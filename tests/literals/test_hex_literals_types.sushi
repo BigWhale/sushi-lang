@@ -1,0 +1,29 @@
+# Test hex literals with various integer types
+
+fn main() i32:
+    # Unsigned types
+    let u8 u8_max = 0xFF as u8
+    let u16 u16_val = 0xFFFF as u16
+    let u32 u32_val = 0xFFFFFFFF as u32
+    let u64 u64_val = 0xFFFFFFFFFFFFFFFF as u64
+
+    # Signed types
+    let i8 i8_val = 0x7F as i8
+    let i16 i16_val = 0x7FFF as i16
+    let i32 i32_val = 0x7FFFFFFF
+    let i64 i64_val = 0x7FFFFFFFFFFFFFFF as i64
+
+    # Common bit patterns
+    let u32 all_ones = 0xFFFFFFFF as u32
+    let u32 high_byte = 0xFF000000 as u32
+    let u32 low_byte = 0x000000FF as u32
+    let u16 alternating = 0xAAAA as u16
+
+    # Use variables
+    let i32 result = (u8_max as i32) + (u16_val as i32) + (i8_val as i32) + (i16_val as i32) + i32_val
+    let i32 result2 = (all_ones as i32) + (high_byte as i32) + (low_byte as i32) + (alternating as i32)
+    let i32 result3 = (u32_val as i32) + (i64_val as i32)
+    let i32 result4 = u64_val as i32
+
+    println("Mostly Harmless")
+    return Result.Ok(result + result2 + result3 + result4)

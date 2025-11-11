@@ -1,0 +1,78 @@
+use <collections/strings>
+
+fn main() i32:
+    # Test 1: Basic match in middle
+    let string s1 = "hello world"
+    let bool r1 = s1.contains("lo wo")
+    println(r1)
+
+    # Test 2: No match
+    let string s2 = "hello world"
+    let bool r2 = s2.contains("xyz")
+    println(r2)
+
+    # Test 3: Match at start
+    let string s3 = "hello world"
+    let bool r3 = s3.contains("hello")
+    println(r3)
+
+    # Test 4: Match at end
+    let string s4 = "hello world"
+    let bool r4 = s4.contains("world")
+    println(r4)
+
+    # Test 5: Empty needle (always found)
+    let string s5 = "hello"
+    let bool r5 = s5.contains("")
+    println(r5)
+
+    # Test 6: Needle longer than haystack
+    let string s6 = "hi"
+    let bool r6 = s6.contains("hello")
+    println(r6)
+
+    # Test 7: Exact match
+    let string s7 = "test"
+    let bool r7 = s7.contains("test")
+    println(r7)
+
+    # Test 8: Single character match
+    let string s8 = "abc"
+    let bool r8 = s8.contains("b")
+    println(r8)
+
+    # Test 9: UTF-8 substring match
+    let string s9 = "café au lait"
+    let bool r9 = s9.contains("au")
+    println(r9)
+
+    # Test 10: Multiple occurrences (should find first)
+    let string s10 = "banana"
+    let bool r10 = s10.contains("na")
+    println(r10)
+
+    # Test 11: Empty haystack with empty needle
+    let string s11 = ""
+    let bool r11 = s11.contains("")
+    println(r11)
+
+    # Test 12: Empty haystack with non-empty needle
+    let string s12 = ""
+    let bool r12 = s12.contains("x")
+    println(r12)
+
+    return Result.Ok(0)
+
+# Expected output:
+# 1
+# 0
+# 1
+# 1
+# 1
+# 0
+# 1
+# 1
+# 1
+# 1
+# 1
+# 0

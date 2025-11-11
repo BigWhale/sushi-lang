@@ -1,0 +1,8 @@
+fn get_success() i32:
+    return Result.Ok(42)
+
+fn main() i32:
+    if (get_success()):
+        println("Success!")
+
+    return Result.Ok(0)

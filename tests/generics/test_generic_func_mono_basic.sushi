@@ -1,0 +1,31 @@
+# Test basic generic function monomorphization
+# Generic identity function should be monomorphized for i32 and string
+
+fn identity<T>(T value) T:
+    return Result.Ok(value)
+
+fn test_identity() i32:
+    # Call identity with i32 - should monomorphize to identity__i32
+    let i32 num = identity(42)??
+    if (num != 42):
+        return Result.Ok(1)
+
+    # Call identity with string - should monomorphize to identity__string
+    # We need to use the string variable to avoid warning
+    if (identity("test")?? == ""):
+        return Result.Ok(10)
+
+    # Verify both monomorphized versions exist by making calls
+    let i32 num2 = identity(100)??
+    if (num2 != 100):
+        return Result.Ok(2)
+
+    # Another string call to verify monomorphization
+    if (identity("another")?? == ""):
+        return Result.Ok(11)
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = test_identity().realise(99)
+    return Result.Ok(result)

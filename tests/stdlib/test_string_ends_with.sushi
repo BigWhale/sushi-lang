@@ -1,0 +1,72 @@
+use <collections/strings>
+
+fn main() i32:
+    # Test 1: Basic match
+    let string s1 = "hello world"
+    let bool r1 = s1.ends_with("world")
+    println(r1)
+
+    # Test 2: No match
+    let string s2 = "hello world"
+    let bool r2 = s2.ends_with("hello")
+    println(r2)
+
+    # Test 3: Empty suffix (always matches)
+    let string s3 = "hello"
+    let bool r3 = s3.ends_with("")
+    println(r3)
+
+    # Test 4: Suffix longer than string
+    let string s4 = "hi"
+    let bool r4 = s4.ends_with("hello")
+    println(r4)
+
+    # Test 5: Exact match (suffix == string)
+    let string s5 = "test"
+    let bool r5 = s5.ends_with("test")
+    println(r5)
+
+    # Test 6: Single character match
+    let string s6 = "abc"
+    let bool r6 = s6.ends_with("c")
+    println(r6)
+
+    # Test 7: Single character no match
+    let string s7 = "abc"
+    let bool r7 = s7.ends_with("b")
+    println(r7)
+
+    # Test 8: UTF-8 suffix match
+    let string s8 = "café"
+    let bool r8 = s8.ends_with("fé")
+    println(r8)
+
+    # Test 9: UTF-8 suffix no match
+    let string s9 = "café"
+    let bool r9 = s9.ends_with("fe")
+    println(r9)
+
+    # Test 10: Empty string with empty suffix
+    let string s10 = ""
+    let bool r10 = s10.ends_with("")
+    println(r10)
+
+    # Test 11: Empty string with non-empty suffix
+    let string s11 = ""
+    let bool r11 = s11.ends_with("x")
+    println(r11)
+
+    return Result.Ok(0)
+
+# Expected output:
+# 1
+# 0
+# 1
+# 0
+# 1
+# 1
+# 0
+# 1
+# 0
+# 1
+# 0

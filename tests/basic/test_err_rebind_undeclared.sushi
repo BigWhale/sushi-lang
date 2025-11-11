@@ -1,0 +1,4 @@
+# CE1002: rebind to undeclared variable
+fn main() i32:
+  x := 42  # x was never declared with let
+  return Result.Ok(x)

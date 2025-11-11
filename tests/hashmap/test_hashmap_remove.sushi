@@ -1,0 +1,35 @@
+fn main() i32:
+    let HashMap<string, i32> map = HashMap.new()
+
+    # Insert some values
+    map.insert("alice", 30)
+    map.insert("bob", 25)
+    map.insert("charlie", 35)
+
+    println("Initial size: {map.len()}")
+    println("Initial tombstones: {map.tombstone_count()}")
+
+    # Remove bob
+    let Maybe<i32> removed = map.remove("bob")
+    match removed:
+        Maybe.Some(val) ->
+            println("Removed bob with value: {val}")
+        Maybe.None() ->
+            println("bob not found")
+
+    println("After removing bob - size: {map.len()}")
+    println("After removing bob - tombstones: {map.tombstone_count()}")
+
+    # Try to remove again - should return None
+    let Maybe<i32> removed2 = map.remove("bob")
+    match removed2:
+        Maybe.Some(val) ->
+            println("Removed bob again (unexpected!): {val}")
+        Maybe.None() ->
+            println("bob not found (expected)")
+
+    # Verify alice still exists
+    if (map.contains_key("alice")):
+        println("alice still exists")
+
+    return Result.Ok(0)

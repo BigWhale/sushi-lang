@@ -1,0 +1,9 @@
+fn increment(&i32 counter) ~:
+    counter := counter + 1
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32 x = 5
+    increment(&x)
+    println(x)
+    return Result.Ok(0)

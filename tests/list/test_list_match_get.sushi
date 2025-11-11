@@ -1,0 +1,15 @@
+fn main() i32:
+    let List<i32> data = List.new()
+    data.push(100)
+
+    # Direct match on .get() return value
+    match data.get(0):
+        Maybe.Some(val) ->
+            if (val != 100):
+                println("ERROR: Expected 100, got {val}")
+                return Result.Ok(6)
+        Maybe.None() ->
+            println("ERROR: Should find element")
+            return Result.Ok(7)
+
+    return Result.Ok(0)

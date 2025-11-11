@@ -1,0 +1,26 @@
+# Test runtime memory allocation with safety checks
+# This test exercises the allocation paths with RE2021 runtime error checks
+# The program should compile successfully and run without errors under normal conditions
+
+fn main() i32:
+    # Test dynamic array allocation (exercises malloc in memory_manager.py)
+    let i32[] numbers = from([1, 2, 3, 4, 5])
+
+    # Test array growth (exercises realloc in llvm_expressions.py)
+    numbers.push(6)
+    numbers.push(7)
+    numbers.push(8)
+    numbers.push(9)
+    numbers.push(10)
+
+    # Verify the values
+    let i32 sum = 0
+    foreach(n in numbers.iter()):
+        sum := sum + n
+
+    println(sum)  # Should print 55
+
+    # Clean up
+    numbers.destroy()
+
+    return Result.Ok(0)

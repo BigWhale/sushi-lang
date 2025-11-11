@@ -1,0 +1,50 @@
+# Test core array functionality
+# Arrays are a CORE language feature (not stdlib) that use inline emission
+# This test validates that array methods work correctly
+
+fn run_test() i32:
+    # Test dynamic array methods
+    let i32[] numbers = new()
+
+    # Test push
+    numbers.push(10)
+    numbers.push(20)
+    numbers.push(30)
+
+    # Test len
+    println("Length: {numbers.len()}")
+
+    # Test capacity
+    println("Capacity: {numbers.capacity()}")
+
+    # Test get
+    let i32 first = numbers.get(0)??
+    println("First element: {first}")
+
+    let i32 second = numbers.get(1)??
+    println("Second element: {second}")
+
+    # Test pop
+    let i32 last = numbers.pop()
+    println("Popped: {last}")
+    println("Length after pop: {numbers.len()}")
+
+    # Test clone
+    let i32[] copy = numbers.clone()
+    println("Clone length: {copy.len()}")
+    println("Clone first: {copy.get(0)??}")
+
+    # Test iter (foreach)
+    println("Iterating:")
+    foreach(i32 n in numbers.iter()):
+        println("  {n}")
+
+    # Test destroy
+    numbers.destroy()
+    println("Array destroyed")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

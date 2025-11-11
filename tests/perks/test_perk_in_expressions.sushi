@@ -1,0 +1,32 @@
+# Test perk method calls in expressions
+
+perk Hashable:
+    fn hash() u64
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Hashable:
+    fn hash() u64:
+        return 100 as u64
+
+fn main() i32:
+    let Point p1 = Point(10, 20)
+    let Point p2 = Point(5, 15)
+
+    # Use in direct calls
+    let u64 h1 = p1.hash()
+    let u64 h2 = p2.hash()
+    println(h1)
+    println(h2)
+
+    # Use in comparison
+    if (p1.hash() > 50 as u64):
+        println("Greater than 50")
+
+    # Use in variable initialization
+    let u64 h3 = p1.hash()
+    println(h3)
+
+    return Result.Ok(0)

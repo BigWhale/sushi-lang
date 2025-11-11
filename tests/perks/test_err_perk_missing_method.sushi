@@ -1,0 +1,16 @@
+# Test CE4005: Missing required method in perk implementation
+
+perk Displayable:
+    fn display() string
+    fn format() string
+
+struct Person:
+    string name
+
+# Missing format() method - should fail
+extend Person with Displayable:
+    fn display() string:
+        return (self.name)
+
+fn main() i32:
+    return Result.Ok(0)

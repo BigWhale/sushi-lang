@@ -1,0 +1,7 @@
+fn run_test(string[] args) i32:
+  print("Args: {args.get(0)??} - {args.get(1)??}")
+  return Result.Ok(0)
+
+fn main(string[] args) i32:
+  let i32 result = run_test(args).realise(99)
+  return Result.Ok(result)

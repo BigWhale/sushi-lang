@@ -1,0 +1,9 @@
+# Extension on unknown type error test
+# Should fail compilation with unknown type error
+
+extend float add(float value) float:
+  return Result.Ok(self + value)
+
+fn main() i32:
+  # This shouldn't be reached due to compilation error
+  return Result.Ok(0)

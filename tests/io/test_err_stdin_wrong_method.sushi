@@ -1,0 +1,7 @@
+# Test error: calling invalid method on stdin
+
+use <io/stdio>
+
+fn main() i32:
+    stdin.write("invalid")  # stdin only has readln() and read()
+    return Result.Ok(0)

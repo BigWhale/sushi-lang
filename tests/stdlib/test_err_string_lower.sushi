@@ -1,0 +1,8 @@
+use <collections/strings>
+
+fn main() i32:
+    # Error: lower() takes no arguments
+    let string s = "HELLO"
+    let string result = s.lower(42)
+    println(result)
+    return Result.Ok(0)

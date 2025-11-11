@@ -1,0 +1,10 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: 100
+
+struct Box<T>:
+    T value
+
+fn main() i32:
+    let Box<Box<i32>> nested = Box(Box(100))
+    println(nested.value.value)
+    return Result.Ok(0)

@@ -1,0 +1,47 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test List<T> free method (reset to empty but still usable)
+fn main() i32:
+    let List<i32> data = List.new()
+    data.push(10)
+    data.push(20)
+    data.push(30)
+
+    if (data.len() != 3):
+        println("ERROR: Should have 3 elements")
+        return Result.Ok(1)
+
+    # Free the list
+    data.free()
+
+    # After free, list should be reset to empty state
+    if (data.len() != 0):
+        println("ERROR: Length should be 0 after free")
+        return Result.Ok(2)
+
+    if (data.capacity() != 0):
+        println("ERROR: Capacity should be 0 after free")
+        return Result.Ok(3)
+
+    if (not data.is_empty()):
+        println("ERROR: Should be empty after free")
+        return Result.Ok(4)
+
+    # List should still be usable - can push new elements
+    data.push(100)
+
+    if (data.len() != 1):
+        println("ERROR: Should be able to push after free")
+        return Result.Ok(5)
+
+    match data.get(0):
+        Maybe.Some(val) ->
+            if (val != 100):
+                println("ERROR: Expected 100, got {val}")
+                return Result.Ok(6)
+        Maybe.None() ->
+            println("ERROR: Should find element after free and push")
+            return Result.Ok(7)
+
+    println("free tests passed!")
+    return Result.Ok(0)

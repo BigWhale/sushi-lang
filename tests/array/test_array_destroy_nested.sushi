@@ -1,0 +1,10 @@
+fn main() i32:
+    # Test Array.destroy() - simple test for now
+    let i32[] arr = from([1, 2, 3, 4, 5])
+    println("Created array with {arr.len()} elements")
+
+    # This should recursively destroy all elements and free the buffer
+    arr.destroy()
+
+    println("Array.destroy() completed successfully!")
+    return Result.Ok(0)

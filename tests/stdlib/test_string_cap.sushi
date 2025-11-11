@@ -1,0 +1,60 @@
+use <collections/strings>
+
+fn main() i32:
+    # Test 1: All lowercase
+    let string s1 = "hello world"
+    let string r1 = s1.cap()
+    println(r1)
+
+    # Test 2: All uppercase
+    let string s2 = "HELLO WORLD"
+    let string r2 = s2.cap()
+    println(r2)
+
+    # Test 3: Mixed case
+    let string s3 = "hELLO wORLD"
+    let string r3 = s3.cap()
+    println(r3)
+
+    # Test 4: Already capitalized
+    let string s4 = "Hello world"
+    let string r4 = s4.cap()
+    println(r4)
+
+    # Test 5: Single character lowercase
+    let string s5 = "a"
+    let string r5 = s5.cap()
+    println(r5)
+
+    # Test 6: Single character uppercase
+    let string s6 = "Z"
+    let string r6 = s6.cap()
+    println(r6)
+
+    # Test 7: Empty string
+    let string s7 = ""
+    let string r7 = s7.cap()
+    println(r7)
+
+    # Test 8: With numbers and punctuation
+    let string s8 = "hello123WORLD!"
+    let string r8 = s8.cap()
+    println(r8)
+
+    # Test 9: UTF-8 first character (should remain unchanged - ASCII only)
+    let string s9 = "éCAFÉ"
+    let string r9 = s9.cap()
+    println(r9)
+
+    return Result.Ok(0)
+
+# Expected output:
+# Hello world
+# Hello world
+# Hello world
+# Hello world
+# A
+# Z
+#
+# Hello123world!
+# écafé

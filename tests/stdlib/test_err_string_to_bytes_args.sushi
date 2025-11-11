@@ -1,0 +1,8 @@
+# Test error: string.to_bytes() with wrong argument count
+use <io/stdio>
+use <collections/strings>
+
+fn main() i32:
+    let string s = "test"
+    let u8[] bytes = s.to_bytes(42)  # Error: expected 0 arguments, got 1
+    return Result.Ok(0)

@@ -1,0 +1,12 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Hello World
+
+use <io/stdio>
+
+fn main() i32:
+    stdout.write("Hello")
+    stdout.write(" ")
+    stdout.write("World")
+    stdout.write("\n")
+    return Result.Ok(0)

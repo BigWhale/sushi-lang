@@ -1,0 +1,8 @@
+# Test pow function
+use <math>
+
+fn main() i32:
+    let f64 power = pow(2.0, 10.0)
+    println("pow(2.0, 10.0) = {power}")
+
+    return Result.Ok(0)

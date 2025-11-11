@@ -1,0 +1,59 @@
+# Test hash methods for integer types
+
+fn main() i32:
+    # Test i8
+    let i8 a = 42 as i8
+    let u64 hash_a = a.hash()
+    println("i8 hash(42) = {hash_a}")
+
+    # Test i16
+    let i16 b = 1000 as i16
+    let u64 hash_b = b.hash()
+    println("i16 hash(1000) = {hash_b}")
+
+    # Test i32
+    let i32 c = 100000
+    let u64 hash_c = c.hash()
+    println("i32 hash(100000) = {hash_c}")
+
+    # Test i64
+    let i64 d = 1000000000 as i64
+    let u64 hash_d = d.hash()
+    println("i64 hash(1000000000) = {hash_d}")
+
+    # Test u8
+    let u8 e = 255 as u8
+    let u64 hash_e = e.hash()
+    println("u8 hash(255) = {hash_e}")
+
+    # Test u16
+    let u16 f = 65535 as u16
+    let u64 hash_f = f.hash()
+    println("u16 hash(65535) = {hash_f}")
+
+    # Test u32
+    let u32 g = 2147483647 as u32
+    let u64 hash_g = g.hash()
+    println("u32 hash(2147483647) = {hash_g}")
+
+    # Test u64
+    let u64 h = 1000000 as u64
+    let u64 hash_h = h.hash()
+    println("u64 hash(1000000) = {hash_h}")
+
+    # Test that same values produce same hash
+    let i32 x = 42
+    let i32 y = 42
+    let u64 hash_x = x.hash()
+    let u64 hash_y = y.hash()
+    if (hash_x == hash_y):
+        println("✓ Same values produce same hash")
+    else:
+        println("✗ Same values produce different hash")
+
+    # Test that zero has a hash
+    let i32 zero = 0
+    let u64 hash_zero = zero.hash()
+    println("i32 hash(0) = {hash_zero}")
+
+    return Result.Ok(0)

@@ -1,0 +1,19 @@
+# Error test: wildcard must be last
+enum Color:
+    Red
+    Green
+    Blue
+
+fn test_color(Color c) i32:
+    match c:
+        _ ->
+            return Result.Ok(0)
+        Color.Red ->
+            return Result.Ok(1)
+        Color.Green ->
+            return Result.Ok(2)
+        Color.Blue ->
+            return Result.Ok(3)
+
+fn main() i32:
+    return Result.Ok(0)

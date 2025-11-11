@@ -1,0 +1,31 @@
+# Test basic dynamic array functionality
+fn run_test() i32:
+  # Test new() constructor with different types
+  let i32[] numbers = new()
+  let string[] names = new()
+  let bool[] flags = new()
+
+  # Test from() constructor
+  let i32[] scores = from([100, 95, 87])
+  let string[] colors = from(["red", "green", "blue"])
+  let bool[] states = from([true, false, true])
+
+  # Test basic methods on new() arrays
+  print(numbers.len())      # Should print 0
+  print(numbers.capacity()) # Should print 0
+
+  # Test basic methods on from() arrays
+  print(scores.len())       # Should print 3
+  print(colors.len())       # Should print 3
+  print(states.len())       # Should print 3
+
+  # Test get() method
+  print(scores.get(0)??)      # Should print 100
+  print(colors.get(1)??)      # Should print "green"
+  print(states.get(2)??)      # Should print true
+
+  return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

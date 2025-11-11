@@ -1,0 +1,45 @@
+# Demo: Zero-cost struct borrowing with references
+# This test demonstrates that we can now pass structs by reference
+# and access their fields without copying the entire struct.
+
+struct Config:
+    string host
+    i32 port
+    bool debug
+
+fn print_config(&Config cfg) ~:
+    print("Config: host=")
+    print(cfg.host)
+    print(" port=")
+    print(cfg.port)
+    print(" debug=")
+    println(cfg.debug)
+    return Result.Ok(~)
+
+fn get_port(&Config cfg) i32:
+    return Result.Ok(cfg.port)
+
+fn is_debug_enabled(&Config cfg) bool:
+    return Result.Ok(cfg.debug)
+
+fn run_test() i32:
+    let Config cfg = Config("localhost", 8080, true)
+
+    # Pass by reference - no copy, just a pointer
+    print_config(&cfg)??
+
+    # Access fields through reference parameters
+    let i32 port = get_port(&cfg)??
+    println(port)
+
+    let bool debug = is_debug_enabled(&cfg)??
+    println(debug)
+
+    # Direct field access (to suppress unused warning)
+    println(cfg.host)
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

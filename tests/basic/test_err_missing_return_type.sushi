@@ -1,0 +1,5 @@
+# CE0103: missing return type
+fn bad_func():
+  return Result.Ok(0)
+fn main() i32:
+  return Result.Ok(0)

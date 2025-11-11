@@ -1,0 +1,21 @@
+# Test type inference failure for generic functions
+# This should fail with CE2060 when type cannot be inferred
+
+fn identity<T>(T value) T:
+    return Result.Ok(value)
+
+fn ambiguous<T>() T:
+    # No way to infer T from parameters
+    let T result = 0 as T
+    return Result.Ok(result)
+
+fn run_test() i32:
+    # This call has no way to infer the type parameter T
+    # Should fail with CE2060: Cannot infer type parameter
+    let i32 x = ambiguous()??
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

@@ -1,0 +1,54 @@
+use <collections/strings>
+
+fn main() i32:
+    # Test 1: ASCII lowercase to uppercase
+    let string s1 = "hello"
+    let string r1 = s1.upper()
+    println(r1)
+
+    # Test 2: Mixed case to uppercase
+    let string s2 = "HeLLo WoRLd"
+    let string r2 = s2.upper()
+    println(r2)
+
+    # Test 3: Already uppercase
+    let string s3 = "HELLO"
+    let string r3 = s3.upper()
+    println(r3)
+
+    # Test 4: With numbers and punctuation
+    let string s4 = "hello123world!"
+    let string r4 = s4.upper()
+    println(r4)
+
+    # Test 5: Empty string
+    let string s5 = ""
+    let string r5 = s5.upper()
+    println(r5)
+
+    # Test 6: Single character lowercase
+    let string s6 = "a"
+    let string r6 = s6.upper()
+    println(r6)
+
+    # Test 7: Single character uppercase
+    let string s7 = "Z"
+    let string r7 = s7.upper()
+    println(r7)
+
+    # Test 8: UTF-8 characters (should remain unchanged - ASCII only)
+    let string s8 = "café"
+    let string r8 = s8.upper()
+    println(r8)
+
+    return Result.Ok(0)
+
+# Expected output:
+# HELLO
+# HELLO WORLD
+# HELLO
+# HELLO123WORLD!
+#
+# A
+# Z
+# CAFé

@@ -1,0 +1,45 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test List<T> with custom struct elements
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let List<Point> points = List.new()
+
+    # Push struct elements
+    points.push(Point(10, 20))
+    points.push(Point(30, 40))
+    points.push(Point(50, 60))
+
+    if (points.len() != 3):
+        println("ERROR: Expected 3 points")
+        return Result.Ok(1)
+
+    # Get and verify struct data
+    match points.get(1):
+        Maybe.Some(p) ->
+            if (p.x != 30):
+                println("ERROR: Expected x=30, got {p.x}")
+                return Result.Ok(2)
+            if (p.y != 40):
+                println("ERROR: Expected y=40, got {p.y}")
+                return Result.Ok(3)
+            println("Point at index 1: ({p.x}, {p.y})")
+        Maybe.None() ->
+            println("ERROR: Should find point at index 1")
+            return Result.Ok(4)
+
+    # Pop struct
+    match points.pop():
+        Maybe.Some(p) ->
+            if (p.x != 50):
+                println("ERROR: Expected popped x=50")
+                return Result.Ok(5)
+        Maybe.None() ->
+            println("ERROR: Should pop point")
+            return Result.Ok(6)
+
+    println("Struct list tests passed!")
+    return Result.Ok(0)

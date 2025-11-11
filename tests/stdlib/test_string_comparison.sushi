@@ -1,0 +1,16 @@
+fn main() i32:
+    let string s1 = "Hello"
+    let string s2 = "Hello"
+    let string s3 = "World"
+
+    if (s1 == s2):
+        println("Equal: PASS")
+    else:
+        println("Equal: FAIL")
+
+    if (s1 != s3):
+        println("Not equal: PASS")
+    else:
+        println("Not equal: FAIL")
+
+    return Result.Ok(0)

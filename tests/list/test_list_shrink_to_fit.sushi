@@ -1,0 +1,43 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test List<T> shrink_to_fit method
+fn main() i32:
+    # Create list with excess capacity
+    let List<i32> data = List.with_capacity(100)
+
+    # Add only a few elements
+    data.push(10)
+    data.push(20)
+    data.push(30)
+
+    if (data.capacity() != 100):
+        println("ERROR: Initial capacity should be 100")
+        return Result.Ok(1)
+
+    # Shrink to exact size
+    data.shrink_to_fit()
+
+    let i32 cap = data.capacity()
+    let i32 len = data.len()
+
+    if (cap != len):
+        println("ERROR: Capacity should equal length after shrink_to_fit")
+        println("  Capacity: {cap}, Length: {len}")
+        return Result.Ok(2)
+
+    if (len != 3):
+        println("ERROR: Length should still be 3")
+        return Result.Ok(3)
+
+    # Elements should still be accessible
+    match data.get(0):
+        Maybe.Some(val) ->
+            if (val != 10):
+                println("ERROR: Element corruption after shrink")
+                return Result.Ok(4)
+        Maybe.None() ->
+            println("ERROR: Should find element at index 0")
+            return Result.Ok(5)
+
+    println("shrink_to_fit tests passed!")
+    return Result.Ok(0)

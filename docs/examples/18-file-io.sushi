@@ -1,0 +1,64 @@
+# Example 18: File I/O
+#
+# This example demonstrates file operations in Sushi, including reading from and
+# writing to files. File operations in Sushi return FileResult<file>, which must
+# be handled using pattern matching to deal with potential errors.
+#
+# Key concepts covered:
+# - Using the io/files stdlib module
+# - Opening files with FileMode.Write() and FileMode.Read()
+# - Pattern matching on FileResult for error handling
+# - Writing content to files with file.write()
+# - Reading content from files with file.read()
+# - Proper file cleanup with file.close()
+# - Handling specific FileError variants (NotFound, PermissionDenied)
+#
+# File operations workflow:
+# 1. Open file with appropriate mode (Read/Write/Append)
+# 2. Match on FileResult to check for errors
+# 3. Perform file operations (read/write)
+# 4. Always close the file when done
+#
+# Common FileError variants:
+# - FileError.NotFound() - File doesn't exist (for reading)
+# - FileError.PermissionDenied() - Insufficient permissions
+# - FileError.AlreadyExists() - File exists (when creating)
+# - FileError.IoError() - Other I/O errors
+
+use <io/files>
+
+fn main() i32:
+    # Write to file
+    println("Creating guide entry...")
+
+    match open("guide_entry.txt", FileMode.Write()):
+        FileResult.Ok(f) ->
+            f.write("Earth: Mostly Harmless")
+            f.close()
+            println("File written successfully")
+        FileResult.Err(FileError.PermissionDenied()) ->
+            println("Permission denied")
+            return Result.Err()
+        FileResult.Err(_) ->
+            println("Failed to create file")
+            return Result.Err()
+
+    # Read from file
+    println("Reading guide entry...")
+
+    match open("guide_entry.txt", FileMode.Read()):
+        FileResult.Ok(f) ->
+            let string content = f.read()
+            f.close()
+            println("Content: {content}")
+        FileResult.Err(FileError.NotFound()) ->
+            println("File not found")
+            return Result.Err()
+        FileResult.Err(FileError.PermissionDenied()) ->
+            println("Permission denied")
+            return Result.Err()
+        FileResult.Err(_) ->
+            println("Failed to read file")
+            return Result.Err()
+
+    return Result.Ok(0)

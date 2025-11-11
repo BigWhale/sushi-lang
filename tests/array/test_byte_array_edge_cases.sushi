@@ -1,0 +1,74 @@
+# Test edge cases for byte arrays
+
+use <collections/strings>
+
+fn main() i32:
+    # Test 1: Empty byte array operations
+    let u8[] empty = new()
+    println("Empty length: {empty.len()}")  # Should be 0
+    println("Empty capacity: {empty.capacity()}")  # Should be 0
+
+    # Test 2: Single byte operations
+    let u8[] single = new()
+    single.push(65 as u8)  # 'A'
+    println("Single length: {single.len()}")  # Should be 1
+    let u8 val = single.pop()
+    println("Popped value: {val}")  # Should be 65
+    println("After pop length: {single.len()}")  # Should be 0
+
+    # Test 3: Pop from empty (should return 0)
+    let u8 empty_pop = single.pop()
+    println("Pop from empty: {empty_pop}")  # Should be 0
+
+    # Test 4: Large array growth
+    let u8[] large = new()
+    let i32 i = 0
+    while (i < 100):
+        large.push((i % 256) as u8)
+        i := i + 1
+    println("Large array length: {large.len()}")  # Should be 100
+    println("Large array capacity: {large.capacity()}")  # Should be >= 100
+
+    # Test 5: Multiple pops
+    let i32 count = 0
+    while (count < 10):
+        large.pop()
+        count := count + 1
+    println("After 10 pops: {large.len()}")  # Should be 90
+
+    # Test 6: Empty string conversion
+    let u8[] empty2 = new()
+    let string empty_str = empty2.to_string()
+    println("Empty string length: {empty_str.len()}")  # Should be 0
+
+    # Test 7: Zero byte in array (null terminator edge case)
+    let u8[] with_zero = from([65, 0, 66])
+    println("Array with zero length: {with_zero.len()}")  # Should be 3
+
+    # Test 8: All ASCII values (0-127)
+    let u8[] ascii = new()
+    let i32 j = 0
+    while (j < 128):
+        ascii.push(j as u8)
+        j := j + 1
+    println("ASCII array length: {ascii.len()}")  # Should be 128
+
+    # Test 9: High byte values (128-255)
+    let u8[] high_bytes = new()
+    let i32 k = 128
+    while (k < 256):
+        high_bytes.push(k as u8)
+        k := k + 1
+    println("High bytes length: {high_bytes.len()}")  # Should be 128
+
+    # Test 10: Capacity growth pattern
+    let u8[] growth = new()
+    growth.push(1 as u8)
+    let i32 cap1 = growth.capacity()
+    growth.push(2 as u8)
+    let i32 cap2 = growth.capacity()
+    growth.push(3 as u8)
+    let i32 cap3 = growth.capacity()
+    println("Capacity pattern: {cap1}, {cap2}, {cap3}")
+
+    return Result.Ok(0)

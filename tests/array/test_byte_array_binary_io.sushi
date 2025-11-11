@@ -1,0 +1,14 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Hello, World!
+# Test binary I/O operations with byte arrays
+
+use <io/stdio>
+
+fn main() i32:
+    # Create a byte array with a message
+    let u8[] message = from([72 as u8, 101 as u8, 108 as u8, 108 as u8, 111 as u8, 44 as u8, 32 as u8, 87 as u8, 111 as u8, 114 as u8, 108 as u8, 100 as u8, 33 as u8])  # "Hello, World!"
+
+    # Write bytes to stdout
+    stdout.write_bytes(message)
+
+    return Result.Ok(0)

@@ -1,0 +1,68 @@
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+# Test dynamic array push/pop operations
+fn run_test() i32:
+  # Start with empty array
+  let i32[] numbers = new()
+  print(numbers.len())      # Should print 0
+  print(numbers.capacity()) # Should print 0
+
+  # Push some elements
+  print(numbers.push(10))   # Push returns void (0)
+  print(numbers.len())      # Should print 1
+  print(numbers.get(0)??)     # Should print 10
+
+  print(numbers.push(20))   # Push returns void (0)
+  print(numbers.push(30))   # Push returns void (0)
+  print(numbers.len())      # Should print 3
+  print(numbers.get(1)??)     # Should print 20
+  print(numbers.get(2)??)     # Should print 30
+
+  # Test capacity growth
+  print(numbers.capacity()) # Should be >= 3
+
+  # Pop elements
+  let i32 popped = numbers.pop()
+  print(popped)             # Should print 30
+  print(numbers.len())      # Should print 2
+
+  # Pop again
+  let i32 second_popped = numbers.pop()
+  print(second_popped)      # Should print 20
+  print(numbers.len())      # Should print 1
+
+  # Test string arrays
+  let string[] words = new()
+  print(words.push("hello"))  # Push returns void (0)
+  print(words.push("world"))  # Push returns void (0)
+  print(words.len())        # Should print 2
+  print(words.get(0)??)       # Should print "hello"
+  print(words.get(1)??)       # Should print "world"
+
+  # Validate all operations worked correctly
+  let i32 validation_count = 0
+
+  # Check final state of numbers array
+  if (numbers.len() == 1 and numbers.get(0)?? == 10):
+    validation_count := validation_count + 1
+
+  # Check final state of words array
+  if (words.len() == 2):
+    validation_count := validation_count + 1
+
+  # Check string array contents
+  if (words.get(0)?? == "hello" and words.get(1)?? == "world"):
+    validation_count := validation_count + 1
+
+  # Cleanup arrays
+  numbers.destroy()
+  words.destroy()
+
+  if (validation_count == 3):
+    return Result.Ok(0)  # All tests passed)
+  else:
+    return Result.Ok(validation_count)  # Return count for debugging)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

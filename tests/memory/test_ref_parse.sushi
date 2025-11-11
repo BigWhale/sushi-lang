@@ -1,0 +1,17 @@
+# Test basic reference syntax parsing
+# This test verifies that the parser accepts reference types and borrow expressions
+
+fn print_array(&i32[] arr) ~:
+    println(arr.len())
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32[] numbers = from([1, 2, 3, 4, 5])
+
+    # Borrow the array to pass it to function
+    print_array(&numbers)
+
+    # Array is still valid after borrow
+    println(numbers.len())
+
+    return Result.Ok(0)

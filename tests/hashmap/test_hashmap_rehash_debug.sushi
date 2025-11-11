@@ -1,0 +1,31 @@
+fn main() i32:
+    let HashMap<string, i32> map = HashMap.new()
+
+    # Insert some values
+    map.insert("alice", 30)
+    map.insert("bob", 25)
+    map.insert("charlie", 35)
+
+    println("=== Initial HashMap ===")
+    map.debug()
+
+    # Remove bob to create a tombstone
+    map.remove("bob")
+
+    println("\n=== After removing bob ===")
+    map.debug()
+
+    # Rehash to remove tombstones
+    map.rehash()
+
+    println("\n=== After rehashing ===")
+    map.debug()
+
+    # Verify alice and charlie still exist
+    if (map.contains_key("alice")):
+        println("\nalice still exists after rehash")
+
+    if (map.contains_key("charlie")):
+        println("charlie still exists after rehash")
+
+    return Result.Ok(0)

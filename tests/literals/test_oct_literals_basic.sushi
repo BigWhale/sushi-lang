@@ -1,0 +1,32 @@
+# Test basic octal literal support
+
+fn main() i32:
+    # Basic octal literals
+    let i32 a = 0o777
+    let i32 b = 0o000
+    let i32 c = 0o644
+
+    # Case insensitivity
+    let i32 d = 0o755
+    let i32 e = 0O777
+    let i32 f = 0o666
+
+    # Octal with underscores
+    let i32 g = 0o7_7_7
+    let i32 h = 0o1_2_3_4
+
+    # Octal in expressions
+    let i32 sum = 0o10 + 0o20
+    let i32 product = 0o7 * 8
+    let bool equal = 0o10 == 8
+
+    # Common Unix permissions
+    let i32 rwx = 0o777
+    let i32 rw = 0o644
+    let i32 rx = 0o755
+
+    # Use the variables
+    let i32 result = a + b + c + d + e + f + g + h + sum + product + rwx + rw + rx
+    if (equal):
+        println("Mostly Harmless")
+    return Result.Ok(result)

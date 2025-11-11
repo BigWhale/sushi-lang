@@ -1,0 +1,9 @@
+# tests/test_perk_multiple_methods.sushi
+# Perk with multiple methods
+
+perk Comparable:
+    fn equals(&i32 other) bool
+    fn less_than(&i32 other) bool
+
+fn main() i32:
+    return Result.Ok(0)

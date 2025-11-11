@@ -1,0 +1,44 @@
+# Example 23: Perks (Basic)
+#
+# Perks are Sushi's trait/interface system that enable static polymorphism.
+# This example demonstrates:
+# - Defining perks
+# - Implementing perks for custom types
+# - Using perk methods
+
+# Define a perk for types that can be converted to a description
+perk Describable:
+    fn describe() string
+
+# Define custom types
+struct Robot:
+    string name
+    i32 battery
+
+struct Ship:
+    string name
+    i32 crew
+
+# Implement Describable for Robot
+extend Robot with Describable:
+    fn describe() string:
+        return "{self.name} (battery: {self.battery}%)"
+
+# Implement Describable for Ship
+extend Ship with Describable:
+    fn describe() string:
+        return "{self.name} (crew: {self.crew})"
+
+fn main() i32:
+    println("=== Perks Example ===")
+    println("")
+
+    # Create instances
+    let Robot marvin = Robot("Marvin", 42)
+    let Ship hog = Ship("Heart of Gold", 5)
+
+    # Use perk methods
+    println("Robot: {marvin.describe()}")
+    println("Ship: {hog.describe()}")
+
+    return Result.Ok(0)

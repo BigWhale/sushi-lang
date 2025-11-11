@@ -1,0 +1,9 @@
+# CE2510: Mixed int/float operations should fail
+fn main() i32:
+  let i32 x = 42
+  let f64 y = 3.14
+
+  # This should fail - mixed i32 and f64
+  let f64 z = x + y
+
+  return Result.Ok(0)

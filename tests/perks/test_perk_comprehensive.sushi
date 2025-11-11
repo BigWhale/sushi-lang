@@ -1,0 +1,54 @@
+# Comprehensive perk test covering multiple features
+
+# Define multiple perks
+perk Hashable:
+    fn hash() u64
+
+perk Displayable:
+    fn display() string
+
+perk Comparable:
+    fn compare(&Point other) i32
+
+# Test struct implementing multiple perks
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Hashable:
+    fn hash() u64:
+        let u64 hx = self.x as u64
+        let u64 hy = self.y as u64
+        let u64 multiplier = 31 as u64
+        return hx * multiplier + hy
+
+extend Point with Displayable:
+    fn display() string:
+        return "Point"
+
+extend Point with Comparable:
+    fn compare(&Point other) i32:
+        if (self.x < other.x):
+            return -1
+        if (self.x > other.x):
+            return 1
+        if (self.y < other.y):
+            return -1
+        if (self.y > other.y):
+            return 1
+        return 0
+
+fn main() i32:
+    let Point p1 = Point(10, 20)
+    let Point p2 = Point(5, 15)
+
+    # Call perk methods
+    let u64 h = p1.hash()
+    let string s = p1.display()
+    let i32 cmp = p1.compare(&p2)
+
+    println(s)
+    println(h)
+    println(cmp)
+    println(p2.x)
+    return Result.Ok(0)

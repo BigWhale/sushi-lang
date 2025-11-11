@@ -1,0 +1,17 @@
+fn main() i32:
+    # Test arithmetic right shift with signed types (sign-extend)
+    let i32 a = -16
+    let i32 shifted = a >> 2
+    println(shifted)  # Should be -4 (sign bit preserved)
+
+    # Test with positive number (behaves like logical)
+    let i32 b = 20
+    let i32 shifted_b = b >> 2
+    println(shifted_b)  # Should be 5
+
+    # Test with i8
+    let i8 c = -8 as i8
+    let i8 shifted_c = c >> 1
+    println(shifted_c)  # Should be -4 (sign-extend)
+
+    return Result.Ok(0)

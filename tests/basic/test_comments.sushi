@@ -1,0 +1,17 @@
+# This is a top-level comment
+fn main() i32:  # Comment after function header
+  # Indented comment in function body
+  let i32 x = 42  # Comment after statement
+
+# Comment at top level between statements
+  let bool flag = true
+
+  # Comment before if statement
+  if (flag):  # Comment after if condition
+    # Comment inside if block
+    x := x + 1
+
+# Comment with no indentation in the middle of function
+  # Back to indented comment
+  let i32 expected = 43
+  return Result.Ok(x - expected)  # Final comment

@@ -1,0 +1,52 @@
+# Example 02: Variables
+#
+# Demonstrates:
+# - Variable declarations with explicit type annotations
+# - Basic primitive types (i32, string, bool, f64)
+# - String interpolation for output
+# - Variable rebinding using ':=' operator
+# - Mutable variables (all variables are mutable by default)
+#
+# Sushi requires explicit type annotations for variable declarations.
+# Variables are mutable and can be rebound to new values of the same type.
+# Rebinding uses ':=' while initial declaration uses 'let'.
+
+fn main() i32:
+    # Variable declarations use 'let' keyword with explicit type annotation.
+    # Syntax: let <type> <name> = <value>
+    # All variables are mutable by default (no 'const' or 'mut' keywords needed).
+    let i32 answer = 42
+    let string question = "What is the Ultimate Question?"
+    let bool knows_answer = false
+
+    # String interpolation allows embedding variables directly in strings.
+    # Use {variable_name} syntax within string literals.
+    # This is more convenient than string concatenation.
+    println("The answer is {answer}")
+    println("Question: {question}")
+
+    # Rebind variables with ':=' operator (not '=').
+    # The ':=' operator updates an existing variable's value.
+    # The variable must already be declared with 'let'.
+    answer := 54  # Wrong answer!
+    knows_answer := true
+
+    println("Wait, the answer is actually {answer}? Nope!")
+
+    # Variables can be rebound multiple times.
+    # Each rebinding must use the same type as the original declaration.
+    answer := 42
+    println("Corrected: The answer is {answer}")
+
+    # Sushi supports multiple primitive types:
+    # - Integers: i8, i16, i32, i64, u8, u16, u32, u64
+    # - Floats: f32, f64
+    # - Bool: true, false
+    # - String: UTF-8 encoded text
+    let f64 improbability = 2.0  # Infinite Improbability Drive
+    let string advice = "Don't Panic"
+
+    println("Improbability factor: {improbability}")
+    println("Important advice: {advice}")
+
+    return Result.Ok(0)

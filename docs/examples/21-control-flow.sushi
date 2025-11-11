@@ -1,0 +1,116 @@
+# Example 21: Advanced Control Flow
+#
+# This example demonstrates complex control flow patterns in Sushi, including:
+# - Nested if-elif-else conditionals
+# - Pattern matching within conditional branches
+# - Combining enums with conditionals
+# - Multiple decision points in a single function
+#
+# The scenario simulates a spaceship readiness assessment system that evaluates
+# fuel levels, crew availability, and ship condition to determine mission viability.
+#
+# Key concepts covered:
+# - Enum with variants of different shapes (empty, with data)
+# - Multi-level nested conditionals (if inside if)
+# - Combining match expressions with if statements
+# - Short-circuit evaluation in conditionals
+# - Blank type (~) return for functions with no meaningful return value
+#
+# Control flow structure:
+# 1. Top-level fuel check (if-elif-else)
+# 2. Nested crew check (if-else within if branch)
+# 3. Pattern matching on ship status (match within if branch)
+# 4. Conditional within match arm (if-else for damage severity)
+
+# Enum representing different ship operational states
+# - Operational: Ship is in perfect working condition
+# - Damaged: Ship has damage with severity level (0-100)
+# - Destroyed: Ship is non-functional
+enum ShipStatus:
+    Operational()
+    Damaged(i32)
+    Destroyed()
+
+# Assesses mission readiness based on multiple factors
+# Returns blank type (~) since this is a pure side-effect function (only prints)
+fn assess_situation(i32 fuel, i32 crew_count, ShipStatus ship) ~:
+    # First decision point: Check fuel level (three-way split)
+    # This demonstrates if-elif-else cascading logic
+    if (fuel > 50):
+        # Branch 1: Adequate fuel - proceed with deeper checks
+        println("Fuel: Adequate")
+
+        # Second decision point: Check crew availability
+        # This demonstrates nested conditionals
+        if (crew_count >= 3):
+            println("Crew: Sufficient")
+
+            # Third decision point: Pattern match on ship status
+            # This demonstrates combining match with nested conditionals
+            match ship:
+                ShipStatus.Operational() ->
+                    # Best case: everything is ready
+                    println("Ship: Ready for hyperspace")
+                ShipStatus.Damaged(severity) ->
+                    # Fourth decision point: Evaluate damage severity
+                    # This demonstrates conditionals within match arms
+                    if (severity < 50):
+                        println("Ship: Minor damage, can proceed")
+                    else:
+                        println("Ship: Significant damage, repairs needed")
+                ShipStatus.Destroyed() ->
+                    # Worst case for ship condition
+                    println("Ship: Critical condition")
+        else:
+            # Not enough crew - mission cannot proceed safely
+            println("Crew: Understaffed, need more crew")
+    elif (fuel > 20):
+        # Branch 2: Low fuel but manageable
+        # Notice we skip crew/ship checks - fuel takes priority
+        println("Fuel: Low but manageable")
+    else:
+        # Branch 3: Critical fuel level
+        # All other checks are irrelevant without fuel
+        println("Fuel: Critical! Need refuel immediately")
+
+    # Return blank type wrapped in Result
+    return Result.Ok(~)
+
+fn main() i32:
+    # Test Scenario 1: Ideal conditions
+    # - High fuel (75 > 50) → enters first if branch
+    # - Sufficient crew (5 >= 3) → enters nested if branch
+    # - Operational ship → matches first pattern
+    # Expected path: fuel check → crew check → operational match
+    println("=== Scenario 1: Good conditions ===")
+    assess_situation(75, 5, ShipStatus.Operational())
+
+    # Test Scenario 2: Minor damage with good resources
+    # - High fuel (60 > 50) → enters first if branch
+    # - Sufficient crew (4 >= 3) → enters nested if branch
+    # - Damaged ship with severity 30 → matches second pattern
+    # - Severity 30 < 50 → takes "can proceed" branch
+    # Expected path: fuel check → crew check → damaged match → severity check
+    println("")
+    println("=== Scenario 2: Minor damage ===")
+    assess_situation(60, 4, ShipStatus.Damaged(30))
+
+    # Test Scenario 3: Low fuel scenario
+    # - Low fuel (25 > 20 but not > 50) → enters elif branch
+    # - Skips crew and ship checks entirely (fuel is limiting factor)
+    # Expected path: fuel check → elif branch only
+    println("")
+    println("=== Scenario 3: Low fuel ===")
+    assess_situation(25, 5, ShipStatus.Operational())
+
+    # Test Scenario 4: Multiple critical issues
+    # - Critical fuel (10 not > 20) → enters else branch
+    # - Skips crew and ship checks (fuel is most critical)
+    # Note: Even though crew (2) and ship (Destroyed) are also bad,
+    #       we never evaluate them due to short-circuit logic
+    # Expected path: fuel check → else branch only
+    println("")
+    println("=== Scenario 4: Critical ===")
+    assess_situation(10, 2, ShipStatus.Destroyed())
+
+    return Result.Ok(0)

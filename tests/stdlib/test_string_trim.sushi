@@ -1,0 +1,55 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT: hello
+# EXPECT_STDOUT: world
+# EXPECT_STDOUT: test
+# EXPECT_STDOUT: clean
+# EXPECT_STDOUT:
+# EXPECT_STDOUT:
+# EXPECT_STDOUT: hello
+# EXPECT_STDOUT: café
+
+use <collections/strings>
+
+fn main() i32:
+    # Test 1: Trim both sides
+    let string s1 = "  hello  "
+    let string r1 = s1.trim()
+    println(r1)  # Expected: hello
+
+    # Test 2: Trim left only (right is clean)
+    let string s2 = "  world"
+    let string r2 = s2.trim()
+    println(r2)  # Expected: world
+
+    # Test 3: Trim right only (left is clean)
+    let string s3 = "test  "
+    let string r3 = s3.trim()
+    println(r3)  # Expected: test
+
+    # Test 4: No whitespace to trim
+    let string s4 = "clean"
+    let string r4 = s4.trim()
+    println(r4)  # Expected: clean
+
+    # Test 5: Empty string
+    let string s5 = ""
+    let string r5 = s5.trim()
+    println(r5)  # Expected: (empty line)
+
+    # Test 6: Only whitespace
+    let string s6 = "   "
+    let string r6 = s6.trim()
+    println(r6)  # Expected: (empty line)
+
+    # Test 7: Multiple whitespace types (space, tab, newline, carriage return)
+    let string s7 = " \t\nhello\r\n "
+    let string r7 = s7.trim()
+    println(r7)  # Expected: hello
+
+    # Test 8: UTF-8 with whitespace
+    let string s8 = "  café  "
+    let string r8 = s8.trim()
+    println(r8)  # Expected: café
+
+    return Result.Ok(0)

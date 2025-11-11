@@ -1,0 +1,7 @@
+# Test error: direct recursion without Own<T>
+enum BadList:
+    Cons(i32, BadList)  # ERROR: direct recursion not allowed
+    Nil()
+
+fn main() i32:
+    return Result.Ok(0)

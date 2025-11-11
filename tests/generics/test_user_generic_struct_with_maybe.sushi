@@ -1,0 +1,16 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: 42
+
+
+struct Box<T>:
+    T value
+
+fn main() i32:
+    let Maybe<i32> m = Maybe.Some(42)
+    let Box<Maybe<i32>> b = Box(m)
+
+    # Use .realise() to extract value instead of match for now
+    let i32 result = b.value.realise(-1)
+    println(result)
+
+    return Result.Ok(0)

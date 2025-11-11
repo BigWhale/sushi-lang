@@ -1,0 +1,5 @@
+# Error: Using undefined struct type
+
+fn main() i32:
+    let Point p = Point(10, 20)
+    return Result.Ok(0)

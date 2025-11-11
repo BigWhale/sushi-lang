@@ -1,0 +1,6 @@
+fn do_nothing() ~:
+  return Result.Ok(~)
+
+fn main() i32:
+  do_nothing()
+  return Result.Ok(0)

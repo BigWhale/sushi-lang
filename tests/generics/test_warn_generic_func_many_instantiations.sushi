@@ -1,0 +1,55 @@
+# Test: Many instantiations of same function (stress test)
+
+struct S1:
+    i32 a
+
+struct S2:
+    i32 b
+
+struct S3:
+    i32 c
+
+struct S4:
+    i32 d
+
+struct S5:
+    i32 e
+
+struct S6:
+    i32 f
+
+struct S7:
+    i32 g
+
+struct S8:
+    i32 h
+
+struct S9:
+    i32 i
+
+struct S10:
+    i32 j
+
+fn process<T>(T _item) ~:
+    return Result.Ok(~)
+
+fn main() i32:
+    # 10+ instantiations to stress test monomorphization
+    # Using primitives only (struct instantiation has issues)
+    process(1)
+    process("test")
+    process(true)
+    process(3.14)
+    process(42 as i8)
+    process(99 as i16)
+    process(1000 as i32)
+    process(9999 as i64)
+    process(10 as u8)
+    process(200 as u16)
+    process(50000 as u32)
+    process(123456 as u64)
+    process(1.5 as f32)
+    process(2.5 as f64)
+    process("another")
+
+    return Result.Ok(0)

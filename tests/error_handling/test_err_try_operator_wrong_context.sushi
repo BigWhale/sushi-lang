@@ -1,0 +1,17 @@
+# Test CE2508: ?? operator requires Result-returning function
+# Expected: CE2508 error
+# Extension methods return bare types, so we can test this error there
+
+fn get_value() i32:
+    return Result.Ok(42)
+
+extend string bad_method() i32:
+    # Error: Extension methods return bare types, not Result<T>
+    # Using ?? operator here is invalid
+    let i32 x = get_value()??
+    return x
+
+fn main() i32:
+    let string val = "test"
+    let i32 result = val.bad_method()
+    return Result.Ok(result)

@@ -1,0 +1,20 @@
+# EXPECT_RUNTIME_EXIT: 10
+# TEST_TYPE: runtime
+fn main() i32:
+  let i32 i = 0
+  let i32 sum = 0
+
+  while (i < 5):
+    sum := sum + i
+    i := i + 1
+
+  # Nested while
+  let i32 j = 0
+  while (j < 3):
+    let i32 k = 0
+    while (k < 2):
+      k := k + 1
+    j := j + 1
+
+  # sum should be 0+1+2+3+4 = 10
+  return Result.Ok(sum)  # Direct return for validation)

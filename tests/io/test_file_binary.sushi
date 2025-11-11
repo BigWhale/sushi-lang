@@ -1,0 +1,56 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Wrote 5 bytes
+# EXPECTED_OUTPUT: Read 5 bytes
+# EXPECTED_OUTPUT: Byte 0: 72
+# EXPECTED_OUTPUT: Byte 1: 101
+# EXPECTED_OUTPUT: Byte 2: 108
+# EXPECTED_OUTPUT: Byte 3: 108
+# EXPECTED_OUTPUT: Byte 4: 111
+# EXPECTED_OUTPUT: Binary file test completed
+
+use <io/files>
+use <io/stdio>
+
+fn run_test() i32:
+    # Write binary data to file
+    let FileResult write_result = open("test_binary_output.bin", FileMode.WriteB())
+    match write_result:
+        FileResult.Ok(out) ->
+            # Create byte array with "Hello" (72, 101, 108, 108, 111)
+            let u8[] data = from([72, 101, 108, 108, 111])
+            out.write_bytes(data)
+            println("Wrote {data.len()} bytes")
+            out.close()
+            data.destroy()
+        FileResult.Err(_) ->
+            stderr.write("Error: cannot create binary file\n")
+            return Result.Err()
+
+    # Read binary data from file
+    let FileResult read_result = open("test_binary_output.bin", FileMode.ReadB())
+    match read_result:
+        FileResult.Ok(f) ->
+            let u8[] bytes = new()
+            bytes := f.read_bytes(5)
+            println("Read {bytes.len()} bytes")
+
+            # Print each byte
+            let i32 i = 0
+            while (i < bytes.len()):
+                let u8 byte = bytes.get(i)??
+                println("Byte {i}: {byte}")
+                i := i + 1
+
+            f.close()
+            bytes.destroy()
+            println("Binary file test completed")
+            return Result.Ok(0)
+        FileResult.Err(_) ->
+            stderr.write("Error: cannot read binary file\n")
+            return Result.Err()
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

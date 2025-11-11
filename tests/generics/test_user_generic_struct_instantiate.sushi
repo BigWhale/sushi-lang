@@ -1,0 +1,26 @@
+# TEST_TYPE: compilation
+# Test that generic struct instantiations are detected and collected
+
+
+struct Pair<T, U>:
+    T first
+    U second
+
+struct Box<T>:
+    T value
+
+fn test_pair(Pair<i32, string> p) i32:
+    return Result.Ok(p.first)
+
+fn test_box(Box<i32> b) i32:
+    return Result.Ok(b.value)
+
+fn main() i32:
+    # These instantiations should be detected:
+    # - Pair<i32, string>
+    # - Box<i32>
+    let Pair<i32, string> p = Pair(42, "Mostly Harmless")
+    let Box<i32> b = Box(100)
+    let i32 sum = test_pair(p).realise(0) + test_box(b).realise(0)
+    let i32 expected = 142
+    return Result.Ok(sum - expected)

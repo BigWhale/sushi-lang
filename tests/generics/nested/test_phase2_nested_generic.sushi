@@ -1,0 +1,17 @@
+# Test that nested generic structs can be hashed
+# "I'd far rather be happy than right any day."
+
+struct Config:
+    Maybe<i32> port
+    Maybe<string> host
+
+struct Server:
+    Config config
+
+fn main() i32:
+    # Port 42 - the Answer computed by Deep Thought
+    let Config cfg = Config(Maybe.Some(42), Maybe.Some("deep-thought"))
+    let Server s = Server(cfg)
+    let u64 h = s.hash()
+    println("Server hash: {h}")
+    return Result.Ok(0)

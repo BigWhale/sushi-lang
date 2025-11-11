@@ -1,0 +1,19 @@
+# Test that nested generic syntax parses correctly
+# Verifies: Result<Maybe<i32>> now works without requiring a space before >>
+# "In the beginning the Universe was created. This has made a lot of people very angry."
+
+fn main() i32:
+    # Test the parser accepts >> in nested generics
+    let Result<Maybe<i32>> nested = Result.Ok(Maybe.Some(42))
+
+    # Use the nested variable to avoid warning
+    let i32 base = 21
+    if (nested):
+        base := 42
+
+    # Verify right shift operator still works correctly
+    let i32 shifted = base >> 1  # Should be 21
+    let i32 expected = 21
+
+    # Return 0 if both features work (nested generics parse, right shift computes correctly)
+    return Result.Ok(shifted - expected)

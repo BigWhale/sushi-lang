@@ -1,0 +1,27 @@
+# Test mixing octal literals with hex, binary, and decimal
+
+fn main() i32:
+    # Mix different literal formats
+    let i32 oct_val = 0o10
+    let i32 hex_val = 0x8
+    let i32 bin_val = 0b1000
+    let i32 dec_val = 8
+
+    # All should be equal
+    let bool all_equal = (oct_val == hex_val) and (hex_val == bin_val) and (bin_val == dec_val)
+
+    # Mix in expressions
+    let i32 result1 = 0o7 + 0x1
+    let i32 result2 = 0o10 | 0b111
+    let i32 result3 = 0o777 & 0xFF
+
+    # Verify conversions
+    let bool check1 = 0o77 == 0x3F
+    let bool check2 = 0o100 == 64
+    let bool check3 = 0o377 == 0xFF
+
+    # Use variables
+    let i32 sum = result1 + result2 + result3
+    if (all_equal and check1 and check2 and check3):
+        println("Mostly Harmless")
+    return Result.Ok(sum)

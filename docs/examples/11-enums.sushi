@@ -1,0 +1,60 @@
+# Example 11: Enums
+#
+# This example demonstrates enum types with associated data in Sushi.
+# Enums (algebraic data types) allow you to define a type that can be
+# one of several variants, each potentially carrying different data.
+#
+# Key concepts covered:
+# - Enum definition with multiple variants
+# - Variants with no data: Idle()
+# - Variants with associated data: Traveling(string), Panicking(i32)
+# - Pattern matching to extract variant data
+# - Exhaustive matching (all variants must be handled)
+# - Wildcard pattern (_) to ignore variant data
+#
+# Note: Enum variants use types only (no field names), similar to structs.
+
+enum CrewStatus:
+    Idle()
+    Traveling(string)
+    Panicking(i32)
+
+fn main() i32:
+    # Create enum instances - each is a different variant
+    let CrewStatus arthur_status = CrewStatus.Idle()
+    let CrewStatus ship_status = CrewStatus.Traveling("Magrathea")
+    let CrewStatus marvin_status = CrewStatus.Panicking(0)  # Never panics
+
+    # Pattern matching is the only way to access enum variant data
+    # The compiler ensures all variants are handled (exhaustiveness check)
+    println("=== Arthur's Status ===")
+    match arthur_status:
+        CrewStatus.Idle() ->
+            println("Arthur is idle, probably looking for tea")
+        CrewStatus.Traveling(dest) ->
+            println("Arthur is traveling to {dest}")
+        CrewStatus.Panicking(level) ->
+            println("Arthur is panicking at level {level}")
+
+    println("")
+    println("=== Ship Status ===")
+    match ship_status:
+        CrewStatus.Idle() ->
+            println("Ship is idle")
+        CrewStatus.Traveling(dest) ->
+            println("Ship traveling to {dest}")
+        CrewStatus.Panicking(_) ->  # _ ignores the panic level
+            println("Ship systems panicking")
+
+    println("")
+    println("=== Marvin's Status ===")
+    match marvin_status:
+        CrewStatus.Idle() ->
+            println("Marvin is idle (and depressed)")
+        CrewStatus.Traveling(dest) ->
+            println("Marvin is traveling to {dest} (reluctantly)")
+        CrewStatus.Panicking(level) ->
+            println("Marvin panic level: {level} (can't be bothered)")
+
+    return Result.Ok(0)
+

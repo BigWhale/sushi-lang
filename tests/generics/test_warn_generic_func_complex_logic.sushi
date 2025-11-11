@@ -1,0 +1,43 @@
+# Test generic functions with complex control flow and logic
+# This tests body substitution with if/while statements
+
+fn find_max<T>(T a, T b) T:
+    # Control flow with generic types
+    if (a > b):
+        return Result.Ok(a)
+    else:
+        return Result.Ok(b)
+
+fn loop_count<T>(T value, i32 max) i32:
+    # Loop with generic type (just using it, not operating on it)
+    let i32 count = 0
+    while (count < max):
+        count := count + 1
+    return Result.Ok(count)
+
+fn run_test() i32:
+    # Test find_max with i32
+    let i32 max1 = find_max(10, 20)??
+    if (max1 != 20):
+        return Result.Ok(1)
+
+    # Test find_max with i64
+    let i64 max2 = find_max(100 as i64, 50 as i64)??
+    if (max2 != 100 as i64):
+        return Result.Ok(2)
+
+    # Test loop_count with i32
+    let i32 count1 = loop_count(42, 5)??
+    if (count1 != 5):
+        return Result.Ok(3)
+
+    # Test loop_count with string
+    let i32 count2 = loop_count("test", 3)??
+    if (count2 != 3):
+        return Result.Ok(4)
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

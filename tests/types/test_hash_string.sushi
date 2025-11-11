@@ -1,0 +1,54 @@
+# Test hash method for string type
+
+fn main() i32:
+    # Test basic string
+    let string s1 = "Mostly Harmless"
+    let u64 hash_s1 = s1.hash()
+    println("string hash('Mostly Harmless') = {hash_s1}")
+
+    # Test empty string
+    let string empty = ""
+    let u64 hash_empty = empty.hash()
+    println("string hash('') = {hash_empty}")
+
+    # Test single character
+    let string single = "a"
+    let u64 hash_single = single.hash()
+    println("string hash('a') = {hash_single}")
+
+    # Test that same strings produce same hash
+    let string x = "hello"
+    let string y = "hello"
+    let u64 hash_x = x.hash()
+    let u64 hash_y = y.hash()
+    if (hash_x == hash_y):
+        println("✓ Same strings produce same hash")
+    else:
+        println("✗ Same strings produce different hash")
+
+    # Test that different strings (usually) produce different hashes
+    let string a = "foo"
+    let string b = "bar"
+    let u64 hash_a = a.hash()
+    let u64 hash_b = b.hash()
+    if (hash_a != hash_b):
+        println("✓ Different strings produce different hashes")
+    else:
+        println("✗ Different strings produce same hash (collision)")
+
+    # Test longer string
+    let string long = "The Hitchhiker's Guide to the Galaxy"
+    let u64 hash_long = long.hash()
+    println("string hash('The Hitchhiker's Guide to the Galaxy') = {hash_long}")
+
+    # Test string with numbers
+    let string nums = "12345"
+    let u64 hash_nums = nums.hash()
+    println("string hash('12345') = {hash_nums}")
+
+    # Test string with special characters
+    let string special = "!@#$%^&*()"
+    let u64 hash_special = special.hash()
+    println("string hash('!@#$%^&*()') = {hash_special}")
+
+    return Result.Ok(0)

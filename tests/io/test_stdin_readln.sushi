@@ -1,0 +1,14 @@
+# TEST_TYPE: runtime
+# STDIN_INPUT: "Test Line\n"
+# EXPECT_STDOUT_CONTAINS: "You entered: Test Line"
+# EXPECT_RUNTIME_EXIT: 0
+# Test stdin.readln() - reads one line from standard input
+
+use <io/stdio>
+
+fn main() i32:
+    let string line = stdin.readln()
+    stdout.write("You entered: ")
+    stdout.write(line)
+    stdout.write("\n")
+    return Result.Ok(0)

@@ -1,0 +1,24 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Same-type integer operations should pass
+fn main() i32:
+  # i32 operations
+  let i32 a = 10
+  let i32 b = 5
+  let i32 sum = a + b
+  let i32 diff = a - b
+  let i32 prod = a * b
+  let i32 quot = a / b
+  let i32 rem = a % b
+
+  # Comparisons
+  let bool gt = a > b
+  let bool lt = b < a
+  let bool eq = sum == 15
+  let bool neq = diff != 0
+
+  if (sum == 15 and diff == 5 and prod == 50 and quot == 2 and rem == 0):
+    if (gt and lt and eq and neq):
+      return Result.Ok(0)
+
+  return Result.Ok(1)

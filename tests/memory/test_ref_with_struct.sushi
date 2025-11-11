@@ -1,0 +1,31 @@
+# Test: Mutable references with struct types
+# Should compile and run successfully
+
+struct Point:
+    i32 x
+    i32 y
+
+fn move_right(&Point p) ~:
+    let Point new_p = Point(p.x + 10, p.y)
+    p := new_p
+    return Result.Ok(~)
+
+fn move_up(&Point p) ~:
+    let Point new_p = Point(p.x, p.y + 5)
+    p := new_p
+    return Result.Ok(~)
+
+fn main() i32:
+    let Point origin = Point(0, 0)
+    println(origin.x)
+    println(origin.y)
+
+    move_right(&origin)
+    println(origin.x)
+    println(origin.y)
+
+    move_up(&origin)
+    println(origin.x)
+    println(origin.y)
+
+    return Result.Ok(0)

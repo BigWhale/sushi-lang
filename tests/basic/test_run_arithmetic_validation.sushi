@@ -1,0 +1,43 @@
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+# TIMEOUT_SECONDS: 10
+fn main() i32:
+  # Test comprehensive arithmetic operations
+  let i32 a = 15
+  let i32 b = 4
+
+  # Basic operations
+  let i32 add_result = a + b      # 19
+  let i32 sub_result = a - b      # 11
+  let i32 mul_result = a * b      # 60
+  let i32 div_result = a / b      # 3 (integer division)
+  let i32 mod_result = a % b      # 3
+
+  # Validate each operation
+  let i32 validation_count = 0
+
+  if (add_result == 19):
+    validation_count := validation_count + 1
+
+  if (sub_result == 11):
+    validation_count := validation_count + 1
+
+  if (mul_result == 60):
+    validation_count := validation_count + 1
+
+  if (div_result == 3):
+    validation_count := validation_count + 1
+
+  if (mod_result == 3):
+    validation_count := validation_count + 1
+
+  # Complex expression validation
+  let i32 complex = (a + b) * (a - b) / b  # (15+4) * (15-4) / 4 = 19 * 11 / 4 = 209 / 4 = 52
+  if (complex == 52):
+    validation_count := validation_count + 1
+
+  # All validations should pass
+  if (validation_count == 6):
+    return Result.Ok(0)                 # Success)
+  else:
+    return Result.Ok(validation_count)  # Return number of passed validations for debugging)

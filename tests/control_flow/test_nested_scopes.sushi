@@ -1,0 +1,22 @@
+# EXPECT_RUNTIME_EXIT: 30
+# TEST_TYPE: runtime
+fn main() i32:
+  let i32 x = 10
+
+  # Nested if blocks
+  if (x > 5):
+    let i32 y = 20
+    if (y > 15):
+      let i32 z = 30
+      x := z
+
+  # Nested while blocks
+  let i32 i = 0
+  while (i < 3):
+    let i32 j = 0
+    while (j < 2):
+      j := j + 1
+    i := i + 1
+
+  # x should be 30 (assigned from z in nested scope)
+  return Result.Ok(x)

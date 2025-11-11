@@ -1,0 +1,199 @@
+# Example 22: Doubly Linked List (Arena-Based)
+#
+# This example demonstrates a doubly-linked list using the arena/index
+# approach - storing all nodes in a List<T> and using integer indices
+# instead of pointers for links.
+#
+# A doubly linked list is a data structure where each node contains:
+# - Data (the value stored in the node)
+# - An index to the next node (forward traversal)
+# - An index to the previous node (backward traversal)
+#
+# Key concepts covered:
+# - Arena allocation pattern (nodes in contiguous memory)
+# - Using indices instead of pointers to avoid ownership issues
+# - List<T> for dynamic node storage
+# - Maybe<i32> for optional indices (None = no link)
+# - While loops for traversal
+# - Safe implementation without unsafe code or raw pointers
+# - Bidirectional traversal without ownership conflicts
+#
+# Why this approach works:
+# - No ownership issues: indices are just copyable integers
+# - Memory safe: invalid indices caught by bounds checks
+# - Cache-friendly: contiguous memory layout
+# - Simple: no manual memory management needed
+#
+# This is a recommended pattern for implementing graph-like structures
+# (doubly-linked lists, trees with parent pointers, etc.) in Sushi.
+
+# Node in a doubly-linked list
+# Uses integer indices to reference other nodes instead of pointers
+struct Node:
+    i32 value
+    Maybe<i32> next  # Index to next node in the arena
+    Maybe<i32> prev  # Index to previous node in the arena
+
+# Builds a doubly-linked list in an arena
+# Returns a List<Node> where nodes link to each other via indices
+fn build_list(i32[] values) List<Node>:
+    let List<Node> nodes = List.new()
+    let i32 len = values.len()
+
+    # Build all nodes with proper links
+    let i32 i = 0
+    while (i < len):
+        # Determine next and prev indices
+        let Maybe<i32> next_idx = Maybe.None()
+        if (i < len - 1):
+            # Not the last node - has next
+            next_idx := Maybe.Some(i + 1)
+
+        let Maybe<i32> prev_idx = Maybe.None()
+        if (i > 0):
+            # Not the first node - has prev
+            prev_idx := Maybe.Some(i - 1)
+
+        # Create node with computed links
+        let i32 val = values.get(i)
+        let Node node = Node(val, next_idx, prev_idx)
+        nodes.push(node)
+
+        i := i + 1
+
+    return Result.Ok(nodes)
+
+# Prints the list forward from a given start index
+fn print_forward(List<Node> nodes, i32 start_idx) ~:
+    print("Forward: [")
+
+    let Maybe<i32> current = Maybe.Some(start_idx)
+    let bool first = true
+
+    # Traverse using while loop
+    while (current.is_some()):
+        let i32 idx = current.realise(-1)
+
+        match nodes.get(idx):
+            Maybe.Some(n) ->
+                if (not first):
+                    print(" <-> ")
+                print("{n.value}")
+                let Maybe<i32> next_idx = n.next
+                current := next_idx
+                first := false
+            Maybe.None() ->
+                break
+
+    println("]")
+    return Result.Ok(~)
+
+# Prints the list backward from a given start index
+fn print_backward(List<Node> nodes, i32 start_idx) ~:
+    print("Backward: [")
+
+    let Maybe<i32> current = Maybe.Some(start_idx)
+    let bool first = true
+
+    # Traverse using while loop
+    while (current.is_some()):
+        let i32 idx = current.realise(-1)
+
+        match nodes.get(idx):
+            Maybe.Some(n) ->
+                if (not first):
+                    print(" <-> ")
+                print("{n.value}")
+                let Maybe<i32> prev_idx = n.prev
+                current := prev_idx
+                first := false
+            Maybe.None() ->
+                break
+
+    println("]")
+    return Result.Ok(~)
+
+# Calculates the sum of all values in the list
+fn sum_list(List<Node> nodes, i32 start_idx) i32:
+    let i32 total = 0
+    let Maybe<i32> current = Maybe.Some(start_idx)
+
+    while (current.is_some()):
+        let i32 idx = current.realise(-1)
+
+        match nodes.get(idx):
+            Maybe.Some(node) ->
+                total := total + node.value
+                let Maybe<i32> next_idx = node.next
+                current := next_idx
+            Maybe.None() ->
+                break
+
+    return Result.Ok(total)
+
+fn main() i32:
+    println("=== Doubly Linked List (Arena-Based) ===")
+    println("")
+
+    # Build a simple list: 10 <-> 20 <-> 30
+    println("=== Building list: [10, 20, 30] ===")
+    let i32[] values1 = from([10, 20, 30])
+    let List<Node> list1 = build_list(values1)??
+
+    println("Nodes stored: {list1.len()}")
+    println("Head index: 0, Tail index: {list1.len() - 1}")
+    println("")
+
+    # Traverse forward from head
+    print_forward(list1, 0)
+
+    # Traverse backward from tail
+    print_backward(list1, list1.len() - 1)
+    println("")
+
+    # Calculate sum
+    let i32 sum1 = sum_list(list1, 0)??
+    println("Sum: {sum1}")
+    println("")
+
+    # Build a longer list
+    println("=== Building list: [5, 15, 25, 35, 45, 55] ===")
+    let i32[] values2 = from([5, 15, 25, 35, 45, 55])
+    let List<Node> list2 = build_list(values2)??
+
+    println("Nodes stored: {list2.len()}")
+    println("Head index: 0, Tail index: {list2.len() - 1}")
+    println("")
+
+    print_forward(list2, 0)
+    print_backward(list2, list2.len() - 1)
+
+    let i32 sum2 = sum_list(list2, 0)??
+    println("Sum: {sum2}")
+    println("")
+
+    # Show node structure
+    println("=== Node Structure ===")
+    match list2.get(2):
+        Maybe.Some(n) ->
+            println("Node at index 2: value={n.value}")
+        Maybe.None() ->
+            println("No node at index 2")
+    println("")
+
+    # Explain the approach
+    println("=== Arena Allocation Benefits ===")
+    println("1. All nodes stored contiguously in List<Node>")
+    println("2. Links are indices (i32), not pointers")
+    println("3. No ownership conflicts - indices are copyable")
+    println("4. Memory safe - bounds checking on access")
+    println("5. Cache-friendly - sequential memory layout")
+    println("6. No unsafe code needed")
+    println("7. Automatic cleanup via List<T> RAII")
+    println("")
+    println("This pattern works for any graph-like structure:")
+    println("- Doubly-linked lists")
+    println("- Trees with parent pointers")
+    println("- Graphs with bidirectional edges")
+
+    return Result.Ok(0)

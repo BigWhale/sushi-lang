@@ -1,0 +1,8 @@
+use <collections/strings>
+
+fn main() i32:
+    # Error: contains() requires exactly 1 string argument (wrong type)
+    let string s = "hello"
+    let bool result = s.contains(42)
+    println(result)
+    return Result.Ok(0)

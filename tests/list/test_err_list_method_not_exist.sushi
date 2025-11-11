@@ -1,0 +1,6 @@
+# Test error: calling non-existent List method
+fn main() i32:
+    let List<i32> data = List.new()
+    # ERROR: append() is not a valid List method (should use push())
+    data.append(42)
+    return Result.Ok(0)

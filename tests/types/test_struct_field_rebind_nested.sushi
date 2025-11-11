@@ -1,0 +1,18 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: 42
+
+# Test nested struct field rebinding
+struct Inner:
+    i32 value
+
+struct Outer:
+    Inner inner
+    i32 count
+
+fn main() i32:
+    let Inner inner = Inner(10)
+    let Outer outer = Outer(inner, 5)
+    outer.inner.value := 42
+    println(outer.inner.value)
+    return Result.Ok(0)

@@ -1,0 +1,17 @@
+# Test valid array bounds access
+# This test should compile and run successfully
+
+fn main() i32:
+    let i32[5] numbers = [10, 20, 30, 40, 50]
+
+    # Valid accesses
+    let i32 first = numbers[0]
+    let i32 last = numbers[4]
+    let i32 middle = numbers[2]
+
+    # Verify values
+    println(first)   # Should print 10
+    println(middle)  # Should print 30
+    println(last)    # Should print 50
+
+    return Result.Ok(0)

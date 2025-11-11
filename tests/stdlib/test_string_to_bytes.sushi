@@ -1,0 +1,34 @@
+# Test string.to_bytes() method with runtime validation
+use <io/stdio>
+use <collections/strings>
+
+fn run_test() i32:
+    # Test 1: ASCII string to bytes
+    let string s1 = "Hello"
+    let u8[] bytes1 = s1.to_bytes()
+    println(bytes1.len())  # Expected: 5
+
+    # Test 2: UTF-8 string to bytes (caf� = 5 bytes)
+    let string s2 = "caf�"
+    let u8[] bytes2 = s2.to_bytes()
+    println(bytes2.len())  # Expected: 5
+
+    # Test 3: Multi-byte UTF-8 (L = 6 bytes, 2 chars * 3 bytes each)
+    let string s3 = "L"
+    let u8[] bytes3 = s3.to_bytes()
+    println(bytes3.len())  # Expected: 6
+
+    # Test 4: Empty string
+    let string empty = ""
+    let u8[] bytes4 = empty.to_bytes()
+    println(bytes4.len())  # Expected: 0
+
+    # Test 5: Access individual bytes (verify first byte of "Hello" = 72 = 'H')
+    let u8 first_byte = bytes1.get(0)??
+    println(first_byte)  # Expected: 72
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

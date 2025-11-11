@@ -1,0 +1,17 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: 100
+
+# Test struct field rebinding through reference parameter
+struct Counter:
+    i32 count
+
+fn update_count(&Counter c) ~:
+    c.count := 100
+    return Result.Ok(~)
+
+fn main() i32:
+    let Counter c = Counter(0)
+    update_count(&c)
+    println(c.count)
+    return Result.Ok(0)

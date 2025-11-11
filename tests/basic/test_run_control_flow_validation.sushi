@@ -1,0 +1,54 @@
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+fn main() i32:
+  # Test control flow structures work correctly
+  let i32 validation_count = 0
+
+  # Test if-else chains
+  let i32 x = 10
+  if (x > 15):
+    return Result.Ok(1)  # Should not happen)
+  elif (x < 5):
+    return Result.Ok(2)  # Should not happen)
+  elif (x == 10):
+    validation_count := validation_count + 1  # Should execute
+  else:
+    return Result.Ok(3)  # Should not happen)
+
+  # Test while loops with break/continue
+  let i32 sum = 0
+  let i32 i = 0
+  while (i < 10):
+    i := i + 1
+    if (i == 3):
+      continue  # Skip 3
+    if (i == 7):
+      break     # Stop at 7
+    sum := sum + i
+
+  # sum should be 1 + 2 + 4 + 5 + 6 = 18
+  if (sum == 18):
+    validation_count := validation_count + 1
+
+  # Test nested control structures
+  let i32 nested_result = 0
+  let i32 j = 0
+  while (j < 3):
+    j := j + 1
+    if (j == 1):
+      let i32 k = 0
+      while (k < 2):
+        k := k + 1
+        nested_result := nested_result + k
+    elif (j == 2):
+      nested_result := nested_result * 2
+
+  # nested_result should be (1+2) * 2 = 6
+  if (nested_result == 6):
+    validation_count := validation_count + 1
+
+  # All validations should pass
+  if (validation_count == 3):
+    return Result.Ok(0)  # Success)
+  else:
+    return Result.Ok(validation_count)  # Return number of passed for debugging)

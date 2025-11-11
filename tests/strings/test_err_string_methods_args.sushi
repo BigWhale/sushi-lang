@@ -1,0 +1,14 @@
+# This file tests argument count errors for string methods
+# This should fail compilation with CE2009 errors (wrong argument count)
+use <collections/strings>
+
+fn main() i32:
+  let string text = "Hello"
+
+  # Test methods with wrong argument counts
+  let string result1 = text.s(1)       # s() expects 2 args, got 1
+  let string result2 = text.sleft()    # sleft() expects 1 arg, got 0
+  let string result3 = text.sright(1, 2)  # sright() expects 1 arg, got 2
+  let string result4 = text.char_at(0, 1)  # char_at() expects 1 arg, got 2
+
+  return Result.Ok(0)

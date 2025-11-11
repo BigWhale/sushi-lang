@@ -1,0 +1,49 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test List<T> push and pop operations
+fn main() i32:
+    # Create empty List
+    let List<i32> numbers = List.new()
+
+    # Test initial state
+    if (not numbers.is_empty()):
+        println("ERROR: List should start empty")
+        return Result.Ok(1)
+
+    # Push elements
+    numbers.push(10)
+    numbers.push(20)
+    numbers.push(30)
+
+    # Check size
+    let i32 size = numbers.len()
+    if (size != 3):
+        println("ERROR: Expected size 3, got {size}")
+        return Result.Ok(2)
+
+    # Pop elements
+    match numbers.pop():
+        Maybe.Some(val) ->
+            if (val != 30):
+                println("ERROR: Expected 30, got {val}")
+                return Result.Ok(3)
+        Maybe.None() ->
+            println("ERROR: Pop should return Some(30)")
+            return Result.Ok(4)
+
+    match numbers.pop():
+        Maybe.Some(val) ->
+            if (val != 20):
+                println("ERROR: Expected 20, got {val}")
+                return Result.Ok(5)
+        Maybe.None() ->
+            println("ERROR: Pop should return Some(20)")
+            return Result.Ok(6)
+
+    # Check size after pops
+    if (numbers.len() != 1):
+        println("ERROR: Expected size 1 after 2 pops")
+        return Result.Ok(7)
+
+    println("Push/pop tests passed!")
+    return Result.Ok(0)

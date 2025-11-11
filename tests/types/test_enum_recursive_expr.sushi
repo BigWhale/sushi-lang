@@ -1,0 +1,36 @@
+# Test recursive Expr AST with Own<Expr>
+enum Expr:
+    IntLit(i32)
+    Add(Own<Expr>, Own<Expr>)
+    Mul(Own<Expr>, Own<Expr>)
+
+fn eval(Expr expr) i32:
+    match expr:
+        Expr.IntLit(n) ->
+            return Result.Ok(n)
+        Expr.Add(Own(left), Own(right)) ->
+            let i32 l = eval(left)??
+            let i32 r = eval(right)??
+            return Result.Ok(l + r)
+        Expr.Mul(Own(left), Own(right)) ->
+            let i32 l = eval(left)??
+            let i32 r = eval(right)??
+            return Result.Ok(l * r)
+
+fn run_test() i32:
+    # Build: 2 + (3 * 5) = 2 + 15 = 17
+    let Own<Expr> lit2 = Own.alloc(Expr.IntLit(2))
+    let Own<Expr> lit3 = Own.alloc(Expr.IntLit(3))
+    let Own<Expr> lit5 = Own.alloc(Expr.IntLit(5))
+
+    let Own<Expr> mul = Own.alloc(Expr.Mul(lit3, lit5))
+    let Expr add = Expr.Add(lit2, mul)
+
+    let i32 result = eval(add)??
+    println("Result: {result}")
+    let i32 expected = 17
+    return Result.Ok(result - expected)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

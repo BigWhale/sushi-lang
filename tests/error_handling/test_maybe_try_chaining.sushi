@@ -1,0 +1,38 @@
+# Test chaining ?? operators with Maybe<T>
+# Demonstrates early return on first None
+
+use <collections/strings>
+
+fn find_both(string text) i32:
+    # Find first 'x', propagate if not found
+    println("Trying first")
+    let i32 first = text.find("x")??
+
+    # Find first 'y', propagate if not found
+    println("Trying second")
+    let i32 second = text.find("y")??
+    return Result.Ok(first + second)
+
+fn main() i32:
+    # Test with both present
+    let Result<i32> result1 = find_both("x hello y world")
+    if (result1):
+        println("Both found")
+    else:
+        println("One or both not found")
+
+    # Test with first missing (should propagate)
+    let Result<i32> result2 = find_both("hello y world")
+    if (result2):
+        println("Both found")
+    else:
+        println("First not found")
+
+    # Test with second missing (should propagate)
+    let Result<i32> result3 = find_both("x hello world")
+    if (result3):
+        println("Both found")
+    else:
+        println("Second not found")
+
+    return Result.Ok(0)

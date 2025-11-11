@@ -1,0 +1,16 @@
+# Test: Cannot borrow temporary values
+# Expected: CE2404 error
+
+struct Config:
+    i32 port
+
+fn get_config() Config:
+    return Result.Ok(Config(8080))
+
+fn modify_port(&i32 p) ~:
+    p := 9000
+    return Result.Ok(~)
+
+fn main() i32:
+    modify_port(&get_config().port)
+    return Result.Ok(0)

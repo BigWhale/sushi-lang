@@ -1,0 +1,22 @@
+# TEST_TYPE: runtime
+# Test chained ?? operators
+
+fn first() i32:
+    return Result.Ok(10)
+
+fn second(i32 x) i32:
+    return Result.Ok(x + 20)
+
+fn third(i32 x) i32:
+    return Result.Ok(x + 30)
+
+fn compute() i32:
+    # Chained ?? operators
+    let i32 result = third(second(first()??)??)??
+    return Result.Ok(result)
+
+fn main() i32:
+    let i32 result = compute().realise(0)
+    println("Result: {result}")
+    let i32 expected = 60
+    return Result.Ok(result - expected)

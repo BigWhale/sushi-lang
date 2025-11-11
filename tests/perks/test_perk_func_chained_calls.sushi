@@ -1,0 +1,41 @@
+# Test chained generic function calls with constraints
+
+perk Hashable:
+    fn hash() u64
+
+perk Displayable:
+    fn display() string
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Hashable:
+    fn hash() u64:
+        return 42 as u64
+
+extend Point with Displayable:
+    fn display() string:
+        return "Point"
+
+fn get_hash<T: Hashable>(T value) u64:
+    return Result.Ok(value.hash())
+
+fn get_display<T: Displayable>(T value) string:
+    return Result.Ok(value.display())
+
+fn combine<T: Hashable + Displayable>(T value) ~:
+    let u64 h = get_hash(value)??
+    let string s = get_display(value)??
+    println(s)
+    println(h)
+    return Result.Ok(~)
+
+fn run_test() i32:
+    let Point p = Point(10, 20)
+    combine(p)??
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

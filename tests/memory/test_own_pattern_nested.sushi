@@ -1,0 +1,31 @@
+# Test Own patterns with nested enum patterns inside
+# This tests Own(EnumPattern) syntax without requiring Own<enum> recursion
+
+enum Status:
+    Ok(i32)
+    Err(string)
+
+struct Container:
+    Own<Status> status
+
+# Test: multiple Own patterns in same variant
+enum Pair:
+    Both(Own<i32>, Own<i32>)
+    Single(Own<i32>)
+    Empty()
+
+fn test_multiple_own(Pair p) i32:
+    match p:
+        Pair.Both(Own(a), Own(b)) ->
+            return Result.Ok(a + b)
+        Pair.Single(Own(x)) ->
+            return Result.Ok(x)
+        Pair.Empty() ->
+            return Result.Ok(0)
+    return Result.Ok(-1)
+
+fn main() i32:
+    # Test multiple Own patterns
+    let Pair p = Pair.Empty()
+    let i32 result = test_multiple_own(p).realise(-1)
+    return Result.Ok(result)

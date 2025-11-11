@@ -1,0 +1,22 @@
+fn run_test() i32:
+    # Test fill() on dynamic array with the answer to life, the universe, and everything
+    let i32[] vogons = from([0, 1, 2, 3, 4])
+    vogons.fill(42)
+
+    # Verify all elements are now 42
+    if (vogons.get(0)?? != 42):
+        return Result.Err()
+    if (vogons.get(1)?? != 42):
+        return Result.Err()
+    if (vogons.get(2)?? != 42):
+        return Result.Err()
+    if (vogons.get(3)?? != 42):
+        return Result.Err()
+    if (vogons.get(4)?? != 42):
+        return Result.Err()
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

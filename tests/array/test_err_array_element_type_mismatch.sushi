@@ -1,0 +1,4 @@
+fn main() i32:
+    # This should fail with CE2013: array element type mismatch
+    let i32[3] arr = [1, true, 3]  # Mixed i32 and bool types
+    return Result.Ok(0)

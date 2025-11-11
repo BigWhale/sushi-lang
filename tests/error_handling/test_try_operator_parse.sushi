@@ -1,0 +1,14 @@
+# Test parsing of ?? operator
+
+fn get_value() i32:
+    return Result.Ok(42)
+
+fn helper() i32:
+    # Test basic ?? operator parsing
+    let i32 x = get_value()??
+    return Result.Ok(x)
+
+fn main() i32:
+    let i32 x = helper().realise(0)
+    let i32 expected = 42
+    return Result.Ok(x - expected)

@@ -1,0 +1,18 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: 42
+
+# Test built-in extension methods work with nested generics
+# "The impossible often has a kind of integrity to it which the merely improbable lacks"
+
+fn main() i32:
+    let Result<Maybe<i32>> nested = Result.Ok(Maybe.Some(42))
+
+    # Use built-in extension methods on nested generic
+    if (nested):
+        let Maybe<i32> inner = nested.realise(Maybe.None())
+        if (inner.is_some()):
+            let i32 value = inner.realise(0)
+            println("{value}")
+            return Result.Ok(0)
+
+    return Result.Ok(1)

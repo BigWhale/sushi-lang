@@ -1,0 +1,65 @@
+# Example 16: HashMap<K, V>
+#
+# This example demonstrates Sushi's HashMap<K, V> generic hash table, a built-in
+# type that provides O(1) average-case lookups using open addressing with linear
+# probing and automatic resizing at 0.75 load factor.
+#
+# Key concepts covered:
+# - Generic hash table HashMap<K, V> with compile-time type specialization
+# - HashMap creation with .new()
+# - Inserting key-value pairs with .insert()
+# - Safe lookups with .get() returning Maybe<V>
+# - Checking key existence with .contains_key()
+# - Removing entries with .remove() returning Maybe<V>
+# - Automatic resizing when load factor exceeds 0.75
+# - Auto-derived .hash() for all types enables HashMap usage
+#
+# Note: HashMap uses power-of-two capacities for fast indexing via bitwise AND.
+# Keys must implement .hash() -> u64 (auto-derived for primitives, strings, structs, enums).
+
+fn main() i32:
+    # Create empty hash map with default capacity
+    let HashMap<string, i32> ages = HashMap.new()
+
+    # Insert key-value pairs - automatically resizes when needed
+    ages.insert("Arthur", 42)
+    ages.insert("Ford", 200)
+    ages.insert("Zaphod", 150)
+    ages.insert("Trillian", 35)
+    ages.insert("Marvin", 1000000)
+
+    println("Number of crew members: {ages.len()}")
+
+    # Safe lookup with .get() - returns Maybe<V>
+    match ages.get("Arthur"):
+        Maybe.Some(age) ->
+            println("Arthur's age: {age}")
+        Maybe.None() ->
+            println("Arthur not found")
+
+    # Check if key exists without retrieving the value
+    if (ages.contains_key("Marvin")):
+        println("Marvin is in the crew")
+
+    # Update value by inserting with the same key
+    # .insert() replaces the old value if the key exists
+    ages.insert("Arthur", 43)
+
+    match ages.get("Arthur"):
+        Maybe.Some(age) ->
+            println("Arthur's updated age: {age}")
+        Maybe.None() ->
+            println("Not found")
+
+    # Remove entry - returns Maybe<V> with the old value
+    match ages.remove("Zaphod"):
+        Maybe.Some(age) ->
+            println("Removed Zaphod (age {age})")
+        Maybe.None() ->
+            println("Zaphod not found")
+
+    println("Remaining crew: {ages.len()}")
+
+    # HashMap automatically cleans up when it goes out of scope (RAII)
+    return Result.Ok(0)
+

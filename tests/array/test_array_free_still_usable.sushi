@@ -1,0 +1,11 @@
+fn main() i32:
+    let i32[] arr = from([1, 2, 3])
+
+    # Free the array (clears but keeps usable)
+    arr.free()
+
+    # This should work - .free() keeps the array usable
+    arr.push(10)
+    println(arr.len())
+
+    return Result.Ok(0)

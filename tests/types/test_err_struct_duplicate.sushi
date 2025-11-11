@@ -1,0 +1,12 @@
+# Error: Duplicate struct definition
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Point:
+    i32 a
+    i32 b
+
+fn main() i32:
+    return Result.Ok(0)

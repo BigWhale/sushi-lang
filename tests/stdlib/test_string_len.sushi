@@ -1,0 +1,32 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT: 5
+# EXPECT_STDOUT: 4
+# EXPECT_STDOUT: 0
+# EXPECT_STDOUT: 2
+# EXPECT_STDOUT: 1
+
+use <collections/strings>
+
+fn main() i32:
+    # Test ASCII string - length should equal size
+    let string s1 = "Hello"
+    println(s1.len())  # Should print: 5
+
+    # Test UTF-8 string - length is character count, not bytes
+    let string s2 = "café"
+    println(s2.len())  # Should print: 4 (c,a,f,é)
+
+    # Test empty string
+    let string s3 = ""
+    println(s3.len())  # Should print: 0
+
+    # Test multi-byte UTF-8
+    let string s4 = "你好"
+    println(s4.len())  # Should print: 2 (两个字符)
+
+    # Test emoji (4-byte UTF-8)
+    let string s5 = "👋"
+    println(s5.len())  # Should print: 1
+
+    return Result.Ok(0)

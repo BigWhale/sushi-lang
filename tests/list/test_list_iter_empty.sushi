@@ -1,0 +1,10 @@
+fn main() i32:
+    let List<i32> empty = List.new()
+
+    println("=== Iterating over empty List ===")
+    foreach(n in empty.iter()):
+        println(n)
+
+    println("Done (should not print any numbers)")
+
+    return Result.Ok(0)

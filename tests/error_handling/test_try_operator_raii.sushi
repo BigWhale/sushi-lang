@@ -1,0 +1,32 @@
+# Test RAII cleanup with ?? operator
+# If cleanup doesn't work properly, this will cause memory leaks or crashes
+
+
+fn create_array() i32[]:
+    let i32[] arr = new()
+    arr.push(1)
+    arr.push(2)
+    arr.push(3)
+    return Result.Ok(arr)
+
+fn might_fail(bool succeed) i32:
+    # Direct initialization from function call with ?? operator
+    let i32[] temp = create_array()??  # RAII: must cleanup on error
+    if (succeed):
+        return Result.Ok(temp.len())
+    return Result.Err()  # Must free temp before returning via ??
+
+fn caller(bool flag) i32:
+    let i32 result = might_fail(flag)??  # Another level of propagation
+    return Result.Ok(result + 100)
+
+fn main() i32:
+    # Test success path
+    let i32 good = caller(true).realise(0)
+    println("Success: {good}")
+
+    # Test error path (should cleanup arrays)
+    let i32 bad = caller(false).realise(999)
+    println("Error handled: {bad}")
+
+    return Result.Ok(0)

@@ -1,0 +1,3 @@
+fn main() i32:
+    let x = 5  # Missing type annotation - should fail
+    return Result.Ok(0)

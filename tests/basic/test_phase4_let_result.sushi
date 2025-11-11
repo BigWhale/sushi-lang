@@ -1,0 +1,19 @@
+# TEST_TYPE: compilation
+# Test for Phase 4.2 - Let Statement Validation
+# This test checks if we can declare variables with Result<T> type
+# and then use those variables in expressions
+
+
+fn get_value() i32:
+    return Result.Ok(42)
+
+fn main() i32:
+    # This should work - declaring a Result<i32> variable
+    let Result<i32> result = get_value()
+
+    # This should work - using the variable with .realise()
+    let i32 x = result.realise(0)
+
+    println(x)
+
+    return Result.Ok(0)

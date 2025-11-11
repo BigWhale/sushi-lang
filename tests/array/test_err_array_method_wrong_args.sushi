@@ -1,0 +1,7 @@
+fn main() i32:
+    let i32[3] arr = [1, 2, 3]
+
+    # This should fail with CE2009: len() takes no arguments
+    let i32 size = arr.len(5)
+
+    return Result.Ok(size)

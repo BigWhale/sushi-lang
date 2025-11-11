@@ -1,0 +1,46 @@
+# Test dynamic array function parameters
+
+
+fn get_length(i32[] arr) i32:
+    return Result.Ok(arr.len())
+
+fn get_string_length(string[] arr) string:
+    return Result.Ok(arr.get(0)??)
+
+fn get_bool_count(bool[] arr) i32:
+    return Result.Ok(arr.len())
+
+fn process_multiple(i32[] numbers, string[] names) i32:
+    return Result.Ok(numbers.len() + names.len())
+
+fn modify_array(i32[] arr) i32:
+    print(arr.push(99))
+    return Result.Ok(arr.len())
+
+fn main() i32:
+    # Test basic dynamic array parameter
+    let i32[] nums = from([1, 2, 3, 4])
+    let i32 length = get_length(nums).realise(0)
+    print(length)  # Should print 4
+
+    # Test string array parameter
+    let string[] words = from(["hello", "world"])
+    let string first = get_string_length(words).realise("")
+    print(first)   # Should print "hello"
+
+    # Test bool array parameter
+    let bool[] flags = from([true, false, true])
+    let i32 bool_count = get_bool_count(flags).realise(0)
+    print(bool_count)  # Should print 3
+
+    # Test multiple parameters
+    let i32 total = process_multiple(nums, words).realise(0)
+    print(total)   # Should print 6 (4 + 2)
+
+    # Test array modification in function
+    let i32[] mutable = from([10, 20])
+    let i32 new_length = modify_array(mutable).realise(0)
+    print(new_length)  # Should print 3
+    print(mutable.len())  # Should also print 3
+
+    return Result.Ok(0)

@@ -1,0 +1,15 @@
+struct Pair<T, U>:
+    T first
+    U second
+
+fn main() i32:
+    let Pair<i32, string> slartibartfast = Pair(42, "Life")
+    let Maybe<Pair<i32, string>> true_answer = Maybe.Some(slartibartfast)
+
+    match true_answer:
+        Maybe.Some(ford) ->
+            let string combined = "Value: {ford.second}"
+            println(combined)
+        Maybe.None() -> println("Nope")
+
+    return Result.Ok(0)

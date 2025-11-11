@@ -1,0 +1,8 @@
+fn main() i32:
+  let string msg = "Hello, World!"
+  let string empty = ""
+  let string quote = "She said \"hello\" today"
+  print(msg)
+  print(empty)
+  print(quote)
+  return Result.Ok(0)

@@ -1,0 +1,11 @@
+fn main() i32:
+  let bool a = true
+  let bool b = false
+  let bool c = a and b
+  let bool d = a or b
+  let bool e = not a
+  if (c):
+    return Result.Ok(1)
+  if (d and e):
+    return Result.Ok(2)
+  return Result.Ok(0)

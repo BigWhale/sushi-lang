@@ -1,0 +1,18 @@
+# Test binary literals in constants
+
+const i32 BIN_CONST = 0b11110000
+const i32 BIT_MASK = 0b11111111
+const i32 ZERO_BIN = 0b0
+
+fn main() i32:
+    let i32 a = BIN_CONST
+    let i32 b = BIT_MASK
+    let i32 c = ZERO_BIN
+
+    # Use constants in expressions
+    let i32 result = a & BIT_MASK
+    let bool check = b == 0b11111111
+
+    if (check):
+        println("Mostly Harmless")
+    return Result.Ok(result + c)

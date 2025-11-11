@@ -1,0 +1,13 @@
+# Simple test for file.lines() type inference
+use <io/files>
+
+fn main() i32:
+    let FileResult result = open("test.txt", FileMode.Read())
+    match result:
+        FileResult.Ok(f) ->
+            # Just call f.lines() to see if type inference works
+            f.lines()
+            return Result.Ok(0)
+        FileResult.Err(_) ->
+            return Result.Err()
+    return Result.Ok(0)

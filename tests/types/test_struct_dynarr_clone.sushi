@@ -1,0 +1,9 @@
+struct Container:
+    i32[] numbers
+
+fn main() i32:
+    let i32[] arr = from([1, 2, 3])
+    let Container c = Container(arr.clone())  # Explicit clone
+    println(arr.len())  # arr is still valid
+    println(c.numbers.len())
+    return Result.Ok(0)

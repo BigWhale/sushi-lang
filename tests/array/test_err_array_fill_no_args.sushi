@@ -1,0 +1,6 @@
+fn main() i32:
+    # Test that fill() requires exactly one argument
+    let i32[] improbability = from([1, 2, 3])
+    improbability.fill()
+
+    return Result.Ok(0)

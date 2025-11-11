@@ -1,0 +1,6 @@
+# Test that type inference requires explicit type declaration
+fn main() i32:
+  # This should fail - cannot infer type without explicit declaration
+  let numbers = new()
+
+  return Result.Ok(0)

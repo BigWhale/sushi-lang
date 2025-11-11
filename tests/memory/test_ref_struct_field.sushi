@@ -1,0 +1,38 @@
+struct Point:
+    i32 x
+    i32 y
+
+fn get_x(&Point p) i32:
+    return Result.Ok(p.x)
+
+fn get_y(&Point p) i32:
+    return Result.Ok(p.y)
+
+fn print_point(&Point p) ~:
+    print("Point(")
+    print(p.x)
+    print(", ")
+    print(p.y)
+    println(")")
+    return Result.Ok(~)
+
+fn run_test() i32:
+    let Point pt = Point(10, 20)
+
+    # Test 1: Access fields through reference parameters
+    let i32 x = get_x(&pt)??
+    let i32 y = get_y(&pt)??
+    println(x)
+    println(y)
+
+    # Test 2: Print struct fields through reference
+    print_point(&pt)??
+
+    # Test 3: Direct field access (not through reference) to suppress unused warning
+    println(pt.x)
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

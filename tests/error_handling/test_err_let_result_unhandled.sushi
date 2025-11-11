@@ -1,0 +1,11 @@
+# TEST_TYPE: compilation
+# Phase 4.2 - Error test for unhandled Result<T> assignment
+# Should fail with CE2505: cannot assign Result<T> to non-Result variable
+
+fn get_value() i32:
+    return Result.Ok(42)
+
+fn main() i32:
+    let i32 x = get_value()
+    println(x)
+    return Result.Ok(0)

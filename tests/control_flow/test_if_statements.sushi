@@ -1,0 +1,23 @@
+# EXPECT_RUNTIME_EXIT: 42
+# TEST_TYPE: runtime
+fn main() i32:
+  let i32 x = 10
+  let i32 result = 0
+
+  if (x > 5):
+    result := 1
+
+  # If-elif-else
+  if (x < 0):
+    result := -1
+  elif (x == 0):
+    result := 0
+  else:
+    result := 1
+
+  # Nested if
+  if (x > 0):
+    if (x < 100):
+      result := 42
+
+  return Result.Ok(result)  # Should be 42 from nested if)

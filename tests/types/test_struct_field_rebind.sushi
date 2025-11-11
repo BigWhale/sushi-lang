@@ -1,0 +1,17 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: 30
+# EXPECT_STDOUT_CONTAINS: 99
+
+# Test struct field rebinding
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point p = Point(10, 20)
+    p.x := 30
+    p.y := 99
+    print(p.x)
+    println(p.y)
+    return Result.Ok(0)

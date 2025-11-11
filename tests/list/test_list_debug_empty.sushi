@@ -1,0 +1,12 @@
+fn main() i32:
+    let List<i32> empty = List.new()
+
+    println("=== Empty List Debug ===")
+    empty.debug()
+
+    println("")
+    println("=== After pushing one element ===")
+    empty.push(42)
+    empty.debug()
+
+    return Result.Ok(0)

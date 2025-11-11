@@ -1,0 +1,71 @@
+# Example 17: Loops
+#
+# This example demonstrates Sushi's loop constructs for iteration and control flow.
+# Sushi provides while loops for condition-based iteration and foreach loops for
+# iterating over collections.
+#
+# Key concepts covered:
+# - while loops with condition checking
+# - foreach loops for iterating over arrays via .iter()
+# - break statement to exit loops early
+# - continue statement to skip to next iteration
+# - Loop variable mutation with := operator
+# - Combining loops with conditionals
+# - Using stdlib time module for delays
+#
+# Note: Sushi doesn't have traditional for loops with initialization/increment.
+# Use while for index-based iteration and foreach for collection iteration.
+
+use <time>
+
+fn main() i32:
+    # While loop - executes as long as condition is true
+    let i32 countdown = 10
+
+    println("Hyperspace countdown:")
+
+    while (countdown > 0):
+        println("T-minus {countdown}")
+        countdown := countdown - 1
+        # Add 200ms delay between countdown steps for dramatic effect
+        msleep(300 as i64)?? # The ?? here is used to prevent a compiler warning for not handling the Result<>
+
+    println("Jump!")
+
+    # Foreach loop - iterates over array elements via .iter()
+    let string[] planets = from(["Earth", "Mars", "Betelgeuse", "Magrathea"])
+
+    println("Planets:")
+
+    foreach(planet in planets.iter()):
+        println("  - {planet}")
+
+    # Break and continue control flow
+    let i32 i = 0
+
+    println("Numbers (skipping 5, stopping at 8):")
+
+    while (i < 10):
+        i := i + 1
+
+        # continue skips the rest of the current iteration
+        if (i == 5):
+            continue  # Skip 5
+
+        # break exits the loop immediately
+        if (i == 8):
+            break  # Stop at 8
+
+        println("  {i}")
+
+    # Foreach with conditional filtering
+    let i32[] numbers = from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+
+    println("Even numbers:")
+
+    foreach(n in numbers.iter()):
+        # Use modulo operator % to check for even numbers
+        if (n % 2 == 0):
+            println("  {n}")
+
+    return Result.Ok(0)

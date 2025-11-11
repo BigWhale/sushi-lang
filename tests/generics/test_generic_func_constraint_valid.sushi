@@ -1,0 +1,31 @@
+# Test valid perk constraint satisfaction for generic functions
+# Point struct implements Hashable, so it should satisfy the constraint
+
+perk Hashable:
+    fn hash() u64
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Hashable:
+    fn hash() u64:
+        return 42 as u64
+
+fn compute_hash<T: Hashable>(T value) u64:
+    return Result.Ok(value.hash())
+
+fn run_test() i32:
+    let Point p = Point(10, 20)
+
+    # This should compile successfully - Point implements Hashable
+    # Note: Phase 3 validates constraint satisfaction during monomorphization
+    let u64 hash_value = compute_hash(p)??
+    if (hash_value != 42 as u64):
+        return Result.Ok(1)
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

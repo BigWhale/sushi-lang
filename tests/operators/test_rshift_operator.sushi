@@ -1,0 +1,6 @@
+fn main() i32:
+    let i32 x = 16
+    let i32 y = x >> 2  # Should be 4
+    println(y)
+    let i32 expected = 4
+    return Result.Ok(y - expected)

@@ -1,0 +1,11 @@
+fn main() i32:
+    let List<f64> doubles = List.new()
+
+    doubles.push(3.14159)
+    doubles.push(2.71828)
+    doubles.push(1.41421)
+
+    println("=== List<f64> Debug ===")
+    doubles.debug()
+
+    return Result.Ok(0)

@@ -1,0 +1,28 @@
+# Test recursive IntList with Own<IntList>
+enum IntList:
+    Nil()
+    Cons(i32, Own<IntList>)
+
+fn length(IntList list) i32:
+    match list:
+        IntList.Nil() ->
+            return Result.Ok(0)
+        IntList.Cons(_, Own(tail)) ->
+            let i32 tail_len = length(tail)??
+            return Result.Ok(1 + tail_len)
+
+fn run_test() i32:
+    # Build: 1 -> 2 -> 3 -> Nil
+    let Own<IntList> tail3 = Own.alloc(IntList.Nil())
+    let Own<IntList> tail2 = Own.alloc(IntList.Cons(3, tail3))
+    let Own<IntList> tail1 = Own.alloc(IntList.Cons(2, tail2))
+    let IntList list = IntList.Cons(1, tail1)
+
+    let i32 len = length(list)??
+    println("Length: {len}")
+    let i32 expected = 3
+    return Result.Ok(len - expected)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

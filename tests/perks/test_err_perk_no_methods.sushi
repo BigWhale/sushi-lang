@@ -1,0 +1,7 @@
+# tests/test_err_perk_no_methods.sushi
+# Error: perk with no methods - should fail to parse
+
+perk Empty:
+
+fn main() i32:
+    return Result.Ok(0)

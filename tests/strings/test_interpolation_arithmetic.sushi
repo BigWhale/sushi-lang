@@ -1,0 +1,8 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+  let i32 a = 10
+  let i32 b = 20
+  print("Sum: {a + b}, Product: {a * b}")
+  return Result.Ok(0)

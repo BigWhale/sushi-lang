@@ -1,0 +1,12 @@
+fn main() i32:
+    let List<i32> numbers = List.new()
+
+    numbers.push(10)
+    numbers.push(20)
+    numbers.push(30)
+
+    println("=== Iterating over List<i32> ===")
+    foreach(n in numbers.iter()):
+        println(n)
+
+    return Result.Ok(0)

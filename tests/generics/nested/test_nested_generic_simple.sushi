@@ -1,0 +1,15 @@
+# Simple nested generic test - Result<Maybe<i32>>
+# Demonstrates that nested generics compile and can be used with conditionals
+# "Don't Panic!" - The Hitchhiker's Guide to the Galaxy
+
+fn main() i32:
+    # The Answer to the Ultimate Question
+    let Maybe<i32> inner = Maybe.Some(42)
+    let Result<Maybe<i32>> outer = Result.Ok(inner)
+
+    # Use the outer variable to avoid warning
+    if (outer):
+        # Successfully compiled nested generics!
+        return Result.Ok(0)
+
+    return Result.Ok(1)

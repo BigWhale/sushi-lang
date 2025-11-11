@@ -1,0 +1,7 @@
+# Test that foreach item type must match iterator element type
+
+fn main() i32:
+    let i32[3] arr = [1, 2, 3]
+    foreach(string s in arr.iter()):
+        print(s)
+    return Result.Ok(0)

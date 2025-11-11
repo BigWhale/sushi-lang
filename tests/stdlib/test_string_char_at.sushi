@@ -1,0 +1,81 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT: H
+# EXPECT_STDOUT: r
+# EXPECT_STDOUT: t
+# EXPECT_STDOUT: f
+# EXPECT_STDOUT: 1
+# EXPECT_STDOUT: é
+# EXPECT_STDOUT: 1
+# EXPECT_STDOUT: 2
+# EXPECT_STDOUT: 好
+# EXPECT_STDOUT: 1
+# EXPECT_STDOUT: 3
+# EXPECT_STDOUT: 0
+# EXPECT_STDOUT: 0
+# EXPECT_STDOUT: 1
+# EXPECT_STDOUT: 4
+# EXPECT_STDOUT: 1
+# EXPECT_STDOUT: 4
+
+use <collections/strings>
+
+fn main() i32:
+    # Test 1: Basic char_at - first character
+    let string s1 = "Hello"
+    let string char1 = s1.char_at(0)
+    println(char1)  # Expected: H
+
+    # Test 2: char_at middle character
+    let string s2 = "World"
+    let string char2 = s2.char_at(2)
+    println(char2)  # Expected: r
+
+    # Test 3: char_at last character
+    let string s3 = "test"
+    let string char3 = s3.char_at(3)
+    println(char3)  # Expected: t
+
+    # Test 4: UTF-8 aware - character at index 2 from "café"
+    let string s4 = "café"
+    let string char4 = s4.char_at(2)
+    println(char4)  # Expected: f
+    println(char4.len())  # Expected: 1
+
+    # Test 5: UTF-8 aware - multi-byte character
+    let string s5 = "café"
+    let string char5 = s5.char_at(3)
+    println(char5)  # Expected: é
+    println(char5.len())  # Expected: 1
+    println(char5.size())  # Expected: 2 (é is 2 bytes)
+
+    # Test 6: UTF-8 Chinese character
+    let string s6 = "你好世界"
+    let string char6 = s6.char_at(1)
+    println(char6)  # Expected: 好
+    println(char6.len())  # Expected: 1
+    println(char6.size())  # Expected: 3 (Chinese char is 3 bytes)
+
+    # Test 7: Invalid index (too large) - should return empty
+    let string s7 = "test"
+    let string char7 = s7.char_at(10)
+    println(char7.size())  # Expected: 0
+
+    # Test 8: Negative index - should return empty
+    let string s8 = "test"
+    let string char8 = s8.char_at(-1)
+    println(char8.size())  # Expected: 0
+
+    # Test 9: UTF-8 emoji
+    let string s9 = "👋🌍"
+    let string char9 = s9.char_at(0)
+    println(char9.len())  # Expected: 1
+    println(char9.size())  # Expected: 4 (emoji is 4 bytes)
+
+    # Test 10: Second emoji
+    let string s10 = "👋🌍"
+    let string char10 = s10.char_at(1)
+    println(char10.len())  # Expected: 1
+    println(char10.size())  # Expected: 4
+
+    return Result.Ok(0)

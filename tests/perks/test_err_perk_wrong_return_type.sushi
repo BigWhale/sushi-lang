@@ -1,0 +1,16 @@
+# Test CE4004: Method return type doesn't match perk
+
+perk Hashable:
+    fn hash() u64
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Hashable:
+    # Wrong return type: returns i32 instead of u64
+    fn hash() i32:
+        return 42
+
+fn main() i32:
+    return Result.Ok(0)

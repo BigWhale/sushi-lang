@@ -1,0 +1,36 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test List<bool> with boolean elements
+fn main() i32:
+    let List<bool> flags = List.new()
+
+    flags.push(true)
+    flags.push(false)
+    flags.push(true)
+    flags.push(true)
+
+    if (flags.len() != 4):
+        println("ERROR: Expected 4 flags")
+        return Result.Ok(1)
+
+    # Check bool values
+    match flags.get(0):
+        Maybe.Some(val) ->
+            if (not val):
+                println("ERROR: Expected true at index 0")
+                return Result.Ok(2)
+        Maybe.None() ->
+            println("ERROR: Should find flag at index 0")
+            return Result.Ok(3)
+
+    match flags.get(1):
+        Maybe.Some(val) ->
+            if (val):
+                println("ERROR: Expected false at index 1")
+                return Result.Ok(4)
+        Maybe.None() ->
+            println("ERROR: Should find flag at index 1")
+            return Result.Ok(5)
+
+    println("Boolean list tests passed!")
+    return Result.Ok(0)

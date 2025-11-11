@@ -1,0 +1,9 @@
+struct Container:
+    i32[] numbers
+
+fn main() i32:
+    let Container c = Container(new())
+    c.numbers.push(10)
+    c.numbers.push(20)
+    println(c.numbers.len())
+    return Result.Ok(0)

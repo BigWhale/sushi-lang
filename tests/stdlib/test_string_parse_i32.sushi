@@ -1,0 +1,58 @@
+# Test string.to_i32() parsing
+use <collections/strings>
+
+fn main() i32:
+    # Valid parse cases
+    let string num1 = "42"
+    let Maybe<i32> result1 = num1.to_i32()
+    match result1:
+        Maybe.Some(value) -> println("Parsed 42: {value}")
+        Maybe.None() -> println("Failed to parse 42")
+
+    let string num2 = "-123"
+    let Maybe<i32> result2 = num2.to_i32()
+    match result2:
+        Maybe.Some(value) -> println("Parsed -123: {value}")
+        Maybe.None() -> println("Failed to parse -123")
+
+    let string num3 = "2147483647"  # INT32_MAX
+    let Maybe<i32> result3 = num3.to_i32()
+    match result3:
+        Maybe.Some(value) -> println("Parsed INT32_MAX: {value}")
+        Maybe.None() -> println("Failed to parse INT32_MAX")
+
+    let string num4 = "-2147483648"  # INT32_MIN
+    let Maybe<i32> result4 = num4.to_i32()
+    match result4:
+        Maybe.Some(value) -> println("Parsed INT32_MIN: {value}")
+        Maybe.None() -> println("Failed to parse INT32_MIN")
+
+    # Invalid parse cases
+    let string invalid1 = "not a number"
+    let Maybe<i32> result5 = invalid1.to_i32()
+    match result5:
+        Maybe.Some(_) -> println("ERROR: Should not have parsed '{invalid1}'")
+        Maybe.None() -> println("Correctly rejected '{invalid1}'")
+
+    let string invalid2 = "123abc"
+    let Maybe<i32> result6 = invalid2.to_i32()
+    match result6:
+        Maybe.Some(_) -> println("ERROR: Should not have parsed '{invalid2}'")
+        Maybe.None() -> println("Correctly rejected '{invalid2}'")
+
+    let string overflow = "9999999999"  # Too large for i32
+    let Maybe<i32> result7 = overflow.to_i32()
+    match result7:
+        Maybe.Some(_) -> println("ERROR: Should not have parsed overflow")
+        Maybe.None() -> println("Correctly rejected overflow")
+
+    # Using realise() for default values
+    let string num5 = "100"
+    let i32 value = num5.to_i32().realise(0)
+    println("Using realise(): {value}")
+
+    let string invalid3 = "bad"
+    let i32 default = invalid3.to_i32().realise(-1)
+    println("Using realise() with invalid: {default}")
+
+    return Result.Ok(0)

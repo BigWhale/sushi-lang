@@ -1,0 +1,19 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: 30
+
+# Passing structs to functions
+
+
+struct Point:
+    i32 x
+    i32 y
+
+fn add_coords(Point p) i32:
+    return Result.Ok(p.x + p.y)
+
+fn main() i32:
+    let Point p = Point(10, 20)
+    let Result<i32> result = add_coords(p)
+    println(result.realise(0))
+    return Result.Ok(0)

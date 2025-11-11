@@ -1,0 +1,17 @@
+# Simple math module test
+use <math>
+
+fn main() i32:
+    # Test PI constant
+    println("PI = {PI}")
+
+    # Test abs
+    let i32 neg = -42
+    let i32 pos = abs(neg)
+    println("abs(-42) = {pos}")
+
+    # Test sqrt
+    let f64 root = sqrt(16.0)
+    println("sqrt(16.0) = {root}")
+
+    return Result.Ok(0)

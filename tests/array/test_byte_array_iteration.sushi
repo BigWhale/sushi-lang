@@ -1,0 +1,114 @@
+# Test iteration over byte arrays with various patterns
+
+
+fn sum_bytes(u8[] data) i32:
+    let i32 sum = 0
+    let i32 i = 0
+    while (i < data.len()):
+        let u8 byte_val = data.get(i)??
+        sum := sum + (byte_val as i32)
+        i := i + 1
+    return Result.Ok(sum)
+
+fn count_zeros(u8[] data) i32:
+    let i32 count = 0
+    let i32 i = 0
+    while (i < data.len()):
+        let u8 byte_val = data.get(i)??
+        if ((byte_val as i32) == 0):
+            count := count + 1
+        i := i + 1
+    return Result.Ok(count)
+
+fn main() i32:
+    # Test 1: Simple iteration
+    println("Test 1: Simple iteration")
+    let u8[] simple = from([1, 2, 3, 4, 5])
+    foreach (byte in simple.iter()):
+        println("  Value: {byte}")
+
+    # Test 2: Empty array iteration (should not iterate)
+    println("Test 2: Empty array iteration")
+    let u8[] empty = new()
+    let i32 empty_count = 0
+    foreach (byte in empty.iter()):
+        let i32 value = byte as i32
+        empty_count := empty_count + value - value + 1
+    println("Empty iteration count: {empty_count}")  # Should be 0
+
+    # Test 3: Single element iteration
+    println("Test 3: Single element")
+    let u8[] single = from([42])
+    foreach (byte in single.iter()):
+        println("  Single value: {byte}")
+
+    # Test 4: Sum all bytes
+    println("Test 4: Sum bytes")
+    let u8[] numbers = from([10, 20, 30, 40])
+    let Result<i32> total = sum_bytes(numbers)
+    println("Sum: {total.realise(0)}")  # Should be 100
+
+    # Test 5: Break in iteration
+    println("Test 5: Break in iteration")
+    let u8[] many = from([1, 2, 3, 4, 5, 6, 7, 8])
+    let i32 break_count = 0
+    foreach (byte in many.iter()):
+        if ((byte as i32) == 5):
+            break
+        break_count := break_count + 1
+        println("  Before break: {byte}")
+    println("Iterated before break: {break_count}")  # Should be 4
+
+    # Test 6: Continue in iteration
+    println("Test 6: Continue in iteration")
+    let u8[] skip = from([1, 2, 3, 4, 5, 6])
+    let i32 continue_count = 0
+    foreach (byte in skip.iter()):
+        if (((byte as i32) % 2) == 0):
+            continue  # Skip even numbers
+        continue_count := continue_count + 1
+        println("  Odd: {byte}")
+    println("Odd count: {continue_count}")  # Should be 3
+
+    # Test 7: Count specific values
+    println("Test 7: Count zeros")
+    let u8[] with_zeros = from([1, 0, 2, 0, 3, 0])
+    let Result<i32> zero_count = count_zeros(with_zeros)
+    println("Zero count: {zero_count.realise(0)}")  # Should be 3
+
+    # Test 8: Nested iteration
+    println("Test 8: Nested iteration")
+    let u8[] outer = from([1, 2, 3])
+    let u8[] inner = from([10, 20])
+    foreach (o in outer.iter()):
+        foreach (i in inner.iter()):
+            let i32 product = (o as i32) * (i as i32)
+            println("  {o} * {i} = {product}")
+
+    # Test 9: Large array iteration
+    println("Test 9: Large array iteration")
+    let u8[] large = new()
+    let i32 i = 0
+    while (i < 50):
+        large.push((i % 256) as u8)
+        i := i + 1
+    let i32 large_count = 0
+    foreach (byte in large.iter()):
+        let i32 value = byte as i32
+        large_count := large_count + value - value + 1
+    println("Large array iterated: {large_count}")  # Should be 50
+
+    # Test 10: Iteration after modifications
+    println("Test 10: Iteration after modifications")
+    let u8[] modified = from([1, 2, 3])
+    modified.push(4 as u8)
+    modified.push(5 as u8)
+    modified.pop()
+    let i32 mod_count = 0
+    foreach (byte in modified.iter()):
+        let i32 value = byte as i32
+        mod_count := mod_count + value - value + 1
+    println("Modified array count: {mod_count}")  # Should be 4
+
+    println("All iteration tests completed!")
+    return Result.Ok(0)

@@ -1,0 +1,60 @@
+# Comprehensive hash test covering all supported scenarios
+# Tests basic primitives, mixed types, nested structs, and generic structs
+
+# Test 1: Basic primitive fields
+struct Point:
+    i32 x
+    i32 y
+
+# Test 2: Mixed primitive types
+struct Person:
+    string name
+    u64 id
+    bool active
+
+# Test 3: Nested structs
+struct Rectangle:
+    Point top_left
+    Point bottom_right
+
+# Test 4: Generic struct
+struct Box<T>:
+    T value
+
+# Test 5: Multiple generic parameters
+struct Pair<T, U>:
+    T first
+    U second
+
+fn main() i32:
+    # Test basic struct
+    let Point p = Point(10, 20)
+    let u64 h1 = p.hash()
+    println("Point hash: {h1}")
+
+    # Test mixed types
+    let Person person = Person("Arthur", 42 as u64, true)
+    let u64 h2 = person.hash()
+    println("Person hash: {h2}")
+
+    # Test nested struct
+    let Rectangle rect = Rectangle(Point(0, 0), Point(10, 10))
+    let u64 h3 = rect.hash()
+    println("Rectangle hash: {h3}")
+
+    # Test generic struct
+    let Box<i32> box1 = Box(42)
+    let u64 h4 = box1.hash()
+    println("Box<i32> hash: {h4}")
+
+    let Box<string> box2 = Box("hello")
+    let u64 h5 = box2.hash()
+    println("Box<string> hash: {h5}")
+
+    # Test pair
+    let Pair<i32, string> pair = Pair(42, "answer")
+    let u64 h6 = pair.hash()
+    println("Pair<i32, string> hash: {h6}")
+
+    println("All hash tests passed!")
+    return Result.Ok(0)

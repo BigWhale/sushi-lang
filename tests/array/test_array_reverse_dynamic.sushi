@@ -1,0 +1,22 @@
+fn run_test() i32:
+    # Test reverse() on dynamic array - countdown to Earth destruction
+    let i32[] countdown = from([5, 4, 3, 2, 1])
+    countdown.reverse()
+
+    # Verify order is reversed
+    if (countdown.get(0)?? != 1):
+        return Result.Err()
+    if (countdown.get(1)?? != 2):
+        return Result.Err()
+    if (countdown.get(2)?? != 3):
+        return Result.Err()
+    if (countdown.get(3)?? != 4):
+        return Result.Err()
+    if (countdown.get(4)?? != 5):
+        return Result.Err()
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

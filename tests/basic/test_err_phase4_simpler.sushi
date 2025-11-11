@@ -1,0 +1,11 @@
+# TEST_TYPE: compilation
+# Simpler test to isolate the issue
+
+fn main() i32:
+    # Declare a variable with Result<i32> type
+    let Result<i32> result = Result.Ok(42)
+
+    # Try to use the variable
+    println(result)
+
+    return Result.Ok(0)

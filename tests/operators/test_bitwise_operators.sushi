@@ -1,0 +1,51 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test bitwise operators: &, |, ^, <<, >>
+
+fn main() i32:
+    # Test bitwise AND (&)
+    let i32 a = 12    # 1100 in binary
+    let i32 b = 10    # 1010 in binary
+    let i32 result_and = a & b  # Should be 8 (1000 in binary)
+
+    # Test bitwise OR (|)
+    let i32 result_or = a | b   # Should be 14 (1110 in binary)
+
+    # Test bitwise XOR (^)
+    let i32 xresult_or = a ^ b  # Should be 6 (0110 in binary)
+
+    # Test left shift (<<)
+    let i32 left_shift = 5 << 2  # Should be 20 (5 * 4)
+
+    # Test right shift (>>)
+    let i32 right_shift = 20 >> 2  # Should be 5 (20 / 4)
+
+    # Verify all results
+    if (result_and != 8):
+        return Result.Ok(1)
+
+    if (result_or != 14):
+        return Result.Ok(2)
+
+    if (xresult_or != 6):
+        return Result.Ok(3)
+
+    if (left_shift != 20):
+        return Result.Ok(4)
+
+    if (right_shift != 5):
+        return Result.Ok(5)
+
+    # Test complex expression with operator precedence
+    let i32 complex = (a & b) | (a ^ b)  # Should be 8 | 6 = 14
+    if (complex != 14):
+        return Result.Ok(6)
+
+    # Test with different integer types
+    let i32 x = 255
+    let i32 y = 15
+    let i32 mask_result = x & y  # Should be 15
+    if (mask_result != 15):
+        return Result.Ok(7)
+
+    return Result.Ok(0)

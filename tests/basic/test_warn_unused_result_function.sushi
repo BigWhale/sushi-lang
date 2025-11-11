@@ -1,0 +1,11 @@
+# TEST_TYPE: compilation
+# Test for Phase 4.1 - Unused Result Detection
+# This test should emit a warning when a function returning Result<T> is called
+# but the return value is not used
+
+fn get_value() i32:
+    return Result.Ok(42)
+
+fn main() i32:
+    get_value()  # Warning: unused Result<i32>
+    return Result.Ok(0)

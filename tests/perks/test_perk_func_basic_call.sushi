@@ -1,0 +1,30 @@
+# Test generic function with perk constraint - ACTUALLY CALL IT
+# This is critical: we define AND call the generic function
+
+perk Hashable:
+    fn hash() u64
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Hashable:
+    fn hash() u64:
+        let u64 hx = self.x as u64
+        let u64 hy = self.y as u64
+        let u64 multiplier = 31 as u64
+        return hx * multiplier + hy
+
+# Generic function with constraint
+fn compute_hash<T: Hashable>(T value) u64:
+    return Result.Ok(value.hash())
+
+fn run_test() i32:
+    let Point p = Point(10, 20)
+    let u64 result = compute_hash(p)??
+    println(result)
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

@@ -1,0 +1,21 @@
+# Test Own pattern with non-recursive types
+enum Container:
+    Box(Own<i32>)
+    Empty()
+
+fn test_own_pattern(Container c) i32:
+    match c:
+        Container.Box(Own(value)) ->
+            return Result.Ok(value)
+        Container.Empty() ->
+            return Result.Ok(0)
+    return Result.Ok(-1)
+
+fn main() i32:
+    # Test the pattern matching
+    let Own<i32> ptr = Own.alloc(42)
+    let Container c = Container.Empty()
+    let i32 result = test_own_pattern(c).realise(-1)
+    let i32 computed = result + ptr.get()
+    let i32 expected = 42
+    return Result.Ok(computed - expected)

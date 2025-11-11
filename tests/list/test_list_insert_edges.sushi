@@ -1,0 +1,97 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test List<T> insert method - edge cases
+fn main() i32:
+    # Test 1: Insert at beginning (index 0)
+    let List<i32> nums1 = List.new()
+    nums1.push(2)
+    nums1.push(3)
+
+    match nums1.insert(0, 1):
+        Result.Ok(_) ->
+            println("Insert at beginning succeeded")
+        Result.Err() ->
+            println("ERROR: Insert at beginning should succeed")
+            return Result.Ok(1)
+
+    match nums1.get(0):
+        Maybe.Some(val) ->
+            if (val != 1):
+                println("ERROR: First element should be 1")
+                return Result.Ok(2)
+        Maybe.None() ->
+            println("ERROR: Missing first element")
+            return Result.Ok(3)
+
+    # Test 2: Insert at end (append-like, index == len)
+    let List<i32> nums2 = List.new()
+    nums2.push(1)
+    nums2.push(2)
+
+    match nums2.insert(2, 3):
+        Result.Ok(_) ->
+            println("Insert at end succeeded")
+        Result.Err() ->
+            println("ERROR: Insert at end should succeed")
+            return Result.Ok(4)
+
+    if (nums2.len() != 3):
+        println("ERROR: Length should be 3 after insert at end")
+        return Result.Ok(5)
+
+    match nums2.get(2):
+        Maybe.Some(val) ->
+            if (val != 3):
+                println("ERROR: Last element should be 3")
+                return Result.Ok(6)
+        Maybe.None() ->
+            println("ERROR: Missing last element")
+            return Result.Ok(7)
+
+    # Test 3: Insert into empty list at index 0
+    let List<i32> nums3 = List.new()
+
+    match nums3.insert(0, 42):
+        Result.Ok(_) ->
+            println("Insert into empty list succeeded")
+        Result.Err() ->
+            println("ERROR: Insert into empty list at 0 should succeed")
+            return Result.Ok(8)
+
+    if (nums3.len() != 1):
+        println("ERROR: Length should be 1")
+        return Result.Ok(9)
+
+    match nums3.get(0):
+        Maybe.Some(val) ->
+            if (val != 42):
+                println("ERROR: Element should be 42")
+                return Result.Ok(10)
+        Maybe.None() ->
+            println("ERROR: Missing element")
+            return Result.Ok(11)
+
+    # Test 4: Insert triggers capacity growth
+    let List<i32> nums4 = List.with_capacity(2)
+    nums4.push(1)
+    nums4.push(2)
+
+    # This should trigger growth (len=2, cap=2, need to insert)
+    match nums4.insert(1, 99):
+        Result.Ok(_) ->
+            println("Insert with growth succeeded")
+        Result.Err() ->
+            println("ERROR: Insert with growth should succeed")
+            return Result.Ok(12)
+
+    if (nums4.len() != 3):
+        println("ERROR: Length should be 3 after growth insert")
+        return Result.Ok(13)
+
+    # Capacity should have grown
+    if (nums4.capacity() < 3):
+        println("ERROR: Capacity should have grown")
+        return Result.Ok(14)
+
+    println("Edge cases test passed!")
+    return Result.Ok(0)

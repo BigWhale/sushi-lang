@@ -1,0 +1,30 @@
+# TEST_TYPE: runtime
+use <collections/strings>
+
+fn main() i32:
+    # Test replacing with empty string
+    let string panic = "Don't Panic!".replace("Panic", "")
+    println("After panic removal: '{panic}'")
+
+    if (panic != "Don't !"):
+        println("ERROR: Expected 'Don't !', got '{panic}'")
+        return Result.Err()
+
+    # Test empty old string - should return original
+    let string original = "Deep Thought".replace("", "something")
+    println("Empty old: '{original}'")
+
+    if (original != "Deep Thought"):
+        println("ERROR: Expected 'Deep Thought', got '{original}'")
+        return Result.Err()
+
+    # Test replacing spaces
+    let string nospace = "So long and thanks".replace(" ", "")
+    println("No spaces: '{nospace}'")
+
+    if (nospace != "Solongandthanks"):
+        println("ERROR: Expected 'Solongandthanks', got '{nospace}'")
+        return Result.Err()
+
+    println("All edge case tests passed!")
+    return Result.Ok(0)

@@ -1,0 +1,9 @@
+use <collections/strings>
+
+fn main() i32:
+    # Error: find() requires exactly 1 string argument (no arguments)
+    let string s = "hello"
+    match s.find():
+        Maybe.Some(index) -> println(index)
+        Maybe.None() -> println(-1)
+    return Result.Ok(0)

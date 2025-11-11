@@ -1,0 +1,10 @@
+# Test invalid string interpolation with array type
+# This test should FAIL compilation with CE2035
+
+fn main() i32:
+    let i32[3] arr = [1, 2, 3]
+
+    # This should trigger CE2035 error - arrays cannot be interpolated
+    println("Array: {arr}")
+
+    return Result.Ok(0)

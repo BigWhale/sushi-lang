@@ -1,0 +1,18 @@
+# Test nested generics with array types
+# "Don't Panic!" - in large, friendly letters
+
+fn main() i32:
+    # Result containing a fixed-size array
+    let Result<i32[3]> result_array = Result.Ok([1, 2, 3])
+
+    # Maybe containing a string (builtin type)
+    let Maybe<string> maybe_string = Maybe.Some("Don't Panic")
+
+    # Verify both compile and work
+    if (result_array):
+        let i32[3] arr = result_array.realise([0, 0, 0])
+        if (arr[0] == 1):
+            if (maybe_string.is_some()):
+                return Result.Ok(0)
+
+    return Result.Ok(1)

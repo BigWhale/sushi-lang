@@ -1,0 +1,8 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+  let f64 pi = 3.14159
+  let f64 e = 2.71828
+  print("Pi: {pi}, E: {e}")
+  return Result.Ok(0)

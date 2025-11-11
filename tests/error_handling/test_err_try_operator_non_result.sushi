@@ -1,0 +1,14 @@
+# Test CE2507: ?? operator requires Result<T> type
+# Expected: CE2507 error
+
+fn get_value() i32:
+    return Result.Ok(42)
+
+fn run_test() i32:
+    # Error: trying to use ?? on a plain i32
+    let i32 x = 5??
+    return Result.Ok(x)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

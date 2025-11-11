@@ -1,0 +1,67 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test List<T> remove method - basic functionality
+fn main() i32:
+    # Create list with elements
+    let List<i32> nums = List.new()
+    nums.push(10)
+    nums.push(20)
+    nums.push(30)
+    nums.push(40)
+    nums.push(50)
+
+    # Remove element at index 2 (value 30)
+    match nums.remove(2):
+        Maybe.Some(val) ->
+            if (val != 30):
+                println("ERROR: Removed value should be 30, got {val}")
+                return Result.Ok(1)
+            println("Removed 30 successfully")
+        Maybe.None() ->
+            println("ERROR: Remove should succeed")
+            return Result.Ok(2)
+
+    # Verify length decreased
+    if (nums.len() != 4):
+        println("ERROR: Length should be 4, got {nums.len()}")
+        return Result.Ok(3)
+
+    # Verify elements shifted correctly
+    match nums.get(0):
+        Maybe.Some(val) ->
+            if (val != 10):
+                println("ERROR: nums[0] should be 10, got {val}")
+                return Result.Ok(4)
+        Maybe.None() ->
+            println("ERROR: Missing element at index 0")
+            return Result.Ok(5)
+
+    match nums.get(1):
+        Maybe.Some(val) ->
+            if (val != 20):
+                println("ERROR: nums[1] should be 20, got {val}")
+                return Result.Ok(6)
+        Maybe.None() ->
+            println("ERROR: Missing element at index 1")
+            return Result.Ok(7)
+
+    match nums.get(2):
+        Maybe.Some(val) ->
+            if (val != 40):
+                println("ERROR: nums[2] should be 40 (shifted), got {val}")
+                return Result.Ok(8)
+        Maybe.None() ->
+            println("ERROR: Missing element at index 2")
+            return Result.Ok(9)
+
+    match nums.get(3):
+        Maybe.Some(val) ->
+            if (val != 50):
+                println("ERROR: nums[3] should be 50 (shifted), got {val}")
+                return Result.Ok(10)
+        Maybe.None() ->
+            println("ERROR: Missing element at index 3")
+            return Result.Ok(11)
+
+    println("Basic remove test passed!")
+    return Result.Ok(0)

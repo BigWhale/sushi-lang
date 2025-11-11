@@ -1,0 +1,44 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test List<T> insert method - bounds checking returns Result.Err()
+fn main() i32:
+    let List<i32> nums = List.new()
+    nums.push(1)
+    nums.push(2)
+    nums.push(3)
+
+    # Test 1: Insert with negative index
+    match nums.insert(-1, 99):
+        Result.Ok(_) ->
+            println("ERROR: Insert with negative index should fail")
+            return Result.Ok(1)
+        Result.Err() ->
+            println("Negative index correctly rejected")
+
+    # Test 2: Insert beyond len (len=3, trying index=4)
+    match nums.insert(4, 99):
+        Result.Ok(_) ->
+            println("ERROR: Insert beyond len should fail")
+            return Result.Ok(2)
+        Result.Err() ->
+            println("Out of bounds index correctly rejected")
+
+    # Verify list unchanged after failed inserts
+    if (nums.len() != 3):
+        println("ERROR: List should still have 3 elements")
+        return Result.Ok(3)
+
+    # Test 3: Insert at exactly len should work (append)
+    match nums.insert(3, 4):
+        Result.Ok(_) ->
+            println("Insert at len succeeded (append)")
+        Result.Err() ->
+            println("ERROR: Insert at len should succeed")
+            return Result.Ok(4)
+
+    if (nums.len() != 4):
+        println("ERROR: Length should be 4 after successful insert")
+        return Result.Ok(5)
+
+    println("Bounds checking test passed!")
+    return Result.Ok(0)

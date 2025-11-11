@@ -1,0 +1,31 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT: empty: yes
+# EXPECT_STDOUT: Hello: not empty
+# EXPECT_STDOUT: UTF-8: not empty
+
+# Note: is_empty() no longer requires use <collections/strings> - it's an inline intrinsic
+
+fn main() i32:
+    # Test empty string
+    let string s1 = ""
+    if (s1.is_empty()):
+        println("empty: yes")
+    else:
+        println("empty: no")
+
+    # Test non-empty ASCII string
+    let string s2 = "Hello"
+    if (s2.is_empty()):
+        println("Hello: empty")
+    else:
+        println("Hello: not empty")
+
+    # Test non-empty UTF-8 string
+    let string s3 = "你好"
+    if (s3.is_empty()):
+        println("UTF-8: empty")
+    else:
+        println("UTF-8: not empty")
+
+    return Result.Ok(0)

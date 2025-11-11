@@ -1,0 +1,83 @@
+use <collections/strings>
+
+fn main() i32:
+    # Test 1: Basic match in middle (returns character index)
+    let string s1 = "hello world"
+    match s1.find("world"):
+        Maybe.Some(index) -> println(index)
+        Maybe.None() -> println(-1)
+
+    # Test 2: No match
+    let string s2 = "hello world"
+    match s2.find("xyz"):
+        Maybe.Some(index) -> println(index)
+        Maybe.None() -> println(-1)
+
+    # Test 3: Match at start
+    let string s3 = "hello world"
+    match s3.find("hello"):
+        Maybe.Some(index) -> println(index)
+        Maybe.None() -> println(-1)
+
+    # Test 4: Match at end
+    let string s4 = "hello world"
+    match s4.find("world"):
+        Maybe.Some(index) -> println(index)
+        Maybe.None() -> println(-1)
+
+    # Test 5: Empty needle (found at position 0)
+    let string s5 = "hello"
+    match s5.find(""):
+        Maybe.Some(index) -> println(index)
+        Maybe.None() -> println(-1)
+
+    # Test 6: Needle longer than haystack
+    let string s6 = "hi"
+    match s6.find("hello"):
+        Maybe.Some(index) -> println(index)
+        Maybe.None() -> println(-1)
+
+    # Test 7: Single character match
+    let string s7 = "abc"
+    match s7.find("b"):
+        Maybe.Some(index) -> println(index)
+        Maybe.None() -> println(-1)
+
+    # Test 8: UTF-8 match (character index, not byte index!)
+    let string s8 = "café"
+    match s8.find("é"):
+        Maybe.Some(index) -> println(index)
+        Maybe.None() -> println(-1)
+
+    # Test 9: Multiple occurrences (returns first)
+    let string s9 = "banana"
+    match s9.find("na"):
+        Maybe.Some(index) -> println(index)
+        Maybe.None() -> println(-1)
+
+    # Test 10: Empty haystack with empty needle
+    let string s10 = ""
+    match s10.find(""):
+        Maybe.Some(index) -> println(index)
+        Maybe.None() -> println(-1)
+
+    # Test 11: Empty haystack with non-empty needle
+    let string s11 = ""
+    match s11.find("x"):
+        Maybe.Some(index) -> println(index)
+        Maybe.None() -> println(-1)
+
+    return Result.Ok(0)
+
+# Expected output:
+# 6
+# -1
+# 0
+# 6
+# 0
+# -1
+# 1
+# 3
+# 2
+# 0
+# -1

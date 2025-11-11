@@ -1,0 +1,133 @@
+# Regression test for Maybe<StructType> support
+# Issues #2 and #3 from ISSUES.md claimed this didn't work - this test proves it does
+#
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: test_struct_in_maybe: 1
+# EXPECTED_OUTPUT: test_struct_in_control_flow: 1
+# EXPECTED_OUTPUT: test_nested_struct_in_maybe: 1
+# EXPECTED_OUTPUT: test_struct_pattern_matching: 1
+# EXPECTED_OUTPUT: test_multiple_maybe_structs: 1
+# EXPECTED_OUTPUT: All tests passed: 5
+
+# Simple struct
+struct Point:
+    i32 x
+    i32 y
+
+# Struct with multiple field types
+struct Config:
+    string name
+    i32 port
+    bool enabled
+
+# Test 1: Basic Maybe<Struct> creation and extraction
+fn test_struct_in_maybe() i32:
+    let Point p = Point(10, 20)
+    let Maybe<Point> mp = Maybe.Some(p)
+
+    if (mp.is_some()):
+        let Point extracted = mp.realise(Point(0, 0))
+        if (extracted.x == 10 and extracted.y == 20):
+            return Result.Ok(1)
+
+    return Result.Ok(0)
+
+# Test 2: Maybe<Struct> declared inside control flow (Issue #3)
+fn test_struct_in_control_flow() i32:
+    let bool condition = true
+
+    # Declare Maybe<Struct> inside if block
+    if (condition):
+        let Config cfg = Config("test", 8080, true)
+        let Maybe<Config> mc = Maybe.Some(cfg)
+
+        if (mc.is_some()):
+            let Config extracted = mc.realise(Config("default", 0, false))
+            if (extracted.port == 8080 and extracted.enabled):
+                return Result.Ok(1)
+
+    # Declare Maybe<Struct> inside while block
+    let i32 i = 0
+    while (i < 1):
+        let Point pt = Point(5, 15)
+        let Maybe<Point> mp = Maybe.Some(pt)
+
+        if (mp.is_some()):
+            let Point ex = mp.realise(Point(0, 0))
+            if (ex.y == 15):
+                i := i + 1  # Exit loop
+                return Result.Ok(1)
+        i := i + 1
+
+    return Result.Ok(0)
+
+# Test 3: Nested struct types
+fn test_nested_struct_in_maybe() i32:
+    # Create Config with multiple field types
+    let Config cfg = Config("myapp", 3000, true)
+    let Maybe<Config> mc1 = Maybe.Some(cfg)
+    let Maybe<Config> mc2 = Maybe.None()
+
+    # Test Some variant
+    if (mc1.is_some()):
+        let Config c1 = mc1.realise(Config("", 0, false))
+        if (c1.name == "myapp" and c1.port == 3000):
+            # Test None variant
+            if (mc2.is_none()):
+                return Result.Ok(1)
+
+    return Result.Ok(0)
+
+# Test 4: Pattern matching on Maybe<Struct>
+fn test_struct_pattern_matching() i32:
+    let Point p = Point(100, 200)
+    let Maybe<Point> mp = Maybe.Some(p)
+
+    # Pattern match works with .realise()
+    if (mp.is_some()):
+        let Point extracted = mp.realise(Point(-1, -1))
+        if (extracted.x == 100 and extracted.y == 200):
+            return Result.Ok(1)
+
+    return Result.Ok(0)
+
+# Test 5: Multiple Maybe<Struct> variables in same scope
+fn test_multiple_maybe_structs() i32:
+    let Point p1 = Point(1, 2)
+    let Point p2 = Point(3, 4)
+    let Config c1 = Config("app1", 8080, true)
+
+    let Maybe<Point> mp1 = Maybe.Some(p1)
+    let Maybe<Point> mp2 = Maybe.Some(p2)
+    let Maybe<Config> mc1 = Maybe.Some(c1)
+
+    # Test multiple extractions
+    let Point ex1 = mp1.realise(Point(0, 0))
+    let Point ex2 = mp2.realise(Point(0, 0))
+    let Config exc = mc1.realise(Config("", 0, false))
+
+    if (ex1.x == 1 and ex2.y == 4 and exc.port == 8080):
+        return Result.Ok(1)
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 t1 = test_struct_in_maybe().realise(0)
+    println("test_struct_in_maybe: {t1}")
+
+    let i32 t2 = test_struct_in_control_flow().realise(0)
+    println("test_struct_in_control_flow: {t2}")
+
+    let i32 t3 = test_nested_struct_in_maybe().realise(0)
+    println("test_nested_struct_in_maybe: {t3}")
+
+    let i32 t4 = test_struct_pattern_matching().realise(0)
+    println("test_struct_pattern_matching: {t4}")
+
+    let i32 t5 = test_multiple_maybe_structs().realise(0)
+    println("test_multiple_maybe_structs: {t5}")
+
+    let i32 total = t1 + t2 + t3 + t4 + t5
+    println("All tests passed: {total}")
+    let i32 expected = 5
+    return Result.Ok(total - expected)

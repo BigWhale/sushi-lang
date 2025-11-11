@@ -1,0 +1,15 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test popping from empty List returns Maybe.None
+fn main() i32:
+    let List<i32> empty = List.new()
+
+    # Pop from empty list
+    match empty.pop():
+        Maybe.Some(val) ->
+            println("ERROR: Should return None, got {val}")
+            return Result.Ok(1)
+        Maybe.None() ->
+            println("Correctly returned None for empty list")
+
+    return Result.Ok(0)

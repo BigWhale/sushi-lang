@@ -1,0 +1,89 @@
+# Test byte arrays in structs with RAII cleanup
+use <collections/strings>
+
+struct DataBuffer:
+    u8[] data
+    string name
+    i32 size
+
+struct NestedBuffer:
+    DataBuffer buffer1
+    DataBuffer buffer2
+
+fn create_buffer(string name) DataBuffer:
+    return Result.Ok(DataBuffer(from([72 as u8, 101 as u8, 108 as u8, 108 as u8, 111 as u8]), name, 5))
+
+fn process_buffer(DataBuffer buf) i32:
+    # Access byte array field from struct
+    println("Processing buffer: {buf.name}")
+    println("  Size: {buf.size}")
+    println("  Data length: {buf.data.len()}")
+
+    # First element
+    let u8 first = buf.data.get(0)??
+    println("  First byte: {first}")
+
+    return Result.Ok(buf.data.len())
+
+fn run_test() i32:
+    # Test 1: Basic struct with byte array field
+    println("Test 1: Basic struct with byte array")
+    let DataBuffer buf1 = DataBuffer(new(), "buffer1", 0)
+    buf1.data.push(65 as u8)  # 'A'
+    buf1.data.push(66 as u8)  # 'B'
+    buf1.data.push(67 as u8)  # 'C'
+    println("Buffer1 length: {buf1.data.len()}")
+    println("Buffer1 first: {buf1.data.get(0)??}")
+
+    # Test 2: Struct with initialized byte array
+    println("Test 2: Struct with initialized byte array")
+    let DataBuffer buf2 = DataBuffer(from([10 as u8, 20 as u8, 30 as u8, 40 as u8, 50 as u8]), "buffer2", 5)
+    println("Buffer2 length: {buf2.data.len()}")
+    let string text = buf2.data.to_string()
+    println("Buffer2 as string length: {text.len()}")
+
+    # Test 3: Struct as function parameter
+    println("Test 3: Struct as function parameter")
+    let DataBuffer buf3 = DataBuffer(from([72 as u8, 101 as u8, 108 as u8, 108 as u8, 111 as u8]), "test_buffer", 5)
+    let i32 len = process_buffer(buf3).realise(0)
+    println("Returned length: {len}")
+
+    # Test 4: Array of structs with byte arrays
+    println("Test 4: Array of structs")
+    let DataBuffer[] buffers = from([DataBuffer(from([1 as u8, 2 as u8]), "first", 2), DataBuffer(from([3 as u8, 4 as u8, 5 as u8]), "second", 3), DataBuffer(from([6 as u8, 7 as u8, 8 as u8, 9 as u8]), "third", 4)])
+    println("Buffer array length: {buffers.len()}")
+
+    # Access nested byte array
+    let DataBuffer first_buf = buffers.get(0)??
+    println("First buffer data length: {first_buf.data.len()}")
+
+    # Test 5: Nested structs with byte arrays
+    println("Test 5: Nested structs")
+    let DataBuffer inner1 = DataBuffer(from([100 as u8, 101 as u8]), "inner1", 2)
+    let DataBuffer inner2 = DataBuffer(from([200 as u8, 201 as u8, 202 as u8]), "inner2", 3)
+    let NestedBuffer nested = NestedBuffer(inner1, inner2)
+    println("Nested buffer1 length: {nested.buffer1.data.len()}")
+    println("Nested buffer2 length: {nested.buffer2.data.len()}")
+
+    # Test 6: Struct rebinding with byte arrays
+    println("Test 6: Struct rebinding")
+    let DataBuffer mutable = DataBuffer(from([1 as u8]), "orig", 1)
+    println("Original length: {mutable.data.len()}")
+    mutable := DataBuffer(from([2 as u8, 3 as u8, 4 as u8]), "new", 3)
+    println("After rebind length: {mutable.data.len()}")
+
+    # Test 7: Iterate over byte array in struct
+    println("Test 7: Iteration")
+    let DataBuffer iter_buf = DataBuffer(from([65 as u8, 66 as u8, 67 as u8]), "iter", 3)
+    let i32 idx = 0
+    while (idx < iter_buf.data.len()):
+        let u8 byte = iter_buf.data.get(idx)??
+        println("  Byte: {byte}")
+        idx := idx + 1
+
+    println("All struct integration tests completed!")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

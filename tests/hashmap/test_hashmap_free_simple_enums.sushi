@@ -1,0 +1,42 @@
+# Test HashMap.free() with simple enum values
+enum Status:
+    Ok(i32)
+    Err(i32)
+    Pending
+
+fn main() i32:
+    let HashMap<i32, Status> map = HashMap.new()
+
+    # Insert enum values
+    let Status s1 = Status.Ok(200)
+    map.insert(1, s1)
+
+    let Status s2 = Status.Err(404)
+    map.insert(2, s2)
+
+    let Status s3 = Status.Pending()
+    map.insert(3, s3)
+
+    println("Before free - map has 3 Status enum entries")
+    let i32 size_before = map.len()
+    println("Size: {size_before}")
+
+    # Free the map
+    map.free()
+
+    println("\nAfter free - map should be empty")
+    let i32 size_after = map.len()
+    println("Size: {size_after}")
+
+    if (size_after == 0):
+        println("✓ Map freed successfully")
+
+    # Insert new enum after free
+    let Status new_s = Status.Ok(100)
+    map.insert(10, new_s)
+
+    let i32 final_size = map.len()
+    if (final_size == 1):
+        println("✓ Can reuse map after free")
+
+    return Result.Ok(0)

@@ -1,0 +1,27 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Success
+
+# Test user-defined generic with nested generics: Pair<Result<T>, Maybe<U>>
+# "Would it save you a lot of time if I just gave up and went mad now?"
+
+struct Pair<T, U>:
+    T first
+    U second
+
+fn main() i32:
+    # Create a pair with nested generics
+    let Pair<Result<i32>, Maybe<string>> pair = Pair(
+        Result.Ok(42),
+        Maybe.Some("Mostly Harmless")
+    )
+
+    # Access and verify both fields
+    let Result<i32> first_val = pair.first
+    let Maybe<string> second_val = pair.second
+
+    if (first_val):
+        if (second_val.is_some()):
+            println("Success")
+            return Result.Ok(0)
+
+    return Result.Ok(1)

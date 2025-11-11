@@ -1,0 +1,6 @@
+# CE2003: return type mismatch
+fn bad_func() i32:
+  return Result.Ok(true)  # cannot return bool when i32 expected)
+
+fn main() i32:
+  return Result.Ok(0)

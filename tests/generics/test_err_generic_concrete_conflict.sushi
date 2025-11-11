@@ -1,0 +1,10 @@
+# Test: Generic function can't have same name as concrete function
+
+fn process(i32 x) i32:
+    return Result.Ok(x)
+
+fn process<T>(T y) T:  # Error CE0101: duplicate
+    return Result.Ok(y)
+
+fn main() i32:
+    return Result.Ok(0)

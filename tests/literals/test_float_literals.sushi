@@ -1,0 +1,18 @@
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+fn main() i32:
+  let f64 x = 3.14
+  let f64 y = -2.5
+  # Validate float literal assignments
+  let i32 validation_count = 0
+
+  if (x > 3.0 and x < 4.0):  # x should be approximately 3.14
+    validation_count := validation_count + 1
+
+  if (y > -3.0 and y < -2.0):  # y should be approximately -2.5
+    validation_count := validation_count + 1
+
+  if (validation_count == 2):
+    return Result.Ok(0)  # All tests passed)
+  else:
+    return Result.Ok(validation_count)  # Return count for debugging)

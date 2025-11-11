@@ -1,0 +1,14 @@
+struct Point:
+    i32 x
+    i32 y
+
+fn run_test() i32:
+    let Point[] points = from([Point(10, 32), Point(11, 33), Point(12, 34)])
+    let Point single = points.get(0)??
+    println("P: {points.get(1).x}")
+    println("S: {single.y}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

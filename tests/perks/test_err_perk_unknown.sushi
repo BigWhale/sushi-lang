@@ -1,0 +1,13 @@
+# Test CE4003: Unknown perk reference
+
+struct Point:
+    i32 x
+    i32 y
+
+# Reference to undefined perk
+extend Point with NonExistent:
+    fn foo() i32:
+        return 42
+
+fn main() i32:
+    return Result.Ok(0)

@@ -1,0 +1,17 @@
+# Test: Generic function with single type parameter
+# Phase 2: Verifies generic function definition parsing
+#
+# This test defines a generic identity function that takes a value
+# of type T and returns it. The function definition is collected in
+# Pass 0 and added to the GenericFunctionTable.
+#
+# Note: Actual calls to generic functions will work in Phase 3
+# when monomorphization is implemented.
+
+fn identity<T>(T x) T:
+    return Result.Ok(x)
+
+fn main() i32:
+    # Phase 2: Generic function defined but not yet callable
+    # Phase 3 will add monomorphization to generate concrete versions
+    return Result.Ok(0)

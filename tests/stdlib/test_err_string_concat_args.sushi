@@ -1,0 +1,9 @@
+# Test error: string.concat() with wrong argument type
+use <io/stdio>
+use <collections/strings>
+
+fn main() i32:
+    let string s = "test"
+    let i32 num = 42
+    let string result = s.concat(num)  # Error: expected string, got i32
+    return Result.Ok(0)

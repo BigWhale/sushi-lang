@@ -1,0 +1,22 @@
+# TEST_TYPE: runtime
+# CMD_ARGS: Thanks for all the fish
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Total arguments: 6
+
+fn run_test(string[] args) i32:
+    println("Total arguments: {args.len()}")
+
+    let i32 i = 0
+    while (i < args.len()):
+        println("Argument {i}: {args.get(i)??}")
+        i := i + 1
+
+    # Test that we can use array methods normally
+    if (args.len() > 0):
+        println("First argument: {args.get(0)??}")
+
+    return Result.Ok(0)
+
+fn main(string[] args) i32:
+    let i32 result = run_test(args).realise(99)
+    return Result.Ok(result)

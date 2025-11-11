@@ -1,0 +1,14 @@
+# Test diamond dependency: main uses foo_module, bar_module, and math_utils
+# foo_module uses math_utils
+# bar_module uses math_utils
+# This tests that math_utils is only loaded once
+use "helpers/foo_module"
+use "helpers/bar_module"
+use "helpers/math_utils"
+
+fn main() i32:
+    let i32 result1 = foo_compute(10).realise(0)
+    let i32 result2 = bar_compute(5).realise(0)
+    let i32 direct = add(result1, result2).realise(0)
+    let i32 expected = 177
+    return Result.Ok(direct - expected)

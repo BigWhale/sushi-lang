@@ -1,0 +1,9 @@
+# CE2510: Mixed float type arithmetic should fail
+fn main() i32:
+  let f32 a = 1.5 as f32
+  let f64 b = 2.5
+
+  # This should fail - mixed f32 and f64
+  let f64 c = a + b
+
+  return Result.Ok(0)

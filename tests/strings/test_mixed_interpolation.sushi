@@ -1,0 +1,7 @@
+fn main() i32:
+    let i32 signed = -42
+    let u32 unsigned = 42 as u32
+
+    println("Signed: {signed}, Unsigned: {unsigned}")
+
+    return Result.Ok(0)

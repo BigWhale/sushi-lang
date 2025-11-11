@@ -1,0 +1,17 @@
+fn main() i32:
+    # Test left shift
+    let i32 a = 5
+    let i32 left = a << 2
+    println(left)  # Should be 20 (5 * 4)
+
+    # Test right shift (arithmetic)
+    let i32 b = 20
+    let i32 right = b >> 2
+    println(right)  # Should be 5 (20 / 4)
+
+    # Test right shift with negative numbers (arithmetic shift preserves sign)
+    let i32 c = -8
+    let i32 right_neg = c >> 2
+    println(right_neg)  # Should be -2 (sign-extended)
+
+    return Result.Ok(0)

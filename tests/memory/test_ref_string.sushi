@@ -1,0 +1,16 @@
+# Test reference to string
+
+fn print_string(&string s) ~:
+    println(s)
+    return Result.Ok(~)
+
+fn main() i32:
+    let string message = "Hello, references!"
+
+    # Borrow the string
+    print_string(&message)
+
+    # String still valid
+    println(message)
+
+    return Result.Ok(0)

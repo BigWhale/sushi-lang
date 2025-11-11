@@ -1,0 +1,13 @@
+# Test Own<struct> - heap-allocated user-defined struct
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point p = Point(10, 20)
+    let Own<Point> ptr = Own.alloc(p)
+    let Point loaded = ptr.get()
+    println("Point: ({loaded.x}, {loaded.y})")
+    let i32 result = loaded.x + loaded.y
+    let i32 expected = 30
+    return Result.Ok(result - expected)

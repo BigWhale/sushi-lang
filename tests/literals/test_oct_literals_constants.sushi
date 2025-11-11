@@ -1,0 +1,18 @@
+# Test octal literals in constants
+
+const i32 OCT_CONST = 0o755
+const i32 UMASK = 0o022
+const i32 ZERO_OCT = 0o0
+
+fn main() i32:
+    let i32 a = OCT_CONST
+    let i32 b = UMASK
+    let i32 c = ZERO_OCT
+
+    # Use constants in expressions
+    let i32 result = a & 0o777
+    let bool check = b == 0o22
+
+    if (check):
+        println("Mostly Harmless")
+    return Result.Ok(result + c)

@@ -1,0 +1,12 @@
+# Minimal test for string.find() returning None
+use <collections/strings>
+
+fn main() i32:
+    match "hello".find("x"):
+        Maybe.Some(_) ->
+            println("ERROR: Should not find x")
+            return Result.Err()
+        Maybe.None() ->
+            println("Not found")
+
+    return Result.Ok(0)

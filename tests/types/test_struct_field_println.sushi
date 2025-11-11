@@ -1,0 +1,8 @@
+struct Pair<T, U>:
+    T first
+    U second
+
+fn main() i32:
+    let Pair<i32, string> p = Pair(42, "Life")
+    println("Value: {p.second}")
+    return Result.Ok(0)

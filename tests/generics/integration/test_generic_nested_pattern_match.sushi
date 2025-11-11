@@ -1,0 +1,29 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: The Answer is 42
+
+# Test complex pattern matching with nested generics
+# "Deep Thought's final answer to the Ultimate Question"
+
+fn parse_answer(string s) Maybe<i32>:
+    if (s == "42"):
+        return Result.Ok(Maybe.Some(42))
+    return Result.Ok(Maybe.None())
+
+fn main() i32:
+    let Result<Maybe<i32>> result = parse_answer("42")
+
+    # Complex nested pattern matching
+    match result:
+        Result.Ok(Maybe.Some(x)) ->
+            if (x == 42):
+                println("The Answer is 42")
+                return Result.Ok(0)
+            else:
+                println("Wrong answer: {x}")
+                return Result.Ok(1)
+        Result.Ok(Maybe.None()) ->
+            println("No answer found")
+            return Result.Ok(2)
+        Result.Err() ->
+            println("Computation failed")
+            return Result.Ok(3)

@@ -1,0 +1,53 @@
+# Stress test for nested struct deep copy
+# Tests repeated allocation/deallocation to catch memory leaks and double-frees
+
+struct Inner:
+    i32[] values
+
+struct Outer:
+    Inner data
+    string name
+
+fn create_nested_struct() Outer:
+    # Create inner struct with dynamic array
+    let Inner inner = Inner(new())
+    inner.values.push(42)
+    inner.values.push(100)
+    inner.values.push(200)
+
+    # Pass inner struct to outer constructor
+    # This triggers deep-copy to prevent double-free
+    let Outer result = Outer(inner, "test")
+
+    # inner.values will be cleaned up here (RAII)
+    # If deep-copy failed, this would be a double-free crash
+    return Result.Ok(result)
+
+fn run_test() i32:
+    println("Testing nested struct deep copy - 1000 iterations")
+
+    let i32 i = 0
+    while (i < 1000):
+        let Outer nested = create_nested_struct().realise(Outer(Inner(new()), "default"))
+
+        # Verify data integrity
+        if (nested.data.values.len() != 3):
+            println("ERROR: Expected len 3, got {nested.data.values.len()}")
+            return Result.Err()
+
+        if (nested.data.values.get(0)?? != 42):
+            println("ERROR: Expected 42, got {nested.data.values.get(0)??}")
+            return Result.Err()
+
+        if (i % 100 == 0):
+            println("Iteration {i}/1000")
+
+        # nested.data.values will be cleaned up here (RAII)
+        i := i + 1
+
+    println("Test complete - no double-free crashes!")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

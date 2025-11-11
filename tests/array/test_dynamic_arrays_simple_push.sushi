@@ -1,0 +1,5 @@
+fn main() i32:
+  let i32[] numbers = new()
+  let i32 len = numbers.len()
+  println(len)
+  return Result.Ok(0)

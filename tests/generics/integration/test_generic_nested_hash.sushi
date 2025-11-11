@@ -1,0 +1,31 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Hashing successful
+
+# Test hashing nested generics in HashMap
+# "In the beginning the Universe was created. This has made a lot of people very angry."
+
+struct Config:
+    Maybe<i32> port
+    Result<string> host
+
+fn main() i32:
+    # Create a struct with nested generics
+    let Config cfg = Config(
+        Maybe.Some(42),
+        Result.Ok("deep-thought.hitchhiker.guide")
+    )
+
+    # Hash it and use in HashMap as a key (tests complete integration)
+    let HashMap<Config, string> map = HashMap.new()
+    map.insert(cfg, "The Ultimate Computer")
+
+    # Retrieve it
+    let Maybe<string> retrieved = map.get(cfg)
+
+    if (retrieved.is_some()):
+        println("Hashing successful")
+        map.free()
+        return Result.Ok(0)
+
+    map.free()
+    return Result.Ok(1)

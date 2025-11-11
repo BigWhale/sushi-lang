@@ -1,0 +1,13 @@
+# Test: Type mismatch after inference should fail
+
+fn identity<T>(T x) T:
+    return Result.Ok(x)
+
+fn run_test() i32:
+    # Error: identity(42) returns i32, can't assign to string
+    let string s = identity(42)??
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

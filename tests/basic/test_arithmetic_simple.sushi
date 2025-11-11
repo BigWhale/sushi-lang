@@ -1,0 +1,7 @@
+fn main() i32:
+    let i32 x = 5
+    let i32 y = 10
+    let i32 result = x + y
+    println("R: {result}")
+    let i32 expected = 15
+    return Result.Ok(result - expected)

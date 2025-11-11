@@ -1,0 +1,365 @@
+# Sushi Syntax Highlighting Showcase
+# This file demonstrates all syntax highlighting features
+
+# ============================================================================
+# 1. COMMENTS
+# ============================================================================
+# Single-line comments start with #
+
+# ============================================================================
+# 2. IMPORTS AND MODULE SYSTEM
+# ============================================================================
+use "other_module"  # Example: import from another module
+
+# ============================================================================
+# 3. CONSTANTS
+# ============================================================================
+const i32 MAX_SIZE = 100
+const string APP_NAME = "Sushi"
+const bool DEBUG = true
+
+# ============================================================================
+# 4. ENUMS WITH PATTERN MATCHING
+# ============================================================================
+enum Status:
+    Success(i32)
+    Failure(string)
+    Pending
+
+enum Color:
+    Red
+    Green
+    Blue
+
+# ============================================================================
+# 5. STRUCTS
+# ============================================================================
+struct Point:
+    i32 x
+    i32 y
+
+struct Person:
+    string name
+    i32 age
+    bool active
+
+struct Container:
+    i32[] data
+    string label
+
+# ============================================================================
+# 6. FUNCTION DECLARATIONS
+# ============================================================================
+
+# Function with multiple parameters and return type
+fn calculate(i32 a, i32 b, string operation) i32:
+    if (operation == "add"):
+        return Ok(a + b)
+    elif (operation == "subtract"):
+        return Ok(a - b)
+    else:
+        return Ok(0)
+
+# Blank type function (side effects only)
+fn print_header(string title) ~:
+    println("==================================================")
+    println(title)
+    println("==================================================")
+    return Ok(~)
+
+# Public function
+public fn api_function(string input) string:
+    return Ok("Processed: {input}")
+
+# ============================================================================
+# 7. EXTENSION METHODS (UFCS)
+# ============================================================================
+
+# Extend i32 with a custom method
+extend i32 squared() i32:
+    return Ok(self * self)
+
+# Extension method example (string methods not fully implemented)
+# extend string repeat_n(i32 times) string:
+#     let string result = ""
+#     let i32 i = 0
+#     while (i < times):
+#         result := result + self
+#         i := i + 1
+#     return Ok(result)
+
+# ============================================================================
+# 8. TYPE ANNOTATIONS
+# ============================================================================
+
+fn type_showcase() ~:
+    # Signed integers
+    let i8 tiny = 127 as i8
+    let i16 small = 32767 as i16
+    let i32 medium = 2147483647
+    let i64 large = 9223372036854775807 as i64
+
+    # Unsigned integers
+    let u8 ubyte = 255 as u8
+    let u16 ushort = 65535 as u16
+    let u32 uint = 4294967295 as u32
+    let u64 ulong = 18446744073709551615 as u64
+
+    # Floating point
+    let f32 single = 3.14 as f32
+    let f64 double = 3.141592653589793
+
+    # Boolean
+    let bool flag = true
+    let bool disabled = false
+
+    # String
+    let string text = "Hello, World!"
+    let string interpolated = "Value: {medium}"
+
+    # Blank type (~ can only be used as function return type)
+
+    # Fixed arrays
+    let i32[5] fixed_arr = [1, 2, 3, 4, 5]
+    let string[3] names = ["Alice", "Bob", "Charlie"]
+
+    # Dynamic arrays
+    let i32[] dynamic = new()
+    let string[] items = from(["one", "two", "three"])
+
+    # User-defined types
+    let Point p = Point(10, 20)
+    let Person person = Person("Alice", 30, true)
+
+    return Ok(~)
+
+# ============================================================================
+# 9. OPERATORS
+# ============================================================================
+
+fn operators_demo(i32 x, i32 y) ~:
+    # Arithmetic operators
+    let i32 sum = x + y
+    let i32 diff = x - y
+    let i32 product = x * y
+    let i32 quotient = x / y
+    let i32 remainder = x % y
+
+    # Comparison operators
+    let bool eq = x == y
+    let bool neq = x != y
+    let bool lt = x < y
+    let bool gt = x > y
+    let bool lte = x <= y
+    let bool gte = x >= y
+
+    # Logical operators
+    let bool and_result = (x > 0) and (y > 0)
+    let bool or_result = (x > 0) or (y > 0)
+    let bool not_result = not (x == 0)
+
+    # Bitwise operators
+    let i32 bitwise_and = x & y
+    let i32 bitwise_or = x | y
+    let i32 bitwise_xor = x ^ y
+    let i32 left_shift = x << 2
+    let i32 right_shift = x >> 2
+
+    # Assignment and rebind
+    let i32 value = 10
+    value := 20  # Rebind operator
+
+    # Type casting
+    let f32 float_val = x as f32
+    let u32 unsigned = y as u32
+
+    return Ok(~)
+
+# ============================================================================
+# 10. CONTROL FLOW
+# ============================================================================
+
+fn control_flow_demo(i32 value) ~:
+    # If-elif-else
+    if (value > 0):
+        println("Positive")
+    elif (value < 0):
+        println("Negative")
+    else:
+        println("Zero")
+
+    # While loop
+    let i32 counter = 0
+    while (counter < 10):
+        println("Count: {counter}")
+        counter := counter + 1
+        if (counter == 5):
+            break
+        if (counter == 3):
+            continue
+
+    # Foreach loop
+    let i32[] numbers = from([1, 2, 3, 4, 5])
+    foreach (num in numbers.iter()):
+        println("Number: {num}")
+
+    return Ok(~)
+
+# ============================================================================
+# 11. ARRAYS AND METHODS
+# ============================================================================
+
+fn array_methods_demo() ~:
+    # Dynamic array operations
+    let i32[] arr = new()
+    arr.push(10)
+    arr.push(20)
+    arr.push(30)
+
+    println("Length: {arr.len()}")
+    println("First: {arr.get(0)}")
+
+    let i32 popped = arr.pop()
+    println("Popped: {popped}")
+
+    # Byte arrays
+    let u8[] bytes = from([72 as u8, 101 as u8, 108 as u8, 108 as u8, 111 as u8])
+    let string text = bytes.to_string()
+    println("Text: {text}")
+
+    # Multi-line arrays
+    let string[] multiline = from([
+        "First",
+        "Second",
+        "Third"
+    ])
+
+    return Ok(~)
+
+# ============================================================================
+# 12. I/O OPERATIONS
+# ============================================================================
+
+fn io_demo() ~:
+    # Print statements
+    print("Hello")
+    println("World")
+
+    # String interpolation
+    let i32 value = 42
+    println("The answer is {value}")
+
+    # I/O streams (stdin, stdout, stderr) - examples
+    # let string line = stdin.readln()
+    # stdout.write("Output text\n")
+    # stderr.write("Error message\n")
+
+    # Binary I/O with byte arrays
+    let u8[] data = new()
+    data.push(72 as u8)
+    stdout.write_bytes(data)
+
+    return Ok(~)
+
+# ============================================================================
+# 13. RESULT TYPE AND ERROR HANDLING
+# ============================================================================
+
+fn divide(i32 a, i32 b) i32:
+    if (b == 0):
+        return Err()
+    return Ok(a / b)
+
+fn result_handling_demo() ~:
+    let i32 result = divide(10, 2)
+    println("Result: {result}")
+
+    let i32 error_case = divide(10, 0)
+    println("Error case: {error_case}")
+
+    return Ok(~)
+
+# ============================================================================
+# 14. STRUCT CONSTRUCTORS AND METHODS
+# ============================================================================
+
+fn struct_demo() ~:
+    # Struct constructor
+    let Point p1 = Point(5, 10)
+
+    # Accessing fields
+    println("X: {p1.x}, Y: {p1.y}")
+
+    # Multi-line constructor
+    let Person person = Person(
+        "Alice",
+        30,
+        true
+    )
+
+    # Struct with array field
+    let Container c = Container(
+        from([1, 2, 3]),
+        "My Container"
+    )
+
+    return Ok(~)
+
+# ============================================================================
+# 15. ENUM VARIANTS
+# ============================================================================
+
+fn enum_demo() ~:
+    let Status success = Status.Success(100)
+    let Status failure = Status.Failure("Error message")
+    let Status pending = Status.Pending
+
+    let Color red = Color.Red
+    let Color green = Color.Green
+    let Color blue = Color.Blue
+
+    return Ok(~)
+
+# ============================================================================
+# 16. FUNCTION CALLS AND METHOD CHAINING
+# ============================================================================
+
+fn chaining_demo() ~:
+    # Function calls
+    let i32 result = calculate(10, 20, "add")
+    print_header("Results")
+
+    # Method calls
+    let i32 value = 5
+    let i32 squared = value.squared()
+
+    # Method chaining
+    let string text = "Hello"
+    # let string repeated = text.repeat_n(3)  # Example of extension methods
+
+    # Multi-line function call
+    let i32 multi_result = calculate(
+        100,
+        50,
+        "subtract"
+    )
+
+    return Ok(~)
+
+# ============================================================================
+# MAIN FUNCTION
+# ============================================================================
+
+fn main() i32:
+    println("Sushi Syntax Showcase")
+    println("All features demonstrated!")
+
+    type_showcase()
+    operators_demo(10, 5)
+    control_flow_demo(42)
+    array_methods_demo()
+    struct_demo()
+    enum_demo()
+    chaining_demo()
+
+    return Ok(0)

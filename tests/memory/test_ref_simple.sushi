@@ -1,0 +1,13 @@
+# Minimal reference test
+
+fn test(&i32 x) i32:
+    println(x)
+    return Result.Ok(42)
+
+fn main() i32:
+    let i32 i = 24
+    let Result<i32> result = test(&i)
+    if (result):
+        println(i)
+        return Result.Ok(0)
+    return Result.Err()

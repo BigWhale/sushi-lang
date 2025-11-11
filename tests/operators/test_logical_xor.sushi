@@ -1,0 +1,25 @@
+fn main() i32:
+    # Basic logical XOR tests
+    let bool a = true
+    let bool b = false
+
+    let bool result1 = a xor b
+    println(result1)  # Should be true
+
+    let bool result2 = a xor a
+    println(result2)  # Should be false
+
+    let bool result3 = b xor b
+    println(result3)  # Should be false
+
+    let bool result4 = true xor true
+    println(result4)  # Should be false
+
+    # XOR with expressions
+    let bool result5 = (5 > 3) xor (2 < 1)
+    println(result5)  # true xor false = true
+
+    let bool result6 = (5 > 3) xor (10 > 2)
+    println(result6)  # true xor true = false
+
+    return Result.Ok(0)

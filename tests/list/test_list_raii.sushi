@@ -1,0 +1,28 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test List<T> RAII automatic cleanup on scope exit
+fn helper() i32:
+    let List<i32> temp = List.new()
+    temp.push(1)
+    temp.push(2)
+    temp.push(3)
+    # temp should be automatically destroyed when leaving scope
+    return Result.Ok(42)
+
+fn run_test() i32:
+    # Call helper function multiple times
+    # Each time, the List should be properly cleaned up
+    let i32 i = 0
+    while (i < 10):
+        let i32 result = helper()??
+        if (result != 42):
+            println("ERROR: Helper should return 42")
+            return Result.Ok(1)
+        i := i + 1
+
+    println("RAII cleanup tests passed!")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

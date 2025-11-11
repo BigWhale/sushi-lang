@@ -1,0 +1,72 @@
+# Example 12: Pattern Matching
+#
+# This example demonstrates advanced pattern matching features in Sushi.
+# Pattern matching is a powerful control flow mechanism that allows you to
+# destructure data and handle different cases in a type-safe manner.
+#
+# Key concepts covered:
+# - Exhaustive pattern matching (compiler ensures all cases are covered)
+# - Multi-field enum variants (variants with multiple associated values)
+# - Pattern binding (extracting values from enum variants)
+# - Wildcard pattern (_) to ignore specific field values
+# - Default pattern (_) as a catch-all for remaining variants
+# - Functions returning blank type (~) for side effects only
+#
+# Note: The compiler performs exhaustiveness checking - if you forget a case,
+# you'll get a compile-time error, preventing runtime bugs.
+
+enum JourneyStatus:
+    NotStarted()
+    InProgress(string, i32)
+    Arrived(string)
+    Lost()
+
+fn describe_status(JourneyStatus status) ~:
+    # Match expression with exhaustive checking
+    # All four variants must be handled or the code won't compile
+    match status:
+        JourneyStatus.NotStarted() ->
+            println("Journey hasn't started yet")
+        JourneyStatus.InProgress(loc, dist) ->
+            # Extract both fields from the InProgress variant
+            println("Currently at {loc}, {dist} parsecs from destination")
+        JourneyStatus.Arrived(dest) ->
+            println("Arrived at {dest}")
+        JourneyStatus.Lost() ->
+            println("Lost in space")
+
+    return Result.Ok(~)
+
+fn is_journey_active(JourneyStatus status) bool:
+    # Using default pattern (_) to match multiple cases
+    # Instead of listing Lost and NotStarted separately, we can use _ as a catch-all
+    match status:
+        JourneyStatus.InProgress(_, _) ->
+            # _ ignores both the location and distance fields
+            return Result.Ok(true)
+        _ ->
+            # Default pattern matches any remaining variants (NotStarted, Arrived, Lost)
+            # This is useful when you only care about one or two specific cases
+            return Result.Ok(false)
+
+fn main() i32:
+    # Create different journey statuses
+    let JourneyStatus s1 = JourneyStatus.NotStarted()
+    let JourneyStatus s2 = JourneyStatus.InProgress("Betelgeuse", 42)
+    let JourneyStatus s3 = JourneyStatus.Arrived("Magrathea")
+    let JourneyStatus s4 = JourneyStatus.Lost()
+
+    # Process each status - function calls don't need ?? since they return Result<~>
+    describe_status(s1)
+    describe_status(s2)
+    describe_status(s3)
+    describe_status(s4)
+
+    println("")
+
+    # Demonstrate the default pattern (_) usage - only InProgress is active
+    let bool active = is_journey_active(s2)??
+    println("InProgress is active: {active}")
+
+    return Result.Ok(0)
+

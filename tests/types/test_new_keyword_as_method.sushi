@@ -1,0 +1,12 @@
+# Test that 'new' can be used as a method name (context-aware parsing)
+fn main() i32:
+    # Test standalone new() for arrays (keyword)
+    let i32[] arr = new()
+
+    # Verify array works
+    if (arr.len() != 0):
+        println("ERROR: new array should be empty")
+        return Result.Ok(1)
+
+    println("Parser accepts 'new' as both keyword and method name!")
+    return Result.Ok(0)

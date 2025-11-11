@@ -1,0 +1,29 @@
+# Test HashMap insert with string keys
+fn main() i32:
+    # Create empty HashMap with string keys
+    let HashMap<string, i32> ages = HashMap.new()
+
+    # Insert multiple entries
+    ages.insert("Arthur", 30)
+    ages.insert("Trillian", 25)
+    ages.insert("Charlie", 35)
+
+    # Check size
+    let i32 size = ages.len()
+    println("Size after 3 inserts: {size}")
+
+    if (size != 3):
+        println("ERROR: Expected size 3, got {size}")
+        return Result.Ok(1)
+
+    # Test updating an existing key
+    ages.insert("Trillian", 26)
+    let i32 size2 = ages.len()
+    println("Size after update: {size2}")
+
+    if (size2 != 3):
+        println("ERROR: Size should still be 3 after update, got {size2}")
+        return Result.Ok(2)
+
+    println("String keys test passed!")
+    return Result.Ok(0)

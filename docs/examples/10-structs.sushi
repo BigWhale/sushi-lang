@@ -1,0 +1,60 @@
+# Example 10: Structs
+#
+# This example demonstrates struct definitions and usage in Sushi.
+# Structs are composite data types that group related fields together,
+# similar to structs in C or Rust.
+#
+# Key concepts covered:
+# - Struct definition with typed fields
+# - Struct instantiation with positional arguments (field order matters)
+# - Field access using dot notation
+# - RAII cleanup (automatic memory management for struct fields)
+#
+# Note: Struct constructors use positional arguments in field declaration order.
+
+struct Person:
+    string name
+    i32 age
+    bool has_towel
+
+struct Spaceship:
+    string name
+    i32 crew_capacity
+    bool improbability_drive
+
+fn main() i32:
+    # Create struct instances using positional arguments
+    # Arguments must match the field order in the struct definition
+    let Person arthur = Person("Arthur Dent", 42, true)
+    let Person ford = Person("Ford Prefect", 200, true)
+    let Person zaphod = Person("Zaphod Beeblebrox", 150, false)
+
+    # Access struct fields using dot notation
+    println("=== Person: Arthur Dent ===")
+    println("Name: {arthur.name}")
+    println("Age: {arthur.age}")
+    println("Has towel: {arthur.has_towel}")
+
+    println("")
+    println("=== Person: Ford Prefect ===")
+    println("Name: {ford.name}")
+    println("Age: {ford.age}")
+    println("Has towel: {ford.has_towel}")
+
+    println("")
+    println("=== Person: Zaphod Beeblebrox ===")
+    println("Name: {zaphod.name}")
+    println("Age: {zaphod.age}")
+    println("Has towel: {zaphod.has_towel}")
+
+    # Structs can have multiple fields of different types
+    let Spaceship heart_of_gold = Spaceship("Heart of Gold", 5, true)
+
+    println("")
+    println("=== Spaceship ===")
+    println("Ship: {heart_of_gold.name}")
+    println("Capacity: {heart_of_gold.crew_capacity}")
+    println("Has improbability drive: {heart_of_gold.improbability_drive}")
+
+    return Result.Ok(0)
+

@@ -1,0 +1,46 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test List<T> get method with bounds checking
+fn main() i32:
+    let List<i32> nums = List.new()
+    nums.push(100)
+    nums.push(200)
+    nums.push(300)
+
+    # Valid access
+    match nums.get(0):
+        Maybe.Some(val) ->
+            if (val != 100):
+                println("ERROR: Expected 100 at index 0, got {val}")
+                return Result.Ok(1)
+        Maybe.None() ->
+            println("ERROR: Should find element at index 0")
+            return Result.Ok(2)
+
+    match nums.get(2):
+        Maybe.Some(val) ->
+            if (val != 300):
+                println("ERROR: Expected 300 at index 2, got {val}")
+                return Result.Ok(3)
+        Maybe.None() ->
+            println("ERROR: Should find element at index 2")
+            return Result.Ok(4)
+
+    # Out of bounds access
+    match nums.get(5):
+        Maybe.Some(val) ->
+            println("ERROR: Should return None for out of bounds, got {val}")
+            return Result.Ok(5)
+        Maybe.None() ->
+            println("Correctly returned None for out of bounds")
+
+    # Negative index
+    match nums.get(-1):
+        Maybe.Some(val) ->
+            println("ERROR: Should return None for negative index, got {val}")
+            return Result.Ok(6)
+        Maybe.None() ->
+            println("Correctly returned None for negative index")
+
+    println("Get tests passed!")
+    return Result.Ok(0)

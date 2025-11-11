@@ -1,0 +1,80 @@
+# Example 03: Functions
+#
+# Demonstrates:
+# - Function definitions with parameters and return types
+# - Multiple parameter passing
+# - Blank type (~) for functions with no return value
+# - Result<T> for explicit error handling
+# - Function calls and .realise() for unwrapping
+# - Error returns using Result.Err()
+#
+# Every function in Sushi implicitly returns Result<T>, enabling
+# consistent error handling. Functions must explicitly return
+# Result.Ok(value) or Result.Err() on all code paths.
+
+# Function with two parameters returning i32.
+# Parameters are declared as: <type> <name>
+# Return type comes after the closing parenthesis.
+# All return types are implicitly wrapped in Result<T>.
+fn calculate_answer(i32 a, i32 b) i32:
+    let i32 result = a * b
+    # Must explicitly wrap return value in Result.Ok()
+    return Result.Ok(result)
+
+# Function with no return value uses the blank type (~).
+# The blank type represents "nothing" or "void".
+# Even blank-returning functions must return Result.Ok(~).
+fn greet(string name) ~:
+    println("Hello, {name}! Welcome aboard the Heart of Gold.")
+    # Blank functions return Result.Ok(~) to indicate success
+    return Result.Ok(~)
+
+# Function demonstrating explicit error handling.
+# Can return Result.Err() to indicate failure.
+# Caller must handle both success and error cases.
+fn divide_pangalactic(i32 numerator, i32 denominator) i32:
+    # Check for error conditions and return Result.Err()
+    if (denominator == 0):
+        println("Error: Can't divide by zero gargle blasters!")
+        return Result.Err()
+
+    # Return successful result wrapped in Result.Ok()
+    return Result.Ok(numerator / denominator)
+
+fn main() i32:
+    # Call functions and unwrap results immediately with .realise().
+    # .realise(default) unwraps Ok(value) or returns the default if Err.
+    # This is safe when you're confident the function will succeed.
+    let i32 answer = calculate_answer(6, 7).realise(0)
+    println("Calculated answer: {answer}")
+
+    # Call blank-returning functions.
+    # These still return Result<~> but we often don't need to check them.
+    # The Result is discarded if not assigned to a variable.
+    greet("Arthur")
+    greet("Ford")
+    greet("Zaphod")
+
+    # Proper error handling: store Result and check it.
+    # Result<T> can be used in boolean context:
+    # - if (result) checks for Ok
+    # - if (!result) or else checks for Err
+    let Result<i32> result = divide_pangalactic(100, 5)
+
+    if (result):
+        # Use .realise() inside the Ok branch to extract the value
+        println("Division successful: {result.realise(0)}")
+    else:
+        println("Division failed!")
+
+    # Demonstrate error path handling.
+    # This function call will fail due to division by zero.
+    let Result<i32> failed = divide_pangalactic(42, 0)
+
+    if (failed):
+        println("This won't print")
+    else:
+        # The else branch executes when Result is Err
+        println("As expected, division by zero failed")
+
+    return Result.Ok(0)

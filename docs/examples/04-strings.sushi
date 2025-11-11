@@ -1,0 +1,82 @@
+# Example 04: String Operations
+#
+# Demonstrates:
+# - String length and size operations
+# - Empty string checking
+# - String interpolation for building strings
+# - Substring search with Maybe<T>
+# - String splitting into arrays
+# - Whitespace trimming
+#
+# Sushi strings are UTF-8 encoded. String concatenation is done via
+# interpolation, not the + operator. Many string methods return Result<T>
+# or Maybe<T> for safe error handling.
+
+use <collections/strings>
+
+fn main() i32:
+    let string message = "Don't Panic"
+    let string guide_entry = "  Vogon poetry is the third worst in the Universe.  "
+
+    # String.len() returns the number of UTF-8 characters.
+    # This may differ from byte count for non-ASCII text.
+    println("Message length: {message.len()}")
+
+    # String.size() returns the byte count.
+    # For ASCII strings, size == len. For UTF-8, size >= len.
+    println("Message size: {message.size()}")
+
+    # String.is_empty() checks if the string has zero length.
+    # This is more idiomatic than checking len() == 0.
+    let string empty = ""
+
+    if (empty.is_empty()):
+        println("String is empty")
+    else:
+        println("String has content")
+
+    # String concatenation in Sushi uses interpolation, not '+'.
+    # Build strings by embedding variables and literals in {}.
+    # This is more efficient and readable than operator overloading.
+    let string suffix = "Always bring a towel"
+    let string full_message = "{message} - {suffix}"
+    println(full_message)
+
+    # String.find(substring) searches for the first occurrence.
+    # Returns Maybe<i32> with the index, or Maybe.None() if not found.
+    # This demonstrates safe handling of search failure.
+    let Maybe<i32> pos = message.find("Panic")
+
+    match pos:
+        Maybe.Some(index) ->
+            println("Found 'Panic' at position {index}")
+        Maybe.None() ->
+            println("'Panic' not found")
+
+    # String.split(delimiter) splits a string into a dynamic array.
+    # Returns string[] containing all parts between delimiters.
+    # Empty strings between consecutive delimiters are included.
+    let string planets = "Earth,Betelgeuse,Magrathea,Vogsphere"
+    let string[] planet_list = planets.split(",")
+
+    println("Planets:")
+
+    # Iterate over the array using .iter() method.
+    # foreach loops require an iterator, not the array directly.
+    foreach(planet in planet_list.iter()):
+        println("  - {planet}")
+
+    # String.trim() removes leading and trailing whitespace.
+    # Returns a new string; the original is unchanged (strings are immutable).
+    let string trimmed = guide_entry.trim()
+    println("Original: '{guide_entry}'")
+    println("Trimmed: '{trimmed}'")
+
+    # Convert case (ASCII only)
+    let string loud = message.upper()
+    let string quiet = message.lower()
+
+    println("Uppercase: {loud}")
+    println("Lowercase: {quiet}")
+
+    return Result.Ok(0)

@@ -1,0 +1,38 @@
+# Test getenv() function for environment variables
+use <sys/env>
+
+fn main() i32:
+    # Test 1: Get HOME environment variable (should exist on all systems)
+    let Maybe<string> home = getenv("HOME")
+    match home:
+        Maybe.Some(path) -> println("HOME is set to: {path}")
+        Maybe.None() -> println("ERROR: HOME not set (unexpected)")
+
+    # Test 2: Get a non-existent environment variable
+    let Maybe<string> missing = getenv("NONEXISTENT_VAR_12345")
+    match missing:
+        Maybe.Some(value) -> println("ERROR: NONEXISTENT_VAR_12345 should not exist: {value}")
+        Maybe.None() -> println("Correctly returned None for non-existent variable")
+
+    # Test 3: Using realise() with default value
+    let string user = getenv("USER").realise("unknown")
+    println("USER (with default): {user}")
+
+    # Test 4: Using realise() with non-existent variable
+    let string missing_default = getenv("NONEXISTENT_XYZ").realise("default_value")
+    println("Non-existent variable with default: {missing_default}")
+
+    # Test 5: Using is_some() and is_none()
+    let Maybe<string> path_var = getenv("PATH")
+    if (path_var.is_some()):
+        println("PATH exists")
+    else:
+        println("ERROR: PATH should exist")
+
+    let Maybe<string> fake_var = getenv("FAKE_VAR_999")
+    if (fake_var.is_none()):
+        println("FAKE_VAR_999 correctly does not exist")
+    else:
+        println("ERROR: FAKE_VAR_999 should not exist")
+
+    return Result.Ok(0)

@@ -1,0 +1,12 @@
+# TEST_TYPE: error
+# Test that nested arrays (arrays of arrays) cannot be hashed
+
+struct Matrix:
+    i32[2][2] data
+
+fn main() i32:
+    # This should fail compilation: nested arrays not supported
+    let Matrix m = Matrix([[1, 2], [3, 4]])
+    let u64 hash = m.hash()  # Error: cannot hash struct with nested array field
+    println("{hash}")
+    return Result.Ok(0)

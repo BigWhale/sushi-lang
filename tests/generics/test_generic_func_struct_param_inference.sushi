@@ -1,0 +1,40 @@
+# Test: Generic function with nested generic struct parameters
+# CURRENT LIMITATION: Type inference doesn't support extracting type parameters
+# from nested generic types (e.g., Pair<A, B>). This should fail with CE2060.
+
+struct Pair<T, U>:
+    T first
+    U second
+
+fn get_first<A, B>(Pair<A, B> p) A:
+    return Result.Ok(p.first)
+
+fn get_second<A, B>(Pair<A, B> p) B:
+    return Result.Ok(p.second)
+
+fn run_test() i32:
+    let Pair<i32, string> p = Pair(42, "test")
+
+    let i32 first = get_first(p)??
+    if (first != 42):
+        return Result.Ok(1)
+
+    let string second = get_second(p)??
+    if (second != "test"):
+        return Result.Ok(2)
+
+    # Test with different types
+    let Pair<string, i32> p2 = Pair("hello", 99)
+    let string first2 = get_first(p2)??
+    if (first2 != "hello"):
+        return Result.Ok(3)
+
+    let i32 second2 = get_second(p2)??
+    if (second2 != 99):
+        return Result.Ok(4)
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

@@ -1,0 +1,13 @@
+fn main() i32:
+    println(42)
+    println(3.14)
+    println(true)
+    println("Hello, World!")
+
+    let i32 x = 100
+    println(x)
+
+    let string message = "Goodbye"
+    println(message)
+
+    return Result.Ok(0)

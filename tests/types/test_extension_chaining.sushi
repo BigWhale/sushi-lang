@@ -1,0 +1,27 @@
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+# Extension method chaining functionality
+# Should compile successfully with method chaining syntax
+
+extend i32 add(i32 value) i32:
+  return self + value
+
+extend i32 multiply(i32 factor) i32:
+  return self * factor
+
+extend i32 subtract(i32 value) i32:
+  return self - value
+
+fn main() i32:
+  # Test method chaining: (5).add(3).multiply(2).subtract(1) = ((5+3)*2)-1 = 15
+  let i32 result = (5).add(3).multiply(2).subtract(1)
+
+  # Equivalent traditional calls would be:
+  # let i32 temp1 = add(5, 3)      # 8
+  # let i32 temp2 = multiply(temp1, 2)  # 16
+  # let i32 final = subtract(temp2, 1)  # 15
+
+  if (result == 15):
+    return Result.Ok(0)
+  else:
+    return Result.Ok(1)

@@ -1,0 +1,32 @@
+# Simplified test to debug the issue
+
+struct Inner:
+    i32[] values
+
+struct Outer:
+    Inner data
+
+fn run_test() i32:
+    # Create inner struct with dynamic array
+    let Inner inner = Inner(new())
+    inner.values.push(42)
+
+    println("Inner array length before: {inner.values.len()}")
+    println("Inner array value before: {inner.values.get(0)??}")
+
+    # Pass inner struct to outer constructor
+    let Outer outer = Outer(inner)
+
+    println("Outer.data array length after: {outer.data.values.len()}")
+    println("Outer.data array value after: {outer.data.values.get(0)??}")
+
+    # Check if inner was affected
+    println("Inner array length after nesting: {inner.values.len()}")
+    if (inner.values.len() > 0):
+        println("Inner array value after nesting: {inner.values.get(0)??}")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

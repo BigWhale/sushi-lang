@@ -1,0 +1,7 @@
+# Test hashing a single string (not in an array)
+
+fn main() i32:
+    let string s = "Mostly"
+    let u64 hash = s.hash()
+    println("String hash = {hash}")
+    return Result.Ok(0)

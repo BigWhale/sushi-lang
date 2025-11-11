@@ -1,0 +1,27 @@
+# Test enum implementing a perk
+
+perk Hashable:
+    fn hash() u64
+
+enum Status:
+    Active(i32)
+    Inactive()
+
+extend Status with Hashable:
+    fn hash() u64:
+        # Simple hash based on discriminant
+        match self:
+            Status.Active(n) -> return n as u64
+            Status.Inactive() -> return 999 as u64
+
+fn main() i32:
+    let Status s1 = Status.Active(42)
+    let Status s2 = Status.Inactive()
+
+    let u64 h1 = s1.hash()
+    let u64 h2 = s2.hash()
+
+    println(h1)
+    println(h2)
+
+    return Result.Ok(0)

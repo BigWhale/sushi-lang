@@ -1,0 +1,28 @@
+# Test octal literals for Unix permissions
+
+fn main() i32:
+    # Common permission patterns
+    let i32 PERM_RX = 0o005
+    let i32 PERM_RWX = 0o007
+
+    # Full permission patterns
+    let i32 PERM_0644 = 0o644  # rw-r--r--
+    let i32 PERM_0755 = 0o755  # rwxr-xr-x
+    let i32 PERM_0777 = 0o777  # rwxrwxrwx
+    let i32 PERM_0600 = 0o600  # rw-------
+
+    # Extract permission bits
+    let i32 owner = (PERM_0755 >> 6) & 0o7
+    let i32 group = (PERM_0755 >> 3) & 0o7
+    let i32 other = PERM_0755 & 0o7
+
+    # Verify permissions
+    let bool owner_rwx = owner == PERM_RWX
+    let bool group_rx = group == PERM_RX
+    let bool other_rx = other == PERM_RX
+
+    # Use variables
+    let i32 sum = PERM_0644 + PERM_0755 + PERM_0777 + PERM_0600
+    if (owner_rwx and group_rx and other_rx):
+        println("Mostly Harmless")
+    return Result.Ok(sum)

@@ -1,0 +1,38 @@
+# Test perk methods with various return types
+
+perk Multi:
+    fn get_int() i32
+    fn get_string() string
+    fn get_bool() bool
+    fn get_u64() u64
+
+struct Data:
+    i32 value
+
+extend Data with Multi:
+    fn get_int() i32:
+        return self.value
+
+    fn get_string() string:
+        return "data"
+
+    fn get_bool() bool:
+        return true
+
+    fn get_u64() u64:
+        return self.value as u64
+
+fn main() i32:
+    let Data d = Data(42)
+
+    let i32 i = d.get_int()
+    let string s = d.get_string()
+    let bool b = d.get_bool()
+    let u64 u = d.get_u64()
+
+    println(i)
+    println(s)
+    println(b)
+    println(u)
+
+    return Result.Ok(0)

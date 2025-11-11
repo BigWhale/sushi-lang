@@ -1,0 +1,7 @@
+use <collections/strings>
+
+fn main() i32:
+    # Error: split() requires exactly 1 argument (string delimiter)
+    let string s = "test"
+    let string[] parts = s.split() # Missing argument
+    return Result.Ok(0)

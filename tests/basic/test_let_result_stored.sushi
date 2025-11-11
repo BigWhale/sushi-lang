@@ -1,0 +1,14 @@
+# TEST_TYPE: runtime
+# TEST_EXPECTED_OUTPUT: x = 42
+# Phase 4.2 - Success test for storing Result<T> in Result variable
+# Should pass: storing in Result<i32> variable then calling .realise()
+
+
+fn get_value() i32:
+    return Result.Ok(42)
+
+fn main() i32:
+    let Result<i32> result = get_value()
+    let i32 x = result.realise(0)
+    println("x = {x}")
+    return Result.Ok(0)

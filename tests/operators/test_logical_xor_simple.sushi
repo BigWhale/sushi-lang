@@ -1,0 +1,9 @@
+fn main() i32:
+    # Basic logical XOR tests
+    let bool a = true
+    let bool b = false
+
+    let bool result = a xor b
+    println(result)  # Should be true
+
+    return Result.Ok(0)

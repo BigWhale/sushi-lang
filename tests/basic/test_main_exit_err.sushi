@@ -1,0 +1,3 @@
+# EXPECT_RUNTIME_EXIT: 1
+fn main() i32:
+    return Result.Err()

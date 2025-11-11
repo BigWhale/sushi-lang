@@ -1,0 +1,17 @@
+# Test: Generic function with multiple type parameters
+# Phase 2: Verifies generic function definition parsing with two type params
+#
+# This test defines a generic swap function that takes two values
+# of different types (T and U). The function definition is collected
+# in Pass 0 and added to the GenericFunctionTable.
+#
+# Note: Actual calls to generic functions will work in Phase 3
+# when monomorphization is implemented.
+
+fn swap<T, U>(T a, U b) ~:
+    return Result.Ok(~)
+
+fn main() i32:
+    # Phase 2: Generic function defined but not yet callable
+    # Phase 3 will add monomorphization to generate concrete versions
+    return Result.Ok(0)

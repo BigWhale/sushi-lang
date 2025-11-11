@@ -1,0 +1,37 @@
+# TEST_TYPE: runtime
+# STDIN_INPUT: "Alpha\nBeta\nGamma\n"
+# EXPECT_STDOUT_CONTAINS: "Received lines:"
+# EXPECT_STDOUT_CONTAINS: "- Alpha"
+# EXPECT_STDOUT_CONTAINS: "- Beta"
+# EXPECT_STDOUT_CONTAINS: "- Gamma"
+# EXPECT_RUNTIME_EXIT: 0
+# Test stdin.readln() in a foreach loop
+# Read multiple lines and process them
+
+use <io/stdio>
+
+fn main() i32:
+    # Read 3 lines from stdin
+    let string[] lines = new()
+
+    # Read first line
+    let string line1 = stdin.readln()
+    lines.push(line1)
+
+    # Read second line
+    let string line2 = stdin.readln()
+    lines.push(line2)
+
+    # Read third line
+    let string line3 = stdin.readln()
+    lines.push(line3)
+
+    # Iterate over lines and print them
+    stdout.write("Received lines:\n")
+    foreach(string line in lines.iter()):
+        stdout.write("  - ")
+        stdout.write(line)
+        stdout.write("\n")
+
+    lines.destroy()
+    return Result.Ok(0)

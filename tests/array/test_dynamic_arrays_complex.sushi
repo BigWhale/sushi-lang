@@ -1,0 +1,58 @@
+# Test complex dynamic array scenarios
+fn run_test() i32:
+  # Test basic operations with multiple arrays
+  let i32[] numbers = from([10, 20, 30, 40])
+  print(numbers.len())      # Should print 4
+
+  # Test dynamic growth and capacity
+  let string[] words = new()
+  let i32 capacity_before = words.capacity()
+  print(capacity_before)    # Should print 0
+
+  print(words.push("first"))   # Push returns void (0)
+  print(words.push("second"))  # Push returns void (0)
+  print(words.push("third"))   # Push returns void (0)
+  print(words.push("fourth"))  # Push returns void (0)
+  print(words.push("fifth"))   # Push returns void (0)
+
+  let i32 capacity_after = words.capacity()
+  print(words.len())        # Should print 5
+  print(capacity_after)     # Should be >= 5 (likely 8 due to exponential growth)
+
+  # Test mixed operations
+  let bool[] flags = new()
+  print(flags.push(true))   # Push returns void (0)
+  print(flags.push(false))  # Push returns void (0)
+  print(flags.push(true))   # Push returns void (0)
+
+  let bool middle = flags.pop()  # Should be true
+  print(middle)
+  print(flags.len())        # Should print 2
+
+  print(flags.push(false))  # Push returns void (0)
+  print(flags.push(true))   # Push returns void (0)
+  print(flags.len())        # Should print 4
+  print(flags.get(3)??)       # Should print true
+
+  # Test multiple arrays in same scope
+  let i32[] evens = new()
+  let i32[] odds = new()
+
+  print(evens.push(2))      # Push returns void (0)
+  print(evens.push(4))      # Push returns void (0)
+  print(evens.push(6))      # Push returns void (0)
+
+  print(odds.push(1))       # Push returns void (0)
+  print(odds.push(3))       # Push returns void (0)
+  print(odds.push(5))       # Push returns void (0)
+
+  print(evens.len())        # Should print 3
+  print(odds.len())         # Should print 3
+  print(evens.get(1)??)       # Should print 4
+  print(odds.get(2)??)        # Should print 5
+
+  return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

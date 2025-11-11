@@ -1,0 +1,16 @@
+# Test basic reference passing with primitive types
+
+
+fn add_one(&i32 x) i32:
+    let i32 val = x
+    return Result.Ok(val + 1)
+
+fn main() i32:
+    let i32 num = 42
+    let Result<i32> result = add_one(&num)
+
+    # Original variable still accessible
+    println(num)
+    println(result.realise(0))
+
+    return Result.Ok(0)

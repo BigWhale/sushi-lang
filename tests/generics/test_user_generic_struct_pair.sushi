@@ -1,0 +1,13 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: 42
+# EXPECTED_OUTPUT: Mostly Harmless
+
+struct Pair<T, U>:
+    T first
+    U second
+
+fn main() i32:
+    let Pair<i32, string> p = Pair(42, "Mostly Harmless")
+    println(p.first)
+    println(p.second)
+    return Result.Ok(0)

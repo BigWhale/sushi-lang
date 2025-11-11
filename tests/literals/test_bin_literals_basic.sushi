@@ -1,0 +1,33 @@
+# Test basic binary literal support
+
+fn main() i32:
+    # Basic binary literals
+    let i32 a = 0b1111
+    let i32 b = 0b0000
+    let i32 c = 0b10101010
+
+    # Case insensitivity
+    let i32 d = 0B1111
+    let i32 e = 0b1010
+    let i32 f = 0B0101
+
+    # Binary with underscores
+    let i32 g = 0b1111_0000
+    let i32 h = 0b1010_1010_1010_1010
+    let i32 i = 0b1_0_1_0
+
+    # Binary in expressions
+    let i32 sum = 0b1000 + 0b0100
+    let i32 product = 0b11 * 2
+    let bool equal = 0b1111 == 15
+
+    # Bitwise operations with binary
+    let i32 mask = 0b11110000 & 0b11111111
+    let i32 combined = 0b11110000 | 0b00001111
+    let i32 shifted = 0b1 << 8
+
+    # Use the variables
+    let i32 result = a + b + c + d + e + f + g + h + i + sum + product + mask + combined + shifted
+    if (equal):
+        println("Mostly Harmless")
+    return Result.Ok(result)

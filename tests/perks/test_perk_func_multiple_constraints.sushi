@@ -1,0 +1,38 @@
+# Test generic function with multiple perk constraints
+
+perk Hashable:
+    fn hash() u64
+
+perk Displayable:
+    fn display() string
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Hashable:
+    fn hash() u64:
+        let u64 hx = self.x as u64
+        let u64 hy = self.y as u64
+        return hx + hy
+
+extend Point with Displayable:
+    fn display() string:
+        return "Point"
+
+# Function with multiple constraints
+fn debug_value<T: Hashable + Displayable>(T value) ~:
+    let u64 h = value.hash()
+    let string s = value.display()
+    println(s)
+    println(h)
+    return Result.Ok(~)
+
+fn run_test() i32:
+    let Point p = Point(10, 20)
+    debug_value(p)??
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

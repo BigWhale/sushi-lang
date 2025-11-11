@@ -1,0 +1,67 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT: Hello
+# EXPECT_STDOUT: World
+# EXPECT_STDOUT: caf
+# EXPECT_STDOUT: 0
+# EXPECT_STDOUT: 0
+# EXPECT_STDOUT: llo
+# EXPECT_STDOUT: Hel
+# EXPECT_STDOUT: 0
+# EXPECT_STDOUT: copy
+# EXPECT_STDOUT: d
+
+use <collections/strings>
+
+fn main() i32:
+    # Test 1: Basic byte-based substring
+    let string s1 = "Hello World"
+    let string sub1 = s1.ss(0, 5)
+    println(sub1)  # Expected: Hello
+
+    # Test 2: Middle substring
+    let string s2 = "Hello World"
+    let string sub2 = s2.ss(6, 5)
+    println(sub2)  # Expected: World
+
+    # Test 3: UTF-8 string (byte-based, not character-based)
+    let string s3 = "café"
+    let string sub3 = s3.ss(0, 3)
+    println(sub3)  # Expected: caf (3 bytes, not 3 characters)
+
+    # Test 4: Empty substring (length = 0)
+    let string s4 = "test"
+    let string sub4 = s4.ss(2, 0)
+    println(sub4.size())  # Expected: 0
+
+    # Test 5: Start beyond string length (should return empty)
+    let string s5 = "test"
+    let string sub5 = s5.ss(10, 5)
+    println(sub5.size())  # Expected: 0
+
+    # Test 6: Length exceeds available bytes (should clamp)
+    let string s6 = "Hello"
+    let string sub6 = s6.ss(2, 100)
+    println(sub6)  # Expected: llo
+
+    # Test 7: Negative start (should clamp to 0)
+    let string s7 = "Hello"
+    let string sub7 = s7.ss(-5, 3)
+    println(sub7)  # Expected: Hel
+
+    # Test 8: Negative length (should return empty)
+    let string s8 = "Hello"
+    let string sub8 = s8.ss(0, -5)
+    println(sub8.size())  # Expected: 0
+
+    # Test 9: Full string copy
+    let string s9 = "copy"
+    let string sub9 = s9.ss(0, 4)
+    println(sub9)  # Expected: copy
+
+    # Test 10: Single byte
+    let string s10 = "abcdef"
+    let string sub10 = s10.ss(3, 1)
+    println(sub10)  # Expected: d
+
+    return Result.Ok(0)

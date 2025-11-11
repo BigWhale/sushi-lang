@@ -1,0 +1,6 @@
+# Test error: reserve() with wrong number of arguments (expects 1)
+fn main() i32:
+    let List<i32> data = List.new()
+    # ERROR: reserve() expects exactly 1 argument (additional capacity)
+    data.reserve()
+    return Result.Ok(0)

@@ -1,0 +1,9 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+  let i32 the_answer = 42
+  let string the_question = "What is 6 * 9?"
+  let string deep_thought = "{the_question} {the_answer}"
+  println(deep_thought)
+  return Result.Ok(0)

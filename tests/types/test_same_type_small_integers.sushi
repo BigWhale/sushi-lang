@@ -1,0 +1,17 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Same-type small integer comparisons should pass
+fn main() i32:
+  # i8 comparisons only (arithmetic has compiler bug)
+  let i8 a = 10 as i8
+  let i8 b = 5 as i8
+
+  # Comparisons should work
+  let bool eq = a == a
+  let bool gt = a > b
+  let bool lt = b < a
+
+  if (eq and gt and lt):
+    return Result.Ok(0)
+
+  return Result.Ok(1)

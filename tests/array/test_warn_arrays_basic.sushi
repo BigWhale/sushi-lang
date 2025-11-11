@@ -1,0 +1,25 @@
+fn run_test() i32:
+    # Test basic array declaration and initialization
+    let i32[3] numbers = [1, 2, 3]
+    let bool[2] flags = [true, false]
+    let string[3] names = ["Arthur", "Trillian", "Charlie"]
+
+    # Test array indexing
+    let i32 first = numbers[0]
+    let bool flag = flags[1]
+    let string name = names[2]
+
+    # Test built-in array methods
+    print(numbers.len())  # Should print: 3
+    print(flags.len())    # Should print: 2
+    print(names.len())    # Should print: 3
+
+    # Test get method
+    print(numbers.get(1)??) # Should print: 2
+    print(names.get(0)??)   # Should print: Arthur
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

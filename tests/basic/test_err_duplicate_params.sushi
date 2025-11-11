@@ -1,0 +1,6 @@
+# CE0102: duplicate parameter names
+fn bad_func(i32 x, i32 x) i32:
+  return Result.Ok(x)
+
+fn main() i32:
+  return Result.Ok(0)

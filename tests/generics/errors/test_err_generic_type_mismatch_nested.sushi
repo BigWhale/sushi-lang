@@ -1,0 +1,7 @@
+# Test error: type mismatch in nested generic
+# Should fail with type compatibility error
+
+fn main() i32:
+    # Declare as Result<Maybe<i32>> but assign Result<Maybe<string>>
+    let Result<Maybe<i32>> var = Result.Ok(Maybe.Some("wrong type"))
+    return Result.Ok(0)

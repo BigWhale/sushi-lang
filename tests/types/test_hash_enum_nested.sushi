@@ -1,0 +1,27 @@
+# Test hashing of enum with nested enum variant data
+
+enum Status:
+    Ok(i32)
+    Err(i32)
+
+enum Response:
+    Success(Status)
+    Pending
+
+fn main() i32:
+    let Status ok_status = Status.Ok(200)
+    let Response r1 = Response.Success(ok_status)
+    let u64 h1 = r1.hash()
+    println("Response.Success(Status.Ok(200)) hash: {h1}")
+
+    let Status err_status = Status.Err(404)
+    let Response r2 = Response.Success(err_status)
+    let u64 h2 = r2.hash()
+    println("Response.Success(Status.Err(404)) hash: {h2}")
+
+    let Response r3 = Response.Pending()
+    let u64 h3 = r3.hash()
+    println("Response.Pending hash: {h3}")
+
+    println("Nested enum hashes computed!")
+    return Result.Ok(0)

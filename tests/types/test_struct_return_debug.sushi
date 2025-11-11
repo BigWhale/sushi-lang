@@ -1,0 +1,37 @@
+# Test returning structs with dynamic arrays from functions
+
+struct Inner:
+    i32[] values
+
+struct Outer:
+    Inner data
+
+fn create_inner() Inner:
+    let Inner inner = Inner(new())
+    inner.values.push(42)
+    inner.values.push(100)
+    println("In create_inner - before return: {inner.values.get(0)??}")
+    return Result.Ok(inner)
+
+fn create_outer_from_inner(Inner arg) Outer:
+    println("In create_outer_from_inner - arg len: {arg.values.len()}")
+    println("In create_outer_from_inner - arg[0]: {arg.values.get(0)??}")
+    let Outer result = Outer(arg)
+    println("In create_outer_from_inner - result len: {result.data.values.len()}")
+    println("In create_outer_from_inner - result[0]: {result.data.values.get(0)??}")
+    return Result.Ok(result)
+
+fn run_test() i32:
+    let Inner inner = create_inner().realise(Inner(new()))
+    println("After create_inner - len: {inner.values.len()}")
+    println("After create_inner - value: {inner.values.get(0)??}")
+
+    let Outer outer = create_outer_from_inner(inner).realise(Outer(Inner(new())))
+    println("After create_outer_from_inner - len: {outer.data.values.len()}")
+    println("After create_outer_from_inner - value: {outer.data.values.get(0)??}")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

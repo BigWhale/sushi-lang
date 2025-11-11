@@ -1,0 +1,54 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test UTF-8 Unicode support: len() vs size()
+use <collections/strings>
+
+fn main() i32:
+    # ASCII string: len == size
+    let string ascii = "hello"
+    println(ascii.len())    # 5 characters
+    println(ascii.size())   # 5 bytes
+
+    # Multi-byte UTF-8 strings
+    let string cafe = "café"
+    println(cafe.len())     # 4 characters
+    println(cafe.size())    # 5 bytes (é is 2 bytes in UTF-8)
+
+    # Emoji (4-byte UTF-8 character)
+    let string wave = "Hello 👋 World"
+    println(wave.len())     # 13 characters
+    println(wave.size())    # 17 bytes (👋 is 4 bytes)
+
+    # Japanese characters (3-byte UTF-8 each)
+    let string japanese = "日本語"
+    println(japanese.len())  # 3 characters
+    println(japanese.size()) # 9 bytes (each char is 3 bytes)
+
+    # Mixed ASCII and Unicode
+    let string mixed = "Test: é ❤ 日"
+    println(mixed.len())     # 11 characters
+    println(mixed.size())    # 17 bytes
+
+    # Heart emoji
+    let string heart = "❤"
+    println(heart.len())     # 1 character
+    println(heart.size())    # 3 bytes
+
+    # Multiple emojis
+    let string emojis = "😀😃😄"
+    println(emojis.len())    # 3 characters
+    println(emojis.size())   # 12 bytes (each emoji is 4 bytes)
+
+    # Empty string
+    let string empty = ""
+    println(empty.len())     # 0
+    println(empty.size())    # 0
+
+    # Test is_empty() with UTF-8
+    let string not_empty = "❤"
+    if (not_empty.is_empty()):
+        println(0)
+    else:
+        println(1)           # 1 (not empty)
+
+    return Result.Ok(0)

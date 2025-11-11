@@ -1,0 +1,18 @@
+# Test RAII cleanup before explicit return statements
+# Own<T> variables should be destroyed before the return
+
+fn test_early_return(bool condition) i32:
+    let Own<i32> ptr = Own.alloc(42)
+    let i32 value = ptr.get()  # Use the value to avoid warnings
+    if (condition):
+        # ptr should be cleaned up here before returning
+        return Result.Ok(value)
+    # ptr should also be cleaned up at function end
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result1 = test_early_return(true).realise(99)
+    let i32 result2 = test_early_return(false).realise(99)
+    let i32 computed = result1 + result2
+    let i32 expected = 42
+    return Result.Ok(computed - expected)

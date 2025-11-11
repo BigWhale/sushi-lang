@@ -1,0 +1,9 @@
+# Error: Wrong number of fields in struct constructor
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point p = Point(10, 20, 30)
+    return Result.Ok(0)

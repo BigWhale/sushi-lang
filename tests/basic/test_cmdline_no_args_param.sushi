@@ -1,0 +1,8 @@
+# Test that functions without string[] args parameter work normally
+# This should NOT trigger command line argument processing
+
+fn main() i32:
+    print("No command line args processing")
+    let i32 result = 42
+    let i32 expected = 42
+    return Result.Ok(result - expected)

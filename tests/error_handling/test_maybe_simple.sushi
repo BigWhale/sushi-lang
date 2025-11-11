@@ -1,0 +1,15 @@
+# Simple test: just verify Maybe<i32> type is recognized
+# Maybe<T> is now a built-in generic type (no enum definition needed)
+
+fn main() i32:
+    # Explicitly typed variable should work
+    let Maybe<i32> val = Maybe.Some(42)
+
+    # Use the variable to avoid warning
+    match val:
+        Maybe.Some(x) ->
+            println("Maybe test passed: {x}")
+        Maybe.None() ->
+            println("Unexpected None")
+
+    return Result.Ok(0)

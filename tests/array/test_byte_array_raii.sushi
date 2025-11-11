@@ -1,0 +1,76 @@
+# Test RAII automatic cleanup for byte arrays in various scopes
+
+
+fn create_and_return() i32:
+    # Byte array created in function scope - should be cleaned up on return
+    let u8[] local = from([1, 2, 3])
+    local.push(4 as u8)
+    return Result.Ok(local.len())  # Returns 4, then local is cleaned up
+
+fn nested_scopes() i32:
+    let u8[] outer = from([10, 20])
+    println("Outer length: {outer.len()}")  # 2
+
+    # Inner scope with its own byte array
+    if (true):
+        let u8[] inner = from([30, 40, 50])
+        inner.push(60 as u8)
+        println("Inner length: {inner.len()}")  # 4
+        # inner is cleaned up when exiting if block
+
+    # outer is still valid here
+    outer.push(30 as u8)
+    return Result.Ok(outer.len())  # Returns 3, then outer is cleaned up
+
+fn early_return_cleanup(i32 condition) i32:
+    let u8[] data = new()
+    data.push(1 as u8)
+    data.push(2 as u8)
+
+    if (condition > 0):
+        # Early return - data should be cleaned up here
+        return Result.Ok(100)
+
+    # Normal path
+    data.push(3 as u8)
+    return Result.Ok(data.len())
+
+fn loop_cleanup() i32:
+    let i32 count = 0
+    while (count < 5):
+        # Byte array created in each loop iteration
+        let u8[] loop_array = new()
+        loop_array.push((count * 10) as u8)
+        println("Loop {count}: {loop_array.len()}")
+        count := count + 1
+        # loop_array is cleaned up at end of each iteration
+
+    return Result.Ok(count)
+
+fn main() i32:
+    println("Test 1: Function scope cleanup")
+    let Result<i32> result1 = create_and_return()
+    println("Result: {result1.realise(0)}")
+
+    println("Test 2: Nested scopes")
+    let Result<i32> result2 = nested_scopes()
+    println("Result: {result2.realise(0)}")
+
+    println("Test 3: Early return cleanup")
+    let Result<i32> result3a = early_return_cleanup(1)
+    println("Early return result: {result3a.realise(0)}")
+    let Result<i32> result3b = early_return_cleanup(0)
+    println("Normal return result: {result3b.realise(0)}")
+
+    println("Test 4: Loop cleanup")
+    let Result<i32> result4 = loop_cleanup()
+    println("Loop result: {result4.realise(0)}")
+
+    println("Test 5: Main function scope")
+    let u8[] main_array = from([100, 200])
+    main_array.push(250 as u8)
+    println("Main array length: {main_array.len()}")
+    # main_array will be cleaned up when main returns
+
+    println("All RAII tests completed successfully!")
+    return Result.Ok(0)

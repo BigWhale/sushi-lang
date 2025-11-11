@@ -1,0 +1,13 @@
+# TEST_TYPE: runtime
+# STDIN_INPUT: "Hello\nWorld\n"
+# EXPECT_STDOUT_CONTAINS: "Total input: Hello\nWorld\n"
+# EXPECT_RUNTIME_EXIT: 0
+# Test stdin.read() - reads all input until EOF
+
+use <io/stdio>
+
+fn main() i32:
+    let string input = stdin.read()
+    stdout.write("Total input: ")
+    stdout.write(input)
+    return Result.Ok(0)

@@ -1,0 +1,9 @@
+# Error: Wrong field type in struct constructor
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point p = Point(10, true)
+    return Result.Ok(0)

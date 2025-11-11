@@ -1,0 +1,7 @@
+use <collections/strings>
+
+fn main() i32:
+    let string s = "test"
+    # Error: sleft() requires exactly 1 argument (n)
+    let string left = s.sleft(1, 2)
+    return Result.Ok(0)

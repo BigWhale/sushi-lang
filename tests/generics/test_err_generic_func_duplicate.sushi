@@ -1,0 +1,10 @@
+# Test: Duplicate generic function names detected
+
+fn process<T>(T x) T:
+    return Result.Ok(x)
+
+fn process<U>(U y) U:  # Error CE0101: duplicate
+    return Result.Ok(y)
+
+fn main() i32:
+    return Result.Ok(0)

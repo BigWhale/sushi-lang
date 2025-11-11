@@ -1,0 +1,12 @@
+fn main() i32:
+    let u8 a = 255 as u8
+    let u16 b = 65535 as u16
+    let u32 c = 4294967295 as u32
+    let u64 d = 18446744073709551615 as u64
+
+    println("u8:  {a}")
+    println("u16: {b}")
+    println("u32: {c}")
+    println("u64: {d}")
+
+    return Result.Ok(0)

@@ -1,0 +1,17 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: 200
+
+# Test extension methods on structs
+struct Point:
+    i32 x
+    i32 y
+
+extend Point area() i32:
+    return self.x * self.y
+
+fn main() i32:
+    let Point p = Point(10, 20)
+    let i32 result = p.area()
+    println(result)
+    return Result.Ok(0)

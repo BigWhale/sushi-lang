@@ -1,0 +1,18 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+
+# Multiple struct definitions
+struct Point:
+    i32 x
+    i32 y
+
+struct Rectangle:
+    i32 width
+    i32 height
+
+fn main() i32:
+    let Point p = Point(2, 10)
+    let Rectangle r = Rectangle(20, 20)
+    let i32 the_answer = p.x + r.width + r.height
+    let i32 expected = 42
+    return Result.Ok(expected - the_answer)

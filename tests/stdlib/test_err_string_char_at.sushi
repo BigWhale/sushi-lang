@@ -1,0 +1,7 @@
+use <collections/strings>
+
+fn main() i32:
+    let string s = "test"
+    # Error: char_at() requires exactly 1 argument (index)
+    let string c = s.char_at(0, 1)
+    return Result.Ok(0)

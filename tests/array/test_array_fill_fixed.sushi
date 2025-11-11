@@ -1,0 +1,18 @@
+fn main() i32:
+    # Test fill() on fixed array - the number of Betelgeuse
+    let i32[5] babel_fish = [10, 20, 30, 40, 50]
+    babel_fish.fill(7)
+
+    # Verify all elements are now 7
+    if (babel_fish[0] != 7):
+        return Result.Err()
+    if (babel_fish[1] != 7):
+        return Result.Err()
+    if (babel_fish[2] != 7):
+        return Result.Err()
+    if (babel_fish[3] != 7):
+        return Result.Err()
+    if (babel_fish[4] != 7):
+        return Result.Err()
+
+    return Result.Ok(0)

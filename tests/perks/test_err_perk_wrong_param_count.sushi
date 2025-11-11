@@ -1,0 +1,15 @@
+# Test CE4004: Wrong parameter count
+
+perk Comparable:
+    fn compare(i32 other) i32
+
+struct Number:
+    i32 value
+
+# Wrong parameter count - has no parameters instead of one
+extend Number with Comparable:
+    fn compare() i32:
+        return 0
+
+fn main() i32:
+    return Result.Ok(0)

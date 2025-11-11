@@ -1,0 +1,22 @@
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+fn main() i32:
+  # Test float-to-int truncation (toward zero)
+  let f64 positive = 3.14
+  let f64 negative = -2.7
+  let i32 pos_int = positive as i32  # Should be 3
+  let i32 neg_int = negative as i32  # Should be -2
+
+  # Validate truncation behavior
+  let i32 validation_count = 0
+
+  if (pos_int == 3):  # 3.14 truncates to 3
+    validation_count := validation_count + 1
+
+  if (neg_int == -2):  # -2.7 truncates to -2 (toward zero)
+    validation_count := validation_count + 1
+
+  if (validation_count == 2):
+    return Result.Ok(0)  # All tests passed
+  else:
+    return Result.Ok(validation_count)  # Return count for debugging

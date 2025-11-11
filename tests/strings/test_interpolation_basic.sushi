@@ -1,0 +1,8 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+  let i32 x = 42
+  let string name = "Arthur"
+  print("Number: {x}, Name: {name}")
+  return Result.Ok(0)

@@ -1,0 +1,34 @@
+fn main() i32:
+    # Test alternative logical operator syntax
+    let bool a = true
+    let bool b = false
+
+    # Test && (and)
+    let bool test_and_1 = a && b
+    let bool test_and_2 = a and b
+    println(test_and_1)  # Should match
+    println(test_and_2)  # Should match
+
+    # Test || (or)
+    let bool test_or_1 = a || b
+    let bool test_or_2 = a or b
+    println(test_or_1)  # Should match
+    println(test_or_2)  # Should match
+
+    # Test ^^ (xor)
+    let bool test_xor_1 = a ^^ b
+    let bool test_xor_2 = a xor b
+    println(test_xor_1)  # Should match
+    println(test_xor_2)  # Should match
+
+    # Test ! (not)
+    let bool test_not_1 = !a
+    let bool test_not_2 = not a
+    println(test_not_1)  # Should match
+    println(test_not_2)  # Should match
+
+    # Complex expression with mixed syntax
+    let bool complex = (a && b) || (a ^^ !b)
+    println(complex)
+
+    return Result.Ok(0)

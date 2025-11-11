@@ -1,0 +1,15 @@
+fn main() i32:
+    # Test HashMap.destroy() - makes map unusable
+    let HashMap<string, i32> map = HashMap.new()
+
+    map.insert("one", 1)
+    map.insert("two", 2)
+    map.insert("three", 3)
+
+    println("Before destroy: len={map.len()}")
+
+    # This should recursively destroy all entries and set buckets to null
+    map.destroy()
+
+    println("HashMap.destroy() completed successfully!")
+    return Result.Ok(0)

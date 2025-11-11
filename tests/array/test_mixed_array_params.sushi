@@ -1,0 +1,29 @@
+# Test mixing fixed and dynamic array parameters
+
+
+fn process_fixed(i32[3] fixed_arr) i32:
+    return Result.Ok(fixed_arr.len())
+
+fn process_dynamic(i32[] dynamic_arr) i32:
+    return Result.Ok(dynamic_arr.len())
+
+fn process_both(i32[2] fixed, i32[] dynamic) i32:
+    return Result.Ok(fixed.len() + dynamic.len())
+
+fn main() i32:
+    # Test fixed array parameter
+    let i32[3] fixed = [1, 2, 3]
+    let i32 fixed_len = process_fixed(fixed).realise(0)
+    println(fixed_len)  # Should print 3
+
+    # Test dynamic array parameter
+    let i32[] dynamic = from([10, 20, 30, 40])
+    let i32 dynamic_len = process_dynamic(dynamic).realise(0)
+    println(dynamic_len)  # Should print 4
+
+    # Test both types
+    let i32[2] small_fixed = [100, 200]
+    let i32 total = process_both(small_fixed, dynamic).realise(0)
+    println(total)  # Should print 6 (2 + 4)
+
+    return Result.Ok(0)

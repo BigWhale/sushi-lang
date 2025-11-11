@@ -1,0 +1,39 @@
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+fn main() i32:
+  # Test basic numeric type casting
+  let i32 x = 42
+  let f64 y = x as f64
+  let i32 z = y as i32
+
+  # Test different integer sizes
+  let i64 big = x as i64
+  let i16 small = x as i16
+
+  # Test float precision conversion
+  let f32 single = y as f32
+  let f64 double = single as f64
+
+  # Validate casting preserves values where possible
+  let i32 validation_count = 0
+
+  if (z == x):  # i32 -> f64 -> i32 should preserve value
+    validation_count := validation_count + 1
+
+  if (big == (x as i64)):  # i32 -> i64 should preserve value
+    validation_count := validation_count + 1
+
+  if (small == (x as i16)):  # i32 -> i16 (42 fits in i16)
+    validation_count := validation_count + 1
+
+  # Float precision tests (approximate) - need explicit casts for literals
+  if ((single as f64) > 41.0 and (single as f64) < 43.0):  # f64 -> f32 should be close
+    validation_count := validation_count + 1
+
+  if (double > 41.0 and double < 43.0):  # f32 -> f64 should be close
+    validation_count := validation_count + 1
+
+  if (validation_count == 5):
+    return Result.Ok(0)  # All tests passed
+  else:
+    return Result.Ok(validation_count)  # Return count for debugging

@@ -1,0 +1,44 @@
+# Test Maybe<T> extension methods
+# Tests: .is_some(), .is_none(), .realise(), .expect()
+
+fn test_is_some() i32:
+    let Maybe<i32> val1 = Maybe.Some(42)
+    let Maybe<i32> val2 = Maybe.None()
+
+    if (val1.is_some()):
+        if (val2.is_none()):
+            return Result.Ok(1)
+
+    return Result.Ok(0)
+
+fn test_realise() i32:
+    let Maybe<i32> val1 = Maybe.Some(42)
+    let Maybe<i32> val2 = Maybe.None()
+
+    let i32 x = val1.realise(99)
+    let i32 y = val2.realise(88)
+
+    # x should be 42, y should be 88
+    return Result.Ok(x + y)  # Should be 130
+
+fn test_expect_some() i32:
+    let Maybe<i32> val = Maybe.Some(42)
+    let i32 x = val.expect("Should have value")
+    return Result.Ok(x)
+
+fn main() i32:
+    # Test is_some/is_none
+    let i32 r1 = test_is_some().realise(0)
+    println("test_is_some: {r1}")
+
+    # Test realise
+    let i32 r2 = test_realise().realise(0)
+    println("test_realise: {r2}")
+
+    # Test expect
+    let i32 r3 = test_expect_some().realise(0)
+    println("test_expect_some: {r3}")
+
+    let i32 result = r1 + r2 + r3
+    let i32 expected = 173
+    return Result.Ok(result - expected)

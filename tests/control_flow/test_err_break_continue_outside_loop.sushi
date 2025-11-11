@@ -1,0 +1,6 @@
+# CE1003: break/continue outside loop
+fn main() i32:
+  let i32 x = 10
+  if (x > 5):
+    break  # break outside loop
+  return Result.Ok(x)

@@ -1,0 +1,27 @@
+# TEST_TYPE: runtime
+# STDIN_INPUT: "Zaphod\n"
+# EXPECT_STDOUT_CONTAINS: "Mostly Harmless"
+# EXPECT_STDOUT_CONTAINS: "Enter your name:"
+# EXPECT_STDOUT_CONTAINS: "Hello, Zaphod!"
+# EXPECT_STDERR_CONTAINS: "Error: Everything is fine"
+# EXPECT_RUNTIME_EXIT: 0
+
+use <io/stdio>
+
+fn main() i32:
+    # Test stdout.write
+    stdout.write("Mostly Harmless")
+    stdout.write("\n")
+
+    # Test stderr.write
+    stderr.write("Error: ")
+    stderr.write("Everything is fine\n")
+
+    # Test readln
+    stdout.write("Enter your name: ")
+    let string name = stdin.readln()
+    stdout.write("Hello, ")
+    stdout.write(name)
+    stdout.write("!\n")
+
+    return Result.Ok(0)

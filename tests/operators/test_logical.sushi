@@ -1,0 +1,17 @@
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+fn main() i32:
+  let bool a = true
+  let bool b = false
+
+  let bool result_and = a and b
+  let bool result_or = a or b
+  let bool result_not_a = not a
+  let bool result_not_b = not b
+
+  # Complex logical expressions using all variables
+  let bool complex = result_and or result_or or result_not_a or result_not_b
+
+  if (complex):
+    return Result.Ok(0)
+  return Result.Ok(1)  # Should not reach here)

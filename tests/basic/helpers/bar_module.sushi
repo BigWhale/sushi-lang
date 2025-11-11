@@ -1,0 +1,8 @@
+# Bar module that also uses math_utils
+use "helpers/math_utils"
+
+const i32 BAR_MAGIC = 100
+
+public fn bar_compute(i32 x) i32:
+    let Result<i32> sq = square(x)
+    return Result.Ok(sq.realise(0) + BAR_MAGIC)

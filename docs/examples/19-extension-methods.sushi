@@ -1,0 +1,70 @@
+# Example 19: Extension Methods
+#
+# This example demonstrates extension methods (also known as UFCS - Uniform Function
+# Call Syntax) in Sushi. Extension methods allow you to add methods to existing types
+# without modifying their original definitions. At compile time, `x.method(args)` is
+# transformed to `method(x, args)`, making it a zero-cost abstraction.
+#
+# Key concepts covered:
+# - Defining extension methods with the extend keyword
+# - Adding methods to primitive types (i32, string)
+# - Using self to refer to the instance
+# - Extension methods return bare types (not Result<T>)
+# - Zero-cost transformation: x.method(args) becomes method(x, args)
+# - Combining extension methods with pattern matching
+#
+# Extension method syntax:
+# extend <type> <method_name>(<params>) <return_type>:
+#     <body>
+#     return <value>
+#
+# Note: Extension methods can be defined for primitives (i32, bool, string) and
+# user-defined types (structs, enums), but not for array types.
+
+use <collections/strings>
+
+# Add method to i32 - checks if value is the answer to life, universe, and everything
+extend i32 is_answer() bool:
+    return self == 42
+
+# Add method to i32 - doubles the value
+extend i32 double() i32:
+    return self * 2
+
+# Add method to string - checks if string is long
+extend string is_long() bool:
+    return self.len() > 10
+
+fn main() i32:
+    # Use extension methods on i32
+    let i32 value = 42
+
+    if (value.is_answer()):
+        println("{value} is the answer!")
+
+    let i32 other = 10
+
+    if (other.is_answer()):
+        println("This won't print")
+    else:
+        println("{other} is not the answer")
+
+    # Use extension methods
+    let i32 doubled = other.double()
+    println("{other} doubled is {doubled}")
+
+    # Use extension method on string
+    let string message1 = "Don't panic!"
+    let string message2 = "Stay calm"
+
+    if (message1.is_long()):
+        println("'{message1}' is a long string")
+    else:
+        println("'{message1}' is not long")
+
+    if (message2.is_long()):
+        println("'{message2}' is a long string")
+    else:
+        println("'{message2}' is not long")
+
+    return Result.Ok(0)

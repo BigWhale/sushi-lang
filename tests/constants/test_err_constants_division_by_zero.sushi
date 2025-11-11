@@ -1,0 +1,7 @@
+# Test division by zero error in constants
+
+const i32 INVALID = 100 / 0
+
+fn main() i32:
+    return Result.Ok(0)
+

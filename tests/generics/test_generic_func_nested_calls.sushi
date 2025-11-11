@@ -1,0 +1,36 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+
+# Test: Nested generic function calls
+fn identity<T>(T x) T:
+    return Result.Ok(x)
+
+fn wrap<U>(U y) U:
+    let U result = identity(y)??
+    return Result.Ok(result)
+
+fn double_wrap<V>(V z) V:
+    let V result = wrap(z)??
+    return Result.Ok(result)
+
+fn run_test() i32:
+    # Test deeply nested calls with i32
+    let i32 a = double_wrap(42)??
+    if (a != 42):
+        return Result.Ok(1)
+
+    # Test with string
+    let string s = double_wrap("test")??
+    if (s != "test"):
+        return Result.Ok(2)
+
+    # Test with bool
+    let bool b = double_wrap(true)??
+    if (not b):
+        return Result.Ok(3)
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

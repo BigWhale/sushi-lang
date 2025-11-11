@@ -1,0 +1,72 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test List<T> insert method - basic functionality
+fn main() i32:
+    # Create list with some elements
+    let List<i32> nums = List.new()
+    nums.push(1)
+    nums.push(2)
+    nums.push(4)
+    nums.push(5)
+
+    # Insert 3 at index 2
+    match nums.insert(2, 3):
+        Result.Ok(_) ->
+            println("Inserted successfully")
+        Result.Err() ->
+            println("ERROR: Insert should succeed")
+            return Result.Ok(1)
+
+    # Verify length
+    if (nums.len() != 5):
+        println("ERROR: Length should be 5, got {nums.len()}")
+        return Result.Ok(2)
+
+    # Verify elements
+    match nums.get(0):
+        Maybe.Some(val) ->
+            if (val != 1):
+                println("ERROR: nums[0] should be 1, got {val}")
+                return Result.Ok(3)
+        Maybe.None() ->
+            println("ERROR: Missing element at index 0")
+            return Result.Ok(4)
+
+    match nums.get(1):
+        Maybe.Some(val) ->
+            if (val != 2):
+                println("ERROR: nums[1] should be 2, got {val}")
+                return Result.Ok(5)
+        Maybe.None() ->
+            println("ERROR: Missing element at index 1")
+            return Result.Ok(6)
+
+    match nums.get(2):
+        Maybe.Some(val) ->
+            if (val != 3):
+                println("ERROR: nums[2] should be 3 (inserted), got {val}")
+                return Result.Ok(7)
+        Maybe.None() ->
+            println("ERROR: Missing element at index 2")
+            return Result.Ok(8)
+
+    match nums.get(3):
+        Maybe.Some(val) ->
+            if (val != 4):
+                println("ERROR: nums[3] should be 4 (shifted), got {val}")
+                return Result.Ok(9)
+        Maybe.None() ->
+            println("ERROR: Missing element at index 3")
+            return Result.Ok(10)
+
+    match nums.get(4):
+        Maybe.Some(val) ->
+            if (val != 5):
+                println("ERROR: nums[4] should be 5 (shifted), got {val}")
+                return Result.Ok(11)
+        Maybe.None() ->
+            println("ERROR: Missing element at index 4")
+            return Result.Ok(12)
+
+    println("Basic insert test passed!")
+    return Result.Ok(0)

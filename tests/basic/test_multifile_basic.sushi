@@ -1,0 +1,8 @@
+use "helpers/test_multifile_helper"
+
+fn main() i32:
+    let i32 result = multiply_by_two(21).realise(0)
+    let i32 constant_val = HELPER_CONSTANT
+    let i32 computed = result + constant_val
+    let i32 expected = 52
+    return Result.Ok(computed - expected)

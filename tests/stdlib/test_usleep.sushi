@@ -1,0 +1,17 @@
+use <time>
+
+fn run_test() i32:
+    println("Testing usleep for 250000 microseconds (250ms)...")
+    let i32 result = usleep(250000 as i64)??
+    println("Sleep completed successfully")
+
+    if (result == 0):
+        println("Sleep was not interrupted")
+    else:
+        println("Sleep was interrupted")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

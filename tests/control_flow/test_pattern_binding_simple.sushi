@@ -1,0 +1,18 @@
+# Test: Simple pattern binding to reproduce Issue #8
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Value: 42
+
+enum Either<T, U>:
+    Left(T)
+    Right(U)
+
+fn main() i32:
+    let Either<i32, string> val = Either.Left(42)
+
+    match val:
+        Either.Left(x) ->
+            println("Value: {x}")
+        Either.Right(s) ->
+            println("String: {s}")
+
+    return Result.Ok(0)

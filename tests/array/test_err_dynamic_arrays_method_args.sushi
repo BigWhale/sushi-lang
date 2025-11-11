@@ -1,0 +1,8 @@
+# Test dynamic array method argument mismatch
+fn main() i32:
+  let i32[] numbers = new()
+
+  # This should fail - push with wrong argument type
+  numbers.push("string")
+
+  return Result.Ok(0)

@@ -1,0 +1,49 @@
+# Test hash methods for float types
+
+fn main() i32:
+    # Test f32
+    let f32 a = 3.14 as f32
+    let u64 hash_a = a.hash()
+    println("f32 hash(3.14) = {hash_a}")
+
+    # Test f64
+    let f64 b = 2.71828
+    let u64 hash_b = b.hash()
+    println("f64 hash(2.71828) = {hash_b}")
+
+    # Test that same values produce same hash
+    let f32 x = 1.5 as f32
+    let f32 y = 1.5 as f32
+    let u64 hash_x = x.hash()
+    let u64 hash_y = y.hash()
+    if (hash_x == hash_y):
+        println("✓ Same float values produce same hash")
+    else:
+        println("✗ Same float values produce different hash")
+
+    # Test zero normalization: +0.0 and -0.0 should hash to same value
+    let f64 pos_zero = 0.0
+    let f64 neg_zero = -0.0
+    let u64 hash_pos = pos_zero.hash()
+    let u64 hash_neg = neg_zero.hash()
+    if (hash_pos == hash_neg):
+        println("✓ +0.0 and -0.0 produce same hash")
+    else:
+        println("✗ +0.0 and -0.0 produce different hash")
+
+    # Test negative numbers
+    let f32 neg = -42.5 as f32
+    let u64 hash_neg_num = neg.hash()
+    println("f32 hash(-42.5) = {hash_neg_num}")
+
+    # Test very large numbers
+    let f64 large = 1.7976931348623157e308
+    let u64 hash_large = large.hash()
+    println("f64 hash(1.7976931348623157e308) = {hash_large}")
+
+    # Test very small numbers
+    let f64 small = 2.2250738585072014e-308
+    let u64 hash_small = small.hash()
+    println("f64 hash(2.2250738585072014e-308) = {hash_small}")
+
+    return Result.Ok(0)

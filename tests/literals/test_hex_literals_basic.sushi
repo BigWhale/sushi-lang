@@ -1,0 +1,38 @@
+# Test basic hexadecimal literal support
+
+fn main() i32:
+    # Basic hex literals
+    let i32 a = 0xFF
+    let i32 b = 0x00
+    let i32 c = 0xDEADBEEF
+
+    # Case insensitivity
+    let i32 d = 0xff
+    let i32 e = 0XFF
+    let i32 f = 0Xff
+
+    # Hex with underscores
+    let i32 g = 0xFF_FF
+    let i32 h = 0xDEAD_BEEF
+    let i32 i = 0x1_2_3_4
+
+    # Hex in expressions
+    let i32 sum = 0x10 + 0x20
+    let i32 product = 0xFF * 2
+    let bool equal = 0xFF == 255
+
+    # Hex with different types
+    let u8 small = 0xFF as u8
+    let u64 large = 0xFFFFFFFF as u64
+
+    # Bitwise operations with hex
+    let i32 mask = 0xFF00 & 0xFFFF
+    let i32 combined = 0xF0 | 0x0F
+    let i32 shifted = 0x01 << 8
+
+    # Use the variables
+    let i32 result = a + b + c + d + e + f + g + h + i + sum + product + mask + combined + shifted
+    let i32 result2 = (small as i32) + (large as i32)
+    if (equal):
+        println("Mostly Harmless")
+    return Result.Ok(result + result2)

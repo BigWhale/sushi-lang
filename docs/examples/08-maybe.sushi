@@ -1,0 +1,82 @@
+# Example 08: Maybe<T> Optional Values
+#
+# This example demonstrates Sushi's Maybe<T> type for type-safe optionals.
+# Maybe<T> eliminates the need for sentinel values (like -1 or null) by
+# explicitly encoding the presence or absence of a value in the type system.
+#
+# Key concepts covered:
+# - Maybe.Some(value) and Maybe.None() variants
+# - Pattern matching on both Result and Maybe values
+# - Utility methods: .is_some(), .is_none(), .realise(default), .expect(msg)
+# - Nested Result<Maybe<T>> handling with explicit pattern matching
+#
+# Note: All functions return Result<T>, so we use match statements to
+# unwrap the Result layer before working with the Maybe<T> value.
+
+fn find_crew_member(string[] crew, string name) Maybe<i32>:
+    # Search for a crew member by name and return their position
+    # Returns Maybe.Some(index) if found, Maybe.None() if not found
+    let i32 i = 0
+
+    while (i < crew.len()):
+        if (crew.get(i) == name):
+            return Result.Ok(Maybe.Some(i))
+
+        i := i + 1
+
+    return Result.Ok(Maybe.None())
+
+fn main() i32:
+    let string[] crew = from(["Arthur", "Ford", "Zaphod", "Trillian", "Marvin"])
+
+    # Find existing member - use match to unwrap Result<Maybe<i32>>
+    let Result<Maybe<i32>> arthur_result = find_crew_member(crew, "Arthur")
+
+    match arthur_result:
+        Result.Ok(arthur_pos) ->
+            # Now we have Maybe<i32>, match again to extract the value
+            match arthur_pos:
+                Maybe.Some(pos) ->
+                    println("Found Arthur at position {pos}")
+                Maybe.None() ->
+                    println("Arthur not found")
+
+            # .is_some() checks if the Maybe contains a value (returns bool)
+            if (arthur_pos.is_some()):
+                println("Arthur is definitely on board")
+
+            # .realise(default) unwraps Maybe.Some or returns the default value
+            # This is safe - no runtime errors, just a fallback value
+            let i32 pos1 = arthur_pos.realise(-1)
+            println("Arthur position (or -1): {pos1}")
+        Result.Err() ->
+            println("Error searching for Arthur")
+
+    # Find non-existent member
+    let Result<Maybe<i32>> vogon_result = find_crew_member(crew, "Vogon")
+
+    match vogon_result:
+        Result.Ok(vogon_pos) ->
+            # .is_none() checks if the Maybe is empty (returns bool)
+            if (vogon_pos.is_none()):
+                println("No Vogons on board (thankfully!)")
+
+            let i32 pos2 = vogon_pos.realise(-1)
+            println("Vogon position (or -1): {pos2}")
+        Result.Err() ->
+            println("Error searching for Vogon")
+
+    # .expect(msg) unwraps Maybe.Some or triggers runtime error with message
+    # Use this when you're certain the value should exist
+    let Result<Maybe<i32>> ford_result = find_crew_member(crew, "Ford")
+
+    match ford_result:
+        Result.Ok(ford_pos) ->
+            let i32 ford_index = ford_pos.expect("Ford must be on the crew")
+            println("Ford is at index {ford_index}")
+        Result.Err() ->
+            println("Error searching for Ford")
+
+    return Result.Ok(0)
+
+

@@ -1,0 +1,17 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Welcome
+
+use <io/stdio>
+
+fn main() i32:
+    # Test combined I/O operations
+    stdout.write("Welcome to Sushi I/O!\n")
+    stdout.write("This is stdout\n")
+    stderr.write("This is stderr\n")
+
+    # Test with string variables
+    let string msg = "Testing variables\n"
+    stdout.write(msg)
+
+    return Result.Ok(0)

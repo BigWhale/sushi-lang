@@ -1,0 +1,110 @@
+# Test logical operations in constant expressions
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "All constant logical tests passed"
+
+const bool TRUE_VAL = true
+const bool FALSE_VAL = false
+
+const bool AND_KEYWORD_TT = true and true
+const bool AND_KEYWORD_TF = true and false
+const bool AND_KEYWORD_FT = false and true
+const bool AND_KEYWORD_FF = false and false
+
+const bool AND_SYMBOL_TT = true && true
+const bool AND_SYMBOL_TF = true && false
+
+const bool OR_KEYWORD_TT = true or true
+const bool OR_KEYWORD_TF = true or false
+const bool OR_KEYWORD_FT = false or true
+const bool OR_KEYWORD_FF = false or false
+
+const bool OR_SYMBOL_TT = true || true
+const bool OR_SYMBOL_FF = false || false
+
+const bool XOR_KEYWORD_TT = true xor true
+const bool XOR_KEYWORD_TF = true xor false
+const bool XOR_KEYWORD_FT = false xor true
+const bool XOR_KEYWORD_FF = false xor false
+
+const bool XOR_SYMBOL_TF = true ^^ false
+const bool XOR_SYMBOL_FF = false ^^ false
+
+const bool NOT_KEYWORD_T = not true
+const bool NOT_KEYWORD_F = not false
+
+const bool NOT_SYMBOL_T = !true
+const bool NOT_SYMBOL_F = !false
+
+const bool COMPLEX_EXPR = (true and false) or (true xor false)
+const bool NESTED_EXPR = not ((true or false) and (false xor false))
+
+const bool IS_VALID = (100 > 50) and (10 == 10)
+const bool IS_INVALID = (100 < 50) or (10 != 10)
+
+fn main() i32:
+    # Verify logical AND results
+    if (not AND_KEYWORD_TT):
+        return Result.Err()
+    if (AND_KEYWORD_TF):
+        return Result.Err()
+    if (AND_KEYWORD_FT):
+        return Result.Err()
+    if (AND_KEYWORD_FF):
+        return Result.Err()
+    if (not AND_SYMBOL_TT):
+        return Result.Err()
+    if (AND_SYMBOL_TF):
+        return Result.Err()
+
+    # Verify logical OR results
+    if (not OR_KEYWORD_TT):
+        return Result.Err()
+    if (not OR_KEYWORD_TF):
+        return Result.Err()
+    if (not OR_KEYWORD_FT):
+        return Result.Err()
+    if (OR_KEYWORD_FF):
+        return Result.Err()
+    if (not OR_SYMBOL_TT):
+        return Result.Err()
+    if (OR_SYMBOL_FF):
+        return Result.Err()
+
+    # Verify logical XOR results
+    if (XOR_KEYWORD_TT):
+        return Result.Err()
+    if (not XOR_KEYWORD_TF):
+        return Result.Err()
+    if (not XOR_KEYWORD_FT):
+        return Result.Err()
+    if (XOR_KEYWORD_FF):
+        return Result.Err()
+    if (not XOR_SYMBOL_TF):
+        return Result.Err()
+    if (XOR_SYMBOL_FF):
+        return Result.Err()
+
+    # Verify logical NOT results
+    if (NOT_KEYWORD_T):
+        return Result.Err()
+    if (not NOT_KEYWORD_F):
+        return Result.Err()
+    if (NOT_SYMBOL_T):
+        return Result.Err()
+    if (not NOT_SYMBOL_F):
+        return Result.Err()
+
+    # Verify complex expressions
+    if (not COMPLEX_EXPR):
+        return Result.Err()
+    if (not NESTED_EXPR):
+        return Result.Err()
+
+    # Verify combined expressions
+    if (not IS_VALID):
+        return Result.Err()
+    if (IS_INVALID):
+        return Result.Err()
+
+    println("All constant logical tests passed")
+    return Result.Ok(0)

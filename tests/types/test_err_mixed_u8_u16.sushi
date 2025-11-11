@@ -1,0 +1,9 @@
+# CE2510: Mixed unsigned type operations should fail
+fn main() i32:
+  let u8 a = 10 as u8
+  let u16 b = 20 as u16
+
+  # This should fail - mixed u8 and u16
+  let u16 c = a + b
+
+  return Result.Ok(0)

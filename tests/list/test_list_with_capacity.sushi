@@ -1,0 +1,38 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test List<T> with_capacity constructor
+fn main() i32:
+    # Create list with pre-allocated capacity
+    let List<i32> reserved = List.with_capacity(100)
+
+    # Should be empty but have capacity
+    if (not reserved.is_empty()):
+        println("ERROR: Should start empty")
+        return Result.Ok(1)
+
+    if (reserved.len() != 0):
+        println("ERROR: Length should be 0")
+        return Result.Ok(2)
+
+    let i32 cap = reserved.capacity()
+    if (cap != 100):
+        println("ERROR: Expected capacity 100, got {cap}")
+        return Result.Ok(3)
+
+    # Push elements without reallocation
+    let i32 i = 0
+    while (i < 50):
+        reserved.push(i)
+        i := i + 1
+
+    # Capacity should still be 100
+    if (reserved.capacity() != 100):
+        println("ERROR: Capacity should remain 100")
+        return Result.Ok(4)
+
+    if (reserved.len() != 50):
+        println("ERROR: Length should be 50")
+        return Result.Ok(5)
+
+    println("with_capacity tests passed!")
+    return Result.Ok(0)

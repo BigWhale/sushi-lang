@@ -1,0 +1,8 @@
+fn main() i32:
+  let i32 x = 42
+  let i32 y = -10
+  let i32 z = x + y
+  let i32 w = x * 2 - y / 5
+  let i32 result = z + w
+  let i32 expected = 118
+  return Result.Ok(result - expected)

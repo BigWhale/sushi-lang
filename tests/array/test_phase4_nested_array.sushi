@@ -1,0 +1,15 @@
+# TEST_TYPE: error
+# Test that nested structs with array fields show error path
+
+struct Inner:
+    i32[3] data
+
+struct Outer:
+    Inner inner
+
+fn main() i32:
+    let Inner i = Inner([1, 2, 3])
+    let Outer o = Outer(i)
+    let u64 h = o.hash()  # Should fail with nested error path
+    println("Hash: {h}")
+    return Result.Ok(0)

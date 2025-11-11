@@ -1,0 +1,15 @@
+struct Pair<T, U>:
+    T first
+    U second
+
+fn main() i32:
+    let Pair<i32, string> p = Pair(42, "Life")
+    let Maybe<Pair<i32, string>> m = Maybe.Some(p)
+
+    match m:
+        Maybe.Some(x) ->
+            let string s = x.second
+            println("X{s}")
+        Maybe.None() -> println("None")
+
+    return Result.Ok(0)

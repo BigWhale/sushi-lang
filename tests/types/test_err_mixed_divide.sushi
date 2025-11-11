@@ -1,0 +1,9 @@
+# CE2510: Mixed type division should fail
+fn main() i32:
+  let i64 a = 100 as i64
+  let i32 b = 10
+
+  # This should fail - mixed i64 and i32
+  let i64 c = a / b
+
+  return Result.Ok(0)

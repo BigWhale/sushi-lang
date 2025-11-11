@@ -1,0 +1,23 @@
+# Test stdlib primitives module (PHASE 4 proof of concept)
+# This test validates that the standalone IR generation for primitives.to_str() works
+
+use <core/primitives>
+
+fn main() i32:
+    # Test i32.to_str()
+    let i32 x = 42
+    println(x.to_str())
+
+    # Test bool.to_str()
+    let bool flag = true
+    println(flag.to_str())
+
+    # Test f64.to_str()
+    let f64 pi = 3.14159
+    println(pi.to_str())
+
+    # Test direct string output (no conversion needed)
+    let string msg = "Mostly Harmless"
+    println(msg)
+
+    return Result.Ok(0)

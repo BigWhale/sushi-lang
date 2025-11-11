@@ -1,0 +1,12 @@
+fn main() i32:
+    let List<string> names = List.new()
+
+    names.push("Alice")
+    names.push("Bob")
+    names.push("Charlie")
+
+    println("=== Iterating over List<string> ===")
+    foreach(name in names.iter()):
+        println(name)
+
+    return Result.Ok(0)

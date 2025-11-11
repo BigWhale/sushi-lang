@@ -1,0 +1,17 @@
+# Test Err() returns - variables should get zero values
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+
+
+fn maybe_divide(i32 a, i32 b) i32:
+  if (b == 0):
+    return Result.Err()
+  return Result.Ok(a / b)
+
+fn main() i32:
+  # This will return Err(), so result should be 42, because realise will fall back to the default
+  let i32 result = maybe_divide(10, 0).realise(42)
+
+  # result should be 42 (zero value for i32)
+  let i32 expected = 42
+  return Result.Ok(result - expected)

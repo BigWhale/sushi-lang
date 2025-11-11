@@ -1,0 +1,55 @@
+fn main() i32:
+  let f64 x = 3.141592653589793
+  let f64 y = -2.718281828459045
+  let f64 z = x + y
+  let f64 w = x * 2.0 - y / 1.5
+
+  # Test basic arithmetic with double precision
+  let f64 sum = x + y        # 0.423310825130748
+  let f64 diff = x - y       # 5.859874482048838
+  let f64 prod = x * y       # -8.539734222673566
+  let f64 quot = x / y       # -1.155727349790922
+
+  # Test unary negation
+  let f64 neg_x = -x         # -3.141592653589793
+
+  # Test complex expressions with high precision
+  let f64 complex = sum + diff * prod / quot
+
+  # Test edge cases
+  let f64 zero = 0.0
+  let f64 small = 1e-10
+  let f64 large = 1e10
+
+  # Use all variables to validate f64 operations work correctly
+  let i32 validation = 0
+
+  # Test initial values
+  if (x > 3.0 and y < 0.0):
+    validation := validation + 1
+
+  # Test computed expressions
+  if (z > 0.0 and w > 0.0):
+    validation := validation + 1
+
+  # Test basic arithmetic results
+  if (sum > 0.0 and diff > 5.0 and prod < 0.0 and quot < 0.0):
+    validation := validation + 1
+
+  # Test unary negation
+  if (neg_x < -3.0):
+    validation := validation + 1
+
+  # Test complex expression
+  if (complex != 0.0):
+    validation := validation + 1
+
+  # Test edge cases
+  if (zero == 0.0 and small > 0.0 and large > 1000000000.0):
+    validation := validation + 1
+
+  # Return success if all validations passed
+  if (validation == 6):
+    return Result.Ok(0)
+  else:
+    return Result.Err()

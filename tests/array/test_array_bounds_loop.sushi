@@ -1,0 +1,23 @@
+# Test array bounds checking with loop iteration
+# This test demonstrates proper iteration within bounds
+
+fn main() i32:
+    let i32[10] values = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+    # Safe iteration using foreach
+    let i32 sum = 0
+    foreach(val in values.iter()):
+        sum := sum + val
+
+    println(sum)  # Should print 45
+
+    # Manual iteration with bounds check
+    let i32 i = 0
+    let i32 product = 1
+    while (i < 5):
+        product := product * values[i]
+        i := i + 1
+
+    println(product)  # Should print 0 (since values[0] is 0)
+
+    return Result.Ok(0)

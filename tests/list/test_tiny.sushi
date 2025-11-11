@@ -1,0 +1,16 @@
+fn main() i32:
+    let List<i32> data = List.new()
+    data.push(100)
+
+    # let Maybe<i32> foo = data.get(0)
+    # match foo:
+    match data.get(0):
+        Maybe.Some(val) ->
+            if (val != 100):
+                println("ERROR: Expected 100, got {val}")
+                return Result.Ok(6)
+        Maybe.None() ->
+            println("ERROR: Should find element after free and push")
+            return Result.Ok(7)
+
+    return Result.Ok(0)

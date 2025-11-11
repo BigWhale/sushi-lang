@@ -1,0 +1,9 @@
+# Error test: cannot print Result<T> directly
+# Expected: CE2037 error
+
+fn get_number() i32:
+    return Result.Ok(42)
+
+fn main() i32:
+    println(get_number())  # Should error: CE2037
+    return Result.Ok(0)

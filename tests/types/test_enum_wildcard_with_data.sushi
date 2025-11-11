@@ -1,0 +1,36 @@
+# Test wildcard with data variants
+
+
+enum Operation:
+    Add(i32, i32)
+    Subtract(i32, i32)
+    Multiply(i32)
+    Negate(i32)
+    Identity
+
+fn evaluate(Operation op) i32:
+    match op:
+        Operation.Add(a, b) ->
+            return Result.Ok(a + b)
+        Operation.Subtract(a, b) ->
+            return Result.Ok(a - b)
+        _ ->
+            return Result.Ok(0)
+
+fn main() i32:
+    let Operation add = Operation.Add(10, 5)
+    let i32 r1 = evaluate(add).realise(0)
+    # r1 = 15
+
+    let Operation mul = Operation.Multiply(3)
+    let i32 r2 = evaluate(mul).realise(0)
+    # r2 = 0 (caught by wildcard)
+
+    let Operation id = Operation.Identity()
+    let i32 r3 = evaluate(id).realise(0)
+    # r3 = 0 (caught by wildcard)
+
+    # Return r1 + r2 + r3 = 15 + 0 + 0 = 15
+    let i32 result = r1 + r2 + r3
+    let i32 expected = 15
+    return Result.Ok(result - expected)

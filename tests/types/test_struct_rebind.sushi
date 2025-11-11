@@ -1,0 +1,14 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: 30
+
+# Test struct rebind operator
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point p = Point(10, 20)
+    p := Point(30, 40)
+    print(p.x)
+    return Result.Ok(0)

@@ -1,0 +1,37 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Hello, Sushi!
+# EXPECTED_OUTPUT: This is a test file.
+# EXPECTED_OUTPUT: File write and read successful!
+
+use <io/stdio>
+use <io/files>
+
+fn main() i32:
+    # Write text to file
+    let FileResult write_result = open("test_output.txt", FileMode.Write())
+    match write_result:
+        FileResult.Ok(out) ->
+            out.writeln("Hello, Sushi!")
+            out.writeln("This is a test file.")
+            out.close()
+        FileResult.Err(_) ->
+            stderr.write("Error: cannot open output.txt for writing\n")
+            return Result.Err()
+
+    # Read text from file
+    let FileResult read_result = open("test_output.txt", FileMode.Read())
+    match read_result:
+        FileResult.Ok(f) ->
+            let string line1 = f.readln()
+            let string line2 = f.readln()
+            println(line1)
+            println(line2)
+            f.close()
+        FileResult.Err(_) ->
+            stderr.write("Error: cannot open file for reading\n")
+            return Result.Err()
+
+    println("File write and read successful!")
+    return Result.Ok(0)
+
+

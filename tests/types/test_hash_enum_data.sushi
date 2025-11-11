@@ -1,0 +1,23 @@
+# Test hashing of enum with associated data
+
+enum MyResult:
+    Success(i32)
+    Failure(i32)
+
+fn main() i32:
+    let MyResult s1 = MyResult.Success(42)
+    let u64 h1 = s1.hash()
+    println("Success(42) hash: {h1}")
+
+    let MyResult s2 = MyResult.Success(100)
+    let u64 h2 = s2.hash()
+    println("Success(100) hash: {h2}")
+
+    let MyResult f1 = MyResult.Failure(404)
+    let u64 h3 = f1.hash()
+    println("Failure(404) hash: {h3}")
+
+    # Same variant with different values should have different hashes
+    # Different variants should have different hashes
+    println("All enum data variant hashes computed!")
+    return Result.Ok(0)

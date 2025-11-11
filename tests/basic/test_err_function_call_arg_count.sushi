@@ -1,0 +1,17 @@
+fn add(i32 a, i32 b) i32:
+  return Result.Ok(a + b)
+
+fn greet(string name) string:
+  return Result.Ok(name)
+
+fn main() i32:
+  # Too few arguments - should generate type errors on missing args
+  let i32 result1 = add(5)  # Missing second argument
+
+  # Too many arguments - excess args will be validated but not matched
+  let i32 result2 = add(5, 10, 15)  # Extra argument
+
+  # No arguments when some expected
+  let string result3 = greet()  # Missing string argument
+
+  return Result.Ok(result1)

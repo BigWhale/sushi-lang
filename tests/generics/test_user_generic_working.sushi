@@ -1,0 +1,23 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Created pair successfully
+# EXPECTED_OUTPUT: First value: 42
+# EXPECTED_OUTPUT: Second value: Thanks for all the fish.
+
+# Test user-defined generic enum (simplified version that works)
+
+enum Pair<T, U>:
+    Both(T, U)
+
+fn main() i32:
+    # Create a Pair<i32, string>
+    let Pair<i32, string> p = Pair.Both(42, "Thanks for all the fish.")
+
+    println("Created pair successfully")
+
+    # Pattern match to extract values
+    match p:
+        Pair.Both(num, text) ->
+            println("First value: {num}")
+            println("Second value: {text}")
+
+    return Result.Ok(0)

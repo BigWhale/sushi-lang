@@ -1,0 +1,23 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Successfully opened file for writing
+# EXPECTED_OUTPUT: Permission test completed
+
+use <io/stdio>
+use <io/files>
+
+fn main() i32:
+    # Write to /tmp which should always be writable
+    let FileResult result = open("/tmp/sushi_test_permission.txt", FileMode.Write())
+
+    match result:
+        FileResult.Ok(f) ->
+            println("Successfully opened file for writing")
+            f.writeln("Test content")
+            f.close()
+            println("Permission test completed")
+            return Result.Ok(0)
+        FileResult.Err(_) ->
+            stderr.write("Error: could not open file for writing\n")
+            return Result.Err()
+
+    return Result.Ok(0)

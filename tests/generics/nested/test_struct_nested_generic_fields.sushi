@@ -1,0 +1,25 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Config created successfully
+
+# Test that nested generic types work in struct fields
+# "The Infinite Improbability Drive is a wonderful new method of crossing interstellar distances"
+
+struct Config:
+    Result<Maybe<i32>> port
+    Maybe<string> hostname
+
+fn main() i32:
+    # Create a Config with nested generics
+    # Port 8080 - the port of infinite improbability
+    let Config cfg = Config(
+        Result.Ok(Maybe.Some(8080)),
+        Maybe.Some("heart-of-gold")
+    )
+
+    # Verify nested generics work
+    if (cfg.port):
+        println("Config created successfully")
+    else:
+        println("Error: port should be Ok")
+
+    return Result.Ok(0)

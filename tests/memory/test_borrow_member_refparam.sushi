@@ -1,0 +1,21 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: 8080
+# EXPECTED_OUTPUT: 9000
+
+struct Config:
+    i32 port
+
+fn set_port(&i32 p) ~:
+    p := 9000
+    return Result.Ok(~)
+
+fn update_config(&Config cfg) ~:
+    set_port(&cfg.port)
+    return Result.Ok(~)
+
+fn main() i32:
+    let Config c = Config(8080)
+    println(c.port)
+    update_config(&c)
+    println(c.port)
+    return Result.Ok(0)

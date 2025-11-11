@@ -1,0 +1,6 @@
+# Test error: pushing wrong type to List
+fn main() i32:
+    let List<i32> numbers = List.new()
+    # ERROR: Cannot push string to List<i32>
+    numbers.push("wrong type")
+    return Result.Ok(0)

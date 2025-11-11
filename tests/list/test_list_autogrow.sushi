@@ -1,0 +1,37 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test List<T> automatic growth (2x exponential)
+fn main() i32:
+    let List<i32> growing = List.new()
+
+    # Push until growth happens multiple times
+    let i32 i = 0
+    while (i < 20):
+        growing.push(i)
+        i := i + 1
+
+    if (growing.len() != 20):
+        println("ERROR: Expected length 20")
+        return Result.Ok(1)
+
+    # Capacity should have grown
+    let i32 cap = growing.capacity()
+    if (cap < 20):
+        println("ERROR: Capacity {cap} should be at least 20")
+        return Result.Ok(2)
+
+    # Verify all elements are correct
+    i := 0
+    while (i < 20):
+        match growing.get(i):
+            Maybe.Some(val) ->
+                if (val != i):
+                    println("ERROR: Expected {i} at index {i}, got {val}")
+                    return Result.Ok(3)
+            Maybe.None() ->
+                println("ERROR: Should find element at index {i}")
+                return Result.Ok(4)
+        i := i + 1
+
+    println("Autogrow tests passed!")
+    return Result.Ok(0)

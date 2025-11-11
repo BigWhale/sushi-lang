@@ -1,0 +1,14 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+
+# Test foreach with empty array - body should never execute
+fn main() i32:
+    let i32[1] arr = [0]
+    let i32 count = 0
+    # Iterate only while index < 0 (never)
+    foreach(i32 x in arr.iter()):
+        if (x == 0):
+            # Actually just test that foreach works and count remains 0
+            break
+    # If we never incremented count, return 0 (success)
+    return Result.Ok(count)

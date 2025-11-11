@@ -1,0 +1,3 @@
+fn main() i32:
+  let ~ x = ~
+  return Result.Ok(0)

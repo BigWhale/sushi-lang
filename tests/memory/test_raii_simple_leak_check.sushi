@@ -1,0 +1,34 @@
+# Simple memory leak check - allocate and free in a tight loop
+# If RAII works, memory should stay constant
+
+struct Container:
+    i32[] data
+
+fn allocate_1mb() ~:
+    let Container c = Container(new())
+
+    # Allocate 1MB (250k integers × 4 bytes)
+    let i32 i = 0
+    while (i < 250000):
+        c.data.push(i)
+        i := i + 1
+
+    # RAII should free c.data here
+    return Result.Ok(~)
+
+fn main() i32:
+    println("Allocating 1MB, 50 times in a loop")
+    println("If RAII works: ~1-2MB max memory")
+    println("If RAII broken: ~50MB max memory")
+
+    let i32 iteration = 0
+    while (iteration < 50):
+        allocate_1mb()
+
+        if (iteration % 10 == 0):
+            println("Iteration {iteration}/50")
+
+        iteration := iteration + 1
+
+    println("Test complete!")
+    return Result.Ok(0)

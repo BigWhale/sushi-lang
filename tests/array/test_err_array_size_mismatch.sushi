@@ -1,0 +1,4 @@
+fn main() i32:
+    # This should fail with CE2011: array literal size mismatch
+    let i32[5] arr = [1, 2, 3]  # 3 elements but declared as size 5
+    return Result.Ok(0)

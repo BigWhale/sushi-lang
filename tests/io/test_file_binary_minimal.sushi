@@ -1,0 +1,49 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Binary file opened for writing
+# EXPECTED_OUTPUT: Wrote 5 bytes
+# EXPECTED_OUTPUT: Binary file opened for reading
+# EXPECTED_OUTPUT: Read 5 bytes
+# EXPECTED_OUTPUT: Binary file test completed
+
+use <io/files>
+use <io/stdio>
+
+fn main() i32:
+    # Create byte array
+    let u8[] data = new()
+    data.push(72 as u8)
+    data.push(101 as u8)
+    data.push(108 as u8)
+    data.push(108 as u8)
+    data.push(111 as u8)
+
+    # Open binary file for writing
+    let FileResult write_result = open("test_binary_minimal.bin", FileMode.WriteB())
+    match write_result:
+        FileResult.Ok(out) ->
+            println("Binary file opened for writing")
+            out.write_bytes(data)
+            println("Wrote {data.len()} bytes")
+            out.close()
+        FileResult.Err(_) ->
+            stderr.write("Error: cannot create binary file\n")
+            return Result.Err()
+
+    data.destroy()
+
+    # Open binary file for reading
+    let FileResult read_result = open("test_binary_minimal.bin", FileMode.ReadB())
+    match read_result:
+        FileResult.Ok(f) ->
+            println("Binary file opened for reading")
+            let u8[] bytes = new()
+            bytes := f.read_bytes(5)
+            println("Read {bytes.len()} bytes")
+            f.close()
+            bytes.destroy()
+        FileResult.Err(_) ->
+            stderr.write("Error: cannot read binary file\n")
+            return Result.Err()
+
+    println("Binary file test completed")
+    return Result.Ok(0)

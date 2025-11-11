@@ -1,0 +1,84 @@
+# Example 06: Arrays
+#
+# Demonstrates:
+# - Fixed-size arrays (T[N]) - stack-allocated, immutable length
+# - Dynamic arrays (T[]) - heap-allocated, growable
+# - Array methods: len(), get(), capacity(), push(), pop()
+# - Array iteration with foreach
+# - Array manipulation: fill(), reverse(), clone()
+# - Deep copying with RAII memory management
+#
+# Sushi has two array types: fixed (size known at compile time) and
+# dynamic (growable at runtime). Both support bounds checking and
+# automatic memory cleanup.
+
+fn main() i32:
+    # Fixed-size array (stack-allocated)
+    let i32[5] primes = [2, 3, 5, 7, 11]
+
+    println("Fixed array length: {primes.len()}")
+    println("First prime: {primes.get(0)}")
+    println("Third prime: {primes.get(2)}")
+
+    # Dynamic array from literal
+    let i32[] fibonacci = from([1, 1, 2, 3, 5, 8, 13])
+
+    println("Fibonacci length: {fibonacci.len()}")
+    println("Capacity: {fibonacci.capacity()}")
+
+    # Push elements (auto-grows)
+    fibonacci.push(21)
+    fibonacci.push(34)
+
+    println("After push: length={fibonacci.len()}, capacity={fibonacci.capacity()}")
+
+    # Pop elements
+    let i32 last = fibonacci.pop()
+    println("Popped: {last}")
+
+    # Create empty dynamic array
+    let string[] crew = new()
+
+    # Build array dynamically
+    crew.push("Arthur")
+    crew.push("Ford")
+    crew.push("Zaphod")
+    crew.push("Trillian")
+    crew.push("Marvin")
+
+    println("Crew members: {crew.len()}")
+
+    # Iterate over array
+    println("Heart of Gold crew:")
+
+    foreach(member in crew.iter()):
+        println("  - {member}")
+
+    # Fill array with a value
+    let i32[] answers = from([1, 2, 3, 4, 5])
+    answers.fill(42)
+
+    println("All answers are now:")
+
+    foreach(val in answers.iter()):
+        println("  {val}")
+
+    # Reverse array
+    let string[] sequence = from(["first", "second", "third"])
+    sequence.reverse()
+
+    println("Reversed sequence:")
+
+    foreach(item in sequence.iter()):
+        println("  {item}")
+
+    # Clone array (deep copy)
+    let i32[] original = from([10, 20, 30])
+    let i32[] copy = original.clone()
+
+    copy.push(40)
+
+    println("Original length: {original.len()}")  # 3
+    println("Copy length: {copy.len()}")          # 4
+
+    return Result.Ok(0)

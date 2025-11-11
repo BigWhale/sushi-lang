@@ -1,0 +1,46 @@
+# Test generic functions with type casts involving type parameters
+# This tests body substitution where T appears in cast expressions
+
+fn numeric_identity<T>(T value) T:
+    # Cast to i64 and back to T (tests generic type in cast target)
+    let i64 temp = value as i64
+    let T result = temp as T
+    return Result.Ok(result)
+
+fn convert_to_float<T>(T value) f64:
+    # Cast generic type to f64
+    let f64 result = value as f64
+    return Result.Ok(result)
+
+fn test_casts() i32:
+    # Test with i32
+    let i32 num1 = numeric_identity(42)??
+    # Test convert_to_float with i32 (don't need to store result)
+    if (convert_to_float(42)?? < 0.0):
+        return Result.Ok(10)
+
+    # Test with i8
+    let i8 byte1 = numeric_identity(10 as i8)??
+    # Test convert_to_float with i8
+    if (convert_to_float(10 as i8)?? < 0.0):
+        return Result.Ok(11)
+
+    # Test with u32
+    let u32 unsigned1 = numeric_identity(100 as u32)??
+    # Test convert_to_float with u32
+    if (convert_to_float(100 as u32)?? < 0.0):
+        return Result.Ok(12)
+
+    # Verify values
+    if (num1 != 42):
+        return Result.Ok(1)
+    if (byte1 != 10 as i8):
+        return Result.Ok(2)
+    if (unsigned1 != 100 as u32):
+        return Result.Ok(3)
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = test_casts().realise(99)
+    return Result.Ok(result)

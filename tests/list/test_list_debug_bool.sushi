@@ -1,0 +1,12 @@
+fn main() i32:
+    let List<bool> flags = List.new()
+
+    # Push some booleans
+    flags.push(true)
+    flags.push(false)
+    flags.push(true)
+
+    println("=== List<bool> Debug ===")
+    flags.debug()
+
+    return Result.Ok(0)

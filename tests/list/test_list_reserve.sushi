@@ -1,0 +1,34 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test List<T> reserve method
+fn main() i32:
+    let List<i32> data = List.new()
+    data.push(1)
+    data.push(2)
+
+    let i32 len_before = data.len()
+
+    # Reserve space for 50 more elements
+    data.reserve(50)
+
+    let i32 cap = data.capacity()
+    if (cap < 52):  # Should have at least 2 (current) + 50 (reserved)
+        println("ERROR: Expected capacity at least 52, got {cap}")
+        return Result.Ok(1)
+
+    # Length should not change
+    if (data.len() != len_before):
+        println("ERROR: Length should not change after reserve")
+        return Result.Ok(2)
+
+    # Reserve when already enough capacity (should not reallocate)
+    let i32 cap_before = data.capacity()
+    data.reserve(10)  # Only 10 more, already have more than enough
+    let i32 cap_after = data.capacity()
+
+    if (cap_after != cap_before):
+        println("ERROR: Should not reallocate when capacity sufficient")
+        return Result.Ok(3)
+
+    println("reserve tests passed!")
+    return Result.Ok(0)

@@ -1,0 +1,31 @@
+# Test generic function with primitives implementing perks
+# Primitives like i32, string have auto-derived hash, but we need to test constraints work
+
+perk Hashable:
+    fn hash() u64
+
+# Generic function that requires Hashable
+fn compute_hash<T: Hashable>(T value) u64:
+    return Result.Ok(value.hash())
+
+fn run_test() i32:
+    # Test with i32 (has auto-derived hash)
+    let i32 num = 42
+    let u64 h1 = compute_hash(num)??
+    println(h1)
+
+    # Test with string (has auto-derived hash)
+    let string s = "test"
+    let u64 h2 = compute_hash(s)??
+    println(h2)
+
+    # Test with bool (has auto-derived hash)
+    let bool b = true
+    let u64 h3 = compute_hash(b)??
+    println(h3)
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

@@ -1,0 +1,14 @@
+# Simple enum test - unit variants
+
+enum Color:
+    Red
+    Green
+    Blue
+
+fn test_color() Color:
+    return Result.Ok(Color.Red())
+
+fn main() i32:
+    let Result<Color> result = test_color()
+    result.realise(Color.Blue())
+    return Result.Ok(0)

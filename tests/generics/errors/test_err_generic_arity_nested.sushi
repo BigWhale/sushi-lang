@@ -1,0 +1,11 @@
+# Test error: wrong number of type parameters in nested generic
+# Should fail with arity error
+
+struct Pair<T, U>:
+    T first
+    U second
+
+fn main() i32:
+    # Pair requires 2 type parameters, but only providing 1
+    let Result<Pair<i32>> bad = Result.Ok(Pair(42, "wrong"))
+    return Result.Ok(0)

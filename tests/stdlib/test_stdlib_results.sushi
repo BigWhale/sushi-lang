@@ -1,0 +1,47 @@
+# Test stdlib Result<T> methods
+# This test verifies that Result<T>.realise() works with the stdlib implementation
+
+
+fn main() i32:
+    # Test i32 - Ok case
+    let Result<i32> r1 = Result.Ok(42)
+    let i32 val1 = r1.realise(0)
+    println("i32 Ok: {val1}")
+
+    # Test i32 - Err case
+    let Result<i32> r2 = Result.Err()
+    let i32 val2 = r2.realise(99)
+    println("i32 Err: {val2}")
+
+    # Test string - Ok case
+    let Result<string> r3 = Result.Ok("Mostly Harmless")
+    let string val3 = r3.realise("fallback")
+    println("string Ok: {val3}")
+
+    # Test string - Err case
+    let Result<string> r4 = Result.Err()
+    let string val4 = r4.realise("default")
+    println("string Err: {val4}")
+
+    # Test bool - Ok case
+    let Result<bool> r5 = Result.Ok(true)
+    let bool val5 = r5.realise(false)
+    println("bool Ok: {val5}")
+
+    # Test bool - Err case
+    let Result<bool> r6 = Result.Err()
+    let bool val6 = r6.realise(true)
+    println("bool Err: {val6}")
+
+    # Test f64 - Ok case
+    let Result<f64> r7 = Result.Ok(3.14)
+    let f64 val7 = r7.realise(0.0)
+    println("f64 Ok: {val7}")
+
+    # Test f64 - Err case
+    let Result<f64> r8 = Result.Err()
+    let f64 val8 = r8.realise(2.71)
+    println("f64 Err: {val8}")
+
+    return Result.Ok(0)
+

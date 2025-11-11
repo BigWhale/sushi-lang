@@ -1,0 +1,56 @@
+# Test nested struct deep copy to prevent double-free
+# This tests the exact scenario from CLAUDE.md Known Limitations #5:
+# Passing a struct with dynamic arrays to another struct's constructor
+
+struct Inner:
+    i32[] values
+    string label
+
+struct Outer:
+    Inner data1
+    Inner data2
+    string name
+
+fn run_test() i32:
+    # Create inner structs with dynamic arrays
+    let Inner inner1 = Inner(new(), "first")
+    inner1.values.push(10)
+    inner1.values.push(20)
+    inner1.values.push(30)
+
+    let Inner inner2 = Inner(new(), "second")
+    inner2.values.push(100)
+    inner2.values.push(200)
+
+    println("Before nesting - inner1 values: {inner1.values.len()}")
+    println("Before nesting - inner2 values: {inner2.values.len()}")
+
+    # This is the critical test case: pass structs with dynamic arrays to constructor
+    # If deep-copy works, this should NOT cause double-free crash
+    let Outer nested = Outer(inner1, inner2, "container")
+
+    println("After nesting - nested.data1.label: {nested.data1.label}")
+    println("After nesting - nested.data2.label: {nested.data2.label}")
+    println("Nested data1 values: {nested.data1.values.len()}")
+    println("Nested data2 values: {nested.data2.values.len()}")
+
+    # Test access to the nested arrays
+    println("Nested data1[0]: {nested.data1.values.get(0)??}")
+    println("Nested data1[1]: {nested.data1.values.get(1)??}")
+    println("Nested data1[2]: {nested.data1.values.get(2)??}")
+    println("Nested data2[0]: {nested.data2.values.get(0)??}")
+    println("Nested data2[1]: {nested.data2.values.get(1)??}")
+
+    # Modify nested arrays to verify independence
+    nested.data1.values.push(40)
+    println("After push - nested data1 values: {nested.data1.values.len()}")
+
+    # RAII cleanup happens here
+    # If deep-copy failed, this would crash with double-free
+    # because both inner1 and nested.data1 would try to free the same memory
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

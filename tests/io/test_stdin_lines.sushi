@@ -1,0 +1,21 @@
+# TEST_TYPE: runtime
+# STDIN_INPUT: "First\nSecond\nThird\n"
+# EXPECT_STDOUT_CONTAINS: "Reading lines from stdin:"
+# EXPECT_STDOUT_CONTAINS: "> First"
+# EXPECT_STDOUT_CONTAINS: "> Second"
+# EXPECT_STDOUT_CONTAINS: "> Third"
+# EXPECT_RUNTIME_EXIT: 0
+# Test stdin.lines() iterator in foreach loop
+
+use <io/stdio>
+
+fn main() i32:
+    stdout.write("Reading lines from stdin:\n")
+
+    foreach(line in stdin.lines()):
+        stdout.write("  > ")
+        stdout.write(line)
+        stdout.write("\n")
+
+    stdout.write("Done!\n")
+    return Result.Ok(0)

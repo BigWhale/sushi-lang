@@ -1,0 +1,25 @@
+# Test perk constraints on generic struct (works now!)
+# This tests the constraint validation infrastructure without requiring generic functions
+
+perk Hashable:
+    fn hash() u64
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Hashable:
+    fn hash() u64:
+        let u64 hx = self.x as u64
+        let u64 hy = self.y as u64
+        return hx + hy
+
+# Generic struct with perk constraint
+struct Container<T: Hashable>:
+    T value
+
+fn main() i32:
+    # This should work: Point implements Hashable
+    let Container<Point> c = Container(Point(10, 20))
+    println(c.value.x)
+    return Result.Ok(0)

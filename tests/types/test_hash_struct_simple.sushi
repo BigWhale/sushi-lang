@@ -1,0 +1,37 @@
+# Test hash method for simple structs
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    # Test basic struct hashing
+    let Point p1 = Point(10, 20)
+    let u64 hash1 = p1.hash()
+    println("Point(10, 20).hash() = {hash1}")
+
+    # Test that same values produce same hash
+    let Point p2 = Point(10, 20)
+    let u64 hash2 = p2.hash()
+    if (hash1 == hash2):
+        println("✓ Same struct values produce same hash")
+    else:
+        println("✗ Same struct values produce different hash")
+
+    # Test that different values produce different hash
+    let Point p3 = Point(5, 15)
+    let u64 hash3 = p3.hash()
+    if (hash1 != hash3):
+        println("✓ Different struct values produce different hashes")
+    else:
+        println("✗ Different struct values produce same hash")
+
+    # Test that field order matters
+    let Point p4 = Point(20, 10)
+    let u64 hash4 = p4.hash()
+    if (hash1 != hash4):
+        println("✓ Field order matters (Point(10,20) != Point(20,10))")
+    else:
+        println("✗ Field order doesn't matter")
+
+    return Result.Ok(0)

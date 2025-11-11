@@ -1,0 +1,29 @@
+# Test basic List<T> methods: new(), len(), is_empty(), capacity()
+fn main() i32:
+    # Create empty List
+    let List<i32> crew_sizes = List.new()
+
+    # Test initial state
+    let i32 size = crew_sizes.len()
+    let bool empty = crew_sizes.is_empty()
+    let i32 cap = crew_sizes.capacity()
+
+    println("Initial size: {size}")
+    println("Is empty: {empty}")
+    println("Capacity: {cap}")
+
+    # Verify initial state
+    if (size != 0):
+        println("ERROR: Initial size should be 0")
+        return Result.Ok(1)
+
+    if (not empty):
+        println("ERROR: Initial list should be empty")
+        return Result.Ok(2)
+
+    if (cap != 0):
+        println("ERROR: Initial capacity should be 0 (lazy allocation)")
+        return Result.Ok(3)
+
+    println("All basic methods working!")
+    return Result.Ok(0)

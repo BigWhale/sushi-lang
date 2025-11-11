@@ -1,0 +1,10 @@
+# CE2510: Mixed int/float comparison should fail
+fn main() i32:
+  let i32 x = 10
+  let f64 y = 10.0
+
+  # This should fail - mixed i32 and f64
+  if (x == y):
+    return Result.Ok(0)
+
+  return Result.Ok(1)

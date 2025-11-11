@@ -1,0 +1,30 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test bitwise operators work with different numeric types
+
+fn main() i32:
+    # Test with different integer types
+    let i32 a = 12
+    let i32 b = 10
+
+    # Basic bitwise operations should work
+    let i32 result_and = a & b   # 12 & 10 = 8
+    let i32 result_or = a | b    # 12 | 10 = 14
+    let i32 xresult_or = a ^ b   # 12 ^ 10 = 6
+
+    # Verify results
+    if (result_and != 8):
+        return Result.Ok(1)
+    if (result_or != 14):
+        return Result.Ok(2)
+    if (xresult_or != 6):
+        return Result.Ok(3)
+    # Test shift operations
+    let i32 left = 5 << 1    # 5 << 1 = 10
+    let i32 right = 10 >> 1  # 10 >> 1 = 5
+
+    if (left != 10):
+        return Result.Ok(4)
+    if (right != 5):
+        return Result.Ok(5)
+    return Result.Ok(0)

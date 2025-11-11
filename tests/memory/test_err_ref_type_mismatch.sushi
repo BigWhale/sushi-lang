@@ -1,0 +1,11 @@
+# Test: Error when rebinding reference with wrong type
+# Should fail with CE2002: type mismatch error
+
+fn update_value(&i32 x) ~:
+    x := "hello"
+    return Result.Ok(~)
+
+fn main(string[] args) i32:
+    let i32 n = 42
+    let Result<~> r = update_value(&n)
+    return Result.Ok(0)

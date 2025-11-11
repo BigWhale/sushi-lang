@@ -1,0 +1,102 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test List<T> remove method - edge cases
+fn main() i32:
+    # Test 1: Remove first element
+    let List<i32> nums1 = List.new()
+    nums1.push(1)
+    nums1.push(2)
+    nums1.push(3)
+
+    match nums1.remove(0):
+        Maybe.Some(val) ->
+            if (val != 1):
+                println("ERROR: First element should be 1")
+                return Result.Ok(1)
+            println("Removed first element successfully")
+        Maybe.None() ->
+            println("ERROR: Remove should succeed")
+            return Result.Ok(2)
+
+    if (nums1.len() != 2):
+        println("ERROR: Length should be 2")
+        return Result.Ok(3)
+
+    match nums1.get(0):
+        Maybe.Some(val) ->
+            if (val != 2):
+                println("ERROR: First element should now be 2")
+                return Result.Ok(4)
+        Maybe.None() ->
+            println("ERROR: Missing element")
+            return Result.Ok(5)
+
+    # Test 2: Remove last element
+    let List<i32> nums2 = List.new()
+    nums2.push(10)
+    nums2.push(20)
+    nums2.push(30)
+
+    match nums2.remove(2):
+        Maybe.Some(val) ->
+            if (val != 30):
+                println("ERROR: Last element should be 30")
+                return Result.Ok(6)
+            println("Removed last element successfully")
+        Maybe.None() ->
+            println("ERROR: Remove should succeed")
+            return Result.Ok(7)
+
+    if (nums2.len() != 2):
+        println("ERROR: Length should be 2")
+        return Result.Ok(8)
+
+    # Test 3: Remove from single-element list
+    let List<i32> nums3 = List.new()
+    nums3.push(42)
+
+    match nums3.remove(0):
+        Maybe.Some(val) ->
+            if (val != 42):
+                println("ERROR: Element should be 42")
+                return Result.Ok(9)
+            println("Removed only element successfully")
+        Maybe.None() ->
+            println("ERROR: Remove should succeed")
+            return Result.Ok(10)
+
+    if (nums3.len() != 0):
+        println("ERROR: List should be empty")
+        return Result.Ok(11)
+
+    # Test 4: Out of bounds - negative index
+    let List<i32> nums4 = List.new()
+    nums4.push(1)
+
+    match nums4.remove(-1):
+        Maybe.Some(v) ->
+            println("ERROR: Negative index should return None, got {v}")
+            return Result.Ok(12)
+        Maybe.None() ->
+            println("Negative index correctly rejected")
+
+    # Test 5: Out of bounds - index >= len
+    match nums4.remove(1):
+        Maybe.Some(v) ->
+            println("ERROR: Out of bounds should return None, got {v}")
+            return Result.Ok(13)
+        Maybe.None() ->
+            println("Out of bounds index correctly rejected")
+
+    # Test 6: Remove from empty list
+    let List<i32> nums5 = List.new()
+
+    match nums5.remove(0):
+        Maybe.Some(v) ->
+            println("ERROR: Cannot remove from empty list, got {v}")
+            return Result.Ok(14)
+        Maybe.None() ->
+            println("Empty list removal correctly rejected")
+
+    println("Edge cases test passed!")
+    return Result.Ok(0)

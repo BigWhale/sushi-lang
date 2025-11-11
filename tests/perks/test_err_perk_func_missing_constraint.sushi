@@ -1,0 +1,21 @@
+# Test CE4006: Generic function constraint violation
+# Type doesn't implement required perk
+
+perk Hashable:
+    fn hash() u64
+
+struct Point:
+    i32 x
+    i32 y
+
+# Point does NOT implement Hashable
+
+fn compute_hash<T: Hashable>(T value) u64:
+    return value.hash()
+
+fn main() i32:
+    let Point p = Point(10, 20)
+    # Should fail: Point doesn't implement Hashable
+    let u64 h = compute_hash(p)
+    println(h)
+    return Result.Ok(0)

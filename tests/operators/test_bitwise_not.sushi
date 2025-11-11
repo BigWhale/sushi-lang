@@ -1,0 +1,24 @@
+fn main() i32:
+    # Basic bitwise NOT tests
+    let i32 a = 5
+    let i32 not_a = ~a
+    println(not_a)  # Should be -6 (two's complement)
+
+    let i32 b = 0
+    let i32 not_b = ~b
+    println(not_b)  # Should be -1
+
+    let i32 c = -1
+    let i32 not_c = ~c
+    println(not_c)  # Should be 0
+
+    # Bitwise NOT with expressions
+    let i32 d = ~(10 + 5)
+    println(d)  # ~15 = -16
+
+    # Double bitwise NOT
+    let i32 e = 42
+    let i32 not_not_e = ~~e
+    println(not_not_e)  # Should be 42 again
+
+    return Result.Ok(0)

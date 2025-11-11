@@ -1,0 +1,6 @@
+const i32 MAX_SIZE = 100
+
+fn main() i32:
+    let i32 size = MAX_SIZE
+    let i32 expected = 100
+    return Result.Ok(size - expected)

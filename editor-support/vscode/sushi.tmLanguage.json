@@ -1,0 +1,398 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Sushi",
+  "scopeName": "source.sushi",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#constants"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#function-declaration"
+    },
+    {
+      "include": "#function-call"
+    },
+    {
+      "include": "#method-call"
+    },
+    {
+      "include": "#struct-declaration"
+    },
+    {
+      "include": "#enum-declaration"
+    },
+    {
+      "include": "#struct-constructor"
+    },
+    {
+      "include": "#enum-variant"
+    },
+    {
+      "include": "#user-types"
+    },
+    {
+      "include": "#array-types"
+    },
+    {
+      "include": "#io-streams"
+    },
+    {
+      "include": "#punctuation"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.sushi",
+          "match": "#.*$"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.flow.sushi",
+          "match": "\\b(if|elif|else|while|break|continue|return)\\b"
+        },
+        {
+          "name": "keyword.control.loop.sushi",
+          "match": "\\b(foreach|in)\\b"
+        },
+        {
+          "name": "keyword.control.match.sushi",
+          "match": "\\b(match)\\b"
+        },
+        {
+          "name": "keyword.declaration.function.sushi",
+          "match": "\\b(fn|extend)\\b"
+        },
+        {
+          "name": "keyword.declaration.sushi",
+          "match": "\\b(let|const|struct|enum|use)\\b"
+        },
+        {
+          "name": "keyword.modifier.sushi",
+          "match": "\\b(public)\\b"
+        },
+        {
+          "name": "keyword.operator.cast.sushi",
+          "match": "\\b(as)\\b"
+        },
+        {
+          "name": "keyword.operator.logical.sushi",
+          "match": "\\b(and|or|not)\\b"
+        },
+        {
+          "name": "keyword.function.builtin.sushi",
+          "match": "\\b(print|println)\\b"
+        },
+        {
+          "name": "keyword.function.array.sushi",
+          "match": "\\b(new|from)\\b"
+        },
+        {
+          "name": "support.type.result.sushi",
+          "match": "\\b(Ok|Err|Result)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.numeric.signed.sushi",
+          "match": "\\b(i8|i16|i32|i64)\\b"
+        },
+        {
+          "name": "storage.type.numeric.unsigned.sushi",
+          "match": "\\b(u8|u16|u32|u64)\\b"
+        },
+        {
+          "name": "storage.type.numeric.float.sushi",
+          "match": "\\b(f32|f64)\\b"
+        },
+        {
+          "name": "storage.type.boolean.sushi",
+          "match": "\\b(bool)\\b"
+        },
+        {
+          "name": "storage.type.string.sushi",
+          "match": "\\b(string)\\b"
+        },
+        {
+          "name": "storage.type.blank.sushi",
+          "match": "\\b(~)\\b"
+        },
+        {
+          "name": "support.type.iterator.sushi",
+          "match": "\\b(Iterator)\\b"
+        }
+      ]
+    },
+    "array-types": {
+      "patterns": [
+        {
+          "name": "storage.type.array.sushi",
+          "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(\\[\\s*\\d*\\s*\\])",
+          "captures": {
+            "1": {
+              "name": "storage.type.sushi"
+            },
+            "2": {
+              "name": "punctuation.definition.array.sushi"
+            }
+          }
+        }
+      ]
+    },
+    "user-types": {
+      "patterns": [
+        {
+          "name": "entity.name.type.sushi",
+          "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.sushi",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "constant.language.underscore.sushi",
+          "match": "\\b(_)\\b"
+        }
+      ]
+    },
+    "io-streams": {
+      "patterns": [
+        {
+          "name": "support.variable.io.sushi",
+          "match": "\\b(stdin|stdout|stderr)\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.sushi",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.sushi",
+              "match": "\\\\([\"\\\\/bfnrt]|u[0-9a-fA-F]{4})"
+            },
+            {
+              "name": "meta.embedded.expression.sushi",
+              "begin": "\\{",
+              "end": "\\}",
+              "beginCaptures": {
+                "0": {
+                  "name": "punctuation.definition.interpolation.begin.sushi"
+                }
+              },
+              "endCaptures": {
+                "0": {
+                  "name": "punctuation.definition.interpolation.end.sushi"
+                }
+              },
+              "patterns": [
+                {
+                  "include": "$self"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.sushi",
+          "match": "\\b\\d+\\.\\d+([eE][+-]?\\d+)?\\b"
+        },
+        {
+          "name": "constant.numeric.integer.sushi",
+          "match": "\\b\\d+\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.assignment.rebind.sushi",
+          "match": ":="
+        },
+        {
+          "name": "keyword.operator.assignment.sushi",
+          "match": "="
+        },
+        {
+          "name": "keyword.operator.comparison.sushi",
+          "match": "(==|!=|<=|>=|<|>)"
+        },
+        {
+          "name": "keyword.operator.bitwise.sushi",
+          "match": "(<<|>>|&|\\||\\^)"
+        },
+        {
+          "name": "keyword.operator.arithmetic.sushi",
+          "match": "(\\+|-|\\*|/|%)"
+        },
+        {
+          "name": "keyword.operator.arrow.sushi",
+          "match": "->"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.accessor.sushi",
+          "match": "\\."
+        },
+        {
+          "name": "punctuation.separator.comma.sushi",
+          "match": ","
+        },
+        {
+          "name": "punctuation.terminator.colon.sushi",
+          "match": ":"
+        },
+        {
+          "name": "punctuation.brackets.round.sushi",
+          "match": "[\\(\\)]"
+        },
+        {
+          "name": "punctuation.brackets.square.sushi",
+          "match": "[\\[\\]]"
+        }
+      ]
+    },
+    "function-declaration": {
+      "patterns": [
+        {
+          "match": "\\b(fn|extend)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(",
+          "captures": {
+            "1": {
+              "name": "keyword.declaration.function.sushi"
+            },
+            "2": {
+              "name": "entity.name.function.declaration.sushi"
+            }
+          }
+        }
+      ]
+    },
+    "function-call": {
+      "patterns": [
+        {
+          "match": "\\b([a-z_][a-zA-Z0-9_]*)\\s*\\(",
+          "captures": {
+            "1": {
+              "name": "entity.name.function.call.sushi"
+            }
+          }
+        }
+      ]
+    },
+    "method-call": {
+      "patterns": [
+        {
+          "match": "\\.\\s*([a-z_][a-zA-Z0-9_]*)\\s*\\(",
+          "captures": {
+            "1": {
+              "name": "entity.name.function.method.sushi"
+            }
+          }
+        },
+        {
+          "match": "\\.\\s*([a-z_][a-zA-Z0-9_]*)\\b",
+          "captures": {
+            "1": {
+              "name": "variable.other.property.sushi"
+            }
+          }
+        }
+      ]
+    },
+    "struct-declaration": {
+      "patterns": [
+        {
+          "match": "\\b(struct)\\s+([A-Z][a-zA-Z0-9_]*)\\s*:",
+          "captures": {
+            "1": {
+              "name": "keyword.declaration.struct.sushi"
+            },
+            "2": {
+              "name": "entity.name.type.struct.sushi"
+            }
+          }
+        }
+      ]
+    },
+    "enum-declaration": {
+      "patterns": [
+        {
+          "match": "\\b(enum)\\s+([A-Z][a-zA-Z0-9_]*)\\s*:",
+          "captures": {
+            "1": {
+              "name": "keyword.declaration.enum.sushi"
+            },
+            "2": {
+              "name": "entity.name.type.enum.sushi"
+            }
+          }
+        }
+      ]
+    },
+    "struct-constructor": {
+      "patterns": [
+        {
+          "match": "\\b([A-Z][a-zA-Z0-9_]*)\\s*\\(",
+          "captures": {
+            "1": {
+              "name": "entity.name.type.constructor.sushi"
+            }
+          }
+        }
+      ]
+    },
+    "enum-variant": {
+      "patterns": [
+        {
+          "match": "\\b([A-Z][a-zA-Z0-9_]*)\\.([A-Z][a-zA-Z0-9_]*)\\b",
+          "captures": {
+            "1": {
+              "name": "entity.name.type.enum.sushi"
+            },
+            "2": {
+              "name": "entity.name.tag.variant.sushi"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

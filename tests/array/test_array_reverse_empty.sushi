@@ -1,0 +1,10 @@
+fn main() i32:
+    # Test reverse() on empty array - the void of space
+    let i32[] void = from([])
+    void.reverse()
+
+    # Verify array is still empty
+    if (void.len() != 0):
+        return Result.Err()
+
+    return Result.Ok(0)

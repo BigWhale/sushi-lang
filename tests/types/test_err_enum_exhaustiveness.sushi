@@ -1,0 +1,18 @@
+# Error test: non-exhaustive match
+enum Color:
+    Red
+    Green
+    Blue
+
+fn test_color(Color c) i32:
+    match c:
+        Color.Red ->
+            return Result.Ok(1)
+        Color.Green ->
+            return Result.Ok(2)
+        # Missing Color.Blue - should error
+
+fn main() i32:
+    let Color c = Color.Red()
+    let i32 result = test_color(c)
+    return Result.Ok(result)

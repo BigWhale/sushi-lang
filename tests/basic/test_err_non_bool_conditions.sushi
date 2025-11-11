@@ -1,0 +1,6 @@
+# CE2005: non-bool conditions
+fn main() i32:
+  let i32 x = 10
+  if (x):  # i32 cannot be used as condition
+    return Result.Ok(1)
+  return Result.Ok(0)

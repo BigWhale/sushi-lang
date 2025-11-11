@@ -1,0 +1,25 @@
+# Test: Pattern matching on user-defined generic enums in variables
+# Issue #4: Pattern matching should work on extracted generic enum values
+
+enum Either<T, U>:
+    Left(T)
+    Right(U)
+
+fn main() i32:
+    let Result<Either<i32, string>> ret = test_return_type()
+
+    # Try to extract Either from Result and pattern match on it
+    match ret:
+        Result.Ok(either_val) ->
+            match either_val:
+                Either.Left(x) ->
+                    println("Left: {x}")
+                Either.Right(s) ->
+                    println("Right: {s}")
+        Result.Err() ->
+            println("Error")
+
+    return Result.Ok(0)
+
+fn test_return_type() Either<i32, string>:
+    return Result.Ok(Either.Left(42))

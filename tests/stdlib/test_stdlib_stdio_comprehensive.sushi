@@ -1,0 +1,33 @@
+# TEST_TYPE: runtime
+# STDIN_INPUT: "Testing!\n"
+# EXPECT_STDOUT_CONTAINS: "Test 1: Basic write"
+# EXPECT_STDOUT_CONTAINS: "Test 2: Write bytes: Hello"
+# EXPECT_STDOUT_CONTAINS: "You entered: Testing!"
+# EXPECT_STDERR_CONTAINS: "stderr: This is an error message"
+# EXPECT_RUNTIME_EXIT: 0
+
+use <io/stdio>
+use <collections/strings>
+
+fn main() i32:
+    # Test 1: Basic write operations
+    stdout.write("Test 1: Basic write\n")
+    stderr.write("stderr: This is an error message\n")
+
+    # Test 2: Write bytes
+    let u8[] bytes = from([72, 101, 108, 108, 111])  # "Hello" in ASCII
+    stdout.write("Test 2: Write bytes: ")
+    stdout.write_bytes(bytes)
+    stdout.write("\n")
+
+    # Test 3: Read and write
+    stdout.write("Test 3: Enter a line (or skip with empty): ")
+    let string line = stdin.readln()
+    if (line.len() > 0):
+        stdout.write("You entered: ")
+        stdout.write(line)
+        stdout.write("\n")
+    else:
+        stdout.write("(empty line)\n")
+
+    return Result.Ok(0)

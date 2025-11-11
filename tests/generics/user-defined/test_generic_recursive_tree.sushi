@@ -1,0 +1,18 @@
+# Test user-defined generic with multiple type parameters
+# "The Guide is definitive. Reality is frequently inaccurate."
+
+struct Pair<T, U>:
+    T first
+    U second
+
+fn main() i32:
+    # Create a pair with different types
+    let Pair<i32, string> pair1 = Pair(42, "Mostly Harmless")
+    let Pair<string, i32> pair2 = Pair("answer", 42)
+
+    # Verify both pairs work
+    if (pair1.first == 42):
+        if (pair2.second == 42):
+            return Result.Ok(0)
+
+    return Result.Ok(1)

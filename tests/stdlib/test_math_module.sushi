@@ -1,0 +1,153 @@
+# Test comprehensive math module functionality
+# Tests all math functions and constants
+
+use <math>
+
+fn main() i32:
+    println("=== Testing Math Module ===")
+    println("")
+
+    # Test constants
+    println("1. Testing Constants:")
+    println("   PI  = {PI}")
+    println("   E   = {E}")
+    println("   TAU = {TAU}")
+    println("")
+
+    # Test abs() with different types
+    println("2. Testing abs():")
+    let i32 neg_int = -42
+    let i32 pos_int = abs(neg_int)
+    println("   abs(-42) = {pos_int}")
+
+    let i64 neg_big = -9999 as i64
+    let i64 pos_big = abs(neg_big)
+    println("   abs(-9999) = {pos_big}")
+
+    let f64 neg_float = -3.14
+    let f64 pos_float = abs(neg_float)
+    println("   abs(-3.14) = {pos_float}")
+    println("")
+
+    # Test min() and max()
+    println("3. Testing min() and max():")
+    let i32 a = 10
+    let i32 b = 20
+    let i32 minimum = min(a, b)
+    let i32 maximum = max(a, b)
+    println("   min(10, 20) = {minimum}")
+    println("   max(10, 20) = {maximum}")
+
+    let f64 x = 3.14
+    let f64 y = 2.71
+    let f64 min_float = min(x, y)
+    let f64 max_float = max(x, y)
+    println("   min(3.14, 2.71) = {min_float}")
+    println("   max(3.14, 2.71) = {max_float}")
+
+    let i64 la = 100 as i64
+    let i64 lb = 200 as i64
+    let i64 min_int64 = min(la, lb)
+    println("   min(100i64, 200i64) = {min_int64}")
+    println("")
+
+    # Test sqrt()
+    println("4. Testing sqrt():")
+    let f64 sqrt_16 = sqrt(16.0)
+    println("   sqrt(16.0) = {sqrt_16}")
+
+    let f64 sqrt_2 = sqrt(2.0)
+    println("   sqrt(2.0) = {sqrt_2}")
+
+    let f64 sqrt_100 = sqrt(100.0)
+    println("   sqrt(100.0) = {sqrt_100}")
+    println("")
+
+    # Test pow()
+    println("5. Testing pow():")
+    let f64 pow_2_10 = pow(2.0, 10.0)
+    println("   pow(2.0, 10.0) = {pow_2_10}")
+
+    let f64 pow_3_3 = pow(3.0, 3.0)
+    println("   pow(3.0, 3.0) = {pow_3_3}")
+
+    let f64 pow_10_2 = pow(10.0, 2.0)
+    println("   pow(10.0, 2.0) = {pow_10_2}")
+
+    let f64 pow_half = pow(16.0, 0.5)
+    println("   pow(16.0, 0.5) = {pow_half}")
+    println("")
+
+    # Test floor()
+    println("6. Testing floor():")
+    let f64 floor_37 = floor(3.7)
+    println("   floor(3.7) = {floor_37}")
+
+    let f64 floor_neg = floor(-2.3)
+    println("   floor(-2.3) = {floor_neg}")
+
+    let f64 floor_pi = floor(PI)
+    println("   floor(PI) = {floor_pi}")
+    println("")
+
+    # Test ceil()
+    println("7. Testing ceil():")
+    let f64 ceil_37 = ceil(3.7)
+    println("   ceil(3.7) = {ceil_37}")
+
+    let f64 ceil_neg = ceil(-2.3)
+    println("   ceil(-2.3) = {ceil_neg}")
+
+    let f64 ceil_pi = ceil(PI)
+    println("   ceil(PI) = {ceil_pi}")
+    println("")
+
+    # Test round()
+    println("8. Testing round():")
+    let f64 round_37 = round(3.7)
+    println("   round(3.7) = {round_37}")
+
+    let f64 round_34 = round(3.4)
+    println("   round(3.4) = {round_34}")
+
+    let f64 round_neg = round(-2.6)
+    println("   round(-2.6) = {round_neg}")
+    println("")
+
+    # Test trunc()
+    println("9. Testing trunc():")
+    let f64 trunc_37 = trunc(3.7)
+    println("   trunc(3.7) = {trunc_37}")
+
+    let f64 trunc_neg = trunc(-2.9)
+    println("   trunc(-2.9) = {trunc_neg}")
+
+    let f64 trunc_pi = trunc(PI)
+    println("   trunc(PI) = {trunc_pi}")
+    println("")
+
+    # Complex calculations using multiple functions
+    println("10. Complex calculations:")
+
+    # Calculate circle area: PI * r^2
+    let f64 radius = 5.0
+    let f64 area = PI * pow(radius, 2.0)
+    println("   Circle area (r=5.0) = {area}")
+
+    # Calculate distance using Pythagorean theorem: sqrt(a^2 + b^2)
+    let f64 side_a = 3.0
+    let f64 side_b = 4.0
+    let f64 hypotenuse = sqrt(pow(side_a, 2.0) + pow(side_b, 2.0))
+    println("   Hypotenuse (3, 4) = {hypotenuse}")
+
+    # Calculate compound interest: P * (1 + r)^t
+    let f64 principal = 1000.0
+    let f64 rate = 1.05
+    let f64 time = 10.0
+    let f64 amount = principal * pow(rate, time)
+    println("   Compound interest (1000, 5%, 10yr) = {amount}")
+
+    println("")
+    println("=== All Math Tests Completed ===")
+
+    return Result.Ok(0)

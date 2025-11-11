@@ -1,0 +1,19 @@
+# Test perk constraint violation for generic functions
+# NoHash struct does NOT implement Hashable, so it should fail
+
+perk Hashable:
+    fn hash() u64
+
+struct NoHash:
+    i32 value
+
+fn compute_hash<T: Hashable>(T value) u64:
+    return value.hash()
+
+fn main() i32:
+    let NoHash nh = NoHash(42)
+
+    # This should fail with CE4006 - NoHash does not implement Hashable
+    let u64 hash_value = compute_hash(nh)
+
+    return Result.Ok(0)

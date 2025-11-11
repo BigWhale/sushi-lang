@@ -1,0 +1,46 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test nested List<List<T>>
+fn main() i32:
+    # Create list of lists
+    let List<List<i32>> matrix = List.new()
+
+    # Create first row
+    let List<i32> row1 = List.new()
+    row1.push(1)
+    row1.push(2)
+    row1.push(3)
+    matrix.push(row1)
+
+    # Create second row
+    let List<i32> row2 = List.new()
+    row2.push(4)
+    row2.push(5)
+    row2.push(6)
+    matrix.push(row2)
+
+    if (matrix.len() != 2):
+        println("ERROR: Expected 2 rows")
+        return Result.Ok(1)
+
+    # Access nested list
+    match matrix.get(0):
+        Maybe.Some(row) ->
+            if (row.len() != 3):
+                println("ERROR: First row should have 3 elements")
+                return Result.Ok(2)
+            match row.get(1):
+                Maybe.Some(val) ->
+                    if (val != 2):
+                        println("ERROR: Expected value 2, got {val}")
+                        return Result.Ok(3)
+                    println("Matrix[0][1] = {val}")
+                Maybe.None() ->
+                    println("ERROR: Should find element in row")
+                    return Result.Ok(4)
+        Maybe.None() ->
+            println("ERROR: Should find first row")
+            return Result.Ok(5)
+
+    println("Nested list tests passed!")
+    return Result.Ok(0)

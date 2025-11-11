@@ -1,0 +1,8 @@
+# Error test: Ok() requires a value. For blank return type use Ok(~)
+# Should fail with parsing error message
+
+fn test(i32[] arr) ~:
+    return Result.Ok()
+
+fn main() i32:
+    return Result.Ok(0)

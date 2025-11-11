@@ -1,0 +1,49 @@
+{
+  "name": "sushi-lang",
+  "displayName": "Sushi Language",
+  "description": "Syntax highlighting for Sushi programming language",
+  "version": "0.1.0",
+  "publisher": "sushilang",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "sushi",
+    "programming language",
+    "syntax highlighting"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "sushi",
+        "aliases": [
+          "Sushi",
+          "sushi"
+        ],
+        "extensions": [
+          ".sushi"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icon.png",
+          "dark": "./icon.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "sushi",
+        "scopeName": "source.sushi",
+        "path": "./sushi.tmLanguage.json"
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/sushi"
+  },
+  "license": "MIT"
+}

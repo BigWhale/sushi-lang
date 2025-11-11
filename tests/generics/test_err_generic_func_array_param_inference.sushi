@@ -1,0 +1,39 @@
+# Test: Generic function with array type parameters
+# CURRENT LIMITATION: Type inference doesn't support extracting element type
+# from array types (e.g., T[] -> T). This should fail with CE2060.
+
+fn first<T>(T[] arr) T:
+    let T elem = arr.get(0)??
+    return Result.Ok(elem)
+
+fn last<T>(T[] arr) T:
+    let i32 len = arr.len()
+    let T elem = arr.get(len - 1)??
+    return Result.Ok(elem)
+
+fn run_test() i32:
+    # Test with i32 array
+    let i32[] ints = from([1, 2, 3])
+    let i32 first_int = first(ints)??
+    if (first_int != 1):
+        return Result.Ok(1)
+
+    let i32 last_int = last(ints)??
+    if (last_int != 3):
+        return Result.Ok(2)
+
+    # Test with string array
+    let string[] strings = from(["a", "b", "c"])
+    let string first_str = first(strings)??
+    if (first_str != "a"):
+        return Result.Ok(3)
+
+    let string last_str = last(strings)??
+    if (last_str != "c"):
+        return Result.Ok(4)
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

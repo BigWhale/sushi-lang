@@ -1,0 +1,7 @@
+# Test RAII automatic cleanup for Own<T>
+# The Own<T> should be automatically destroyed at function exit
+fn main() i32:
+    let Own<i32> ptr = Own.alloc(42)
+    let i32 value = ptr.get()
+    let i32 expected = 42
+    return Result.Ok(value - expected)

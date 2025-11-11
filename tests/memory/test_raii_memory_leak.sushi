@@ -1,0 +1,61 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Memory leak test for RAII - allocates large arrays repeatedly
+# If RAII works correctly, memory usage should remain stable
+#
+# To monitor memory usage while running this test:
+#   ./test_raii_memory_leak &
+#   PID=$!
+#   while kill -0 $PID 2>/dev/null; do ps -o rss= -p $PID; sleep 0.1; done
+#
+# Or use time command to see max resident set size:
+#   /usr/bin/time -l ./test_raii_memory_leak 2>&1 | grep "maximum resident set size"
+
+struct LargeContainer:
+    i32[] data1
+    i32[] data2
+    i32[] data3
+    i32[] data4
+    i32[] data5
+
+fn allocate_large_struct() ~:
+    # Each iteration allocates ~5MB (5 arrays × 250k elements × 4 bytes)
+    let LargeContainer container = LargeContainer(new(), new(), new(), new(), new())
+
+    # Fill each array with 250,000 integers (1MB each)
+    let i32 i = 0
+    while (i < 250000):
+        container.data1.push(i)
+        container.data2.push(i + 1000000)
+        container.data3.push(i + 2000000)
+        container.data4.push(i + 3000000)
+        container.data5.push(i + 4000000)
+        i := i + 1
+
+    # RAII should automatically free all 5 arrays when container goes out of scope
+    return Result.Ok(~)
+
+fn test_memory_cleanup() ~:
+    println("Starting memory leak test...")
+    println("Allocating 5MB per iteration, 20 iterations = 100MB total")
+    println("If RAII works, memory usage stays constant after first allocation")
+
+    let i32 iteration = 0
+    while (iteration < 20):
+        allocate_large_struct()
+
+        # Print progress every 5 iterations
+        let i32 mod_result = iteration % 5
+        if (mod_result == 0):
+            println("Completed iteration {iteration}/20")
+
+        iteration := iteration + 1
+
+    println("Memory leak test completed!")
+    println("If you saw stable memory usage, RAII is working correctly!")
+
+    return Result.Ok(~)
+
+fn main() i32:
+    test_memory_cleanup()
+    return Result.Ok(0)

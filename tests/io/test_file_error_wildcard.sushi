@@ -1,0 +1,22 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Error opening file - using wildcard pattern
+# EXPECTED_OUTPUT: Wildcard error handling successful
+
+use <io/stdio>
+use <io/files>
+
+fn main() i32:
+    # Try to open a file that doesn't exist - using wildcard to catch any error
+    let FileResult result = open("nonexistent_wildcard_test.txt", FileMode.Read())
+
+    match result:
+        FileResult.Ok(f) ->
+            stderr.write("Error: should not have succeeded!\n")
+            f.close()
+            return Result.Err()
+        FileResult.Err(_) ->
+            println("Error opening file - using wildcard pattern")
+            println("Wildcard error handling successful")
+            return Result.Ok(0)
+
+    return Result.Ok(0)

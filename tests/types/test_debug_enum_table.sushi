@@ -1,0 +1,6 @@
+# TEST_TYPE: compilation
+# Debug test to check enum table
+
+fn main() i32:
+    # This should create a monomorphized Result<i32> enum
+    return Result.Ok(0)

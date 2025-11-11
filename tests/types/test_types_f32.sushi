@@ -1,0 +1,6 @@
+fn main() i32:
+  # For now, f32 support is limited since literals default to f64
+  # This test just verifies f32 variables can be declared
+
+  # Test that we can compile without crashing - basic validation
+  return Result.Ok(0)

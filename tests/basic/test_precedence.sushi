@@ -1,0 +1,20 @@
+# EXPECT_RUNTIME_EXIT: 1
+# TEST_TYPE: runtime
+fn main() i32:
+  let i32 a = 2
+  let i32 b = 3
+  let i32 c = 4
+
+  # Arithmetic precedence: * / before + -
+  let i32 result1 = a + b * c  # Should be 2 + (3 * 4) = 14
+  let i32 result2 = a * b + c  # Should be (2 * 3) + 4 = 10
+
+  # Parentheses override precedence
+  let i32 result3 = (a + b) * c  # Should be (2 + 3) * 4 = 20
+
+  # Comparison and logical precedence
+  let bool flag = a < b and b < c  # Should be (2 < 3) and (3 < 4) = true
+
+  if (flag and result1 == 14 and result2 == 10 and result3 == 20):
+    return Result.Ok(1)
+  return Result.Ok(0)

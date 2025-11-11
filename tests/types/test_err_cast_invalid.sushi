@@ -1,0 +1,6 @@
+# CE2014: invalid cast to non-numeric types
+
+fn main() i32:
+  let i32 x = 42
+  let string s = x as string  # Should fail with CE2014
+  return Result.Ok(0)

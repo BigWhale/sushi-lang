@@ -1,0 +1,7 @@
+# Test variable reference in constant (CE0108)
+
+fn main() i32:
+    let i32 x = 42
+    return Result.Ok(0)
+
+const i32 INVALID = x + 1

@@ -1,0 +1,12 @@
+# Test that other functions can have string[] args parameters without issues
+
+
+fn helper(string[] args) i32:
+    # This should work normally - no special command line processing
+    return Result.Ok(args.len())
+
+fn main() i32:
+    let string[] test_array = new()
+    let Result<i32> result = helper(test_array)
+    print("Helper function works normally")
+    return Result.Ok(result.realise(0))

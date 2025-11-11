@@ -1,0 +1,21 @@
+# Test: Generic function with struct type parameter
+# Phase 2: Verifies generic function definition parsing with struct types
+#
+# This test defines a generic identity function that can accept
+# user-defined struct types. The function should work with Point
+# once Phase 3 monomorphization is implemented.
+#
+# Note: Actual calls to generic functions will work in Phase 3
+# when monomorphization is implemented.
+
+struct Point:
+    i32 x
+    i32 y
+
+fn identity<T>(T value) T:
+    return Result.Ok(value)
+
+fn main() i32:
+    # Phase 2: Generic function defined but not yet callable
+    # Phase 3 will add monomorphization to generate concrete versions
+    return Result.Ok(0)

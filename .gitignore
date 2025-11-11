@@ -1,0 +1,25 @@
+__pycache__/
+.idea/
+FUTURE.md
+
+/backend/c_utils/*.o
+
+/a
+
+a.out
+/a.sushi
+
+/test_*
+/tests/bin/
+/tests/*.bin
+/tests/*.txt
+
+# Standard library build artifacts
+/stdlib/dist/
+/stdlib/**/*.bc
+/stdlib/**/*.o
+/stdlib/**/__pycache__/
+/stdlib/**/*.pyc
+# Backup files
+*.py.old
+*.py.bak*

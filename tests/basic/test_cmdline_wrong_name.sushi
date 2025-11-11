@@ -1,0 +1,10 @@
+# Test that string[] parameter with wrong name doesn't trigger special handling
+
+fn main(string[] arguments) i32:
+    # This should NOT trigger command line argument processing
+    # because the parameter is named "arguments" not "args"
+    print("Parameter named 'arguments', not 'args'")
+    # Use the arguments parameter to avoid warning
+    print("Arguments length:")
+    print(arguments.len())
+    return Result.Ok(0)

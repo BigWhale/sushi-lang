@@ -1,0 +1,24 @@
+# Test: Nested pattern matching with user-defined generics
+# "The Answer to the Great Question... is... Forty-two."
+
+enum Either<T, U>:
+    Left(T)
+    Right(U)
+
+fn main() i32:
+    let Result<Either<i32, string>> ret = test_return_type()
+
+    # Try nested pattern matching
+    match ret:
+        Result.Ok(Either.Left(x)) ->
+            println("Left: {x}")
+        Result.Ok(Either.Right(s)) ->
+            println("Right: {s}")
+        Result.Err() ->
+            println("Error")
+
+    return Result.Ok(0)
+
+fn test_return_type() Either<i32, string>:
+    # Return the Answer to the Ultimate Question
+    return Result.Ok(Either.Left(42))

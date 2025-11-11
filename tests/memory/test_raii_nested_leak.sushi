@@ -1,0 +1,37 @@
+# Test to verify nested struct RAII cleanup
+# If cleanup works: memory stays low
+# If cleanup broken: memory grows linearly
+
+struct Inner:
+    i32[] values
+
+struct Outer:
+    Inner data
+    string name
+
+fn allocate_nested() ~:
+    let Outer o = Outer(Inner(new()), "test")
+
+    # Allocate 1MB in nested array
+    let i32 i = 0
+    while (i < 250000):
+        o.data.values.push(i)
+        i := i + 1
+
+    # RAII should clean up o.data.values here
+    return Result.Ok(~)
+
+fn main() i32:
+    println("Testing nested struct cleanup - 50 iterations of 1MB each")
+
+    let i32 iteration = 0
+    while (iteration < 50):
+        allocate_nested()
+
+        if (iteration % 10 == 0):
+            println("Iteration {iteration}/50")
+
+        iteration := iteration + 1
+
+    println("Test complete!")
+    return Result.Ok(0)

@@ -1,0 +1,51 @@
+# Test: Generic type annotations (Phase 0, Step 0.2)
+# Tests: Verify that generic type syntax is correctly parsed in type annotations
+#        - Function return types
+#        - Variable declarations
+#        - Function parameters
+
+enum Either<T, U>:
+    Left(T)
+    Right(U)
+
+# Test function with generic return type
+fn test_return_type() Either<i32, string>:
+    return Result.Ok(Either.Left(42))
+
+# Test variable with generic type annotation
+fn test_variable_type() i32:
+    let Either<i32, string> val = Either.Left(99)
+    # Test rebinding to avoid unused variable warning
+    val := Either.Right("test")
+    return Result.Ok(99)
+
+# Test function parameter with generic type
+fn test_parameter_type(Either<string, i32> param) i32:
+    param := Either.Left("Left")
+# TODO: This below crashes the compiled binary
+#    match param:
+#        Either.Left(_) ->
+#            println("Parameter Left")
+#        Either.Right(_) ->
+#            println("Parameter Right:")
+    return Result.Ok(123)
+
+fn main() i32:
+    println("Testing generic type annotations")
+
+    # Call the test functions to verify they compile
+    let Result<Either<i32, string>> ret = test_return_type()
+    let Result<i32> vt_result = test_variable_type()
+    let Result<i32> pt_result = test_parameter_type(Either.Right(123))
+
+    # Use the variables to avoid warnings
+    if (ret):
+        println("Return type test passed")
+
+    if (vt_result):
+        println("Variable type test passed")
+
+    if (pt_result):
+        println("Parameter type test passed")
+
+    return Result.Ok(0)

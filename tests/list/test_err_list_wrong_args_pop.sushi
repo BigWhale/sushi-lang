@@ -1,0 +1,11 @@
+# Test error: pop() with arguments (expects 0)
+fn run_test() i32:
+    let List<i32> data = List.new()
+    data.push(42)
+    # ERROR: pop() expects no arguments
+    let i32 val = data.pop(1)??
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

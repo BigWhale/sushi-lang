@@ -1,0 +1,71 @@
+# Example 15: List<T>
+#
+# This example demonstrates Sushi's List<T> generic collection from the standard
+# library. List<T> is a growable array (dynamic vector) that automatically resizes
+# as you add elements. It uses exponential growth (2x) for amortized O(1) push.
+#
+# Key concepts covered:
+# - Importing standard library modules with use <collections>
+# - Generic collection List<T> with compile-time type specialization
+# - List creation: .new() and .with_capacity()
+# - Adding elements: .push() with automatic resizing
+# - Removing elements: .pop() returns Maybe<T>
+# - Safe element access: .get() returns Maybe<T>
+# - Iteration: .iter() for foreach loops
+# - RAII cleanup: Lists automatically free memory when they go out of scope
+#
+# Note: List<T> uses move semantics for dynamic arrays and provides methods for
+# in-place modification. Elements are stored contiguously in memory for cache efficiency.
+
+
+fn main() i32:
+    # Create empty list with default capacity
+    let List<string> crew = List.new()
+
+    # Add crew members - list grows automatically
+    # Push is amortized O(1) due to exponential growth strategy
+    crew.push("Arthur Dent")
+    crew.push("Ford Prefect")
+    crew.push("Zaphod Beeblebrox")
+    crew.push("Trillian")
+    crew.push("Marvin")
+
+    println("Crew size: {crew.len()}")
+    println("Capacity: {crew.capacity()}")  # Capacity >= length
+
+    # Safe element access with bounds checking
+    # .get() returns Maybe<T> to handle out-of-bounds gracefully
+    match crew.get(0):
+        Maybe.Some(name) ->
+            println("Captain: {name}")
+        Maybe.None() ->
+            println("Empty crew")
+
+    # Iterate over all elements using .iter()
+    println("All crew members:")
+
+    foreach(member in crew.iter()):
+        println("  - {member}")
+
+    # Remove last element - returns Maybe<T>
+    # Returns Maybe.None() if the list is empty
+    match crew.pop():
+        Maybe.Some(name) ->
+            println("Removed: {name}")
+        Maybe.None() ->
+            println("No one to remove")
+
+    println("Remaining crew: {crew.len()}")
+
+    # Pre-allocate capacity to avoid reallocations
+    # Useful when you know the approximate size in advance
+    let List<i32> answers = List.with_capacity(10)
+
+    answers.push(42)
+    answers.push(42)
+    answers.push(42)
+
+    println("Number of answers: {answers.len()}")
+
+    # List automatically cleans up when it goes out of scope (RAII)
+    return Result.Ok(0)

@@ -1,0 +1,27 @@
+# Test that implementations can have extra methods beyond perk requirements
+
+perk Hashable:
+    fn hash() u64
+
+struct Point:
+    i32 x
+    i32 y
+
+# Implementation has extra method - this is OK
+extend Point with Hashable:
+    fn hash() u64:
+        let u64 hx = self.x as u64
+        let u64 hy = self.y as u64
+        let u64 multiplier = 31 as u64
+        return hx * multiplier + hy
+
+    fn reset() ~:
+        self.x := 0
+        self.y := 0
+        return ~
+
+fn main() i32:
+    let Point p = Point(10, 20)
+    p.hash()
+    p.reset()
+    return Result.Ok(0)

@@ -1,0 +1,17 @@
+fn get_value(i32 should_fail) i32:
+    if (should_fail == 1):
+        return Result.Err()
+    return Result.Ok(123)
+
+fn main() i32:
+    if (get_value(0)):
+        println("Got OK value")
+    else:
+        println("Got ERR")
+
+    if (get_value(1)):
+        println("Got OK value")
+    else:
+        println("Got ERR")
+
+    return Result.Ok(0)

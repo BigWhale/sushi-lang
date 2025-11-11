@@ -1,0 +1,34 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test RAII for structs with multiple dynamic array fields
+
+struct MultiArray:
+    i32[] numbers
+    string[] names
+    bool[] flags
+
+fn test_multiple_arrays() i32:
+    let MultiArray m = MultiArray(new(), new(), new())
+
+    m.numbers.push(10)
+    m.numbers.push(20)
+
+    m.names.push("hello")
+    m.names.push("world")
+
+    m.flags.push(true)
+    m.flags.push(false)
+
+    println("Number: {m.numbers.get(0)??}")
+    println("Name: {m.names.get(0)??}")
+    println("Flag count: {m.flags.len()}")
+
+    # NO manual cleanup for any of the three arrays!
+    # RAII should clean up all three dynamic array fields
+    return Result.Ok(0)
+
+fn main() i32:
+    let Result<i32> result = test_multiple_arrays()
+    if (result):
+        return Result.Ok(0)
+    return Result.Err()

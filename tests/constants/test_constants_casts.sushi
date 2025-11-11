@@ -1,0 +1,49 @@
+# Test type casts in constant expressions
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "All constant cast tests passed"
+
+const f64 PI = 3.14159
+const i32 PI_INT = PI as i32
+const f64 PI_BACK = PI_INT as f64
+
+const i32 HUNDRED = 100
+const f64 HUNDRED_FLOAT = HUNDRED as f64
+
+const i32 SIGNED_VALUE = -42
+const u32 UNSIGNED_VALUE = SIGNED_VALUE as u32
+
+const u32 LARGE_UNSIGNED = 255 as u32
+const i32 BACK_TO_SIGNED = LARGE_UNSIGNED as i32
+
+const i32 INT_CHAIN = ((100.5 as i32) + 50) as i32
+const f64 FLOAT_CHAIN = ((100 as f64) * 2.5) as f64
+
+fn main() i32:
+    # Verify cast results
+    if (PI < 3.14 or PI > 3.15):
+        return Result.Err()
+    if (PI_INT != 3):
+        return Result.Err()
+    if (PI_BACK < 2.9 or PI_BACK > 3.1):
+        return Result.Err()
+
+    if (HUNDRED != 100):
+        return Result.Err()
+    if (HUNDRED_FLOAT < 99.9 or HUNDRED_FLOAT > 100.1):
+        return Result.Err()
+
+    if (SIGNED_VALUE != -42):
+        return Result.Err()
+
+    if (LARGE_UNSIGNED != 255 as u32):
+        return Result.Err()
+    if (BACK_TO_SIGNED != 255):
+        return Result.Err()
+
+    if (INT_CHAIN != 150):
+        return Result.Err()
+    if (FLOAT_CHAIN < 249.9 or FLOAT_CHAIN > 250.1):
+        return Result.Err()
+
+    println("All constant cast tests passed")
+    return Result.Ok(0)

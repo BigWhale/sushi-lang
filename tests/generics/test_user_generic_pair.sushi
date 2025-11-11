@@ -1,0 +1,41 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Both: 42 and Thanks for all the fish.
+# EXPECTED_OUTPUT: Left: 100
+# EXPECTED_OUTPUT: Right: So long!
+# EXPECTED_OUTPUT: Neither
+
+# Test user-defined generic enum with multiple type parameters
+# Demonstrates that Pair<T, U> works as described in GENERICS.md
+
+enum Pair<T, U>:
+    Both(T, U)
+    Left(T)
+    Right(U)
+    Neither()
+
+fn describe_pair_int_string(Pair<i32, string> p) ~:
+    match p:
+        Pair.Both(num, text) ->
+            println("Both: {num} and {text}")
+        Pair.Left(num) ->
+            println("Left: {num}")
+        Pair.Right(text) ->
+            println("Right: {text}")
+        Pair.Neither() ->
+            println("Neither")
+    return Result.Ok(~)
+
+fn main() i32:
+    # Create different variants of Pair<i32, string>
+    let Pair<i32, string> p1 = Pair.Both(42, "Thanks for all the fish.")
+    let Pair<i32, string> p2 = Pair.Left(100)
+    let Pair<i32, string> p3 = Pair.Right("So long!")
+    let Pair<i32, string> p4 = Pair.Neither()
+
+    # Test all variants
+    describe_pair_int_string(p1)
+    describe_pair_int_string(p2)
+    describe_pair_int_string(p3)
+    describe_pair_int_string(p4)
+
+    return Result.Ok(0)

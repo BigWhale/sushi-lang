@@ -1,0 +1,75 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT: Hello
+# EXPECT_STDOUT: 0
+# EXPECT_STDOUT: Hi
+# EXPECT_STDOUT: caf
+# EXPECT_STDOUT: 3
+# EXPECT_STDOUT: 你好
+# EXPECT_STDOUT: 2
+# EXPECT_STDOUT: 6
+# EXPECT_STDOUT: 0
+# EXPECT_STDOUT: copy
+# EXPECT_STDOUT: a
+# EXPECT_STDOUT: 1
+# EXPECT_STDOUT: 4
+# EXPECT_STDOUT: 0
+
+use <collections/strings>
+
+fn main() i32:
+    # Test 1: Basic sleft - first 5 characters
+    let string s1 = "Hello World"
+    let string left1 = s1.sleft(5)
+    println(left1)  # Expected: Hello
+
+    # Test 2: sleft with 0 characters (empty string)
+    let string s2 = "test"
+    let string left2 = s2.sleft(0)
+    println(left2.size())  # Expected: 0
+
+    # Test 3: sleft with n > length (should return entire string)
+    let string s3 = "Hi"
+    let string left3 = s3.sleft(100)
+    println(left3)  # Expected: Hi
+
+    # Test 4: UTF-8 aware - first 3 characters from "café"
+    let string s4 = "café"
+    let string left4 = s4.sleft(3)
+    println(left4)  # Expected: caf (3 UTF-8 characters)
+    println(left4.size())  # Expected: 3 (3 bytes)
+
+    # Test 5: UTF-8 aware - first 2 characters from "你好世界"
+    let string s5 = "你好世界"
+    let string left5 = s5.sleft(2)
+    println(left5)  # Expected: 你好 (2 UTF-8 characters)
+    println(left5.len())  # Expected: 2 (2 characters)
+    println(left5.size())  # Expected: 6 (6 bytes)
+
+    # Test 6: Negative n (should return empty)
+    let string s6 = "test"
+    let string left6 = s6.sleft(-5)
+    println(left6.size())  # Expected: 0
+
+    # Test 7: Full string
+    let string s7 = "copy"
+    let string left7 = s7.sleft(4)
+    println(left7)  # Expected: copy
+
+    # Test 8: Single character
+    let string s8 = "abcdef"
+    let string left8 = s8.sleft(1)
+    println(left8)  # Expected: a
+
+    # Test 9: UTF-8 emoji - first 1 character
+    let string s9 = "👋 Hello"
+    let string left9 = s9.sleft(1)
+    println(left9.len())  # Expected: 1 (1 character)
+    println(left9.size())  # Expected: 4 (4 bytes for emoji)
+
+    # Test 10: Empty string
+    let string s10 = ""
+    let string left10 = s10.sleft(5)
+    println(left10.size())  # Expected: 0
+
+    return Result.Ok(0)

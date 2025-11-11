@@ -1,0 +1,9 @@
+# CE2510: Mixed type subtraction should fail
+fn main() i32:
+  let u32 a = 50 as u32
+  let i32 b = 20
+
+  # This should fail - mixed u32 and i32
+  let u32 c = a - b
+
+  return Result.Ok(0)

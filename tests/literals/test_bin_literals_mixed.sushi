@@ -1,0 +1,27 @@
+# Test mixing binary literals with hex and decimal
+
+fn main() i32:
+    # Mix different literal formats
+    let i32 bin_val = 0b11111111
+    let i32 hex_val = 0xFF
+    let i32 dec_val = 255
+
+    # All should be equal
+    let bool all_equal = (bin_val == hex_val) and (hex_val == dec_val)
+
+    # Bitwise operations mixing formats
+    let i32 result1 = 0b1111 & 0xF
+    let i32 result2 = 0xFF | 0b00001111
+    let i32 result3 = 15 ^ 0b1111
+
+    # Common patterns
+    let i32 byte = 0b11111111
+    let i32 word = 0xFFFF
+    let i32 shift_bin = 0b1 << 8
+    let i32 shift_hex = 0x1 << 8
+
+    # Use variables
+    let i32 sum = result1 + result2 + result3 + byte + (word as i32) + shift_bin + shift_hex
+    if (all_equal):
+        println("Mostly Harmless")
+    return Result.Ok(sum)

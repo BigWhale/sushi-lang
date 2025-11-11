@@ -1,0 +1,41 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Wrote 3 lines to file
+# EXPECTED_OUTPUT: Position after writes: 36
+# EXPECTED_OUTPUT: After seek to start: First line
+# EXPECTED_OUTPUT: Seek test completed
+
+use <io/files>
+use <io/stdio>
+
+fn main() i32:
+    # Write test file
+    let FileResult write_result = open("test_seek_output.txt", FileMode.Write())
+    match write_result:
+        FileResult.Ok(out) ->
+            out.writeln("First line")
+            out.writeln("Second line")
+            out.writeln("Third line")
+            println("Wrote 3 lines to file")
+            let i64 pos = out.tell()
+            println("Position after writes: {pos}")
+            out.close()
+        FileResult.Err(_) ->
+            stderr.write("Error: cannot create test file\n")
+            return Result.Err()
+
+    # Read file with seeking
+    let FileResult read_result = open("test_seek_output.txt", FileMode.Read())
+    match read_result:
+        FileResult.Ok(f) ->
+            # Seek to start
+            f.seek(0 as i64, SeekFrom.Start())
+            let string line = f.readln()
+            println("After seek to start: {line}")
+            f.close()
+            println("Seek test completed")
+            return Result.Ok(0)
+        FileResult.Err(_) ->
+            stderr.write("Error: cannot read test file\n")
+            return Result.Err()
+
+    return Result.Ok(0)

@@ -1,0 +1,6 @@
+# Test Own<string> - heap-allocated strings
+fn main() i32:
+    let Own<string> s = Own.alloc("Mostly Harmless")
+    let string value = s.get()
+    println(value)
+    return Result.Ok(0)

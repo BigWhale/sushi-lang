@@ -1,0 +1,12 @@
+# tests/test_perk_basic_parse.sushi
+# Basic perk definition parsing test
+
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "42"
+
+fn main() i32:
+    return Result.Ok(0)

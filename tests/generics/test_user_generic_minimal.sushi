@@ -1,0 +1,7 @@
+# Minimal test - just define a user generic enum
+
+enum Pair<T, U>:
+    Both(T, U)
+
+fn main() i32:
+    return Result.Ok(0)

@@ -1,0 +1,4 @@
+fn main() i32:
+    let string s = "test {}"
+    println(s)
+    return Result.Ok(0)

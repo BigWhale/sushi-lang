@@ -1,0 +1,30 @@
+# Test string.to_i64() parsing
+use <collections/strings>
+
+fn main() i32:
+    # Valid parse cases
+    let string num1 = "42"
+    let Maybe<i64> result1 = num1.to_i64()
+    match result1:
+        Maybe.Some(value) -> println("Parsed 42: {value}")
+        Maybe.None() -> println("Failed to parse 42")
+
+    let string large = "9223372036854775807"  # INT64_MAX
+    let Maybe<i64> result2 = large.to_i64()
+    match result2:
+        Maybe.Some(value) -> println("Parsed INT64_MAX: {value}")
+        Maybe.None() -> println("Failed to parse INT64_MAX")
+
+    # Invalid parse cases
+    let string invalid = "not a number"
+    let Maybe<i64> result3 = invalid.to_i64()
+    match result3:
+        Maybe.Some(_) -> println("ERROR: Should not have parsed '{invalid}'")
+        Maybe.None() -> println("Correctly rejected '{invalid}'")
+
+    # Using realise()
+    let string num2 = "1234567890"
+    let i64 value = num2.to_i64().realise(0 as i64)
+    println("Using realise(): {value}")
+
+    return Result.Ok(0)

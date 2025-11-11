@@ -1,0 +1,12 @@
+# TEST_TYPE: compilation
+# Test that generic struct definitions are collected correctly in Pass 0
+
+struct Pair<T, U>:
+    T first
+    U second
+
+struct Box<T>:
+    T value
+
+fn main() i32:
+    return Result.Ok(0)

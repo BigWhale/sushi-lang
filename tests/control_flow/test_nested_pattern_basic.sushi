@@ -1,0 +1,29 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: 42
+
+# Simple nested pattern with nested enums
+# This tests the basic functionality of nested pattern matching
+
+
+enum Inner:
+    Some(i32)
+    None
+
+enum Outer:
+    Value(Inner)
+    Empty
+
+fn test_nested() i32:
+    let Outer w = Outer.Value(Inner.Some(42))
+    match w:
+        Outer.Value(Inner.Some(x)) ->
+            return Result.Ok(x)
+        Outer.Value(Inner.None) ->
+            return Result.Ok(0)
+        Outer.Empty ->
+            return Result.Ok(-1)
+
+fn main() i32:
+    let i32 result = test_nested().realise(0)
+    println("{result}")
+    return Result.Ok(0)

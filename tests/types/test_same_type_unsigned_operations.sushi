@@ -1,0 +1,18 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Same-type unsigned integer comparisons should pass
+fn main() i32:
+  # u32 comparisons only (arithmetic ops have compiler bug)
+  let u32 a = 100 as u32
+  let u32 b = 25 as u32
+
+  # Comparisons should work
+  let bool eq = a == a
+  let bool gt = a > b
+  let bool lt = b < a
+  let bool neq = a != b
+
+  if (eq and gt and lt and neq):
+    return Result.Ok(0)
+
+  return Result.Ok(1)

@@ -1,0 +1,6 @@
+fn main() i32:
+    # This should fail - bitwise NOT only works on integers
+    let string s = "hello"
+    let i32 result = ~s  # Error: CE2004
+
+    return Result.Ok(0)

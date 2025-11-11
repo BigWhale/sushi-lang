@@ -1,0 +1,46 @@
+# Test move semantics for dynamic arrays
+# This test verifies that variable-to-variable rebinding transfers ownership
+# and prevents double-free crashes
+use <collections/strings>
+
+fn run_test() i32:
+    # Test 1: Basic move semantics
+    let i32[] arr1 = from([1, 2, 3])
+    let i32[] arr2 = from([10, 20, 30, 40, 50])
+
+    # Move arr2 into arr1 (arr2 becomes invalid, arr1 owns the memory)
+    arr1 := arr2
+
+    # Verify arr1 has arr2's data
+    println(arr1.len())  # Should print 5
+    println(arr1.get(0)??) # Should print 10
+    println(arr1.get(4)??) # Should print 50
+
+    # Test 2: Chain rebinding
+    let i32[] arr3 = from([100, 200])
+    arr1 := arr3  # arr3 moved to arr1
+
+    println(arr1.len())  # Should print 2
+    println(arr1.get(0)??) # Should print 100
+    println(arr1.get(1)??) # Should print 200
+
+    # Test 3: Move with empty array
+    let i32[] arr4 = new()
+    let i32[] arr5 = from([7, 8, 9])
+    arr4 := arr5  # Move non-empty into empty
+
+    println(arr4.len())  # Should print 3
+    println(arr4.get(2)??) # Should print 9
+
+    # Test 4: Method call rebind (should still work, not affected by move semantics)
+    let string test_string = "hello"
+    let u8[] bytes1 = new()
+    bytes1 := test_string.to_bytes()  # Method call rebind
+
+    println(bytes1.len())  # Should print 5
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

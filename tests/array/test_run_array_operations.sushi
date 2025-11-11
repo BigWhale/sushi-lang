@@ -1,0 +1,57 @@
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+fn run_test() i32:
+  # Test array operations work correctly
+  let i32 validation_count = 0
+
+  # Test fixed arrays
+  let i32[5] numbers = [10, 20, 30, 40, 50]
+
+  # Test array indexing
+  if (numbers[0] == 10 and numbers[4] == 50):
+    validation_count := validation_count + 1
+
+  # Test array length
+  if (numbers.len() == 5):
+    validation_count := validation_count + 1
+
+  # Test array.get() method
+  if (numbers.get(2)?? == 30):
+    validation_count := validation_count + 1
+
+  # Test dynamic arrays
+  let i32[] dynamic = new()
+  dynamic.push(100)
+  dynamic.push(200)
+  dynamic.push(300)
+
+  # Test dynamic array operations
+  if (dynamic.len() == 3):
+    validation_count := validation_count + 1
+
+  if (dynamic.get(1)?? == 200):
+    validation_count := validation_count + 1
+
+  # Test pop operation
+  let i32 popped = dynamic.pop()
+  if (popped == 300 and dynamic.len() == 2):
+    validation_count := validation_count + 1
+
+  # Test dynamic array from constructor
+  let i32[] from_literal = from([1, 2, 3, 4])
+  if (from_literal.len() == 4 and from_literal.get(3)?? == 4):
+    validation_count := validation_count + 1
+
+  # Clean up dynamic arrays
+  dynamic.destroy()
+  from_literal.destroy()
+
+  # All validations should pass
+  if (validation_count == 7):
+    return Result.Ok(0)                 # Success)
+  else:
+    return Result.Ok(validation_count)  # Return number passed for debugging)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

@@ -1,0 +1,39 @@
+# Example 14: Generics
+#
+# This example demonstrates Sushi's generic type system. Generics allow you to
+# write code that works with multiple types without duplication. The compiler
+# performs monomorphization - generating specialized versions for each concrete
+# type usage at compile time.
+#
+# Key concepts covered:
+# - Generic struct definitions with type parameters (T, U)
+# - Type parameter instantiation at use sites
+# - Compile-time monomorphization (zero runtime overhead)
+# - Automatic generic instantiation detection
+# - Type safety with different instantiations
+#
+# Note: Generics in Sushi use compile-time monomorphization like C++ templates
+# or Rust, not runtime type erasure like Java. This means zero abstraction cost.
+
+struct Pair<T, U>:
+    T first
+    U second
+
+fn main() i32:
+    # Pair of integers - compiler generates Pair<i32, i32> version
+    let Pair<i32, i32> coordinates = Pair(42, 24)
+
+    println("Coordinates: ({coordinates.first}, {coordinates.second})")
+
+    # Pair of mixed types - compiler generates Pair<string, i32> version
+    let Pair<string, i32> answer_pair = Pair("The answer", 42)
+
+    println("{answer_pair.first} is {answer_pair.second}")
+
+    # Pair of strings - compiler generates Pair<string, string> version
+    let Pair<string, string> names = Pair("Arthur", "Dent")
+
+    println("Name: {names.first} {names.second}")
+
+    return Result.Ok(0)
+

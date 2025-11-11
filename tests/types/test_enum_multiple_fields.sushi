@@ -1,0 +1,35 @@
+# Enum test with multiple associated data fields
+
+
+enum Shape:
+    Circle(i32)
+    Rectangle(i32, i32)
+    Point
+
+fn calculate_area(Shape s) i32:
+    match s:
+        Shape.Circle(radius) ->
+            return Result.Ok(radius * radius * 3)
+        Shape.Rectangle(width, height) ->
+            return Result.Ok(width * height)
+        Shape.Point ->
+            return Result.Ok(0)
+
+fn main() i32:
+    let Shape circle = Shape.Circle(5)
+    let i32 area1 = calculate_area(circle).realise(0)
+    # area1 = 5 * 5 * 3 = 75
+
+    let Shape rect = Shape.Rectangle(4, 6)
+    let i32 area2 = calculate_area(rect).realise(0)
+    # area2 = 4 * 6 = 24
+
+    let Shape point = Shape.Point()
+    let i32 p_area = calculate_area(point).realise(0)
+
+    println("Area of a point should be zero: {p_area}")
+
+    # Return area1 - area2 = 75 - 24 = 51
+    let i32 result = area1 - area2
+    let i32 expected = 51
+    return Result.Ok(result - expected)

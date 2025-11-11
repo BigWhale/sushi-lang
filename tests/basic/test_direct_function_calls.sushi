@@ -1,0 +1,67 @@
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+# Test direct function calls as statements
+
+
+fn setup_system() i32:
+    println("System initialized")
+    return Result.Ok(42)
+
+fn process_data() string:
+    println("Processing")
+    return Result.Ok("completed")
+
+fn do_cleanup() i32:
+    println("Cleanup done")
+    return Result.Ok(0)
+
+extend i32 double() i32:
+    return self * 2
+
+extend string announce() string:
+    println(self)
+    return self
+
+fn run_test() i32:
+    # Test basic function calls as statements (return values discarded)
+    setup_system().realise(0)
+    process_data().realise("Slartibartfast")
+    do_cleanup().realise(0)
+
+    # Test method calls as statements
+    let i32 number = 5
+    let string message = "Hello World"
+    let i32[] numbers = new()
+
+    number.double()
+    message.announce()
+    numbers.push(10)
+    numbers.push(20)
+
+    # Test multiple method calls as statements
+    let string[] words = new()
+    words.push("hello")
+    words.push("world")
+
+    # Validate direct function calls worked
+    let i32 validation_count = 0
+
+    # Verify arrays have expected content
+    if (numbers.len() == 2 and numbers.get(0)?? == 10 and numbers.get(1)?? == 20):
+        validation_count := validation_count + 1
+
+    if (words.len() == 2 and words.get(0)?? == "hello" and words.get(1)?? == "world"):
+        validation_count := validation_count + 1
+
+    # Cleanup
+    numbers.destroy()
+    words.destroy()
+
+    if (validation_count == 2):
+        return Result.Ok(0)  # All tests passed)
+    else:
+        return Result.Ok(validation_count)  # Return count for debugging)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

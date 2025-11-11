@@ -1,0 +1,14 @@
+# TEST_TYPE: error
+# Test that compiler prevents use of List after .destroy()
+fn main() i32:
+    let List<i32> data = List.new()
+    data.push(1)
+    data.push(2)
+    data.push(3)
+
+    data.destroy()
+
+    # This should trigger CE2406: use of destroyed variable
+    let i32 len = data.len()
+
+    return Result.Ok(0)

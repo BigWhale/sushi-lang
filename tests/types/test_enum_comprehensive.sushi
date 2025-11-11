@@ -1,0 +1,49 @@
+# Comprehensive enum test
+
+
+enum Operation:
+    Add(i32, i32)
+    Subtract(i32, i32)
+    Multiply(i32, i32)
+    Negate(i32)
+    Identity
+
+fn evaluate(Operation op) i32:
+    match op:
+        Operation.Add(a, b) ->
+            return Result.Ok(a + b)
+        Operation.Subtract(a, b) ->
+            return Result.Ok(a - b)
+        Operation.Multiply(a, b) ->
+            return Result.Ok(a * b)
+        Operation.Negate(x) ->
+            return Result.Ok(x * -1)
+        Operation.Identity ->
+            return Result.Ok(1)
+
+fn main() i32:
+    # Test various operations
+    let Operation add = Operation.Add(10, 5)
+    let i32 r1 = evaluate(add).realise(0)
+    # r1 = 15
+
+    let Operation sub = Operation.Subtract(10, 5)
+    let i32 r2 = evaluate(sub).realise(0)
+    # r2 = 5
+
+    let Operation mul = Operation.Multiply(3, 4)
+    let i32 r3 = evaluate(mul).realise(0)
+    # r3 = 12
+
+    let Operation neg = Operation.Negate(7)
+    let i32 r4 = evaluate(neg).realise(0)
+    # r4 = -7
+
+    let Operation id = Operation.Identity()
+    let i32 r5 = evaluate(id).realise(0)
+    # r5 = 1
+
+    # Return r1 + r2 + r3 - r4 + r5 = 15 + 5 + 12 - (-7) + 1 = 40
+    let i32 result = r1 + r2 + r3 - r4 + r5
+    let i32 expected = 40
+    return Result.Ok(result - expected)

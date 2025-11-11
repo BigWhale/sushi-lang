@@ -1,0 +1,4 @@
+# CE1001: use of undeclared variable
+fn main() i32:
+  let i32 x = y + 10  # y is not declared
+  return Result.Ok(x)

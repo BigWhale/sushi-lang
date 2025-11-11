@@ -1,0 +1,23 @@
+# Test edge cases for compile-time array bounds checking (CE2012)
+# This test should fail compilation with CE2012 errors
+
+fn run_test() i32:
+  let i32[1] single = [42]        # Array with single element
+  let string[0] empty = []        # Empty array (if allowed)
+
+  # Test boundary conditions for single element array
+  let i32 valid = single[0]       # Valid: 0 < 1
+  let i32 invalid = single[1]     # Error: index 1 >= size 1
+
+  # Test with larger constant indices
+  let i32 huge_index = single[100]  # Error: index 100 >= size 1
+
+  # Test method calls on single element array
+  let i32 valid_get = single.get(0)??   # Valid: 0 < 1
+  let i32 invalid_get = single.get(1)?? # Error: index 1 >= size 1
+
+  return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

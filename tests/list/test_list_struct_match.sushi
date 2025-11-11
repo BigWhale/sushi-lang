@@ -1,0 +1,17 @@
+# Test pattern matching on List<Struct>.get()
+
+struct Node:
+    i32 value
+
+fn main() i32:
+    let List<Node> nodes = List.new()
+    let Node node1 = Node(42)
+    nodes.push(node1)
+
+    match nodes.get(0):
+        Maybe.Some(n) ->
+            println("Value: {n.value}")
+        Maybe.None() ->
+            println("Empty")
+
+    return Result.Ok(0)

@@ -1,0 +1,8 @@
+# Error test: Ok() value must match function return type
+# Should fail with CE2031
+
+fn wrong_type() i32:
+  return Result.Ok(true)  # Error: expected i32, got bool
+
+fn main() i32:
+  return Result.Ok(0)

@@ -1,0 +1,30 @@
+# Test that custom perk implementation OVERRIDES auto-derived hash
+# This was the critical bug that was just fixed
+
+perk Hashable:
+    fn hash() u64
+
+struct Point:
+    i32 x
+    i32 y
+
+# Custom hash implementation that should override auto-derived
+extend Point with Hashable:
+    fn hash() u64:
+        # Return a distinctive value to prove custom impl is used
+        return 999999 as u64
+
+fn main() i32:
+    let Point p = Point(10, 20)
+    let u64 h = p.hash()
+
+    # Should be 999999, NOT the auto-derived hash
+    println(h)
+
+    # Validate
+    if (h == 999999 as u64):
+        println("PASS: Custom hash used")
+    else:
+        println("FAIL: Auto-derived hash used")
+
+    return Result.Ok(0)

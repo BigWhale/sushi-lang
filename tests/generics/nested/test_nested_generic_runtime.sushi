@@ -1,0 +1,29 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: 42
+
+# Enhanced runtime test for nested generics
+# Tests Result<Maybe<T>> in a realistic scenario
+# "I always thought something was fundamentally wrong with the universe."
+
+fn parse_answer(string s) Maybe<i32>:
+    # Parse the Answer to the Ultimate Question
+    if (s == "42"):
+        return Result.Ok(Maybe.Some(42))
+    return Result.Ok(Maybe.None())
+
+fn main() i32:
+    let Result<Maybe<i32>> result = parse_answer("42")
+
+    match result:
+        Result.Ok(val) ->
+            let Maybe<i32> inner = val
+            match inner:
+                Maybe.Some(x) ->
+                    println("{x}")
+                    return Result.Ok(0)
+                Maybe.None() ->
+                    println("Not the answer")
+                    return Result.Ok(1)
+        Result.Err() ->
+            println("Computation error")
+            return Result.Ok(2)

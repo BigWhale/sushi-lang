@@ -1,0 +1,26 @@
+# Comprehensive I/O demonstration
+# Shows stdin, stdout, and stderr functionality
+
+use <io/stdio>
+
+fn main() i32:
+    # Write to stdout
+    stdout.write("=== Sushi I/O Demo ===\n")
+    stdout.write("This demonstrates standard I/O operations\n\n")
+
+    # Write to stderr (for warnings/errors)
+    stderr.write("[INFO] Starting I/O operations...\n")
+
+    # Example with string variables
+    let string greeting = "Hello from Sushi!\n"
+    stdout.write(greeting)
+
+    # Multiple write operations
+    stdout.write("Line 1\n")
+    stdout.write("Line 2\n")
+    stdout.write("Line 3\n")
+
+    # Write completion message to stderr
+    stderr.write("[INFO] I/O operations completed successfully\n")
+
+    return Result.Ok(0)

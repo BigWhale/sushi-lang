@@ -1,0 +1,51 @@
+# Example 09: Error Propagation with ??
+#
+# This example demonstrates the ?? operator for automatic error propagation.
+# The ?? operator provides a clean way to handle Result<T> values by either
+# unwrapping the Ok value or immediately propagating the Err up the call stack.
+#
+# Key concepts covered:
+# - The ?? operator for Result unwrapping
+# - Early return on error (short-circuit evaluation)
+# - RAII-safe error propagation (automatic cleanup on error path)
+# - Composing fallible operations without nested match statements
+#
+# Compare this with Example 08 which uses explicit match statements.
+# The ?? operator is syntactic sugar that makes error handling more ergonomic.
+
+fn get_answer() i32:
+    # Simple function that always succeeds
+    return Result.Ok(42)
+
+fn might_fail(bool succeed) i32:
+    # Conditionally returns success or failure based on parameter
+    if (succeed):
+        return Result.Ok(100)
+
+    return Result.Err()
+
+fn calculate_with_propagation(bool succeed) i32:
+    # Demonstrates ?? operator chaining multiple fallible operations
+    # If might_fail returns Err, ?? propagates it immediately and
+    # this function returns Result.Err() without executing further code
+    let i32 value = might_fail(succeed)??
+
+    # This line only executes if might_fail succeeded
+    # If get_answer returns Err, ?? propagates that error too
+    let i32 answer = get_answer()??
+
+    # Only reaches here if both operations succeeded
+    return Result.Ok(value + answer)
+
+fn main() i32:
+    # Success case: might_fail(true) returns 100, get_answer() returns 42
+    let i32 result1 = calculate_with_propagation(true).realise(-1)
+    println("Success case: {result1}")  # Prints: 142
+
+    # Failure case: might_fail(false) returns Err, which propagates immediately
+    # The function returns Result.Err(), so .realise(-1) returns the default -1
+    let i32 result2 = calculate_with_propagation(false).realise(-1)
+    println("Failure case: {result2}")  # Prints: -1
+
+    return Result.Ok(0)
+

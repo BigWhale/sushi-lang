@@ -1,0 +1,9 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+
+# Very simple foreach test
+fn main() i32:
+    let i32[2] arr = [1, 2]
+    foreach(i32 x in arr.iter()):
+        print(x)
+    return Result.Ok(0)

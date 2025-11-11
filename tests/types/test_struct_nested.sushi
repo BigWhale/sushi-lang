@@ -1,0 +1,19 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: 150
+
+# Nested struct usage
+struct Point:
+    i32 x
+    i32 y
+
+struct Rectangle:
+    Point topLeft
+    Point bottomRight
+
+fn main() i32:
+    let Point tl = Point(10, 100)
+    let Point br = Point(50, 20)
+    let Rectangle rect = Rectangle(tl, br)
+    print(rect.bottomRight.x + rect.topLeft.y)
+    return Result.Ok(0)

@@ -1,0 +1,7 @@
+use <collections/strings>
+
+fn main() i32:
+    let string s = "test"
+    # Error: ss() requires exactly 2 arguments (start, length)
+    let string sub = s.ss(0)
+    return Result.Ok(0)

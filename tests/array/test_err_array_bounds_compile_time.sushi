@@ -1,0 +1,21 @@
+# Test compile-time array bounds checking (CE2012)
+# This test should fail compilation with CE2012 errors
+
+fn run_test() i32:
+  let i32[3] numbers = [10, 20, 30]
+  let bool[2] flags = [true, false]
+
+  # Test direct indexing out-of-bounds
+  let i32 value1 = numbers[3]    # Error: index 3 >= size 3
+  let i32 value2 = numbers[5]    # Error: index 5 >= size 3
+  let bool flag1 = flags[2]      # Error: index 2 >= size 2
+
+  # Test method calls with out-of-bounds constants
+  let i32 value4 = numbers.get(3)??  # Error: index 3 >= size 3
+  let bool flag2 = flags.get(5)??    # Error: index 5 >= size 2
+
+  return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

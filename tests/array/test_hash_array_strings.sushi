@@ -1,0 +1,7 @@
+# Test array hashing with strings
+
+fn main() i32:
+    let string[2] strs = ["Mostly", "Harmless"]
+    let u64 hash = strs.hash()
+    println("String array.hash() = {hash}")
+    return Result.Ok(0)

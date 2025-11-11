@@ -1,0 +1,18 @@
+# Test for struct alignment bug fix in enum storage
+# This test ensures that structs with padding are correctly stored in enums
+struct Pair<T, U>:
+    T first
+    U second
+
+fn main() i32:
+    let Pair<i32, string> p = Pair(42, "Life")
+    let Maybe<Pair<i32, string>> m = Maybe.Some(p)
+
+    match m:
+        Maybe.Some(x) ->
+            println("Value: {x.second}")
+            let string s = x.second
+            println("Var: {s}")
+        Maybe.None() -> println("None")
+
+    return Result.Ok(0)

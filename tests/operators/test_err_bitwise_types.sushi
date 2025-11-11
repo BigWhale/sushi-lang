@@ -1,0 +1,10 @@
+# Test that bitwise operators only work with integer types
+# Should fail with CE2004: invalid operand types for operator
+
+fn main() i32:
+    let string s = "hello"
+
+    # This should cause a type error - bitwise operations not supported on strings
+    let i32 result = s & 5
+
+    return Result.Ok(0)

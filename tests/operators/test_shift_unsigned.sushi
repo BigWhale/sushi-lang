@@ -1,0 +1,17 @@
+fn main() i32:
+    # Test logical right shift with unsigned types
+    let u32 a = 3221225472 as u32  # 0xC0000000 (binary: 11000000...)
+    let u32 shifted = a >> 2
+    println(shifted)  # Should be 805306368 (0x30000000) - logical shift, zero-fill
+
+    # Test with u8
+    let u8 b = 240 as u8  # 0xF0 (binary: 11110000)
+    let u8 shifted_b = b >> 2
+    println(shifted_b)  # Should be 60 (0x3C, binary: 00111100) - zero-fill
+
+    # Test left shift (same for signed and unsigned)
+    let u32 c = 5 as u32
+    let u32 left = c << 2
+    println(left)  # Should be 20
+
+    return Result.Ok(0)

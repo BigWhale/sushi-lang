@@ -1,0 +1,13 @@
+# TEST_TYPE: runtime
+# TEST_EXPECTED_OUTPUT: x = 42
+# Phase 4.2 - Success test for handled Result<T> with .realise()
+# Should pass: using .realise() to handle Result<T>
+
+
+fn get_value() i32:
+    return Result.Ok(42)
+
+fn main() i32:
+    let i32 x = get_value().realise(0)
+    println("x = {x}")
+    return Result.Ok(0)

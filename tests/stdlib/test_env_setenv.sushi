@@ -1,0 +1,41 @@
+# Test setenv() function for setting environment variables
+use <sys/env>
+
+fn run_test() i32:
+    # Test 1: Set a new environment variable
+    let i32 result1 = setenv("SUSHI_TEST_VAR", "hello_world")??
+    println("Set SUSHI_TEST_VAR result: {result1}")
+
+    # Test 2: Read it back to verify
+    let Maybe<string> test_var = getenv("SUSHI_TEST_VAR")
+    match test_var:
+        Maybe.Some(value) -> println("SUSHI_TEST_VAR value: {value}")
+        Maybe.None() -> println("ERROR: SUSHI_TEST_VAR should be set")
+
+    # Test 3: Overwrite existing variable
+    let i32 result2 = setenv("SUSHI_TEST_VAR", "new_value")??
+    println("Overwrite SUSHI_TEST_VAR result: {result2}")
+
+    # Test 4: Verify overwrite
+    let string new_value = getenv("SUSHI_TEST_VAR").realise("error")
+    println("SUSHI_TEST_VAR after overwrite: {new_value}")
+
+    # Test 5: Set another variable
+    let i32 result3 = setenv("SUSHI_VAR_2", "value_2")??
+    println("Set SUSHI_VAR_2 result: {result3}")
+    let string var2 = getenv("SUSHI_VAR_2").realise("error")
+    println("SUSHI_VAR_2: {var2}")
+
+    # Test 6: Set with empty value
+    let i32 result4 = setenv("SUSHI_EMPTY", "")??
+    println("Set SUSHI_EMPTY result: {result4}")
+    let Maybe<string> empty_var = getenv("SUSHI_EMPTY")
+    match empty_var:
+        Maybe.Some(_) -> println("SUSHI_EMPTY is set to empty string (length 0)")
+        Maybe.None() -> println("ERROR: SUSHI_EMPTY should be set (even if empty)")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

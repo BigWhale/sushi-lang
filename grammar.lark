@@ -1,0 +1,241 @@
+?start: program
+
+program: (_NEWLINE | toplevel)+
+toplevel: use_stmt | const_def | struct_def | enum_def | perk_def | function_def | extend_stmt
+
+const_def: CONST type NAME "=" expr _NEWLINE
+use_stmt: USE (stdlib_import | user_import) _NEWLINE
+stdlib_import: LT use_path GT
+user_import: STRING
+use_path: NAME ("/" NAME)*
+struct_def: STRUCT NAME [type_params] ":" _NEWLINE _INDENT struct_field+ _DEDENT
+struct_field: type NAME _NEWLINE
+
+enum_def: ENUM NAME [type_params] ":" _NEWLINE _INDENT enum_variant+ _DEDENT
+type_params: "<" type_param_list ">"
+type_param_list: type_param ("," type_param)*
+type_param: NAME [perk_constraints]
+perk_constraints: ":" perk_constraint_list
+perk_constraint_list: NAME ("+" NAME)*
+enum_variant: NAME ["(" [enum_variant_fields] ")"] _NEWLINE
+enum_variant_fields: type ("," type)*
+
+perk_def: PERK NAME [type_params] ":" _NEWLINE _INDENT perk_method+ _DEDENT
+perk_method: FN NAME "(" [parameters] ")" type _NEWLINE
+
+// Extension statements - unified to avoid LALR ambiguity
+extend_stmt: EXTEND type extend_suffix
+extend_suffix: WITH NAME ":" _NEWLINE _INDENT function_def+ _DEDENT  -> extend_with_def
+             | NAME "(" [parameters] ")" type ":" block               -> extend_def
+
+// Keep old definitions for reference (not used in parsing)
+// extend_with_def: EXTEND type WITH NAME ":" _NEWLINE _INDENT function_def+ _DEDENT
+// extend_def: EXTEND type NAME "(" [parameters] ")" type ":" block
+
+block: _NEWLINE _INDENT (_NEWLINE | statement)+ _DEDENT
+
+
+function_def: PUBLIC? FN NAME [type_params] "(" [parameters] ")" type? ":" block
+
+parameters: typed_param ("," typed_param)*
+typed_param: type NAME
+
+?statement: function_def
+          | return_stmt
+          | print_stmt
+          | println_stmt
+          | let_stmt
+          | rebind_stmt
+          | call_stmt
+          | if_stmt
+          | while_stmt
+          | foreach_stmt
+          | match_stmt
+          | break_stmt
+          | continue_stmt
+
+
+rebind_stmt: postfix ASSIGN_REBIND expr _NEWLINE
+
+return_stmt: "return" expr _NEWLINE?
+print_stmt: "print" "(" expr ")" _NEWLINE
+println_stmt: "println" "(" expr ")" _NEWLINE
+
+let_stmt: "let" [type] NAME "=" expr _NEWLINE
+call_stmt: postfix _NEWLINE
+
+if_stmt: IF "(" expr ")" ":" block elif_part* else_part?
+elif_part: ELIF "(" expr ")" ":" block
+else_part: ELSE ":" block
+
+while_stmt: WHILE "(" expr ")" ":" block
+foreach_stmt: FOREACH "(" [type] NAME "in" expr ")" ":" block
+
+match_stmt: MATCH expr ":" _NEWLINE _INDENT match_arm+ _DEDENT
+match_arm: (pattern | wildcard_pattern) "->" (match_arm_inline | block)
+match_arm_inline: (return_stmt | print_stmt | println_stmt | call_stmt | break_stmt | continue_stmt | expr _NEWLINE)
+pattern: NAME "." NAME ["(" [pattern_list] ")"]
+pattern_list: pattern_item ("," pattern_item)*
+pattern_item: pattern | NAME | wildcard_pattern | own_pattern
+own_pattern: NAME "(" pattern_item ")"  -> own_pattern_call
+wildcard_pattern: UNDERSCORE
+
+break_stmt: BREAK _NEWLINE
+continue_stmt: CONTINUE _NEWLINE
+
+?type: BIT_AND type -> reference_t
+     | atom_type "[" INT "]" -> array_t
+     | atom_type "[" "]" -> dynamic_array_t
+     | atom_type
+
+?atom_type: "i8" -> i8_t
+          | "i16" -> i16_t
+          | "i32" -> i32_t
+          | "i64" -> i64_t
+          | "u8" -> u8_t
+          | "u16" -> u16_t
+          | "u32" -> u32_t
+          | "u64" -> u64_t
+          | "f32" -> f32_t
+          | "f64" -> f64_t
+          | "bool" -> bool_t
+          | "string" -> string_t
+          | "~" -> blank_t
+          | "file" -> file_t
+          | NAME "<" type_list generic_close -> generic_type_t
+          | NAME -> name_t
+
+# Allow both > and >> to close generic types
+# This enables Result<Maybe<i32>> without requiring a space before >>
+generic_close: GT | RSHIFT
+
+type_list: type ("," type)*
+
+?expr: or_expr
+
+or_expr: xor_expr (OR xor_expr)*
+xor_expr: and_expr (XOR and_expr)*
+and_expr: bitwise_or (AND bitwise_or)*
+bitwise_or: bitwise_xor (BIT_OR bitwise_xor)*
+bitwise_xor: bitwise_and (BIT_XOR bitwise_and)*
+bitwise_and: equality (BIT_AND equality)*
+equality: comparison ((EQEQ | NEQ) comparison)*
+comparison: shift ((LT | GT | LE | GE) shift)*
+shift: cast ((LSHIFT | RSHIFT) cast)*
+cast: add (AS type)*
+?add: mul ((PLUS | MINUS) mul)*
+?mul: unary ((STAR | SLASH | MOD) unary)*
+
+?unary: "-" unary        -> neg
+      | NOT unary        -> not
+      | BITNOT unary     -> bitnot
+      | BIT_AND unary    -> borrow
+      | postfix
+
+?postfix: atom (call | method_call | member_access | index | try_op)*    -> maybe_call
+call: "(" [args] ")"
+method_call: "." method_name "(" [args] ")"
+member_access: "." method_name
+index: "[" expr "]"
+try_op: DOUBLE_QUESTION
+method_name: NAME | NEW
+
+?atom: FLOAT
+     | HEX_INT
+     | BIN_INT
+     | OCT_INT
+     | INT
+     | TRUE
+     | FALSE
+     | STRING
+     | NAME
+     | "~" -> blank_literal
+     | STDIN -> stdin_literal
+     | STDOUT -> stdout_literal
+     | STDERR -> stderr_literal
+     | array_literal
+     | dynamic_array_new
+     | dynamic_array_from
+     | "(" expr ")"
+
+array_literal: "[" [array_elements] "]"
+array_elements: expr ("," expr)*
+
+dynamic_array_new: "new" "(" ")"
+dynamic_array_from: "from" "(" array_literal ")"
+
+args: expr ("," expr)*
+
+#
+# Tokens
+#
+CONST: "const"
+STRUCT: "struct"
+ENUM: "enum"
+PERK.2: /perk\b/
+FN: "fn"
+EXTEND.2: /extend\b/
+WITH.2: /with\b/
+USE: "use"
+PUBLIC: "public"
+MATCH: "match"
+NEW: "new"
+
+COMMENT: /#+[^\n]*/
+_NEWLINE: /(\r?\n[ \t]*(?:#[^\n]*\r?\n[ \t]*)*)+/
+
+TRUE: "true"
+FALSE: "false"
+STRING: /\"([^\"\\]|\\.)*\"/
+
+ASSIGN_REBIND: ":="
+UNDERSCORE: "_"
+DOUBLE_QUESTION: "??"
+
+PLUS: "+"
+MINUS: "-"
+STAR: "*"
+SLASH: "/"
+MOD: "%"
+EQEQ: "=="
+NEQ.3: "!="
+LE: "<="
+GE: ">="
+LT: "<"
+GT: ">"
+BIT_AND: "&"
+BIT_OR: "|"
+BIT_XOR: "^"
+LSHIFT: "<<"
+RSHIFT: ">>"
+
+AND.2: /and\b/ | "&&"
+OR.2: /or\b/ | "||"
+XOR.2: /xor\b/ | "^^"
+NOT.2: /not\b/ | "!"
+BITNOT.2: "~"
+IF.2: /if\b/
+ELIF.2: /elif\b/
+ELSE.2: /else\b/
+WHILE.2: /while\b/
+FOREACH.2: /foreach\b/
+BREAK.2: /break\b/
+CONTINUE.2: /continue\b/
+AS.2: /as\b/
+STDIN.2: /stdin\b/
+STDOUT.2: /stdout\b/
+STDERR.2: /stderr\b/
+
+HEX_INT: /0[xX][0-9a-fA-F]([0-9a-fA-F_]*[0-9a-fA-F])?/
+BIN_INT: /0[bB][01]([01_]*[01])?/
+OCT_INT: /0[oO][0-7]([0-7_]*[0-7])?/
+
+%import common.WS_INLINE
+%import common.INT
+%import common.FLOAT
+%import common.CNAME -> NAME
+
+%declare _INDENT _DEDENT
+
+%ignore WS_INLINE
+%ignore COMMENT

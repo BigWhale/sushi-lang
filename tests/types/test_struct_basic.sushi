@@ -1,0 +1,13 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: 42
+
+# Basic struct definition and usage
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point p = Point(10, 32)
+    println(p.x + p.y)
+    return Result.Ok(0)

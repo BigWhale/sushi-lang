@@ -1,0 +1,20 @@
+# Test CE4002: Duplicate perk implementation
+
+perk Hashable:
+    fn hash() u64
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Hashable:
+    fn hash() u64:
+        return 1 as u64
+
+# Duplicate implementation
+extend Point with Hashable:
+    fn hash() u64:
+        return 2 as u64
+
+fn main() i32:
+    return Result.Ok(0)

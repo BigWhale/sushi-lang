@@ -1,0 +1,30 @@
+# Test hash method for structs with multiple fields
+
+struct Person:
+    string name
+    i32 age
+    bool active
+
+fn main() i32:
+    # Test struct with mixed field types
+    let Person p1 = Person("Arthur", 30, true)
+    let u64 hash1 = p1.hash()
+    println("Person('Arthur', 30, true).hash() = {hash1}")
+
+    # Test consistency
+    let Person p2 = Person("Arthur", 30, true)
+    let u64 hash2 = p2.hash()
+    if (hash1 == hash2):
+        println("✓ Same values produce same hash")
+    else:
+        println("✗ Same values produce different hash")
+
+    # Test different values
+    let Person p3 = Person("Trillian", 25, false)
+    let u64 hash3 = p3.hash()
+    if (hash1 != hash3):
+        println("✓ Different values produce different hash")
+    else:
+        println("✗ Different values produce same hash")
+
+    return Result.Ok(0)

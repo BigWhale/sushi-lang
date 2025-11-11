@@ -1,0 +1,19 @@
+# Double nesting test - Maybe<Maybe<i32>>
+# Tests same generic nested within itself
+# "The ships hung in the sky in much the same way that bricks don't."
+
+fn main() i32:
+    # The Answer to Life, the Universe, and Everything
+    let Maybe<i32> inner = Maybe.Some(42)
+    let Maybe<Maybe<i32>> middle = Maybe.Some(inner)
+
+    match middle:
+        Maybe.Some(val) ->
+            let Maybe<i32> inner2 = val
+            match inner2:
+                Maybe.Some(_) ->
+                    return Result.Ok(0)
+                Maybe.None() ->
+                    return Result.Ok(1)
+        Maybe.None() ->
+            return Result.Ok(-1)

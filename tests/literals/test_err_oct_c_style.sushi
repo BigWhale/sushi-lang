@@ -1,0 +1,7 @@
+# Test that C-style octal literals are rejected (should fail compilation)
+
+fn main() i32:
+    # This should error - C-style octal not allowed
+    let i32 bad = 077
+    println("Mostly Harmless")
+    return Result.Ok(bad)

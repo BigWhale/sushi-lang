@@ -1,0 +1,24 @@
+# Test hashing of enum with unit variants only
+
+enum Color:
+    Red
+    Green
+    Blue
+
+fn main() i32:
+    let Color c1 = Color.Red()
+    let u64 h1 = c1.hash()
+    println("Red hash: {h1}")
+
+    let Color c2 = Color.Green()
+    let u64 h2 = c2.hash()
+    println("Green hash: {h2}")
+
+    let Color c3 = Color.Blue()
+    let u64 h3 = c3.hash()
+    println("Blue hash: {h3}")
+
+    # Different colors should have different hashes
+    # (based on different discriminant tags)
+    println("All enum unit variant hashes computed!")
+    return Result.Ok(0)

@@ -1,0 +1,13 @@
+# Test invalid string interpolation with blank type
+# This test should FAIL compilation with CE2035
+
+fn get_blank() ~:
+    return Result.Ok(~)
+
+fn main() i32:
+    let ~ blank_val = get_blank()
+
+    # This should trigger CE2035 error - blank type cannot be interpolated
+    println("Blank: {blank_val}")
+
+    return Result.Ok(0)

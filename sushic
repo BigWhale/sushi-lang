@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Capture the original working directory where sushic was called
+ORIGINAL_CWD="$(pwd)"
+
+# Get the directory where sushic is located (the sushi project root)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Change to the sushi project directory to ensure Python can find the compiler module
+cd "$SCRIPT_DIR"
+
+# Run the compiler with the original working directory as an environment variable
+exec env SUSHI_CWD="$ORIGINAL_CWD" uv run --active python -m compiler "$@"

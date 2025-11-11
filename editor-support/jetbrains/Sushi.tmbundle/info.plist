@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>contactEmailRot13</key>
+    <string>contact@sushilang.org</string>
+    <key>contactName</key>
+    <string>Sushi Lang</string>
+    <key>description</key>
+    <string>Syntax highlighting for &lt;a href="https://github.com/yourusername/sushi"&gt;Sushi programming language&lt;/a&gt;.</string>
+    <key>name</key>
+    <string>Sushi</string>
+    <key>uuid</key>
+    <string>9F7B9E8A-3C4D-4E5F-8A9B-1C2D3E4F5A6B</string>
+</dict>
+</plist>

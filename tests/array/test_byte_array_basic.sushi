@@ -1,0 +1,43 @@
+# Test basic byte array operations
+fn run_test() i32:
+    # Create empty byte array
+    let u8[] bytes = new()
+    println("Initial length: {bytes.len()}")  # Should be 0
+
+    # Push individual bytes
+    bytes.push(65 as u8)   # 'A'
+    bytes.push(66 as u8)   # 'B'
+    bytes.push(67 as u8)   # 'C'
+    println("After 3 pushes: {bytes.len()}")  # Should be 3
+
+    # Access elements
+    let u8 first = bytes.get(0)??
+    let u8 second = bytes.get(1)??
+    let u8 third = bytes.get(2)??
+    println("First byte: {first}")   # Should be 65
+    println("Second byte: {second}")  # Should be 66
+    println("Third byte: {third}")    # Should be 67
+
+    # Pop element
+    let u8 popped = bytes.pop()
+    println("Popped: {popped}")       # Should be 67
+    println("After pop: {bytes.len()}")  # Should be 2
+
+    # Iterate over bytes
+    println("Iterating over bytes:")
+    foreach (byte in bytes.iter()):
+        println("  Byte: {byte}")
+
+    # Create from literal values
+    let u8[] data = from([72, 101, 108, 108, 111])
+    println("From literal length: {data.len()}")  # Should be 5
+
+    # Convert to string
+    let string text = data.to_string()
+    println("Converted text: {text}")  # Should be "Hello"
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

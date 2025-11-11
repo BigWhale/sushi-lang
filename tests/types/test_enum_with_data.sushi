@@ -1,0 +1,26 @@
+# Enum test with associated data
+
+
+enum MyResult:
+    Success(i32)
+    Failure(i32)
+
+fn process_result(MyResult r) i32:
+    match r:
+        MyResult.Success(value) ->
+            return Result.Ok(value)
+        MyResult.Failure(code) ->
+            return Result.Ok(code * -1)
+
+fn main() i32:
+    let MyResult success = MyResult.Success(42)
+    let i32 val1 = process_result(success).realise(0)
+
+    let MyResult failure = MyResult.Failure(10)
+    let i32 val2 = process_result(failure).realise(0)
+
+    # val1 should be 42, val2 should be -10
+    # Return val1 - val2 = 42 - (-10) = 52
+    let i32 result = val1 - val2
+    let i32 expected = 52
+    return Result.Ok(result - expected)

@@ -1,0 +1,38 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Left: 99
+# EXPECTED_OUTPUT: Right: test
+
+# Test rebinding of user-defined generic enum variables
+# This test verifies Issue #2 fix: rebinding user-defined generic enum variables
+
+enum Either<T, U>:
+    Left(T)
+    Right(U)
+
+fn test_rebind() i32:
+    let Either<i32, string> val = Either.Left(99)
+
+    # Pattern match to print first value
+    match val:
+        Either.Left(n) ->
+            println("Left: {n}")
+        Either.Right(s) ->
+            println("Right: {s}")
+
+    # Rebind to different variant
+    val := Either.Right("test")
+
+    # Pattern match to print second value
+    match val:
+        Either.Left(n) ->
+            println("Left: {n}")
+        Either.Right(s) ->
+            println("Right: {s}")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let Result<i32> result = test_rebind()
+    if (result):
+        return Result.Ok(0)
+    return Result.Err()

@@ -1,0 +1,11 @@
+# TEST_TYPE: error
+# Test that structs with array fields show clear error messages
+
+struct Container:
+    i32[5] items
+
+fn main() i32:
+    let Container c = Container([1, 2, 3, 4, 5])
+    let u64 h = c.hash()  # Should fail with clear error message
+    println("Hash: {h}")
+    return Result.Ok(0)

@@ -1,0 +1,16 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: 1
+# EXPECTED_OUTPUT: 2
+# EXPECTED_OUTPUT: 3
+
+struct Triple<T, U, V>:
+    T first
+    U second
+    V third
+
+fn main() i32:
+    let Triple<i32, i32, i32> t = Triple(1, 2, 3)
+    println(t.first)
+    println(t.second)
+    println(t.third)
+    return Result.Ok(0)

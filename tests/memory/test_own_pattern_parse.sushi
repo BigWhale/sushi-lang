@@ -1,0 +1,22 @@
+# Test Own pattern with recursive enum types
+enum Expr:
+    IntLit(i32)
+    BinOp(Own<Expr>, Own<Expr>, string)
+
+fn test_pattern(Expr expr) i32:
+    match expr:
+        Expr.IntLit(n) ->
+            return Result.Ok(n)
+        Expr.BinOp(Own(left), Own(right), _) ->
+            # Recursively evaluate left and right
+            let i32 left_val = test_pattern(left).realise(0)
+            let i32 right_val = test_pattern(right).realise(0)
+            return Result.Ok(left_val + right_val)
+    return Result.Ok(0)
+
+fn main() i32:
+    # Test with IntLit
+    let Expr e1 = Expr.IntLit(5)
+    let i32 result = test_pattern(e1).realise(-1)
+    let i32 expected = 5
+    return Result.Ok(result - expected)

@@ -1,0 +1,15 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: 30
+
+# Struct variable reassignment
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point p = Point(10, 20)
+    p := Point(15, 15)
+    let i32 result = p.x + p.y
+    print(result)
+    return Result.Ok(0)

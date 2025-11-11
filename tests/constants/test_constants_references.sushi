@@ -1,0 +1,58 @@
+# Test constants referencing other constants
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "All constant reference tests passed"
+
+const i32 WIDTH = 100
+const i32 HEIGHT = 50
+const i32 AREA = WIDTH * HEIGHT
+
+const i32 BASE = 10
+const i32 MULTIPLIER = 3
+const i32 OFFSET = 5
+const i32 RESULT = BASE * MULTIPLIER + OFFSET
+
+const i32 A = 10
+const i32 B = A + 20
+const i32 C = B * 2
+const i32 D = C - A
+
+const f64 PI = 3.14159
+const f64 RADIUS = 10.0
+const f64 CIRCUMFERENCE = 2.0 * PI * RADIUS
+
+fn main() i32:
+    # Verify reference results
+    if (WIDTH != 100):
+        return Result.Err()
+    if (HEIGHT != 50):
+        return Result.Err()
+    if (AREA != 5000):
+        return Result.Err()
+
+    if (BASE != 10):
+        return Result.Err()
+    if (MULTIPLIER != 3):
+        return Result.Err()
+    if (OFFSET != 5):
+        return Result.Err()
+    if (RESULT != 35):
+        return Result.Err()
+
+    if (A != 10):
+        return Result.Err()
+    if (B != 30):
+        return Result.Err()
+    if (C != 60):
+        return Result.Err()
+    if (D != 50):
+        return Result.Err()
+
+    if (PI < 3.14 or PI > 3.15):
+        return Result.Err()
+    if (RADIUS < 9.9 or RADIUS > 10.1):
+        return Result.Err()
+    if (CIRCUMFERENCE < 62.8 or CIRCUMFERENCE > 62.9):
+        return Result.Err()
+
+    println("All constant reference tests passed")
+    return Result.Ok(0)

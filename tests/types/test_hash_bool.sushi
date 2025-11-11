@@ -1,0 +1,28 @@
+# Test hash method for boolean type
+
+fn main() i32:
+    # Test true
+    let bool t = true
+    let u64 hash_t = t.hash()
+    println("bool hash(true) = {hash_t}")
+
+    # Test false
+    let bool f = false
+    let u64 hash_f = f.hash()
+    println("bool hash(false) = {hash_f}")
+
+    # Verify they're different
+    if (hash_t != hash_f):
+        println("✓ true and false produce different hashes")
+    else:
+        println("✗ true and false produce same hash")
+
+    # Test consistency
+    let bool t2 = true
+    let u64 hash_t2 = t2.hash()
+    if (hash_t == hash_t2):
+        println("✓ Same boolean values produce same hash")
+    else:
+        println("✗ Same boolean values produce different hash")
+
+    return Result.Ok(0)

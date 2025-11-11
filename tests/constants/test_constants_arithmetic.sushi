@@ -1,0 +1,36 @@
+# Test arithmetic operations in constant expressions
+
+const i32 BASE = 10
+const i32 DOUBLE = 2 * 10
+const i32 SUM = 100 + 50
+const i32 DIFF = 100 - 50
+const i32 PRODUCT = 10 * 5
+const i32 QUOTIENT = 100 / 4
+const i32 REMAINDER = 100 % 7
+const i32 COMPLEX = (100 + 50) / 3
+const i32 NEG = -42
+
+fn main() i32:
+    # Verify arithmetic results
+    if (BASE != 10):
+        return Result.Err()
+    if (DOUBLE != 20):
+        return Result.Err()
+    if (SUM != 150):
+        return Result.Err()
+    if (DIFF != 50):
+        return Result.Err()
+    if (PRODUCT != 50):
+        return Result.Err()
+    if (QUOTIENT != 25):
+        return Result.Err()
+    if (REMAINDER != 2):
+        return Result.Err()
+    if (COMPLEX != 50):
+        return Result.Err()
+    if (NEG != -42):
+        return Result.Err()
+
+    println("All arithmetic constant tests passed")
+    return Result.Ok(0)
+

@@ -1,0 +1,26 @@
+# Test ?? operator with Maybe<T> - basic usage
+# When Some(value): unwraps to value
+# When None(): propagates as Result.Err()
+
+use <collections/strings>
+
+fn try_parse(string input) i32:
+    let i32 pos = input.find("x")??  # Unwrap Some or propagate None as Err
+    return Result.Ok(pos)
+
+fn main() i32:
+    # Test with Some variant
+    let Result<i32> result1 = try_parse("hello x world")
+    if (result1):
+        println("Found at position")
+    else:
+        println("Not found")
+
+    # Test with None variant (propagates as Err)
+    let Result<i32> result2 = try_parse("hello world")
+    if (result2):
+        println("Found")
+    else:
+        println("Not found (propagated from None)")
+
+    return Result.Ok(0)

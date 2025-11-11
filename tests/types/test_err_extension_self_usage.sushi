@@ -1,0 +1,18 @@
+# Invalid self usage in extension methods error test
+# Should fail compilation with invalid self usage errors
+
+extend i32 bad_method(i32 value) i32:
+  # Error: Cannot rebind self parameter
+  self := value
+  return Result.Ok(self)
+
+extend i32 another_bad_method() i32:
+  # Error: self used incorrectly in different context
+  let i32 x = self
+  x := 10
+  return Result.Ok(x)
+
+fn main() i32:
+  let i32 num = 5
+  let i32 result = num.bad_method(10)
+  return Result.Ok(result)

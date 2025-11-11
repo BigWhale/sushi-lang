@@ -1,0 +1,17 @@
+use <time>
+
+fn run_test() i32:
+    println("Testing nanosleep for 1.5 seconds (1 sec + 500,000,000 nsec)...")
+    let i32 result = nanosleep(1 as i64, 500000000 as i64)??
+    println("Sleep completed successfully")
+
+    if (result == 0):
+        println("Sleep was not interrupted")
+    else:
+        println("Sleep was interrupted")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

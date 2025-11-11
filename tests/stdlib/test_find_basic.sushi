@@ -1,0 +1,36 @@
+# Test basic string.find() functionality
+use <collections/strings>
+
+fn main() i32:
+    # Test 1: Find substring that exists
+    match "hello world".find("world"):
+        Maybe.Some(pos) ->
+            println("Test 1: Found 'world' at position {pos}")
+            if (pos != 6):
+                println("ERROR: Expected position 6, got {pos}")
+                return Result.Err()
+        Maybe.None() ->
+            println("ERROR: 'world' should be found")
+            return Result.Err()
+
+    # Test 2: Find substring that doesn't exist
+    match "hello world".find("xyz"):
+        Maybe.Some(_) ->
+            println("ERROR: Should not find 'xyz'")
+            return Result.Err()
+        Maybe.None() ->
+            println("Test 2: 'xyz' not found (expected)")
+
+    # Test 3: Find at beginning
+    match "hello world".find("hello"):
+        Maybe.Some(pos) ->
+            println("Test 3: Found 'hello' at position {pos}")
+            if (pos != 0):
+                println("ERROR: Expected position 0, got {pos}")
+                return Result.Err()
+        Maybe.None() ->
+            println("ERROR: 'hello' should be found")
+            return Result.Err()
+
+    println("All tests passed!")
+    return Result.Ok(0)

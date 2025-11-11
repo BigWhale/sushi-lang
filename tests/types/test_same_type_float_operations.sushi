@@ -1,0 +1,22 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Same-type float operations should pass
+fn main() i32:
+  # f64 operations
+  let f64 x = 10.5
+  let f64 y = 2.5
+  let f64 sum = x + y
+  let f64 diff = x - y
+  let f64 prod = x * y
+  let f64 quot = x / y
+
+  # Comparisons
+  let bool gt = x > y
+  let bool lt = y < x
+  let bool eq = sum == 13.0
+
+  if (sum == 13.0 and diff == 8.0 and prod == 26.25 and quot == 4.2):
+    if (gt and lt and eq):
+      return Result.Ok(0)
+
+  return Result.Ok(1)

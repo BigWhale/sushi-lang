@@ -1,0 +1,6 @@
+# Test invalid type casts in constants (CE0111)
+
+const i32 INVALID = "hello" as i32
+
+fn main() i32:
+    return Result.Ok(0)

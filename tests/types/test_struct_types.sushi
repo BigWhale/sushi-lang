@@ -1,0 +1,18 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+
+# Struct with different field types
+struct Mixed:
+    i32 a
+    i64 b
+    f32 c
+    f64 d
+    bool flag
+
+fn main() i32:
+    let Mixed m = Mixed(10, 20 as i64, 3.14 as f32, 2.718, true)
+    print(m.a)
+    print(m.b)
+    if (m.flag):
+        print(1)
+    return Result.Ok(0)

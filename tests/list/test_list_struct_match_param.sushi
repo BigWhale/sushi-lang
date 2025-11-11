@@ -1,0 +1,31 @@
+# Test pattern matching on List<Struct>.get() with parameter
+
+struct Node:
+    i32 value
+    Maybe<i32> next
+
+fn print_values(List<Node> nodes, i32 start_idx) ~:
+    let Maybe<i32> current = Maybe.Some(start_idx)
+
+    while (current.is_some()):
+        let i32 idx = current.realise(-1)
+
+        match nodes.get(idx):
+            Maybe.Some(n) ->
+                print("{n.value}")
+                current := n.next
+            Maybe.None() ->
+                break
+
+    return Result.Ok(~)
+
+fn main() i32:
+    let List<Node> nodes = List.new()
+    let Node node1 = Node(10, Maybe.Some(1))
+    let Node node2 = Node(20, Maybe.None())
+    nodes.push(node1)
+    nodes.push(node2)
+
+    print_values(nodes, 0)
+
+    return Result.Ok(0)

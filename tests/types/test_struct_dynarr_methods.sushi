@@ -1,0 +1,10 @@
+struct Container:
+    i32[] numbers
+
+fn main() i32:
+    let i32[] arr = from([1, 2, 3])
+    let Container c = Container(arr)
+    c.numbers.push(4)
+    c.numbers.push(5)
+    println(c.numbers.len())
+    return Result.Ok(0)

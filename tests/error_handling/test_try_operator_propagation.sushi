@@ -1,0 +1,22 @@
+# Test error propagation with ?? operator
+
+fn might_fail(bool succeed) i32:
+    if (succeed):
+        return Result.Ok(42)
+    return Result.Err()
+
+fn caller(bool flag) i32:
+    # Pass flag to might_fail to test both success and error paths
+    let i32 x = might_fail(flag)??  # Should propagate error
+    return Result.Ok(x + 10)
+
+fn main() i32:
+    # Test success path
+    let i32 good = caller(true).realise(0)  # Should get 52
+    println("Good: {good}")
+
+    # Test error path
+    let i32 bad = caller(false).realise(99)  # Should get 99 (default)
+    println("Bad: {bad}")
+    let i32 expected = 99
+    return Result.Ok(bad - expected)

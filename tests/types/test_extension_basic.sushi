@@ -1,0 +1,31 @@
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+# Basic extension method functionality
+# Should compile successfully with zero-cost method calls
+
+extend i32 add(i32 value) i32:
+  return self + value
+
+extend i32 multiply(i32 factor) i32:
+  return self * factor
+
+extend bool negate() bool:
+  return not self
+
+fn main() i32:
+  # Test basic extension method calls
+  let i32 x = 5
+  let i32 result1 = x.add(3)  # Should be equivalent to add(x, 3) = 8
+
+  let i32 y = 10
+  let i32 result2 = y.multiply(2)  # Should be equivalent to multiply(y, 2) = 20
+
+  # Test boolean extension
+  let bool flag = true
+  let bool result3 = flag.negate()  # Should be equivalent to negate(flag) = false
+
+  # Verify results
+  if (result1 == 8 and result2 == 20 and result3 == false):
+    return Result.Ok(0)
+  else:
+    return Result.Ok(1)

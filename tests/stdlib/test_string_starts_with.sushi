@@ -1,0 +1,72 @@
+use <collections/strings>
+
+fn main() i32:
+    # Test 1: Basic match
+    let string s1 = "hello world"
+    let bool r1 = s1.starts_with("hello")
+    println(r1)
+
+    # Test 2: No match
+    let string s2 = "hello world"
+    let bool r2 = s2.starts_with("world")
+    println(r2)
+
+    # Test 3: Empty prefix (always matches)
+    let string s3 = "hello"
+    let bool r3 = s3.starts_with("")
+    println(r3)
+
+    # Test 4: Prefix longer than string
+    let string s4 = "hi"
+    let bool r4 = s4.starts_with("hello")
+    println(r4)
+
+    # Test 5: Exact match (prefix == string)
+    let string s5 = "test"
+    let bool r5 = s5.starts_with("test")
+    println(r5)
+
+    # Test 6: Single character match
+    let string s6 = "abc"
+    let bool r6 = s6.starts_with("a")
+    println(r6)
+
+    # Test 7: Single character no match
+    let string s7 = "abc"
+    let bool r7 = s7.starts_with("b")
+    println(r7)
+
+    # Test 8: UTF-8 prefix match
+    let string s8 = "café au lait"
+    let bool r8 = s8.starts_with("café")
+    println(r8)
+
+    # Test 9: UTF-8 prefix no match
+    let string s9 = "café"
+    let bool r9 = s9.starts_with("cafe")
+    println(r9)
+
+    # Test 10: Empty string with empty prefix
+    let string s10 = ""
+    let bool r10 = s10.starts_with("")
+    println(r10)
+
+    # Test 11: Empty string with non-empty prefix
+    let string s11 = ""
+    let bool r11 = s11.starts_with("x")
+    println(r11)
+
+    return Result.Ok(0)
+
+# Expected output:
+# 1
+# 0
+# 1
+# 0
+# 1
+# 1
+# 0
+# 1
+# 0
+# 1
+# 0

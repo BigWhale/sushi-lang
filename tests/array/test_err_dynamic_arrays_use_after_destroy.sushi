@@ -1,0 +1,11 @@
+# Test that using destroyed dynamic arrays fails (CE2024)
+fn main() i32:
+  let i32[] numbers = from([1, 2, 3])
+  print(numbers.len())      # Should work - prints 3
+
+  numbers.destroy()         # Manual destruction
+
+  # This should fail - use after destroy
+  print(numbers.len())
+
+  return Result.Ok(0)

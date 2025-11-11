@@ -1,0 +1,47 @@
+# Test string.to_f64() parsing
+use <collections/strings>
+
+fn main() i32:
+    # Valid parse cases
+    let string num1 = "3.14159"
+    let Maybe<f64> result1 = num1.to_f64()
+    match result1:
+        Maybe.Some(value) -> println("Parsed 3.14159: {value}")
+        Maybe.None() -> println("Failed to parse 3.14159")
+
+    let string num2 = "-2.71828"
+    let Maybe<f64> result2 = num2.to_f64()
+    match result2:
+        Maybe.Some(value) -> println("Parsed -2.71828: {value}")
+        Maybe.None() -> println("Failed to parse -2.71828")
+
+    let string num3 = "42"  # Integer as float
+    let Maybe<f64> result3 = num3.to_f64()
+    match result3:
+        Maybe.Some(value) -> println("Parsed integer as float: {value}")
+        Maybe.None() -> println("Failed to parse integer")
+
+    # Scientific notation
+    let string sci = "1.23e-4"
+    let Maybe<f64> result4 = sci.to_f64()
+    match result4:
+        Maybe.Some(value) -> println("Parsed scientific notation: {value}")
+        Maybe.None() -> println("Failed to parse scientific notation")
+
+    # Invalid parse cases
+    let string invalid = "not a number"
+    let Maybe<f64> result5 = invalid.to_f64()
+    match result5:
+        Maybe.Some(_) -> println("ERROR: Should not have parsed '{invalid}'")
+        Maybe.None() -> println("Correctly rejected '{invalid}'")
+
+    # Using realise()
+    let string num4 = "2.5"
+    let f64 value = num4.to_f64().realise(0.0)
+    println("Using realise(): {value}")
+
+    let string invalid2 = "bad"
+    let f64 default = invalid2.to_f64().realise(-1.0)
+    println("Using realise() with invalid: {default}")
+
+    return Result.Ok(0)

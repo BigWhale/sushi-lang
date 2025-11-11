@@ -1,0 +1,30 @@
+fn main() i32:
+    # Test operator precedence with new operators
+
+    # Bitwise NOT has higher precedence than bitwise operators
+    let i32 a = ~5 & 3
+    println(a)  # (~5) & 3
+
+    let i32 b = 5 & ~3
+    println(b)  # 5 & (~3)
+
+    # Logical XOR between OR and AND in precedence
+    let bool c = true or false xor false and true
+    println(c)  # true or (false xor (false and true))
+
+    # NOT has highest precedence among logical operators
+    let bool d = !true and false
+    println(d)  # (!true) and false = false
+
+    let bool e = true and !false
+    println(e)  # true and (!false) = true
+
+    # Bitwise NOT vs arithmetic
+    let i32 f = ~5 + 3
+    println(f)  # (~5) + 3
+
+    # Complex expression
+    let bool g = true xor false and true or !false
+    println(g)  # true xor ((false and true) or (!false))
+
+    return Result.Ok(0)

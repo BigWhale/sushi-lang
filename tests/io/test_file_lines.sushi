@@ -1,0 +1,45 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Line 1: First line
+# EXPECTED_OUTPUT: Line 2: Second line
+# EXPECTED_OUTPUT: Line 3: Third line
+# EXPECTED_OUTPUT: Read 3 lines total
+
+use <io/stdio>
+use <io/files>
+use <collections/strings>
+
+fn main() i32:
+    # Write test file with multiple lines
+    let FileResult write_result = open("test_lines_output.txt", FileMode.Write())
+    match write_result:
+        FileResult.Ok(out) ->
+            out.writeln("First line")
+            out.writeln("Second line")
+            out.writeln("Third line")
+            out.close()
+        FileResult.Err(_) ->
+            stderr.write("Error: cannot create test file\n")
+            return Result.Err()
+
+    println("Reading ...")
+    # Read file line by line using lines() iterator
+    let FileResult read_result = open("test_lines_output.txt", FileMode.Read())
+    match read_result:
+        FileResult.Ok(f) ->
+            println("Wheeeee")
+            let i32 count = 1
+
+            foreach(line in f.lines()):
+                println("Line {count}: {line}")
+                count := count + 1
+
+            f.close()
+
+            let i32 total = count - 1
+            println("Read {total} lines total")
+            return Result.Ok(0)
+        FileResult.Err(_) ->
+            stderr.write("Error: cannot read test file\n")
+            return Result.Err()
+
+    return Result.Ok(0)

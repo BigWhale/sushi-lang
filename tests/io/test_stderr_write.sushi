@@ -1,0 +1,9 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+
+use <io/stdio>
+
+fn main() i32:
+    stderr.write("Error message\n")
+    stdout.write("Normal output\n")
+    return Result.Ok(0)

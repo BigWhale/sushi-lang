@@ -1,0 +1,8 @@
+use <collections/strings>
+
+fn main() i32:
+    # Error: upper() takes no arguments
+    let string s = "hello"
+    let string result = s.upper("extra")
+    println(result)
+    return Result.Ok(0)

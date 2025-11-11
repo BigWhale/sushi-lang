@@ -1,0 +1,12 @@
+fn main() i32:
+    let i8 a = -128 as i8
+    let i16 b = -32768 as i16
+    let i32 c = -2147483648
+    let i64 d = -99999999 as i64
+
+    println("i8:  {a}")
+    println("i16: {b}")
+    println("i32: {c}")
+    println("i64: {d}")
+
+    return Result.Ok(0)

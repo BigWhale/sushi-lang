@@ -1,0 +1,30 @@
+# Test wrong argument types for Phase 2 string methods
+
+fn main() i32:
+  let string text = "test"
+  let i32 number = 42
+  let bool flag = true
+
+  # ss() expects (i32, i32)
+  print(text.ss("1", 2))     # CE2006: expected i32, got string
+  print(text.ss(1, "2"))     # CE2006: expected i32, got string
+  print(text.ss(flag, 2))    # CE2006: expected i32, got bool
+  print(text.ss(1, flag))    # CE2006: expected i32, got bool
+
+  # contains() expects string
+  print(text.contains(42))   # CE2006: expected string, got i32
+  print(text.contains(flag)) # CE2006: expected string, got bool
+
+  # find() expects string
+  print(text.find(42))   # CE2006: expected string, got i32
+  print(text.find(flag)) # CE2006: expected string, got bool
+
+  # starts_with() expects string
+  print(text.starts_with(42))   # CE2006: expected string, got i32
+  print(text.starts_with(flag)) # CE2006: expected string, got bool
+
+  # ends_with() expects string
+  print(text.ends_with(42))   # CE2006: expected string, got i32
+  print(text.ends_with(flag)) # CE2006: expected string, got bool
+
+  return Result.Ok(0)

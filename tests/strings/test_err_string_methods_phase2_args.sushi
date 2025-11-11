@@ -1,0 +1,46 @@
+# Test wrong argument counts for Phase 2 string methods
+use <collections/strings>
+
+fn main() i32:
+  let string text = "test"
+
+  # ss() expects 2 arguments
+  print(text.ss())           # CE2009: expected 2, got 0
+  print(text.ss(1))          # CE2009: expected 2, got 1
+  print(text.ss(1, 2, 3))    # CE2009: expected 2, got 3
+
+  # contains() expects 1 argument
+  print(text.contains())     # CE2009: expected 1, got 0
+  print(text.contains("a", "b"))  # CE2009: expected 1, got 2
+
+  # find() expects 1 argument
+  print(text.find())     # CE2009: expected 1, got 0
+  print(text.find("a", "b"))  # CE2009: expected 1, got 2
+
+  # starts_with() expects 1 argument
+  print(text.starts_with())  # CE2009: expected 1, got 0
+  print(text.starts_with("a", "b"))  # CE2009: expected 1, got 2
+
+  # ends_with() expects 1 argument
+  print(text.ends_with())    # CE2009: expected 1, got 0
+  print(text.ends_with("a", "b"))  # CE2009: expected 1, got 2
+
+  # upper() expects 0 arguments
+  print(text.upper("arg"))   # CE2009: expected 0, got 1
+
+  # lower() expects 0 arguments
+  print(text.lower("arg"))   # CE2009: expected 0, got 1
+
+  # cap() expects 0 arguments
+  print(text.cap("arg"))     # CE2009: expected 0, got 1
+
+  # trim() expects 0 arguments
+  print(text.trim("arg"))    # CE2009: expected 0, got 1
+
+  # tleft() expects 0 arguments
+  print(text.tleft("arg"))   # CE2009: expected 0, got 1
+
+  # tright() expects 0 arguments
+  print(text.tright("arg"))  # CE2009: expected 0, got 1
+
+  return Result.Ok(0)

@@ -1,0 +1,10 @@
+# Test: Multiple type parameters work
+
+fn triple<T, U, V>(T a, U b, V c) ~:
+    return Result.Ok(~)
+
+fn pair<A, B>(A first, B second) ~:
+    return Result.Ok(~)
+
+fn main() i32:
+    return Result.Ok(0)

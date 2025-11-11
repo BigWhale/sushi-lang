@@ -1,0 +1,6 @@
+# TEST_TYPE: error
+# Test error: List.new() with arguments (expects 0)
+fn main() i32:
+    # ERROR: new() expects no arguments
+    let List<i32> data = List.new(10)
+    return Result.Ok(0)

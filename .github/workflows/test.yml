@@ -1,0 +1,195 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie-slim
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          apt-get update
+          apt-get install -y wget ca-certificates gnupg lsb-release curl build-essential cmake git jq
+
+      - name: Install LLVM 20
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          echo "deb http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee /etc/apt/sources.list.d/llvm.list
+          echo "deb-src http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee -a /etc/apt/sources.list.d/llvm.list
+          apt-get update
+          apt-get install -y llvm-20 llvm-20-dev
+
+      - name: Install uv from Astral
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install Python dependencies with uv
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          LLVM_CONFIG=/usr/bin/llvm-config-20 uv sync
+
+      - name: Build standard library for Linux
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run python stdlib/build.py
+
+      - name: Make sushic executable
+        run: chmod +x sushic
+
+      - name: Test compiler setup
+        run: |
+          echo "Testing sushic..."
+          llvm-config-20 --version
+          ./sushic --help || echo "sushic --help failed with exit code $?"
+
+      - name: Run tests
+        id: run_tests
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run python tests/run_tests.py --json > test_results.json || true
+          cat test_results.json
+        continue-on-error: true
+
+      - name: Generate badge data
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run python << 'EOF'
+          import json
+
+          # Read test results
+          with open('test_results.json', 'r') as f:
+              results = json.load(f)
+
+          total = results['total_tests']
+          passed = results['passed']
+          failed = results['failed']
+
+          # Badge 1: Status (Pass/Fail)
+          if failed == 0:
+              status_badge = {
+                  "schemaVersion": 1,
+                  "label": "tests",
+                  "message": "passing",
+                  "color": "brightgreen"
+              }
+          else:
+              status_badge = {
+                  "schemaVersion": 1,
+                  "label": "tests",
+                  "message": "failing",
+                  "color": "red"
+              }
+
+          # Badge 2: Total tests
+          total_badge = {
+              "schemaVersion": 1,
+              "label": "total tests",
+              "message": str(total),
+              "color": "blue"
+          }
+
+          # Badge 3: Passed tests
+          passed_badge = {
+              "schemaVersion": 1,
+              "label": "passed",
+              "message": str(passed),
+              "color": "brightgreen"
+          }
+
+          # Badge 4: Failed tests
+          if failed == 0:
+              failed_badge = {
+                  "schemaVersion": 1,
+                  "label": "failed",
+                  "message": "0",
+                  "color": "brightgreen"
+              }
+          else:
+              failed_badge = {
+                  "schemaVersion": 1,
+                  "label": "failed",
+                  "message": str(failed),
+                  "color": "red"
+              }
+
+          # Save badge data
+          with open('badge_status.json', 'w') as f:
+              json.dump(status_badge, f)
+
+          with open('badge_total.json', 'w') as f:
+              json.dump(total_badge, f)
+
+          with open('badge_passed.json', 'w') as f:
+              json.dump(passed_badge, f)
+
+          with open('badge_failed.json', 'w') as f:
+              json.dump(failed_badge, f)
+
+          print(f"Generated badges: {total} total, {passed} passed, {failed} failed")
+          EOF
+
+      - name: Update Gist with badge data
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+        run: |
+          # Determine which Gist to use based on repository
+          if [ "${{ github.repository }}" = "BigWhale/sushi-lang" ]; then
+            GIST_ID="5bfbd5156dec23acfe18dd7956e251ba"
+            echo "Using public Gist for sushi-lang repository"
+          else
+            GIST_ID="e893b92ba7b7561fae565f832f83159d"
+            echo "Using dev Gist for sushi repository"
+          fi
+
+          # Update all badge files in a single API call
+          echo "Updating Gist $GIST_ID with badge data..."
+
+          STATUS_CONTENT=$(cat badge_status.json | jq -R -s '.')
+          TOTAL_CONTENT=$(cat badge_total.json | jq -R -s '.')
+          PASSED_CONTENT=$(cat badge_passed.json | jq -R -s '.')
+          FAILED_CONTENT=$(cat badge_failed.json | jq -R -s '.')
+
+          curl -X PATCH \
+            -H "Authorization: token $GIST_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/gists/$GIST_ID \
+            -d @- << EOF
+          {
+            "files": {
+              "badge_status.json": {
+                "content": $STATUS_CONTENT
+              },
+              "badge_total.json": {
+                "content": $TOTAL_CONTENT
+              },
+              "badge_passed.json": {
+                "content": $PASSED_CONTENT
+              },
+              "badge_failed.json": {
+                "content": $FAILED_CONTENT
+              }
+            }
+          }
+          EOF
+
+          echo "Successfully updated Gist with badge data"
+
+      - name: Fail job if tests failed
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          FAILED=$(uv run python -c "import json; print(json.load(open('test_results.json'))['failed'])")
+          if [ "$FAILED" != "0" ]; then
+            echo "Tests failed: $FAILED test(s) failed"
+            exit 1
+          fi

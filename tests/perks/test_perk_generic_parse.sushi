@@ -1,0 +1,8 @@
+# tests/test_perk_generic_parse.sushi
+# Generic perk parsing test
+
+perk Iterator<Item>:
+    fn next() Maybe<Item>
+
+fn main() i32:
+    return Result.Ok(0)

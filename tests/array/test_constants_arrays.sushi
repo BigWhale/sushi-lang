@@ -1,0 +1,15 @@
+const i32[3] NUMBERS = [1, 2, 3]
+const bool[2] FLAGS = [true, false]
+
+fn main() i32:
+    let i32[3] nums = NUMBERS
+    let bool[2] flags_copy = FLAGS
+
+    let i32 first = nums[0]
+    let bool flag = flags_copy[1]
+
+    # Use flag to avoid warning
+    if (flag):
+        first := first + 10
+    let i32 expected = 1
+    return Result.Ok(first - expected)

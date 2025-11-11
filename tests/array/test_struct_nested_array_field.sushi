@@ -1,0 +1,35 @@
+# Test nested struct with dynamic array fields
+# This validates that nested struct field access works correctly
+
+struct Inner:
+    i32[] values
+    string label
+
+struct Outer:
+    Inner data
+    string name
+
+fn run_test() i32:
+    # Create nested struct with dynamic array in inner struct
+    let Outer o = Outer(Inner(new(), "inner"), "outer")
+
+    println("Outer name: {o.name}")
+    println("Inner label: {o.data.label}")
+
+    # Test methods on nested struct array field
+    o.data.values.push(100)
+    o.data.values.push(200)
+    o.data.values.push(300)
+
+    println("First value: {o.data.values.get(0)??}")
+    println("Second value: {o.data.values.get(1)??}")
+    println("Third value: {o.data.values.get(2)??}")
+    println("Values length: {o.data.values.len()}")
+
+    # Automatic cleanup via RAII - o.data.values is freed at scope exit
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

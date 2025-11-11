@@ -1,0 +1,13 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: 6
+
+# Test foreach with dynamic array
+fn main() i32:
+    let i32[] arr = from([1, 2, 3])
+    let i32 sum = 0
+    foreach(i32 x in arr.iter()):
+        sum := sum + x
+    print(sum)
+    arr.destroy()
+    return Result.Ok(0)

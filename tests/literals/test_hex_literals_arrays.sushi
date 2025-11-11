@@ -1,0 +1,23 @@
+# Test hex literals in arrays
+
+fn main() i32:
+    # Fixed arrays with hex literals
+    let i32[5] arr = [0x01, 0x02, 0x03, 0x04, 0x05]
+    let i32[4] bytes = [0xFF, 0xFE, 0xFD, 0xFC]
+
+    # Dynamic arrays
+    let i32[] darr = from([0xDEAD, 0xBEEF, 0xCAFE])
+
+    # Array indexing with hex
+    let i32 first = arr[0x00]
+    let i32 second = arr[0x01]
+
+    # Hex in array expressions
+    let i32[3] masks = [0xFF, 0xFF00, 0xFF0000]
+
+    # Use the arrays
+    let i32 sum = first + second + masks[0] + bytes[0]
+    let i32 dsum = darr[0] + darr[1]
+
+    println("Mostly Harmless")
+    return Result.Ok(sum + dsum)

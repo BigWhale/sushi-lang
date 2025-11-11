@@ -1,0 +1,23 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Status: success
+
+# Test that Result<T> works in struct fields
+
+struct Response:
+    Result<i32> status_code
+    Result<string> message
+
+fn main() i32:
+    # Create a Response with Result fields
+    let Response resp = Response(
+        Result.Ok(200),
+        Result.Ok("success")
+    )
+
+    # Check if status_code is Ok
+    if (resp.status_code):
+        println("Status: success")
+    else:
+        println("Status: error")
+
+    return Result.Ok(0)

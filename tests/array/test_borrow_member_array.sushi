@@ -1,0 +1,17 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: 3
+# EXPECTED_OUTPUT: 4
+
+struct Container:
+    i32[] numbers
+
+fn add_to_array(&i32[] arr, i32 value) ~:
+    arr.push(value)
+    return Result.Ok(~)
+
+fn main() i32:
+    let Container c = Container(from([1, 2, 3]))
+    println(c.numbers.len())
+    add_to_array(&c.numbers, 4)
+    println(c.numbers.len())
+    return Result.Ok(0)

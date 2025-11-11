@@ -1,0 +1,17 @@
+# Test perk on empty struct (edge case)
+
+perk Hashable:
+    fn hash() u64
+
+struct Empty:
+    i32 dummy
+
+extend Empty with Hashable:
+    fn hash() u64:
+        return 0 as u64
+
+fn main() i32:
+    let Empty e = Empty(0)
+    let u64 h = e.hash()
+    println(h)
+    return Result.Ok(0)

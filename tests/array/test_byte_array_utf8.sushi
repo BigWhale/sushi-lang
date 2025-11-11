@@ -1,0 +1,46 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: ASCII text: Hello
+# EXPECTED_OUTPUT: Multi-byte char: 世
+# EXPECTED_OUTPUT: Emoji: 🌍
+# EXPECTED_OUTPUT: Mixed: Hello世界🌍
+# EXPECTED_OUTPUT: Bytes: 20
+# Test UTF-8 encoding and multi-byte characters
+use <collections/strings>
+
+fn main() i32:
+    # Test 1: Simple ASCII (1 byte per character)
+    let u8[] ascii = from([72, 101, 108, 108, 111])
+    let string ascii_text = ascii.to_string()
+    println("ASCII text: {ascii_text}")  # "Hello"
+
+    # Test 2: Multi-byte UTF-8 character (Chinese character 世 = E4 B8 96)
+    let u8[] chinese = from([228, 184, 150])
+    let string chinese_text = chinese.to_string()
+    println("Multi-byte char: {chinese_text}")  # "世"
+
+    # Test 3: 4-byte UTF-8 character (Emoji 🌍 = F0 9F 8C 8D)
+    let u8[] emoji = from([240, 159, 140, 141])
+    let string emoji_text = emoji.to_string()
+    println("Emoji: {emoji_text}")  # "🌍"
+
+    # Test 4: Mixed ASCII and multi-byte
+    # "Hello世界🌍" = H e l l o 世(3) 界(3) 🌍(4) = 5+3+3+4 = 15 bytes
+    let u8[] mixed = from([72, 101, 108, 108, 111, 228, 184, 150, 231, 149, 140, 240, 159, 140, 141])
+    let string mixed_text = mixed.to_string()
+    println("Mixed: {mixed_text}")  # "Hello世界🌍"
+
+    # Test 5: Verify byte count vs character count
+    # String methods: .len() = character count, .size() = byte count
+    # 🌍 (4 bytes, 1 char) + 🎨 (4 bytes, 1 char) + 🎭 (4 bytes, 1 char) + 🎪 (4 bytes, 1 char) + ABCD (4 bytes, 4 chars) = 20 bytes
+    let u8[] test_bytes = from([240, 159, 140, 141, 240, 159, 142, 168, 240, 159, 142, 173, 240, 159, 142, 170, 65, 66, 67, 68])
+    println("Bytes: {test_bytes.len()}")  # 20 bytes
+
+    # Test 6: All printable ASCII characters
+    let u8[] printable = new()
+    let i32 i = 32  # Start from space character
+    while (i < 127):
+        printable.push(i as u8)
+        i := i + 1
+    println("Printable ASCII count: {printable.len()}")  # Should be 95
+
+    return Result.Ok(0)

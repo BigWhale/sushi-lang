@@ -1,0 +1,202 @@
+# Test byte arrays as function parameters and return values
+
+fn create_hello() u8[]:
+    let u8[] result = from([72, 101, 108, 108, 111])
+    return Result.Ok(result)
+
+fn create_sequence(i32 start, i32 count) u8[]:
+    let u8[] seq = new()
+    let i32 i = 0
+    while (i < count):
+        seq.push(((start + i) % 256) as u8)
+        i := i + 1
+    return Result.Ok(seq)
+
+fn append_byte(u8[] arr, u8 value) u8[]:
+    arr.push(value)
+    return Result.Ok(arr)
+
+fn get_first_byte(u8[] arr) u8:
+    if (arr.len() > 0):
+        return Result.Ok(arr.get(0)??)
+    return Result.Ok(0 as u8)
+
+fn reverse_bytes_manual(u8[] input) u8[]:
+    # Manual iteration without foreach to avoid semantic type issue
+    let u8[] output = new()
+    let i32 i = input.len() - 1
+    while (i >= 0):
+        let u8 byte = input.get(i)??
+        output.push(byte)
+        i := i - 1
+    return Result.Ok(output)
+
+fn concat_arrays_manual(u8[] first, u8[] second) u8[]:
+    # Manual iteration without foreach
+    let u8[] result = new()
+    # Copy first array
+    let i32 i = 0
+    while (i < first.len()):
+        result.push(first.get(i)??)
+        i := i + 1
+    # Copy second array
+    let i32 j = 0
+    while (j < second.len()):
+        result.push(second.get(j)??)
+        j := j + 1
+    return Result.Ok(result)
+
+fn filter_even_bytes_manual(u8[] input) u8[]:
+    # Manual iteration
+    let u8[] output = new()
+    let i32 i = 0
+    while (i < input.len()):
+        let u8 byte = input.get(i)??
+        if (((byte as i32) % 2) == 0):
+            output.push(byte)
+        i := i + 1
+    return Result.Ok(output)
+
+fn multiply_bytes_manual(u8[] input, i32 factor) u8[]:
+    # Manual iteration
+    let u8[] output = new()
+    let i32 i = 0
+    while (i < input.len()):
+        let u8 byte = input.get(i)??
+        let i32 multiplied = (byte as i32) * factor
+        output.push((multiplied % 256) as u8)
+        i := i + 1
+    return Result.Ok(output)
+
+fn test_return_array() ~:
+    println("Test 1: Return byte array")
+    let u8[] result = from([72, 101, 108, 108, 111])
+    println("Returned length: {result.len()}")
+    let string result_str = result.to_string()
+    println("Returned string: {result_str}")
+    return Result.Ok(~)
+
+fn test_with_parameters() ~:
+    println("Test 2: Function with parameters")
+    let u8[] result = new()
+    let i32 i = 0
+    while (i < 5):
+        result.push(((10 + i) % 256) as u8)
+        i := i + 1
+    println("Sequence length: {result.len()}")
+    println("First: {result.get(0)??}, Last: {result.get(4)??}")
+    return Result.Ok(~)
+
+fn test_modify_array() ~:
+    println("Test 3: Modify and return")
+    let u8[] arr2 = from([1, 2, 3])
+    arr2.push(4 as u8)
+    println("Modified length: {arr2.len()}")
+    return Result.Ok(~)
+
+fn test_extract_byte() ~:
+    println("Test 4: Extract single byte")
+    let u8[] data = from([100, 101, 102])
+    let Result<u8> first = get_first_byte(data)
+    println("First byte: {first.realise(0 as u8)}")
+    return Result.Ok(~)
+
+fn test_reverse() ~:
+    println("Test 5: Reverse array")
+    let u8[] original = from([1, 2, 3, 4, 5])
+    # Manually reverse the array inline
+    let u8[] reversed = new()
+    let i32 i = original.len() - 1
+    while (i >= 0):
+        reversed.push(original.get(i)??)
+        i := i - 1
+    println("Original first: {original.get(0)??}, Reversed first: {reversed.get(0)??}")
+    println("Original last: {original.get(4)??}, Reversed last: {reversed.get(4)??}")
+    return Result.Ok(~)
+
+fn test_concatenate() ~:
+    println("Test 6: Concatenate arrays")
+    let u8[] part1 = from([1, 2, 3])
+    let u8[] part2 = from([4, 5, 6])
+    # Manually concatenate inline
+    let u8[] combined = new()
+    let i32 i = 0
+    while (i < part1.len()):
+        combined.push(part1.get(i)??)
+        i := i + 1
+    let i32 j = 0
+    while (j < part2.len()):
+        combined.push(part2.get(j)??)
+        j := j + 1
+    println("Combined length: {combined.len()}")
+    println("Combined first: {combined.get(0)??}, last: {combined.get(5)??}")
+    return Result.Ok(~)
+
+fn test_filter() ~:
+    println("Test 7: Filter even bytes")
+    let u8[] mixed = from([1, 2, 3, 4, 5, 6, 7, 8])
+    # Manually filter inline
+    let u8[] evens = new()
+    let i32 i = 0
+    while (i < mixed.len()):
+        let u8 byte = mixed.get(i)??
+        if (((byte as i32) % 2) == 0):
+            evens.push(byte)
+        i := i + 1
+    println("Original length: {mixed.len()}, Filtered length: {evens.len()}")
+    return Result.Ok(~)
+
+fn test_transform() ~:
+    println("Test 8: Multiply bytes")
+    let u8[] nums = from([10, 20, 30])
+    # Manually transform inline
+    let u8[] doubled = new()
+    let i32 i = 0
+    while (i < nums.len()):
+        let u8 byte = nums.get(i)??
+        let i32 multiplied = (byte as i32) * 2
+        doubled.push((multiplied % 256) as u8)
+        i := i + 1
+    println("Original first: {nums.get(0)??}, Doubled first: {doubled.get(0)??}")
+    return Result.Ok(~)
+
+fn test_chain() ~:
+    println("Test 9: Chain function calls")
+    # Create sequence manually
+    let u8[] chain = new()
+    let i32 i = 0
+    while (i < 3):
+        chain.push(((5 + i) % 256) as u8)
+        i := i + 1
+    # Append byte
+    chain.push(100 as u8)
+    # Reverse manually
+    let u8[] chain_reversed = new()
+    let i32 j = chain.len() - 1
+    while (j >= 0):
+        chain_reversed.push(chain.get(j)??)
+        j := j - 1
+    println("Chained length: {chain_reversed.len()}")
+    return Result.Ok(~)
+
+fn test_empty() ~:
+    println("Test 10: Empty array")
+    let u8[] empty = new()
+    let Result<u8> empty_first = get_first_byte(empty)
+    println("Empty array first byte: {empty_first.realise(0 as u8)}")
+    return Result.Ok(~)
+
+fn main() i32:
+    test_return_array()
+    test_with_parameters()
+    test_modify_array()
+    test_extract_byte()
+    test_reverse()
+    test_concatenate()
+    test_filter()
+    test_transform()
+    test_chain()
+    test_empty()
+
+    println("All function tests completed!")
+    return Result.Ok(0)

@@ -1,0 +1,6 @@
+fn main() i32:
+    # Test that reverse() takes no arguments
+    let i32[] paranoid_android = from([1, 2, 3])
+    paranoid_android.reverse(42)
+
+    return Result.Ok(0)

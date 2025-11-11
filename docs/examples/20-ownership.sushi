@@ -1,0 +1,60 @@
+# Example 20: Own<T> for Heap Allocation
+#
+# This example demonstrates Own<T>, Sushi's type for explicit heap allocation.
+# Own<T> is essential for creating recursive data structures like linked lists
+# and trees, where a type needs to contain itself.
+#
+# Key concepts covered:
+# - Using Own<T> for heap allocation
+# - Creating recursive data structures (linked lists)
+# - Own.alloc(value) - allocate value on heap
+# - Own.null() - create null pointer
+# - .is_some() - check if pointer is valid
+# - .get() - dereference pointer to get value
+# - Automatic RAII cleanup (no manual .destroy() needed)
+#
+# Own<T> features:
+# - Zero-cost abstraction (compiles to raw pointers)
+# - Automatic memory management via RAII
+# - Compile-time move semantics
+# - Required for recursive types (struct containing itself)
+#
+# Note: Own<T> pointers are automatically freed when they go out of scope,
+# preventing memory leaks without garbage collection overhead.
+
+struct Point:
+    i32 x
+    i32 y
+
+# Recursive struct with Maybe<Own<T>> for optional next pointer
+struct Node:
+    i32 value
+    Maybe<Own<Node>> next
+
+fn main() i32:
+    # Demonstrate Own<T> for heap allocation
+
+    # Allocate a Point on the heap
+    let Point p = Point(10, 20)
+    let Own<Point> ptr = Own.alloc(p)
+
+    # Dereference the pointer to get the value
+    let Point loaded = ptr.get()
+    println("Point: ({loaded.x}, {loaded.y})")
+
+    # Create a simple linked list: 1 -> 2 -> None
+    # Use Maybe<Own<Node>> for nullable next pointers
+    let Node node2 = Node(2, Maybe.None())
+    let Own<Node> node2_ptr = Own.alloc(node2)
+
+    let Node head = Node(1, Maybe.Some(node2_ptr))
+    println("Linked list head: {head.value}")
+
+    # Check if next exists
+    if (head.next.is_some()):
+        println("List has more nodes")
+
+    # Own<T> values are automatically freed when they go out of scope (RAII)
+    # No need to manually call .destroy()
+
+    return Result.Ok(0)

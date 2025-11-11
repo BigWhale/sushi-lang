@@ -1,0 +1,13 @@
+# Test: Generic functions with perk constraints parse correctly
+
+perk Hashable:
+    fn hash() u64
+
+fn compute_hash<T: Hashable>(T value) u64:
+    return value.hash()
+
+fn process<T: Hashable>(T item) ~:
+    return Result.Ok(~)
+
+fn main() i32:
+    return Result.Ok(0)

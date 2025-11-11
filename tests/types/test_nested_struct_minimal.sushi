@@ -1,0 +1,32 @@
+# Minimal test case for nested struct double-free bug
+# This test creates two Inner structs with dynamic arrays,
+# then nests them in an Outer struct. The bug manifests as a
+# segfault during RAII cleanup due to duplicate ownership.
+
+struct Inner:
+    u8[] data
+    string name
+
+struct Outer:
+    Inner inner1
+    Inner inner2
+
+fn main() i32:
+    println("Creating inner1...")
+    let Inner inner1 = Inner(from([100 as u8, 101 as u8]), "inner1")
+    println("  inner1.data.len() = {inner1.data.len()}")
+
+    println("Creating inner2...")
+    let Inner inner2 = Inner(from([200 as u8, 201 as u8, 202 as u8]), "inner2")
+    println("  inner2.data.len() = {inner2.data.len()}")
+
+    println("Creating nested (this triggers shallow copy)...")
+    let Outer nested = Outer(inner1, inner2)
+    println("  nested.inner1.data.len() = {nested.inner1.data.len()}")
+    println("  nested.inner2.data.len() = {nested.inner2.data.len()}")
+
+    println("About to exit scope...")
+    println("BUG: RAII cleanup will try to free the same memory twice!")
+    println("Expected: segfault or double-free detected")
+
+    return Result.Ok(0)

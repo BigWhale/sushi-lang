@@ -1,0 +1,13 @@
+# EXPECTED_ERROR: CE0006
+# Test that generic struct/enum name conflicts are detected
+# Error should be: type name 'Container' is already defined as a generic struct
+
+struct Container<T>:
+    T value
+
+enum Container<T>:
+    Full(T)
+    Empty
+
+fn main() i32:
+    return Result.Ok(0)

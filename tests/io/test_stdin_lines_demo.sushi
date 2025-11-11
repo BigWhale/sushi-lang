@@ -1,0 +1,29 @@
+# TEST_TYPE: runtime
+# STDIN_INPUT: "One\nTwo\nThree\nFour\n"
+# EXPECT_STDOUT_CONTAINS: "stdin.lines() Demo"
+# EXPECT_STDOUT_CONTAINS: "Line 1: One"
+# EXPECT_STDOUT_CONTAINS: "Line 4: Four"
+# EXPECT_STDOUT_CONTAINS: "Total lines read: 4"
+# EXPECT_RUNTIME_EXIT: 0
+# Comprehensive demonstration of stdin.lines() iterator
+
+use <io/stdio>
+
+fn main() i32:
+    stdout.write("=== stdin.lines() Demo ===\n")
+    stdout.write("Reading lines from stdin until EOF...\n\n")
+
+    let i32 count = 0
+
+    foreach(line in stdin.lines()):
+        count := count + 1
+        stdout.write("Line ")
+        print(count)
+        stdout.write(": ")
+        stdout.write(line)
+        stdout.write("\n")
+
+    stdout.write("\nTotal lines read: ")
+    println(count)
+
+    return Result.Ok(0)

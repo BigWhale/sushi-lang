@@ -1,0 +1,25 @@
+# Example 01: Hello World
+#
+# Demonstrates:
+# - Basic program structure with main() function
+# - Standard output using println()
+# - Result<T> return type (implicit wrapper around all return types)
+# - Exit code conventions (0 = success)
+#
+# This is the simplest valid Sushi program. Every executable program
+# must have a main() function that returns i32. Behind the scenes,
+# all function return types are wrapped in Result<T> for explicit
+# error handling.
+
+fn main() i32:
+    # Every Sushi program starts with a main function that returns i32.
+    # The i32 return type is implicitly wrapped as Result<i32>.
+    # This allows consistent error handling across all functions.
+
+    # println() outputs a line to stdout with a newline.
+    println("Mostly Harmless")
+
+    # All functions must explicitly return Result.Ok(value) or Result.Err().
+    # For main(), returning Ok(0) indicates successful program execution.
+    # Non-zero values indicate errors (following Unix convention).
+    return Result.Ok(0)

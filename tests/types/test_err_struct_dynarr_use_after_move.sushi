@@ -1,0 +1,8 @@
+struct Container:
+    i32[] numbers
+
+fn main() i32:
+    let i32[] arr = from([1, 2, 3])
+    let Container c = Container(arr)  # arr is moved here
+    println(arr.len())  # ERROR: arr has been moved
+    return Result.Ok(0)

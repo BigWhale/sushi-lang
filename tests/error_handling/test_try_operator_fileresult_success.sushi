@@ -1,0 +1,37 @@
+# Test ?? operator with FileResult - success path
+# Creates a test file and uses ?? to read from it
+
+use <io/files>
+use <collections/strings>
+
+fn write_test_file() ~:
+    # Use pattern matching to handle FileResult
+    match open("/tmp/sushi_test_try.txt", FileMode.Write()):
+        FileResult.Ok(f) ->
+            f.writeln("Hello from FileResult test!")
+            f.writeln("Second line here.")
+            f.close()
+        FileResult.Err(_) ->
+            println("Failed to create test file")
+    return Result.Ok(~)
+
+fn read_first_line(string path) string:
+    # Use ?? to unwrap FileResult from open()
+    let file f = open(path, FileMode.Read())??
+
+    # Read the first line
+    let string line = f.readln()
+    f.close()
+
+    return Result.Ok(line)
+
+fn main() i32:
+    # Write test file
+    write_test_file()
+
+    # Use .realise() to read from the file (should succeed)
+    let string first_line = read_first_line("/tmp/sushi_test_try.txt").realise("")
+
+    println("Successfully read: {first_line}")
+
+    return Result.Ok(0)

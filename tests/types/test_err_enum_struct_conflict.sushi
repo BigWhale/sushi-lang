@@ -1,0 +1,14 @@
+# EXPECTED_ERROR: CE0006
+# Test that enum/struct name conflicts are detected (reverse order)
+# Error should be: type name 'Box' is already defined as an enum
+
+struct Box:
+     i32 x
+     i32 y
+
+enum Box:
+    Big
+    Huge
+
+fn main() i32:
+    return Result.Ok(0)

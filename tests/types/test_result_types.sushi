@@ -1,0 +1,45 @@
+# Test Result<T> with different return types
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 1
+
+fn get_i8() i8:
+  return Result.Ok(42 as i8)
+
+fn get_i16() i16:
+  return Result.Ok(1000 as i16)
+
+fn get_i32() i32:
+  return Result.Ok(100000)
+
+fn get_i64() i64:
+  return Result.Ok(9999999 as i64)
+
+fn get_bool() bool:
+  return Result.Ok(true)
+
+fn get_f32() f32:
+  return Result.Ok(3.14 as f32)
+
+fn get_f64() f64:
+  return Result.Ok(2.718)
+
+fn main() i32:
+  let i8 v1 = get_i8().realise(0 as i8)
+  let i16 v2 = get_i16().realise(0 as i16)
+  let i32 v3 = get_i32().realise(0)
+  let i64 v4 = get_i64().realise(0 as i64)
+  let bool v5 = get_bool().realise(false)
+  let f32 v6 = get_f32().realise(0.0 as f32)
+  let f64 v7 = get_f64().realise(0.0)
+
+  if (v1 == 42 as i8):
+    if (v2 == 1000 as i16):
+      if (v3 == 100000):
+        if (v4 == 9999999 as i64):
+          if (v5):
+            if (v6 == 3.14 as f32):
+              if (v7 == 2.718):
+                println("Yay")
+                return Result.Ok(1)
+
+  return Result.Ok(0)

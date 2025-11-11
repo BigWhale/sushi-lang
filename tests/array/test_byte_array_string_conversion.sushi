@@ -1,0 +1,21 @@
+# Test byte array string conversion methods - basic test
+fn main() i32:
+    # Create a simple byte array manually
+    let u8[] bytes = new()
+    bytes.push(72 as u8)   # 'H'
+    bytes.push(101 as u8)  # 'e'
+    bytes.push(108 as u8)  # 'l'
+    bytes.push(108 as u8)  # 'l'
+    bytes.push(111 as u8)  # 'o'
+
+    println("Manual byte count: {bytes.len()}")  # Should be 5
+
+    # Test bytes to string conversion
+    let string result = bytes.to_string()
+    println("Converted: {result}")  # Should print "Hello"
+
+    # Create empty byte array
+    let u8[] empty = new()
+    println("Empty byte count: {empty.len()}")  # Should be 0
+
+    return Result.Ok(0)

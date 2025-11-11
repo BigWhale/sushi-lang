@@ -1,0 +1,15 @@
+# Test min/max
+use <math>
+
+fn main() i32:
+    let i32 a = 10
+    let i32 b = 20
+    let i32 minimum = min(a, b)
+    println("min(10, 20) = {minimum}")
+
+    let f64 x = 3.14
+    let f64 y = 2.71
+    let f64 min_float = min(x, y)
+    println("min(3.14, 2.71) = {min_float}")
+
+    return Result.Ok(0)

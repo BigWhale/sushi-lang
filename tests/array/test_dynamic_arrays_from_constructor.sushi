@@ -1,0 +1,34 @@
+# Test dynamic array from() constructor with various element types
+fn run_test() i32:
+  # Test from() with integers
+  let i32[] nums = from([10, 20, 30, 40, 50])
+  print(nums.len())         # Should print 5
+  print(nums.get(0)??)        # Should print 10
+  print(nums.get(4)??)        # Should print 50
+
+  # Test from() with strings
+  let string[] words = from(["apple", "banana", "cherry"])
+  print(words.len())        # Should print 3
+  print(words.get(0)??)       # Should print "apple"
+  print(words.get(2)??)       # Should print "cherry"
+
+  # Test from() with booleans
+  let bool[] flags = from([true, false, true, true, false])
+  print(flags.len())        # Should print 5
+  print(flags.get(1)??)       # Should print false
+  print(flags.get(3)??)       # Should print true
+
+  # Test from() with single element
+  let i32[] single = from([42])
+  print(single.len())       # Should print 1
+  print(single.get(0)??)      # Should print 42
+
+  # Test empty from() - should create empty array
+  let string[] empty = from([])
+  print(empty.len())        # Should print 0
+
+  return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

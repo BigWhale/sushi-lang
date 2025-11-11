@@ -1,0 +1,30 @@
+# TEST_TYPE: runtime
+use <collections/strings>
+
+fn main() i32:
+    # Test multiple replacements - vogon poetry is terrible
+    let string poetry = "vogon vogon vogon poetry".replace("vogon", "dolphin")
+    println("Poetry: {poetry}")
+
+    if (poetry != "dolphin dolphin dolphin poetry"):
+        println("ERROR: Expected 'dolphin dolphin dolphin poetry', got '{poetry}'")
+        return Result.Err()
+
+    # Test replacing "42" with "the answer"
+    let string answers = "42 is 42 and 42".replace("42", "the answer")
+    println("Answers: {answers}")
+
+    if (answers != "the answer is the answer and the answer"):
+        println("ERROR: Expected 'the answer is the answer and the answer', got '{answers}'")
+        return Result.Err()
+
+    # Test replacing single character multiple times
+    let string towels = "t t t".replace("t", "towel")
+    println("Towels: {towels}")
+
+    if (towels != "towel towel towel"):
+        println("ERROR: Expected 'towel towel towel', got '{towels}'")
+        return Result.Err()
+
+    println("All multiple replacement tests passed!")
+    return Result.Ok(0)

@@ -1,0 +1,16 @@
+# tests/test_perk_impl_parse.sushi
+# Perk implementation parsing test
+
+perk Hashable:
+    fn hash() u64
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Hashable:
+    fn hash() u64:
+        return 42 as u64
+
+fn main() i32:
+    return Result.Ok(0)

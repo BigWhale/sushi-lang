@@ -1,0 +1,32 @@
+fn main() i32:
+    # Test combining bitwise and logical operators
+
+    # Bitwise operations
+    let i32 mask = 255
+    let i32 inverted = ~mask
+    let i32 combined = mask & inverted
+    println(combined)  # Should be 0
+
+    # Logical operations with all operators
+    let bool p = true
+    let bool q = false
+    let bool r = true
+
+    let bool result1 = p and q or r
+    println(result1)  # (true and false) or true = true
+
+    let bool result2 = p xor q and r
+    println(result2)  # true xor (false and true) = true
+
+    let bool result3 = p or q xor r
+    println(result3)  # true or (false xor true) = true
+
+    # Mixed with NOT operators
+    let bool result4 = !p xor !q and r
+    println(result4)  # (!true) xor ((!false) and true) = false xor true = true
+
+    # Bitwise with shifts
+    let i32 shifted = ~8 << 2
+    println(shifted)  # (~8) << 2
+
+    return Result.Ok(0)

@@ -1,0 +1,22 @@
+# Test hashing of struct containing enum field
+
+enum Status:
+    Ok
+    Error
+
+struct Response:
+    Status status
+    i32 code
+
+fn main() i32:
+    let Response r1 = Response(Status.Ok(), 200)
+    let u64 h1 = r1.hash()
+    println("Response(Ok, 200) hash: {h1}")
+
+    let Response r2 = Response(Status.Error(), 500)
+    let u64 h2 = r2.hash()
+    println("Response(Error, 500) hash: {h2}")
+
+    # Different status should produce different hashes
+    println("Struct with enum field hashes computed!")
+    return Result.Ok(0)

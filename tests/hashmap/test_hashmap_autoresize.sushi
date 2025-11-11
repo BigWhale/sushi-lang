@@ -1,0 +1,51 @@
+# Test automatic HashMap resize
+fn main() i32:
+    let HashMap<i32, string> map = HashMap.new()
+
+    # Initial capacity is 16
+    # Load factor threshold is 0.75
+    # Resize check: (size + tombstones) * 4 > capacity * 3
+    # For capacity 16: resize when (size + tombstones) > 12
+    # The check happens BEFORE insertion, so:
+    # - Insert #13: size=12, no resize yet
+    # - Insert #14: size=13, triggers resize to 32
+
+    # Insert 13 items
+    map.insert(1, "one")
+    map.insert(2, "two")
+    map.insert(3, "three")
+    map.insert(4, "four")
+    map.insert(5, "five")
+    map.insert(6, "six")
+    map.insert(7, "seven")
+    map.insert(8, "eight")
+    map.insert(9, "nine")
+    map.insert(10, "ten")
+    map.insert(11, "eleven")
+    map.insert(12, "twelve")
+    map.insert(13, "thirteen")
+
+    let i32 size1 = map.len()
+    println("After 13 insertions: size = {size1}, capacity should still be 16")
+
+    # This 14th insert should trigger resize
+    map.insert(14, "fourteen")
+    map.insert(15, "fifteen")
+
+    println("\nAfter 15 insertions (should have auto-resized to capacity 32):")
+    map.debug()
+
+    # Verify all values are still accessible after resize
+    if (map.contains_key(1)):
+        println("\n✓ Key 1 still exists after resize")
+
+    if (map.contains_key(15)):
+        println("✓ Key 15 exists after resize")
+
+    let i32 final_size = map.len()
+    if (final_size == 15):
+        println("✓ All 15 items preserved after resize")
+        return Result.Ok(0)
+
+    println("ERROR: Expected size 15, got {final_size}")
+    return Result.Ok(1)

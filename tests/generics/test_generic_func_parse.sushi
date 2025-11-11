@@ -1,0 +1,10 @@
+# Test: Generic function definitions parse correctly
+
+fn identity<T>(T x) T:
+    return Result.Ok(x)
+
+fn swap<T, U>(T a, U b) ~:
+    return Result.Ok(~)
+
+fn main() i32:
+    return Result.Ok(0)

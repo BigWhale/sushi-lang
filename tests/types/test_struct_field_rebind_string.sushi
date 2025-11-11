@@ -1,0 +1,15 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: hello world
+
+# Test struct field rebinding with strings
+struct Person:
+    string name
+    i32 age
+
+fn main() i32:
+    let Person p = Person("alice", 25)
+    p.name := "hello world"
+    p.age := 30
+    println(p.name)
+    return Result.Ok(0)

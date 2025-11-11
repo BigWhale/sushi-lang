@@ -1,0 +1,15 @@
+# Test CE4004: Wrong parameter type
+
+perk Comparable:
+    fn compare(i32 other) i32
+
+struct Number:
+    i32 value
+
+# Wrong parameter type - has string instead of i32
+extend Number with Comparable:
+    fn compare(string other) i32:
+        return 0
+
+fn main() i32:
+    return Result.Ok(0)

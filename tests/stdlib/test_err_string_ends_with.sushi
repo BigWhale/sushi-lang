@@ -1,0 +1,8 @@
+use <collections/strings>
+
+fn main() i32:
+    # Error: ends_with() requires exactly 1 string argument
+    let string s = "hello"
+    let bool result = s.ends_with("a", "b")
+    println(result)
+    return Result.Ok(0)

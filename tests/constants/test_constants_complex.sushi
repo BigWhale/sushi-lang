@@ -1,0 +1,91 @@
+# Test complex expressions combining multiple operations
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "All complex constant tests passed"
+
+const i32 ARITHMETIC_COMPLEX = ((100 + 50) / 3) * 2
+const i32 NESTED_PARENS = (((10 + 5) * 2) - 3) / 3
+
+const u32 BITWISE_ARITHMETIC = ((0x0F as u32) | (0xF0 as u32)) & (0xFF as u32)
+const u32 SHIFT_ARITHMETIC = ((100 as u32) << (2 as u32)) >> (1 as u32)
+
+const bool COMPARISON_LOGICAL = (100 > 50) and (10 == 10) or (5 < 3)
+const bool NESTED_LOGICAL = not ((true and false) or (false xor false))
+
+const i32 MIXED_OPS = (100 + 50) * 2 / 3 - 10 % 3
+const i32 REF_MIXED = ARITHMETIC_COMPLEX + NESTED_PARENS
+
+const bool BOOL_FROM_CMP = ((100 + 50) > (200 - 100)) and ((10 * 5) == 50)
+
+const f64 FLOAT_COMPLEX = (3.14 * 2.0) + (10.0 / 2.0) - 1.28
+const i32 CAST_COMPLEX = (((100.5 as i32) + 50) * 2) as i32
+
+const u32 HEX_COMPLEX = (0xFF as u32) & ((0x0F as u32) | (0xF0 as u32))
+const u32 BIN_COMPLEX = ((0b1111 as u32) << (2 as u32)) | (0b0011 as u32)
+
+const bool PRECEDENCE_TEST = 10 + 5 * 2 == 20
+const bool PAREN_OVERRIDE = (10 + 5) * 2 == 30
+
+const i32 MULTI_REF_BASE = 10
+const i32 MULTI_REF_A = MULTI_REF_BASE * 2
+const i32 MULTI_REF_B = MULTI_REF_BASE + 5
+const i32 MULTI_REF_RESULT = (MULTI_REF_A + MULTI_REF_B) * 2
+
+fn main() i32:
+    # Verify complex arithmetic
+    if (ARITHMETIC_COMPLEX != 100):
+        return Result.Err()
+    if (NESTED_PARENS != 9):
+        return Result.Err()
+
+    # Verify bitwise with arithmetic
+    if (BITWISE_ARITHMETIC != 255 as u32):
+        return Result.Err()
+    if (SHIFT_ARITHMETIC != 200 as u32):
+        return Result.Err()
+
+    # Verify comparison with logical
+    if (not COMPARISON_LOGICAL):
+        return Result.Err()
+    if (not NESTED_LOGICAL):
+        return Result.Err()
+
+    # Verify mixed operations
+    if (MIXED_OPS != 99):
+        return Result.Err()
+    if (REF_MIXED != 109):
+        return Result.Err()
+
+    # Verify boolean from comparison
+    if (not BOOL_FROM_CMP):
+        return Result.Err()
+
+    # Verify float complex
+    if (FLOAT_COMPLEX < 10.0 or FLOAT_COMPLEX > 11.0):
+        return Result.Err()
+    if (CAST_COMPLEX != 300):
+        return Result.Err()
+
+    # Verify hex and binary complex
+    if (HEX_COMPLEX != 255 as u32):
+        return Result.Err()
+    if (BIN_COMPLEX != 63 as u32):
+        return Result.Err()
+
+    # Verify precedence
+    if (not PRECEDENCE_TEST):
+        return Result.Err()
+    if (not PAREN_OVERRIDE):
+        return Result.Err()
+
+    # Verify multi-reference
+    if (MULTI_REF_BASE != 10):
+        return Result.Err()
+    if (MULTI_REF_A != 20):
+        return Result.Err()
+    if (MULTI_REF_B != 15):
+        return Result.Err()
+    if (MULTI_REF_RESULT != 70):
+        return Result.Err()
+
+    println("All complex constant tests passed")
+    return Result.Ok(0)

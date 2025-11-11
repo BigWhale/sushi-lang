@@ -1,0 +1,77 @@
+# Test comparison operators in constant expressions
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "All constant comparison tests passed"
+
+const bool EQ_TRUE = 10 == 10
+const bool EQ_FALSE = 10 == 20
+const bool NEQ_TRUE = 10 != 20
+const bool NEQ_FALSE = 10 != 10
+
+const bool LT_TRUE = 10 < 20
+const bool LT_FALSE = 20 < 10
+const bool LTE_TRUE_LT = 10 <= 20
+const bool LTE_TRUE_EQ = 10 <= 10
+const bool LTE_FALSE = 20 <= 10
+
+const bool GT_TRUE = 20 > 10
+const bool GT_FALSE = 10 > 20
+const bool GTE_TRUE_GT = 20 >= 10
+const bool GTE_TRUE_EQ = 10 >= 10
+const bool GTE_FALSE = 10 >= 20
+
+const bool NEG_CMP = -10 < 0
+const bool FLOAT_CMP = 3.14 > 3.0
+
+const i32 A = 100
+const i32 B = 50
+const bool IS_LARGE = A > B
+const bool IS_EQUAL = A == A
+const bool IS_DIFFERENT = A != B
+
+fn main() i32:
+    # Verify comparison results
+    if (not EQ_TRUE):
+        return Result.Err()
+    if (EQ_FALSE):
+        return Result.Err()
+    if (not NEQ_TRUE):
+        return Result.Err()
+    if (NEQ_FALSE):
+        return Result.Err()
+
+    if (not LT_TRUE):
+        return Result.Err()
+    if (LT_FALSE):
+        return Result.Err()
+    if (not LTE_TRUE_LT):
+        return Result.Err()
+    if (not LTE_TRUE_EQ):
+        return Result.Err()
+    if (LTE_FALSE):
+        return Result.Err()
+
+    if (not GT_TRUE):
+        return Result.Err()
+    if (GT_FALSE):
+        return Result.Err()
+    if (not GTE_TRUE_GT):
+        return Result.Err()
+    if (not GTE_TRUE_EQ):
+        return Result.Err()
+    if (GTE_FALSE):
+        return Result.Err()
+
+    if (not NEG_CMP):
+        return Result.Err()
+    if (not FLOAT_CMP):
+        return Result.Err()
+
+    if (not IS_LARGE):
+        return Result.Err()
+    if (not IS_EQUAL):
+        return Result.Err()
+    if (not IS_DIFFERENT):
+        return Result.Err()
+
+    println("All constant comparison tests passed")
+    return Result.Ok(0)

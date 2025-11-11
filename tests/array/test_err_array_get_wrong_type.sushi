@@ -1,0 +1,11 @@
+fn run_test() i32:
+    let i32[3] arr = [1, 2, 3]
+
+    # This should fail with CE2006: get() expects i32 argument
+    let i32 value = arr.get(true)??
+
+    return Result.Ok(value)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

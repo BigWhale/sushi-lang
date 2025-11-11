@@ -1,0 +1,8 @@
+const i32 HELPER_CONSTANT = 10
+
+public fn multiply_by_two(i32 x) i32:
+    return Result.Ok(x * 2)
+
+fn private_function() i32:
+    println("In private.")
+    return Result.Ok(HELPER_CONSTANT * 3)

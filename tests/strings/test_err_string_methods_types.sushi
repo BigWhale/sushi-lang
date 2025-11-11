@@ -1,0 +1,10 @@
+# This file tests type mismatch errors for string methods
+# This should fail compilation with CE2006 errors (wrong argument types)
+
+fn main() i32:
+  let string text = "Hello"
+
+  # Test concat() with wrong type (should fail)
+  let string result = text.concat(42)
+
+  return Result.Ok(0)

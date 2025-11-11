@@ -1,0 +1,24 @@
+# Debug test to see if cleanup is happening
+
+struct Container:
+    i32[] data
+
+fn test() ~:
+    println("Before allocation")
+    let Container c = Container(new())
+    c.data.push(1)
+    c.data.push(2)
+    println("After allocation, before return")
+    # RAII should clean up here
+    return Result.Ok(~)
+
+fn main() i32:
+    println("=== Test 1 ===")
+    test()
+    println("After test() returned")
+
+    println("=== Test 2 ===")
+    test()
+    println("After test() returned again")
+
+    return Result.Ok(0)

@@ -1,0 +1,27 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT: 5
+# EXPECT_STDOUT: 5
+# EXPECT_STDOUT: 0
+# EXPECT_STDOUT: 6
+
+use <collections/strings>
+
+fn main() i32:
+    # Test ASCII string - size should equal length
+    let string s1 = "Hello"
+    println(s1.size())  # Should print: 5
+
+    # Test UTF-8 string - size should be bytes, not characters
+    let string s2 = "café"
+    println(s2.size())  # Should print: 5 (4 chars: c,a,f,é but é is 2 bytes)
+
+    # Test empty string
+    let string s3 = ""
+    println(s3.size())  # Should print: 0
+
+    # Test multi-byte UTF-8
+    let string s4 = "你好"
+    println(s4.size())  # Should print: 6 (2 chars, each 3 bytes)
+
+    return Result.Ok(0)

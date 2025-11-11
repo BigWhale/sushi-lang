@@ -1,0 +1,8 @@
+# TEST_TYPE: compilation
+# Phase 4.2 - Error test for unhandled Result.Ok() constructor
+# Should fail with CE2505: even direct Result.Ok() needs handling
+
+fn main() i32:
+    let i32 x = Result.Ok(42)
+    println(x)
+    return Result.Ok(0)

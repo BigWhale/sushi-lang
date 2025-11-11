@@ -1,0 +1,16 @@
+# Test automatic cleanup of Own<T> variables (RAII)
+# This test verifies that Own<T> variables are automatically destroyed
+# at function exit without explicit .destroy() calls
+
+fn main() i32:
+    let Own<i32> ptr1 = Own.alloc(42)
+    let Own<i32> ptr2 = Own.alloc(100)
+
+    # Use the values to avoid warnings
+    let i32 val1 = ptr1.get()
+    let i32 val2 = ptr2.get()
+
+    # Both ptr1 and ptr2 should be automatically destroyed here
+    let i32 result = val1 + val2
+    let i32 expected = 142
+    return Result.Ok(result - expected)

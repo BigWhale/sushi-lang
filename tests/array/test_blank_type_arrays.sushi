@@ -1,0 +1,16 @@
+fn test_push() ~:
+  let i32[] arr = new()
+  arr.push(42)
+  arr.push(100)
+  arr.destroy()
+  return Result.Ok(~)
+
+fn test_destroy() ~:
+  let i32[] arr = new()
+  arr.destroy()
+  return Result.Ok(~)
+
+fn main() i32:
+  test_push()
+  test_destroy()
+  return Result.Ok(0)

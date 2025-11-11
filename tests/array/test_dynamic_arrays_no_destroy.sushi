@@ -1,0 +1,10 @@
+fn run_test() i32:
+  let i32[] numbers = from([1, 2, 3])
+  print(numbers.len())      # Should print 3
+  print(numbers.get(0)??)     # Should print 1
+  print(numbers.get(2)??)     # Should print 3
+  return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

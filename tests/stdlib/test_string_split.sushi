@@ -1,0 +1,75 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_LINES: 30
+
+use <collections/strings>
+
+fn run_test() i32:
+    # Test 1: Basic split with single delimiter
+    let string s1 = "hello,world,test"
+    let string[] parts1 = s1.split(",")
+    println(parts1.len())  # 3
+    println(parts1.get(0)??)
+    println(parts1.get(1)??)
+    println(parts1.get(2)??)
+
+    # Test 2: Split with multi-character delimiter
+    let string s2 = "foo::bar::baz"
+    let string[] parts2 = s2.split("::")
+    println(parts2.len())  # 3
+    println(parts2.get(0)??)
+    println(parts2.get(1)??)
+    println(parts2.get(2)??)
+
+    # Test 3: No delimiter found (return single element)
+    let string s3 = "nodashes"
+    let string[] parts3 = s3.split("-")
+    println(parts3.len())  # 1
+    println(parts3.get(0)??)
+
+    # Test 4: Empty string split
+    let string s4 = ""
+    let string[] parts4 = s4.split(",")
+    println(parts4.len())  # 1
+    println(parts4.get(0)??)  # empty
+
+    # Test 5: Multiple consecutive delimiters (creates empty strings)
+    let string s5 = "a,,b"
+    let string[] parts5 = s5.split(",")
+    println(parts5.len())  # 3
+    println(parts5.get(0)??)
+    println(parts5.get(1)??)  # empty
+    println(parts5.get(2)??)
+
+    # Test 6: UTF-8 string split
+    let string s6 = "hello|world|café"
+    let string[] parts6 = s6.split("|")
+    println(parts6.len())  # 3
+    println(parts6.get(0)??)
+    println(parts6.get(1)??)
+    println(parts6.get(2)??)
+
+    # Test 7: Split at start
+    let string s7 = ",starts,with,comma"
+    let string[] parts7 = s7.split(",")
+    println(parts7.len())  # 4
+    println(parts7.get(0)??)  # empty
+    println(parts7.get(1)??)
+    println(parts7.get(2)??)
+    println(parts7.get(3)??)
+
+    # Test 8: Split at end
+    let string s8 = "ends,with,comma,"
+    let string[] parts8 = s8.split(",")
+    println(parts8.len())  # 4
+    println(parts8.get(0)??)
+    println(parts8.get(1)??)
+    println(parts8.get(2)??)
+    println(parts8.get(3)??)  # empty
+
+    return Result.Ok(0)
+
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

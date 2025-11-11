@@ -1,0 +1,18 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: 25
+
+# Returning structs from functions
+
+struct Point:
+    i32 x
+    i32 y
+
+fn make_point(i32 x, i32 y) Point:
+    return Result.Ok(Point(x, y))
+
+fn main() i32:
+    let Point p = make_point(10, 15).realise(Point(0, 0))
+    let i32 result = p.x + p.y
+    println(result)
+    return Result.Ok(0)

@@ -1,0 +1,12 @@
+# TEST_TYPE: compilation
+# Test using the variable in a method call
+
+
+fn main() i32:
+    # Declare a variable with Result<i32> type
+    let Result<i32> result = Result.Ok(42)
+
+    # Try to call a method on it
+    let i32 x = result.realise(0)
+
+    return Result.Ok(0)

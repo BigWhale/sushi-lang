@@ -1,0 +1,37 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test List<string> with string elements
+fn main() i32:
+    let List<string> crew = List.new()
+
+    crew.push("Arthur Dent")
+    crew.push("Ford Prefect")
+    crew.push("Zaphod Beeblebrox")
+    crew.push("Trillian")
+
+    if (crew.len() != 4):
+        println("ERROR: Expected 4 crew members, got {crew.len()}")
+        return Result.Ok(1)
+
+    # Get by index
+    match crew.get(2):
+        Maybe.Some(name) ->
+            println("Crew member 2: {name}")
+        Maybe.None() ->
+            println("ERROR: Should find crew member at index 2")
+            return Result.Ok(2)
+
+    # Pop
+    match crew.pop():
+        Maybe.Some(name) ->
+            println("Removed: {name}")
+        Maybe.None() ->
+            println("ERROR: Pop should return Some")
+            return Result.Ok(3)
+
+    if (crew.len() != 3):
+        println("ERROR: Should have 3 members after pop")
+        return Result.Ok(4)
+
+    println("String list tests passed!")
+    return Result.Ok(0)

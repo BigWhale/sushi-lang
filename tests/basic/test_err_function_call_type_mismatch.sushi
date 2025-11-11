@@ -1,0 +1,16 @@
+fn add(i32 a, i32 b) i32:
+  return Result.Ok(a + b)
+
+fn greet(string name) string:
+  return Result.Ok(name)
+
+fn main() i32:
+  # Wrong argument types should generate CE2006 errors
+  let i32 result1 = add("hello", "world")  # Should error: strings instead of ints
+
+  let string result2 = greet(42)  # Should error: i32 instead of string
+
+  # Mixed errors
+  let i32 result3 = add(5, "test")  # Should error: second arg is string instead of i32
+
+  return Result.Ok(result1)

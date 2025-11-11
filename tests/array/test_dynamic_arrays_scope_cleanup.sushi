@@ -1,0 +1,43 @@
+# Test dynamic array automatic cleanup in scopes
+fn run_test() i32:
+  let i32 result = 0
+
+  # Test scope cleanup in if blocks
+  if (true):
+    let i32[] numbers = from([1, 2, 3])
+    print(numbers.push(4))   # Push and print result (0)
+    print(numbers.push(5))   # Push and print result (0)
+    print(numbers.len())    # Should print 5
+    result := numbers.get(0)?? # Should be 1
+  # Array should be automatically cleaned up here
+
+  # Test scope cleanup in while loops
+  let i32 counter = 0
+  while (counter < 2):
+    let string[] words = new()
+    print(words.push("test"))   # Push and print result (0)
+    print(words.push("array"))  # Push and print result (0)
+    print(words.len())      # Should print 2 (twice)
+    counter := counter + 1
+  # Array should be automatically cleaned up here
+
+  # Test nested scopes
+  if (true):
+    let bool[] outer = from([true, false])
+    print(outer.len())      # Should print 2
+
+    if (true):
+      let bool[] inner = new()
+      print(inner.push(true))  # Push and print result (0)
+      print(inner.len())    # Should print 1
+    # inner array cleaned up here
+
+    print(outer.len())      # Should still print 2
+  # outer array cleaned up here
+
+  let i32 expected = 1
+  return Result.Ok(result - expected)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

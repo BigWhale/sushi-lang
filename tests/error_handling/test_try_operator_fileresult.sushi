@@ -1,0 +1,29 @@
+# Test ?? operator with FileResult enum
+# This demonstrates error propagation for file operations
+
+use <io/files>
+
+fn read_first_line(string path) string:
+    # Use ?? to unwrap FileResult from open()
+    # If file doesn't exist, propagates FileResult.Err() to caller
+    let file f = open(path, FileMode.Read())??
+
+    # Read the first line
+    let string line = f.readln()
+    f.close()
+
+    return Result.Ok(line)
+
+fn process_config() string:
+    # Use ?? to propagate errors from read_first_line()
+    # If read_first_line returns Result.Err(), propagates to caller
+    let string first_line = read_first_line("config.txt")??
+
+    return Result.Ok(first_line)
+
+fn main() i32:
+    # Test error propagation with FileResult
+    let string result = process_config().realise("Error reading config")
+    println("Result: {result}")
+
+    return Result.Ok(0)

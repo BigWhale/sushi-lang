@@ -1,0 +1,15 @@
+
+fn try_increment(i32 current) i32:
+    if (current >= 3):
+        return Result.Err()
+    return Result.Ok(current + 1)
+
+fn main() i32:
+    let i32 count = 0
+
+    while (try_increment(count)):
+        count := try_increment(count).realise(count)
+        println("Count: {count}")
+
+    println("Done!")
+    return Result.Ok(0)

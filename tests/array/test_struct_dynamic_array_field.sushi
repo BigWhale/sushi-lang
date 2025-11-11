@@ -1,0 +1,50 @@
+# Test structs with dynamic array fields
+# This validates that structs can contain dynamic arrays and that
+# methods can be called on those array fields (Rust-style GEP access)
+
+struct Container:
+    i32[] numbers
+    string name
+
+struct Person:
+    string name
+    i32 age
+    string[] hobbies
+
+fn run_test() i32:
+    # Test struct with empty dynamic array field
+    let Container c = Container(new(), "test")
+    println("Container name: {c.name}")
+
+    # Test push method on struct array field
+    c.numbers.push(10)
+    c.numbers.push(20)
+    c.numbers.push(30)
+
+    println("First number: {c.numbers.get(0)??}")
+    println("Second number: {c.numbers.get(1)??}")
+    println("Third number: {c.numbers.get(2)??}")
+    println("Array length: {c.numbers.len()}")
+
+    # Test struct with initialized dynamic array field
+    let Person p = Person("Arthur", 30, from(["reading", "coding", "hiking"]))
+    println("Person name: {p.name}")
+    println("Person age: {p.age}")
+    println("First hobby: {p.hobbies.get(0)??}")
+    println("Second hobby: {p.hobbies.get(1)??}")
+    println("Third hobby: {p.hobbies.get(2)??}")
+    println("Hobbies count: {p.hobbies.len()}")
+
+    # Add more hobbies
+    p.hobbies.push("swimming")
+    println("After push - Hobbies count: {p.hobbies.len()}")
+    println("Fourth hobby: {p.hobbies.get(3)??}")
+
+    # Automatic cleanup via RAII - no manual .destroy() needed!
+    # c.numbers and p.hobbies are automatically freed at scope exit
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

@@ -1,0 +1,9 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+  let i32 x = 5
+  let i32 y = 10
+  let i32 z = 15
+  print("{x} + {y} + {z} = {x + y + z}")
+  return Result.Ok(0)

@@ -1,0 +1,46 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Extension methods for different primitive types
+# Demonstrates that extension methods work correctly with i32, bool, and string types
+
+extend i32 square() i32:
+  return self * self
+
+extend i32 is_even() bool:
+  return self % 2 == 0
+
+extend bool to_int() i32:
+  if (self):
+    return 1
+  else:
+    return 0
+
+extend string length() i32:
+  # Placeholder implementation for demonstration purposes
+  # Tests that extension methods work on string types
+  # For now, returns a constant since actual string.len() isn't exposed here
+  if (self == "hello"):
+    return 42
+  else:
+    return 42
+
+
+fn main() i32:
+  # Test i32 extensions
+  let i32 num = 4
+  let i32 squared = num.square()  # 16
+  let bool even = num.is_even()    # true
+
+  # Test bool extension
+  let bool flag = true
+  let i32 flag_as_int = flag.to_int()  # 1
+
+  # Test string extension
+  let string msg = "hello"
+  let i32 msg_len = msg.length()  # 42 (placeholder)
+
+  # Verify results
+  if (squared == 16 and even == true and flag_as_int == 1 and msg_len == 42):
+    return Result.Ok(0)
+  else:
+    return Result.Ok(1)

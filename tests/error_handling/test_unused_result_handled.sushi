@@ -1,0 +1,25 @@
+# TEST_TYPE: compilation
+# Test for Phase 4.1 - Unused Result Detection
+# This test should NOT emit warnings because all Result<T> values are properly handled
+
+
+fn get_value() i32:
+    return Result.Ok(42)
+
+fn main() i32:
+    # OK: Result is handled with .realise()
+    let i32 x = get_value().realise(0)
+    println(x)
+
+    # OK: Result is used in if condition
+    if (get_value()):
+        println("Success")
+
+    # OK: Result is stored in a variable (not an expression statement)
+    let Result<i32> result = get_value()
+
+    # OK: Result is used with .realise() method
+    let i32 y = result.realise(0)
+    println(y)
+
+    return Result.Ok(0)

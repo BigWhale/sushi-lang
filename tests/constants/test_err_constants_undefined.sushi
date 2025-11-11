@@ -1,0 +1,6 @@
+# Test undefined constant reference (CE1002)
+
+const i32 X = UNDEFINED + 1
+
+fn main() i32:
+    return Result.Ok(0)

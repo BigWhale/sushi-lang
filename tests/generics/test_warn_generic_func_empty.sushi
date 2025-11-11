@@ -1,0 +1,14 @@
+# Test: Generic function with minimal body (noop)
+# Tests that generic functions with unused parameters compile
+
+fn noop<T>(T x) ~:
+    # Intentionally not using parameter to test minimal generic function
+    return Result.Ok(~)
+
+fn main() i32:
+    # Test with different types - all should compile and run
+    noop(42)
+    noop("test")
+    noop(3.14)
+    noop(true)
+    return Result.Ok(0)

@@ -1,0 +1,29 @@
+# Test: Multiple functions modifying the same reference in sequence
+# Should compile and run successfully
+
+fn set_to_zero(&i32 x) ~:
+    x := 0
+    return Result.Ok(~)
+
+fn add_ten(&i32 x) ~:
+    x := x + 10
+    return Result.Ok(~)
+
+fn double_it(&i32 x) ~:
+    x := x * 2
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32 value = 5
+    println(value)
+
+    set_to_zero(&value)
+    println(value)
+
+    add_ten(&value)
+    println(value)
+
+    double_it(&value)
+    println(value)
+
+    return Result.Ok(0)

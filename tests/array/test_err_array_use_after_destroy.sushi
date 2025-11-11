@@ -1,0 +1,10 @@
+fn main() i32:
+    let i32[] arr = from([1, 2, 3])
+
+    # Destroy the array
+    arr.destroy()
+
+    # ERROR CE2406: use of destroyed variable 'arr'
+    println(arr.len())
+
+    return Result.Ok(0)

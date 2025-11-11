@@ -1,0 +1,24 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test shrink_to_fit on empty list
+fn main() i32:
+    let List<i32> empty = List.with_capacity(50)
+
+    if (empty.capacity() != 50):
+        println("ERROR: Should start with capacity 50")
+        return Result.Ok(1)
+
+    # Shrink empty list
+    empty.shrink_to_fit()
+
+    # Should have zero capacity now
+    if (empty.capacity() != 0):
+        println("ERROR: Empty list should shrink to capacity 0")
+        return Result.Ok(2)
+
+    if (not empty.is_empty()):
+        println("ERROR: Should still be empty")
+        return Result.Ok(3)
+
+    println("shrink_to_fit on empty list passed!")
+    return Result.Ok(0)

@@ -1,0 +1,22 @@
+# Test that using a variable as the source of a rebind doesn't mark it as moved
+# This test ensures that i can be used multiple times without being considered "moved"
+
+fn main() i32:
+    let i32 i = 0
+    let i32 eq_pos = -1
+    let i32 len = 5
+
+    while (i < len):
+        # This rebind should NOT mark 'i' as moved
+        # because we're just reading i's value
+        if (i == 2):
+            eq_pos := i
+
+        # This should work - i is not moved, just read
+        i := i + 1
+
+    println("Loop completed successfully")
+    println(i)
+    println(eq_pos)
+
+    return Result.Ok(0)

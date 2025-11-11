@@ -1,0 +1,13 @@
+# Test rebinding from method calls that return dynamic arrays
+use <collections/strings>
+
+fn main() i32:
+    # Test 1: Rebinding from string.to_bytes()
+    let string test1 = "Hello"
+    let u8[] bytes1 = new()
+    println("Before rebind")
+    bytes1 := test1.to_bytes()
+    println("After rebind")
+    println("Byte count: {bytes1.len()}")
+
+    return Result.Ok(0)

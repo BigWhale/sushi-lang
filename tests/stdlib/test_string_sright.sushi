@@ -1,0 +1,75 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT: World
+# EXPECT_STDOUT: 0
+# EXPECT_STDOUT: Hi
+# EXPECT_STDOUT: fé
+# EXPECT_STDOUT: 2
+# EXPECT_STDOUT: 世界
+# EXPECT_STDOUT: 2
+# EXPECT_STDOUT: 6
+# EXPECT_STDOUT: 0
+# EXPECT_STDOUT: copy
+# EXPECT_STDOUT: f
+# EXPECT_STDOUT:  世界
+# EXPECT_STDOUT: 3
+# EXPECT_STDOUT: 0
+
+use <collections/strings>
+
+fn main() i32:
+    # Test 1: Basic sright - last 5 characters
+    let string s1 = "Hello World"
+    let string right1 = s1.sright(5)
+    println(right1)  # Expected: World
+
+    # Test 2: sright with 0 characters (empty string)
+    let string s2 = "test"
+    let string right2 = s2.sright(0)
+    println(right2.size())  # Expected: 0
+
+    # Test 3: sright with n > length (should return entire string)
+    let string s3 = "Hi"
+    let string right3 = s3.sright(100)
+    println(right3)  # Expected: Hi
+
+    # Test 4: UTF-8 aware - last 2 characters from "café"
+    let string s4 = "café"
+    let string right4 = s4.sright(2)
+    println(right4)  # Expected: fé (2 UTF-8 characters)
+    println(right4.len())  # Expected: 2
+
+    # Test 5: UTF-8 aware - last 2 characters from "你好世界"
+    let string s5 = "你好世界"
+    let string right5 = s5.sright(2)
+    println(right5)  # Expected: 世界 (2 UTF-8 characters)
+    println(right5.len())  # Expected: 2
+    println(right5.size())  # Expected: 6 (6 bytes)
+
+    # Test 6: Negative n (should return empty)
+    let string s6 = "test"
+    let string right6 = s6.sright(-5)
+    println(right6.size())  # Expected: 0
+
+    # Test 7: Full string
+    let string s7 = "copy"
+    let string right7 = s7.sright(4)
+    println(right7)  # Expected: copy
+
+    # Test 8: Single character
+    let string s8 = "abcdef"
+    let string right8 = s8.sright(1)
+    println(right8)  # Expected: f
+
+    # Test 9: UTF-8 mixed - last 3 characters
+    let string s9 = "Hello 世界"
+    let string right9 = s9.sright(3)
+    println(right9)  # Expected:  世界 (space + 2 Chinese chars)
+    println(right9.len())  # Expected: 3
+
+    # Test 10: Empty string
+    let string s10 = ""
+    let string right10 = s10.sright(5)
+    println(right10.size())  # Expected: 0
+
+    return Result.Ok(0)

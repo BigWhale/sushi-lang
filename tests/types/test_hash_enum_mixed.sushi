@@ -1,0 +1,22 @@
+# Test hashing of enum with mixed unit and data variants
+
+enum Operation:
+    Add(i32, i32)
+    Negate(i32)
+    Identity
+
+fn main() i32:
+    let Operation op1 = Operation.Add(10, 20)
+    let u64 h1 = op1.hash()
+    println("Add(10, 20) hash: {h1}")
+
+    let Operation op2 = Operation.Negate(5)
+    let u64 h2 = op2.hash()
+    println("Negate(5) hash: {h2}")
+
+    let Operation op3 = Operation.Identity()
+    let u64 h3 = op3.hash()
+    println("Identity hash: {h3}")
+
+    println("All mixed enum variant hashes computed!")
+    return Result.Ok(0)

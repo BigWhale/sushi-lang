@@ -1,0 +1,38 @@
+# Enum test with nested enums
+
+
+enum Inner:
+    A(i32)
+    B(i32)
+
+enum Outer:
+    Left(i32)
+    Right(i32)
+
+fn process_inner(Inner i) i32:
+    match i:
+        Inner.A(val) ->
+            return Result.Ok(val * 2)
+        Inner.B(val) ->
+            return Result.Ok(val * 3)
+
+fn process_outer(Outer o) i32:
+    match o:
+        Outer.Left(val) ->
+            return Result.Ok(val + 10)
+        Outer.Right(val) ->
+            return Result.Ok(val + 20)
+
+fn main() i32:
+    let Inner ia = Inner.A(5)
+    let i32 result1 = process_inner(ia).realise(0)
+    # result1 = 5 * 2 = 10
+
+    let Outer ol = Outer.Left(7)
+    let i32 result2 = process_outer(ol).realise(0)
+    # result2 = 7 + 10 = 17
+
+    # Return result1 + result2 = 10 + 17 = 27
+    let i32 result = result1 + result2
+    let i32 expected = 27
+    return Result.Ok(result - expected)

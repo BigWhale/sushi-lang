@@ -1,0 +1,66 @@
+# Example 05: String Interpolation
+#
+# Demonstrates:
+# - Basic variable interpolation in strings
+# - Expression evaluation within interpolation
+# - Multiple interpolations in one string
+# - Boolean and numeric interpolation
+# - Arithmetic expressions in interpolation
+# - Mixing variables, literals, and expressions
+#
+# String interpolation uses {expression} syntax. Any expression that can
+# be converted to a string can be interpolated. This is the primary way
+# to build strings in Sushi (no + operator for strings).
+
+fn main() i32:
+    let i32 answer = 42
+    let string name = "Arthur"
+    let i32 heads = 2
+    let bool has_towel = true
+
+    # Basic interpolation: embed variables directly in strings.
+    # The {name} and {answer} are replaced with their values.
+    println("Hello, {name}!")
+    println("The answer to everything is {answer}")
+
+    # Expressions in interpolations: any arithmetic expression works.
+    # The expression is evaluated first, then converted to string.
+    # No need to pre-compute values in separate variables.
+    println("Next answer: {answer + 1}")
+    println("Double the answer: {answer * 2}")
+    println("Half the answer: {answer / 2}")
+
+    # Multiple interpolations in one string.
+    # Each {expression} is independently evaluated and interpolated.
+    # This is cleaner than manual concatenation or multiple prints.
+    println("{name} knows the answer is {answer}")
+
+    # Interpolate computed values.
+    # Complex expressions can be pre-computed for clarity.
+    let i32 computed = answer * 100 - 4158
+    println("Computed value: {computed}")
+
+    # Complex interpolation with multiple expressions.
+    # Mix variables and arithmetic in the same interpolation.
+    let string character = "Zaphod"
+    println("{character} has {heads} heads and {heads + 2} arms")
+
+    # Boolean interpolation: booleans convert to "true" or "false".
+    # No special formatting needed.
+    println("Has towel: {has_towel}")
+
+    # Nested calculations: multiple expressions with operators.
+    # Each comma-separated part uses its own interpolation.
+    let i32 x = 10
+    let i32 y = 20
+    println("Sum: {x + y}, Product: {x * y}, Difference: {y - x}")
+
+    # String interpolation is the ONLY way to concatenate strings.
+    # The + operator is not supported for strings (by design).
+    let string part1 = "Ford"
+    let string part2 = "Prefect"
+    println("{part1} {part2}")  # Interpolation
+    let string full = "{part1} {part2}"  # Store interpolated string
+    println(full)
+
+    return Result.Ok(0)

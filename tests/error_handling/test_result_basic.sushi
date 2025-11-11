@@ -1,0 +1,18 @@
+# Basic Result<T> test with Ok() returns
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 42
+
+
+fn add(i32 a, i32 b) i32:
+  return Result.Ok(a + b)
+
+fn multiply(i32 x, i32 y) i32:
+  return Result.Ok(x * y)
+
+fn main() i32:
+  let i32 sum = add(5, 3).realise(0)
+  let i32 product = multiply(6, 7).realise(0)
+
+  # sum = 8, product = 42
+  println("Sum: {sum}, Prod: {product}")
+  return Result.Ok(product)

@@ -1,0 +1,6 @@
+fn main() i32:
+    # Test that fill() requires matching type
+    let i32[] hyperspace = from([1, 2, 3])
+    hyperspace.fill("bypass")
+
+    return Result.Ok(0)

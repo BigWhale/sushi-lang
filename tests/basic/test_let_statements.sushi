@@ -1,0 +1,14 @@
+# EXPECT_RUNTIME_EXIT: 200
+# TEST_TYPE: runtime
+fn main() i32:
+  let i32 num = 100
+  let bool flag = true
+  let string text = "test"
+
+  # Rebinding
+  num := 200
+  flag := false
+  text := "updated"
+
+  # num should be 200 after rebinding
+  return Result.Ok(num)

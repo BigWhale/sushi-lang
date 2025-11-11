@@ -1,0 +1,17 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: 23
+
+# Test foreach with break and continue
+# Expected: 1+2+3+4+6+7 = 23 (skip 5, break before 8)
+fn main() i32:
+    let i32[10] arr = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    let i32 sum = 0
+    foreach(i32 x in arr.iter()):
+        if (x == 5):
+            continue
+        if (x == 8):
+            break
+        sum := sum + x
+    print(sum)
+    return Result.Ok(0)

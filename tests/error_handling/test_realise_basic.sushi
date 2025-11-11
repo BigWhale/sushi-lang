@@ -1,0 +1,15 @@
+
+fn get_value() i32:
+    return Result.Ok(42)
+
+fn get_error() i32:
+    return Result.Err()
+
+fn main() i32:
+    let i32 x = get_value().realise(0)
+    let i32 y = get_error().realise(99)
+
+    println("x = {x}")
+    println("y = {y}")
+
+    return Result.Ok(0)

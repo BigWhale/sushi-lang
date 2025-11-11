@@ -1,0 +1,38 @@
+# Test: Generic enum parsing (Phase 0, Step 0.1)
+# Tests: Verify that generic enum syntax is correctly parsed by AST builder
+#        - Multiple type parameters: Either<T, U>
+#        - Triple type parameters: Triple<T, U, V>
+
+# Multiple type parameters
+enum Either<T, U>:
+    Left(T)
+    Right(U)
+
+# Triple type parameters
+enum Triple<T, U, V>:
+    First(T)
+    Second(U)
+    Third(V)
+
+fn main() i32:
+    # Test instantiation of user-defined generic enums
+    let Either<i32, string> e = Either.Left(42)
+    let Triple<i32, string, bool> t = Triple.First(99)
+
+    # Use variables via pattern matching to avoid warnings
+    match e:
+        Either.Left(x) ->
+            println("Either.Left: {x}")
+        Either.Right(s) ->
+            println("Either.Right: {s}")
+
+    match t:
+        Triple.First(x) ->
+            println("Triple.First: {x}")
+        Triple.Second(s) ->
+            println("Triple.Second: {s}")
+        Triple.Third(b) ->
+            println("Triple.Third: {b}")
+
+    return Result.Ok(0)
+

@@ -1,0 +1,24 @@
+# Test quadruple-nested user-defined generics
+# "Space is big. You just won't believe how vastly, hugely, mind-bogglingly big it is."
+
+struct Box<T>:
+    T value
+
+fn main() i32:
+    # Four levels of nesting with user-defined generic
+    let i32 inner = 42
+    let Box<i32> level1 = Box(inner)
+    let Box<Box<i32>> level2 = Box(level1)
+    let Box<Box<Box<i32>>> level3 = Box(level2)
+    let Box<Box<Box<Box<i32>>>> level4 = Box(level3)
+
+    # Verify the nested structure compiles and is accessible
+    let Box<Box<Box<i32>>> unwrap1 = level4.value
+    let Box<Box<i32>> unwrap2 = unwrap1.value
+    let Box<i32> unwrap3 = unwrap2.value
+    let i32 final_value = unwrap3.value
+
+    if (final_value == 42):
+        return Result.Ok(0)
+
+    return Result.Ok(1)

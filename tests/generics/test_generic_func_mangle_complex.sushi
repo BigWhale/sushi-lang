@@ -1,0 +1,39 @@
+# Test complex type name mangling for generic functions
+# Struct types should be included in mangled names
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Box:
+    i32 value
+
+fn process_point<T>(T value) i32:
+    # Access field to use the value
+    let i32 x = value.x
+    return Result.Ok(x)
+
+fn process_box<T>(T value) i32:
+    # Access field to use the value
+    let i32 v = value.value
+    return Result.Ok(v)
+
+fn run_test() i32:
+    let Point p = Point(10, 20)
+    let Box b = Box(100)
+
+    # Call process with Point struct - should monomorphize to process_point__Point
+    let i32 result1 = process_point(p)??
+    if (result1 != 10):
+        return Result.Ok(1)
+
+    # Call process with Box struct - should monomorphize to process_box__Box
+    let i32 result2 = process_box(b)??
+    if (result2 != 100):
+        return Result.Ok(2)
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

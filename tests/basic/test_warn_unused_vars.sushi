@@ -1,0 +1,5 @@
+# CW1001: unused variable
+fn main() i32:
+  let i32 x = 42  # x is never used
+  let string msg = "hello"  # msg is never used
+  return Result.Ok(0)

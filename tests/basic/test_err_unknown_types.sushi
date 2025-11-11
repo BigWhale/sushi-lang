@@ -1,0 +1,4 @@
+# CE2001: unknown type
+fn main() i32:
+  let float x = 3.14  # float type is not supported
+  return Result.Ok(0)

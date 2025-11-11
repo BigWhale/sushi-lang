@@ -1,0 +1,41 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test RAII for structs with dynamic array fields
+# This test verifies that dynamic arrays inside structs are
+# automatically cleaned up when the struct goes out of scope
+
+struct Container:
+    i32[] numbers
+    string name
+
+fn test_basic_raii() i32:
+    let Container c = Container(new(), "test")
+    c.numbers.push(10)
+    c.numbers.push(20)
+    c.numbers.push(30)
+
+    println("First: {c.numbers.get(0)??}")
+    println("Length: {c.numbers.len()}")
+
+    # NO manual c.numbers.destroy() call!
+    # RAII should automatically clean up when c goes out of scope
+    return Result.Ok(0)
+
+fn test_nested_scopes() i32:
+    println("Outer scope start")
+
+    if (true):
+        let Container c1 = Container(new(), "inner")
+        c1.numbers.push(100)
+        println("Inner: {c1.numbers.get(0)??}")
+        # c1 and c1.numbers should be cleaned up here
+
+    println("Outer scope end")
+    return Result.Ok(0)
+
+fn main() i32:
+    let Result<i32> result1 = test_basic_raii()
+    let Result<i32> result2 = test_nested_scopes()
+    if (result1 and result2):
+        return Result.Ok(0)
+    return Result.Err()

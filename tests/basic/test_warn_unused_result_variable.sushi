@@ -1,0 +1,9 @@
+# TEST_TYPE: compilation
+# Test for Phase 4.1 - Unused Result Detection
+# This test should emit a warning when a Result<T> variable is used in an
+# expression statement without being handled
+
+fn main() i32:
+    let Result<i32> result = Result.Ok(42)
+    result  # Warning: unused Result<i32> (just referencing variable)
+    return Result.Ok(0)

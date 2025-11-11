@@ -1,0 +1,7 @@
+# Test that foreach requires an iterator
+
+fn main() i32:
+    let i32 x = 5
+    foreach(i32 val in x):
+        print(val)
+    return Result.Ok(0)

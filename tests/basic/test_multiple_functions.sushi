@@ -1,0 +1,26 @@
+# EXPECT_RUNTIME_EXIT: 14
+# TEST_TYPE: runtime
+
+
+fn helper1(i32 x) i32:
+  return Result.Ok(x * 2)
+
+fn helper2(bool flag) i32:
+  if (flag):
+    return Result.Ok(1)
+  return Result.Ok(0)
+
+fn helper3() string:
+  return Result.Ok("test")
+
+fn compute(i32 a, i32 b, bool use_flag) i32:
+  let i32 doubled = helper1(a).realise(0)
+  let i32 flag_val = helper2(use_flag).realise(0)
+  return Result.Ok(doubled + b + flag_val)
+
+fn main() i32:
+  let i32 result = compute(5, 3, true).realise(0)
+  let string msg = helper3().realise("")
+  print(msg)
+  # result = compute(5, 3, true) = helper1(5) + 3 + helper2(true) = 10 + 3 + 1 = 14
+  return Result.Ok(result)

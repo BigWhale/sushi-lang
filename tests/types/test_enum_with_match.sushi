@@ -1,0 +1,21 @@
+# Enum test with match expression
+
+
+enum Color:
+    Red
+    Green
+    Blue
+
+fn test_color(Color c) i32:
+    match c:
+        Color.Red ->
+            return Result.Ok(1)
+        Color.Green ->
+            return Result.Ok(2)
+        Color.Blue ->
+            return Result.Ok(3)
+
+fn main() i32:
+    let i32 result = test_color(Color.Red()).realise(0)
+    let i32 expected = 1
+    return Result.Ok(result - expected)

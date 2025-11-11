@@ -1,0 +1,28 @@
+# Test RAII cleanup with ?? error propagation operator
+fn may_fail(i32 x) i32:
+    if (x < 0):
+        return Result.Err()
+    return Result.Ok(x * 2)
+
+fn test_cleanup(i32 x) i32:
+    let Own<i32> ptr1 = Own.alloc(10)
+    let Own<i32> ptr2 = Own.alloc(20)
+
+    # If may_fail returns Err, ptr1 and ptr2 should be cleaned up
+    let i32 result = may_fail(x)??
+
+    let i32 val1 = ptr1.get()
+    let i32 val2 = ptr2.get()
+
+    return Result.Ok(val1 + val2 + result)
+
+fn main() i32:
+    # Test successful case
+    let i32 success = test_cleanup(5).realise(-1)
+    println("Success: {success}")
+
+    # Test error case (should cleanup and propagate)
+    let i32 failure = test_cleanup(-5).realise(-1)
+    println("Failure: {failure}")
+
+    return Result.Ok(0)

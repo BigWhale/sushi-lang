@@ -1,0 +1,33 @@
+# Test binary literals for bit flags
+
+fn main() i32:
+    # Bit flags using binary literals
+    let i32 FLAG_READ = 0b0001
+    let i32 FLAG_WRITE = 0b0010
+    let i32 FLAG_EXECUTE = 0b0100
+    let i32 FLAG_ADMIN = 0b1000
+
+    # Combine flags
+    let i32 read_write = FLAG_READ | FLAG_WRITE
+    let i32 all_flags = FLAG_READ | FLAG_WRITE | FLAG_EXECUTE | FLAG_ADMIN
+
+    # Check flags
+    let bool has_read = (all_flags & FLAG_READ) == FLAG_READ
+    let bool has_write = (all_flags & FLAG_WRITE) != 0
+
+    # Toggle flags
+    let i32 toggle_execute = all_flags ^ FLAG_EXECUTE
+
+    # Clear flags
+    let i32 clear_admin = all_flags & (~FLAG_ADMIN)
+
+    # Common bit patterns
+    let i32 byte_mask = 0b11111111
+    let i32 nibble_high = 0b11110000
+    let i32 nibble_low = 0b00001111
+
+    # Use variables
+    let i32 result = read_write + toggle_execute + clear_admin + byte_mask + nibble_high + nibble_low
+    if (has_read and has_write):
+        println("Mostly Harmless")
+    return Result.Ok(result)

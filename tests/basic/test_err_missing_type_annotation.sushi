@@ -1,0 +1,4 @@
+# CE2007: missing type annotation
+fn main() i32:
+  let x = 42  # missing type annotation
+  return Result.Ok(x)

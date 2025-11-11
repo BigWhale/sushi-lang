@@ -1,0 +1,9 @@
+# TEST_TYPE: compilation
+
+struct Box<T>:
+    T value
+
+fn main() i32:
+    let Box<i32> b = Box(42)
+    let i32 expected = 42
+    return Result.Ok(b.value - expected)

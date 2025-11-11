@@ -1,0 +1,74 @@
+# Test HashMap with nested user-defined generic structs
+# Use case: Container<Pair<i32, string>> as key/value types
+
+struct Pair<T, U>:
+    T first
+    U second
+
+struct Container<T>:
+    T value
+
+fn main() i32:
+    # Test 1: Container<i32> as key
+    println("Starting Test #1")
+    let HashMap<Container<i32>, string> map1 = HashMap.new()
+
+    let Container<i32> key1 = Container(42)
+    map1.insert(key1, "forty-two")
+
+    match map1.get(Container(42)):
+        Maybe.Some(val) -> println("Found: {val}")
+        Maybe.None() -> println("ERROR: Should have found value")
+
+    # Test 2: Nested Container<Container<i32>> as key
+    println("Starting Test #2")
+    let HashMap<Container<Container<i32>>, string> map2 = HashMap.new()
+
+    let Container<i32> inner = Container(100)
+    let Container<Container<i32>> nested = Container(inner)
+    map2.insert(nested, "nested")
+
+    let Container<i32> inner2 = Container(100)
+    match map2.get(Container(inner2)):
+        Maybe.Some(val) -> println("Nested found: {val}")
+        Maybe.None() -> println("ERROR: Should have found nested value")
+
+    # Test 3: Pair<i32, string> as key
+    println("Starting Test #3")
+    let HashMap<Pair<i32, string>, bool> map3 = HashMap.new()
+
+    let Pair<i32, string> p1 = Pair(1, "one")
+    map3.insert(p1, true)
+
+    match map3.get(Pair(1, "one")):
+        Maybe.Some(found) -> println("Pair key works: {found}")
+        Maybe.None() -> println("ERROR: Should have found pair")
+
+    # Test 4: Container<Pair<i32, string>> as nested generic struct key
+    println("Starting Test #4")
+    let HashMap<Container<Pair<i32, string>>, i32> map4 = HashMap.new()
+
+    let Pair<i32, string> pair = Pair(5, "five")
+    let Container<Pair<i32, string>> boxed_pair = Container(pair)
+    map4.insert(boxed_pair, 555)
+
+    let Pair<i32, string> pair2 = Pair(5, "five")
+    match map4.get(Container(pair2)):
+        Maybe.Some(num) -> println("Nested generic struct key: {num}")
+        Maybe.None() -> println("ERROR: Should have found nested generic struct")
+
+    # Test 5: Pair<Container<i32>, Container<string>> - deeply nested generics
+    println("Starting Test #5")
+    let HashMap<Pair<Container<i32>, Container<string>>, bool> map5 = HashMap.new()
+
+    let Pair<Container<i32>, Container<string>> complex = Pair(Container(10), Container("ten"))
+    map5.insert(complex, true)
+
+    match map5.get(Pair(Container(10), Container("ten"))):
+        Maybe.Some(b) ->
+            println("Deeply nested generics work: {b}")
+        Maybe.None() ->
+            println("ERROR: Should have found complex key")
+
+    println("All nested user-defined generic tests passed")
+    return Result.Ok(0)

@@ -1,0 +1,30 @@
+# TEST_TYPE: runtime
+use <collections/strings>
+
+fn main() i32:
+    # Test no matches - string should remain unchanged
+    let string babel = "Babel Fish".replace("Vogon", "Human")
+    println("Babel: '{babel}'")
+
+    if (babel != "Babel Fish"):
+        println("ERROR: Expected 'Babel Fish', got '{babel}'")
+        return Result.Err()
+
+    # Test substring not present
+    let string guide = "Don't Panic".replace("worry", "fear")
+    println("Guide: '{guide}'")
+
+    if (guide != "Don't Panic"):
+        println("ERROR: Expected 'Don't Panic', got '{guide}'")
+        return Result.Err()
+
+    # Test longer search string than original
+    let string short = "Hi".replace("Hello", "Greetings")
+    println("Short: '{short}'")
+
+    if (short != "Hi"):
+        println("ERROR: Expected 'Hi', got '{short}'")
+        return Result.Err()
+
+    println("All unchanged tests passed!")
+    return Result.Ok(0)

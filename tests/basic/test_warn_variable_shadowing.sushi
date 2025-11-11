@@ -1,0 +1,7 @@
+# CW1002: variable shadowing
+fn main() i32:
+  let i32 x = 10
+  if (x > 5):
+    let i32 x = 20  # shadows outer x
+    return Result.Ok(x)
+  return Result.Ok(0)

@@ -1,0 +1,10 @@
+# This file tests error conditions for string methods
+# This should fail compilation with CE2009 errors (wrong argument count)
+
+fn main() i32:
+  let string text = "Hello"
+
+  # Test len() with arguments (should fail)
+  print(text.len(5))
+
+  return Result.Ok(0)

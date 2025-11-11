@@ -1,0 +1,10 @@
+# Test error for function calls in constants
+
+fn get_value() i32:
+    return Result.Ok(42)
+
+const i32 INVALID = get_value()
+
+fn main() i32:
+    return Result.Ok(0)
+

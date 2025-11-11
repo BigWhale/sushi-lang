@@ -1,0 +1,33 @@
+# Test hashing of generic enum Maybe<T>
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    # Test Maybe<i32>
+    let Maybe<i32> m1 = Maybe.Some(42)
+    let u64 h1 = m1.hash()
+    println("Maybe.Some(42) hash: {h1}")
+
+    let Maybe<i32> m2 = Maybe.None()
+    let u64 h2 = m2.hash()
+    println("Maybe<i32>.None hash: {h2}")
+
+    # Test Maybe<string>
+    let Maybe<string> m3 = Maybe.Some("hello")
+    let u64 h3 = m3.hash()
+    println("Maybe.Some(\"hello\") hash: {h3}")
+
+    let Maybe<string> m4 = Maybe.None()
+    let u64 h4 = m4.hash()
+    println("Maybe<string>.None hash: {h4}")
+
+    # Test Maybe<Point> with struct
+    let Point p = Point(10, 20)
+    let Maybe<Point> m5 = Maybe.Some(p)
+    let u64 h5 = m5.hash()
+    println("Maybe.Some(Point(10, 20)) hash: {h5}")
+
+    println("All generic Maybe<T> enum hashes computed!")
+    return Result.Ok(0)

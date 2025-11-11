@@ -1,0 +1,13 @@
+# Test that structs with dynamic array fields CAN be hashed
+
+struct Container:
+    i32[] items
+
+fn main() i32:
+    let Container c = Container(from([1, 2, 3]))
+
+    # Structs with dynamic array fields support hashing
+    let u64 h = c.hash()
+    println("{h}")
+
+    return Result.Ok(0)

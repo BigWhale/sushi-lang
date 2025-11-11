@@ -1,0 +1,25 @@
+# Test valid string interpolation with all supported types
+# This test should compile and run successfully
+
+fn main() i32:
+    # Integer types
+    let i32 num = 42
+    println("Integer: {num}")
+
+    # Boolean
+    let bool flag = true
+    println("Boolean: {flag}")
+
+    # String
+    let string name = "Sushi"
+    println("String: {name}")
+
+    # Multiple interpolations
+    println("Mix: {num} and {name} and {flag}")
+
+    # Nested expressions
+    let i32 a = 10
+    let i32 b = 20
+    println("Sum: {a + b}")
+
+    return Result.Ok(0)

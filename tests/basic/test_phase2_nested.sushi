@@ -1,0 +1,17 @@
+# Test that nested structs can now be hashed (Pass 1.8 uses topological sort)
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Rectangle:
+    Point top_left
+    Point bottom_right
+
+fn main() i32:
+    let Point tl = Point(0, 0)
+    let Point br = Point(10, 10)
+    let Rectangle r = Rectangle(tl, br)
+    let u64 h = r.hash()
+    println("Rectangle hash: {h}")
+    return Result.Ok(0)

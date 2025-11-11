@@ -1,0 +1,4 @@
+# CE2002: type mismatch in assignments
+fn main() i32:
+  let i32 x = true  # cannot assign bool to i32
+  return Result.Ok(x)

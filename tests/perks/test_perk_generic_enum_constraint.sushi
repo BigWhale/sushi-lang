@@ -1,0 +1,29 @@
+# Test generic enum with perk constraints
+
+perk Hashable:
+    fn hash() u64
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Hashable:
+    fn hash() u64:
+        return (self.x + self.y) as u64
+
+enum Option<T: Hashable>:
+    Some(T)
+    None()
+
+fn main() i32:
+    let Point p = Point(10, 20)
+    let Option<Point> opt = Option.Some(p)
+
+    match opt:
+        Option.Some(val) ->
+            let u64 h = val.hash()
+            println(h)
+        Option.None() ->
+            println("None")
+
+    return Result.Ok(0)

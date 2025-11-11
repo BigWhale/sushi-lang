@@ -1,0 +1,5 @@
+# EXPECT_RUNTIME_EXIT: 42
+fn main() i32:
+    let i32 x = 40
+    let i32 y = 2
+    return Result.Ok(x + y)

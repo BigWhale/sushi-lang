@@ -1,0 +1,19 @@
+# Test: Multiple constraint violations
+
+perk Hashable:
+    fn hash() u64
+
+perk Displayable:
+    fn display() string
+
+struct NoPerks:
+    i32 value
+
+fn process<T: Hashable + Displayable>(T item) ~:
+    return Result.Ok(~)
+
+fn main() i32:
+    let NoPerks n = NoPerks(42)
+    # Error CE4006: NoPerks doesn't implement required perks (Hashable + Displayable)
+    process(n)
+    return Result.Ok(0)

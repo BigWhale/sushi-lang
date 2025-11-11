@@ -1,0 +1,20 @@
+# EXPECT_RUNTIME_EXIT: 103
+# TEST_TYPE: runtime
+const f64 PI = 3.14159
+const i32 MAX_SIZE = 100
+const bool DEBUG_MODE = true
+
+fn main() i32:
+    let i32 size = MAX_SIZE
+    let f64 pi_val = PI
+    let bool debug = DEBUG_MODE
+
+    if (debug):
+        print("Debug mode enabled")
+
+    # Use pi_val to avoid warning by converting to int
+    let i32 pi_int = pi_val as i32
+    size := size + pi_int
+
+    # size should be 100 + 3 = 103
+    return Result.Ok(size)

@@ -1,0 +1,22 @@
+# TEST_TYPE: runtime
+use <collections/strings>
+
+fn main() i32:
+    # Test basic replacement - "harmless" to "mostly harmless"
+    let string result = "harmless".replace("harmless", "mostly harmless")
+    println("Result: {result}")
+
+    if (result != "mostly harmless"):
+        println("ERROR: Expected 'mostly harmless', got '{result}'")
+        return Result.Err()
+
+    # Test replacement in middle of string
+    let string guide = "The Guide is harmless".replace("harmless", "mostly harmless")
+    println("Guide: {guide}")
+
+    if (guide != "The Guide is mostly harmless"):
+        println("ERROR: Expected 'The Guide is mostly harmless', got '{guide}'")
+        return Result.Err()
+
+    println("All basic replacement tests passed!")
+    return Result.Ok(0)

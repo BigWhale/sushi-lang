@@ -1,0 +1,31 @@
+# Test constraint violation error reporting with multiple types
+
+perk Hashable:
+    fn hash() u64
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Hashable:
+    fn hash() u64:
+        let u64 hx = self.x as u64
+        let u64 hy = self.y as u64
+        return hx + hy
+
+struct NoHash:
+    i32 value
+# NoHash does NOT implement Hashable
+
+struct Container<T: Hashable>:
+    T data
+
+fn main() i32:
+    # This should compile (Point implements Hashable)
+    let Container<Point> good = Container(Point(10, 20))
+    println(good.data.x)
+
+    # This should fail with CE4006 (NoHash doesn't implement Hashable)
+    let Container<NoHash> bad = Container(NoHash(42))
+
+    return Result.Ok(0)

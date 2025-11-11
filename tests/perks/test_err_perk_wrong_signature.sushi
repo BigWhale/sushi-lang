@@ -1,0 +1,16 @@
+# Test CE4004: Method signature doesn't match perk requirement
+
+perk Hashable:
+    fn hash() u64
+
+struct Point:
+    i32 x
+    i32 y
+
+# Wrong return type - returns i32 instead of u64
+extend Point with Hashable:
+    fn hash() i32:
+        return (self.x + self.y)
+
+fn main() i32:
+    return Result.Ok(0)

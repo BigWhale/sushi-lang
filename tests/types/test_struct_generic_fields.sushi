@@ -1,0 +1,21 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Point created successfully
+
+# Test that generic types (Maybe<T>, Result<T>) work as struct field types
+
+
+struct Point:
+    Maybe<i32> x
+    Maybe<i32> y
+
+fn main() i32:
+    # Create a Point with Some and None values
+    let Point p = Point(Maybe.Some(10), Maybe.None())
+
+    # Check if x is Some using is_some() method
+    if (p.x.is_some()):
+        println("Point created successfully")
+    else:
+        println("Error: x should be Some")
+
+    return Result.Ok(0)

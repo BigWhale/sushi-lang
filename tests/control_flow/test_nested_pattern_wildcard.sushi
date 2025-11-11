@@ -1,0 +1,40 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: 10
+# EXPECTED_OUTPUT: 0
+# EXPECTED_OUTPUT: 100
+
+# Mix of nested patterns and wildcards
+# This tests that wildcards work correctly with nested patterns
+
+
+enum Inner:
+    A(i32)
+    B(i32)
+
+enum Outer:
+    Left(Inner)
+    Right(Inner)
+
+fn process(Outer o) i32:
+    match o:
+        Outer.Left(Inner.A(x)) ->
+            return Result.Ok(x * 2)
+        Outer.Left(_) ->
+            return Result.Ok(0)
+        Outer.Right(_) ->
+            return Result.Ok(100)
+
+fn main() i32:
+    let Outer o1 = Outer.Left(Inner.A(5))
+    let i32 r1 = process(o1).realise(0)
+    println("{r1}")
+
+    let Outer o2 = Outer.Left(Inner.B(7))
+    let i32 r2 = process(o2).realise(0)
+    println("{r2}")
+
+    let Outer o3 = Outer.Right(Inner.A(99))
+    let i32 r3 = process(o3).realise(0)
+    println("{r3}")
+
+    return Result.Ok(0)

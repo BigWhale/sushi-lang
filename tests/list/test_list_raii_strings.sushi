@@ -1,0 +1,37 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Test RAII cleanup with List<string> containing heap-allocated strings
+fn create_list() List<string>:
+    let List<string> names = List.new()
+    names.push("Arthur Dent")
+    names.push("Ford Prefect")
+    names.push("Zaphod Beeblebrox")
+    return Result.Ok(names)
+
+fn run_test() i32:
+    # Create and destroy lists in a loop
+    let i32 i = 0
+    while (i < 5):
+        let List<string> crew = create_list()??
+
+        if (crew.len() != 3):
+            println("ERROR: Expected 3 elements")
+            return Result.Ok(1)
+
+        match crew.get(1):
+            Maybe.Some(name) ->
+                # Strings should be valid
+                println("Crew member: {name}")
+            Maybe.None() ->
+                println("ERROR: Should find element at index 1")
+                return Result.Ok(2)
+
+        # crew is automatically destroyed here
+        i := i + 1
+
+    println("RAII string cleanup passed!")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

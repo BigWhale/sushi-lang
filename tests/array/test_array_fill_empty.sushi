@@ -1,0 +1,10 @@
+fn main() i32:
+    # Test fill() on empty array - should work without issues
+    let i32[] empty_space = from([])
+    empty_space.fill(42)
+
+    # Verify array is still empty
+    if (empty_space.len() != 0):
+        return Result.Err()
+
+    return Result.Ok(0)

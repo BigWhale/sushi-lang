@@ -1,0 +1,53 @@
+# Test hash method for structs containing arrays
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Polygon:
+    string name
+    i32[3] vertices
+
+struct Graph:
+    string label
+    i32[] data
+
+fn main() i32:
+    # Test struct with fixed array
+    let Polygon poly1 = Polygon("Triangle", [0, 1, 2])
+    let u64 hash1 = poly1.hash()
+    println("Polygon(\"Triangle\", [0,1,2]).hash() = {hash1}")
+
+    # Test that same values produce same hash
+    let Polygon poly2 = Polygon("Triangle", [0, 1, 2])
+    let u64 hash2 = poly2.hash()
+    if (hash1 == hash2):
+        println("✓ Same struct values with arrays produce same hash")
+    else:
+        println("✗ Same struct values with arrays produce different hash")
+
+    # Test that different array values produce different hash
+    let Polygon poly3 = Polygon("Triangle", [3, 4, 5])
+    let u64 hash3 = poly3.hash()
+    if (hash1 != hash3):
+        println("✓ Different array values produce different hashes")
+    else:
+        println("✗ Different array values produce same hash")
+
+    # Test struct with dynamic array
+    let Graph g1 = Graph("Sales", from([100, 200, 300]))
+    let u64 g1_hash = g1.hash()
+    println("Graph with dynamic array.hash() = {g1_hash}")
+
+    # Same values should have same hash
+    let Graph g2 = Graph("Sales", from([100, 200, 300]))
+    let u64 g2_hash = g2.hash()
+    if (g1_hash == g2_hash):
+        println("✓ Same struct with dynamic array values produce same hash")
+    else:
+        println("✗ Same struct with dynamic array values produce different hash")
+
+    g1.data.destroy()
+    g2.data.destroy()
+
+    return Result.Ok(0)

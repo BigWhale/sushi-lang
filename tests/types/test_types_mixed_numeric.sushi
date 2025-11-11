@@ -1,0 +1,82 @@
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+fn main() i32:
+  # Test various numeric type operations and mixed expressions
+
+  # Integer operations
+  let i32 a = 42
+  let i32 b = a + 10
+  let i32 c = b - a
+
+  # Cast operations
+  let f64 d = a as f64
+  let i32 back_to_int = d as i32
+
+  # Mixed operations with casting
+  let f64 f = (a + b) as f64
+  let i32 result = (f * 2.0) as i32
+
+  # Boolean operations
+  let bool h = (a > b) and (c < 20)
+  let i32 validation = 0
+  if (not h):
+    validation := 1
+
+  # Validate basic casting
+  if (back_to_int == a):
+    validation := validation + 1
+
+  # Validate mixed operations
+  if (result > 0):
+    validation := validation + 1
+
+  # Test casting between different sizes
+  let i64 big_int = a as i64
+  let i16 small_int = a as i16
+  let f32 small_float = d as f32
+  let f64 big_float = small_float as f64
+  let i32 final_int = big_float as i32
+
+  # Validate casting preserves values
+  if (big_int == (a as i64) and final_int == a):
+    validation := validation + 1
+
+  # Complex expression
+  let i32 complex = (a + b) * c - (small_int as i32)
+  if (complex > 0):
+    validation := validation + 1
+
+  # Casting edge cases
+  let f64 pi = 3.14159
+  let i32 truncated = pi as i32  # Should truncate to 3
+  if (truncated == 3):
+    validation := validation + 1
+
+  # Test casting preserves values when possible
+  let f32 original = 123.456 as f32
+  let f64 expanded = original as f64
+  let f32 compressed = expanded as f32
+  if (compressed == original):
+    validation := validation + 1
+
+  # More complex casting chain
+  let i32 start = 100
+  let f64 to_float = start as f64
+  let i64 to_long = to_float as i64
+  let i32 back_again = to_long as i32
+  if (back_again == start):
+    validation := validation + 1
+
+  # Test precision handling
+  let f64 precise = 123.456789
+  let f32 less_precise = precise as f32
+  let f64 back_to_precise = less_precise as f64
+  # Note: this might not be exactly equal due to precision loss
+  if (back_to_precise > 123.4 and back_to_precise < 123.5):
+    validation := validation + 1
+
+  # Verify all validations passed
+  if (validation == 9):
+    return Result.Ok(0)  # Success)
+  else:
+    return Result.Ok(1)  # Test failed)

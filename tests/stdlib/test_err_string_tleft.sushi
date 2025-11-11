@@ -1,0 +1,7 @@
+use <collections/strings>
+
+fn main() i32:
+    let string s = "  hello"
+    # Error: tleft() takes no arguments
+    let string r = s.tleft("extra")
+    return Result.Ok(0)

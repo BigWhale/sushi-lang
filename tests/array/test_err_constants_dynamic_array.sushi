@@ -1,0 +1,4 @@
+const i32[] ITEMS = new()
+
+fn main() i32:
+    return Result.Ok(0)

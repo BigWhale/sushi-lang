@@ -1,0 +1,16 @@
+fn main() i32:
+    # Test reverse() on fixed array - the guide entries
+    let string[4] guide_entries = ["Vogon", "Poetry", "Mostly", "Harmless"]
+    guide_entries.reverse()
+
+    # Verify order is reversed
+    if (guide_entries[0] != "Harmless"):
+        return Result.Err()
+    if (guide_entries[1] != "Mostly"):
+        return Result.Err()
+    if (guide_entries[2] != "Poetry"):
+        return Result.Err()
+    if (guide_entries[3] != "Vogon"):
+        return Result.Err()
+
+    return Result.Ok(0)

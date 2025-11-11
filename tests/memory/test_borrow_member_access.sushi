@@ -1,0 +1,15 @@
+# Test: Try to borrow a struct field
+# This should currently fail with CE2404
+
+struct Config:
+    i32 port
+    string host
+
+fn print_port(&i32 p) ~:
+    println(p)
+    return Result.Ok(~)
+
+fn main() i32:
+    let Config cfg = Config(8080, "localhost")
+    print_port(&cfg.port)
+    return Result.Ok(0)

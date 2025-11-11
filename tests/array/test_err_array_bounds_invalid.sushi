@@ -1,0 +1,9 @@
+fn main() i32:
+    let i32[5] numbers = [10, 20, 30, 40, 50]
+
+    # Valid accesses
+    let i32 first = numbers[0]
+    let i32 last = numbers[10]
+    let i32 middle = numbers[2]
+
+    return Result.Ok(0)

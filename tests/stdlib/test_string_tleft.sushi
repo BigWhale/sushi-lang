@@ -1,0 +1,49 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT: hello
+# EXPECT_STDOUT: world
+# EXPECT_STDOUT: test
+# EXPECT_STDOUT:
+# EXPECT_STDOUT:
+# EXPECT_STDOUT: hello
+# EXPECT_STDOUT: 你好
+
+use <collections/strings>
+
+fn main() i32:
+    # Test 1: Trim leading whitespace
+    let string s1 = "  hello"
+    let string r1 = s1.tleft()
+    println(r1)  # Expected: hello
+
+    # Test 2: No leading whitespace
+    let string s2 = "world  "
+    let string r2 = s2.tleft()
+    println(r2)  # Expected: world
+
+    # Test 3: Both leading and trailing whitespace
+    let string s3 = "  test  "
+    let string r3 = s3.tleft()
+    println(r3)  # Expected: test
+
+    # Test 4: Empty string
+    let string s4 = ""
+    let string r4 = s4.tleft()
+    println(r4)  # Expected: (empty line)
+
+    # Test 5: Only whitespace
+    let string s5 = "   "
+    let string r5 = s5.tleft()
+    println(r5)  # Expected: (empty line)
+
+    # Test 6: Multiple whitespace types (space, tab, newline)
+    let string s6 = " \t\nhello"
+    let string r6 = s6.tleft()
+    println(r6)  # Expected: hello
+
+    # Test 7: UTF-8 with leading whitespace
+    let string s7 = "  你好"
+    let string r7 = s7.tleft()
+    println(r7)  # Expected: 你好
+
+    return Result.Ok(0)

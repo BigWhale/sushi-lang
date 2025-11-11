@@ -1,0 +1,7 @@
+# Simple test for array hashing with integers only
+
+fn main() i32:
+    let i32[3] arr = [10, 20, 30]
+    let u64 hash = arr.hash()
+    println("Array [10, 20, 30].hash() = {hash}")
+    return Result.Ok(0)

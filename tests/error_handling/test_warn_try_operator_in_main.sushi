@@ -1,0 +1,11 @@
+# Test CW2511: ?? operator in main function generates warning
+# Expected: CW2511 warning
+
+fn get_value() i32:
+    return Result.Ok(42)
+
+fn main() i32:
+    # Warning: ?? operator in main function
+    # This should generate CW2511 warning
+    let i32 x = get_value()??
+    return Result.Ok(x)

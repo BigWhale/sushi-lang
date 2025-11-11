@@ -1,0 +1,28 @@
+# Test valid array access patterns (should compile successfully)
+
+fn run_test() i32:
+  let i32[5] numbers = [10, 20, 30, 40, 50]
+  let bool[3] flags = [true, false, true]
+  let string[2] names = ["Arthur", "Trillian"]
+
+  # Test valid direct indexing (all within bounds)
+  let i32 first = numbers[0]      # Valid: 0 < 5
+  let i32 last = numbers[4]       # Valid: 4 < 5
+  let bool flag = flags[1]        # Valid: 1 < 3
+  let string name = names[0]      # Valid: 0 < 2
+
+  # Test valid method calls
+  let i32 value1 = numbers.get(2)??   # Valid: 2 < 5
+  let bool flag2 = flags.get(0)??     # Valid: 0 < 3
+  let string name2 = names.get(1)??   # Valid: 1 < 2
+
+  # Test that runtime variables still work (no compile-time check)
+  let i32 runtime_index = 2
+  let i32 value3 = numbers[runtime_index]      # Should work - runtime check
+  let i32 value4 = numbers.get(runtime_index)??  # Should work - runtime check
+
+  return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

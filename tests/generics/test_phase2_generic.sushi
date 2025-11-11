@@ -1,0 +1,11 @@
+# Test that generic structs can now be hashed (Pass 1.8 handles monomorphized types)
+
+struct Pair<T, U>:
+    T first
+    U second
+
+fn main() i32:
+    let Pair<i32, string> p = Pair(42, "hello")
+    let u64 h = p.hash()
+    println("Pair<i32, string> hash: {h}")
+    return Result.Ok(0)

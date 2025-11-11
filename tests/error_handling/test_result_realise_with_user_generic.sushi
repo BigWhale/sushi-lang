@@ -1,0 +1,27 @@
+# Test: Using Result<T>.realise() where T is a user-defined generic enum
+# Issue #3: This should work because we're calling .realise() on Result<T>, not on Either<T,U>
+
+enum Either<T, U>:
+    Left(T)
+    Right(U)
+
+fn test_return_type() Either<i32, string>:
+    return Result.Ok(Either.Left(42))
+
+fn main() i32:
+    println("Testing Result<Either>.realise()")
+
+    # Get a Result<Either<i32, string>>
+    let Result<Either<i32, string>> ret = test_return_type()
+
+    # Use .realise() to extract the Either value with a default
+    let Either<i32, string> either_val = ret.realise(Either.Left(0))
+
+    # Now use the Either value
+    match either_val:
+        Either.Left(x) ->
+            println("Got Left: {x}")
+        Either.Right(s) ->
+            println("Got Right: {s}")
+
+    return Result.Ok(0)

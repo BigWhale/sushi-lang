@@ -1,0 +1,22 @@
+# Test perk on enum with only unit variants (edge case)
+
+perk Hashable:
+    fn hash() u64
+
+enum Color:
+    Red()
+    Green()
+    Blue()
+
+extend Color with Hashable:
+    fn hash() u64:
+        match self:
+            Color.Red() -> return 1 as u64
+            Color.Green() -> return 2 as u64
+            Color.Blue() -> return 3 as u64
+
+fn main() i32:
+    let Color c = Color.Green()
+    let u64 h = c.hash()
+    println(h)
+    return Result.Ok(0)

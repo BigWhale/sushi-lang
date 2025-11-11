@@ -1,0 +1,24 @@
+# Test ?? operator with Maybe<T> stored in variable
+
+fn process_maybe(Maybe<i32> value) i32:
+    let i32 unwrapped = value??  # Unwrap Some or propagate None
+    return Result.Ok(unwrapped * 2)
+
+fn main() i32:
+    # Test with Some variant
+    let Maybe<i32> some_value = Maybe.Some(42)
+    let Result<i32> result1 = process_maybe(some_value)
+    if (result1):
+        println("Some variant processed successfully")
+    else:
+        println("Error: None propagated")
+
+    # Test with None variant
+    let Maybe<i32> none_value = Maybe.None()
+    let Result<i32> result2 = process_maybe(none_value)
+    if (result2):
+        println("Unexpected success")
+    else:
+        println("None propagated as expected")
+
+    return Result.Ok(0)

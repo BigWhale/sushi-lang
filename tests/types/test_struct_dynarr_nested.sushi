@@ -1,0 +1,12 @@
+struct Inner:
+    i32[] data
+
+struct Outer:
+    Inner inner
+
+fn main() i32:
+    let i32[] arr = from([1, 2, 3])
+    let Inner inner = Inner(arr)
+    let Outer outer = Outer(inner)
+    println(outer.inner.data.len())
+    return Result.Ok(0)

@@ -1,0 +1,7 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Mostly Harmless
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    println(s)
+    return Result.Ok(0)

@@ -1,0 +1,9 @@
+fn update_message(&string msg) ~:
+    msg := "Updated!"
+    return Result.Ok(~)
+
+fn main() i32:
+    let string text = "Original"
+    update_message(&text)
+    println(text)
+    return Result.Ok(0)

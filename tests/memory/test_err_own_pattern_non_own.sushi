@@ -1,0 +1,15 @@
+# Test error: Own pattern on non-Own field
+enum Container:
+    Box(i32)
+    Empty()
+
+fn test_error(Container c) i32:
+    match c:
+        Container.Box(Own(value)) ->  # ERROR: i32 is not Own<T>
+            return Result.Ok(value)
+        Container.Empty() ->
+            return Result.Ok(0)
+    return Result.Ok(-1)
+
+fn main() i32:
+    return Result.Ok(0)

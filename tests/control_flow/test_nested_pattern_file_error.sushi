@@ -1,0 +1,30 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Using default config (file not found)
+# EXPECTED_OUTPUT: Config: default=true
+
+# Realistic FileResult/FileError nested pattern example
+# This tests nested pattern matching with the file I/O system
+
+use <io/files>
+
+fn load_config() string:
+    let FileResult result = open("nonexistent_nested_test.txt", FileMode.Read())
+    match result:
+        FileResult.Ok(f) ->
+            let string content = f.read()
+            f.close()
+            return Result.Ok(content)
+        FileResult.Err(FileError.NotFound) ->
+            println("Using default config (file not found)")
+            return Result.Ok("default=true")
+        FileResult.Err(FileError.PermissionDenied) ->
+            println("Error: Permission denied")
+            return Result.Err()
+        FileResult.Err(_) ->
+            println("Error: Other I/O error")
+            return Result.Err()
+
+fn main() i32:
+    let string config = load_config().realise("")
+    println("Config: {config}")
+    return Result.Ok(0)

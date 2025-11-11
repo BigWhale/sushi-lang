@@ -1,0 +1,34 @@
+# Test multiple string.find() calls
+use <collections/strings>
+
+fn test_case1() i32:
+    # "hello" does not contain "world", so this should return None
+    match "hello".find("world"):
+        Maybe.Some(_) ->
+            println("ERROR: Should not find 'world' in 'hello'")
+            return Result.Err()
+        Maybe.None() ->
+            println("Test 1: 'world' not found in 'hello' (expected)")
+
+    return Result.Ok(0)
+
+fn test_case2() i32:
+    match "hello".find("xyz"):
+        Maybe.Some(_) ->
+            println("ERROR: Should not find xyz")
+            return Result.Err()
+        Maybe.None() ->
+            println("Test 2: 'xyz' not found (expected)")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r1 = test_case1().realise(1)
+    if (r1 != 0):
+        return Result.Err()
+
+    let i32 r2 = test_case2().realise(1)
+    if (r2 != 0):
+        return Result.Err()
+
+    return Result.Ok(0)

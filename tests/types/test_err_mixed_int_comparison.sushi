@@ -1,0 +1,10 @@
+# CE2510: Mixed integer type comparisons should fail
+fn main() i32:
+  let i32 a = 42
+  let i64 b = 100 as i64
+
+  # This should fail - mixed i32 and i64
+  if (a < b):
+    return Result.Ok(0)
+
+  return Result.Ok(1)

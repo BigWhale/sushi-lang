@@ -1,0 +1,59 @@
+# Test nested generic enum constructor literals
+# Regression test for ISSUES.md #13: "undefined name: Result" error
+# "Time is an illusion. Lunchtime doubly so."
+
+fn main() i32:
+    # Test 1: Maybe<Result<i32>> with literal constructor
+    # The Answer to the Ultimate Question
+    let Maybe<Result<i32>> outer1 = Maybe.Some(Result.Ok(42))
+    if (outer1.is_some()):
+        let Result<i32> inner1 = outer1.realise(Result.Err())
+        if (inner1):
+            let i32 val = inner1.realise(0)
+            if (val == 42):
+                println("Test 1 passed: Maybe<Result<i32>>")
+            else:
+                return Result.Ok(1)
+        else:
+            return Result.Ok(2)
+    else:
+        return Result.Ok(3)
+
+    # Test 2: Result<Maybe<string>> with literal constructor
+    # "Mostly Harmless" - Earth's entry in the Guide
+    let Result<Maybe<string>> outer2 = Result.Ok(Maybe.Some("Mostly Harmless"))
+    if (outer2):
+        let Maybe<string> inner2 = outer2.realise(Maybe.None())
+        if (inner2.is_some()):
+            let string val = inner2.realise("")
+            if (val == "Mostly Harmless"):
+                println("Test 2 passed: Result<Maybe<string>>")
+            else:
+                return Result.Ok(4)
+        else:
+            return Result.Ok(5)
+    else:
+        return Result.Ok(6)
+
+    # Test 3: Triple nesting Maybe<Maybe<Maybe<i32>>>
+    # Deep Thought computed for 7.5 million years
+    let Maybe<Maybe<Maybe<i32>>> triple = Maybe.Some(Maybe.Some(Maybe.Some(42)))
+    if (triple.is_some()):
+        let Maybe<Maybe<i32>> level2 = triple.realise(Maybe.None())
+        if (level2.is_some()):
+            let Maybe<i32> level1 = level2.realise(Maybe.None())
+            if (level1.is_some()):
+                let i32 val = level1.realise(0)
+                if (val == 42):
+                    println("Test 3 passed: Triple nested Maybe")
+                else:
+                    return Result.Ok(7)
+            else:
+                return Result.Ok(8)
+        else:
+            return Result.Ok(9)
+    else:
+        return Result.Ok(10)
+
+    println("All tests passed!")
+    return Result.Ok(0)

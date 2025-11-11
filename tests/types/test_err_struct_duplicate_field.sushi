@@ -1,0 +1,9 @@
+# Error: Duplicate field in struct
+
+struct Point:
+    i32 x
+    i32 y
+    i32 x
+
+fn main() i32:
+    return Result.Ok(0)
