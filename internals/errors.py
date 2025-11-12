@@ -871,6 +871,10 @@ _add(ErrorMessage("CE2071", Severity.ERROR,
     "C-style octal literal '{literal}' is not supported. Use '0o' prefix instead (e.g., 0o{octal})",
     Category.TYPE, "Leading zero octals (like 077) are ambiguous and error-prone. Use explicit 0o prefix instead."))
 
+_add(ErrorMessage("CE2072", Severity.ERROR,
+    "range expression requires integer types for start and end bounds. Got {got}, expected {expected}",
+    Category.TYPE, "Range expressions (.. and ..=) can only be used with integer types (i8, i16, i32, i64, u8, u16, u32, u64)."))
+
 # Unit Management Errors (CE3xxx)
 _add(ErrorMessage("CE3001", Severity.ERROR,
     "circular dependency detected: {cycle}",

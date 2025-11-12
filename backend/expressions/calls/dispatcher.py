@@ -261,15 +261,15 @@ def _check_stdlib_function_codegen(codegen: 'LLVMCodegen', function_name: str) -
     """
     # Access the function table from the codegen
     func_table = codegen.func_table
-    
+
     # Try common module paths
-    possible_modules = ["time", "sys/env", "math"]
-    
+    possible_modules = ["time", "sys/env", "math", "random"]
+
     for module_path in possible_modules:
         stdlib_func = func_table.lookup_stdlib_function(module_path, function_name)
         if stdlib_func is not None:
             return (module_path, stdlib_func)
-    
+
     return None
 
 
@@ -299,5 +299,8 @@ def _emit_stdlib_function(codegen: 'LLVMCodegen', expr: Call, function_name: str
         return emit_env_function(codegen, expr, function_name, to_i1)
     elif module_path == "math":
         return emit_math_function(codegen, expr, function_name, to_i1)
+    elif module_path == "random":
+        from backend.expressions.calls.stdlib import emit_random_function
+        return emit_random_function(codegen, expr, function_name, to_i1)
     else:
         raise_internal_error("CE0055", name=f"{module_path}/{function_name}")

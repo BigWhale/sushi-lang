@@ -1,0 +1,13 @@
+fn main() i32:
+    let i32 start = 2
+    let i32 end = 7
+
+    println("Dynamic range:")
+    foreach(i in start..end):
+        println(i)
+
+    println("Expression range:")
+    foreach(i in (1 + 1)..(10 - 3)):
+        println(i)
+
+    return Result.Ok(0)

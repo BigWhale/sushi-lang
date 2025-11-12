@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 from internals import errors as er
 from semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType
-from semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, IntLit
+from semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, IntLit, RangeExpr
 from semantics.type_predicates import is_numeric_type
 from .compatibility import is_valid_cast
 
@@ -97,6 +97,36 @@ def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None
     if not is_valid_cast(source_type, target_type):
         er.emit(validator.reporter, er.ERR.CE2014, expr.loc,
                source=str(source_type), target=str(target_type))
+
+
+def validate_range_expression(validator: 'TypeValidator', expr: 'RangeExpr') -> None:
+    """Validate range expression - start and end must be integer types.
+
+    Args:
+        validator: The TypeValidator instance.
+        expr: The range expression to validate.
+    """
+    # Validate start expression
+    validator.validate_expression(expr.start)
+    start_type = validator.infer_expression_type(expr.start)
+
+    # Validate end expression
+    validator.validate_expression(expr.end)
+    end_type = validator.infer_expression_type(expr.end)
+
+    # Check that start is integer type (i8, i16, i32, i64, u8, u16, u32, u64)
+    if start_type is not None and not is_numeric_type(start_type):
+        er.emit(validator.reporter, er.ERR.CE2072, expr.start.loc,
+               got=str(start_type), expected="integer type")
+
+    # Check that end is integer type
+    if end_type is not None and not is_numeric_type(end_type):
+        er.emit(validator.reporter, er.ERR.CE2072, expr.end.loc,
+               got=str(end_type), expected="integer type")
+
+    # Note: We accept any integer type (i8, i16, i32, i64, u8, u16, u32, u64)
+    # but the backend will cast to i32 for iteration. Type compatibility
+    # checking happens during cast emission.
 
 
 def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None:

@@ -88,6 +88,12 @@ def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
         raise_internal_error("CE0015", message="foreach item_type not resolved by semantic analysis")
     codegen.utils.ensure_open_block()
 
+    # Check if this is a range expression (special case for zero-cost optimization)
+    from semantics.ast import RangeExpr
+    if isinstance(node.iterable, RangeExpr):
+        _emit_range_foreach(codegen, node, node.iterable)
+        return
+
     # Emit the iterable expression to get the iterator
     iterator_value = codegen.expressions.emit_expr(node.iterable)
     iterator_type = IteratorType(element_type=node.item_type)
@@ -474,6 +480,177 @@ def _emit_hashmap_foreach(
 
     # Position at end block
     codegen.builder.position_at_end(end_bb)
+
+
+def _emit_range_foreach(codegen: 'LLVMCodegen', node: 'Foreach', range_expr: 'RangeExpr') -> None:
+    """Emit optimized foreach loop for range expressions.
+
+    Compiles range expressions directly to for-loops without iterator overhead:
+
+    foreach(i in 0..10):        # Exclusive
+        body
+
+    Becomes:
+        start = 0
+        end = 10
+        if (start < end):
+            # Ascending
+            i = start
+            while (i < end):
+                body
+                i = i + 1
+        else:
+            # Descending
+            i = start
+            while (i > end):
+                body
+                i = i - 1
+
+    For inclusive ranges (..=), the condition adjusts to <= or >=.
+    Empty ranges (start == end) produce zero iterations.
+
+    Args:
+        codegen: The main LLVMCodegen instance.
+        node: The foreach statement node.
+        range_expr: The range expression from node.iterable.
+    """
+    from llvmlite import ir
+
+    if codegen.builder is None:
+        raise_internal_error("CE0009")
+    if codegen.func is None:
+        raise_internal_error("CE0010")
+
+    codegen.utils.ensure_open_block()
+
+    # Emit start and end expressions (cast to i32)
+    start_value = codegen.expressions.emit_expr(range_expr.start)
+    start_i32 = codegen.utils.as_i32(start_value)
+
+    end_value = codegen.expressions.emit_expr(range_expr.end)
+    end_i32 = codegen.utils.as_i32(end_value)
+
+    # Allocate slots for start/end/loop variable
+    start_slot = codegen.builder.alloca(codegen.types.i32, name="range_start")
+    codegen.builder.store(start_i32, start_slot)
+
+    end_slot = codegen.builder.alloca(codegen.types.i32, name="range_end")
+    codegen.builder.store(end_i32, end_slot)
+
+    # Determine direction at runtime: start < end (ascending) vs start >= end (descending)
+    start_loaded = codegen.builder.load(start_slot, name="start_val")
+    end_loaded = codegen.builder.load(end_slot, name="end_val")
+    is_ascending = codegen.builder.icmp_signed("<", start_loaded, end_loaded, name="is_ascending")
+
+    # Create blocks
+    ascending_bb = codegen.func.append_basic_block(name="range.ascending")
+    descending_bb = codegen.func.append_basic_block(name="range.descending")
+    end_bb = codegen.func.append_basic_block(name="range.end")
+
+    # Branch based on direction
+    codegen.builder.cbranch(is_ascending, ascending_bb, descending_bb)
+
+    # === Ascending path ===
+    codegen.builder.position_at_end(ascending_bb)
+    _emit_range_loop_path(codegen, node, start_slot, end_slot, range_expr.inclusive, ascending=True, end_bb=end_bb)
+
+    # === Descending path ===
+    codegen.builder.position_at_end(descending_bb)
+    _emit_range_loop_path(codegen, node, start_slot, end_slot, range_expr.inclusive, ascending=False, end_bb=end_bb)
+
+    # Position at end block
+    codegen.builder.position_at_end(end_bb)
+
+
+def _emit_range_loop_path(
+    codegen: 'LLVMCodegen',
+    node: 'Foreach',
+    start_slot: 'ir.Value',
+    end_slot: 'ir.Value',
+    inclusive: bool,
+    ascending: bool,
+    end_bb: 'ir.Block'
+) -> None:
+    """Emit one direction of the range loop (ascending or descending).
+
+    Args:
+        codegen: The main LLVMCodegen instance.
+        node: The foreach statement node.
+        start_slot: Allocated slot for start value.
+        end_slot: Allocated slot for end value.
+        inclusive: True for ..=, False for ..
+        ascending: True for ascending loop, False for descending.
+        end_bb: The shared end block.
+    """
+    from llvmlite import ir
+
+    # Adjust end value for inclusive ranges
+    end_val = codegen.builder.load(end_slot, name="end_val")
+    if inclusive:
+        if ascending:
+            # Inclusive ascending: end = end + 1 (so i <= end becomes i < end+1)
+            adjusted_end = codegen.builder.add(end_val, ir.Constant(codegen.types.i32, 1), name="adjusted_end")
+        else:
+            # Inclusive descending: end = end - 1 (so i >= end becomes i > end-1)
+            adjusted_end = codegen.builder.sub(end_val, ir.Constant(codegen.types.i32, 1), name="adjusted_end")
+    else:
+        adjusted_end = end_val
+
+    # Create loop blocks
+    cond_bb = codegen.func.append_basic_block(name=f"range.{'asc' if ascending else 'desc'}.cond")
+    body_bb = codegen.func.append_basic_block(name=f"range.{'asc' if ascending else 'desc'}.body")
+    incr_bb = codegen.func.append_basic_block(name=f"range.{'asc' if ascending else 'desc'}.incr")
+
+    # Initialize loop variable: i = start
+    start_val = codegen.builder.load(start_slot, name="start_val")
+    counter_slot = codegen.builder.alloca(codegen.types.i32, name=node.item_name)
+    codegen.builder.store(start_val, counter_slot)
+
+    codegen.builder.branch(cond_bb)
+
+    # === Condition block ===
+    codegen.builder.position_at_end(cond_bb)
+    current_counter = codegen.builder.load(counter_slot, name=f"{node.item_name}_val")
+
+    if ascending:
+        # Ascending: i < adjusted_end
+        condition = codegen.builder.icmp_signed("<", current_counter, adjusted_end, name="loop_cond")
+    else:
+        # Descending: i > adjusted_end
+        condition = codegen.builder.icmp_signed(">", current_counter, adjusted_end, name="loop_cond")
+
+    codegen.builder.cbranch(condition, body_bb, end_bb)
+
+    # === Body block ===
+    codegen.builder.position_at_end(body_bb)
+    # Push increment block to loop stack so continue jumps there
+    codegen.loop_stack.append((incr_bb, end_bb))
+    codegen.memory.push_scope()
+
+    # Register loop variable in scope
+    element_ll_type = codegen.types.ll_type(node.item_type)
+    counter_value = codegen.builder.load(counter_slot, name=node.item_name)
+    codegen.memory.create_local(node.item_name, element_ll_type, counter_value, node.item_type)
+
+    # Emit the foreach body
+    _emit_block(codegen, node.body)
+
+    codegen.memory.pop_scope()
+    codegen.loop_stack.pop()
+
+    # Branch to increment block if no terminator
+    if codegen.builder.block.terminator is None:
+        codegen.builder.branch(incr_bb)
+
+    # === Increment block ===
+    codegen.builder.position_at_end(incr_bb)
+    current_val = codegen.builder.load(counter_slot, name="current_val")
+    if ascending:
+        next_val = codegen.builder.add(current_val, ir.Constant(codegen.types.i32, 1), name="next_val")
+    else:
+        next_val = codegen.builder.sub(current_val, ir.Constant(codegen.types.i32, 1), name="next_val")
+    codegen.builder.store(next_val, counter_slot)
+    codegen.builder.branch(cond_bb)
 
 
 def _emit_block(codegen: 'LLVMCodegen', block) -> None:

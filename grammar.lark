@@ -120,7 +120,8 @@ bitwise_or: bitwise_xor (BIT_OR bitwise_xor)*
 bitwise_xor: bitwise_and (BIT_XOR bitwise_and)*
 bitwise_and: equality (BIT_AND equality)*
 equality: comparison ((EQEQ | NEQ) comparison)*
-comparison: shift ((LT | GT | LE | GE) shift)*
+comparison: range ((LT | GT | LE | GE) range)*
+range: shift ((RANGE | RANGE_INCLUSIVE) shift)?
 shift: cast ((LSHIFT | RSHIFT) cast)*
 cast: add (AS type)*
 ?add: mul ((PLUS | MINUS) mul)*
@@ -208,6 +209,8 @@ BIT_OR: "|"
 BIT_XOR: "^"
 LSHIFT: "<<"
 RSHIFT: ">>"
+RANGE_INCLUSIVE.3: "..="
+RANGE.3: ".."
 
 AND.2: /and\b/ | "&&"
 OR.2: /or\b/ | "||"
@@ -229,10 +232,10 @@ STDERR.2: /stderr\b/
 HEX_INT: /0[xX][0-9a-fA-F]([0-9a-fA-F_]*[0-9a-fA-F])?/
 BIN_INT: /0[bB][01]([01_]*[01])?/
 OCT_INT: /0[oO][0-7]([0-7_]*[0-7])?/
+FLOAT: /\d+\.\d+([eE][+-]?\d+)?|\d+[eE][+-]?\d+/
 
 %import common.WS_INLINE
 %import common.INT
-%import common.FLOAT
 %import common.CNAME -> NAME
 
 %declare _INDENT _DEDENT

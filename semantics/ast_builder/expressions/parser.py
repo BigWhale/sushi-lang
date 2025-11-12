@@ -46,10 +46,14 @@ class ExpressionParser:
             return operators.expr_borrow(t, self.ast_builder)
 
         # Binary operator chains
-        if tag in {"add", "mul", "equality", "comparison", "shift", 
-                   "bitwise_and", "bitwise_xor", "bitwise_or", 
+        if tag in {"add", "mul", "equality", "comparison", "shift",
+                   "bitwise_and", "bitwise_xor", "bitwise_or",
                    "and_expr", "xor_expr", "or_expr"}:
             return operators.bin_chain(t, self.ast_builder)
+
+        # Range expressions
+        if tag == "range":
+            return operators.parse_range_expr(t, self.ast_builder)
 
         # Cast expressions
         if tag == "cast":

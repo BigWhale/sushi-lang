@@ -1,0 +1,54 @@
+use <random>
+
+fn test_die_rolls() ~:
+    println("Die roll test (1-6):")
+
+    let i32 roll1 = rand_range(1, 7)
+    let i32 roll2 = rand_range(1, 7)
+    let i32 roll3 = rand_range(1, 7)
+
+    println("  Roll 1: {roll1}")
+    println("  Roll 2: {roll2}")
+    println("  Roll 3: {roll3}")
+
+    if (roll1 >= 1 and roll1 < 7):
+        println("  Pass: Roll 1 in valid range [1, 7)")
+    if (roll2 >= 1 and roll2 < 7):
+        println("  Pass: Roll 2 in valid range [1, 7)")
+    if (roll3 >= 1 and roll3 < 7):
+        println("  Pass: Roll 3 in valid range [1, 7)")
+
+    return Result.Ok(~)
+
+fn test_array_indices() ~:
+    println("Array index test (0-9):")
+
+    let i32 idx1 = rand_range(0, 10)
+    let i32 idx2 = rand_range(0, 10)
+    let i32 idx3 = rand_range(0, 10)
+
+    println("  Index 1: {idx1}")
+    println("  Index 2: {idx2}")
+    println("  Index 3: {idx3}")
+
+    if (idx1 >= 0 and idx1 < 10):
+        println("  Pass: Index 1 in valid range [0, 10)")
+    if (idx2 >= 0 and idx2 < 10):
+        println("  Pass: Index 2 in valid range [0, 10)")
+    if (idx3 >= 0 and idx3 < 10):
+        println("  Pass: Index 3 in valid range [0, 10)")
+
+    return Result.Ok(~)
+
+fn main() i32:
+    println("=== Random Range Test ===")
+    println("")
+
+    test_die_rolls()
+    println("")
+
+    test_array_indices()
+    println("")
+
+    println("=== Range Test Passed ===")
+    return Result.Ok(0)

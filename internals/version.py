@@ -3,7 +3,7 @@ import sys, platform, datetime
 
 MAJOR = 0
 MINOR = 0
-PATCH = 10
+PATCH = 11
 VERSION = f"{MAJOR}.{MINOR}.{PATCH}"
 
 try:

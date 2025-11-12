@@ -1,0 +1,39 @@
+use <random>
+
+fn main() i32:
+    println("=== Random Module Basic Test ===")
+
+    let u64 r1 = rand()
+    let u64 r2 = rand()
+    let u64 r3 = rand()
+
+    println("rand() test:")
+    println("  Value 1: {r1}")
+    println("  Value 2: {r2}")
+    println("  Value 3: {r3}")
+
+    if (r1 != r2 and r2 != r3 and r1 != r3):
+        println("  Pass: All values different")
+    else:
+        println("  Warning: Got duplicate (extremely unlikely)")
+
+    let f64 f1 = rand_f64()
+    let f64 f2 = rand_f64()
+    let f64 f3 = rand_f64()
+
+    println("")
+    println("rand_f64() test:")
+    println("  Value 1: {f1}")
+    println("  Value 2: {f2}")
+    println("  Value 3: {f3}")
+
+    if (f1 >= 0.0 and f1 < 1.0):
+        println("  Pass: Value 1 in valid range")
+    if (f2 >= 0.0 and f2 < 1.0):
+        println("  Pass: Value 2 in valid range")
+    if (f3 >= 0.0 and f3 < 1.0):
+        println("  Pass: Value 3 in valid range")
+
+    println("")
+    println("=== Basic Test Passed ===")
+    return Result.Ok(0)

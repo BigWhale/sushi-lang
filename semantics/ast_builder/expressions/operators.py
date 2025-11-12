@@ -93,3 +93,42 @@ def expr_borrow(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
     sub = first_tree_child(t)
     borrowed_expr = ast_builder._expr(sub)
     return Borrow(expr=borrowed_expr, loc=span_of(t))
+
+def parse_range_expr(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
+    """Parse range expression: start..end or start..=end
+
+    Grammar: range: shift ((RANGE | RANGE_INCLUSIVE) shift)?
+
+    Args:
+        t: The range expression tree node
+        ast_builder: The AST builder instance
+
+    Returns:
+        RangeExpr if range operator present, otherwise the shift expression
+    """
+    from semantics.ast import RangeExpr
+
+    children = t.children
+
+    # Simple case: no range operator (just shift expression)
+    if len(children) == 1:
+        return ast_builder._expr(children[0])
+
+    # Range case: start..end or start..=end
+    if len(children) == 3:
+        start_expr = ast_builder._expr(children[0])
+        operator = children[1]  # Token (RANGE or RANGE_INCLUSIVE)
+        end_expr = ast_builder._expr(children[2])
+
+        # Determine if inclusive based on token type
+        inclusive = (operator.type == "RANGE_INCLUSIVE")
+
+        return RangeExpr(
+            start=start_expr,
+            end=end_expr,
+            inclusive=inclusive,
+            loc=span_of(t)
+        )
+
+    # Unexpected structure
+    raise NotImplementedError(f"unexpected range node structure: {len(children)} children")

@@ -418,7 +418,32 @@ class TryExpr(Node):
     """
     expr: "Expr"  # The expression being unwrapped (must be Result<T>)
 
-Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, StructConstructor, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr]
+@dataclass
+class RangeExpr(Node):
+    """Range expression: start..end or start..=end
+
+    Represents an integer range for iteration:
+    - start..end: Exclusive upper bound (start <= i < end)
+    - start..=end: Inclusive upper bound (start <= i <= end)
+
+    Both start and end are evaluated at runtime, allowing dynamic ranges.
+    Direction (ascending/descending) is determined automatically at runtime
+    by comparing start and end values.
+
+    Examples:
+        0..10       # Yields 0, 1, 2, ..., 9
+        0..=10      # Yields 0, 1, 2, ..., 10
+        10..0       # Yields 10, 9, 8, ..., 1 (descending)
+        5..5        # Empty range (zero iterations)
+
+    Type: Always evaluates to Iterator<i32> for consistency with array iterators.
+    Backend: Compiles to optimized for-loop (no iterator struct overhead).
+    """
+    start: "Expr"           # Start expression (must evaluate to integer)
+    end: "Expr"             # End expression (must evaluate to integer)
+    inclusive: bool         # True for ..=, False for ..
+
+Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, StructConstructor, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr]
 
 def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
     """
@@ -466,6 +491,6 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
 __all__ = [
     "Node", "Program", "UseStatement", "FuncDef", "ConstDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "Block", "Param",
     "Let", "ExprStmt", "Return", "Print", "PrintLn", "If", "While", "Foreach", "Match", "MatchArm", "Pattern", "WildcardPattern", "Break", "Continue",
-    "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "StructConstructor", "EnumConstructor", "CastExpr", "Borrow", "TryExpr",
+    "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "StructConstructor", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",
 ]

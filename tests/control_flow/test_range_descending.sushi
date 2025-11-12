@@ -1,0 +1,10 @@
+fn main() i32:
+    println("Descending exclusive:")
+    foreach(i in 10..5):
+        println(i)
+
+    println("Descending inclusive:")
+    foreach(i in 10..=5):
+        println(i)
+
+    return Result.Ok(0)

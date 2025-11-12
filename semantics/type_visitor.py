@@ -18,7 +18,7 @@ from semantics.ast import (
     Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, MatchArm, Pattern, Break, Continue,
     # Expressions
     Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
-    UnaryOp, BinaryOp, Call, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom, CastExpr, EnumConstructor, TryExpr
+    UnaryOp, BinaryOp, Call, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom, CastExpr, EnumConstructor, TryExpr, RangeExpr
 )
 
 
@@ -277,6 +277,11 @@ class ExpressionValidator(RecursiveVisitor):
     def visit_tryexpr(self, node: TryExpr) -> None:
         """Validate try expression (?? operator)."""
         self.type_validator._validate_try_expression(node)
+
+    def visit_rangeexpr(self, node: RangeExpr) -> None:
+        """Validate range expression."""
+        from semantics.passes.types.expressions import validate_range_expression
+        validate_range_expression(self.type_validator, node)
 
     # Terminal expressions don't need recursive validation
     def visit_name(self, node: Name) -> None:
@@ -664,6 +669,11 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
         # Not a result-like enum - will be caught by validation
         return None
+
+    def visit_rangeexpr(self, node: RangeExpr) -> Optional[Type]:
+        """Infer type of range expression - always Iterator<i32>."""
+        from semantics.passes.types.inference import infer_range_expression_type
+        return infer_range_expression_type(self.type_validator, node)
 
     def generic_visit(self, node) -> Optional[Type]:
         """Default behavior for unknown nodes."""

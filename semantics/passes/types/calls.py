@@ -670,7 +670,7 @@ def _check_stdlib_function(validator: 'TypeValidator', call: Call) -> Optional[a
     function_name = call.callee.id
 
     # Try common module paths to find the function
-    possible_modules = ["time", "sys/env", "math"]
+    possible_modules = ["time", "sys/env", "math", "random"]
 
     for module_path in possible_modules:
         stdlib_func = validator.func_table.lookup_stdlib_function(module_path, function_name)

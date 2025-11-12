@@ -1,0 +1,38 @@
+use <random>
+
+fn get_five_values() ~:
+    let i32 v1 = rand_range(0, 100)
+    let i32 v2 = rand_range(0, 100)
+    let i32 v3 = rand_range(0, 100)
+    let i32 v4 = rand_range(0, 100)
+    let i32 v5 = rand_range(0, 100)
+
+    println("  {v1}, {v2}, {v3}, {v4}, {v5}")
+
+    return Result.Ok(~)
+
+fn main() i32:
+    println("=== Random Seeding Test ===")
+    println("")
+
+    println("First sequence (seed=42):")
+    srand(42 as u64)
+    get_five_values()
+
+    println("")
+    println("Different sequence (seed=99):")
+    srand(99 as u64)
+    get_five_values()
+
+    println("")
+    println("Second sequence (seed=42 again):")
+    srand(42 as u64)
+    get_five_values()
+
+    println("")
+    println("Note: Visually verify that first and third sequences are identical")
+    println("      and that second sequence is different.")
+
+    println("")
+    println("=== Seeding Test Complete ===")
+    return Result.Ok(0)

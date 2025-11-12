@@ -1,0 +1,4 @@
+fn main() i32:
+    foreach(i in "hello".."world"):
+        println(i)
+    return Result.Ok(0)

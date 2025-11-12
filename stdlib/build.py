@@ -134,6 +134,18 @@ def build_sys_env(platform_dir: Path):
     compile_module_to_bc(module, output)
 
 
+def build_random(platform_dir: Path):
+    """Build random unit (includes platform-specific random declarations)."""
+    print("Building random...")
+
+    # Use the new standalone IR generator
+    from stdlib.src import random
+    module = random.generate_module_ir()
+
+    output = platform_dir / "random.bc"
+    compile_module_to_bc(module, output)
+
+
 def main():
     """Build all stdlib units for the current platform."""
     print("=" * 60)
@@ -186,6 +198,7 @@ def main():
     build_time(platform_dir)
     build_math(platform_dir)
     build_sys_env(platform_dir)
+    build_random(platform_dir)
 
     # Build platform-specific modules
     build_io_stdio(platform_dir, platform)

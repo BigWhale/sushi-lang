@@ -1,0 +1,9 @@
+fn main() i32:
+    println("Nested ranges:")
+    foreach(i in 0..3):
+        foreach(j in 0..3):
+            print(i)
+            print(",")
+            println(j)
+
+    return Result.Ok(0)

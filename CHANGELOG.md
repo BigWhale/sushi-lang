@@ -2,6 +2,25 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [0.0.11] - 2025-11-11
+
+### Added
+- Range expressions with .. (exclusive) and ..= (inclusive) operators
+  - Zero-cost iteration that compiles to optimized for-loops
+  - Automatic direction detection (ascending vs descending)
+  - Supports break/continue statements
+  - Returns Iterator<i32> for consistency with array iteration
+- Random number generator module (<random>)
+  - rand() -> u64: Random 64-bit unsigned integer
+  - rand_range(i32, i32) -> i32: Random integer in range
+  - srand(u64) -> ~: Seed RNG for reproducibility
+  - rand_f64() -> f64: Random float in [0.0, 1.0)
+  - POSIX-compliant using libc random()/srandom()
+- Manual workflow dispatch trigger for CI
+
+### Fixed
+- GitHub Actions badges display
+
 ## [0.0.10] - 2025-11-11
 
 ### Added

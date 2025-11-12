@@ -12,8 +12,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from internals import errors as er
-from semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType
-from semantics.ast import IntLit, FloatLit, ArrayLiteral, IndexAccess, DynamicArrayFrom, Expr
+from semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType, IteratorType
+from semantics.ast import IntLit, FloatLit, ArrayLiteral, IndexAccess, DynamicArrayFrom, Expr, RangeExpr
 
 if TYPE_CHECKING:
     from . import TypeValidator
@@ -124,6 +124,24 @@ def infer_element_type_with_context(validator: 'TypeValidator', expr: Expr, expe
 
     # Otherwise, use normal type inference
     return validator.infer_expression_type(expr)
+
+
+def infer_range_expression_type(validator: 'TypeValidator', expr: 'RangeExpr') -> Optional[Type]:
+    """Infer type of range expression - always returns Iterator<i32>.
+
+    Range expressions always produce Iterator<i32> regardless of the
+    start/end expression types. Any integer expressions are implicitly
+    cast to i32 during code generation.
+
+    Args:
+        validator: The TypeValidator instance.
+        expr: The range expression to infer.
+
+    Returns:
+        IteratorType with i32 element type.
+    """
+    # Always return Iterator<i32> for consistency with array iteration
+    return IteratorType(element_type=BuiltinType.I32)
 
 
 def int_literal_fits_in_type(value: int, target_type: BuiltinType) -> bool:

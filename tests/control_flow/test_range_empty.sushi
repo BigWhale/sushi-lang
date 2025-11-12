@@ -1,0 +1,13 @@
+fn main() i32:
+    println("Empty range (5..5):")
+    foreach(i in 5..5):
+        println(i)
+        println("Should not print")
+
+    println("Empty range (5..=4):")
+    foreach(i in 5..=4):
+        println(i)
+        println("Should not print")
+
+    println("Done")
+    return Result.Ok(0)

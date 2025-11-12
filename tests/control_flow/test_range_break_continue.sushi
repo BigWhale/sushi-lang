@@ -1,0 +1,14 @@
+fn main() i32:
+    println("With break:")
+    foreach(i in 0..10):
+        if (i == 5):
+            break
+        println(i)
+
+    println("With continue:")
+    foreach(i in 0..10):
+        if (i % 2 == 0):
+            continue
+        println(i)
+
+    return Result.Ok(0)
