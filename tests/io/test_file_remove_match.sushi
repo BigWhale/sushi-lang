@@ -1,0 +1,25 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Create: Success
+# EXPECTED_OUTPUT: Remove: Success
+
+use <io/files>
+
+fn main() i32:
+    let string test_file = "/tmp/sushi_test_remove_match.txt"
+
+    match open(test_file, FileMode.Write()):
+        FileResult.Ok(f) ->
+            f.close()
+            println("Create: Success")
+        FileResult.Err(_) ->
+            println("Create: Failed")
+            return Result.Ok(1)
+
+    match remove(test_file):
+        Result.Ok(_) ->
+            println("Remove: Success")
+        Result.Err() ->
+            println("Remove: Failed")
+            return Result.Ok(2)
+
+    return Result.Ok(0)

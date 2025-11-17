@@ -1,0 +1,214 @@
+use <collections/strings>
+
+fn test_pad_left_basic() ~:
+    let string text = "hello"
+    let string result = text.pad_left(10, " ")
+
+    if (result == "     hello" and result.len() == 10):
+        println("PASS: pad_left basic test")
+    else:
+        println("FAIL: pad_left basic - expected '     hello', got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_pad_left_no_padding_needed() ~:
+    let string text = "hello"
+    let string result = text.pad_left(5, " ")
+
+    if (result == "hello"):
+        println("PASS: pad_left no padding needed (exact width)")
+    else:
+        println("FAIL: pad_left no padding - expected 'hello', got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_pad_left_already_longer() ~:
+    let string text = "hello world"
+    let string result = text.pad_left(5, " ")
+
+    if (result == "hello world"):
+        println("PASS: pad_left with string already longer than width")
+    else:
+        println("FAIL: pad_left already longer - expected 'hello world', got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_pad_left_multi_char_pad() ~:
+    let string text = "hi"
+    let string result = text.pad_left(6, "=")
+
+    if (result == "====hi"):
+        println("PASS: pad_left with multi-char padding")
+    else:
+        println("FAIL: pad_left multi-char - expected '====hi', got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_pad_left_utf8() ~:
+    let string text = "café"
+    let string result = text.pad_left(8, " ")
+
+    if (result.len() == 8):
+        println("PASS: pad_left with UTF-8 string (width counted in chars)")
+    else:
+        println("FAIL: pad_left UTF-8 - expected len 8, got {result.len()}")
+
+    return Result.Ok(~)
+
+fn test_pad_left_utf8_pad_char() ~:
+    let string text = "hi"
+    let string result = text.pad_left(5, "•")
+
+    if (result == "•••hi" and result.len() == 5):
+        println("PASS: pad_left with UTF-8 padding character")
+    else:
+        println("FAIL: pad_left UTF-8 pad char - got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_pad_left_zero_width() ~:
+    let string text = "hello"
+    let string result = text.pad_left(0, " ")
+
+    if (result == "hello"):
+        println("PASS: pad_left with zero width")
+    else:
+        println("FAIL: pad_left zero width - expected 'hello', got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_pad_right_basic() ~:
+    let string text = "hello"
+    let string result = text.pad_right(10, " ")
+
+    if (result == "hello     " and result.len() == 10):
+        println("PASS: pad_right basic test")
+    else:
+        println("FAIL: pad_right basic - expected 'hello     ', got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_pad_right_no_padding_needed() ~:
+    let string text = "hello"
+    let string result = text.pad_right(5, " ")
+
+    if (result == "hello"):
+        println("PASS: pad_right no padding needed (exact width)")
+    else:
+        println("FAIL: pad_right no padding - expected 'hello', got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_pad_right_already_longer() ~:
+    let string text = "hello world"
+    let string result = text.pad_right(5, " ")
+
+    if (result == "hello world"):
+        println("PASS: pad_right with string already longer than width")
+    else:
+        println("FAIL: pad_right already longer - expected 'hello world', got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_pad_right_multi_char_pad() ~:
+    let string text = "hi"
+    let string result = text.pad_right(6, "-")
+
+    if (result == "hi----"):
+        println("PASS: pad_right with multi-char padding")
+    else:
+        println("FAIL: pad_right multi-char - expected 'hi----', got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_pad_right_utf8() ~:
+    let string text = "café"
+    let string result = text.pad_right(8, " ")
+
+    if (result.len() == 8):
+        println("PASS: pad_right with UTF-8 string (width counted in chars)")
+    else:
+        println("FAIL: pad_right UTF-8 - expected len 8, got {result.len()}")
+
+    return Result.Ok(~)
+
+fn test_pad_right_utf8_pad_char() ~:
+    let string text = "hi"
+    let string result = text.pad_right(5, "★")
+
+    if (result == "hi★★★" and result.len() == 5):
+        println("PASS: pad_right with UTF-8 padding character")
+    else:
+        println("FAIL: pad_right UTF-8 pad char - got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_pad_both_center_effect() ~:
+    let string text = "center"
+    let string left = text.pad_left(9, " ")
+    let string both = left.pad_right(12, " ")
+
+    if (both.len() == 12):
+        println("PASS: combining pad_left and pad_right for centering")
+    else:
+        println("FAIL: pad both - expected len 12, got {both.len()}")
+
+    return Result.Ok(~)
+
+fn test_pad_left_emoji() ~:
+    let string text = "test"
+    let string result = text.pad_left(8, "🎉")
+
+    if (result.len() == 8):
+        println("PASS: pad_left with emoji padding")
+    else:
+        println("FAIL: pad_left emoji - expected len 8, got {result.len()}")
+
+    return Result.Ok(~)
+
+fn test_pad_right_emoji() ~:
+    let string text = "test"
+    let string result = text.pad_right(8, "🎊")
+
+    if (result.len() == 8):
+        println("PASS: pad_right with emoji padding")
+    else:
+        println("FAIL: pad_right emoji - expected len 8, got {result.len()}")
+
+    return Result.Ok(~)
+
+fn main() i32:
+    if (test_pad_left_basic()):
+        println("")
+    if (test_pad_left_no_padding_needed()):
+        println("")
+    if (test_pad_left_already_longer()):
+        println("")
+    if (test_pad_left_multi_char_pad()):
+        println("")
+    if (test_pad_left_utf8()):
+        println("")
+    if (test_pad_left_utf8_pad_char()):
+        println("")
+    if (test_pad_left_zero_width()):
+        println("")
+    if (test_pad_right_basic()):
+        println("")
+    if (test_pad_right_no_padding_needed()):
+        println("")
+    if (test_pad_right_already_longer()):
+        println("")
+    if (test_pad_right_multi_char_pad()):
+        println("")
+    if (test_pad_right_utf8()):
+        println("")
+    if (test_pad_right_utf8_pad_char()):
+        println("")
+    if (test_pad_both_center_effect()):
+        println("")
+    if (test_pad_left_emoji()):
+        println("")
+    if (test_pad_right_emoji()):
+        println("")
+
+    return Result.Ok(0)

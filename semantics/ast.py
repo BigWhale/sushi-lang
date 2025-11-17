@@ -334,6 +334,7 @@ class BinaryOp(Node):
 class Call(Node):
     callee: Name
     args: List["Expr"]
+    field_names: Optional[List[str]] = None  # For named struct construction
 
 @dataclass
 class MethodCall(Node):
@@ -368,9 +369,10 @@ class MemberAccess(Node):
 
 @dataclass
 class StructConstructor(Node):
-    """Struct constructor call: Point(10, 20)"""
-    struct_name: str    # Name of the struct type
-    args: List["Expr"]  # Constructor arguments
+    """Struct constructor call: Point(10, 20) or Point(x: 10, y: 20)"""
+    struct_name: str                     # Name of the struct type
+    args: List["Expr"]                   # Constructor arguments (in source order for named, field order after reordering)
+    field_names: Optional[List[str]] = None     # Field names for named construction (None for positional)
 
 @dataclass
 class EnumConstructor(Node):

@@ -247,15 +247,32 @@ def parse_interpolation_expr(expr_text: str, ast_builder: 'ASTBuilder', fallback
 
 
 def parse_string_token(tok: Token, ast_builder: 'ASTBuilder') -> Union['StringLit', 'InterpolatedString']:
-    """Parse a STRING token into either StringLit or InterpolatedString based on content."""
+    """Parse a STRING or CHAR_STRING token into either StringLit or InterpolatedString.
+
+    Behavior:
+    - STRING (double quotes): Supports interpolation with {expr} syntax
+    - CHAR_STRING (single quotes): Plain string literals, no interpolation
+    - Both support identical escape sequences
+
+    Args:
+        tok: Lark token of type STRING or CHAR_STRING
+        ast_builder: AST builder instance for parsing interpolation expressions
+
+    Returns:
+        StringLit for plain strings or InterpolatedString for double-quote strings with {expr}
+    """
     from semantics.ast import StringLit, InterpolatedString, Name
     from internals.report import span_of
 
     raw_value = str(tok.value)
-    unquoted_value = raw_value[1:-1]
+    unquoted_value = raw_value[1:-1]  # Strip opening and closing quotes
     span = span_of(tok)
 
-    if '{' in unquoted_value:
+    # Only STRING (double-quote) tokens support interpolation
+    is_interpolation_capable = (tok.type == 'STRING')
+
+    if is_interpolation_capable and '{' in unquoted_value:
+        # Double-quote string with interpolation expressions
         parts, expr_spans = parse_interpolated_string(unquoted_value, span)
 
         ast_parts: List[Union[str, Expr]] = []
@@ -263,9 +280,11 @@ def parse_string_token(tok: Token, ast_builder: 'ASTBuilder') -> Union['StringLi
 
         for i, part in enumerate(parts):
             if i % 2 == 0:
+                # String literal part
                 processed_string = process_string_escapes(part)
                 ast_parts.append(processed_string)
             else:
+                # Expression part
                 expr_text = part
                 expr_span = expr_spans[expr_index]
                 expr_index += 1
@@ -278,5 +297,7 @@ def parse_string_token(tok: Token, ast_builder: 'ASTBuilder') -> Union['StringLi
 
         return InterpolatedString(parts=ast_parts, loc=span)
     else:
+        # Plain string literal (no interpolation)
+        # Apply escape sequence processing for both STRING and CHAR_STRING
         string_value = process_string_escapes(unquoted_value)
         return StringLit(value=string_value, loc=span)

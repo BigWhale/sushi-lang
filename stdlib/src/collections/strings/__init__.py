@@ -39,6 +39,7 @@ from .methods.basic import (
 from .methods.convert import (
     emit_string_to_bytes,
     emit_string_split,
+    emit_string_join,
 )
 from .methods.case import (
     emit_string_upper,
@@ -50,6 +51,8 @@ from .methods.search import (
     emit_string_ends_with,
     emit_string_contains,
     emit_string_find,
+    emit_string_find_last,
+    emit_string_count,
 )
 from .methods.trim import (
     emit_string_trim,
@@ -65,6 +68,12 @@ from .methods.slice import (
 )
 from .methods.modify import (
     emit_string_replace,
+    emit_string_reverse,
+    emit_string_repeat,
+    emit_string_pad_left,
+    emit_string_pad_right,
+    emit_string_strip_prefix,
+    emit_string_strip_suffix,
 )
 from .methods.parse import (
     emit_string_to_i32,
@@ -98,28 +107,37 @@ METHOD_SPECS = {
     "tleft": MethodSpec("string.tleft", 0, []),
     "tright": MethodSpec("string.tright", 0, []),
     "to_bytes": MethodSpec("string.to_bytes", 0, []),
+    "reverse": MethodSpec("string.reverse", 0, []),
 
     # Single string argument methods
     "concat": MethodSpec("string.concat", 1, [BuiltinType.STRING]),
     "contains": MethodSpec("string.contains", 1, [BuiltinType.STRING]),
     "find": MethodSpec("string.find", 1, [BuiltinType.STRING]),
+    "find_last": MethodSpec("string.find_last", 1, [BuiltinType.STRING]),
+    "count": MethodSpec("string.count", 1, [BuiltinType.STRING]),
     "starts_with": MethodSpec("string.starts_with", 1, [BuiltinType.STRING]),
     "ends_with": MethodSpec("string.ends_with", 1, [BuiltinType.STRING]),
+    "strip_prefix": MethodSpec("string.strip_prefix", 1, [BuiltinType.STRING]),
+    "strip_suffix": MethodSpec("string.strip_suffix", 1, [BuiltinType.STRING]),
 
     # Single int argument methods
     "sleft": MethodSpec("string.sleft", 1, [BuiltinType.I32]),
     "sright": MethodSpec("string.sright", 1, [BuiltinType.I32]),
     "char_at": MethodSpec("string.char_at", 1, [BuiltinType.I32]),
+    "repeat": MethodSpec("string.repeat", 1, [BuiltinType.I32]),
 
     # Two int arguments methods
     "s": MethodSpec("string.s", 2, [BuiltinType.I32, BuiltinType.I32]),
     "ss": MethodSpec("string.ss", 2, [BuiltinType.I32, BuiltinType.I32]),
 
-    # String splitting
+    # String splitting and joining
     "split": MethodSpec("string.split", 1, [BuiltinType.STRING]),
+    "join": MethodSpec("string.join", 1, []),
 
     # String modification
     "replace": MethodSpec("string.replace", 2, [BuiltinType.STRING, BuiltinType.STRING]),
+    "pad_left": MethodSpec("string.pad_left", 2, [BuiltinType.I32, BuiltinType.STRING]),
+    "pad_right": MethodSpec("string.pad_right", 2, [BuiltinType.I32, BuiltinType.STRING]),
 
     # String parsing (return Maybe<T>)
     "to_i32": MethodSpec("string.to_i32", 0, []),
@@ -187,7 +205,8 @@ def get_builtin_string_method_return_type(method_name: str, string_type: Builtin
         return BuiltinType.BOOL
     # Methods returning string
     elif method_name in {"concat", "s", "sleft", "sright", "char_at", "ss",
-                         "upper", "lower", "cap", "trim", "tleft", "tright", "replace"}:
+                         "upper", "lower", "cap", "trim", "tleft", "tright", "replace",
+                         "join", "pad_left", "pad_right", "strip_prefix", "strip_suffix"}:
         return BuiltinType.STRING
     # Methods returning u8[]
     elif method_name == "to_bytes":
@@ -242,6 +261,7 @@ def generate_module_ir() -> ir.Module:
     # === Emit conversion methods ===
     emit_string_to_bytes(module)
     emit_string_split(module)
+    emit_string_join(module)
 
     # === Emit case conversion methods ===
     emit_string_upper(module)
@@ -253,6 +273,8 @@ def generate_module_ir() -> ir.Module:
     emit_string_ends_with(module)
     emit_string_contains(module)
     emit_string_find(module)
+    emit_string_find_last(module)
+    emit_string_count(module)
 
     # === Emit trim methods ===
     emit_string_trim(module)
@@ -268,6 +290,12 @@ def generate_module_ir() -> ir.Module:
 
     # === Emit modification methods ===
     emit_string_replace(module)
+    emit_string_reverse(module)
+    emit_string_repeat(module)
+    emit_string_pad_left(module)
+    emit_string_pad_right(module)
+    emit_string_strip_prefix(module)
+    emit_string_strip_suffix(module)
 
     # === Emit parsing methods ===
     emit_string_to_i32(module)

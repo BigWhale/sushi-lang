@@ -1,921 +1,224 @@
-# Standard Library Reference
+# Sushi Standard Library
 
-[← Back to Documentation](README.md)
-
-Complete reference for Sushi's built-in types and functions.
+Complete reference for Sushi's standard library modules and types.
 
 ## Table of Contents
 
-- [Result<T>](#resultt)
-- [Maybe<T>](#maybet)
-- [List<T>](#listt)
-- [HashMap<K, V>](#hashmapk-v)
-- [Array Methods](#array-methods)
-- [String Methods](#string-methods)
-- [I/O Functions](#io-functions)
-- [File Operations](#file-operations)
-- [Math Operations](#math-operations)
-- [Environment Variables](#environment-variables)
-- [Time Functions](#time-functions)
+### Core Types
+- [Result<T>](stdlib/result.md) - Error handling for fallible operations
+- [Maybe<T>](stdlib/maybe.md) - Optional values
 
-## Result<T>
+### Collections
+- [List<T>](stdlib/collections/list.md) - Dynamic growable array
+- [HashMap<K, V>](stdlib/collections/hashmap.md) - Hash table with open addressing
+- [Arrays](stdlib/collections/arrays.md) - Fixed and dynamic array methods
+- [Strings](stdlib/collections/strings.md) - 33 string manipulation methods
 
-All functions implicitly return `Result<T>` for explicit error handling.
+### I/O Operations
+- [Console I/O](stdlib/io/console.md) - println, print, stdin/stdout/stderr
+- [File I/O](stdlib/io/files.md) - File operations with error handling
 
-### Variants
+### System Modules
+- [Math](stdlib/math.md) - Mathematical operations (abs, min, max, sqrt, pow, trig)
+- [Time](stdlib/time.md) - High-precision sleep functions
+- [Environment](stdlib/env.md) - Environment variables and system information
+- [Platform](stdlib/platform.md) - Platform detection and OS-specific utilities
 
-- `Result.Ok(value)` - Success with value
-- `Result.Err()` - Failure with no value
+## Quick Reference
 
-### Methods
-
-#### `.realise(default)`
-
-Extract value or return default on error.
+### Importing Modules
 
 ```sushi
-fn get_value() i32:
-    return Result.Ok(42)
-
-fn main() i32:
-    let i32 x = get_value().realise(0)  # x = 42
-
-    let i32 y = might_fail().realise(-1)  # y = -1 if error
-
-    return Result.Ok(0)
+use <collections/strings>  # String methods
+use <collections>          # List<T>, HashMap<K, V>
+use <io/stdio>             # Console I/O
+use <io/files>             # File operations
+use <math>                 # Math functions
+use <time>                 # Sleep functions
+use <sys/env>              # Environment variables
 ```
 
-**Parameters:**
-- `default` - Value to return if `Result.Err()`
+### Common Patterns
 
-**Returns:** `T` (the unwrapped value or default)
-
-### Usage in Conditionals
+#### Error Handling
 
 ```sushi
-let Result<i32> result = divide(10, 2)
+# Using ?? operator for propagation
+fn read_config() string:
+    let file f = open("config.txt", FileMode.Read())??
+    let string content = f.read()
+    f.close()
+    return Result.Ok(content)
 
-if (result):
-    # Success - result is Ok
-    let i32 value = result.realise(0)
-else:
-    # Failure - result is Err
-    println("Operation failed")
+# Using pattern matching
+match parse_number("42"):
+    Result.Ok(n) -> println("Got: {n}")
+    Result.Err() -> println("Parse failed")
+
+# Using .realise() for defaults
+let i32 port = config.get("port").realise(8080)
 ```
 
-## Maybe<T>
-
-Type-safe optional values.
-
-### Variants
-
-- `Maybe.Some(value)` - Contains a value
-- `Maybe.None()` - No value
-
-### Methods
-
-#### `.is_some() -> bool`
-
-Check if value is present.
+#### Optional Values
 
 ```sushi
-let Maybe<i32> m = Maybe.Some(42)
-if (m.is_some()):
-    println("Has value")
+# Safe array access
+match arr.get(0):
+    Maybe.Some(first) -> println("First: {first}")
+    Maybe.None() -> println("Array empty")
+
+# String searching
+let string text = "hello world"
+let Maybe<i32> pos = text.find("world")
 ```
 
-#### `.is_none() -> bool`
-
-Check if value is absent.
+#### Collections
 
 ```sushi
-let Maybe<i32> m = Maybe.None()
-if (m.is_none()):
-    println("No value")
-```
-
-#### `.realise(default) -> T`
-
-Extract value or return default.
-
-```sushi
-let Maybe<i32> m = Maybe.Some(42)
-let i32 x = m.realise(0)  # x = 42
-
-let Maybe<i32> empty = Maybe.None()
-let i32 y = empty.realise(0)  # y = 0
-```
-
-#### `.expect(message) -> T`
-
-Extract value or panic with message.
-
-```sushi
-let Maybe<i32> m = Maybe.Some(42)
-let i32 x = m.expect("Expected a value")  # x = 42
-
-let Maybe<i32> empty = Maybe.None()
-# let i32 y = empty.expect("Value required")  # Runtime panic!
-```
-
-### Pattern Matching
-
-```sushi
-match result:
-    Maybe.Some(value) ->
-        println("Got: {value}")
-    Maybe.None() ->
-        println("No value")
-```
-
-## List<T>
-
-Generic growable array with automatic memory management.
-
-**Import:** `use <collections>`
-
-### Construction
-
-#### `List.new() -> List<T>`
-
-Create empty list (zero capacity, lazy allocation).
-
-```sushi
-let List<i32> nums = List.new()
-```
-
-#### `List.with_capacity(i32 n) -> List<T>`
-
-Create list with pre-allocated capacity.
-
-```sushi
-let List<string> names = List.with_capacity(100)
-```
-
-### Query Methods
-
-#### `.len() -> i32`
-
-Get number of elements.
-
-```sushi
-println("Size: {list.len()}")
-```
-
-#### `.capacity() -> i32`
-
-Get allocated capacity.
-
-```sushi
-println("Capacity: {list.capacity()}")
-```
-
-#### `.is_empty() -> bool`
-
-Check if list is empty.
-
-```sushi
-if (list.is_empty()):
-    println("Empty list")
-```
-
-### Access Methods
-
-#### `.get(i32 index) -> Maybe<T>`
-
-Get element at index (bounds-checked).
-
-```sushi
-match list.get(0):
-    Maybe.Some(value) ->
-        println("First: {value}")
-    Maybe.None() ->
-        println("Index out of bounds")
-```
-
-#### `.pop() -> Maybe<T>`
-
-Remove and return last element.
-
-```sushi
-match list.pop():
-    Maybe.Some(value) ->
-        println("Popped: {value}")
-    Maybe.None() ->
-        println("Empty list")
-```
-
-### Modification Methods
-
-#### `.push(T element) -> ~`
-
-Append element (auto-grows capacity).
-
-```sushi
-list.push(42)
-list.push(100)
-```
-
-#### `.insert(i32 index, T element) -> Result<~>`
-
-Insert element at index (shifts elements right).
-
-```sushi
-# Insert at beginning
-list.insert(0, 1)
-
-# Insert in middle
-list.insert(5, 42)
-
-# Insert at end (equivalent to push)
-list.insert(list.len(), 99)
-```
-
-**Bounds:** `0 <= index <= len`
-
-#### `.remove(i32 index) -> Maybe<T>`
-
-Remove and return element at index (shifts elements left).
-
-```sushi
-match list.remove(2):
-    Maybe.Some(value) ->
-        println("Removed: {value}")
-    Maybe.None() ->
-        println("Index out of bounds")
-```
-
-**Bounds:** `0 <= index < len`
-
-#### `.clear() -> ~`
-
-Remove all elements (keeps capacity).
-
-```sushi
-list.clear()
-println("Length: {list.len()}")  # 0
-println("Capacity: {list.capacity()}")  # Unchanged
-```
-
-### Capacity Management
-
-#### `.reserve(i32 n) -> ~`
-
-Ensure capacity is at least `n`.
-
-```sushi
-list.reserve(100)  # Ensure space for 100 elements
-```
-
-#### `.shrink_to_fit() -> ~`
-
-Reduce capacity to match length.
-
-```sushi
-list.shrink_to_fit()  # Capacity = len
-```
-
-### Iteration
-
-#### `.iter() -> Iterator<T>`
-
-Create iterator for foreach loops.
-
-```sushi
-foreach(value in list.iter()):
-    println(value)
-```
-
-### Memory Management
-
-#### `.free() -> ~`
-
-Free memory and reset to empty (still usable).
-
-```sushi
-list.free()
-list.push(1)  # OK: Can still use
-```
-
-#### `.destroy() -> ~`
-
-Free memory and invalidate (unusable).
-
-```sushi
-list.destroy()
-# list.len()  # ERROR CE2406: use of destroyed variable
-```
-
-### Debugging
-
-#### `.debug() -> ~`
-
-Print internal state (length, capacity, elements).
-
-```sushi
-list.debug()  # Output: List<i32> { len: 3, capacity: 4, [1, 2, 3] }
-```
-
-### Performance
-
-- `push()`: Amortized O(1)
-- `pop()`: O(1)
-- `get()`: O(1)
-- `insert()`: O(n)
-- `remove()`: O(n)
-- `clear()`: O(n)
-
-## HashMap<K, V>
-
-Generic hash table with open addressing (linear probing).
-
-**Import:** `use <collections>`
-
-### Construction
-
-#### `HashMap.new() -> HashMap<K, V>`
-
-Create empty hash map (initial capacity 16).
-
-```sushi
+# List<T>
+let List<i32> numbers = List.new()
+numbers.push(1)
+numbers.push(2)
+numbers.push(3)
+
+# HashMap<K, V>
 let HashMap<string, i32> ages = HashMap.new()
-```
+ages.insert("Alice", 30)
+match ages.get("Alice"):
+    Maybe.Some(age) -> println("Age: {age}")
+    Maybe.None() -> println("Not found")
 
-### Methods
-
-#### `.insert(K key, V value) -> ~`
-
-Insert or update key-value pair.
-
-```sushi
-ages.insert("Arthur", 42)
-ages.insert("Ford", 200)
-```
-
-**Note:** Automatically resizes at 0.75 load factor.
-
-#### `.get(K key) -> Maybe<V>`
-
-Get value for key.
-
-```sushi
-match ages.get("Arthur"):
-    Maybe.Some(age) ->
-        println("Arthur is {age}")
-    Maybe.None() ->
-        println("Not found")
-```
-
-#### `.remove(K key) -> Maybe<V>`
-
-Remove and return value for key.
-
-```sushi
-match ages.remove("Arthur"):
-    Maybe.Some(age) ->
-        println("Removed age {age}")
-    Maybe.None() ->
-        println("Key not found")
-```
-
-#### `.contains(K key) -> bool`
-
-Check if key exists.
-
-```sushi
-if (ages.contains("Arthur")):
-    println("Arthur exists")
-```
-
-#### `.len() -> i32`
-
-Get number of entries.
-
-```sushi
-println("Entries: {ages.len()}")
-```
-
-#### `.free() -> ~`
-
-Clear all entries and reset to capacity 16 (still usable).
-
-```sushi
-ages.free()
-ages.insert("Zaphod", 150)  # OK
-```
-
-#### `.rehash(i32 new_capacity) -> ~`
-
-Manually rehash with new capacity (must be power of 2).
-
-```sushi
-ages.rehash(64)  # Resize to capacity 64
-```
-
-#### `.debug() -> ~`
-
-Print internal state.
-
-```sushi
-ages.debug()
-```
-
-### Key Requirements
-
-Keys must implement `.hash() -> u64` method. Supported types:
-
-- Primitives: `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`, `f32`, `f64`, `bool`
-- `string`
-- Structs (with hashable fields)
-- Enums (with hashable variant data)
-
-**Not supported:** Nested arrays (cannot be hashed)
-
-## Array Methods
-
-### Common (Fixed and Dynamic)
-
-#### `.len() -> i32`
-
-```sushi
-let i32[5] arr = [1, 2, 3, 4, 5]
-println(arr.len())  # 5
-```
-
-#### `.get(i32 index) -> T`
-
-Bounds-checked access.
-
-```sushi
-let i32 value = arr.get(2)  # Runtime bounds check
-```
-
-#### `.iter() -> Iterator<T>`
-
-```sushi
+# Arrays
+let i32[] arr = from([1, 2, 3])
+arr.push(4)
 foreach(n in arr.iter()):
     println(n)
 ```
 
-#### `.hash() -> u64`
+#### String Processing
 
 ```sushi
-let u64 h = arr.hash()
-```
+let string text = "  Hello World  "
+let string clean = text.trim().lower()  # "hello world"
 
-#### `.fill(T value) -> ~`
-
-Fill all elements with value (in-place).
-
-```sushi
-arr.fill(0)  # All elements become 0
-```
-
-#### `.reverse() -> ~`
-
-Reverse array elements (in-place).
-
-```sushi
-arr.reverse()  # [5, 4, 3, 2, 1]
-```
-
-### Dynamic Array Only
-
-#### `.push(T element) -> ~`
-
-```sushi
-arr.push(42)
-```
-
-#### `.pop() -> T`
-
-```sushi
-let i32 last = arr.pop()
-```
-
-#### `.capacity() -> i32`
-
-```sushi
-println(arr.capacity())
-```
-
-#### `.clone() -> T[]`
-
-Deep copy.
-
-```sushi
-let i32[] copy = arr.clone()
-```
-
-#### `.free() -> ~`
-
-Clear and reset (still usable).
-
-```sushi
-arr.free()
-arr.push(1)  # OK
-```
-
-#### `.destroy() -> ~`
-
-Free and invalidate.
-
-```sushi
-arr.destroy()
-# arr.len()  # ERROR CE2406
-```
-
-### Byte Array Only (u8[])
-
-#### `.to_string() -> string`
-
-Zero-cost UTF-8 conversion.
-
-```sushi
-let u8[] bytes = from([72 as u8, 105 as u8])
-let string text = bytes.to_string()  # "Hi"
-```
-
-## String Methods
-
-#### `.len() -> i32`
-
-Character count (UTF-8 aware).
-
-```sushi
-let string s = "Hello 🌍"
-println(s.len())  # 7 characters
-```
-
-#### `.size() -> i32`
-
-Byte count.
-
-```sushi
-println(s.size())  # 10 bytes
-```
-
-#### `.is_empty() -> bool`
-
-```sushi
-if (s.is_empty()):
-    println("Empty string")
-```
-
-#### `.find(string needle) -> Maybe<i32>`
-
-Find substring position.
-
-```sushi
-match text.find("world"):
-    Maybe.Some(pos) ->
-        println("Found at {pos}")
-    Maybe.None() ->
-        println("Not found")
-```
-
-#### `.split(string delimiter) -> string[]`
-
-Split into array.
-
-```sushi
 let string[] parts = "a,b,c".split(",")
-# parts = ["a", "b", "c"]
+let string joined = ",".join(parts)  # "a,b,c"
+
+let string path = "/home/user/file.txt"
+let string filename = path.strip_prefix("/home/user/")  # "file.txt"
 ```
 
-#### `.trim() -> string`
-
-Remove leading/trailing whitespace.
+#### File I/O
 
 ```sushi
-let string clean = "  hello  ".trim()  # "hello"
-```
-
-#### `.to_upper() -> string`
-
-Convert to uppercase (ASCII only).
-
-```sushi
-let string loud = "hello".to_upper()  # "HELLO"
-```
-
-#### `.to_lower() -> string`
-
-Convert to lowercase (ASCII only).
-
-```sushi
-let string quiet = "HELLO".to_lower()  # "hello"
-```
-
-## I/O Functions
-
-### Console Output
-
-#### `println(string message) -> ~`
-
-Print with newline.
-
-```sushi
-println("Hello, World!")
-```
-
-#### `print(string message) -> ~`
-
-Print without newline.
-
-```sushi
-print("Loading")
-print("...")
-```
-
-### Standard Streams
-
-#### `stdin.read_line() -> string`
-
-Read line from stdin.
-
-```sushi
-println("Enter name:")
-let string name = stdin.read_line()
-```
-
-#### `stdin.read_bytes(i32 n) -> u8[]`
-
-Read exactly n bytes.
-
-```sushi
-let u8[] data = stdin.read_bytes(100)
-```
-
-#### `stdout.write_bytes(u8[] data) -> ~`
-
-Write bytes to stdout.
-
-```sushi
-stdout.write_bytes(data)
-```
-
-#### `stderr.write_bytes(u8[] data) -> ~`
-
-Write bytes to stderr.
-
-```sushi
-stderr.write_bytes(data)
-```
-
-## File Operations
-
-### Opening Files
-
-#### `open(string path, FileMode mode) -> FileResult`
-
-```sushi
+# Reading files
 match open("data.txt", FileMode.Read()):
     FileResult.Ok(f) ->
-        # Use file
+        let string content = f.read()
         f.close()
-    FileResult.Err(e) ->
-        # Handle error
-        println("Failed to open file")
-```
-
-**File modes:**
-- `FileMode.Read()` - Read only
-- `FileMode.Write()` - Write only (create/truncate)
-- `FileMode.Append()` - Append only
-
-### File Methods
-
-#### `.read() -> string`
-
-Read entire file as string.
-
-```sushi
-let string content = file.read()
-```
-
-#### `.read_line() -> string`
-
-Read single line.
-
-```sushi
-let string line = file.read_line()
-```
-
-#### `.write(string data) -> ~`
-
-Write string to file.
-
-```sushi
-file.write("Hello, file!")
-```
-
-#### `.close() -> ~`
-
-Close file.
-
-```sushi
-file.close()
-```
-
-### Error Handling
-
-```sushi
-match open("config.txt", FileMode.Read()):
-    FileResult.Ok(f) ->
-        let string data = f.read()
-        f.close()
-        println(data)
+        println(content)
     FileResult.Err(FileError.NotFound()) ->
         println("File not found")
-    FileResult.Err(FileError.PermissionDenied()) ->
-        println("Permission denied")
     FileResult.Err(_) ->
         println("Other error")
+
+# Writing files
+match open("output.txt", FileMode.Write()):
+    FileResult.Ok(f) ->
+        f.write("Hello, file!")
+        f.close()
+    FileResult.Err(_) ->
+        println("Failed to write")
 ```
 
-## Math Operations
+## Module Overview
 
-Mathematical functions for all numeric types.
+### Collections (`use <collections>`)
 
-**Import:** `use <math>`
+**List<T>** - Generic dynamic array with:
+- Construction: `new()`, `with_capacity()`
+- Access: `get()`, `len()`, `is_empty()`
+- Modification: `push()`, `pop()`, `insert()`, `remove()`, `clear()`
+- Iteration: `iter()` for foreach loops
+- Memory: `free()`, `destroy()`
 
-**Documentation:** See [Math Module](stdlib/math.md) for complete reference
+**HashMap<K, V>** - Generic hash table with:
+- Construction: `new()`
+- Operations: `insert()`, `get()`, `remove()`, `contains_key()`
+- Iteration: `keys()`, `values()`
+- Automatic resizing at 0.75 load factor
+- Memory: `free()`, `destroy()`
 
-### Quick Reference
+**Arrays** - Built-in array support:
+- Fixed arrays: `i32[10]`
+- Dynamic arrays: `i32[]` with `from([...])`
+- Methods: `len()`, `get()`, `push()`, `pop()`, `iter()`, `clone()`
+- Safe access with `get()` returns `Maybe<T>`
+- Unsafe direct indexing: `arr[i]`
 
-**Absolute Value:**
-```sushi
-use <math>
+**Strings** - 33 methods covering:
+- Inspection, slicing, transformation, padding, stripping
+- Splitting/joining, case conversion, parsing
+- UTF-8 aware where needed
 
-let i32 x = abs_i32(-42)  # 42
-let f64 y = abs_f64(-3.14)  # 3.14
-```
+### I/O (`use <io/stdio>`, `use <io/files>`)
 
-Available for: `i8`, `i16`, `i32`, `i64`, `f32`, `f64`
+**Console I/O:**
+- `println()`, `print()` - Output with/without newline
+- `stdin.read_line()` - Read user input
+- `stdout`, `stderr` - Direct stream access
 
-**Min/Max:**
-```sushi
-use <math>
+**File I/O:**
+- `open()` - Open files with Read/Write/Append modes
+- File methods: `read()`, `read_line()`, `write()`, `close()`
+- Error handling with `FileResult` and `FileError` enums
 
-let i32 smaller = min_i32(10, 20)  # 10
-let i32 larger = max_i32(10, 20)  # 20
-```
+### Math (`use <math>`)
 
-Available for all integer and floating-point types.
+Functions for all numeric types:
+- Absolute value: `abs_i32()`, `abs_f64()`, etc.
+- Min/Max: `min_i32()`, `max_f64()`, etc.
+- Floating-point: `sqrt()`, `pow()`, `floor()`, `ceil()`, `round()`
+- Trigonometry: `sin()`, `cos()`, `tan()`, `asin()`, `acos()`, `atan()`
+- Exponential: `exp()`, `ln()`, `log10()`, `log2()`
+- Constants: `PI`, `E`, `SQRT_2`, `LN_2`, `LN_10`
 
-**Floating-Point Operations:**
-```sushi
-use <math>
+### Time (`use <time>`)
 
-let f64 root = sqrt_f64(16.0)  # 4.0
-let f64 power = pow_f64(2.0, 3.0)  # 8.0
-let f64 floored = floor_f64(3.7)  # 3.0
-let f64 ceiled = ceil_f64(3.2)  # 4.0
-let f64 rounded = round_f64(3.5)  # 4.0
-let f64 truncated = trunc_f64(3.9)  # 3.0
-```
+High-precision sleep functions:
+- `sleep(i64)` - Sleep for N seconds
+- `msleep(i64)` - Sleep for N milliseconds
+- `usleep(i64)` - Sleep for N microseconds
+- `nanosleep(i64, i64)` - Nanosecond precision
 
-Available for: `f32`, `f64`
+### Environment (`use <sys/env>`)
 
-## Environment Variables
+Environment and system:
+- `getenv()` - Get environment variable
+- `setenv()` - Set environment variable
+- `unsetenv()` - Remove environment variable
+- Process control: `exit()`, `getcwd()`, `chdir()`
 
-Read and modify system environment variables.
+## Design Principles
 
-**Import:** `use <env>`
+1. **Explicit error handling** - All fallible operations return `Result<T>` or `Maybe<T>`
+2. **Memory safety** - RAII cleanup, no manual memory management
+3. **Zero-cost abstractions** - Generics compile to concrete types
+4. **UTF-8 by default** - Strings are UTF-8, methods are aware where needed
+5. **Immutability** - String methods return new strings, arrays use RAII
+6. **Type safety** - No null, no undefined behavior, exhaustive pattern matching
 
-**Documentation:** See [Environment Module](stdlib/env.md) for complete reference
+## Performance Notes
 
-### getenv
+- **List<T>**: Amortized O(1) push, O(n) insert/remove
+- **HashMap<K, V>**: O(1) average insert/get/remove, O(n) worst case
+- **String methods**: All allocate new strings, O(n) for most operations
+- **Arrays**: Direct memory access, bounds checked at runtime
+- **Generics**: Monomorphized at compile-time (no runtime overhead)
 
-Get environment variable value.
+## See Also
 
-```sushi
-use <env>
-
-fn main() i32:
-    match getenv("PATH"):
-        Maybe.Some(path) ->
-            println("PATH: {path}")
-        Maybe.None() ->
-            println("PATH not set")
-
-    return Result.Ok(0)
-```
-
-**Returns:** `Maybe<string>` - Value if exists, `Maybe.None()` otherwise
-
-### setenv
-
-Set environment variable value.
-
-```sushi
-use <env>
-
-fn main() i32:
-    # Set variable (overwrite if exists)
-    setenv("MY_VAR", "my_value", 1)??
-
-    # Set only if not already defined
-    setenv("MY_VAR", "new_value", 0)??
-
-    return Result.Ok(0)
-```
-
-**Parameters:**
-- `key` - Variable name
-- `value` - Variable value
-- `overwrite` - 1 to replace existing, 0 to preserve existing
-
-**Returns:** `Result<i32>` - Success or error
-
-## Time Functions
-
-High-precision sleep functions.
-
-**Import:** `use <time>`
-
-### sleep
-
-Sleep for N seconds.
-
-```sushi
-use <time>
-
-fn main() i32:
-    println("Waiting 1 second...")
-    let i32 result = sleep(1 as i64)??
-    println("Done!")
-
-    return Result.Ok(0)
-```
-
-**Parameters:** `i64 seconds`
-
-**Returns:** `Result<i32>` - 0 on success, remaining microseconds if interrupted
-
-### msleep
-
-Sleep for N milliseconds.
-
-```sushi
-use <time>
-
-fn main() i32:
-    println("Waiting 500ms...")
-    let i32 result = msleep(500 as i64)??
-    println("Done!")
-
-    return Result.Ok(0)
-```
-
-**Parameters:** `i64 milliseconds`
-
-**Returns:** `Result<i32>` - 0 on success, remaining microseconds if interrupted
-
-### usleep
-
-Sleep for N microseconds.
-
-```sushi
-use <time>
-
-fn main() i32:
-    let i32 result = usleep(1000 as i64)??  # 1ms
-    return Result.Ok(0)
-```
-
-**Parameters:** `i64 microseconds`
-
-**Returns:** `Result<i32>` - 0 on success, remaining microseconds if interrupted
-
-### nanosleep
-
-Sleep with nanosecond precision.
-
-```sushi
-use <time>
-
-fn main() i32:
-    # Sleep for 1.5 seconds
-    let i32 result = nanosleep(1 as i64, 500000000 as i64)??
-    return Result.Ok(0)
-```
-
-**Parameters:**
-- `i64 seconds`
-- `i64 nanoseconds`
-
-**Returns:** `Result<i32>` - 0 on success, remaining microseconds if interrupted
-
-**Note:** Actual precision limited by OS scheduler (typically ~1ms minimum on macOS).
-
----
-
-**See also:**
-- [Math Module](stdlib/math.md) - Complete math function reference
-- [Environment Module](stdlib/env.md) - Environment variable details
-- [Platform System](stdlib/platform.md) - Platform-specific implementations
-- [Error Handling](error-handling.md) - Deep dive into Result and Maybe
-- [Language Reference](language-reference.md) - Complete syntax reference
-- [Examples](examples/) - Hands-on examples
+- [Language Reference](language-reference.md) - Core language features
+- [Memory Management](memory-management.md) - RAII, borrowing, ownership
+- [Generics](generics.md) - Generic types and functions
+- [Getting Started](getting-started.md) - Installation and first program

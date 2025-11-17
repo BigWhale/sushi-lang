@@ -1,0 +1,135 @@
+use <collections/strings>
+
+fn test_repeat_basic() ~:
+    let string original = "abc"
+    let string repeated = original.repeat(3)
+
+    if (repeated == "abcabcabc"):
+        println("PASS: Basic repeat (abc * 3)")
+    else:
+        println("FAIL: Basic repeat - expected 'abcabcabc', got '{repeated}'")
+
+    return Result.Ok(~)
+
+fn test_repeat_single_char() ~:
+    let string original = "x"
+    let string repeated = original.repeat(5)
+
+    if (repeated == "xxxxx"):
+        println("PASS: Single character repeat (x * 5)")
+    else:
+        println("FAIL: Single character repeat - expected 'xxxxx', got '{repeated}'")
+
+    return Result.Ok(~)
+
+fn test_repeat_zero() ~:
+    let string original = "test"
+    let string repeated = original.repeat(0)
+
+    if (repeated == ""):
+        println("PASS: Repeat with n=0")
+    else:
+        println("FAIL: Repeat with n=0 - expected empty string, got '{repeated}'")
+
+    return Result.Ok(~)
+
+fn test_repeat_negative() ~:
+    let string original = "test"
+    let string repeated = original.repeat(-5)
+
+    if (repeated == ""):
+        println("PASS: Repeat with negative n")
+    else:
+        println("FAIL: Repeat with negative n - expected empty string, got '{repeated}'")
+
+    return Result.Ok(~)
+
+fn test_repeat_one() ~:
+    let string original = "hello"
+    let string repeated = original.repeat(1)
+
+    if (repeated == "hello"):
+        println("PASS: Repeat with n=1")
+    else:
+        println("FAIL: Repeat with n=1 - expected 'hello', got '{repeated}'")
+
+    return Result.Ok(~)
+
+fn test_repeat_empty_string() ~:
+    let string original = ""
+    let string repeated = original.repeat(10)
+
+    if (repeated == ""):
+        println("PASS: Repeat empty string")
+    else:
+        println("FAIL: Repeat empty string - expected empty, got '{repeated}'")
+
+    return Result.Ok(~)
+
+fn test_repeat_utf8() ~:
+    let string original = "🎉"
+    let string repeated = original.repeat(3)
+
+    if (repeated == "🎉🎉🎉"):
+        println("PASS: UTF-8 emoji repeat (🎉 * 3)")
+    else:
+        println("FAIL: UTF-8 emoji repeat - expected '🎉🎉🎉', got '{repeated}'")
+
+    return Result.Ok(~)
+
+fn test_repeat_multibyte() ~:
+    let string original = "café"
+    let string repeated = original.repeat(2)
+
+    if (repeated == "cafécafé"):
+        println("PASS: Multibyte UTF-8 repeat (café * 2)")
+    else:
+        println("FAIL: Multibyte UTF-8 repeat - expected 'cafécafé', got '{repeated}'")
+
+    return Result.Ok(~)
+
+fn test_repeat_large() ~:
+    let string original = "-"
+    let string repeated = original.repeat(10)
+
+    if (repeated == "----------"):
+        println("PASS: Repeat 10 times")
+    else:
+        println("FAIL: Repeat 10 times - expected '----------', got '{repeated}'")
+
+    return Result.Ok(~)
+
+fn test_repeat_word() ~:
+    let string original = "ha"
+    let string repeated = original.repeat(3)
+
+    if (repeated == "hahaha"):
+        println("PASS: Word repeat (ha * 3)")
+    else:
+        println("FAIL: Word repeat - expected 'hahaha', got '{repeated}'")
+
+    return Result.Ok(~)
+
+fn main() i32:
+    if (test_repeat_basic()):
+        println("")
+    if (test_repeat_single_char()):
+        println("")
+    if (test_repeat_zero()):
+        println("")
+    if (test_repeat_negative()):
+        println("")
+    if (test_repeat_one()):
+        println("")
+    if (test_repeat_empty_string()):
+        println("")
+    if (test_repeat_utf8()):
+        println("")
+    if (test_repeat_multibyte()):
+        println("")
+    if (test_repeat_large()):
+        println("")
+    if (test_repeat_word()):
+        println("")
+
+    return Result.Ok(0)

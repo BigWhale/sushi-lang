@@ -844,7 +844,11 @@ _add(ErrorMessage("CE2055", Severity.ERROR,
     "HashMap<K, V> key type '{key_type}' does not support equality comparison",
     Category.TYPE, "HashMap keys must support equality comparison (==). This is required for collision resolution."))
 
-# Array indexing errors (CE2056-CE2059)
+_add(ErrorMessage("CE2058", Severity.ERROR,
+    "HashMap<K, V> key type '{key_type}' is not comparable (dynamic arrays cannot be HashMap keys)",
+    Category.TYPE, "Dynamic arrays are not allowed as HashMap keys due to memory management constraints. Use fixed-size arrays instead (e.g., i32[3] instead of i32[])."))
+
+# Array indexing errors (CE2056-CE2057, CE2059)
 _add(ErrorMessage("CE2056", Severity.ERROR,
     "array index {index} is negative (indices must be >= 0)",
     Category.TYPE, "Array indices must be non-negative. Negative indices are not supported."))
@@ -852,6 +856,10 @@ _add(ErrorMessage("CE2056", Severity.ERROR,
 _add(ErrorMessage("CE2057", Severity.ERROR,
     "array index {index} out of bounds for array of size {size}",
     Category.TYPE, "Array index exceeds array bounds. This error is caught at compile-time for constant indices."))
+
+_add(ErrorMessage("CE2059", Severity.ERROR,
+    "enum variant '{variant}' cannot have dynamic array field '{field_type}'",
+    Category.TYPE, "Dynamic arrays in enum variants cause memory management issues. Use fixed-size arrays instead (e.g., i32[3] instead of i32[])."))
 
 # Generic function call errors (CE2060-CE2069)
 _add(ErrorMessage("CE2060", Severity.ERROR,
@@ -874,6 +882,25 @@ _add(ErrorMessage("CE2071", Severity.ERROR,
 _add(ErrorMessage("CE2072", Severity.ERROR,
     "range expression requires integer types for start and end bounds. Got {got}, expected {expected}",
     Category.TYPE, "Range expressions (.. and ..=) can only be used with integer types (i8, i16, i32, i64, u8, u16, u32, u64)."))
+
+# Named struct constructor errors (CE2080-CE2089)
+_add(ErrorMessage("CE2080", Severity.ERROR,
+    "unknown field '{field}' for struct '{struct}'",
+    Category.TYPE, "Named struct constructor field name does not exist in struct definition."))
+
+_add(ErrorMessage("CE2081", Severity.ERROR,
+    "duplicate field '{field}' in struct constructor",
+    Category.TYPE, "Field name appears more than once in named struct constructor."))
+
+_add(ErrorMessage("CE2082", Severity.ERROR,
+    "missing required field(s) '{fields}' for struct '{struct}'",
+    Category.TYPE, "Named struct constructor must provide all required fields."))
+
+_add(ErrorMessage("CE2083", Severity.ERROR,
+    "field '{field}' expects type '{expected}', got '{got}'",
+    Category.TYPE, "Named struct constructor field type mismatch."))
+
+# CE2084-CE2089 reserved for future named parameter extensions
 
 # Unit Management Errors (CE3xxx)
 _add(ErrorMessage("CE3001", Severity.ERROR,

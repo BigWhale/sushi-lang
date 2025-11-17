@@ -1,0 +1,122 @@
+use <collections/strings>
+
+fn test_reverse_ascii() ~:
+    let string original = "hello"
+    let string reversed = original.reverse()
+
+    if (reversed == "olleh"):
+        println("PASS: ASCII reverse")
+    else:
+        println("FAIL: ASCII reverse - expected 'olleh', got '{reversed}'")
+
+    return Result.Ok(~)
+
+fn test_reverse_empty() ~:
+    let string original = ""
+    let string reversed = original.reverse()
+
+    if (reversed == ""):
+        println("PASS: Empty string reverse")
+    else:
+        println("FAIL: Empty string reverse")
+
+    return Result.Ok(~)
+
+fn test_reverse_single_char() ~:
+    let string original = "a"
+    let string reversed = original.reverse()
+
+    if (reversed == "a"):
+        println("PASS: Single character reverse")
+    else:
+        println("FAIL: Single character reverse")
+
+    return Result.Ok(~)
+
+fn test_reverse_utf8() ~:
+    let string original = "café"
+    let string reversed = original.reverse()
+
+    if (reversed == "éfac"):
+        println("PASS: UTF-8 reverse (café -> éfac)")
+    else:
+        println("FAIL: UTF-8 reverse - expected 'éfac', got '{reversed}'")
+
+    return Result.Ok(~)
+
+fn test_reverse_utf8_complex() ~:
+    let string original = "Hello 世界"
+    let string reversed = original.reverse()
+
+    if (reversed == "界世 olleH"):
+        println("PASS: Complex UTF-8 reverse (Hello 世界 -> 界世 olleH)")
+    else:
+        println("FAIL: Complex UTF-8 reverse - expected '界世 olleH', got '{reversed}'")
+
+    return Result.Ok(~)
+
+fn test_reverse_palindrome() ~:
+    let string original = "racecar"
+    let string reversed = original.reverse()
+
+    if (reversed == "racecar"):
+        println("PASS: Palindrome reverse")
+    else:
+        println("FAIL: Palindrome reverse")
+
+    return Result.Ok(~)
+
+fn test_reverse_numbers() ~:
+    let string original = "12345"
+    let string reversed = original.reverse()
+
+    if (reversed == "54321"):
+        println("PASS: Numbers reverse")
+    else:
+        println("FAIL: Numbers reverse - expected '54321', got '{reversed}'")
+
+    return Result.Ok(~)
+
+fn test_reverse_special_chars() ~:
+    let string original = "a!b@c#"
+    let string reversed = original.reverse()
+
+    if (reversed == "#c@b!a"):
+        println("PASS: Special characters reverse")
+    else:
+        println("FAIL: Special characters reverse - expected '#c@b!a', got '{reversed}'")
+
+    return Result.Ok(~)
+
+fn test_reverse_emoji() ~:
+    let string original = "Hi👋"
+    let string reversed = original.reverse()
+
+    if (reversed == "👋iH"):
+        println("PASS: Emoji reverse (Hi👋 -> 👋iH)")
+    else:
+        println("FAIL: Emoji reverse - expected '👋iH', got '{reversed}'")
+
+    return Result.Ok(~)
+
+fn main() i32:
+    if (test_reverse_ascii()):
+        println("")
+    if (test_reverse_empty()):
+        println("")
+    if (test_reverse_single_char()):
+        println("")
+    if (test_reverse_utf8()):
+        println("")
+    if (test_reverse_utf8_complex()):
+        println("")
+    if (test_reverse_palindrome()):
+        println("")
+    if (test_reverse_numbers()):
+        println("")
+    if (test_reverse_special_chars()):
+        println("")
+    if (test_reverse_emoji()):
+        println("")
+
+    return Result.Ok(0)

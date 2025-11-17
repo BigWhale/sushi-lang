@@ -354,9 +354,24 @@ struct Person:
 
 ### Instantiation
 
+Structs support both positional and named parameter construction:
+
+**Positional (traditional):**
 ```sushi
-let Person p = Person(name: "Arthur", age: 42, active: true)
+let Person p = Person("Arthur", 42, true)
 ```
+
+**Named (order-independent):**
+```sushi
+let Person p1 = Person(name: "Arthur", age: 42, active: true)
+let Person p2 = Person(age: 42, active: true, name: "Arthur")  # Order doesn't matter
+```
+
+**Rules:**
+- Named parameters provide clarity and prevent argument order mistakes
+- All fields must be provided (no partial construction)
+- Cannot mix positional and named arguments (all-or-nothing)
+- Named parameters are resolved at compile-time (zero-cost abstraction)
 
 ### Field Access
 
@@ -542,9 +557,45 @@ Reserved keywords:
 - `extend` - Extension method
 - `self` - Extension method receiver
 
+## String Literals
+
+Sushi supports two string literal syntaxes:
+
+**Double-quote strings** (`"..."`):
+- Support interpolation with `{expr}` syntax
+- All escape sequences supported
+- Use for: string constants, interpolated strings
+
+**Single-quote strings** (`'...'`):
+- Plain string literals, no interpolation
+- Same escape sequences as double-quote strings
+- Use for: string arguments in interpolation, literal strings
+
+```sushi
+let string s1 = "double quotes"    # Supports interpolation
+let string s2 = 'single quotes'    # No interpolation
+let string s3 = 'can\'t'           # Escape sequences work
+```
+
+**Both quote styles are equivalent** except for interpolation support. Use whichever is more convenient.
+
+### Escape Sequences
+
+Both quote styles support the same escape sequences:
+
+- `\\` - Backslash
+- `\"` - Double quote
+- `\'` - Single quote
+- `\n` - Newline
+- `\t` - Tab
+- `\r` - Carriage return
+- `\0` - Null character
+- `\xNN` - Hexadecimal escape (e.g., `\x41` = 'A')
+- `\uNNNN` - Unicode escape (e.g., `\u0041` = 'A')
+
 ## String Interpolation
 
-Embed expressions in strings with `{expression}`:
+Embed expressions in double-quote strings with `{expression}`:
 
 ```sushi
 let i32 x = 42
@@ -557,6 +608,22 @@ println("Squared: {x * x}")
 ```
 
 **Supported types:** All primitives, strings
+
+### String Arguments in Interpolation
+
+Use single-quote strings for string arguments inside interpolation expressions:
+
+```sushi
+use <collections/strings>
+
+let string text = "hello"
+println("{text.pad_left(10, '*')}")       # Padding character
+println("{text.find('world')}")           # Search string
+println("{text.replace('old', 'new')}")   # Multiple string args
+println("{','.join(parts)}")              # Separator string
+```
+
+Single-quote strings work naturally in nested contexts where double quotes would require escaping.
 
 ## Constants
 

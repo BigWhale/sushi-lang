@@ -1,0 +1,10 @@
+# CE2083: Type mismatch in named struct constructor
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    # ERROR: 'y' expects i32, got string
+    let Point p = Point(x: 10, y: "twenty")
+    return Result.Ok(0)

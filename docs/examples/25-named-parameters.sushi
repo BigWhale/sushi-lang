@@ -1,0 +1,105 @@
+# Example 25: Named Parameters for Struct Construction
+#
+# This example demonstrates named parameter syntax for struct constructors,
+# which provides clarity and order-independence when creating struct instances.
+#
+# Key concepts covered:
+# - Named parameter syntax: StructName(field: value, ...)
+# - Order independence: fields can be specified in any order
+# - Boolean trap prevention: named parameters make boolean arguments clear
+# - Comparison with positional parameters
+# - Mixed usage: positional and named styles in the same program
+#
+# Named parameters are especially useful for:
+# - Structs with many fields
+# - Structs with multiple boolean fields (preventing confusion)
+# - Improving code readability and maintainability
+
+struct Config:
+    string host
+    i32 port
+    bool use_ssl
+    bool enable_cache
+    i32 timeout_ms
+
+struct Point3D:
+    i32 x
+    i32 y
+    i32 z
+
+fn main() i32:
+    println("=== Named Parameters Demo ===")
+    println("")
+
+    # Example 1: Named parameters with order independence
+    println("1. Order-independent named parameters:")
+    let Config cfg1 = Config(
+        host: "localhost",
+        port: 8080,
+        use_ssl: false,
+        enable_cache: true,
+        timeout_ms: 5000
+    )
+
+    # Same struct, different field order - both are valid!
+    let Config cfg2 = Config(
+        timeout_ms: 3000,
+        enable_cache: false,
+        use_ssl: true,
+        port: 443,
+        host: "api.example.com"
+    )
+
+    println("Config 1: {cfg1.host}:{cfg1.port} (SSL: {cfg1.use_ssl})")
+    println("Config 2: {cfg2.host}:{cfg2.port} (SSL: {cfg2.use_ssl})")
+    println("")
+
+    # Example 2: Boolean trap prevention
+    println("2. Named parameters prevent boolean traps:")
+    println("Compare these two equivalent constructions:")
+    println("")
+
+    # With positional (hard to read - which bool is which?):
+    let Config cfg3 = Config("database.local", 5432, true, false, 10000)
+    println("Positional: Config('database.local', 5432, true, false, 10000)")
+    println("  ^ What does 'true' mean? SSL? Cache? Not obvious!")
+    println("")
+
+    # With named (crystal clear):
+    let Config cfg4 = Config(
+        host: "database.local",
+        port: 5432,
+        use_ssl: true,
+        enable_cache: false,
+        timeout_ms: 10000
+    )
+    println("Named: Config(host: 'database.local', port: 5432,")
+    println("              use_ssl: true, enable_cache: false, ...)")
+    println("  ^ Immediately clear what each parameter does!")
+    println("")
+
+    # Example 3: Works with all struct types
+    println("3. Named parameters work for any struct:")
+
+    # Simple struct with positional
+    let Point3D p1 = Point3D(10, 20, 30)
+    println("Positional: Point3D(10, 20, 30) = ({p1.x}, {p1.y}, {p1.z})")
+
+    # Same struct with named (order doesn't matter)
+    let Point3D p2 = Point3D(z: 60, x: 40, y: 50)
+    println("Named: Point3D(z: 60, x: 40, y: 50) = ({p2.x}, {p2.y}, {p2.z})")
+    println("")
+
+    # Example 4: Generic structs support named parameters too
+    println("4. Generic structs support named parameters:")
+    println("See examples/14-generics.sushi for generic struct examples")
+    println("")
+
+    println("=== Key Takeaways ===")
+    println("1. Named parameters improve readability")
+    println("2. Field order doesn't matter with named syntax")
+    println("3. Prevents boolean trap and argument order bugs")
+    println("4. Cannot mix positional and named (all-or-nothing)")
+    println("5. Zero runtime cost (resolved at compile-time)")
+
+    return Result.Ok(0)

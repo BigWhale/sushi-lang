@@ -1,12 +1,18 @@
 # Example 04: String Operations
 #
 # Demonstrates:
+# - Two quote styles (double and single quotes)
 # - String length and size operations
 # - Empty string checking
 # - String interpolation for building strings
 # - Substring search with Maybe<T>
 # - String splitting into arrays
 # - Whitespace trimming
+# - Single-quote strings in method arguments
+#
+# Sushi supports two string literal syntaxes:
+# - Double quotes ("..."): Support interpolation with {expr}
+# - Single quotes ('...'): Plain literals, no interpolation
 #
 # Sushi strings are UTF-8 encoded. String concatenation is done via
 # interpolation, not the + operator. Many string methods return Result<T>
@@ -45,7 +51,8 @@ fn main() i32:
     # String.find(substring) searches for the first occurrence.
     # Returns Maybe<i32> with the index, or Maybe.None() if not found.
     # This demonstrates safe handling of search failure.
-    let Maybe<i32> pos = message.find("Panic")
+    # Note: Single-quote strings work great for method arguments
+    let Maybe<i32> pos = message.find('Panic')
 
     match pos:
         Maybe.Some(index) ->
@@ -56,8 +63,9 @@ fn main() i32:
     # String.split(delimiter) splits a string into a dynamic array.
     # Returns string[] containing all parts between delimiters.
     # Empty strings between consecutive delimiters are included.
+    # Single quotes for the delimiter make it clear it's a literal
     let string planets = "Earth,Betelgeuse,Magrathea,Vogsphere"
-    let string[] planet_list = planets.split(",")
+    let string[] planet_list = planets.split(',')
 
     println("Planets:")
 

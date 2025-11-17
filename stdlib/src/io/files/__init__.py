@@ -55,6 +55,7 @@ def generate_module_ir() -> ir.Module:
     from stdlib.src.io.files.status import (
         generate_close, generate_is_open
     )
+    from stdlib.src.io.files.utils import generate_ir as generate_utils_ir
 
     # Create module
     module = create_stdlib_module("io.files")
@@ -80,6 +81,9 @@ def generate_module_ir() -> ir.Module:
     # Generate status methods (2 methods)
     generate_close(module)
     generate_is_open(module)
+
+    # Generate utility functions (4 functions)
+    generate_utils_ir(module)
 
     return module
 

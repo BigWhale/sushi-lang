@@ -149,6 +149,7 @@ method_name: NAME | NEW
      | TRUE
      | FALSE
      | STRING
+     | CHAR_STRING
      | NAME
      | "~" -> blank_literal
      | STDIN -> stdin_literal
@@ -165,7 +166,16 @@ array_elements: expr ("," expr)*
 dynamic_array_new: "new" "(" ")"
 dynamic_array_from: "from" "(" array_literal ")"
 
-args: expr ("," expr)*
+// Arguments for function/struct calls
+args: arg_list?
+
+arg_list: positional_args
+        | named_args
+
+positional_args: expr ("," expr)*
+
+named_args: named_arg ("," named_arg)*
+named_arg: NAME ":" expr
 
 #
 # Tokens
@@ -188,6 +198,7 @@ _NEWLINE: /(\r?\n[ \t]*(?:#[^\n]*\r?\n[ \t]*)*)+/
 TRUE: "true"
 FALSE: "false"
 STRING: /\"([^\"\\]|\\.)*\"/
+CHAR_STRING: /'([^'\\]|\\.)*'/
 
 ASSIGN_REBIND: ":="
 UNDERSCORE: "_"

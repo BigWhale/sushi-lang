@@ -1,0 +1,13 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Got hello
+
+fn returns_string() string:
+    return Result.Ok("hello")
+
+fn main() i32:
+    match returns_string():
+        Result.Ok(val) ->
+            println("Got {val}")
+        Result.Err() ->
+            println("Error")
+    return Result.Ok(0)

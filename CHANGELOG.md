@@ -2,6 +2,63 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [0.0.12] - 2025-11-17
+
+### Added
+- Named parameters for struct constructors
+  - Order-independent syntax: Point(y: 20, x: 10)
+  - All-or-nothing: cannot mix positional and named arguments
+  - Zero-cost abstraction resolved at compile-time
+  - Error codes: CE2080-CE2083 for validation
+- Single-quote string literals ('...') for plain strings without interpolation
+  - Double quotes ("...") support {expr} interpolation
+  - Single quotes provide literals for use in interpolation arguments
+  - Example: {text.pad_left(10, '*')} uses single quotes for arguments
+- File utilities in io/files module
+  - remove(path) - Delete files
+  - rename(old_path, new_path) - Rename/move files
+  - mkdir(path, mode) - Create directories with permissions
+  - rmdir(path) - Remove empty directories
+  - copy(src, dest) - Copy files
+- String methods in collections/strings module
+  - reverse() - UTF-8 aware character-level reversal
+  - repeat(n) - Repeat string n times
+  - count(needle) - Count non-overlapping occurrences
+  - find_last(needle) - Find last occurrence index
+  - join(separator, array) - Join string array with separator
+  - pad_left(width, pad_char) - Left-pad to width
+  - pad_right(width, pad_char) - Right-pad to width
+  - strip_prefix(prefix) - Remove prefix if present
+  - strip_suffix(suffix) - Remove suffix if present
+
+### Fixed
+- Pattern matching segfault on Result<T> function calls
+  - Added Call node handling in _get_scrutinee_type()
+- HashMap array key implementation
+  - Corrected GEP indexing for fixed and dynamic array equality
+  - Fixed arrays now use gep_fixed_array_element() utility
+- Directory-based stdlib imports now include submodules
+  - use <collections> properly provides collections/strings
+- String methods now UTF-8 aware
+  - ss(start, length) works with character indices instead of bytes
+
+### Changed
+- Migrated to uv-only dependency management with direnv integration
+- Refactored version management to use pyproject.toml as single source of truth
+- Refactored file utilities to use fat_pointer_to_cstr() helper function
+- Reorganized stdlib documentation into modular structure (docs/stdlib/)
+
+### Validation
+- Dynamic arrays disallowed as HashMap keys at compile time (error CE2058)
+- Dynamic arrays disallowed in enum variants at compile time (error CE2059)
+- Fixed arrays remain supported in both contexts
+
+### Documentation
+- Comprehensive documentation for named struct constructors
+- Single-quote string literal syntax documented across language reference
+- File utilities documentation in docs/stdlib/io/files.md
+- String methods documentation in reorganized stdlib docs
+
 ## [0.0.11] - 2025-11-11
 
 ### Added

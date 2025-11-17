@@ -51,7 +51,7 @@ The `??` operator for ergonomic error propagation.
 ## Data Structures
 
 ### 10-structs.sushi
-Defining and using custom struct types.
+Defining and using custom struct types with positional parameters.
 
 ### 11-enums.sushi
 Rust-style enums with associated data.
@@ -64,6 +64,9 @@ Generic `List<T>` - dynamic growable arrays.
 
 ### 16-hashmaps.sushi
 Generic `HashMap<K,V>` - hash tables with key-value pairs.
+
+### 25-named-parameters.sushi
+Named parameter syntax for struct construction - order-independent, prevents boolean traps.
 
 ## Advanced Features
 

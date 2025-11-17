@@ -319,6 +319,95 @@ fn distance(Point p1, Point p2) f64:
 
 ## Language-Specific Conventions
 
+### Struct Construction
+
+Sushi supports both positional and named parameter syntax for struct constructors. Choose the appropriate style based on the situation:
+
+**Use positional construction when:**
+- The struct has 1-3 fields
+- Field types make the meaning obvious
+- The struct is used frequently in tight loops
+
+```sushi
+struct Point:
+    i32 x
+    i32 y
+
+# Good - simple struct, types are clear
+let Point p = Point(10, 20)
+```
+
+**Use named construction when:**
+- The struct has 4+ fields
+- Multiple fields have the same type (especially booleans)
+- Field names provide important context
+- Code clarity is more important than brevity
+
+```sushi
+struct ServerConfig:
+    string host
+    i32 port
+    bool use_ssl
+    bool enable_cache
+    i32 timeout_ms
+
+# Good - named parameters prevent confusion
+let ServerConfig config = ServerConfig(
+    host: "localhost",
+    port: 8080,
+    use_ssl: false,
+    enable_cache: true,
+    timeout_ms: 5000
+)
+
+# Avoid - unclear which boolean is which
+let ServerConfig config = ServerConfig("localhost", 8080, false, true, 5000)
+```
+
+**Boolean trap prevention:**
+
+Named parameters are especially valuable when a struct has multiple boolean fields:
+
+```sushi
+struct Flags:
+    bool verbose
+    bool debug
+    bool strict
+    bool quiet
+
+# Good - crystal clear
+let Flags flags = Flags(
+    verbose: true,
+    debug: false,
+    strict: true,
+    quiet: false
+)
+
+# Bad - impossible to tell which flag is which without checking the definition
+let Flags flags = Flags(true, false, true, false)
+```
+
+**Formatting multi-field construction:**
+
+For structs with many fields, break across lines:
+
+```sushi
+# Good - one field per line for complex structs
+let DatabaseConfig db = DatabaseConfig(
+    host: "db.example.com",
+    port: 5432,
+    database: "production",
+    username: "admin",
+    password: get_password()??,
+    pool_size: 10,
+    timeout_ms: 30000,
+    use_ssl: true
+)
+
+# Also acceptable - compact for simple cases
+let Point p = Point(x: 10, y: 20)
+```
+
 ### Result Handling
 
 Always handle `Result` types explicitly:

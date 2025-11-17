@@ -1,16 +1,27 @@
 from __future__ import annotations
 import sys, platform, datetime
+import tomllib
+from pathlib import Path
+from importlib.metadata import version as _pkg_version, PackageNotFoundError
 
-MAJOR = 0
-MINOR = 0
-PATCH = 11
-VERSION = f"{MAJOR}.{MINOR}.{PATCH}"
+def _read_version_from_pyproject() -> str:
+    """
+    Read version from pyproject.toml as the single source of truth.
 
-try:
-    from importlib.metadata import version as _pkg_version, PackageNotFoundError
-except Exception:  # py<3.8 fallback if you ever need it
-    _pkg_version = None
-    PackageNotFoundError = Exception
+    Returns:
+        Version string from pyproject.toml, or "unknown" if unable to read.
+    """
+    try:
+        project_root = Path(__file__).parent.parent
+        pyproject_path = project_root / "pyproject.toml"
+
+        if pyproject_path.exists():
+            with open(pyproject_path, "rb") as f:
+                data = tomllib.load(f)
+                return data.get("project", {}).get("version", "unknown")
+    except Exception:
+        pass
+    return "unknown"
 
 def _ensure_utf8_stdout() -> None:
     try:
@@ -19,13 +30,16 @@ def _ensure_utf8_stdout() -> None:
         pass
 
 def _get_versions() -> dict[str, str]:
-    # Project/package version (edit the package name if you publish it)
-    app_ver = VERSION
-    if _pkg_version is not None:
-        try:
-            app_ver = _pkg_version("sushi-lang")
-        except PackageNotFoundError:
-            pass
+    # Project/package version with fallback chain:
+    # 1. Try installed package metadata (when installed via pip/uv)
+    # 2. Fall back to pyproject.toml (development mode)
+    app_ver = "unknown"
+
+    try:
+        app_ver = _pkg_version("sushi-lang")
+    except PackageNotFoundError:
+        # Not installed as package, read from pyproject.toml
+        app_ver = _read_version_from_pyproject()
 
     # llvmlite + LLVM (best-effort; don’t crash if missing)
     llvmlite_ver = "unknown"
@@ -62,6 +76,6 @@ def print_banner() -> None:
         BOLD, DIM, RESET = "", "", ""
 
     print(
-        f"{BOLD} 🍣 Sushi (すし) Lang Compiler{RESET}  v{v['app']}\n"
+        f"{BOLD} 🍣 Sushi (すし) Lang Compiler{RESET} • {v['app']}\n"
         f"{DIM}Python {v['python']} • llvmlite {v['llvmlite']} • LLVM {v['llvm']} • {today}{RESET}\n"
     )

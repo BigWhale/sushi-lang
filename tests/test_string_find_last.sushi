@@ -1,0 +1,186 @@
+use <collections/strings>
+
+fn test_find_last_basic() ~:
+    let string text = "hello world"
+    let Maybe<i32> result = text.find_last("o")
+
+    if (result.is_some()):
+        let i32 index = result.realise(-1)
+        if (index == 7):
+            println("PASS: find_last('o') in 'hello world' = 7")
+        else:
+            println("FAIL: find_last('o') - expected 7, got {index}")
+    else:
+        println("FAIL: find_last('o') - expected Some, got None")
+
+    return Result.Ok(~)
+
+fn test_find_last_not_found() ~:
+    let string text = "hello"
+    let Maybe<i32> result = text.find_last("x")
+
+    if (result.is_none()):
+        println("PASS: find_last not found returns None")
+    else:
+        println("FAIL: find_last not found - expected None")
+
+    return Result.Ok(~)
+
+fn test_find_last_first_char() ~:
+    let string text = "test"
+    let Maybe<i32> result = text.find_last("t")
+
+    if (result.is_some()):
+        let i32 index = result.realise(-1)
+        if (index == 3):
+            println("PASS: find_last('t') in 'test' = 3 (last occurrence)")
+        else:
+            println("FAIL: find_last('t') - expected 3, got {index}")
+    else:
+        println("FAIL: find_last('t') - expected Some")
+
+    return Result.Ok(~)
+
+fn test_find_last_substring() ~:
+    let string text = "the cat in the hat"
+    let Maybe<i32> result = text.find_last("the")
+
+    if (result.is_some()):
+        let i32 index = result.realise(-1)
+        if (index == 11):
+            println("PASS: find_last('the') = 11 (last occurrence)")
+        else:
+            println("FAIL: find_last('the') - expected 11, got {index}")
+    else:
+        println("FAIL: find_last('the') - expected Some")
+
+    return Result.Ok(~)
+
+fn test_find_last_single_occurrence() ~:
+    let string text = "unique"
+    let Maybe<i32> result = text.find_last("que")
+
+    if (result.is_some()):
+        let i32 index = result.realise(-1)
+        if (index == 3):
+            println("PASS: find_last with single occurrence")
+        else:
+            println("FAIL: find_last single occurrence - expected 3, got {index}")
+    else:
+        println("FAIL: find_last single occurrence - expected Some")
+
+    return Result.Ok(~)
+
+fn test_find_last_empty_needle() ~:
+    let string text = "test"
+    let Maybe<i32> result = text.find_last("")
+
+    if (result.is_some()):
+        let i32 index = result.realise(-1)
+        if (index == 4):
+            println("PASS: find_last empty needle returns end position")
+        else:
+            println("FAIL: find_last empty needle - expected 4, got {index}")
+    else:
+        println("FAIL: find_last empty needle - expected Some")
+
+    return Result.Ok(~)
+
+fn test_find_last_empty_string() ~:
+    let string text = ""
+    let Maybe<i32> result = text.find_last("x")
+
+    if (result.is_none()):
+        println("PASS: find_last in empty string returns None")
+    else:
+        println("FAIL: find_last in empty string - expected None")
+
+    return Result.Ok(~)
+
+fn test_find_last_full_match() ~:
+    let string text = "hello"
+    let Maybe<i32> result = text.find_last("hello")
+
+    if (result.is_some()):
+        let i32 index = result.realise(-1)
+        if (index == 0):
+            println("PASS: find_last full string match")
+        else:
+            println("FAIL: find_last full match - expected 0, got {index}")
+    else:
+        println("FAIL: find_last full match - expected Some")
+
+    return Result.Ok(~)
+
+fn test_find_last_utf8() ~:
+    let string text = "café café"
+    let Maybe<i32> result = text.find_last("café")
+
+    if (result.is_some()):
+        let i32 index = result.realise(-1)
+        if (index == 5):
+            println("PASS: find_last UTF-8 word (last 'café' at char 5)")
+        else:
+            println("FAIL: find_last UTF-8 - expected 5, got {index}")
+    else:
+        println("FAIL: find_last UTF-8 - expected Some")
+
+    return Result.Ok(~)
+
+fn test_find_last_emoji() ~:
+    let string text = "🎉test🎉"
+    let Maybe<i32> result = text.find_last("🎉")
+
+    if (result.is_some()):
+        let i32 index = result.realise(-1)
+        if (index == 5):
+            println("PASS: find_last emoji (last 🎉 at char 5)")
+        else:
+            println("FAIL: find_last emoji - expected 5, got {index}")
+    else:
+        println("FAIL: find_last emoji - expected Some")
+
+    return Result.Ok(~)
+
+fn test_find_last_vs_find() ~:
+    let string text = "abcabc"
+    let Maybe<i32> first = text.find("abc")
+    let Maybe<i32> last = text.find_last("abc")
+
+    if (first.is_some() and last.is_some()):
+        let i32 first_idx = first.realise(-1)
+        let i32 last_idx = last.realise(-1)
+        if (first_idx == 0 and last_idx == 3):
+            println("PASS: find() returns first (0), find_last() returns last (3)")
+        else:
+            println("FAIL: find vs find_last - got {first_idx} and {last_idx}")
+    else:
+        println("FAIL: find vs find_last - expected both Some")
+
+    return Result.Ok(~)
+
+fn main() i32:
+    if (test_find_last_basic()):
+        println("")
+    if (test_find_last_not_found()):
+        println("")
+    if (test_find_last_first_char()):
+        println("")
+    if (test_find_last_substring()):
+        println("")
+    if (test_find_last_single_occurrence()):
+        println("")
+    if (test_find_last_empty_needle()):
+        println("")
+    if (test_find_last_empty_string()):
+        println("")
+    if (test_find_last_full_match()):
+        println("")
+    if (test_find_last_utf8()):
+        println("")
+    if (test_find_last_emoji()):
+        println("")
+    if (test_find_last_vs_find()):
+        println("")
+
+    return Result.Ok(0)

@@ -1,0 +1,13 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Got 42
+
+fn returns_i32() i32:
+    return Result.Ok(42)
+
+fn main() i32:
+    match returns_i32():
+        Result.Ok(val) ->
+            println("Got {val}")
+        Result.Err() ->
+            println("Error")
+    return Result.Ok(0)

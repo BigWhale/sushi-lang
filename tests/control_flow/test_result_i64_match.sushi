@@ -1,0 +1,13 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Got 9876543210
+
+fn returns_i64() i64:
+    return Result.Ok(9876543210 as i64)
+
+fn main() i32:
+    match returns_i64():
+        Result.Ok(val) ->
+            println("Got {val}")
+        Result.Err() ->
+            println("Error")
+    return Result.Ok(0)

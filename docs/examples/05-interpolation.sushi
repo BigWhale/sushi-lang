@@ -7,10 +7,14 @@
 # - Boolean and numeric interpolation
 # - Arithmetic expressions in interpolation
 # - Mixing variables, literals, and expressions
+# - Using single-quote strings in interpolation for method args
 #
-# String interpolation uses {expression} syntax. Any expression that can
-# be converted to a string can be interpolated. This is the primary way
+# String interpolation uses {expression} syntax in double-quote strings.
+# Single-quote strings do not support interpolation but work great as
+# arguments inside interpolation expressions. This is the primary way
 # to build strings in Sushi (no + operator for strings).
+
+use <collections/strings>
 
 fn main() i32:
     let i32 answer = 42
@@ -62,5 +66,19 @@ fn main() i32:
     println("{part1} {part2}")  # Interpolation
     let string full = "{part1} {part2}"  # Store interpolated string
     println(full)
+
+    # Single-quote strings work naturally in interpolation.
+    # They don't support interpolation themselves, but that makes
+    # them perfect for string arguments in method calls within
+    # interpolation expressions.
+    let string text = "hello world"
+    println("Uppercase: {text.upper()}")  # No args
+    println("Trimmed: {'  spaces  '.trim()}")  # Single quotes for literal
+
+    # Both quote styles produce the same string type.
+    # Choose based on context: double for interpolation, single for literals.
+    let string s1 = "double quotes"
+    let string s2 = 'single quotes'
+    println("s1: {s1}, s2: {s2}")
 
     return Result.Ok(0)

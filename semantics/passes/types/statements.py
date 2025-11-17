@@ -54,6 +54,12 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
             validator.variable_types[stmt.name] = resolved_type
             stmt.ty = resolved_type  # Update AST node for backend
     elif isinstance(stmt.ty, GenericTypeRef):
+        # Validate HashMap key types BEFORE resolution (reject dynamic arrays)
+        if stmt.ty.base_name == "HashMap" and len(stmt.ty.type_args) >= 1:
+            key_type = stmt.ty.type_args[0]
+            if isinstance(key_type, DynamicArrayType):
+                er.emit(validator.reporter, er.ERR.CE2058, stmt.type_span, key_type=str(key_type))
+
         # Resolve GenericTypeRef to monomorphized EnumType or StructType
         # Build type name: Result<i32> -> "Result<i32>", Box<i32> -> "Box<i32>"
         type_args_str = ", ".join(str(arg) for arg in stmt.ty.type_args)

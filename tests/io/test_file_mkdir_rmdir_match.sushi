@@ -1,0 +1,24 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Mkdir: Success
+# EXPECTED_OUTPUT: Rmdir: Success
+
+use <io/files>
+
+fn main() i32:
+    let string test_dir = "/tmp/sushi_test_dir_match"
+
+    match mkdir(test_dir, 0o755):
+        Result.Ok(_) ->
+            println("Mkdir: Success")
+        Result.Err() ->
+            println("Mkdir: Failed")
+            return Result.Ok(1)
+
+    match rmdir(test_dir):
+        Result.Ok(_) ->
+            println("Rmdir: Success")
+        Result.Err() ->
+            println("Rmdir: Failed")
+            return Result.Ok(2)
+
+    return Result.Ok(0)

@@ -2,11 +2,13 @@
 String Slice Operations
 
 Implements string slicing methods that work with fat pointer representation:
-- ss(start, length): Byte-based substring (UTF-8 unaware, simpler)
+- ss(start, length): Substring from character index with character length (UTF-8 aware)
 - sleft(n): First n UTF-8 characters (UTF-8 aware)
 - sright(n): Last n UTF-8 characters (UTF-8 aware)
 - char_at(index): Single UTF-8 character at index (UTF-8 aware)
 - s(start, end): Slice from character index start to end (UTF-8 aware)
+
+All methods now properly handle UTF-8 multi-byte characters at code point boundaries.
 """
 
 import llvmlite.ir as ir
@@ -18,8 +20,8 @@ from stdlib.src.type_definitions import get_string_types
 def emit_string_ss(module: ir.Module) -> ir.Function:
     """Emit the string.ss() method.
 
-    Returns substring of 'length' bytes starting from byte index 'start'.
-    This is byte-based (UTF-8 unaware) and simpler than character-based slicing.
+    Returns substring of 'length' UTF-8 characters starting from character index 'start'.
+    UTF-8 aware - uses utf8_count and utf8_byte_offset to find character boundaries.
 
     Args:
         module: The LLVM module to emit the function into.
@@ -38,9 +40,11 @@ def emit_string_ss(module: ir.Module) -> ir.Function:
     # Get common types
     i8, i8_ptr, i32, i64, string_type = get_string_types()
 
-    # Declare external functions
+    # Declare external functions and intrinsics
     malloc = declare_malloc(module)
     memcpy = declare_memcpy(module)
+    utf8_count_fn = declare_utf8_count_intrinsic(module)
+    utf8_byte_offset_fn = declare_utf8_byte_offset_intrinsic(module)
 
     # Function signature: { i8*, i32 } string_ss({ i8*, i32 } str, i32 start, i32 length)
     fn_ty = ir.FunctionType(string_type, [string_type, i32, i32])
@@ -57,7 +61,10 @@ def emit_string_ss(module: ir.Module) -> ir.Function:
     data = builder.extract_value(func.args[0], 0, name="data")
     size = builder.extract_value(func.args[0], 1, name="size")
 
-    # Clamp start to valid range [0, size]
+    # Get total character count
+    char_count = builder.call(utf8_count_fn, [data, size], name="char_count")
+
+    # Clamp start to valid range [0, char_count]
     zero = ir.Constant(i32, 0)
     start_clamped = builder.select(
         builder.icmp_signed("<", func.args[1], zero),
@@ -66,16 +73,16 @@ def emit_string_ss(module: ir.Module) -> ir.Function:
         name="start_clamped"
     )
     start_final = builder.select(
-        builder.icmp_signed(">", start_clamped, size),
-        size,
+        builder.icmp_signed(">", start_clamped, char_count),
+        char_count,
         start_clamped,
         name="start_final"
     )
 
-    # Calculate maximum available length from start position
-    remaining = builder.sub(size, start_final, name="remaining")
+    # Calculate maximum available character length from start position
+    remaining_chars = builder.sub(char_count, start_final, name="remaining_chars")
 
-    # Clamp length to [0, remaining]
+    # Clamp length to [0, remaining_chars]
     length_clamped = builder.select(
         builder.icmp_signed("<", func.args[2], zero),
         zero,
@@ -83,14 +90,48 @@ def emit_string_ss(module: ir.Module) -> ir.Function:
         name="length_clamped"
     )
     length_final = builder.select(
-        builder.icmp_signed(">", length_clamped, remaining),
-        remaining,
+        builder.icmp_signed(">", length_clamped, remaining_chars),
+        remaining_chars,
         length_clamped,
         name="length_final"
     )
 
+    # Calculate end character index
+    end_char = builder.add(start_final, length_final, name="end_char")
+
+    # Find byte offsets of start and end characters
+    start_byte = builder.call(utf8_byte_offset_fn, [data, size, start_final], name="start_byte")
+    end_byte = builder.call(utf8_byte_offset_fn, [data, size, end_char], name="end_byte")
+
+    # If start_byte is -1, use 0
+    start_byte_final = builder.select(
+        builder.icmp_signed("<", start_byte, zero),
+        zero,
+        start_byte,
+        name="start_byte_final"
+    )
+
+    # If end_byte is -1, use size
+    end_byte_final = builder.select(
+        builder.icmp_signed("<", end_byte, zero),
+        size,
+        end_byte,
+        name="end_byte_final"
+    )
+
+    # Calculate byte length
+    byte_length = builder.sub(end_byte_final, start_byte_final, name="byte_length")
+
+    # Ensure byte_length is non-negative
+    byte_length_final = builder.select(
+        builder.icmp_signed("<", byte_length, zero),
+        zero,
+        byte_length,
+        name="byte_length_final"
+    )
+
     # Allocate and copy substring
-    result = allocate_substring(builder, malloc, memcpy, string_type, data, start_final, length_final, i32, i64)
+    result = allocate_substring(builder, malloc, memcpy, string_type, data, start_byte_final, byte_length_final, i32, i64)
     builder.ret(result)
     return func
 

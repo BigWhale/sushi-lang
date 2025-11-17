@@ -6,8 +6,9 @@ This guide will help you set up Sushi and write your first program.
 
 ## Prerequisites
 
-- **Python 3.8+** (for the compiler)
-- **LLVM/Clang** (for code generation and linking)
+- **Python 3.13+** (managed by uv)
+- **LLVM 20** (for code generation - llvmlite 0.45 requirement)
+- **cmake** (required for building llvmlite)
 - **macOS, Linux, or WSL** (Windows support via WSL)
 
 ## Installation
@@ -19,23 +20,90 @@ git clone https://github.com/yourusername/sushi.git
 cd sushi
 ```
 
-### 2. Install Dependencies
+### 2. Install System Dependencies
 
-Sushi uses `uv` for Python dependency management:
+#### macOS
 
 ```bash
-# Install uv if you don't have it
-pip install uv
+# Install Homebrew if not already installed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# Install dependencies
-uv sync
+# Install cmake and LLVM 20
+brew install cmake llvm@20
 ```
 
-### 3. Verify Installation
+**Note**: LLVM 20 is keg-only on macOS (not symlinked into `/usr/local`). The build process will automatically detect and use the correct version.
+
+#### Linux (Ubuntu/Debian)
 
 ```bash
-# The sushic compiler script should be executable
+# Install cmake
+sudo apt update
+sudo apt install cmake
+
+# Install LLVM 20 (check your distribution's package manager for llvm-20)
+# For Ubuntu 22.04+:
+sudo apt install llvm-20 llvm-20-dev
+```
+
+#### Linux (Arch)
+
+```bash
+# Install cmake and LLVM
+sudo pacman -S cmake llvm
+```
+
+### 3. Install uv
+
+uv is a fast Python package manager that handles dependency installation and virtual environments:
+
+```bash
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Or via pip
+pip install uv
+
+# Or via Homebrew (macOS)
+brew install uv
+```
+
+### 4. Install Python Dependencies
+
+```bash
+# Install all dependencies (including dev dependencies)
+uv sync --dev
+
+# This will:
+# - Create a virtual environment at .venv/
+# - Install lark (parser)
+# - Build and install llvmlite (LLVM bindings)
+# - Install colorama (colored output)
+# - Install dev tools (pytest, ruff, black, mypy)
+```
+
+**Note**: Building llvmlite may take a few minutes on first install.
+
+### 5. Build Standard Library
+
+```bash
+# Build platform-specific standard library modules
+uv run python stdlib/build.py
+
+# This generates LLVM bitcode for:
+# - collections/strings, io/stdio, io/files
+# - time, math, sys/env, random
+```
+
+### 6. Verify Installation
+
+```bash
+# Test the compiler
 ./sushic --help
+
+# You should see:
+# 🍣 Sushi (すし) Lang Compiler  v0.0.11
+# Python 3.x.x • llvmlite 0.45.1 • LLVM 20.x.x
 ```
 
 ## Your First Program
@@ -198,13 +266,13 @@ Sushi includes a comprehensive test suite. Try running it:
 
 ```bash
 # Run all tests (compilation only)
-python tests/run_tests.py
+uv run python tests/run_tests.py
 
 # Run with runtime validation
-python tests/run_tests.py --enhanced
+uv run python tests/run_tests.py --enhanced
 
 # Run specific tests
-python tests/run_tests.py --filter hashmap
+uv run python tests/run_tests.py --filter hashmap
 ```
 
 ## Common Issues
@@ -220,19 +288,47 @@ chmod +x sushic
 
 ### "ModuleNotFoundError: No module named 'llvmlite'"
 
-Install dependencies:
+Install dependencies with uv:
 
 ```bash
-uv sync
+uv sync --dev
 ```
 
-### "clang: command not found"
+### "llvmlite only officially supports LLVM 20"
 
-Install LLVM/Clang:
+You have the wrong LLVM version installed. llvmlite 0.45 requires LLVM 20:
 
-- **macOS**: `brew install llvm`
-- **Ubuntu/Debian**: `apt install clang llvm`
-- **Arch**: `pacman -S clang llvm`
+```bash
+# macOS - remove LLVM 21 and install LLVM 20
+brew uninstall llvm
+brew install llvm@20
+
+# Then rebuild dependencies
+uv sync --dev
+```
+
+### "FileNotFoundError: [Errno 2] No such file or directory: 'cmake'"
+
+cmake is required to build llvmlite:
+
+```bash
+# macOS
+brew install cmake
+
+# Ubuntu/Debian
+sudo apt install cmake
+
+# Arch
+sudo pacman -S cmake
+```
+
+### "clang: command not found" during linking
+
+The system needs clang for linking the final binary:
+
+- **macOS**: Install Xcode Command Line Tools: `xcode-select --install`
+- **Ubuntu/Debian**: `sudo apt install clang`
+- **Arch**: `sudo pacman -S clang`
 
 ## Next Steps
 

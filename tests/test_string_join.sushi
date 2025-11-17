@@ -1,0 +1,135 @@
+use <collections/strings>
+
+fn test_join_basic() ~:
+    let string[] parts = from(["a", "b", "c"])
+    let string result = ",".join(parts)
+
+    if (result == "a,b,c"):
+        println("PASS: join basic test")
+    else:
+        println("FAIL: join basic - expected 'a,b,c', got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_join_empty_array() ~:
+    let string[] empty = from([])
+    let string result = ",".join(empty)
+
+    if (result.is_empty()):
+        println("PASS: join empty array returns empty string")
+    else:
+        println("FAIL: join empty array - expected empty, got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_join_single_element() ~:
+    let string[] single = from(["hello"])
+    let string result = ",".join(single)
+
+    if (result == "hello"):
+        println("PASS: join single element")
+    else:
+        println("FAIL: join single element - expected 'hello', got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_join_empty_separator() ~:
+    let string[] parts = from(["a", "b", "c"])
+    let string result = "".join(parts)
+
+    if (result == "abc"):
+        println("PASS: join with empty separator")
+    else:
+        println("FAIL: join empty separator - expected 'abc', got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_join_multi_char_separator() ~:
+    let string[] parts = from(["foo", "bar", "baz"])
+    let string result = " | ".join(parts)
+
+    if (result == "foo | bar | baz"):
+        println("PASS: join with multi-char separator")
+    else:
+        println("FAIL: join multi-char separator - expected 'foo | bar | baz', got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_join_with_empty_parts() ~:
+    let string[] parts = from(["a", "", "c"])
+    let string result = ",".join(parts)
+
+    if (result == "a,,c"):
+        println("PASS: join with empty parts")
+    else:
+        println("FAIL: join with empty parts - expected 'a,,c', got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_join_utf8() ~:
+    let string[] parts = from(["café", "naïve", "résumé"])
+    let string result = " • ".join(parts)
+
+    if (result == "café • naïve • résumé"):
+        println("PASS: join with UTF-8 strings")
+    else:
+        println("FAIL: join UTF-8 - expected 'café • naïve • résumé', got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_join_emoji() ~:
+    let string[] parts = from(["🎉", "test", "🎊"])
+    let string result = "-".join(parts)
+
+    if (result == "🎉-test-🎊"):
+        println("PASS: join with emoji")
+    else:
+        println("FAIL: join emoji - expected '🎉-test-🎊', got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_join_two_elements() ~:
+    let string[] parts = from(["first", "second"])
+    let string result = " and ".join(parts)
+
+    if (result == "first and second"):
+        println("PASS: join two elements")
+    else:
+        println("FAIL: join two elements - expected 'first and second', got '{result}'")
+
+    return Result.Ok(~)
+
+fn test_join_long_strings() ~:
+    let string[] parts = from(["The", "quick", "brown", "fox"])
+    let string result = " ".join(parts)
+
+    if (result == "The quick brown fox"):
+        println("PASS: join long strings with space")
+    else:
+        println("FAIL: join long strings - expected 'The quick brown fox', got '{result}'")
+
+    return Result.Ok(~)
+
+fn main() i32:
+    if (test_join_basic()):
+        println("")
+    if (test_join_empty_array()):
+        println("")
+    if (test_join_single_element()):
+        println("")
+    if (test_join_empty_separator()):
+        println("")
+    if (test_join_multi_char_separator()):
+        println("")
+    if (test_join_with_empty_parts()):
+        println("")
+    if (test_join_utf8()):
+        println("")
+    if (test_join_emoji()):
+        println("")
+    if (test_join_two_elements()):
+        println("")
+    if (test_join_long_strings()):
+        println("")
+
+    return Result.Ok(0)

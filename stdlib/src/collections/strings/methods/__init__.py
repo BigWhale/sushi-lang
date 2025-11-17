@@ -22,6 +22,8 @@ from .search import (
     emit_string_ends_with,
     emit_string_contains,
     emit_string_find,
+    emit_string_find_last,
+    emit_string_count,
 )
 from .trim import (
     emit_string_trim,
@@ -36,9 +38,16 @@ from .case import (
 from .convert import (
     emit_string_to_bytes,
     emit_string_split,
+    emit_string_join,
 )
 from .modify import (
     emit_string_replace,
+    emit_string_reverse,
+    emit_string_repeat,
+    emit_string_pad_left,
+    emit_string_pad_right,
+    emit_string_strip_prefix,
+    emit_string_strip_suffix,
 )
 from .parse import (
     emit_string_to_i32,
@@ -59,6 +68,8 @@ __all__ = [
     'emit_string_ends_with',
     'emit_string_contains',
     'emit_string_find',
+    'emit_string_find_last',
+    'emit_string_count',
     'emit_string_trim',
     'emit_string_tleft',
     'emit_string_tright',
@@ -67,7 +78,14 @@ __all__ = [
     'emit_string_cap',
     'emit_string_to_bytes',
     'emit_string_split',
+    'emit_string_join',
     'emit_string_replace',
+    'emit_string_reverse',
+    'emit_string_repeat',
+    'emit_string_pad_left',
+    'emit_string_pad_right',
+    'emit_string_strip_prefix',
+    'emit_string_strip_suffix',
     'emit_string_to_i32',
     'emit_string_to_i64',
     'emit_string_to_f64',

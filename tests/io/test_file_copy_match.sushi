@@ -1,0 +1,41 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Create: Success
+# EXPECTED_OUTPUT: Copy: Success
+# EXPECTED_OUTPUT: Remove src: Success
+# EXPECTED_OUTPUT: Remove dst: Success
+
+use <io/files>
+
+fn main() i32:
+    let string src = "/tmp/sushi_copy_match_src.txt"
+    let string dst = "/tmp/sushi_copy_match_dst.txt"
+
+    match open(src, FileMode.Write()):
+        FileResult.Ok(f) ->
+            f.close()
+            println("Create: Success")
+        FileResult.Err(_) ->
+            return Result.Ok(1)
+
+    match copy(src, dst):
+        Result.Ok(_) ->
+            println("Copy: Success")
+        Result.Err() ->
+            match remove(src):
+                Result.Ok(_) -> println("Cleaned on error")
+                Result.Err() -> println("Cleanup failed")
+            return Result.Ok(2)
+
+    match remove(src):
+        Result.Ok(_) ->
+            println("Remove src: Success")
+        Result.Err() ->
+            return Result.Ok(3)
+
+    match remove(dst):
+        Result.Ok(_) ->
+            println("Remove dst: Success")
+        Result.Err() ->
+            return Result.Ok(4)
+
+    return Result.Ok(0)

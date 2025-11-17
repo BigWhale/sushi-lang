@@ -48,7 +48,7 @@ def validate_hashmap_method_with_validator(
     method = call.method
 
     if method == "new":
-        _validate_hashmap_new(call, hashmap_type, reporter)
+        _validate_hashmap_new(call, hashmap_type, reporter, validator)
     elif method == "insert":
         _validate_hashmap_insert(call, hashmap_type, reporter, validator)
     elif method == "get":
@@ -171,7 +171,8 @@ def _resolve_type_string(type_str: str, validator: Any) -> Optional[Type]:
 def _validate_hashmap_new(
     call: MethodCall,
     hashmap_type: StructType,
-    reporter: Any
+    reporter: Any,
+    validator: Any
 ) -> None:
     """Validate HashMap<K, V>.new() method call.
 
@@ -182,6 +183,7 @@ def _validate_hashmap_new(
         call: The method call AST node.
         hashmap_type: The HashMap<K, V> struct type.
         reporter: Error reporter for emitting validation errors.
+        validator: Type validator for inferring expression types.
     """
     from stdlib.src.common import get_builtin_method
     from .utils import emit_key_equality_check
@@ -220,22 +222,24 @@ def _validate_hashmap_new(
 
     key_type_str = type_params_str[:comma_pos].strip()
 
-    # We need to find the actual Type object for the key type
-    # Since we don't have a validator here, we need to look up the type differently
-    # We can check if it's in the struct_table that's part of hashmap_type's context
-    # For now, let's use a simpler approach: check the fields of the HashMap struct
-    # The HashMap struct has a "keys" field which is K[]
-    key_type = None
-    for field_name, field_type in hashmap_type.fields:
-        if field_name == "keys":
-            # This is K[] (DynamicArrayType), extract the element type
-            from semantics.typesys import DynamicArrayType
-            if isinstance(field_type, DynamicArrayType):
-                key_type = field_type.element_type
-                break
+    # Check for dynamic arrays (not comparable, disallowed as HashMap keys)
+    if '[]' in key_type_str:
+        # Dynamic arrays are not allowed as HashMap keys (like Go slices)
+        # Fixed arrays are fine: i32[3] is allowed, i32[] is not
+        er.emit(reporter, er.ERR.CE2058, call.loc, key_type=key_type_str)
+        return
 
+    # Skip further validation for fixed array types (validated during codegen)
+    if '[' in key_type_str:
+        # Fixed array type: hash method registered on-demand in codegen
+        # Equality checking is implemented in emit_key_equality_check()
+        return
+
+    # For non-array types, validate using existing type resolution
+    from backend.generics.hashmap.types import resolve_type_from_string
+
+    key_type = _resolve_type_string(key_type_str, validator)
     if key_type is None:
-        # Could not extract key type, skip validation
         return
 
     # Validate that K has .hash() method

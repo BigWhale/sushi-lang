@@ -1,9 +1,10 @@
-# Error: Duplicate field in struct
+# CE2081: Duplicate field name in named struct constructor
 
 struct Point:
     i32 x
     i32 y
-    i32 x
 
 fn main() i32:
+    # ERROR: 'x' appears twice
+    let Point p = Point(x: 10, y: 20, x: 15)
     return Result.Ok(0)

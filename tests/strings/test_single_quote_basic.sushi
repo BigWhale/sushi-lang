@@ -1,0 +1,36 @@
+# Test basic single-quote string functionality
+
+fn test_literal() ~:
+    let string s = 'hello'
+    if (s == "hello"):
+        println("PASS: Single-quote string literal")
+    else:
+        println("FAIL: Single-quote literal")
+    return Result.Ok(~)
+
+fn test_equivalence() ~:
+    let string s1 = "world"
+    let string s2 = 'world'
+    if (s1 == s2):
+        println("PASS: Single-quote equals double-quote")
+    else:
+        println("FAIL: Quote styles not equivalent")
+    return Result.Ok(~)
+
+fn test_assignment() ~:
+    let string s1 = 'first'
+    let string s3 = s1
+    if (s3 == "first"):
+        println("PASS: Single-quote assignment")
+    else:
+        println("FAIL: Assignment failed")
+    return Result.Ok(~)
+
+fn main() i32:
+    if (test_literal()):
+        println("")
+    if (test_equivalence()):
+        println("")
+    if (test_assignment()):
+        println("")
+    return Result.Ok(0)

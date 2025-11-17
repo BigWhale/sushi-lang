@@ -22,12 +22,11 @@ fn test_variable_type() i32:
 # Test function parameter with generic type
 fn test_parameter_type(Either<string, i32> param) i32:
     param := Either.Left("Left")
-# TODO: This below crashes the compiled binary
-#    match param:
-#        Either.Left(_) ->
-#            println("Parameter Left")
-#        Either.Right(_) ->
-#            println("Parameter Right:")
+    match param:
+        Either.Left(_) ->
+            println("Parameter Left")
+        Either.Right(_) ->
+            println("Parameter Right:")
     return Result.Ok(123)
 
 fn main() i32:

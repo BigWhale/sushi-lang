@@ -1,0 +1,44 @@
+use <collections/strings>
+
+fn test_escaped_single_quote() ~:
+    let string s = 'can\'t'
+    if (s == "can't"):
+        println("PASS: Escaped single quote")
+    else:
+        println("FAIL: Escaped single quote")
+    return Result.Ok(~)
+
+fn test_escaped_backslash() ~:
+    let string s = 'path\\file'
+    if (s == "path\\file"):
+        println("PASS: Escaped backslash")
+    else:
+        println("FAIL: Escaped backslash")
+    return Result.Ok(~)
+
+fn test_newline() ~:
+    let string s = 'line1\nline2'
+    if (s.contains("\n")):
+        println("PASS: Newline escape")
+    else:
+        println("FAIL: Newline escape")
+    return Result.Ok(~)
+
+fn test_tab() ~:
+    let string s = 'col1\tcol2'
+    if (s.contains("\t")):
+        println("PASS: Tab escape")
+    else:
+        println("FAIL: Tab escape")
+    return Result.Ok(~)
+
+fn main() i32:
+    if (test_escaped_single_quote()):
+        println("")
+    if (test_escaped_backslash()):
+        println("")
+    if (test_newline()):
+        println("")
+    if (test_tab()):
+        println("")
+    return Result.Ok(0)

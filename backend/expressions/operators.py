@@ -893,8 +893,8 @@ def _get_stdlib_function_return_type(codegen: 'CodegenProtocol', func_name: str)
     """
     # Try to find the function in the stdlib registry
     func_table = codegen.func_table
-    possible_modules = ["time", "sys/env", "math"]
-    
+    possible_modules = ["time", "sys/env", "math", "io/files"]
+
     for module_path in possible_modules:
         stdlib_func = func_table.lookup_stdlib_function(module_path, func_name)
         if stdlib_func is not None:

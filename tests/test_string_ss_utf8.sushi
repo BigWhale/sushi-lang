@@ -1,0 +1,90 @@
+use <collections/strings>
+
+fn test_ascii() ~:
+    let string s = "Hello World"
+    let string sub = s.ss(0, 5)
+    if (sub == "Hello"):
+        println("PASS: ASCII ss(0, 5)")
+    else:
+        println("FAIL: ASCII ss(0, 5) - expected 'Hello', got '{sub}'")
+    return Result.Ok(~)
+
+fn test_utf8_emoji() ~:
+    let string s = "Hello 🌍 World"
+    let string sub1 = s.ss(0, 6)
+    if (sub1 == "Hello "):
+        println("PASS: UTF-8 ss(0, 6) before emoji")
+    else:
+        println("FAIL: UTF-8 ss(0, 6) - expected 'Hello ', got '{sub1}'")
+
+    let string sub2 = s.ss(6, 1)
+    if (sub2 == "🌍"):
+        println("PASS: UTF-8 ss(6, 1) emoji extraction")
+    else:
+        println("FAIL: UTF-8 ss(6, 1) - expected '🌍', got '{sub2}'")
+
+    let string sub3 = s.ss(7, 6)
+    if (sub3 == " World"):
+        println("PASS: UTF-8 ss(7, 6) after emoji")
+    else:
+        println("FAIL: UTF-8 ss(7, 6) - expected ' World', got '{sub3}'")
+
+    return Result.Ok(~)
+
+fn test_utf8_multibyte() ~:
+    let string s = "Café"
+    let string sub1 = s.ss(0, 3)
+    if (sub1 == "Caf"):
+        println("PASS: UTF-8 ss(0, 3) with é")
+    else:
+        println("FAIL: UTF-8 ss(0, 3) - expected 'Caf', got '{sub1}'")
+
+    let string sub2 = s.ss(3, 1)
+    if (sub2 == "é"):
+        println("PASS: UTF-8 ss(3, 1) extract é")
+    else:
+        println("FAIL: UTF-8 ss(3, 1) - expected 'é', got '{sub2}'")
+
+    return Result.Ok(~)
+
+fn test_utf8_cyrillic() ~:
+    let string s = "Привет"
+    let string sub = s.ss(0, 3)
+    if (sub == "При"):
+        println("PASS: UTF-8 ss(0, 3) Cyrillic")
+    else:
+        println("FAIL: UTF-8 ss(0, 3) - expected 'При', got '{sub}'")
+
+    return Result.Ok(~)
+
+fn test_edge_cases() ~:
+    let string s = "Test"
+
+    let string empty = s.ss(2, 0)
+    if (empty == ""):
+        println("PASS: ss with length 0")
+    else:
+        println("FAIL: ss with length 0 - expected empty, got '{empty}'")
+
+    let string full = s.ss(0, 4)
+    if (full == "Test"):
+        println("PASS: ss full string")
+    else:
+        println("FAIL: ss full string - expected 'Test', got '{full}'")
+
+    let string beyond = s.ss(2, 100)
+    if (beyond == "st"):
+        println("PASS: ss length beyond string")
+    else:
+        println("FAIL: ss length beyond - expected 'st', got '{beyond}'")
+
+    return Result.Ok(~)
+
+fn main() i32:
+    test_ascii()
+    test_utf8_emoji()
+    test_utf8_multibyte()
+    test_utf8_cyrillic()
+    test_edge_cases()
+    return Result.Ok(0)
+

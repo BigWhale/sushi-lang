@@ -1,0 +1,103 @@
+use <collections/strings>
+
+fn test_basic_strip() ~:
+    let string s = "hello world"
+    let string result = s.strip_suffix(" world")
+    if (result == "hello"):
+        println("PASS: Basic strip_suffix")
+    else:
+        println("FAIL: Basic strip_suffix - expected 'hello', got '{result}'")
+    return Result.Ok(~)
+
+fn test_no_match() ~:
+    let string s = "hello world"
+    let string result = s.strip_suffix("goodbye")
+    if (result == "hello world"):
+        println("PASS: strip_suffix with no match returns original")
+    else:
+        println("FAIL: strip_suffix no match - expected 'hello world', got '{result}'")
+    return Result.Ok(~)
+
+fn test_empty_suffix() ~:
+    let string s = "hello"
+    let string result = s.strip_suffix("")
+    if (result == "hello"):
+        println("PASS: strip_suffix with empty suffix returns original")
+    else:
+        println("FAIL: strip_suffix empty - expected 'hello', got '{result}'")
+    return Result.Ok(~)
+
+fn test_empty_string() ~:
+    let string s = ""
+    let string result = s.strip_suffix("x")
+    if (result == ""):
+        println("PASS: strip_suffix on empty string")
+    else:
+        println("FAIL: strip_suffix empty string - expected '', got '{result}'")
+    return Result.Ok(~)
+
+fn test_full_match() ~:
+    let string s = "test"
+    let string result = s.strip_suffix("test")
+    if (result == ""):
+        println("PASS: strip_suffix removes entire string")
+    else:
+        println("FAIL: strip_suffix full - expected '', got '{result}'")
+    return Result.Ok(~)
+
+fn test_suffix_longer() ~:
+    let string s = "hi"
+    let string result = s.strip_suffix("hello")
+    if (result == "hi"):
+        println("PASS: strip_suffix when suffix longer than string")
+    else:
+        println("FAIL: strip_suffix longer - expected 'hi', got '{result}'")
+    return Result.Ok(~)
+
+fn test_utf8() ~:
+    let string s = "café au lait"
+    let string result = s.strip_suffix(" au lait")
+    if (result == "café"):
+        println("PASS: strip_suffix with UTF-8")
+    else:
+        println("FAIL: strip_suffix UTF-8 - expected 'café', got '{result}'")
+    return Result.Ok(~)
+
+fn test_single_char() ~:
+    let string s = "hellox"
+    let string result = s.strip_suffix("x")
+    if (result == "hello"):
+        println("PASS: strip_suffix single character")
+    else:
+        println("FAIL: strip_suffix single - expected 'hello', got '{result}'")
+    return Result.Ok(~)
+
+fn test_file_extension() ~:
+    let string s = "document.txt"
+    let string result = s.strip_suffix(".txt")
+    if (result == "document"):
+        println("PASS: strip_suffix removes file extension")
+    else:
+        println("FAIL: strip_suffix extension - expected 'document', got '{result}'")
+    return Result.Ok(~)
+
+fn main() i32:
+    if (test_basic_strip()):
+        println("")
+    if (test_no_match()):
+        println("")
+    if (test_empty_suffix()):
+        println("")
+    if (test_empty_string()):
+        println("")
+    if (test_full_match()):
+        println("")
+    if (test_suffix_longer()):
+        println("")
+    if (test_utf8()):
+        println("")
+    if (test_single_char()):
+        println("")
+    if (test_file_extension()):
+        println("")
+    return Result.Ok(0)

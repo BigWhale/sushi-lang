@@ -89,7 +89,7 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
     Returns:
         The monomorphized EnumType of the scrutinee, or None if not found.
     """
-    from semantics.ast import Name, DotCall, MethodCall
+    from semantics.ast import Name, DotCall, MethodCall, Call
     from semantics.typesys import EnumType
 
     # Try to get type from variable table if it's a Name
@@ -97,6 +97,16 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
         var_type = codegen.memory.find_semantic_type(scrutinee.id)
         if isinstance(var_type, EnumType):
             return var_type
+
+    # For Call nodes (function calls like simple_result()), infer the return type
+    # which is Result<T> for most user functions
+    if isinstance(scrutinee, Call):
+        try:
+            from backend.expressions.operators import _infer_call_return_type
+            return _infer_call_return_type(codegen, scrutinee)
+        except Exception:
+            # If inference fails, fall through to other methods
+            pass
 
     # For DotCall or MethodCall (method calls like "hello".find()), check if the type
     # checker already inferred and annotated the return type (Phase 2)

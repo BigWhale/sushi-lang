@@ -1,0 +1,52 @@
+use <collections/strings>
+
+fn test_pad_left() ~:
+    let string s = "hello"
+    let string pad_char = "*"
+    let string result = s.pad_left(10, pad_char)
+    let string interp = "{s.pad_left(10, '*')}"
+    if (interp == result):
+        println("PASS: pad_left with single-quote char")
+    else:
+        println("FAIL: pad_left interpolation - expected '{result}', got '{interp}'")
+    return Result.Ok(~)
+
+fn test_multiple_args() ~:
+    let string s = "hello world"
+    let string result = s.replace("world", "there")
+    let string interp = "{s.replace('world', 'there')}"
+    if (interp == result):
+        println("PASS: Multiple single-quote args")
+    else:
+        println("FAIL: replace interpolation - expected '{result}', got '{interp}'")
+    return Result.Ok(~)
+
+fn test_empty_string() ~:
+    let string[] parts = from(["a", "b", "c"])
+    let string result = "".join(parts)
+    let string interp = "{''.join(parts)}"
+    if (interp == result):
+        println("PASS: Empty single-quote string")
+    else:
+        println("FAIL: empty string interpolation")
+    return Result.Ok(~)
+
+fn test_count() ~:
+    let string s = "hello"
+    let string interp = "{s.count('l')}"
+    if (interp == "2"):
+        println("PASS: count with single-quote needle")
+    else:
+        println("FAIL: count interpolation - got '{interp}'")
+    return Result.Ok(~)
+
+fn main() i32:
+    if (test_pad_left()):
+        println("")
+    if (test_multiple_args()):
+        println("")
+    if (test_empty_string()):
+        println("")
+    if (test_count()):
+        println("")
+    return Result.Ok(0)

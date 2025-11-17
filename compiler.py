@@ -380,10 +380,13 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter, ar
         return 2  # Backend compilation failed
 
 def main(argv: list[str] | None = None) -> int:
+    # Always print banner first
     print_banner()
+
     ap = argparse.ArgumentParser(prog="compiler", description="Language compiler")
 
     ap.add_argument("source", nargs='?', help="Path to source file (.sushi)")
+    ap.add_argument("--version", action="store_true", help="Show version and exit")
     ap.add_argument("--dump-parse", action="store_true", help="Print raw Lark tree")
     ap.add_argument("--dump-ast", action="store_true", help="Print AST")
     ap.add_argument("-o", "--out", metavar="OUT",
@@ -420,6 +423,10 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     args = ap.parse_args(argv)
+
+    # Handle --version flag
+    if args.version:
+        return 0
 
     # Handle --build-stdlib flag
     if args.build_stdlib:

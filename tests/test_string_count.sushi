@@ -1,0 +1,161 @@
+use <collections/strings>
+
+fn test_count_single_char() ~:
+    let string text = "hello"
+    let i32 count = text.count("l")
+
+    if (count == 2):
+        println("PASS: Count single char (hello.count('l') = 2)")
+    else:
+        println("FAIL: Count single char - expected 2, got {count}")
+
+    return Result.Ok(~)
+
+fn test_count_substring() ~:
+    let string text = "ababab"
+    let i32 count = text.count("ab")
+
+    if (count == 3):
+        println("PASS: Count substring (ababab.count('ab') = 3)")
+    else:
+        println("FAIL: Count substring - expected 3, got {count}")
+
+    return Result.Ok(~)
+
+fn test_count_non_overlapping() ~:
+    let string text = "aaa"
+    let i32 count = text.count("aa")
+
+    if (count == 1):
+        println("PASS: Non-overlapping count (aaa.count('aa') = 1)")
+    else:
+        println("FAIL: Non-overlapping count - expected 1, got {count}")
+
+    return Result.Ok(~)
+
+fn test_count_not_found() ~:
+    let string text = "hello"
+    let i32 count = text.count("x")
+
+    if (count == 0):
+        println("PASS: Count not found (hello.count('x') = 0)")
+    else:
+        println("FAIL: Count not found - expected 0, got {count}")
+
+    return Result.Ok(~)
+
+fn test_count_empty_needle() ~:
+    let string text = "hello"
+    let i32 count = text.count("")
+
+    if (count == 0):
+        println("PASS: Count empty needle returns 0")
+    else:
+        println("FAIL: Count empty needle - expected 0, got {count}")
+
+    return Result.Ok(~)
+
+fn test_count_empty_string() ~:
+    let string text = ""
+    let i32 count = text.count("x")
+
+    if (count == 0):
+        println("PASS: Count in empty string returns 0")
+    else:
+        println("FAIL: Count in empty string - expected 0, got {count}")
+
+    return Result.Ok(~)
+
+fn test_count_full_match() ~:
+    let string text = "test"
+    let i32 count = text.count("test")
+
+    if (count == 1):
+        println("PASS: Count full match (test.count('test') = 1)")
+    else:
+        println("FAIL: Count full match - expected 1, got {count}")
+
+    return Result.Ok(~)
+
+fn test_count_word() ~:
+    let string text = "the cat in the hat"
+    let i32 count = text.count("the")
+
+    if (count == 2):
+        println("PASS: Count word in sentence (count 'the' = 2)")
+    else:
+        println("FAIL: Count word - expected 2, got {count}")
+
+    return Result.Ok(~)
+
+fn test_count_repeated() ~:
+    let string text = "aaaa"
+    let i32 count = text.count("a")
+
+    if (count == 4):
+        println("PASS: Count repeated character (aaaa.count('a') = 4)")
+    else:
+        println("FAIL: Count repeated character - expected 4, got {count}")
+
+    return Result.Ok(~)
+
+fn test_count_utf8() ~:
+    let string text = "café café"
+    let i32 count = text.count("café")
+
+    if (count == 2):
+        println("PASS: Count UTF-8 word (café appears 2 times)")
+    else:
+        println("FAIL: Count UTF-8 word - expected 2, got {count}")
+
+    return Result.Ok(~)
+
+fn test_count_emoji() ~:
+    let string text = "🎉🎊🎉"
+    let i32 count = text.count("🎉")
+
+    if (count == 2):
+        println("PASS: Count emoji (🎉 appears 2 times)")
+    else:
+        println("FAIL: Count emoji - expected 2, got {count}")
+
+    return Result.Ok(~)
+
+fn test_count_case_sensitive() ~:
+    let string text = "Hello hello HELLO"
+    let i32 count = text.count("hello")
+
+    if (count == 1):
+        println("PASS: Count is case sensitive (only 1 lowercase 'hello')")
+    else:
+        println("FAIL: Count case sensitive - expected 1, got {count}")
+
+    return Result.Ok(~)
+
+fn main() i32:
+    if (test_count_single_char()):
+        println("")
+    if (test_count_substring()):
+        println("")
+    if (test_count_non_overlapping()):
+        println("")
+    if (test_count_not_found()):
+        println("")
+    if (test_count_empty_needle()):
+        println("")
+    if (test_count_empty_string()):
+        println("")
+    if (test_count_full_match()):
+        println("")
+    if (test_count_word()):
+        println("")
+    if (test_count_repeated()):
+        println("")
+    if (test_count_utf8()):
+        println("")
+    if (test_count_emoji()):
+        println("")
+    if (test_count_case_sensitive()):
+        println("")
+
+    return Result.Ok(0)

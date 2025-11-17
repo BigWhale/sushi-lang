@@ -1,0 +1,16 @@
+# Test generic struct construction with named parameters
+
+struct Pair<T, U>:
+    T first
+    U second
+
+fn main() i32:
+    # Named construction with type inference
+    let Pair<i32, string> p1 = Pair(first: 42, second: "answer")
+    println(p1.first)
+
+    # Order independence for generic structs
+    let Pair<bool, i32> p2 = Pair(second: 100, first: true)
+    println(p2.second)
+
+    return Result.Ok(0)

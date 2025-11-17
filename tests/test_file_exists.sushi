@@ -1,0 +1,13 @@
+use <io/files>
+
+fn main() i32:
+    if (not exists("tests/test_file_exists.sushi")):
+        println("ERROR: File should exist")
+        return Result.Ok(1)
+
+    if (exists("/tmp/nonexistent_file_12345.txt")):
+        println("ERROR: File should not exist")
+        return Result.Ok(1)
+
+    println("OK: exists() works correctly")
+    return Result.Ok(0)

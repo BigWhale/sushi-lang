@@ -1,0 +1,43 @@
+# Test basic named struct construction
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Person:
+    string name
+    i32 age
+    bool has_towel
+    bool is_alien
+    string home_planet
+
+fn main() i32:
+    # Basic named construction
+    let Point p1 = Point(x: 10, y: 20)
+    println(p1.x)
+
+    # Named construction with different order
+    let Point p2 = Point(y: 30, x: 15)
+    println(p2.y)
+
+    # Multi-field struct with booleans (boolean trap mitigation)
+    let Person arthur = Person(
+        name: "Arthur Dent",
+        age: 42,
+        has_towel: true,
+        is_alien: false,
+        home_planet: "Earth"
+    )
+    println(arthur.name)
+
+    # Order independence
+    let Person ford = Person(
+        home_planet: "Betelgeuse Five",
+        has_towel: true,
+        name: "Ford Prefect",
+        age: 200,
+        is_alien: true
+    )
+    println(ford.home_planet)
+
+    return Result.Ok(0)

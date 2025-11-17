@@ -20,6 +20,14 @@ a.out
 /stdlib/**/*.o
 /stdlib/**/__pycache__/
 /stdlib/**/*.pyc
+
 # Backup files
 *.py.old
 *.py.bak*
+
+# Python virtual environment
+.venv/
+
+# direnv
+.direnv/
+.envrc.local

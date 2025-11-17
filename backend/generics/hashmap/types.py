@@ -5,10 +5,11 @@ This module provides functions to create LLVM struct types for HashMap<K, V>
 and Entry<K, V>, along with constants for entry states and prime capacity tables.
 """
 
-from typing import Any
-from semantics.typesys import Type, StructType, BuiltinType, EnumType
+from typing import Any, Optional
+from semantics.typesys import Type, StructType, BuiltinType, EnumType, ArrayType, DynamicArrayType
 import llvmlite.ir as ir
 from internals.errors import raise_internal_error
+import re
 
 
 # ==============================================================================
@@ -123,6 +124,37 @@ def get_hashmap_llvm_type(codegen: Any, key_type: Type, value_type: Type) -> ir.
 # ==============================================================================
 
 
+def get_key_hash_method(key_type: Type) -> Optional[Any]:
+    """Get the hash method for a HashMap key type, registering it on-demand if needed.
+
+    This function handles on-demand hash registration for array types used as HashMap keys.
+    Array types may not be registered in Pass 1.8 if they only appear as HashMap type
+    parameters (not in struct/enum fields).
+
+    Args:
+        key_type: The key type (must have a hash() method).
+
+    Returns:
+        The BuiltinMethod for hash(), or None if the type cannot be hashed.
+    """
+    from stdlib.src.common import get_builtin_method
+
+    # Try to get existing hash method
+    hash_method = get_builtin_method(key_type, "hash")
+    if hash_method is not None:
+        return hash_method
+
+    # For array types, try to register on-demand
+    if isinstance(key_type, (ArrayType, DynamicArrayType)):
+        from backend.types.arrays.methods.hashing import register_array_hash_method, can_array_be_hashed
+        can_hash, reason = can_array_be_hashed(key_type)
+        if can_hash:
+            register_array_hash_method(key_type)
+            return get_builtin_method(key_type, "hash")
+
+    return None
+
+
 def split_type_arguments(type_args_str: str) -> list[str]:
     """Split comma-separated type arguments while respecting angle brackets.
 
@@ -167,9 +199,11 @@ def resolve_type_from_string(type_str: str, codegen: Any) -> Type:
     - Struct types (Point, Person, etc.)
     - Enum types (Color, FileError, etc.)
     - Generic types (Maybe<i32>, Box<string>, etc.)
+    - Fixed arrays (i32[10], string[3], etc.)
+    - Dynamic arrays (i32[], string[], etc.)
 
     Args:
-        type_str: Type name string (e.g., "i32", "Point", "Maybe<i32>").
+        type_str: Type name string (e.g., "i32", "Point", "Maybe<i32>", "string[3]").
         codegen: LLVM codegen instance with struct_table and enum_table.
 
     Returns:
@@ -178,6 +212,25 @@ def resolve_type_from_string(type_str: str, codegen: Any) -> Type:
     Raises:
         ValueError: If type cannot be resolved.
     """
+    # Check for array types first (fixed: "type[N]" or dynamic: "type[]")
+    if '[' in type_str and type_str.endswith(']'):
+        # Extract base type and size
+        match = re.match(r'^(.+)\[(\d*)\]$', type_str)
+        if match:
+            base_type_str = match.group(1)
+            size_str = match.group(2)
+
+            # Recursively resolve base type
+            base_type = resolve_type_from_string(base_type_str, codegen)
+
+            if size_str:
+                # Fixed array: "type[N]"
+                size = int(size_str)
+                return ArrayType(base_type=base_type, size=size)
+            else:
+                # Dynamic array: "type[]"
+                return DynamicArrayType(base_type=base_type)
+
     # Builtin type mapping
     builtin_map = {
         "i8": BuiltinType.I8,

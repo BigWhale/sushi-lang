@@ -1,0 +1,29 @@
+# Test nested struct construction with named parameters
+
+struct Address:
+    string street
+    string city
+
+struct Person:
+    string name
+    Address address
+
+fn main() i32:
+    # Named with nested named
+    let Person p1 = Person(
+        name: "Arthur Dent",
+        address: Address(
+            street: "155 Country Lane",
+            city: "Cottington"
+        )
+    )
+    println(p1.name)
+
+    # Named with nested positional
+    let Person p2 = Person(
+        name: "Ford Prefect",
+        address: Address("Betelgeuse Five", "Unknown")
+    )
+    println(p2.address.city)
+
+    return Result.Ok(0)

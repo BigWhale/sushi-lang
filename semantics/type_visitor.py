@@ -498,6 +498,23 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 return self.type_validator.enum_table.by_name[result_i32_name]
             return None
 
+        # Check for io/files module functions
+        if function_name in {'exists', 'is_file', 'is_dir'}:
+            # These functions return bool (i8)
+            return BuiltinType.BOOL
+        if function_name == 'file_size':
+            # file_size() returns Result<i64>
+            result_i64_name = "Result<i64>"
+            if result_i64_name in self.type_validator.enum_table.by_name:
+                return self.type_validator.enum_table.by_name[result_i64_name]
+            return None
+        if function_name in {'remove', 'rename', 'copy', 'mkdir', 'rmdir'}:
+            # These functions return Result<i32>
+            result_i32_name = "Result<i32>"
+            if result_i32_name in self.type_validator.enum_table.by_name:
+                return self.type_validator.enum_table.by_name[result_i32_name]
+            return None
+
         # Check for math module functions
         if function_name in {'abs', 'min', 'max', 'sqrt', 'pow', 'floor', 'ceil', 'round', 'trunc'}:
             from stdlib.src import math as math_module

@@ -329,11 +329,13 @@ def _references_enum(ty: Type, enum_name: str) -> bool:
 
 
 def collect_array_types(struct_table: StructTable, enum_table: EnumTable) -> Set[Type]:
-    """Collect all array types used in structs and enums.
+    """Collect all array types used in structs, enums, and HashMap keys/values.
 
     This finds array types in:
     - Struct field types
     - Enum variant associated types
+    - HashMap key types (inferred from HashMap struct field types)
+    - HashMap value types (inferred from HashMap struct field types)
 
     Args:
         struct_table: Table of all struct types
@@ -344,18 +346,21 @@ def collect_array_types(struct_table: StructTable, enum_table: EnumTable) -> Set
     """
     array_types: Set[Type] = set()
 
+    def extract_arrays_from_type(ty: Type) -> None:
+        """Recursively extract array types from a type."""
+        if isinstance(ty, (ArrayType, DynamicArrayType)):
+            array_types.add(ty)
+
     # Collect from struct fields
     for struct_type in struct_table.by_name.values():
         for field_name, field_type in struct_type.fields:
-            if isinstance(field_type, (ArrayType, DynamicArrayType)):
-                array_types.add(field_type)
+            extract_arrays_from_type(field_type)
 
     # Collect from enum variant data
     for enum_type in enum_table.by_name.values():
         for variant in enum_type.variants:
             for assoc_type in variant.associated_types:
-                if isinstance(assoc_type, (ArrayType, DynamicArrayType)):
-                    array_types.add(assoc_type)
+                extract_arrays_from_type(assoc_type)
 
     return array_types
 

@@ -755,6 +755,21 @@ class InstantiationCollector:
 
         function_name = callee.id
 
+        # Check for stdlib functions that return generic types
+        from semantics.typesys import BuiltinType
+        if function_name in {'sleep', 'msleep', 'usleep', 'nanosleep', 'setenv'}:
+            # Time and sys/env functions return Result<i32>
+            self.instantiations.add(("Result", (BuiltinType.I32,)))
+            return
+        elif function_name == 'getenv':
+            # getenv() returns Maybe<string>
+            self.instantiations.add(("Maybe", (BuiltinType.STRING,)))
+            return
+        elif function_name == 'file_size':
+            # file_size() returns Result<i64>
+            self.instantiations.add(("Result", (BuiltinType.I64,)))
+            return
+
         # Check if this is a generic function
         if not self.generic_funcs or function_name not in self.generic_funcs:
             # Not a generic function

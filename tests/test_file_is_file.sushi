@@ -1,0 +1,17 @@
+use <io/files>
+
+fn main() i32:
+    if (not is_file("tests/test_file_is_file.sushi")):
+        println("ERROR: Should detect regular file")
+        return Result.Ok(1)
+
+    if (is_file("tests")):
+        println("ERROR: Should not detect directory as file")
+        return Result.Ok(1)
+
+    if (is_file("/tmp/nonexistent_12345.txt")):
+        println("ERROR: Should return false for non-existent path")
+        return Result.Ok(1)
+
+    println("OK: is_file() works correctly")
+    return Result.Ok(0)

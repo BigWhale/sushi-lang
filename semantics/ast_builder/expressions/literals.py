@@ -48,6 +48,9 @@ def expr_from_token(tok: Token, ast_builder: 'ASTBuilder') -> Expr:
     if t == "STRING":
         return parse_string_token(tok, ast_builder)
 
+    if t == "CHAR_STRING":
+        return parse_string_token(tok, ast_builder)
+
     if t == "NAME":
         return Name(id=str(tok.value), loc=span_of(tok))
 

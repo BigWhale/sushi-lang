@@ -1,0 +1,92 @@
+use <collections/strings>
+
+fn test_basic_strip() ~:
+    let string s = "hello world"
+    let string result = s.strip_prefix("hello ")
+    if (result == "world"):
+        println("PASS: Basic strip_prefix")
+    else:
+        println("FAIL: Basic strip_prefix - expected 'world', got '{result}'")
+    return Result.Ok(~)
+
+fn test_no_match() ~:
+    let string s = "hello world"
+    let string result = s.strip_prefix("goodbye")
+    if (result == "hello world"):
+        println("PASS: strip_prefix with no match returns original")
+    else:
+        println("FAIL: strip_prefix no match - expected 'hello world', got '{result}'")
+    return Result.Ok(~)
+
+fn test_empty_prefix() ~:
+    let string s = "hello"
+    let string result = s.strip_prefix("")
+    if (result == "hello"):
+        println("PASS: strip_prefix with empty prefix returns original")
+    else:
+        println("FAIL: strip_prefix empty - expected 'hello', got '{result}'")
+    return Result.Ok(~)
+
+fn test_empty_string() ~:
+    let string s = ""
+    let string result = s.strip_prefix("x")
+    if (result == ""):
+        println("PASS: strip_prefix on empty string")
+    else:
+        println("FAIL: strip_prefix empty string - expected '', got '{result}'")
+    return Result.Ok(~)
+
+fn test_full_match() ~:
+    let string s = "test"
+    let string result = s.strip_prefix("test")
+    if (result == ""):
+        println("PASS: strip_prefix removes entire string")
+    else:
+        println("FAIL: strip_prefix full - expected '', got '{result}'")
+    return Result.Ok(~)
+
+fn test_prefix_longer() ~:
+    let string s = "hi"
+    let string result = s.strip_prefix("hello")
+    if (result == "hi"):
+        println("PASS: strip_prefix when prefix longer than string")
+    else:
+        println("FAIL: strip_prefix longer - expected 'hi', got '{result}'")
+    return Result.Ok(~)
+
+fn test_utf8() ~:
+    let string s = "café au lait"
+    let string result = s.strip_prefix("café ")
+    if (result == "au lait"):
+        println("PASS: strip_prefix with UTF-8")
+    else:
+        println("FAIL: strip_prefix UTF-8 - expected 'au lait', got '{result}'")
+    return Result.Ok(~)
+
+fn test_single_char() ~:
+    let string s = "xhello"
+    let string result = s.strip_prefix("x")
+    if (result == "hello"):
+        println("PASS: strip_prefix single character")
+    else:
+        println("FAIL: strip_prefix single - expected 'hello', got '{result}'")
+    return Result.Ok(~)
+
+fn main() i32:
+    if (test_basic_strip()):
+        println("")
+    if (test_no_match()):
+        println("")
+    if (test_empty_prefix()):
+        println("")
+    if (test_empty_string()):
+        println("")
+    if (test_full_match()):
+        println("")
+    if (test_prefix_longer()):
+        println("")
+    if (test_utf8()):
+        println("")
+    if (test_single_char()):
+        println("")
+    return Result.Ok(0)

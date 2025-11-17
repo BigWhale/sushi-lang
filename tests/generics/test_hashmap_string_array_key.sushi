@@ -1,0 +1,15 @@
+fn main() i32:
+    let HashMap<string[2], i32> map = HashMap.new()
+
+    let string[2] key1 = ["hello", "world"]
+    let string[2] key2 = ["foo", "bar"]
+    let string[2] key3 = ["hello", "world"]
+
+    map.insert(key1, 42)
+    map.insert(key2, 99)
+
+    let Maybe<i32> val = map.get(key3)
+    println(val.realise(0))
+
+    map.free()
+    return Result.Ok(0)

@@ -1,0 +1,7 @@
+# Test that enums cannot have dynamic array fields (CE2059)
+enum MyEnum:
+    SimpleVariant
+    ArrayVariant(i32[])
+
+fn main() i32:
+    return Result.Ok(0)

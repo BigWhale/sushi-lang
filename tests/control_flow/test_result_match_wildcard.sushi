@@ -1,0 +1,23 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Success: 100
+# EXPECTED_OUTPUT: Other case
+
+fn returns_value(i32 x) i32:
+    if (x > 0):
+        return Result.Ok(x)
+    return Result.Err()
+
+fn main() i32:
+    match returns_value(100):
+        Result.Ok(val) ->
+            println("Success: {val}")
+        _ ->
+            println("Wildcard case")
+
+    match returns_value(-1):
+        Result.Ok(val) ->
+            println("Success: {val}")
+        _ ->
+            println("Other case")
+
+    return Result.Ok(0)

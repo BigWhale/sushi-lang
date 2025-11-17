@@ -1,0 +1,31 @@
+# Test hash method for enums with fixed array variant data
+
+enum Response:
+    Ok(i32[2])
+    Error(string)
+
+fn main() i32:
+    # Test enum with fixed array variant data
+    let Response r1 = Response.Ok([42, 100])
+    let u64 hash1 = r1.hash()
+    println("Response.Ok([42, 100]).hash() = {hash1}")
+
+    # Same values should have same hash
+    let Response r2 = Response.Ok([42, 100])
+    let u64 hash2 = r2.hash()
+    if (hash1 == hash2):
+        println("Same enum with array data produce same hash")
+
+    # Different values should have different hash
+    let Response r3 = Response.Ok([99, 88])
+    let u64 hash3 = r3.hash()
+    if (hash1 != hash3):
+        println("Different array values in enum produce different hashes")
+
+    # Different variants should have different hash
+    let Response r4 = Response.Error("fail")
+    let u64 hash4 = r4.hash()
+    if (hash1 != hash4):
+        println("Different enum variants produce different hashes")
+
+    return Result.Ok(0)

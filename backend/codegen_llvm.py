@@ -400,8 +400,24 @@ class LLVMCodegen:
 
         Returns:
             True if the unit was imported via use <unit> syntax
+
+        Note:
+            Supports directory imports. If "collections" is imported,
+            then has_stdlib_unit("collections/strings") returns True.
         """
-        return unit_path in self.stdlib_units
+        # Check exact match first
+        if unit_path in self.stdlib_units:
+            return True
+
+        # Check if any parent directory of this unit was imported
+        # e.g., if "collections" is imported, then "collections/strings" is available
+        parts = unit_path.split('/')
+        for i in range(1, len(parts)):
+            parent = '/'.join(parts[:i])
+            if parent in self.stdlib_units:
+                return True
+
+        return False
 
     def _link_stdlib_modules(self, llmod: llvm.ModuleRef, program: Program) -> None:
         """Link stdlib .bc files into the current LLVM IR module.

@@ -6,7 +6,7 @@ which are shared across multiple HashMap methods.
 """
 
 from typing import Any
-from semantics.typesys import Type, StructType, EnumType, BuiltinType
+from semantics.typesys import Type, StructType, EnumType, BuiltinType, ArrayType, DynamicArrayType
 import llvmlite.ir as ir
 from .types import ENTRY_OCCUPIED
 from backend import enum_utils
@@ -21,6 +21,8 @@ def emit_key_equality_check(codegen: Any, key_type: Type, key1: ir.Value, key2: 
     - Strings (strcmp)
     - Structs (field-by-field comparison)
     - Enums (tag comparison, then data comparison if tags match)
+    - Fixed arrays (element-by-element comparison)
+    - Dynamic arrays (length check, then element comparison)
 
     Args:
         codegen: LLVM codegen instance.
@@ -62,6 +64,14 @@ def emit_key_equality_check(codegen: Any, key_type: Type, key1: ir.Value, key2: 
     # For enum types, compare tag first, then data
     elif isinstance(key_type, EnumType):
         return emit_enum_equality(codegen, key_type, key1, key2)
+
+    # For fixed array types, compare element-by-element
+    elif isinstance(key_type, ArrayType):
+        return emit_fixed_array_equality(codegen, key_type, key1, key2)
+
+    # For dynamic array types, compare length then elements
+    elif isinstance(key_type, DynamicArrayType):
+        return emit_dynamic_array_equality(codegen, key_type, key1, key2)
 
     else:
         raise NotImplementedError(f"Equality check not yet implemented for key type: {key_type}")
@@ -206,3 +216,161 @@ def emit_insert_entry(codegen: Any, entry_ptr: ir.Value, key: ir.Value, value: i
     # Set state = OCCUPIED
     state_ptr = builder.gep(entry_ptr, [zero_i32, two_i32], name="entry_state_ptr")
     builder.store(ir.Constant(codegen.types.i8, ENTRY_OCCUPIED), state_ptr)
+
+
+def emit_fixed_array_equality(codegen: Any, array_type: ArrayType, arr1: ir.Value, arr2: ir.Value) -> ir.Value:
+    """Emit element-by-element equality check for fixed arrays.
+
+    Uses gep_fixed_array_element() utility for correct LLVM GEP construction.
+
+    Args:
+        codegen: LLVM codegen instance.
+        array_type: The fixed array type.
+        arr1: First array value.
+        arr2: Second array value.
+
+    Returns:
+        i1 boolean result of arr1 == arr2.
+    """
+    from backend import gep_utils
+
+    builder = codegen.builder
+    element_type = array_type.base_type
+    size = array_type.size
+
+    # Fixed arrays are value types in LLVM. Store to alloca to get pointers for GEP
+    arr1_llvm_type = codegen.types.ll_type(array_type)
+    arr1_ptr = builder.alloca(arr1_llvm_type, name="arr1_ptr")
+    builder.store(arr1, arr1_ptr)
+    arr2_ptr = builder.alloca(arr1_llvm_type, name="arr2_ptr")
+    builder.store(arr2, arr2_ptr)
+
+    # Start with result = true
+    result = builder.alloca(codegen.types.i1, name="arrays_equal")
+    builder.store(TRUE_I1, result)
+
+    # Loop through elements
+    i_ptr = builder.alloca(codegen.types.i32, name="i_ptr")
+    builder.store(ZERO_I32, i_ptr)
+
+    loop_cond_bb = builder.append_basic_block(name="array_eq_loop_cond")
+    loop_body_bb = builder.append_basic_block(name="array_eq_loop_body")
+    loop_end_bb = builder.append_basic_block(name="array_eq_loop_end")
+
+    builder.branch(loop_cond_bb)
+
+    # Loop condition: i < size
+    builder.position_at_end(loop_cond_bb)
+    i_val = builder.load(i_ptr, name="i_val")
+    size_const = ir.Constant(codegen.types.i32, size)
+    cond = builder.icmp_signed("<", i_val, size_const, name="loop_cond")
+    builder.cbranch(cond, loop_body_bb, loop_end_bb)
+
+    # Loop body: compare elements
+    builder.position_at_end(loop_body_bb)
+    # Get arr1[i] using gep_fixed_array_element utility
+    elem1_ptr = gep_utils.gep_fixed_array_element(codegen, arr1_ptr, i_val, "elem1_ptr")
+    elem1 = builder.load(elem1_ptr, name="elem1")
+    # Get arr2[i] using gep_fixed_array_element utility
+    elem2_ptr = gep_utils.gep_fixed_array_element(codegen, arr2_ptr, i_val, "elem2_ptr")
+    elem2 = builder.load(elem2_ptr, name="elem2")
+    # Compare elements (recursively for complex types)
+    elem_equal = emit_key_equality_check(codegen, element_type, elem1, elem2)
+    # If not equal, set result = false
+    result_val = builder.load(result, name="result_val")
+    new_result = builder.and_(result_val, elem_equal, name="new_result")
+    builder.store(new_result, result)
+    # Increment i
+    i_next = builder.add(i_val, ir.Constant(codegen.types.i32, 1), name="i_next")
+    builder.store(i_next, i_ptr)
+    builder.branch(loop_cond_bb)
+
+    # After loop
+    builder.position_at_end(loop_end_bb)
+    return builder.load(result, name="arrays_equal")
+
+
+def emit_dynamic_array_equality(codegen: Any, array_type: DynamicArrayType, arr1: ir.Value, arr2: ir.Value) -> ir.Value:
+    """Emit length check + element-by-element equality for dynamic arrays.
+
+    Dynamic arrays are passed as struct VALUES: {i32 len, i32 cap, T* data}.
+    Uses extractvalue to access struct fields directly (no GEP needed).
+
+    Args:
+        codegen: LLVM codegen instance.
+        array_type: The dynamic array type.
+        arr1: First array value (struct {i32, i32, T*}).
+        arr2: Second array value (struct {i32, i32, T*}).
+
+    Returns:
+        i1 boolean result of arr1 == arr2.
+    """
+    from backend import gep_utils
+
+    builder = codegen.builder
+    element_type = array_type.base_type
+
+    # Extract lengths (field 0) using extractvalue for struct values
+    len1 = builder.extract_value(arr1, 0, name="len1")
+    len2 = builder.extract_value(arr2, 0, name="len2")
+
+    # Check if lengths are equal
+    lens_equal = builder.icmp_signed("==", len1, len2, name="lens_equal")
+
+    # Short-circuit if lengths differ
+    check_elements_bb = builder.append_basic_block(name="check_array_elements")
+    done_bb = builder.append_basic_block(name="arrays_eq_done")
+
+    builder.cbranch(lens_equal, check_elements_bb, done_bb)
+
+    # Check elements (if lengths match)
+    builder.position_at_end(check_elements_bb)
+    # Extract data pointers (field 2) using extractvalue
+    data1_ptr = builder.extract_value(arr1, 2, name="data1_ptr")
+    data2_ptr = builder.extract_value(arr2, 2, name="data2_ptr")
+
+    # Loop through elements
+    result = builder.alloca(codegen.types.i1, name="elements_equal")
+    builder.store(TRUE_I1, result)
+
+    i_ptr = builder.alloca(codegen.types.i32, name="i_ptr")
+    builder.store(ZERO_I32, i_ptr)
+
+    loop_cond_bb = builder.append_basic_block(name="dyn_array_loop_cond")
+    loop_body_bb = builder.append_basic_block(name="dyn_array_loop_body")
+    loop_end_bb = builder.append_basic_block(name="dyn_array_loop_end")
+
+    builder.branch(loop_cond_bb)
+
+    # Loop condition: i < len
+    builder.position_at_end(loop_cond_bb)
+    i_val = builder.load(i_ptr, name="i_val")
+    cond = builder.icmp_signed("<", i_val, len1, name="loop_cond")
+    builder.cbranch(cond, loop_body_bb, loop_end_bb)
+
+    # Loop body
+    builder.position_at_end(loop_body_bb)
+    # Use gep_array_element for data pointer indexing
+    elem1_ptr = gep_utils.gep_array_element(codegen, data1_ptr, i_val, "elem1_ptr")
+    elem1 = builder.load(elem1_ptr, name="elem1")
+    elem2_ptr = gep_utils.gep_array_element(codegen, data2_ptr, i_val, "elem2_ptr")
+    elem2 = builder.load(elem2_ptr, name="elem2")
+    elem_equal = emit_key_equality_check(codegen, element_type, elem1, elem2)
+    result_val = builder.load(result, name="result_val")
+    new_result = builder.and_(result_val, elem_equal, name="new_result")
+    builder.store(new_result, result)
+    i_next = builder.add(i_val, ir.Constant(codegen.types.i32, 1), name="i_next")
+    builder.store(i_next, i_ptr)
+    builder.branch(loop_cond_bb)
+
+    # After element loop
+    builder.position_at_end(loop_end_bb)
+    elements_equal = builder.load(result, name="elements_equal")
+    builder.branch(done_bb)
+
+    # Final result
+    builder.position_at_end(done_bb)
+    result_phi = builder.phi(codegen.types.i1, name="arrays_equal")
+    result_phi.add_incoming(ir.Constant(codegen.types.i1, 0), lens_equal.parent)  # False if lengths differ
+    result_phi.add_incoming(elements_equal, loop_end_bb)  # Result from element comparison
+    return result_phi

@@ -1,17 +1,14 @@
-# CRITICAL BUG: This test demonstrates the double-free bug in dynamic array rebinding
-# Filename prefix "BROKEN_" excludes this from test suite (would crash if run)
-# Status: Compiles successfully but CRASHES at runtime with segmentation fault (exit code 133)
-# Issue: Rebinding between variables causes memory aliasing → double-free at scope exit
-# See CLAUDE.md "Known Limitations #5" for detailed explanation and fix plan
-# TODO: Remove "BROKEN_" prefix once move semantics or deep copy is implemented
+# Test: Dynamic array rebinding with move semantics
+# This test verifies that rebinding transfers ownership correctly
+# Move semantics prevent double-free by nullifying the source array
 
 fn main() i32:
-  # This will crash - both arrays alias the same memory
+  # Move semantics ensure ownership transfer
   let i32[] arr1 = from([1, 2, 3])
   let i32[] arr2 = from([10, 20, 30, 40, 50])
 
-  # BUG: This copies the struct by value, making both arrays point to same memory
+  # This transfers ownership: arr2 is nullified and arr1 now owns the memory
   arr1 := arr2
 
-  # At scope exit, both arr1 and arr2 will try to free the same memory → SEGFAULT
+  # At scope exit, only arr1 is freed (arr2 was moved and marked as invalid)
   return Result.Ok(0)

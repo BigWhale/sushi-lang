@@ -1,0 +1,10 @@
+# CE2082: Missing required field in named struct constructor
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    # ERROR: Missing field 'y'
+    let Point p = Point(x: 10)
+    return Result.Ok(0)

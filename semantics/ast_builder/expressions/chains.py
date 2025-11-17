@@ -65,7 +65,9 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
                 if isinstance(result_expr, Name):
                     result_expr = calls.call_from_parts(result_expr.id, call_node, ast_builder)
                 elif isinstance(result_expr, MemberAccess):
-                    args = calls.extract_call_args(call_node, ast_builder)
+                    args, field_names = calls.extract_call_args(call_node, ast_builder)
+                    # Note: field_names for DotCall (enum constructors) are ignored for now
+                    # Named parameters for enum variants are not yet supported
                     result_expr = DotCall(
                         receiver=result_expr.receiver,
                         method=result_expr.member,
@@ -83,7 +85,9 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
                     method_name_tok = first_method_name(call_node.children)
 
                 if method_name_tok:
-                    args = calls.extract_call_args(call_node, ast_builder)
+                    args, field_names = calls.extract_call_args(call_node, ast_builder)
+                    # Note: field_names for DotCall (method calls) are ignored for now
+                    # Named parameters for method calls are not yet supported
                     result_expr = DotCall(
                         receiver=result_expr,
                         method=str(method_name_tok),

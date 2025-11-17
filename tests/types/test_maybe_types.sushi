@@ -58,14 +58,21 @@ fn test_struct_type() i32:
 
     return Result.Ok(0)
 
-# Test 5: Nested Maybe (Maybe<Maybe<i32> >)
-# Note: Space before >> needed due to parser limitation
-# TODO: Nested Maybe not yet supported - size calculation for enum types as type parameters
-# Skipping this test for now - will be implemented in future phase
+# Test 5: Nested Maybe (Maybe<Maybe<i32>>)
 fn test_nested_maybe() i32:
-    # Placeholder - nested Maybe requires enum type size calculation support
-    # This is a known limitation documented in MAYBE.md
-    return Result.Ok(1)
+    # Test 5a: Some(Some(42))
+    let Maybe<i32> inner1 = Maybe.Some(42)
+    let Maybe<Maybe<i32>> nested1 = Maybe.Some(inner1)
+
+    match nested1:
+        Maybe.Some(inner) ->
+            let i32 val = inner.realise(0)
+            if (val == 42):
+                return Result.Ok(1)
+        Maybe.None() ->
+            return Result.Ok(0)
+
+    return Result.Ok(0)
 
 # Test 6: Pattern matching with None variants
 fn test_none_variants() i32:

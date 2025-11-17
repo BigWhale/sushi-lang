@@ -1,0 +1,29 @@
+use <io/files>
+use <io/stdio>
+
+fn main() i32:
+    match open("/tmp/test_rename_old.txt", FileMode.Write()):
+        FileResult.Ok(f) ->
+            f.write("test content")
+            f.close()
+        FileResult.Err(_) ->
+            return Result.Ok(1)
+
+    match rename("/tmp/test_rename_old.txt", "/tmp/test_rename_new.txt"):
+        Result.Ok(_) -> println("Renamed")
+        Result.Err() -> return Result.Ok(1)
+
+    if (exists("/tmp/test_rename_old.txt")):
+        println("ERROR: Old file should not exist")
+        return Result.Ok(1)
+
+    if (not exists("/tmp/test_rename_new.txt")):
+        println("ERROR: New file should exist")
+        return Result.Ok(1)
+
+    match remove("/tmp/test_rename_new.txt"):
+        Result.Ok(_) -> println("Cleaned")
+        Result.Err() -> return Result.Ok(1)
+
+    println("OK: rename() works")
+    return Result.Ok(0)

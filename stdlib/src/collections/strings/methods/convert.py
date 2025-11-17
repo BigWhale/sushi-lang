@@ -3,7 +3,8 @@ Conversion Operations for Strings
 
 Implements conversion methods that transform strings into other data types:
 - to_bytes(): Converts string to u8[] dynamic array
-- split(): Splits string into string[] array (Phase 8)
+- split(): Splits string into string[] array
+- join(): Joins array of strings with separator
 """
 
 import llvmlite.ir as ir
@@ -360,6 +361,170 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     result_phi = builder.phi(dyn_array_type, name="result")
     result_phi.add_incoming(result_empty, empty_delim_block)
     result_phi.add_incoming(result_normal, split_done_block)
+    builder.ret(result_phi)
+
+    return func
+
+
+def emit_string_join(module: ir.Module) -> ir.Function:
+    """Emit the string.join() method.
+
+    Joins an array of strings with a separator string between elements.
+    Example: ",".join(["a", "b", "c"]) -> "a,b,c"
+
+    Args:
+        module: The LLVM module to emit the function into.
+
+    Returns:
+        The emitted function: { i8*, i32 } string_join({ i8*, i32 } sep, { i32, i32, {i8*,i32}* } parts)
+    """
+    func_name = "string_join"
+
+    if func_name in module.globals:
+        func = module.globals[func_name]
+        if not func.is_declaration:
+            return func
+
+    i8, i8_ptr, i32, i64, string_type = get_string_types()
+    string_ptr = string_type.as_pointer()
+    dyn_array_type = ir.LiteralStructType([i32, i32, string_ptr])
+
+    malloc = declare_malloc(module)
+    memcpy = declare_memcpy(module)
+
+    fn_ty = ir.FunctionType(string_type, [string_type, dyn_array_type])
+    func = ir.Function(module, fn_ty, name=func_name)
+    func.args[0].name = "sep"
+    func.args[1].name = "parts"
+
+    entry_block = func.append_basic_block("entry")
+    empty_array_block = func.append_basic_block("empty_array")
+    single_elem_block = func.append_basic_block("single_elem")
+    calc_size_block = func.append_basic_block("calc_size")
+    size_loop_block = func.append_basic_block("size_loop")
+    size_done_block = func.append_basic_block("size_done")
+    alloc_block = func.append_basic_block("alloc")
+    copy_loop_block = func.append_basic_block("copy_loop")
+    copy_part_block = func.append_basic_block("copy_part")
+    copy_sep_block = func.append_basic_block("copy_sep")
+    copy_continue_block = func.append_basic_block("copy_continue")
+    copy_done_block = func.append_basic_block("copy_done")
+    return_block = func.append_basic_block("return")
+
+    builder = ir.IRBuilder(entry_block)
+    sep_data = builder.extract_value(func.args[0], 0, name="sep_data")
+    sep_size = builder.extract_value(func.args[0], 1, name="sep_size")
+    arr_len = builder.extract_value(func.args[1], 0, name="arr_len")
+    arr_data = builder.extract_value(func.args[1], 2, name="arr_data")
+
+    is_empty = builder.icmp_signed("==", arr_len, ir.Constant(i32, 0), name="is_empty")
+    builder.cbranch(is_empty, empty_array_block, calc_size_block)
+
+    builder.position_at_end(empty_array_block)
+    empty_string = build_string_struct(builder, string_type, ir.Constant(i8_ptr, None), ir.Constant(i32, 0))
+    builder.branch(return_block)
+
+    builder.position_at_end(calc_size_block)
+    is_single = builder.icmp_signed("==", arr_len, ir.Constant(i32, 1), name="is_single")
+    builder.cbranch(is_single, single_elem_block, size_loop_block)
+
+    builder.position_at_end(single_elem_block)
+    single_elem_ptr = builder.gep(arr_data, [ir.Constant(i32, 0)], name="single_elem_ptr")
+    single_elem = builder.load(single_elem_ptr, name="single_elem")
+    single_data = builder.extract_value(single_elem, 0, name="single_data")
+    single_size = builder.extract_value(single_elem, 1, name="single_size")
+    single_size_i64 = builder.zext(single_size, i64, name="single_size_i64")
+    single_copy = builder.call(malloc, [single_size_i64], name="single_copy")
+    is_volatile = ir.Constant(ir.IntType(1), 0)
+    builder.call(memcpy, [single_copy, single_data, single_size, is_volatile])
+    single_result = build_string_struct(builder, string_type, single_copy, single_size)
+    builder.branch(return_block)
+
+    builder.position_at_end(size_loop_block)
+    idx_ptr = builder.alloca(i32, name="idx_ptr")
+    builder.store(ir.Constant(i32, 0), idx_ptr)
+    total_size_ptr = builder.alloca(i32, name="total_size_ptr")
+    builder.store(ir.Constant(i32, 0), total_size_ptr)
+
+    size_loop_cond = func.append_basic_block("size_loop_cond")
+    size_loop_body = func.append_basic_block("size_loop_body")
+
+    builder.branch(size_loop_cond)
+
+    builder.position_at_end(size_loop_cond)
+    idx = builder.load(idx_ptr, name="idx")
+    loop_continue = builder.icmp_signed("<", idx, arr_len, name="loop_continue")
+    builder.cbranch(loop_continue, size_loop_body, size_done_block)
+
+    builder.position_at_end(size_loop_body)
+    elem_ptr = builder.gep(arr_data, [idx], name="elem_ptr")
+    elem = builder.load(elem_ptr, name="elem")
+    elem_size = builder.extract_value(elem, 1, name="elem_size")
+    total_size = builder.load(total_size_ptr, name="total_size")
+    new_total = builder.add(total_size, elem_size, name="new_total")
+    builder.store(new_total, total_size_ptr)
+    next_idx = builder.add(idx, ir.Constant(i32, 1), name="next_idx")
+    builder.store(next_idx, idx_ptr)
+    builder.branch(size_loop_cond)
+
+    builder.position_at_end(size_done_block)
+    parts_total_size = builder.load(total_size_ptr, name="parts_total_size")
+    num_separators = builder.sub(arr_len, ir.Constant(i32, 1), name="num_separators")
+    sep_total_size = builder.mul(num_separators, sep_size, name="sep_total_size")
+    final_size = builder.add(parts_total_size, sep_total_size, name="final_size")
+    builder.branch(alloc_block)
+
+    builder.position_at_end(alloc_block)
+    final_size_i64 = builder.zext(final_size, i64, name="final_size_i64")
+    result_data = builder.call(malloc, [final_size_i64], name="result_data")
+
+    builder.store(ir.Constant(i32, 0), idx_ptr)
+    offset_ptr = builder.alloca(i32, name="offset_ptr")
+    builder.store(ir.Constant(i32, 0), offset_ptr)
+    builder.branch(copy_loop_block)
+
+    builder.position_at_end(copy_loop_block)
+    copy_idx = builder.load(idx_ptr, name="copy_idx")
+    copy_continue = builder.icmp_signed("<", copy_idx, arr_len, name="copy_continue")
+    builder.cbranch(copy_continue, copy_part_block, copy_done_block)
+
+    builder.position_at_end(copy_part_block)
+    part_ptr = builder.gep(arr_data, [copy_idx], name="part_ptr")
+    part = builder.load(part_ptr, name="part")
+    part_data = builder.extract_value(part, 0, name="part_data")
+    part_size = builder.extract_value(part, 1, name="part_size")
+
+    offset = builder.load(offset_ptr, name="offset")
+    dest_ptr = builder.gep(result_data, [offset], name="dest_ptr")
+    builder.call(memcpy, [dest_ptr, part_data, part_size, is_volatile])
+    new_offset = builder.add(offset, part_size, name="new_offset")
+    builder.store(new_offset, offset_ptr)
+
+    is_last = builder.icmp_signed("==", copy_idx, num_separators, name="is_last")
+    builder.cbranch(is_last, copy_continue_block, copy_sep_block)
+
+    builder.position_at_end(copy_sep_block)
+    sep_offset = builder.load(offset_ptr, name="sep_offset")
+    sep_dest_ptr = builder.gep(result_data, [sep_offset], name="sep_dest_ptr")
+    builder.call(memcpy, [sep_dest_ptr, sep_data, sep_size, is_volatile])
+    sep_new_offset = builder.add(sep_offset, sep_size, name="sep_new_offset")
+    builder.store(sep_new_offset, offset_ptr)
+    builder.branch(copy_continue_block)
+
+    builder.position_at_end(copy_continue_block)
+    copy_next_idx = builder.add(copy_idx, ir.Constant(i32, 1), name="copy_next_idx")
+    builder.store(copy_next_idx, idx_ptr)
+    builder.branch(copy_loop_block)
+
+    builder.position_at_end(copy_done_block)
+    join_result = build_string_struct(builder, string_type, result_data, final_size)
+    builder.branch(return_block)
+
+    builder.position_at_end(return_block)
+    result_phi = builder.phi(string_type, name="result")
+    result_phi.add_incoming(empty_string, empty_array_block)
+    result_phi.add_incoming(single_result, single_elem_block)
+    result_phi.add_incoming(join_result, copy_done_block)
     builder.ret(result_phi)
 
     return func

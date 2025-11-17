@@ -1,0 +1,13 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: Got error
+
+fn returns_error() i32:
+    return Result.Err()
+
+fn main() i32:
+    match returns_error():
+        Result.Ok(val) ->
+            println("Got value {val}")
+        Result.Err() ->
+            println("Got error")
+    return Result.Ok(0)

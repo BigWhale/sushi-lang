@@ -1,0 +1,56 @@
+# Test edge cases for single-quote strings
+
+use <collections/strings>
+
+fn test_empty() ~:
+    let string s = ''
+    if (s.is_empty()):
+        println("PASS: Empty single-quote string")
+    else:
+        println("FAIL: Empty string")
+    return Result.Ok(~)
+
+fn test_single_char() ~:
+    let string s = 'x'
+    if (s.len() == 1):
+        println("PASS: Single character")
+    else:
+        println("FAIL: Single character")
+    return Result.Ok(~)
+
+fn test_long_string() ~:
+    let string s = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    if (s.len() == 64):
+        println("PASS: Very long string")
+    else:
+        println("FAIL: Long string")
+    return Result.Ok(~)
+
+fn test_whitespace() ~:
+    let string s = '   \t\n  '
+    if (s.len() > 0):
+        println("PASS: All whitespace")
+    else:
+        println("FAIL: Whitespace string")
+    return Result.Ok(~)
+
+fn test_special_chars() ~:
+    let string s = '!@#$%^&*()_+-=[]{}|;:,.<>?/'
+    if (s.len() > 20):
+        println("PASS: Special characters")
+    else:
+        println("FAIL: Special characters")
+    return Result.Ok(~)
+
+fn main() i32:
+    if (test_empty()):
+        println("")
+    if (test_single_char()):
+        println("")
+    if (test_long_string()):
+        println("")
+    if (test_whitespace()):
+        println("")
+    if (test_special_chars()):
+        println("")
+    return Result.Ok(0)

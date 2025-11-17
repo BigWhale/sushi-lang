@@ -536,7 +536,10 @@ fn main() i32:
 ```
 
 **Key features**:
-- **Named field initialization**: Use `StructName(field: value, ...)` syntax for clarity
+- **Named field initialization**: Use `StructName(field: value, ...)` syntax for clarity and order-independence
+  - Positional also supported: `Person("Arthur", 42, true)` for brevity
+  - Named parameters prevent "boolean trap" bugs in structs with multiple bool fields
+  - Cannot mix positional and named (all-or-nothing)
 - **Field access**: Use dot notation `struct.field` to read or modify fields
 - **RAII cleanup**: When a struct goes out of scope, all its fields are recursively destroyed
 - **Auto-derived hashing**: Structs automatically get a `.hash()` method combining all field hashes

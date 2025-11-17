@@ -1,0 +1,55 @@
+# Test string interpolation with single-quote arguments
+
+use <collections/strings>
+
+fn test_pad_left() ~:
+    let string s = "hello"
+    let string result = s.pad_left(10, '*')
+    let string interp = "{s.pad_left(10, '*')}"
+    if (interp == result):
+        println("PASS: pad_left with single-quote char")
+    else:
+        println("FAIL: pad_left interpolation")
+    return Result.Ok(~)
+
+fn test_find() ~:
+    let string s = "hello world"
+    let Maybe<i32> result = s.find('world')
+    let i32 index = result.realise(-1)
+    let string interp = "{s.find('world').realise(-1)}"
+    if (interp == "{index}"):
+        println("PASS: find with single-quote needle")
+    else:
+        println("FAIL: find interpolation")
+    return Result.Ok(~)
+
+fn test_replace() ~:
+    let string s = "hello world"
+    let string result = s.replace("world", "there")
+    let string interp = "{s.replace('world', 'there')}"
+    if (interp == result):
+        println("PASS: replace with single-quote args")
+    else:
+        println("FAIL: replace interpolation")
+    return Result.Ok(~)
+
+fn test_empty_string() ~:
+    let string[] parts = from(["a", "b", "c"])
+    let string result = "".join(parts)
+    let string interp = "{''.join(parts)}"
+    if (interp == result):
+        println("PASS: Empty single-quote string")
+    else:
+        println("FAIL: empty string interpolation")
+    return Result.Ok(~)
+
+fn main() i32:
+    if (test_pad_left()):
+        println("")
+    if (test_find()):
+        println("")
+    if (test_replace()):
+        println("")
+    if (test_empty_string()):
+        println("")
+    return Result.Ok(0)
