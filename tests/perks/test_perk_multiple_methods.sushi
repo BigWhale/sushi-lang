@@ -2,8 +2,8 @@
 # Perk with multiple methods
 
 perk Comparable:
-    fn equals(&i32 other) bool
-    fn less_than(&i32 other) bool
+    fn equals(&poke i32 other) bool
+    fn less_than(&poke i32 other) bool
 
 fn main() i32:
     return Result.Ok(0)

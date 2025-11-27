@@ -20,6 +20,7 @@ import llvmlite.ir as ir
 from backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from internals import errors as er
 from internals.errors import raise_internal_error
+from backend.utils import require_builder
 from stdlib.src.common import register_builtin_method, BuiltinMethod
 from backend.types.hash_utils import FNV1A_OFFSET_BASIS, FNV1A_PRIME, emit_fnv1a_combine
 
@@ -53,8 +54,7 @@ def _emit_generic_hash(prim_type: BuiltinType) -> Any:
         if len(call.args) != 0:
             raise_internal_error("CE0054", got=len(call.args))
 
-        if codegen.builder is None:
-            raise_internal_error("CE0009")
+        builder = require_builder(codegen)
         builder = codegen.builder
         u64 = ir.IntType(INT64_BIT_WIDTH)
 
@@ -139,8 +139,7 @@ def _emit_string_hash_fnv1a(codegen: Any, string_value: ir.Value) -> ir.Value:
     Returns:
         Hash value as u64
     """
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
+    builder = require_builder(codegen)
     builder = codegen.builder
     i8 = ir.IntType(INT8_BIT_WIDTH)
     i32 = ir.IntType(INT32_BIT_WIDTH)

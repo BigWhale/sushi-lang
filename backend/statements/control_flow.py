@@ -7,6 +7,7 @@ including if/elif/else and while loops.
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from internals.errors import raise_internal_error
+from backend.utils import require_both_initialized
 
 if TYPE_CHECKING:
     from backend.codegen_llvm import LLVMCodegen
@@ -23,10 +24,7 @@ def emit_if(codegen: 'LLVMCodegen', node: 'If') -> None:
         codegen: The main LLVMCodegen instance.
         node: The if statement node to emit.
     """
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
-    if codegen.func is None:
-        raise_internal_error("CE0010")
+    builder, func = require_both_initialized(codegen)
     codegen.utils.ensure_open_block()
 
     arms = list(node.arms)
@@ -78,10 +76,7 @@ def emit_while(codegen: 'LLVMCodegen', node: 'While') -> None:
         codegen: The main LLVMCodegen instance.
         node: The while statement node to emit.
     """
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
-    if codegen.func is None:
-        raise_internal_error("CE0010")
+    builder, func = require_both_initialized(codegen)
     codegen.utils.ensure_open_block()
 
     cond_bb = codegen.func.append_basic_block(name="while.cond")

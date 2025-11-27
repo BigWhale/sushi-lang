@@ -8,10 +8,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from llvmlite import ir
-from backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
+from backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH, FAT_POINTER_SIZE_BYTES
 from backend.llvm_constants import FALSE_I1
 from internals.errors import raise_internal_error
 from semantics.typesys import BuiltinType
+from backend.utils import require_builder
 
 if TYPE_CHECKING:
     from backend.codegen_llvm import LLVMCodegen
@@ -42,8 +43,7 @@ def emit_stdlib_stdio_call(
     Raises:
         ValueError: If the method is not implemented in stdlib
     """
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
+    builder = require_builder(codegen)
     # Map method names to stdlib function names
     i8 = ir.IntType(INT8_BIT_WIDTH)
     i32 = ir.IntType(INT32_BIT_WIDTH)
@@ -140,8 +140,7 @@ def emit_stdlib_file_call(
     Raises:
         ValueError: If the method is not implemented in stdlib
     """
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
+    builder = require_builder(codegen)
     i8 = ir.IntType(INT8_BIT_WIDTH)
     i32 = ir.IntType(INT32_BIT_WIDTH)
     i64 = ir.IntType(INT64_BIT_WIDTH)
@@ -210,8 +209,9 @@ def emit_stdlib_file_call(
         offset_value = codegen.expressions.emit_expr(args[0])
         seekfrom_value = codegen.expressions.emit_expr(args[1])
 
-        # SeekFrom enum struct type: {i32 tag, [0 x i8] data}
-        seekfrom_struct_ty = ir.LiteralStructType([i32, ir.ArrayType(i8, 0)])
+        # SeekFrom is a unit enum (no associated data)
+        # Use correct type: {i32 tag, [1 x i8] data}
+        seekfrom_struct_ty = ir.LiteralStructType([i32, ir.ArrayType(i8, 1)])
 
         # seekfrom_value is the enum by value (from emit_name loading it)
         # Stdlib expects a pointer, so store it in a slot
@@ -269,8 +269,7 @@ def emit_stdlib_primitive_call(
     Raises:
         ValueError: If the method is not implemented in stdlib
     """
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
+    builder = require_builder(codegen)
     # For now, only handle to_str()
     if method != "to_str":
         raise_internal_error("CE0028", method=method)
@@ -326,8 +325,7 @@ def emit_stdlib_string_call(
     Raises:
         ValueError: If the method is not implemented in stdlib
     """
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
+    builder = require_builder(codegen)
     i32 = ir.IntType(INT32_BIT_WIDTH)
     i8 = ir.IntType(INT8_BIT_WIDTH)
     i8_ptr = ir.IntType(INT8_BIT_WIDTH).as_pointer()
@@ -544,8 +542,7 @@ def emit_math_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
     Raises:
         ValueError: If the function is not a recognized math function
     """
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
+    builder = require_builder(codegen)
 
     from backend.llvm_functions import declare_stdlib_function
 
@@ -648,8 +645,7 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
     Raises:
         ValueError: If the function is not a recognized time function
     """
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
+    builder = require_builder(codegen)
 
     i32 = ir.IntType(INT32_BIT_WIDTH)
     i64 = ir.IntType(INT64_BIT_WIDTH)
@@ -685,18 +681,20 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
     else:
         raise_internal_error("CE0024", type="time", method=func_name)
 
-    # The stdlib functions return bare i32, but Sushi functions return Result<i32>
+    # The stdlib functions return bare i32, but Sushi functions return Result<i32, StdError>
     # We need to wrap the result in a Result.Ok() enum
-    # Result<i32> enum layout: {i32 tag, [N x i8] data}
+    # Result<i32, StdError> enum layout: {i32 tag, [N x i8] data}
 
-    from semantics.typesys import ResultType, BuiltinType
-    result_type = ResultType(ok_type=BuiltinType.I32)
-    result_llvm_type = codegen.types.ll_type(result_type)
+    from semantics.typesys import BuiltinType, UnknownType
+    from backend.generics.results import ensure_result_type_in_table
 
-    # Get the Result<i32> enum from the enum table
-    result_enum_name = "Result<i32>"
-    if result_enum_name in codegen.enum_table.by_name:
-        result_enum = codegen.enum_table.by_name[result_enum_name]
+    # Create Result<i32, StdError> enum if it doesn't exist
+    ok_type = BuiltinType.I32
+    err_type = UnknownType("StdError")
+    result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type)
+
+    if result_enum:
+        result_llvm_type = codegen.types.ll_type(result_enum)
         ok_variant_index = result_enum.get_variant_index("Ok")
 
         # Create Result.Ok(value) enum
@@ -756,8 +754,7 @@ def emit_env_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
     Raises:
         ValueError: If the function is not a recognized env function
     """
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
+    builder = require_builder(codegen)
 
     i32 = ir.IntType(INT32_BIT_WIDTH)
     i8_ptr = ir.IntType(8).as_pointer()
@@ -778,7 +775,7 @@ def emit_env_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
         key_value = codegen.expressions.emit_expr(expr.args[0])
 
         # Maybe<string> type: {i32 tag, [12 x i8] data}
-        maybe_string_data_size = 12
+        maybe_string_data_size = FAT_POINTER_SIZE_BYTES
         maybe_string_type = ir.LiteralStructType([i32, ir.ArrayType(ir.IntType(8), maybe_string_data_size)])
 
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, maybe_string_type, [string_type])
@@ -799,14 +796,16 @@ def emit_env_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
         result = codegen.builder.call(stdlib_func, [key_value, value_value], name="setenv_result")
 
         # Wrap in Result.Ok() enum (same as time functions)
-        from semantics.typesys import ResultType
-        result_type = ResultType(ok_type=BuiltinType.I32)
-        result_llvm_type = codegen.types.ll_type(result_type)
+        from semantics.typesys import UnknownType
+        from backend.generics.results import ensure_result_type_in_table
 
-        # Get the Result<i32> enum from the enum table
-        result_enum_name = "Result<i32>"
-        if result_enum_name in codegen.enum_table.by_name:
-            result_enum = codegen.enum_table.by_name[result_enum_name]
+        # Create Result<i32, EnvError> enum if it doesn't exist
+        ok_type = BuiltinType.I32
+        err_type = UnknownType("EnvError")
+        result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type)
+
+        if result_enum:
+            result_llvm_type = codegen.types.ll_type(result_enum)
             ok_variant_index = result_enum.get_variant_index("Ok")
 
             # Create Result.Ok(value) enum
@@ -868,8 +867,7 @@ def emit_random_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bo
     Raises:
         ValueError: If the function is not a recognized random function
     """
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
+    builder = require_builder(codegen)
 
     i32 = ir.IntType(INT32_BIT_WIDTH)
     i64 = ir.IntType(INT64_BIT_WIDTH)
@@ -946,8 +944,7 @@ def emit_files_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: boo
     Raises:
         ValueError: If the function is not a recognized files function
     """
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
+    builder = require_builder(codegen)
 
     i8 = ir.IntType(INT8_BIT_WIDTH)
     i32 = ir.IntType(INT32_BIT_WIDTH)
@@ -1019,3 +1016,112 @@ def emit_files_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: boo
 
     else:
         raise_internal_error("CE0024", type="io/files", method=func_name)
+
+
+def emit_process_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool) -> ir.Value:
+    """Emit a call to a sys/process module function.
+
+    This function emits an external call to a precompiled stdlib process function.
+    Maps user-facing function names (getcwd, chdir, exit, getpid, getuid) to their
+    internal sushi_* prefixed names in the stdlib.
+
+    Args:
+        codegen: The LLVM code generator
+        func_name: The function name ('getcwd', 'chdir', 'exit', 'getpid', 'getuid')
+        expr: The function call expression
+        to_i1: Whether to convert result to i1 (for boolean conditions)
+
+    Returns:
+        The result of the stdlib function call
+
+    Raises:
+        ValueError: If the function is not a recognized process function
+    """
+    builder = require_builder(codegen)
+
+    i32 = ir.IntType(INT32_BIT_WIDTH)
+    i8_ptr = ir.IntType(8).as_pointer()
+    void = ir.VoidType()
+
+    # Map user function name to stdlib function name
+    stdlib_func_name = f"sushi_{func_name}"
+
+    from backend.llvm_functions import declare_stdlib_function
+
+    # String type: {i8* data, i32 size}
+    string_type = codegen.types.ll_type(BuiltinType.STRING)
+
+    if func_name == "getcwd":
+        # getcwd() -> Result<string, ProcessError>
+        if len(expr.args) != 0:
+            raise_internal_error("CE0023", method="getcwd", expected=0, got=len(expr.args))
+
+        # Result<string, ProcessError> type
+        # string (fat pointer) = 12 bytes
+        # ProcessError (unit enum) = 5 bytes
+        # Result data size = max(12, 5) = 12 bytes
+        result_string_data_size = FAT_POINTER_SIZE_BYTES  # 12 bytes
+        result_string_type = ir.LiteralStructType([i32, ir.ArrayType(ir.IntType(8), result_string_data_size)])
+
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, result_string_type, [])
+        result = codegen.builder.call(stdlib_func, [], name="getcwd_result")
+
+        return codegen.utils.as_i1(result) if to_i1 else result
+
+    elif func_name == "chdir":
+        # chdir(string path) -> Result<i32, ProcessError>
+        if len(expr.args) != 1:
+            raise_internal_error("CE0023", method="chdir", expected=1, got=len(expr.args))
+
+        path_value = codegen.expressions.emit_expr(expr.args[0])
+
+        # Result<i32, ProcessError> type
+        # ProcessError is a unit enum: {i32 tag, [1 x i8] data} = 5 bytes
+        # i32 = 4 bytes
+        # Result data size = max(4, 5) = 5 bytes
+        result_i32_type = ir.LiteralStructType([i32, ir.ArrayType(ir.IntType(8), 5)])
+
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, result_i32_type, [string_type])
+        result = codegen.builder.call(stdlib_func, [path_value], name="chdir_result")
+
+        return codegen.utils.as_i1(result) if to_i1 else result
+
+    elif func_name == "exit":
+        # exit(i32 code) -> ~
+        if len(expr.args) != 1:
+            raise_internal_error("CE0023", method="exit", expected=1, got=len(expr.args))
+
+        code_value = codegen.expressions.emit_expr(expr.args[0])
+
+        # The stdlib function returns void
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, void, [i32])
+        codegen.builder.call(stdlib_func, [code_value], name="exit_call")
+
+        # exit() never returns, so emit unreachable
+        codegen.builder.unreachable()
+
+        # Return undef value (won't be used)
+        return ir.Constant(i32, ir.Undefined)
+
+    elif func_name == "getpid":
+        # getpid() -> i32
+        if len(expr.args) != 0:
+            raise_internal_error("CE0023", method="getpid", expected=0, got=len(expr.args))
+
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, i32, [])
+        result = codegen.builder.call(stdlib_func, [], name="getpid_result")
+
+        return codegen.utils.as_i1(result) if to_i1 else result
+
+    elif func_name == "getuid":
+        # getuid() -> i32
+        if len(expr.args) != 0:
+            raise_internal_error("CE0023", method="getuid", expected=0, got=len(expr.args))
+
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, i32, [])
+        result = codegen.builder.call(stdlib_func, [], name="getuid_result")
+
+        return codegen.utils.as_i1(result) if to_i1 else result
+
+    else:
+        raise_internal_error("CE0024", type="sys/process", method=func_name)

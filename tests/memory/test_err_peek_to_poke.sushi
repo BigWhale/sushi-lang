@@ -1,0 +1,14 @@
+# Test error: peek to poke coercion not allowed
+# &peek T cannot be passed where &poke T is expected
+
+fn modify_value(&poke i32 x) ~:
+    x := x + 1
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32 num = 42
+
+    # This should fail: passing &peek where &poke is expected
+    modify_value(&peek num)??
+
+    return Result.Ok(0)

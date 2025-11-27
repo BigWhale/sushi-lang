@@ -1,0 +1,48 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: First propagation works
+# EXPECT_STDOUT_CONTAINS: PASS: Second propagation works
+# EXPECT_STDERR_EMPTY: true
+
+# Tests multiple error propagations in one function
+
+enum MyFileError:
+    NotFound
+    PermissionDenied
+
+fn check_exists(string path) bool | MyFileError:
+    if (path == "missing"):
+        return Result.Err(MyFileError.NotFound)
+    return Result.Ok(true)
+
+fn check_readable(string path) bool | MyFileError:
+    if (path == "forbidden"):
+        return Result.Err(MyFileError.PermissionDenied)
+    return Result.Ok(true)
+
+fn validate_file(string path) i32 | MyFileError:
+    check_exists(path)??
+    check_readable(path)??
+    return Result.Ok(42)
+
+fn main() i32:
+    match validate_file("missing"):
+        Result.Ok(_) ->
+            println("FAIL: Should have gotten NotFound")
+            return Result.Ok(1)
+        Result.Err(MyFileError.NotFound) ->
+            println("PASS: First propagation works")
+        Result.Err(_) ->
+            println("FAIL: Wrong error on first propagation")
+            return Result.Ok(1)
+
+    match validate_file("forbidden"):
+        Result.Ok(_) ->
+            println("FAIL: Should have gotten PermissionDenied")
+            return Result.Ok(1)
+        Result.Err(MyFileError.PermissionDenied) ->
+            println("PASS: Second propagation works")
+        Result.Err(_) ->
+            println("FAIL: Wrong error on second propagation")
+            return Result.Ok(1)
+
+    return Result.Ok(0)

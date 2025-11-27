@@ -1,0 +1,29 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: Manual error conversion works
+# EXPECT_STDERR_EMPTY: true
+
+# Tests manual error type conversion between different error types
+
+fn file_op() string | FileError:
+    return Result.Err(FileError.NotFound)
+
+fn app_logic() i32 | IoError:
+    match file_op():
+        Result.Ok(_) ->
+            return Result.Ok(42)
+        Result.Err(FileError.NotFound) ->
+            return Result.Err(IoError.ReadError)
+        Result.Err(_) ->
+            return Result.Err(IoError.ReadError)
+
+fn main() i32:
+    match app_logic():
+        Result.Ok(_) ->
+            println("FAIL: Should have gotten error")
+            return Result.Ok(1)
+        Result.Err(IoError.ReadError) ->
+            println("PASS: Manual error conversion works")
+            return Result.Ok(0)
+        Result.Err(_) ->
+            println("FAIL: Wrong error type")
+            return Result.Ok(1)

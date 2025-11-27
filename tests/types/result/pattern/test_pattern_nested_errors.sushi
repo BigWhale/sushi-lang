@@ -1,0 +1,38 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: Nested error pattern works
+# EXPECT_STDERR_EMPTY: true
+
+# Tests pattern matching on nested error enum variants
+
+enum NetworkError:
+    Timeout
+    ConnectionRefused
+    InvalidResponse
+
+enum AppError:
+    NetworkFailure
+    ParseFailure
+
+fn network_call() string | NetworkError:
+    return Result.Err(NetworkError.Timeout)
+
+fn app_operation() i32 | AppError:
+    match network_call():
+        Result.Ok(_) ->
+            return Result.Ok(42)
+        Result.Err(NetworkError.Timeout) ->
+            return Result.Err(AppError.NetworkFailure)
+        Result.Err(_) ->
+            return Result.Err(AppError.NetworkFailure)
+
+fn main() i32:
+    match app_operation():
+        Result.Ok(_) ->
+            println("FAIL: Should have gotten error")
+            return Result.Ok(1)
+        Result.Err(AppError.NetworkFailure) ->
+            println("PASS: Nested error pattern works")
+            return Result.Ok(0)
+        Result.Err(_) ->
+            println("FAIL: Wrong error type")
+            return Result.Ok(1)

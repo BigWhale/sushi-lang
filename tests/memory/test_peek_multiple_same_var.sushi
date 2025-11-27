@@ -1,0 +1,19 @@
+# Test multiple &peek borrows of the same variable
+# Multiple read-only borrows should work simultaneously
+
+fn triple_read(&peek i32 a, &peek i32 b, &peek i32 c) i32:
+    return Result.Ok(a + b + c)
+
+fn main() i32:
+    let i32 num = 10
+    println(num)
+
+    # Three &peek borrows of the same variable - all should work
+    let Result<i32, StdError> result = triple_read(&peek num, &peek num, &peek num)
+    let i32 sum = result.realise(0)
+
+    # 10 + 10 + 10 = 30
+    if (sum == 30):
+        return Result.Ok(0)
+
+    return Result.Ok(1)

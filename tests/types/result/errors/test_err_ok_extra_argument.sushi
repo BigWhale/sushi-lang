@@ -1,0 +1,10 @@
+# Tests error for Ok with extra arguments
+
+enum MyError:
+    Error
+
+fn test_func() i32 | MyError:
+    return Result.Ok(42, 100)
+
+fn main() i32:
+    return Result.Ok(0)

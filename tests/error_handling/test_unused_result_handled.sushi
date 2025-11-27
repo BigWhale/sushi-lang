@@ -16,7 +16,7 @@ fn main() i32:
         println("Success")
 
     # OK: Result is stored in a variable (not an expression statement)
-    let Result<i32> result = get_value()
+    let Result<i32, StdError> result = get_value()
 
     # OK: Result is used with .realise() method
     let i32 y = result.realise(0)

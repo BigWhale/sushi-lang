@@ -4,5 +4,5 @@ use "helpers/math_utils"
 const i32 FOO_MAGIC = 42
 
 public fn foo_compute(i32 x) i32:
-    let Result<i32> sum = add(x, FOO_MAGIC)
+    let Result<i32, StdError> sum = add(x, FOO_MAGIC)
     return Result.Ok(sum.realise(0))

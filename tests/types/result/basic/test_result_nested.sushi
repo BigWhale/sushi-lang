@@ -1,0 +1,36 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: Nested Result works
+# EXPECT_STDERR_EMPTY: true
+
+# Tests nested Result<Result<T, E1>, E2> (edge case)
+
+enum InnerError:
+    InnerFailed
+
+enum OuterError:
+    OuterFailed
+
+fn inner_operation() Result<i32, InnerError>:
+    return Result.Ok(42)
+
+fn outer_operation() Result<Result<i32, InnerError>, OuterError>:
+    return Result.Ok(inner_operation())
+
+fn main() i32:
+    match outer_operation():
+        Result.Ok(inner_result) ->
+            match inner_result:
+                Result.Ok(value) ->
+                    if (value == 42):
+                        println("PASS: Nested Result works")
+                    else:
+                        println("FAIL: Wrong value in nested Result")
+                        return Result.Ok(1)
+                Result.Err(_) ->
+                    println("FAIL: Inner Result is Err")
+                    return Result.Ok(1)
+        Result.Err(_) ->
+            println("FAIL: Outer Result is Err")
+            return Result.Ok(1)
+
+    return Result.Ok(0)

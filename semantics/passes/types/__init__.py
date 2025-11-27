@@ -201,6 +201,29 @@ class TypeValidator:
         # Validate return type (blank type is allowed here)
         validate_type_name(self, func.ret, func.ret_span)
 
+        # Validate error type if specified (must be an enum)
+        if func.err_type is not None:
+            # First validate the type name itself
+            validate_type_name(self, func.err_type, func.ret_span)  # Use ret_span since we don't have err_span
+
+            # Then check if it's an enum
+            from semantics.generics.types import GenericTypeRef
+            resolved_err_type = func.err_type
+
+            # Resolve UnknownType to actual type
+            if isinstance(func.err_type, UnknownType):
+                resolved_err_type = resolve_unknown_type(
+                    func.err_type,
+                    self.struct_table.by_name,
+                    self.enum_table.by_name
+                )
+
+            # Check if resolved type is an enum
+            if not isinstance(resolved_err_type, EnumType):
+                # Error type must be an enum, not a struct or primitive
+                self.err.emit(er.ERR.CE2084, func.ret_span,
+                             type_name=str(func.err_type))
+
         # Validate function body
         self._validate_block(func.body)
 

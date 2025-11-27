@@ -3,5 +3,5 @@
 
 fn main() i32:
     # Declare as Result<Maybe<i32>> but assign Result<Maybe<string>>
-    let Result<Maybe<i32>> var = Result.Ok(Maybe.Some("wrong type"))
+    let Result<Maybe<i32>, StdError> var = Result.Ok(Maybe.Some("wrong type"))
     return Result.Ok(0)

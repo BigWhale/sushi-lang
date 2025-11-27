@@ -16,7 +16,7 @@ fn main() i32:
             out.close()
         FileResult.Err(_) ->
             stderr.write("Error: cannot open output.txt for writing\n")
-            return Result.Err()
+            return Result.Err(StdError.Error)
 
     # Read text from file
     let FileResult read_result = open("test_output.txt", FileMode.Read())
@@ -29,9 +29,7 @@ fn main() i32:
             f.close()
         FileResult.Err(_) ->
             stderr.write("Error: cannot open file for reading\n")
-            return Result.Err()
+            return Result.Err(StdError.Error)
 
     println("File write and read successful!")
     return Result.Ok(0)
-
-

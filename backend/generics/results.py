@@ -1,23 +1,27 @@
 """
-Built-in extension methods for Result<T> generic enum type.
+Built-in extension methods for Result<T, E> generic enum type.
 
 Implemented methods:
+- is_ok() -> bool: Check if Result is Ok variant
+- is_err() -> bool: Check if Result is Err variant
 - realise(default: T) -> T: Extract Ok value or return default if Err
+- expect(message: string) -> T: Extract Ok value or panic with message if Err
+- err() -> Maybe<E>: Extract error value or Maybe.None if Ok
 
-The Result<T> type is a generic enum with two variants:
+The Result<T, E> type is a generic enum with two variants:
 - Ok(T): Contains a successful value of type T
-- Err(): Represents an error with no value
+- Err(E): Contains an error value of type E
 
 This module provides ergonomic error handling methods that work with
-the Result<T> type after monomorphization.
+the Result<T, E> type after monomorphization.
 
 ARCHITECTURE:
-This module provides INLINE EMISSION ONLY. Result<T> methods work on-demand
+This module provides INLINE EMISSION ONLY. Result<T, E> methods work on-demand
 for all types (built-in and user-defined) during compilation. There is no
 stdlib IR generation because monomorphizing for all possible user types is
 impractical.
 
-See docs/stdlib/ISSUES.md for why Result<T> cannot be moved to stdlib.
+See docs/stdlib/ISSUES.md for why Result<T, E> cannot be moved to stdlib.
 """
 
 from typing import Any, Optional
@@ -34,15 +38,149 @@ from internals.errors import raise_internal_error
 
 
 def is_builtin_result_method(method_name: str) -> bool:
-    """Check if a method name is a builtin Result<T> method.
+    """Check if a method name is a builtin Result<T, E> method.
 
     Args:
         method_name: The name of the method to check.
 
     Returns:
-        True if this is a recognized Result<T> method, False otherwise.
+        True if this is a recognized Result<T, E> method, False otherwise.
     """
-    return method_name == "realise"
+    return method_name in ("is_ok", "is_err", "realise", "expect", "err")
+
+
+def validate_result_method_with_validator(
+    call: MethodCall,
+    result_type: EnumType,
+    reporter: Any,
+    validator: Any
+) -> None:
+    """Validate Result<T, E> method calls.
+
+    Routes to specific validation functions based on method name.
+
+    Args:
+        call: The method call AST node.
+        result_type: The Result<T, E> enum type (after monomorphization).
+        reporter: Error reporter for emitting validation errors.
+        validator: Type validator for inferring expression types.
+    """
+    # CRITICAL: Annotate the MethodCall with the resolved Result<T, E> type
+    # This allows the backend to use the correct type during code generation
+    # instead of relying on unreliable LLVM type matching
+    call.resolved_enum_type = result_type
+
+    if call.method == "is_ok":
+        _validate_result_is_ok(call, result_type, reporter)
+    elif call.method == "is_err":
+        _validate_result_is_err(call, result_type, reporter)
+    elif call.method == "realise":
+        validate_result_realise_method_with_validator(call, result_type, reporter, validator)
+    elif call.method == "expect":
+        _validate_result_expect(call, result_type, reporter, validator)
+    elif call.method == "err":
+        _validate_result_err(call, result_type, reporter)
+    else:
+        # Unknown method - should not happen if is_builtin_result_method was called first
+        raise_internal_error("CE0094", method=call.method)
+
+
+def _validate_result_is_ok(
+    call: MethodCall,
+    result_type: EnumType,
+    reporter: Any
+) -> None:
+    """Validate Result<T, E>.is_ok() method call.
+
+    Validates that no arguments are provided.
+
+    Args:
+        call: The method call AST node.
+        result_type: The Result<T, E> enum type.
+        reporter: Error reporter for emitting validation errors.
+    """
+    # Validate argument count
+    if len(call.args) != 0:
+        er.emit(reporter, er.ERR.CE2016, call.loc, method="is_ok", expected=0, got=len(call.args))
+
+
+def _validate_result_is_err(
+    call: MethodCall,
+    result_type: EnumType,
+    reporter: Any
+) -> None:
+    """Validate Result<T, E>.is_err() method call.
+
+    Validates that no arguments are provided.
+
+    Args:
+        call: The method call AST node.
+        result_type: The Result<T, E> enum type.
+        reporter: Error reporter for emitting validation errors.
+    """
+    # Validate argument count
+    if len(call.args) != 0:
+        er.emit(reporter, er.ERR.CE2016, call.loc, method="is_err", expected=0, got=len(call.args))
+
+
+def _validate_result_err(
+    call: MethodCall,
+    result_type: EnumType,
+    reporter: Any
+) -> None:
+    """Validate Result<T, E>.err() method call.
+
+    Validates that no arguments are provided.
+
+    Args:
+        call: The method call AST node.
+        result_type: The Result<T, E> enum type.
+        reporter: Error reporter for emitting validation errors.
+    """
+    # Validate argument count
+    if len(call.args) != 0:
+        er.emit(reporter, er.ERR.CE2016, call.loc, method="err", expected=0, got=len(call.args))
+
+
+def _validate_result_expect(
+    call: MethodCall,
+    result_type: EnumType,
+    reporter: Any,
+    validator: Any
+) -> None:
+    """Validate Result<T, E>.expect(message) method call.
+
+    Validates that:
+    1. Exactly one argument is provided (the error message)
+    2. The message is a string type
+
+    Args:
+        call: The method call AST node.
+        result_type: The Result<T, E> enum type (after monomorphization).
+        reporter: Error reporter for emitting validation errors.
+        validator: Type validator for inferring expression types.
+
+    Emits:
+        CE2016: If argument count is not exactly 1
+        CE2503: If message is not a string
+    """
+    # Validate argument count
+    if len(call.args) != 1:
+        er.emit(reporter, er.ERR.CE2016, call.loc, method="expect", expected=1, got=len(call.args))
+        return
+
+    # Validate the message argument is a string
+    message_arg = call.args[0]
+
+    # First validate the argument expression
+    validator.validate_expression(message_arg)
+
+    # Then check it's a string
+    from semantics.typesys import BuiltinType
+    arg_type = validator.infer_expression_type(message_arg)
+    if arg_type is not None and arg_type != BuiltinType.STRING:
+        er.emit(reporter, er.ERR.CE2503, message_arg.loc,
+               expected="string", got=str(arg_type))
 
 
 def validate_result_realise_method_with_validator(
@@ -117,14 +255,14 @@ def emit_builtin_result_method(
     result_type: EnumType,
     to_i1: bool
 ) -> ir.Value:
-    """Emit LLVM code for Result<T> built-in methods.
+    """Emit LLVM code for Result<T, E> built-in methods.
 
     Args:
         codegen: The LLVM code generator instance.
         call: The method call AST node.
-        result_value: The LLVM value of the Result<T> receiver.
-        result_type: The Result<T> enum type (after monomorphization).
-        to_i1: Whether to convert result to i1 (not used for realise).
+        result_value: The LLVM value of the Result<T, E> receiver.
+        result_type: The Result<T, E> enum type (after monomorphization).
+        to_i1: Whether to convert result to i1 (for is_ok/is_err).
 
     Returns:
         The LLVM value representing the method call result.
@@ -132,24 +270,223 @@ def emit_builtin_result_method(
     Raises:
         ValueError: If the method is not recognized or has invalid arguments.
     """
-    from backend.generics.enum_methods_base import emit_enum_realise
+    from backend.generics.enum_methods_base import emit_enum_tag_check, emit_enum_realise
 
-    if call.method == "realise":
+    if call.method == "is_ok":
+        return emit_enum_tag_check(codegen, result_value, 0, "is_ok")
+    elif call.method == "is_err":
+        return emit_enum_tag_check(codegen, result_value, 1, "is_err")
+    elif call.method == "realise":
         return emit_enum_realise(codegen, call, result_value, result_type, "Ok", "Result")
+    elif call.method == "expect":
+        return _emit_result_expect(codegen, call, result_value, result_type)
+    elif call.method == "err":
+        return _emit_result_err(codegen, result_value, result_type)
     else:
         raise_internal_error("CE0094", method=call.method)
 
 
+def _emit_result_expect(
+    codegen: Any,
+    call: MethodCall,
+    result_value: ir.Value,
+    result_type: EnumType
+) -> ir.Value:
+    """Emit LLVM code for result.expect(message).
+
+    Result<T, E> enum layout: {i32 tag, [N x i8] data}
+    - tag = 0 for Ok variant, 1 for Err variant
+    - data contains the packed value bytes
+
+    If Ok: return unpacked value
+    If Err: print error message and exit(1)
+
+    Args:
+        codegen: The LLVM code generator instance.
+        call: The method call AST node.
+        result_value: The LLVM value of the Result<T, E> enum.
+        result_type: The Result<T, E> enum type (after monomorphization).
+
+    Returns:
+        The extracted value if Ok (or exits if Err).
+
+    Raises:
+        ValueError: If argument count is not exactly 1.
+    """
+    from backend.llvm_constants import ONE_I64, ONE_I32
+
+    if len(call.args) != 1:
+        raise_internal_error("CE0095", got=len(call.args))
+
+    # Extract T from Result<T, E>
+    ok_variant = result_type.get_variant("Ok")
+    if ok_variant is None:
+        raise_internal_error("CE0089", enum=result_type.name)
+
+    if len(ok_variant.associated_types) != 1:
+        raise_internal_error("CE0090", got=len(ok_variant.associated_types))
+
+    t_type = ok_variant.associated_types[0]
+
+    # Get the LLVM type for T
+    value_llvm_type = codegen.types.ll_type(t_type)
+
+    # Extract (is_ok, value) from Result<T, E>
+    is_ok, unpacked_value = codegen.functions._extract_value_from_result_enum(
+        result_value, value_llvm_type, t_type
+    )
+
+    # Create basic blocks for Ok and Err paths
+    ok_block = codegen.builder.append_basic_block(name="result_expect_ok")
+    err_block = codegen.builder.append_basic_block(name="result_expect_err")
+    continue_block = codegen.builder.append_basic_block(name="result_expect_continue")
+
+    # Branch based on is_ok
+    codegen.builder.cbranch(is_ok, ok_block, err_block)
+
+    # Ok block: continue with unpacked value
+    codegen.builder.position_at_end(ok_block)
+    codegen.builder.branch(continue_block)
+
+    # Err block: print error message and exit
+    codegen.builder.position_at_end(err_block)
+
+    # Emit the error message expression (fat pointer string)
+    error_message = codegen.expressions.emit_expr(call.args[0])
+
+    # Print error message to stderr using runtime function
+    # Format: "ERROR: <message>\n"
+    error_prefix_fat = codegen.runtime.strings.emit_string_literal("ERROR: ")
+    newline_fat = codegen.runtime.strings.emit_string_literal("\n")
+
+    # Get stderr file pointer
+    stderr_ptr = codegen.builder.load(codegen.runtime.libc_stdio.stderr_handle)
+
+    # Get fwrite function
+    fwrite_fn = codegen.runtime.libc_stdio.fwrite
+
+    # Write "ERROR: " to stderr using fwrite
+    error_prefix_ptr = codegen.builder.extract_value(error_prefix_fat, 0, name="error_prefix_ptr")
+    error_prefix_len = codegen.builder.extract_value(error_prefix_fat, 1, name="error_prefix_len")
+    error_prefix_len_i64 = codegen.builder.zext(error_prefix_len, ir.IntType(64), name="error_prefix_len_i64")
+    codegen.builder.call(fwrite_fn, [error_prefix_ptr, ONE_I64, error_prefix_len_i64, stderr_ptr])
+
+    # Write user message to stderr using fwrite
+    error_message_ptr = codegen.builder.extract_value(error_message, 0, name="error_msg_ptr")
+    error_message_len = codegen.builder.extract_value(error_message, 1, name="error_msg_len")
+    error_message_len_i64 = codegen.builder.zext(error_message_len, ir.IntType(64), name="error_msg_len_i64")
+    codegen.builder.call(fwrite_fn, [error_message_ptr, ONE_I64, error_message_len_i64, stderr_ptr])
+
+    # Write newline to stderr using fwrite
+    newline_ptr = codegen.builder.extract_value(newline_fat, 0, name="newline_ptr")
+    newline_len = codegen.builder.extract_value(newline_fat, 1, name="newline_len")
+    newline_len_i64 = codegen.builder.zext(newline_len, ir.IntType(64), name="newline_len_i64")
+    codegen.builder.call(fwrite_fn, [newline_ptr, ONE_I64, newline_len_i64, stderr_ptr])
+
+    # Call exit(1)
+    codegen.builder.call(codegen.runtime.libc_process.exit, [ONE_I32])
+
+    # Unreachable after exit, but LLVM requires a terminator
+    codegen.builder.unreachable()
+
+    # Continue block: return the unpacked value
+    codegen.builder.position_at_end(continue_block)
+
+    # Create a phi node to receive the value from ok_block
+    phi = codegen.builder.phi(value_llvm_type, name="expect_result")
+    phi.add_incoming(unpacked_value, ok_block)
+
+    return phi
+
+
+def _emit_result_err(
+    codegen: Any,
+    result_value: ir.Value,
+    result_type: EnumType
+) -> ir.Value:
+    """Emit LLVM code for result.err().
+
+    Result<T, E> enum layout: {i32 tag, [N x i8] data}
+    - tag = 0 for Ok variant, 1 for Err variant
+    - data contains the packed value bytes
+
+    Returns Maybe<E>:
+    - If Ok: Maybe.None()
+    - If Err: Maybe.Some(error_value)
+
+    Args:
+        codegen: The LLVM code generator instance.
+        result_value: The LLVM value of the Result<T, E> enum.
+        result_type: The Result<T, E> enum type (after monomorphization).
+
+    Returns:
+        Maybe<E> enum value.
+    """
+    from backend.generics.maybe import emit_maybe_some, emit_maybe_none
+
+    # Extract E from Result<T, E>
+    err_variant = result_type.get_variant("Err")
+    if err_variant is None:
+        raise_internal_error("CE0089", enum=result_type.name)
+
+    if len(err_variant.associated_types) != 1:
+        raise_internal_error("CE0090", got=len(err_variant.associated_types))
+
+    e_type = err_variant.associated_types[0]
+
+    # Get the LLVM type for E
+    error_llvm_type = codegen.types.ll_type(e_type)
+
+    # Extract (is_ok, error_value) from Result<T, E>
+    # Note: We're extracting the Err variant's data, but _extract_value_from_result_enum
+    # always extracts from the data field regardless of tag
+    is_ok, error_value = codegen.functions._extract_value_from_result_enum(
+        result_value, error_llvm_type, e_type
+    )
+
+    # Create basic blocks for Ok and Err paths
+    ok_block = codegen.builder.append_basic_block(name="result_err_ok")
+    err_block = codegen.builder.append_basic_block(name="result_err_err")
+    continue_block = codegen.builder.append_basic_block(name="result_err_continue")
+
+    # Branch based on is_ok
+    codegen.builder.cbranch(is_ok, ok_block, err_block)
+
+    # Ok block: return Maybe.None()
+    codegen.builder.position_at_end(ok_block)
+    none_value = emit_maybe_none(codegen, e_type)
+    codegen.builder.branch(continue_block)
+
+    # Err block: return Maybe.Some(error_value)
+    codegen.builder.position_at_end(err_block)
+    some_value = emit_maybe_some(codegen, e_type, error_value)
+    codegen.builder.branch(continue_block)
+
+    # Continue block: phi to merge the two paths
+    codegen.builder.position_at_end(continue_block)
+
+    # Get the Maybe<E> LLVM type
+    from backend.generics.maybe import get_maybe_enum_type
+    maybe_llvm_type = get_maybe_enum_type(codegen, e_type)
+
+    # Create phi node to select between None and Some
+    phi = codegen.builder.phi(maybe_llvm_type, name="err_result")
+    phi.add_incoming(none_value, ok_block)
+    phi.add_incoming(some_value, err_block)
+
+    return phi
+
+
 def _extract_ok_type_from_result(result_type: EnumType) -> Type:
-    """Extract the T type from Result<T> enum.
+    """Extract the T type from Result<T, E> enum.
 
     Helper function to get the associated type from the Ok variant.
 
     Args:
-        result_type: The Result<T> enum type.
+        result_type: The Result<T, E> enum type.
 
     Returns:
-        The T type from Result<T>.
+        The T type from Result<T, E>.
 
     Raises:
         RuntimeError: If Result enum is malformed.
@@ -164,37 +501,43 @@ def _extract_ok_type_from_result(result_type: EnumType) -> Type:
     return ok_variant.associated_types[0]
 
 
-def ensure_result_type_in_table(enum_table: Any, value_type: Type) -> Optional[EnumType]:
-    """Ensure that Result<T> exists in the enum table, creating it if necessary.
+def ensure_result_type_in_table(enum_table: Any, ok_type: Type, err_type: Type) -> Optional[EnumType]:
+    """Ensure that Result<T, E> exists in the enum table, creating it if necessary.
 
     This is the core function that works with just an enum table, making it usable
     from both semantic analysis and code generation phases.
 
     Args:
         enum_table: The enum table to register the type in.
-        value_type: The T type parameter for Result<T>.
+        ok_type: The T type parameter for Result<T, E>.
+        err_type: The E type parameter for Result<T, E>.
 
     Returns:
-        The EnumType for Result<T>, or None if it couldn't be created.
+        The EnumType for Result<T, E>, or None if it couldn't be created.
     """
     from semantics.typesys import EnumType, EnumVariantInfo, BuiltinType
 
     # Format the type name
-    if isinstance(value_type, BuiltinType):
-        type_str = str(value_type).lower()
+    if isinstance(ok_type, BuiltinType):
+        ok_str = str(ok_type).lower()
     else:
-        type_str = str(value_type)
+        ok_str = str(ok_type)
 
-    result_enum_name = f"Result<{type_str}>"
+    if isinstance(err_type, BuiltinType):
+        err_str = str(err_type).lower()
+    else:
+        err_str = str(err_type)
+
+    result_enum_name = f"Result<{ok_str}, {err_str}>"
 
     # Check if it already exists
     if result_enum_name in enum_table.by_name:
         return enum_table.by_name[result_enum_name]
 
-    # Create the Result<T> enum type on the fly
-    # Define variants: Ok(T) and Err()
-    ok_variant = EnumVariantInfo(name="Ok", associated_types=(value_type,))
-    err_variant = EnumVariantInfo(name="Err", associated_types=())
+    # Create the Result<T, E> enum type on the fly
+    # Define variants: Ok(T) and Err(E)
+    ok_variant = EnumVariantInfo(name="Ok", associated_types=(ok_type,))
+    err_variant = EnumVariantInfo(name="Err", associated_types=(err_type,))
 
     # Create enum type
     result_enum = EnumType(
@@ -205,5 +548,13 @@ def ensure_result_type_in_table(enum_table: Any, value_type: Type) -> Optional[E
     # Register in enum table
     enum_table.by_name[result_enum_name] = result_enum
     enum_table.order.append(result_enum_name)
+
+    # Register hash method for the Result enum if hashable
+    # This must happen immediately after creation, since Result enums are created
+    # on-demand AFTER Pass 1.8 (hash registration pass) has already run
+    from backend.types.enums import can_enum_be_hashed, register_enum_hash_method
+    can_hash, reason = can_enum_be_hashed(result_enum)
+    if can_hash:
+        register_enum_hash_method(result_enum)
 
     return result_enum

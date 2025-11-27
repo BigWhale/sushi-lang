@@ -11,6 +11,7 @@ from llvmlite import ir
 from semantics.ast import DotCall, MethodCall, Name
 from semantics.typesys import EnumType, StructType, BuiltinType
 from internals.errors import raise_internal_error
+from backend.utils import require_builder
 
 if TYPE_CHECKING:
     from backend.codegen_llvm import LLVMCodegen
@@ -28,8 +29,14 @@ def try_emit_enum_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, Do
     # Priority 1: Check if resolved_enum_type is set (for generic enums like Result<T>)
     resolved_type = get_resolved_type(expr, 'resolved_enum_type')
     if resolved_type is not None:
-        from backend.expressions import enums
-        return enums.emit_enum_constructor_from_method_call(codegen, resolved_type, method, args)
+        # CRITICAL: Verify that method is actually a variant name, not a method name
+        # This prevents treating Result.realise() as a constructor when resolved_enum_type is set
+        from semantics.typesys import EnumType
+        if isinstance(resolved_type, EnumType) and resolved_type.get_variant(method) is not None:
+            from backend.expressions import enums
+            return enums.emit_enum_constructor_from_method_call(codegen, resolved_type, method, args)
+        # Not a variant - fall through to method dispatch
+        return None
 
     # Priority 2: Check if receiver is in enum_table (for non-generic enums)
     if isinstance(receiver, Name) and hasattr(codegen, 'enum_table'):
@@ -37,6 +44,21 @@ def try_emit_enum_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, Do
             from backend.expressions import enums
             enum_type = codegen.enum_table.by_name[receiver.id]
             return enums.emit_enum_constructor_from_method_call(codegen, enum_type, method, args)
+
+    # Priority 3: Defensive check for generic enum constructors without type info
+    # This should never be reached if semantic analysis properly sets resolved_enum_type
+    if isinstance(receiver, Name) and hasattr(codegen, 'enum_table'):
+        base_name = receiver.id
+        prefix = base_name + "<"
+
+        # Check if this looks like a generic enum base name
+        for enum_name in codegen.enum_table.by_name:
+            if enum_name.startswith(prefix):
+                raise_internal_error("CE0113",
+                    message=f"Generic enum constructor {base_name}.{method}() requires "
+                            f"type annotation. Found monomorphized instance {enum_name}. "
+                            f"This is a compiler bug - semantic analysis should have set "
+                            f"resolved_enum_type on this DotCall node.")
 
     return None
 
@@ -169,8 +191,7 @@ def try_emit_string_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCa
         is_empty_func = emit_string_is_empty_intrinsic(codegen.module)
 
         # Call the intrinsic
-        if codegen.builder is None:
-            raise_internal_error("CE0009")
+        builder = require_builder(codegen)
         result = codegen.builder.call(is_empty_func, [receiver_value], name="is_empty_result")
 
         # Convert i8 to i1 if needed
@@ -214,7 +235,34 @@ def try_emit_enum_hash(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                        receiver_value: ir.Value, receiver_type: ir.Type,
                        semantic_type, to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as auto-derived enum hash method. Returns None if not applicable."""
-    if semantic_type is None or not isinstance(semantic_type, EnumType):
+    if semantic_type is None:
+        return None
+
+    # Handle GenericTypeRef for Result<T, E>
+    from semantics.generics.types import GenericTypeRef
+    from semantics.typesys import ResultType, EnumType
+
+    if isinstance(semantic_type, GenericTypeRef) and semantic_type.base_name == "Result":
+        # Convert GenericTypeRef("Result", [T, E]) to Result enum
+        if len(semantic_type.type_args) >= 2:
+            from backend.generics.results import ensure_result_type_in_table
+            ok_type = semantic_type.type_args[0]
+            err_type = semantic_type.type_args[1]
+            result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type)
+            if result_enum is None:
+                return None
+            semantic_type = result_enum
+
+    # Convert ResultType to EnumType if needed
+    elif isinstance(semantic_type, ResultType):
+        # Ensure Result<T, E> enum exists and get it
+        from backend.generics.results import ensure_result_type_in_table
+        result_enum = ensure_result_type_in_table(codegen.enum_table, semantic_type.ok_type, semantic_type.err_type)
+        if result_enum is None:
+            return None
+        semantic_type = result_enum
+
+    if not isinstance(semantic_type, EnumType):
         return None
 
     if expr.method != "hash":

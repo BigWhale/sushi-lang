@@ -5,15 +5,15 @@ fn run_test() i32:
 
     # Verify all elements are now 42
     if (vogons.get(0)?? != 42):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (vogons.get(1)?? != 42):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (vogons.get(2)?? != 42):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (vogons.get(3)?? != 42):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (vogons.get(4)?? != 42):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     return Result.Ok(0)
 

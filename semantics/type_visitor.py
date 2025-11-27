@@ -18,7 +18,7 @@ from semantics.ast import (
     Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, MatchArm, Pattern, Break, Continue,
     # Expressions
     Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
-    UnaryOp, BinaryOp, Call, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom, CastExpr, EnumConstructor, TryExpr, RangeExpr
+    UnaryOp, BinaryOp, Call, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom, CastExpr, EnumConstructor, TryExpr, RangeExpr, Borrow
 )
 
 
@@ -77,12 +77,20 @@ class StatementValidator(RecursiveVisitor):
         # First validate the expression
         self.type_validator.validate_expression(node.expr)
 
-        # Check if the expression evaluates to Result<T>
+        # Check if the expression evaluates to Result<T, E>
         expr_type = self.type_validator.infer_expression_type(node.expr)
         if expr_type is not None:
-            from semantics.typesys import EnumType, BuiltinType
-            if isinstance(expr_type, EnumType) and expr_type.name.startswith("Result<"):
-                # Extract T from Result<T>
+            from semantics.typesys import EnumType, BuiltinType, ResultType
+
+            # Handle ResultType (semantic representation)
+            if isinstance(expr_type, ResultType):
+                # Skip warning if T is blank type (~)
+                # Blank functions have no meaningful return value to handle
+                if expr_type.ok_type != BuiltinType.BLANK:
+                    er.emit(self.type_validator.reporter, er.ERR.CW2001, node.expr.loc)
+            # Handle EnumType (monomorphized representation)
+            elif isinstance(expr_type, EnumType) and expr_type.name.startswith("Result<"):
+                # Extract T from Result<T, E>
                 ok_variant = expr_type.get_variant("Ok")
                 if ok_variant and ok_variant.associated_types:
                     t_type = ok_variant.associated_types[0]
@@ -92,7 +100,7 @@ class StatementValidator(RecursiveVisitor):
                     if t_type == BuiltinType.BLANK:
                         return
 
-                # Emit warning for unused Result<T> (where T is not blank)
+                # Emit warning for unused Result<T, E> (where T is not blank)
                 er.emit(self.type_validator.reporter, er.ERR.CW2001, node.expr.loc)
 
     def visit_print(self, node: Print) -> None:
@@ -250,6 +258,11 @@ class ExpressionValidator(RecursiveVisitor):
         if hasattr(temp_method_call, 'inferred_return_type') and temp_method_call.inferred_return_type is not None:
             node.inferred_return_type = temp_method_call.inferred_return_type
 
+        # CRITICAL: Copy resolved_enum_type back to the DotCall node for codegen
+        # This is set by Result<T>/Maybe<T> method validation
+        if hasattr(temp_method_call, 'resolved_enum_type') and temp_method_call.resolved_enum_type is not None:
+            node.resolved_enum_type = temp_method_call.resolved_enum_type
+
     def visit_arrayliteral(self, node: ArrayLiteral) -> None:
         """Validate array literal."""
         self.type_validator._validate_array_literal(node)
@@ -323,6 +336,51 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         """Initialize with reference to the main type validator."""
         self.type_validator = type_validator
 
+    # === Utility methods ===
+
+    def _resolve_generic_to_semantic_type(self, generic_type: 'Type') -> 'Type':
+        """Resolve GenericTypeRef to semantic types (ResultType, etc.) where applicable.
+
+        This centralizes the conversion logic for special generic types that have
+        semantic representations beyond simple monomorphization.
+
+        Args:
+            generic_type: The type to potentially resolve (may be GenericTypeRef or other)
+
+        Returns:
+            Resolved semantic type (ResultType, etc.) or original type if no resolution needed
+
+        Examples:
+            GenericTypeRef("Result", [i32, MyError]) → ResultType(i32, MyError)
+            GenericTypeRef("Maybe", [i32]) → GenericTypeRef("Maybe", [i32])  # no change
+        """
+        from semantics.generics.types import GenericTypeRef
+        from semantics.typesys import ResultType
+        from semantics.type_resolution import resolve_unknown_type
+
+        # Only process GenericTypeRef types
+        if not isinstance(generic_type, GenericTypeRef):
+            return generic_type
+
+        # Special handling for Result<T, E> - convert to ResultType
+        if generic_type.base_name == "Result" and len(generic_type.type_args) == 2:
+            # Recursively resolve type arguments in case they're also generic
+            ok_type = resolve_unknown_type(
+                generic_type.type_args[0],
+                self.type_validator.struct_table.by_name,
+                self.type_validator.enum_table.by_name
+            )
+            err_type = resolve_unknown_type(
+                generic_type.type_args[1],
+                self.type_validator.struct_table.by_name,
+                self.type_validator.enum_table.by_name
+            )
+            return ResultType(ok_type=ok_type, err_type=err_type)
+
+        # For other generic types (Maybe, Own, etc.), return as-is
+        # They will be handled by monomorphization
+        return generic_type
+
     # === Type inference methods ===
 
     def visit_intlit(self, node: IntLit) -> Optional[Type]:
@@ -371,7 +429,12 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return self.type_validator._infer_index_access_type(node)
 
     def visit_memberaccess(self, node: MemberAccess) -> Optional[Type]:
-        """Infer member access type (struct field access)."""
+        """Infer member access type (struct field access).
+
+        For fields with generic types like Result<T, E>, this resolves them to their
+        semantic type representations (ResultType) for compatibility with pattern matching
+        and other type operations.
+        """
         # Get the type of the receiver (the struct)
         receiver_type = self.type_validator.infer_expression_type(node.receiver)
 
@@ -383,7 +446,11 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             # Fields are stored as tuples of (field_name, field_type)
             for field_name, field_type in receiver_type.fields:
                 if field_name == node.member:
-                    return field_type
+                    # Resolve generic types to semantic types where applicable
+                    # E.g., GenericTypeRef("Result", [T, E]) → ResultType(T, E)
+                    # This ensures pattern matching and other operations work correctly
+                    resolved_type = self._resolve_generic_to_semantic_type(field_type)
+                    return resolved_type
 
         return None
 
@@ -503,17 +570,31 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             # These functions return bool (i8)
             return BuiltinType.BOOL
         if function_name == 'file_size':
-            # file_size() returns Result<i64>
-            result_i64_name = "Result<i64>"
-            if result_i64_name in self.type_validator.enum_table.by_name:
-                return self.type_validator.enum_table.by_name[result_i64_name]
-            return None
+            # file_size() returns Result<i64, FileError>
+            from semantics.typesys import ResultType, UnknownType
+            from semantics.type_resolution import resolve_unknown_type
+
+            # Get FileError enum type
+            file_error = self.type_validator.enum_table.by_name.get("FileError")
+            if file_error is None:
+                # Fallback to UnknownType if FileError not registered yet
+                file_error = UnknownType("FileError")
+
+            # Return ResultType - it will be resolved to EnumType when needed
+            return ResultType(ok_type=BuiltinType.I64, err_type=file_error)
         if function_name in {'remove', 'rename', 'copy', 'mkdir', 'rmdir'}:
-            # These functions return Result<i32>
-            result_i32_name = "Result<i32>"
-            if result_i32_name in self.type_validator.enum_table.by_name:
-                return self.type_validator.enum_table.by_name[result_i32_name]
-            return None
+            # These functions return Result<i32, FileError>
+            from semantics.typesys import ResultType, UnknownType
+            from semantics.type_resolution import resolve_unknown_type
+
+            # Get FileError enum type
+            file_error = self.type_validator.enum_table.by_name.get("FileError")
+            if file_error is None:
+                # Fallback to UnknownType if FileError not registered yet
+                file_error = UnknownType("FileError")
+
+            # Return ResultType - it will be resolved to EnumType when needed
+            return ResultType(ok_type=BuiltinType.I32, err_type=file_error)
 
         # Check for math module functions
         if function_name in {'abs', 'min', 'max', 'sqrt', 'pow', 'floor', 'ceil', 'round', 'trunc'}:
@@ -539,14 +620,45 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         # Otherwise, check if it's a function call
         if function_name in self.type_validator.func_table.by_name:
             func_sig = self.type_validator.func_table.by_name[function_name]
-            # All functions implicitly return Result<T> where T is the declared return type
-            # Look up the monomorphized Result<T> in the enum table
+            # Functions can declare explicit Result<T, E> or just T (implicit Result<T, StdError>)
             if func_sig.ret_type is not None:
-                result_enum_name = f"Result<{func_sig.ret_type}>"
-                if result_enum_name in self.type_validator.enum_table.by_name:
-                    return self.type_validator.enum_table.by_name[result_enum_name]
-            # Fallback to declared return type (shouldn't happen after monomorphization)
-            return func_sig.ret_type
+                from semantics.generics.types import GenericTypeRef
+                from semantics.typesys import ResultType
+                from semantics.type_resolution import resolve_unknown_type
+
+                # If function already returns ResultType, return it as-is
+                if isinstance(func_sig.ret_type, ResultType):
+                    return func_sig.ret_type
+
+                # If function declares Result<T, E>, resolve and return it
+                if isinstance(func_sig.ret_type, GenericTypeRef) and func_sig.ret_type.base_name == "Result":
+                    # Resolve GenericTypeRef("Result") to ResultType
+                    return resolve_unknown_type(
+                        func_sig.ret_type,
+                        self.type_validator.struct_table.by_name,
+                        self.type_validator.enum_table.by_name
+                    )
+                elif func_sig.err_type is not None:
+                    # Implicit Result syntax: fn foo() i32 | MyError
+                    # Construct ResultType(ok_type=i32, err_type=MyError)
+                    err_type = resolve_unknown_type(
+                        func_sig.err_type,
+                        self.type_validator.struct_table.by_name,
+                        self.type_validator.enum_table.by_name
+                    )
+                    return ResultType(ok_type=func_sig.ret_type, err_type=err_type)
+                else:
+                    # Default implicit Result syntax: fn foo() i32 (defaults to StdError)
+                    # Construct ResultType(ok_type=i32, err_type=StdError)
+                    err_type = self.type_validator.enum_table.by_name.get("StdError")
+                    if err_type is not None:
+                        return ResultType(ok_type=func_sig.ret_type, err_type=err_type)
+                    # Fallback to old behavior if StdError not found
+                    result_enum_name = f"Result<{func_sig.ret_type}>"
+                    if result_enum_name in self.type_validator.enum_table.by_name:
+                        return self.type_validator.enum_table.by_name[result_enum_name]
+                # Fallback to declared return type
+                return func_sig.ret_type
         return None
 
     def visit_methodcall(self, node: MethodCall) -> Optional[Type]:
@@ -691,6 +803,23 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         """Infer type of range expression - always Iterator<i32>."""
         from semantics.passes.types.inference import infer_range_expression_type
         return infer_range_expression_type(self.type_validator, node)
+
+    def visit_borrow(self, node: Borrow) -> Optional[Type]:
+        """Infer type of borrow expression (&peek expr or &poke expr).
+
+        Returns ReferenceType with the correct mutability based on the
+        borrow mode (peek or poke) specified in the node.
+        """
+        from semantics.typesys import ReferenceType, BorrowMode
+
+        # Get the type of the borrowed expression
+        inner_type = self.type_validator.infer_expression_type(node.expr)
+        if inner_type is None:
+            return None
+
+        # Create ReferenceType with the correct mutability
+        mutability = BorrowMode.PEEK if node.mutability == "peek" else BorrowMode.POKE
+        return ReferenceType(referenced_type=inner_type, mutability=mutability)
 
     def generic_visit(self, node) -> Optional[Type]:
         """Default behavior for unknown nodes."""

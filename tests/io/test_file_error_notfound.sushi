@@ -13,7 +13,7 @@ fn main() i32:
         FileResult.Ok(f) ->
             stderr.write("Error: should not have succeeded!\n")
             f.close()
-            return Result.Err()
+            return Result.Err(StdError.Error)
         FileResult.Err(err) ->
             # We have the FileError enum value, now match on it
             match err:
@@ -23,6 +23,6 @@ fn main() i32:
                     return Result.Ok(0)
                 _ ->
                     stderr.write("Error: unexpected error type\n")
-                    return Result.Err()
+                    return Result.Err(StdError.Error)
 
     return Result.Ok(0)

@@ -1,0 +1,37 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: Result field in struct Ok works
+# EXPECT_STDOUT_CONTAINS: PASS: Result field in struct Err works
+# EXPECT_STDERR_EMPTY: true
+
+# Tests Result as struct field
+
+enum OpError:
+    Failed
+
+struct Operation:
+    string name
+    Result<i32, OpError> result
+
+fn main() i32:
+    let Operation op1 = Operation("add", Result.Ok(42))
+    let Operation op2 = Operation("sub", Result.Err(OpError.Failed))
+
+    match op1.result:
+        Result.Ok(value) ->
+            if (value == 42):
+                println("PASS: Result field in struct Ok works")
+            else:
+                println("FAIL: Wrong value in struct field")
+                return Result.Ok(1)
+        Result.Err(_) ->
+            println("FAIL: Got error in op1")
+            return Result.Ok(1)
+
+    match op2.result:
+        Result.Ok(_) ->
+            println("FAIL: Should get error in op2")
+            return Result.Ok(1)
+        Result.Err(OpError.Failed) ->
+            println("PASS: Result field in struct Err works")
+
+    return Result.Ok(0)

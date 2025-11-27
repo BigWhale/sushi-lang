@@ -5,7 +5,7 @@
 fn returns_value(i32 x) i32:
     if (x > 0):
         return Result.Ok(x)
-    return Result.Err()
+    return Result.Err(StdError.Error)
 
 fn main() i32:
     match returns_value(100):

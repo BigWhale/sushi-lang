@@ -23,6 +23,7 @@ import llvmlite.ir as ir
 from backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from internals import errors as er
 from internals.errors import raise_internal_error
+from backend.utils import require_builder
 from stdlib.src.common import register_builtin_method, BuiltinMethod
 from backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
 
@@ -132,8 +133,7 @@ def _emit_struct_hash(prim_type: Type) -> Any:
         if len(call.args) != 0:
             raise_internal_error("CE0054", got=len(call.args))
 
-        if codegen.builder is None:
-            raise_internal_error("CE0009")
+        builder = require_builder(codegen)
         builder = codegen.builder
         u64 = ir.IntType(INT64_BIT_WIDTH)
 
@@ -181,8 +181,7 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
     from semantics.ast import MethodCall, Name
     from semantics.typesys import BuiltinType
 
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
+    builder = require_builder(codegen)
     builder = codegen.builder
 
     # For primitive types, call their hash() method inline
@@ -230,8 +229,27 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
 
         return nested_hash
 
+    # For Result<T, E> types (GenericTypeRef or ResultType), convert to EnumType and hash
+    from semantics.generics.types import GenericTypeRef
+    from semantics.typesys import ResultType
+    if isinstance(field_type, GenericTypeRef) and field_type.base_name == "Result":
+        # Convert GenericTypeRef("Result", [T, E]) to Result enum
+        if len(field_type.type_args) >= 2:
+            from backend.generics.results import ensure_result_type_in_table
+            ok_type = field_type.type_args[0]
+            err_type = field_type.type_args[1]
+            result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type)
+            if result_enum is not None:
+                field_type = result_enum
+    elif isinstance(field_type, ResultType):
+        # Convert ResultType to Result enum
+        from backend.generics.results import ensure_result_type_in_table
+        result_enum = ensure_result_type_in_table(codegen.enum_table, field_type.ok_type, field_type.err_type)
+        if result_enum is not None:
+            field_type = result_enum
+
     # For enum types (like Maybe<i32>, Result<T>), call their hash() method
-    elif isinstance(field_type, EnumType):
+    if isinstance(field_type, EnumType):
         from stdlib.src.common import get_builtin_method
 
         hash_method = get_builtin_method(field_type, "hash")

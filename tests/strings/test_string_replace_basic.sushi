@@ -8,7 +8,7 @@ fn main() i32:
 
     if (result != "mostly harmless"):
         println("ERROR: Expected 'mostly harmless', got '{result}'")
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Test replacement in middle of string
     let string guide = "The Guide is harmless".replace("harmless", "mostly harmless")
@@ -16,7 +16,7 @@ fn main() i32:
 
     if (guide != "The Guide is mostly harmless"):
         println("ERROR: Expected 'The Guide is mostly harmless', got '{guide}'")
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     println("All basic replacement tests passed!")
     return Result.Ok(0)

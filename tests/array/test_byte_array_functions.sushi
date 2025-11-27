@@ -97,7 +97,7 @@ fn test_modify_array() ~:
 fn test_extract_byte() ~:
     println("Test 4: Extract single byte")
     let u8[] data = from([100, 101, 102])
-    let Result<u8> first = get_first_byte(data)
+    let Result<u8, StdError> first = get_first_byte(data)
     println("First byte: {first.realise(0 as u8)}")
     return Result.Ok(~)
 
@@ -182,7 +182,7 @@ fn test_chain() ~:
 fn test_empty() ~:
     println("Test 10: Empty array")
     let u8[] empty = new()
-    let Result<u8> empty_first = get_first_byte(empty)
+    let Result<u8, StdError> empty_first = get_first_byte(empty)
     println("Empty array first byte: {empty_first.realise(0 as u8)}")
     return Result.Ok(~)
 

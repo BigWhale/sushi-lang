@@ -38,10 +38,10 @@ fn main() i32:
             println("File written successfully")
         FileResult.Err(FileError.PermissionDenied()) ->
             println("Permission denied")
-            return Result.Err()
+            return Result.Err(StdError.Error)
         FileResult.Err(_) ->
             println("Failed to create file")
-            return Result.Err()
+            return Result.Err(StdError.Error)
 
     # Read from file
     println("Reading guide entry...")
@@ -53,12 +53,12 @@ fn main() i32:
             println("Content: {content}")
         FileResult.Err(FileError.NotFound()) ->
             println("File not found")
-            return Result.Err()
+            return Result.Err(StdError.Error)
         FileResult.Err(FileError.PermissionDenied()) ->
             println("Permission denied")
-            return Result.Err()
+            return Result.Err(StdError.Error)
         FileResult.Err(_) ->
             println("Failed to read file")
-            return Result.Err()
+            return Result.Err(StdError.Error)
 
     return Result.Ok(0)

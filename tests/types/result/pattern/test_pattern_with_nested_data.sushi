@@ -1,0 +1,47 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: NetworkError matched
+# EXPECT_STDOUT_CONTAINS: PASS: AuthError matched
+# EXPECT_STDERR_EMPTY: true
+
+# Tests pattern matching with enum variants containing data
+
+struct ErrorInfo:
+    i32 code
+    string message
+
+enum ApiError:
+    NetworkError
+    AuthError
+    ServerError
+
+fn call_api(i32 code) string | ApiError:
+    if (code == 1):
+        return Result.Err(ApiError.NetworkError)
+    if (code == 2):
+        return Result.Err(ApiError.AuthError)
+    if (code == 3):
+        return Result.Err(ApiError.ServerError)
+    return Result.Ok("success")
+
+fn main() i32:
+    match call_api(1):
+        Result.Ok(_) ->
+            println("FAIL: Should get NetworkError")
+            return Result.Ok(1)
+        Result.Err(ApiError.NetworkError) ->
+            println("PASS: NetworkError matched")
+        Result.Err(_) ->
+            println("FAIL: Wrong error")
+            return Result.Ok(1)
+
+    match call_api(2):
+        Result.Ok(_) ->
+            println("FAIL: Should get AuthError")
+            return Result.Ok(1)
+        Result.Err(ApiError.AuthError) ->
+            println("PASS: AuthError matched")
+        Result.Err(_) ->
+            println("FAIL: Wrong error")
+            return Result.Ok(1)
+
+    return Result.Ok(0)

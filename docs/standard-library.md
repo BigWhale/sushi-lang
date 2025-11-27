@@ -22,6 +22,7 @@ Complete reference for Sushi's standard library modules and types.
 - [Math](stdlib/math.md) - Mathematical operations (abs, min, max, sqrt, pow, trig)
 - [Time](stdlib/time.md) - High-precision sleep functions
 - [Environment](stdlib/env.md) - Environment variables and system information
+- [Process Control](stdlib/process.md) - Process management (getcwd, chdir, exit, getpid, getuid)
 - [Platform](stdlib/platform.md) - Platform detection and OS-specific utilities
 
 ## Quick Reference
@@ -36,6 +37,7 @@ use <io/files>             # File operations
 use <math>                 # Math functions
 use <time>                 # Sleep functions
 use <sys/env>              # Environment variables
+use <sys/process>          # Process control
 ```
 
 ### Common Patterns

@@ -8,6 +8,7 @@ Implements IR generation for:
 
 import llvmlite.ir as ir
 from stdlib.src.libc_declarations import declare_fseek, declare_ftell
+from stdlib.src.type_definitions import get_unit_enum_type
 
 
 def generate_seek(module: ir.Module) -> None:
@@ -25,10 +26,9 @@ def generate_seek(module: ir.Module) -> None:
     i8 = ir.IntType(8)
     i8_ptr = i8.as_pointer()
 
-    # SeekFrom enum struct type (simplified - we only care about the tag)
-    # The actual struct size depends on the largest variant, but we can just use
-    # a pointer and extract the tag field
-    seekfrom_struct_ty = ir.LiteralStructType([i32, ir.ArrayType(i8, 0)])
+    # SeekFrom is a unit enum (no associated data)
+    # Use the standard unit enum type helper
+    seekfrom_struct_ty = get_unit_enum_type()
 
     # Function signature: i32 @sushi_file_seek(ptr %file_ptr, i64 %offset, ptr %seekfrom)
     fn_ty = ir.FunctionType(i32, [i8_ptr, i64, seekfrom_struct_ty.as_pointer()])

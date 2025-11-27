@@ -5,14 +5,14 @@ fn main() i32:
 
     # Verify all elements are now 7
     if (babel_fish[0] != 7):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (babel_fish[1] != 7):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (babel_fish[2] != 7):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (babel_fish[3] != 7):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (babel_fish[4] != 7):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     return Result.Ok(0)

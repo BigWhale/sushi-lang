@@ -1,0 +1,68 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: Multiple error variants work
+# EXPECT_STDERR_EMPTY: true
+
+# Tests Result with error enum containing multiple variants
+
+enum HttpError:
+    BadRequest
+    Unauthorized
+    Forbidden
+    NotFound
+    InternalServerError
+
+fn handle_request(i32 status) string | HttpError:
+    if (status == 400):
+        return Result.Err(HttpError.BadRequest)
+    if (status == 401):
+        return Result.Err(HttpError.Unauthorized)
+    if (status == 403):
+        return Result.Err(HttpError.Forbidden)
+    if (status == 404):
+        return Result.Err(HttpError.NotFound)
+    if (status == 500):
+        return Result.Err(HttpError.InternalServerError)
+    return Result.Ok("Success")
+
+fn main() i32:
+    let i32 error_count = 0
+
+    match handle_request(400):
+        Result.Err(HttpError.BadRequest) ->
+            error_count := error_count + 1
+        _ ->
+            return Result.Ok(1)
+
+    match handle_request(401):
+        Result.Err(HttpError.Unauthorized) ->
+            error_count := error_count + 1
+        _ ->
+            return Result.Ok(1)
+
+    match handle_request(403):
+        Result.Err(HttpError.Forbidden) ->
+            error_count := error_count + 1
+        _ ->
+            return Result.Ok(1)
+
+    match handle_request(404):
+        Result.Err(HttpError.NotFound) ->
+            error_count := error_count + 1
+        _ ->
+            return Result.Ok(1)
+
+    match handle_request(500):
+        Result.Err(HttpError.InternalServerError) ->
+            error_count := error_count + 1
+        _ ->
+            return Result.Ok(1)
+
+    match handle_request(200):
+        Result.Ok(msg) ->
+            if (msg == "Success" and error_count == 5):
+                println("PASS: Multiple error variants work")
+                return Result.Ok(0)
+            else:
+                return Result.Ok(1)
+        _ ->
+            return Result.Ok(1)

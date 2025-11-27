@@ -87,12 +87,23 @@ def handle_cast(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
 
 
 def expr_borrow(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
-    """Handle borrow expression: &expr."""
+    """Handle borrow expression: &peek expr or &poke expr."""
     from semantics.ast_builder.utils.tree_navigation import first_tree_child
+
+    # Extract borrow mode (peek or poke)
+    mutability = None
+    for child in t.children:
+        if isinstance(child, Token) and child.type == "BORROW_MODE":
+            mutability = child.value.lower()  # "peek" or "poke"
+            break
+
+    if mutability is None:
+        # This should not happen with the new grammar
+        raise ValueError("Borrow expression missing borrow mode (peek/poke)")
 
     sub = first_tree_child(t)
     borrowed_expr = ast_builder._expr(sub)
-    return Borrow(expr=borrowed_expr, loc=span_of(t))
+    return Borrow(expr=borrowed_expr, mutability=mutability, loc=span_of(t))
 
 def parse_range_expr(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
     """Parse range expression: start..end or start..=end

@@ -30,12 +30,28 @@ from semantics.error_reporter import PassErrorReporter
 
 @dataclass
 class BorrowState:
-    """Tracks the borrow state of a single variable."""
+    """Tracks the borrow state of a single variable.
+
+    Supports two borrow modes:
+    - &poke: Exclusive (read-write) - only one at a time
+    - &peek: Shared (read-only) - multiple allowed
+
+    Rules:
+    - Multiple &peek borrows allowed
+    - Only one &poke borrow at a time
+    - Cannot have &peek and &poke borrows simultaneously
+    """
     name: str
     var_type: Optional[Type] = None  # Variable type (for move semantics)
-    is_borrowed: bool = False  # Currently has an active borrow
+    poke_borrow_count: int = 0  # Number of active &poke borrows (max 1)
+    peek_borrow_count: int = 0  # Number of active &peek borrows (unlimited)
     is_moved: bool = False  # Ownership has been transferred
     is_destroyed: bool = False  # Variable has been explicitly destroyed (via .destroy())
+
+    @property
+    def is_borrowed(self) -> bool:
+        """Returns True if variable has any active borrows."""
+        return self.poke_borrow_count > 0 or self.peek_borrow_count > 0
 
 
 class BorrowChecker:
@@ -128,12 +144,12 @@ class BorrowChecker:
                 if var_name in self.borrow_state:
                     state = self.borrow_state[var_name]
 
-                    # Reference parameters themselves are not "borrowed" in the tracking sense
-                    # The parameter IS the borrow, so we can rebind through it
-                    # This implements mutable reference semantics
+                    # Reference parameters: only &poke allows modification
                     if isinstance(state.var_type, ReferenceType):
-                        # Allow rebind through reference parameters
-                        pass
+                        # Check if it's a &peek reference (read-only)
+                        if state.var_type.is_peek():
+                            self.err.emit(er.ERR.CE2408, stmt.loc, name=var_name)
+                        # &poke references allow rebind (mutable reference semantics)
                     elif state.is_borrowed:
                         self.err.emit(er.ERR.CE2401, stmt.loc, name=var_name)
 
@@ -299,6 +315,9 @@ class BorrowChecker:
         elif isinstance(expr, CastExpr):
             self._check_expr(expr.expr)
 
+        elif isinstance(expr, TryExpr):
+            self._check_expr(expr.expr)
+
         elif isinstance(expr, InterpolatedString):
             for part in expr.parts:
                 if not isinstance(part, str):
@@ -307,14 +326,21 @@ class BorrowChecker:
         # Literals and other leaf expressions don't need checking
 
     def _check_borrow(self, borrow: Borrow) -> None:
-        """Check borrow expression: &expr
+        """Check borrow expression: &peek expr or &poke expr
 
         Supports:
-        - Variables: &x
-        - Member access: &obj.field, &obj.nested.field
+        - Variables: &peek x, &poke x
+        - Member access: &peek obj.field, &poke obj.nested.field
+
+        Borrow rules:
+        - Multiple &peek borrows allowed (read-only)
+        - Only one &poke borrow at a time (exclusive)
+        - Cannot have &peek and &poke borrows simultaneously
         """
+        is_poke = borrow.mutability == "poke"
+
         if isinstance(borrow.expr, Name):
-            # Original logic for variable borrows
+            # Variable borrows
             var_name = borrow.expr.id
 
             # Check if variable exists in borrow state
@@ -329,18 +355,31 @@ class BorrowChecker:
                 self.err.emit(er.ERR.CE2405, borrow.loc, name=var_name)
                 return
 
-            # Check if variable is already borrowed (only one borrow at a time)
-            if state.is_borrowed:
-                self.err.emit(er.ERR.CE2403, borrow.loc, name=var_name)
-                return
+            # Check borrow compatibility based on mode
+            if is_poke:
+                # &poke: exclusive borrow - no other borrows allowed
+                if state.poke_borrow_count > 0:
+                    self.err.emit(er.ERR.CE2403, borrow.loc, name=var_name)
+                    return
+                if state.peek_borrow_count > 0:
+                    self.err.emit(er.ERR.CE2407, borrow.loc, name=var_name)
+                    return
+                # Warn when creating &poke of a variable that is itself a &poke reference
+                # This is a nested mutable borrow - potentially dangerous but allowed
+                if isinstance(state.var_type, ReferenceType) and state.var_type.is_poke():
+                    self.err.emit(er.ERR.CW2409, borrow.loc, name=var_name)
+                state.poke_borrow_count = 1
+            else:
+                # &peek: shared borrow - only check for poke conflict
+                if state.poke_borrow_count > 0:
+                    self.err.emit(er.ERR.CE2407, borrow.loc, name=var_name)
+                    return
+                state.peek_borrow_count += 1
 
-            # Mark variable as borrowed
-            state.is_borrowed = True
             self.active_borrows.add(var_name)
 
         elif isinstance(borrow.expr, MemberAccess):
-            # New logic for member access borrows
-            # Validate the base expression is borrowable
+            # Member access borrows
             base = self._get_member_access_base(borrow.expr)
 
             if not isinstance(base, Name):
@@ -359,12 +398,23 @@ class BorrowChecker:
                 self.err.emit(er.ERR.CE2405, borrow.loc, name=base_var)
                 return
 
-            if state.is_borrowed:
-                self.err.emit(er.ERR.CE2403, borrow.loc, name=base_var)
-                return
+            # Check borrow compatibility based on mode
+            if is_poke:
+                # &poke: exclusive borrow - no other borrows allowed
+                if state.poke_borrow_count > 0:
+                    self.err.emit(er.ERR.CE2403, borrow.loc, name=base_var)
+                    return
+                if state.peek_borrow_count > 0:
+                    self.err.emit(er.ERR.CE2407, borrow.loc, name=base_var)
+                    return
+                state.poke_borrow_count = 1
+            else:
+                # &peek: shared borrow - only check for poke conflict
+                if state.poke_borrow_count > 0:
+                    self.err.emit(er.ERR.CE2407, borrow.loc, name=base_var)
+                    return
+                state.peek_borrow_count += 1
 
-            # Mark base variable as borrowed
-            state.is_borrowed = True
             self.active_borrows.add(base_var)
 
         else:
@@ -410,7 +460,9 @@ class BorrowChecker:
         """Clear all active borrows (called after expression evaluation)."""
         for var_name in self.active_borrows:
             if var_name in self.borrow_state:
-                self.borrow_state[var_name].is_borrowed = False
+                state = self.borrow_state[var_name]
+                state.poke_borrow_count = 0
+                state.peek_borrow_count = 0
         self.active_borrows.clear()
 
     def _expr_to_string(self, expr: Expr) -> str:

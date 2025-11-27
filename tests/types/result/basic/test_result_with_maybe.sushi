@@ -1,0 +1,56 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: Result<Maybe<T>, E> Some works
+# EXPECT_STDOUT_CONTAINS: PASS: Result<Maybe<T>, E> None works
+# EXPECT_STDOUT_CONTAINS: PASS: Result<Maybe<T>, E> Err works
+# EXPECT_STDERR_EMPTY: true
+
+# Tests Result<Maybe<T>, E> combination
+
+enum MyError:
+    Error
+
+fn find_value(string key) Result<Maybe<i32>, MyError>:
+    if (key == "fail"):
+        return Result.Err(MyError.Error)
+    if (key == "none"):
+        return Result.Ok(Maybe.None())
+    if (key == "some"):
+        return Result.Ok(Maybe.Some(42))
+    return Result.Ok(Maybe.None())
+
+fn main() i32:
+    match find_value("some"):
+        Result.Ok(maybe_val) ->
+            match maybe_val:
+                Maybe.Some(n) ->
+                    if (n == 42):
+                        println("PASS: Result<Maybe<T>, E> Some works")
+                    else:
+                        println("FAIL: Wrong value")
+                        return Result.Ok(1)
+                Maybe.None() ->
+                    println("FAIL: Got None instead of Some")
+                    return Result.Ok(1)
+        Result.Err(_) ->
+            println("FAIL: Got Err")
+            return Result.Ok(1)
+
+    match find_value("none"):
+        Result.Ok(maybe_val) ->
+            if (maybe_val.is_none()):
+                println("PASS: Result<Maybe<T>, E> None works")
+            else:
+                println("FAIL: Should be None")
+                return Result.Ok(1)
+        Result.Err(_) ->
+            println("FAIL: Got Err")
+            return Result.Ok(1)
+
+    match find_value("fail"):
+        Result.Ok(_) ->
+            println("FAIL: Should get Err")
+            return Result.Ok(1)
+        Result.Err(MyError.Error) ->
+            println("PASS: Result<Maybe<T>, E> Err works")
+
+    return Result.Ok(0)

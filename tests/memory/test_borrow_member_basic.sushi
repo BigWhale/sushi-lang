@@ -6,13 +6,13 @@ struct Config:
     i32 port
     string host
 
-fn modify_port(&i32 p) ~:
+fn modify_port(&poke i32 p) ~:
     p := p + 100
     return Result.Ok(~)
 
 fn main() i32:
     let Config cfg = Config(8080, "localhost")
     println(cfg.port)
-    modify_port(&cfg.port)
+    modify_port(&poke cfg.port)
     println(cfg.port)
     return Result.Ok(0)

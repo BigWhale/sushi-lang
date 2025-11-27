@@ -4,7 +4,7 @@
 
 fn main() i32:
     let Maybe<i32> inner = Maybe.Some(42)
-    let Result<Maybe<i32>> outer = Result.Ok(inner)
+    let Result<Maybe<i32>, StdError> outer = Result.Ok(inner)
     if (outer):
         return Result.Ok(0)
     return Result.Ok(1)

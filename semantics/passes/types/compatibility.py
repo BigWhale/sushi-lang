@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Optional
 
 from internals.report import Span
 from internals import errors as er
-from semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, EnumType
+from semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, EnumType, ReferenceType, BorrowMode
 from semantics.ast import Expr, ArrayLiteral, DynamicArrayNew, DynamicArrayFrom, IntLit
 from semantics.type_resolution import resolve_unknown_type
 from .inference import infer_dynamic_array_from_type
@@ -163,11 +163,53 @@ def types_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -
     - Direct type equality
     - UnknownType -> StructType/EnumType resolution
     - GenericTypeRef -> EnumType/StructType resolution (for generic types like Result<T>, Box<T>)
+    - ResultType compatibility (semantic Result<T, E> vs GenericTypeRef)
+    - ReferenceType compatibility with coercion (&poke T -> &peek T allowed)
     - Recursive comparison for container types (arrays, etc.)
     """
+    from semantics.typesys import ResultType
+    from semantics.generics.types import GenericTypeRef
+
     # Quick check for direct equality
     if actual == expected:
         return True
+
+    # Reference type compatibility with coercion
+    # - &poke T can be passed where &peek T is expected (safe downgrade)
+    # - &peek T cannot be passed where &poke T is expected
+    if isinstance(actual, ReferenceType) and isinstance(expected, ReferenceType):
+        # First check if referenced types are compatible
+        if not types_compatible(validator, actual.referenced_type, expected.referenced_type):
+            return False
+
+        # Check mutability compatibility
+        if actual.mutability == expected.mutability:
+            return True  # Same mutability
+        elif actual.mutability == BorrowMode.POKE and expected.mutability == BorrowMode.PEEK:
+            return True  # &poke -> &peek coercion allowed
+        else:
+            return False  # &peek -> &poke not allowed
+
+    # Special handling for ResultType compatibility
+    # Case 1: actual is ResultType, expected is GenericTypeRef("Result", [T, E])
+    if isinstance(actual, ResultType) and isinstance(expected, GenericTypeRef):
+        if expected.base_name == "Result" and len(expected.type_args) == 2:
+            # Recursively compare T and E
+            ok_compatible = types_compatible(validator, actual.ok_type, expected.type_args[0])
+            err_compatible = types_compatible(validator, actual.err_type, expected.type_args[1])
+            return ok_compatible and err_compatible
+
+    # Case 2: actual is GenericTypeRef("Result", [T, E]), expected is ResultType
+    if isinstance(actual, GenericTypeRef) and isinstance(expected, ResultType):
+        if actual.base_name == "Result" and len(actual.type_args) == 2:
+            # Recursively compare T and E
+            ok_compatible = types_compatible(validator, actual.type_args[0], expected.ok_type)
+            err_compatible = types_compatible(validator, actual.type_args[1], expected.err_type)
+            return ok_compatible and err_compatible
+
+    # Case 3: both are ResultType - use built-in equality
+    if isinstance(actual, ResultType) and isinstance(expected, ResultType):
+        return actual == expected
 
     # Step 1: Resolve GenericTypeRef to monomorphized EnumType or StructType (if applicable)
     resolved_actual = resolve_generic_type_ref(validator, actual)

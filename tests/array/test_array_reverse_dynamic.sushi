@@ -5,15 +5,15 @@ fn run_test() i32:
 
     # Verify order is reversed
     if (countdown.get(0)?? != 1):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (countdown.get(1)?? != 2):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (countdown.get(2)?? != 3):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (countdown.get(3)?? != 4):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (countdown.get(4)?? != 5):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     return Result.Ok(0)
 

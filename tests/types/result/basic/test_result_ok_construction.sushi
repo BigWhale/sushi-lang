@@ -1,0 +1,25 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: Ok construction works
+# EXPECT_STDERR_EMPTY: true
+
+# Tests basic Ok variant construction with implicit Result syntax
+
+enum MyError:
+    Error
+
+fn returns_ok() i32 | MyError:
+    return Result.Ok(42)
+
+fn main() i32:
+    match returns_ok():
+        Result.Ok(value) ->
+            if (value == 42):
+                println("PASS: Ok construction works")
+            else:
+                println("FAIL: Wrong value")
+                return Result.Ok(1)
+        Result.Err(_) ->
+            println("FAIL: Got Err instead of Ok")
+            return Result.Ok(1)
+
+    return Result.Ok(0)

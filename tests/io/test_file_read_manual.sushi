@@ -19,7 +19,7 @@ fn main() i32:
             out.close()
         FileResult.Err(_) ->
             stderr.write("Error: cannot create test file\n")
-            return Result.Err()
+            return Result.Err(StdError.Error)
 
     # Read file line by line manually using readln()
     let FileResult read_result = open("test_read_manual.txt", FileMode.Read())
@@ -46,6 +46,6 @@ fn main() i32:
             return Result.Ok(0)
         FileResult.Err(_) ->
             stderr.write("Error: cannot read test file\n")
-            return Result.Err()
+            return Result.Err(StdError.Error)
 
     return Result.Ok(0)

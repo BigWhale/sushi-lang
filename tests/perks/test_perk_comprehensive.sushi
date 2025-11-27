@@ -8,7 +8,7 @@ perk Displayable:
     fn display() string
 
 perk Comparable:
-    fn compare(&Point other) i32
+    fn compare(&poke Point other) i32
 
 # Test struct implementing multiple perks
 struct Point:
@@ -27,7 +27,7 @@ extend Point with Displayable:
         return "Point"
 
 extend Point with Comparable:
-    fn compare(&Point other) i32:
+    fn compare(&poke Point other) i32:
         if (self.x < other.x):
             return -1
         if (self.x > other.x):
@@ -45,7 +45,7 @@ fn main() i32:
     # Call perk methods
     let u64 h = p1.hash()
     let string s = p1.display()
-    let i32 cmp = p1.compare(&p2)
+    let i32 cmp = p1.compare(&poke p2)
 
     println(s)
     println(h)

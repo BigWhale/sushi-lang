@@ -12,7 +12,7 @@ fn parse_answer(string s) Maybe<i32>:
     return Result.Ok(Maybe.None())
 
 fn main() i32:
-    let Result<Maybe<i32>> result = parse_answer("42")
+    let Result<Maybe<i32>, StdError> result = parse_answer("42")
 
     match result:
         Result.Ok(val) ->
@@ -24,6 +24,6 @@ fn main() i32:
                 Maybe.None() ->
                     println("Not the answer")
                     return Result.Ok(1)
-        Result.Err() ->
+        Result.Err(_) ->
             println("Computation error")
             return Result.Ok(2)

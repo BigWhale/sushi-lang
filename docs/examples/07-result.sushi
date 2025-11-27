@@ -1,32 +1,32 @@
-# Example 07: Result<T> Error Handling
+# Example 07: Result<T, E> Error Handling
 #
 # Demonstrates:
-# - Result<T> as the foundation of error handling in Sushi
-# - Multiple error conditions with explicit Result.Err() returns
+# - Result<T, E> as the foundation of error handling in Sushi
+# - Multiple error conditions with explicit Result.Err(error_value) returns
 # - Boolean context checking (if (result) for Ok, else for Err)
 # - Safe unwrapping with .realise(default_value)
-# - Difference between storing Result<T> vs unwrapping immediately
+# - Difference between storing Result<T, E> vs unwrapping immediately
 # - Chaining result checks and handling
 #
-# Every function in Sushi implicitly returns Result<T>. This enables
+# Every function in Sushi implicitly returns Result<T, E>. This enables
 # explicit, type-safe error handling without exceptions. Functions must
-# handle all error paths and return Result.Ok() or Result.Err().
+# handle all error paths and return Result.Ok() or Result.Err(error_value).
 
 # Function demonstrating multiple error conditions.
 # Shows validation at multiple stages before performing computation.
-# Each error path logs a message and returns Result.Err().
+# Each error path logs a message and returns Result.Err(error_value).
 fn calculate_hyperspace_jump(i32 distance, i32 fuel) i32:
     # First validation: minimum fuel check.
     # Guard clauses at the top make error cases explicit.
     if (fuel < 10):
         println("Error: Insufficient fuel for hyperspace jump")
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Second validation: input sanity check.
     # Negative distance is logically invalid.
     if (distance < 0):
         println("Error: Cannot jump negative distance")
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Calculate required resources.
     # Complex logic can be broken down before the final check.
@@ -36,19 +36,19 @@ fn calculate_hyperspace_jump(i32 distance, i32 fuel) i32:
     # Compare computed requirements against available resources.
     if (required_fuel > fuel):
         println("Error: Not enough fuel for this distance")
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Success path: return computed result wrapped in Result.Ok().
     # Only reached if all validations passed.
     return Result.Ok(distance * 2)
 
 fn main() i32:
-    # Pattern 1: Store Result<T> and check it explicitly.
+    # Pattern 1: Store Result<T, E> and check it explicitly.
     # This is the most explicit approach, allowing separate handling
-    # of Ok and Err cases. Result<T> can be used in boolean context.
-    let Result<i32> jump1 = calculate_hyperspace_jump(1000, 50)
+    # of Ok and Err cases. Result<T, E> can be used in boolean context.
+    let Result<i32, StdError> jump1 = calculate_hyperspace_jump(1000, 50)
 
-    # Result<T> in boolean context: if (result) checks for Ok.
+    # Result<T, E> in boolean context: if (result) checks for Ok.
     # Inside the Ok branch, use .realise() to extract the value safely.
     if (jump1):
         let i32 result = jump1.realise(0)
@@ -60,10 +60,10 @@ fn main() i32:
     # Pattern 2: Unwrap immediately with .realise(default).
     # .realise(default) extracts the Ok value or returns default if Err.
     # This is convenient when you want a fallback value rather than
-    # branching logic. No Result<T> variable is stored.
+    # branching logic. No Result<T, E> variable is stored.
     let i32 jump2_result = calculate_hyperspace_jump(2000, 100).realise(-1)
 
-    # After .realise(), you have a plain value (not Result<T>).
+    # After .realise(), you have a plain value (not Result<T, E>).
     # Check the sentinel value to detect if it was an error.
     if (jump2_result == -1):
         println("Second jump failed, using default")
@@ -72,17 +72,17 @@ fn main() i32:
 
     # Pattern 3: Demonstrate error path.
     # This call will fail due to insufficient fuel (5 < required 50).
-    let Result<i32> jump3 = calculate_hyperspace_jump(5000, 5)
+    let Result<i32, StdError> jump3 = calculate_hyperspace_jump(5000, 5)
 
     if (jump3):
         println("This won't print")
     else:
-        # Error case: else branch executes for Result.Err()
+        # Error case: else branch executes for Result.Err(error_value)
         println("Third jump failed as expected")
 
     # Pattern 4: Error with negative input.
     # This demonstrates input validation failure.
-    let Result<i32> jump4 = calculate_hyperspace_jump(-100, 50)
+    let Result<i32, StdError> jump4 = calculate_hyperspace_jump(-100, 50)
 
     # Use .realise(0) to safely extract with default of 0.
     # If Err, we get 0 instead of the computed value.

@@ -9,7 +9,7 @@ fn get_value() i32:
 
 fn main() i32:
     # This should work - declaring a Result<i32> variable
-    let Result<i32> result = get_value()
+    let Result<i32, StdError> result = get_value()
 
     # This should work - using the variable with .realise()
     let i32 x = result.realise(0)

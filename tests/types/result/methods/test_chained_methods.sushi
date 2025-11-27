@@ -1,0 +1,40 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: Chained method calls on Ok work
+# EXPECT_STDOUT_CONTAINS: PASS: Chained method calls on Err work
+# EXPECT_STDERR_EMPTY: true
+
+# Tests chaining Result methods
+
+enum MyError:
+    Error
+
+fn get_result(bool success) i32 | MyError:
+    if (success):
+        return Result.Ok(42)
+    return Result.Err(MyError.Error)
+
+fn main() i32:
+    let Result<i32, MyError> r1 = get_result(true)
+    if (r1.is_ok() and not r1.is_err()):
+        let i32 value = r1.realise(0)
+        if (value == 42):
+            println("PASS: Chained method calls on Ok work")
+        else:
+            println("FAIL: Wrong value")
+            return Result.Ok(1)
+    else:
+        println("FAIL: Wrong Ok status")
+        return Result.Ok(1)
+
+    let Result<i32, MyError> r2 = get_result(false)
+    if (r2.is_err() and not r2.is_ok()):
+        let i32 value = r2.realise(99)
+        if (value == 99):
+            println("PASS: Chained method calls on Err work")
+            return Result.Ok(0)
+        else:
+            println("FAIL: Wrong default value")
+            return Result.Ok(1)
+    else:
+        println("FAIL: Wrong Err status")
+        return Result.Ok(1)

@@ -1,0 +1,45 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: FileError works
+# EXPECT_STDOUT_CONTAINS: PASS: IoError works
+# EXPECT_STDOUT_CONTAINS: PASS: MathError works
+# EXPECT_STDERR_EMPTY: true
+
+# Tests using multiple stdlib error types in one program
+
+fn file_operation(i32 code) string | FileError:
+    if (code == 1):
+        return Result.Err(FileError.NotFound)
+    return Result.Ok("file data")
+
+fn io_operation(i32 code) string | IoError:
+    if (code == 1):
+        return Result.Err(IoError.ReadError)
+    return Result.Ok("io data")
+
+fn math_operation(i32 a, i32 b) i32 | MathError:
+    if (b == 0):
+        return Result.Err(MathError.DivisionByZero)
+    return Result.Ok(a / b)
+
+fn main() i32:
+    match file_operation(1):
+        Result.Err(FileError.NotFound) ->
+            println("PASS: FileError works")
+        _ ->
+            println("FAIL: FileError failed")
+            return Result.Ok(1)
+
+    match io_operation(1):
+        Result.Err(IoError.ReadError) ->
+            println("PASS: IoError works")
+        _ ->
+            println("FAIL: IoError failed")
+            return Result.Ok(1)
+
+    match math_operation(10, 0):
+        Result.Err(MathError.DivisionByZero) ->
+            println("PASS: MathError works")
+            return Result.Ok(0)
+        _ ->
+            println("FAIL: MathError failed")
+            return Result.Ok(1)

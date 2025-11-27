@@ -146,6 +146,18 @@ def build_random(platform_dir: Path):
     compile_module_to_bc(module, output)
 
 
+def build_sys_process(platform_dir: Path):
+    """Build sys/process unit (includes platform-specific process control declarations)."""
+    print("Building sys/process...")
+
+    # Use the new standalone IR generator
+    from stdlib.src.sys import process
+    module = process.generate_module_ir()
+
+    output = platform_dir / "sys" / "process.bc"
+    compile_module_to_bc(module, output)
+
+
 def main():
     """Build all stdlib units for the current platform."""
     print("=" * 60)
@@ -198,6 +210,7 @@ def main():
     build_time(platform_dir)
     build_math(platform_dir)
     build_sys_env(platform_dir)
+    build_sys_process(platform_dir)
     build_random(platform_dir)
 
     # Build platform-specific modules

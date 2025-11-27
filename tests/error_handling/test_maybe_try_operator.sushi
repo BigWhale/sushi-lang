@@ -10,14 +10,14 @@ fn try_parse(string input) i32:
 
 fn main() i32:
     # Test with Some variant
-    let Result<i32> result1 = try_parse("hello x world")
+    let Result<i32, StdError> result1 = try_parse("hello x world")
     if (result1):
         println("Found at position")
     else:
         println("Not found")
 
     # Test with None variant (propagates as Err)
-    let Result<i32> result2 = try_parse("hello world")
+    let Result<i32, StdError> result2 = try_parse("hello world")
     if (result2):
         println("Found")
     else:

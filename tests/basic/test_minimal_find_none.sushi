@@ -5,7 +5,7 @@ fn main() i32:
     match "hello".find("x"):
         Maybe.Some(_) ->
             println("ERROR: Should not find x")
-            return Result.Err()
+            return Result.Err(StdError.Error)
         Maybe.None() ->
             println("Not found")
 

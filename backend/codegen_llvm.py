@@ -33,6 +33,8 @@ from backend.expressions import ExpressionEmitter
 from backend.statements import StatementEmitter
 from backend.llvm_functions import LLVMFunctionManager
 from backend.llvm_optimization import LLVMOptimizer
+from backend.string_constants import StringConstantManager
+from backend.stdlib_linker import StdlibLinker
 
 
 class LLVMCodegen:
@@ -68,6 +70,10 @@ class LLVMCodegen:
         self.functions = LLVMFunctionManager(self)
         self.optimizer = LLVMOptimizer(self)
 
+        # Specialized managers for common operations
+        self.string_manager = StringConstantManager(self)
+        self.stdlib = StdlibLinker(self)
+
         # Type properties for convenient access
         self.i32 = self.types.i32
         self.i8 = self.types.i8
@@ -91,9 +97,6 @@ class LLVMCodegen:
 
         # Global constants registry
         self.constants: Dict[str, ir.GlobalVariable] = {}
-
-        # String constants registry (special handling)
-        self.string_constants: Dict[str, ir.GlobalVariable] = {}
 
         # Centralized memory management function declarations
         self._malloc_func: Optional[ir.Function] = None
@@ -200,18 +203,7 @@ class LLVMCodegen:
         Returns:
             The global variable containing the string array.
         """
-        null_terminated = value + '\0'
-        str_bytes = bytearray(null_terminated, 'utf-8')
-        array_type = ir.ArrayType(self.i8, len(str_bytes))
-
-        global_name = f".str_const.{name}"
-        string_global = ir.GlobalVariable(self.module, array_type, name=global_name)
-        string_global.linkage = 'internal'  # Internal linkage for constants
-        string_global.global_constant = True
-        string_global.initializer = ir.Constant(array_type, str_bytes)
-        string_global.unnamed_addr = True  # Allow merging identical constants
-
-        return string_global
+        return self.string_manager.create_string_constant(name, value)
 
     def _generate_argc_argv_conversion(self, argc: ir.Value, argv: ir.Value) -> ir.Value:
         """Convert C-style argc/argv to Sushi string[] dynamic array.
@@ -243,7 +235,7 @@ class LLVMCodegen:
         # Extract stdlib unit imports from all units for conditional code generation
         for unit in units:
             if unit.ast is not None:
-                self._extract_stdlib_units(unit.ast)
+                self.stdlib.extract_stdlib_units(unit.ast)
 
         self.runtime.declare_externs()
         self._emit_multi_unit_program(units)
@@ -296,7 +288,7 @@ class LLVMCodegen:
         # Link stdlib modules if any units import them
         for unit in units:
             if unit.ast is not None:
-                self._link_stdlib_modules(llmod, unit.ast)
+                self.stdlib.link_stdlib_modules(llmod, unit.ast)
 
         # Set up target information
         self.optimizer.ensure_target(llmod)
@@ -373,25 +365,6 @@ class LLVMCodegen:
             obj_path.unlink()
         return out
 
-    def _extract_stdlib_units(self, program: Program) -> None:
-        """Extract stdlib unit imports from the program and store them for conditional codegen.
-
-        This enables the backend to conditionally emit code based on which stdlib units
-        are imported. For example, if "core/primitives" is imported, method calls like
-        i32.to_str() will emit external function calls instead of inline IR.
-
-        Args:
-            program: The program AST containing use statements.
-        """
-        for use_stmt in program.uses:
-            if use_stmt.is_stdlib:
-                self.stdlib_units.add(use_stmt.path)
-                # Also add parent units for directory imports
-                # e.g., "core/primitives" should also register "core"
-                parts = use_stmt.path.split('/')
-                for i in range(1, len(parts)):
-                    self.stdlib_units.add('/'.join(parts[:i]))
-
     def has_stdlib_unit(self, unit_path: str) -> bool:
         """Check if a stdlib unit has been imported.
 
@@ -405,135 +378,7 @@ class LLVMCodegen:
             Supports directory imports. If "collections" is imported,
             then has_stdlib_unit("collections/strings") returns True.
         """
-        # Check exact match first
-        if unit_path in self.stdlib_units:
-            return True
-
-        # Check if any parent directory of this unit was imported
-        # e.g., if "collections" is imported, then "collections/strings" is available
-        parts = unit_path.split('/')
-        for i in range(1, len(parts)):
-            parent = '/'.join(parts[:i])
-            if parent in self.stdlib_units:
-                return True
-
-        return False
-
-    def _link_stdlib_modules(self, llmod: llvm.ModuleRef, program: Program) -> None:
-        """Link stdlib .bc files into the current LLVM IR module.
-
-        Args:
-            llmod: The main LLVM module to link into.
-            program: The program AST containing use statements.
-        """
-        # Collect stdlib units to link
-        stdlib_units = []
-        for use_stmt in program.uses:
-            if use_stmt.is_stdlib:
-                bc_paths = self._resolve_stdlib_unit(use_stmt.path)
-                stdlib_units.extend(bc_paths)
-
-        # Link each stdlib unit
-        for bc_path in stdlib_units:
-            with open(bc_path, 'rb') as f:
-                bc_data = f.read()
-                try:
-                    stdlib_mod = llvm.parse_bitcode(bc_data)
-                    llmod.link_in(stdlib_mod, preserve=True)
-                except Exception as e:
-                    print(f"Warning: Failed to link stdlib unit {bc_path}: {e}")
-
-    def _list_available_stdlib_units(self, stdlib_dist: 'Path') -> list[str]:
-        """List all available stdlib units for error messages.
-
-        Args:
-            stdlib_dist: Path to stdlib/dist directory
-
-        Returns:
-            List of available unit paths (e.g., ["core/primitives", "io/stdio"])
-        """
-        available = []
-
-        # Find all .bc files recursively
-        for bc_file in stdlib_dist.rglob("*.bc"):
-            # Get relative path from stdlib_dist
-            rel_path = bc_file.relative_to(stdlib_dist)
-            # Remove .bc extension and convert to forward slashes
-            unit_path = str(rel_path.with_suffix('')).replace('\\', '/')
-            available.append(unit_path)
-
-        # Also list directories (for directory imports like "io")
-        for subdir in stdlib_dist.iterdir():
-            if subdir.is_dir() and list(subdir.glob("*.bc")):
-                available.append(subdir.name)
-
-        return available
-
-    def _resolve_stdlib_unit(self, unit_path: str) -> list[Path]:
-        """Resolve stdlib unit path to .bc file(s).
-
-        Supports both individual units and directory imports with platform-specific resolution:
-        - "core/primitives" -> [stdlib/dist/darwin/core/primitives.bc]
-        - "io" -> [stdlib/dist/darwin/io/stdio.bc, stdlib/dist/darwin/io/files.bc]
-
-        Search order:
-        1. Platform-specific path (e.g., dist/darwin/io/stdio.bc)
-
-        Args:
-            unit_path: Unit path like "core/primitives" or "io"
-
-        Returns:
-            List of paths to .bc files
-
-        Raises:
-            FileNotFoundError: If the stdlib unit does not exist or is empty
-        """
-        from pathlib import Path
-        from backend.platform_detect import get_current_platform
-
-        stdlib_dist = Path(__file__).parent.parent / "stdlib" / "dist"
-
-        # Detect target platform
-        platform = get_current_platform()
-        platform_name = "darwin" if platform.is_darwin else ("linux" if platform.is_linux else "unknown")
-
-        # Try platform-specific path first
-        platform_dir = stdlib_dist / platform_name
-
-        # Check if it's a directory import (platform-specific)
-        dir_path = platform_dir / unit_path
-        if dir_path.is_dir():
-            # Return all .bc files in the directory
-            bc_files = sorted(dir_path.glob("*.bc"))
-            if not bc_files:
-                raise FileNotFoundError(
-                    f"Stdlib directory exists but contains no .bc files: <{unit_path}>\n"
-                    f"Platform: {platform_name}\n"
-                    f"The stdlib may not be built. Try running: python stdlib/build.py"
-                )
-            return bc_files
-
-        # Check single unit file (platform-specific)
-        bc_path = platform_dir / f"{unit_path}.bc"
-        if bc_path.exists():
-            return [bc_path]
-
-        # Unit not found - provide helpful error message
-        available_units = self._list_available_stdlib_units(platform_dir)
-        if available_units:
-            available_str = ', '.join(f"<{u}>" for u in sorted(available_units))
-            raise FileNotFoundError(
-                f"Stdlib unit not found: <{unit_path}>\n"
-                f"Platform: {platform_name}\n"
-                f"Available units: {available_str}\n"
-                f"Note: Use angle brackets like 'use <io/stdio>' for stdlib imports\n"
-                f"Hint: Try running 'python stdlib/build.py' to build stdlib for your platform"
-            )
-        else:
-            raise FileNotFoundError(
-                f"Stdlib unit not found: <{unit_path}>\n"
-                f"No stdlib units are available. Try running: python stdlib/build.py"
-            )
+        return self.stdlib.has_stdlib_unit(unit_path)
 
     def _emit_multi_unit_program(self, units: list[Unit]) -> None:
         """Emit LLVM IR for multiple compilation units.

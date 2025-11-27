@@ -1,0 +1,20 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: realise on Err returns default
+# EXPECT_STDERR_EMPTY: true
+
+# Tests realise method on Err variant
+
+enum MyError:
+    Error
+
+fn get_error() i32 | MyError:
+    return Result.Err(MyError.Error)
+
+fn main() i32:
+    let i32 value = get_error().realise(99)
+    if (value == 99):
+        println("PASS: realise on Err returns default")
+        return Result.Ok(0)
+    else:
+        println("FAIL: realise returned wrong value")
+        return Result.Ok(1)

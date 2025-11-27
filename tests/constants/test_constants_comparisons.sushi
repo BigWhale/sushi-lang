@@ -31,47 +31,47 @@ const bool IS_DIFFERENT = A != B
 fn main() i32:
     # Verify comparison results
     if (not EQ_TRUE):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (EQ_FALSE):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not NEQ_TRUE):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (NEQ_FALSE):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     if (not LT_TRUE):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (LT_FALSE):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not LTE_TRUE_LT):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not LTE_TRUE_EQ):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (LTE_FALSE):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     if (not GT_TRUE):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (GT_FALSE):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not GTE_TRUE_GT):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not GTE_TRUE_EQ):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (GTE_FALSE):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     if (not NEG_CMP):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not FLOAT_CMP):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     if (not IS_LARGE):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not IS_EQUAL):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not IS_DIFFERENT):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     println("All constant comparison tests passed")
     return Result.Ok(0)

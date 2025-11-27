@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from llvmlite import ir
 from semantics.ast import CastExpr
 from internals.errors import raise_internal_error
+from backend.utils import require_builder
 
 if TYPE_CHECKING:
     from backend.codegen_llvm import LLVMCodegen
@@ -125,8 +126,7 @@ def emit_cast_expression(codegen: 'LLVMCodegen', expr: CastExpr) -> ir.Value:
     Raises:
         NotImplementedError: If the cast operation is not supported.
     """
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
+    builder = require_builder(codegen)
     # Emit the source expression
     source_value = codegen.expressions.emit_expr(expr.expr)
 

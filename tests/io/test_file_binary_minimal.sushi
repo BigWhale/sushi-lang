@@ -27,7 +27,7 @@ fn main() i32:
             out.close()
         FileResult.Err(_) ->
             stderr.write("Error: cannot create binary file\n")
-            return Result.Err()
+            return Result.Err(StdError.Error)
 
     data.destroy()
 
@@ -43,7 +43,7 @@ fn main() i32:
             bytes.destroy()
         FileResult.Err(_) ->
             stderr.write("Error: cannot read binary file\n")
-            return Result.Err()
+            return Result.Err(StdError.Error)
 
     println("Binary file test completed")
     return Result.Ok(0)

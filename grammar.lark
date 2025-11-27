@@ -35,7 +35,7 @@ extend_suffix: WITH NAME ":" _NEWLINE _INDENT function_def+ _DEDENT  -> extend_w
 block: _NEWLINE _INDENT (_NEWLINE | statement)+ _DEDENT
 
 
-function_def: PUBLIC? FN NAME [type_params] "(" [parameters] ")" type? ":" block
+function_def: PUBLIC? FN NAME [type_params] "(" [parameters] ")" type? ["|" type] ":" block
 
 parameters: typed_param ("," typed_param)*
 typed_param: type NAME
@@ -83,7 +83,7 @@ wildcard_pattern: UNDERSCORE
 break_stmt: BREAK _NEWLINE
 continue_stmt: CONTINUE _NEWLINE
 
-?type: BIT_AND type -> reference_t
+?type: BIT_AND BORROW_MODE type -> reference_t
      | atom_type "[" INT "]" -> array_t
      | atom_type "[" "]" -> dynamic_array_t
      | atom_type
@@ -130,7 +130,7 @@ cast: add (AS type)*
 ?unary: "-" unary        -> neg
       | NOT unary        -> not
       | BITNOT unary     -> bitnot
-      | BIT_AND unary    -> borrow
+      | BIT_AND BORROW_MODE unary    -> borrow
       | postfix
 
 ?postfix: atom (call | method_call | member_access | index | try_op)*    -> maybe_call
@@ -236,6 +236,7 @@ FOREACH.2: /foreach\b/
 BREAK.2: /break\b/
 CONTINUE.2: /continue\b/
 AS.2: /as\b/
+BORROW_MODE.2: /peek\b/ | /poke\b/
 STDIN.2: /stdin\b/
 STDOUT.2: /stdout\b/
 STDERR.2: /stderr\b/

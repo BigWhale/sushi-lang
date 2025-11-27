@@ -1,0 +1,37 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: Exhaustive matching works
+# EXPECT_STDERR_EMPTY: true
+
+# Tests exhaustive pattern matching on Result
+
+enum MyError:
+    Error
+
+fn get_result(i32 code) i32 | MyError:
+    if (code == 0):
+        return Result.Ok(42)
+    else:
+        return Result.Err(MyError.Error)
+
+fn main() i32:
+    let i32 ok_count = 0
+    let i32 err_count = 0
+
+    match get_result(0):
+        Result.Ok(_) ->
+            ok_count := ok_count + 1
+        Result.Err(_) ->
+            err_count := err_count + 1
+
+    match get_result(1):
+        Result.Ok(_) ->
+            ok_count := ok_count + 1
+        Result.Err(_) ->
+            err_count := err_count + 1
+
+    if (ok_count == 1 and err_count == 1):
+        println("PASS: Exhaustive matching works")
+        return Result.Ok(0)
+    else:
+        println("FAIL: Wrong match counts")
+        return Result.Ok(1)

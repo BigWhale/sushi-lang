@@ -36,6 +36,25 @@ def emit_key_equality_check(codegen: Any, key_type: Type, key1: ir.Value, key2: 
     builder = codegen.builder
     zero_i32 = ZERO_I32
 
+    # Handle Result<T, E> types (GenericTypeRef or ResultType) - convert to EnumType
+    from semantics.generics.types import GenericTypeRef
+    from semantics.typesys import ResultType
+    if isinstance(key_type, GenericTypeRef) and key_type.base_name == "Result":
+        # Convert GenericTypeRef("Result", [T, E]) to Result enum
+        if len(key_type.type_args) >= 2:
+            from backend.generics.results import ensure_result_type_in_table
+            ok_type = key_type.type_args[0]
+            err_type = key_type.type_args[1]
+            result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type)
+            if result_enum is not None:
+                key_type = result_enum
+    elif isinstance(key_type, ResultType):
+        # Convert ResultType to Result enum
+        from backend.generics.results import ensure_result_type_in_table
+        result_enum = ensure_result_type_in_table(codegen.enum_table, key_type.ok_type, key_type.err_type)
+        if result_enum is not None:
+            key_type = result_enum
+
     # For primitive types, use direct comparison
     if key_type in (BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64):
         return builder.icmp_signed("==", key1, key2, name="keys_equal")

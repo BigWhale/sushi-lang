@@ -9,6 +9,7 @@ import llvmlite.ir as ir
 from backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from typing import TYPE_CHECKING
 from internals.errors import raise_internal_error
+from backend.utils import require_builder
 
 if TYPE_CHECKING:
     from backend.codegen_llvm import LLVMCodegen
@@ -37,8 +38,7 @@ def emit_fnv1a_combine(codegen: 'LLVMCodegen', current_hash: ir.Value, value_has
     Returns:
         Combined hash value (u64)
     """
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
+    builder = require_builder(codegen)
     builder = codegen.builder
     u64 = ir.IntType(INT64_BIT_WIDTH)
 

@@ -13,7 +13,7 @@ fn main() i32:
     match nums.insert(2, 3):
         Result.Ok(_) ->
             println("Inserted successfully")
-        Result.Err() ->
+        Result.Err(_) ->
             println("ERROR: Insert should succeed")
             return Result.Ok(1)
 

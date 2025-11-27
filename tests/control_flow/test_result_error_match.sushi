@@ -2,12 +2,12 @@
 # EXPECTED_OUTPUT: Got error
 
 fn returns_error() i32:
-    return Result.Err()
+    return Result.Err(StdError.Error)
 
 fn main() i32:
     match returns_error():
         Result.Ok(val) ->
             println("Got value {val}")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Got error")
     return Result.Ok(0)

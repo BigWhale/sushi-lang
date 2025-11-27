@@ -4,7 +4,7 @@
 
 fn main() i32:
     # Test the parser accepts >> in nested generics
-    let Result<Maybe<i32>> nested = Result.Ok(Maybe.Some(42))
+    let Result<Maybe<i32>, StdError> nested = Result.Ok(Maybe.Some(42))
 
     # Use the nested variable to avoid warning
     let i32 base = 21

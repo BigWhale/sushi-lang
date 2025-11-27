@@ -6,7 +6,7 @@ enum Either<T, U>:
     Right(U)
 
 fn main() i32:
-    let Result<Either<i32, string>> ret = test_return_type()
+    let Result<Either<i32, string>, StdError> ret = test_return_type()
 
     # Try nested pattern matching
     match ret:
@@ -14,7 +14,7 @@ fn main() i32:
             println("Left: {x}")
         Result.Ok(Either.Right(s)) ->
             println("Right: {s}")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Error")
 
     return Result.Ok(0)

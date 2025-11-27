@@ -1,0 +1,47 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: Nested calls work with Ok
+# EXPECT_STDOUT_CONTAINS: PASS: Error propagated through nested calls
+# EXPECT_STDERR_EMPTY: true
+
+# Tests chained function calls with error propagation
+
+enum ParseError:
+    InvalidSyntax
+    UnexpectedToken
+
+fn parse_token(string s) i32 | ParseError:
+    if (s == "bad"):
+        return Result.Err(ParseError.InvalidSyntax)
+    return Result.Ok(1)
+
+fn parse_expression(string s) i32 | ParseError:
+    let i32 token = parse_token(s)??
+    return Result.Ok(token * 2)
+
+fn parse_statement(string s) i32 | ParseError:
+    let i32 expr = parse_expression(s)??
+    return Result.Ok(expr * 3)
+
+fn main() i32:
+    match parse_statement("good"):
+        Result.Ok(value) ->
+            if (value == 6):
+                println("PASS: Nested calls work with Ok")
+            else:
+                println("FAIL: Wrong value from nested calls")
+                return Result.Ok(1)
+        Result.Err(_) ->
+            println("FAIL: Got error on success path")
+            return Result.Ok(1)
+
+    match parse_statement("bad"):
+        Result.Ok(_) ->
+            println("FAIL: Should have propagated error")
+            return Result.Ok(1)
+        Result.Err(ParseError.InvalidSyntax) ->
+            println("PASS: Error propagated through nested calls")
+        Result.Err(_) ->
+            println("FAIL: Wrong error type")
+            return Result.Ok(1)
+
+    return Result.Ok(0)

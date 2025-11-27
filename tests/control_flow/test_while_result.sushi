@@ -1,7 +1,7 @@
 
 fn try_increment(i32 current) i32:
     if (current >= 3):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     return Result.Ok(current + 1)
 
 fn main() i32:

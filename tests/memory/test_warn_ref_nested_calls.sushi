@@ -1,0 +1,23 @@
+# Test: Nested function calls with mutable references
+# Should compile and run successfully
+
+fn add_five(&poke i32 x) ~:
+    x := x + 5
+    return Result.Ok(~)
+
+fn multiply_by_two(&poke i32 x) ~:
+    x := x * 2
+    return Result.Ok(~)
+
+fn transform(&poke i32 value) ~:
+    value := value + 0
+    add_five(&poke value)
+    multiply_by_two(&poke value)
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32 n = 10
+    println(n)
+    transform(&poke n)
+    println(n)
+    return Result.Ok(0)

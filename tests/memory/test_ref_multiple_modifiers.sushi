@@ -1,15 +1,15 @@
 # Test: Multiple functions modifying the same reference in sequence
 # Should compile and run successfully
 
-fn set_to_zero(&i32 x) ~:
+fn set_to_zero(&poke i32 x) ~:
     x := 0
     return Result.Ok(~)
 
-fn add_ten(&i32 x) ~:
+fn add_ten(&poke i32 x) ~:
     x := x + 10
     return Result.Ok(~)
 
-fn double_it(&i32 x) ~:
+fn double_it(&poke i32 x) ~:
     x := x * 2
     return Result.Ok(~)
 
@@ -17,13 +17,13 @@ fn main() i32:
     let i32 value = 5
     println(value)
 
-    set_to_zero(&value)
+    set_to_zero(&poke value)
     println(value)
 
-    add_ten(&value)
+    add_ten(&poke value)
     println(value)
 
-    double_it(&value)
+    double_it(&poke value)
     println(value)
 
     return Result.Ok(0)

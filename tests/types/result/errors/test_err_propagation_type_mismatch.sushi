@@ -1,0 +1,17 @@
+# Tests error for propagating different error types
+
+enum ErrorA:
+    Error
+
+enum ErrorB:
+    Error
+
+fn inner() i32 | ErrorA:
+    return Result.Err(ErrorA.Error)
+
+fn outer() i32 | ErrorB:
+    let i32 value = inner()??
+    return Result.Ok(value)
+
+fn main() i32:
+    return Result.Ok(0)

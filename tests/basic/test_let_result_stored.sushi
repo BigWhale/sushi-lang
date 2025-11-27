@@ -8,7 +8,7 @@ fn get_value() i32:
     return Result.Ok(42)
 
 fn main() i32:
-    let Result<i32> result = get_value()
+    let Result<i32, StdError> result = get_value()
     let i32 x = result.realise(0)
     println("x = {x}")
     return Result.Ok(0)

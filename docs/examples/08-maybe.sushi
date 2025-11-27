@@ -10,7 +10,7 @@
 # - Utility methods: .is_some(), .is_none(), .realise(default), .expect(msg)
 # - Nested Result<Maybe<T>> handling with explicit pattern matching
 #
-# Note: All functions return Result<T>, so we use match statements to
+# Note: All functions return Result<T, E>, so we use match statements to
 # unwrap the Result layer before working with the Maybe<T> value.
 
 fn find_crew_member(string[] crew, string name) Maybe<i32>:
@@ -19,8 +19,10 @@ fn find_crew_member(string[] crew, string name) Maybe<i32>:
     let i32 i = 0
 
     while (i < crew.len()):
-        if (crew.get(i) == name):
-            return Result.Ok(Maybe.Some(i))
+        let Maybe<string> member = crew.get(i)
+        if (member.is_some()):
+            if (member.realise("") == name):
+                return Result.Ok(Maybe.Some(i))
 
         i := i + 1
 
@@ -29,8 +31,8 @@ fn find_crew_member(string[] crew, string name) Maybe<i32>:
 fn main() i32:
     let string[] crew = from(["Arthur", "Ford", "Zaphod", "Trillian", "Marvin"])
 
-    # Find existing member - use match to unwrap Result<Maybe<i32>>
-    let Result<Maybe<i32>> arthur_result = find_crew_member(crew, "Arthur")
+    # Find existing member - use match to unwrap Result<Maybe<i32>, StdError>
+    let Result<Maybe<i32>, StdError> arthur_result = find_crew_member(crew, "Arthur")
 
     match arthur_result:
         Result.Ok(arthur_pos) ->
@@ -49,11 +51,11 @@ fn main() i32:
             # This is safe - no runtime errors, just a fallback value
             let i32 pos1 = arthur_pos.realise(-1)
             println("Arthur position (or -1): {pos1}")
-        Result.Err() ->
+        Result.Err(e) ->
             println("Error searching for Arthur")
 
     # Find non-existent member
-    let Result<Maybe<i32>> vogon_result = find_crew_member(crew, "Vogon")
+    let Result<Maybe<i32>, StdError> vogon_result = find_crew_member(crew, "Vogon")
 
     match vogon_result:
         Result.Ok(vogon_pos) ->
@@ -63,18 +65,18 @@ fn main() i32:
 
             let i32 pos2 = vogon_pos.realise(-1)
             println("Vogon position (or -1): {pos2}")
-        Result.Err() ->
+        Result.Err(e) ->
             println("Error searching for Vogon")
 
     # .expect(msg) unwraps Maybe.Some or triggers runtime error with message
     # Use this when you're certain the value should exist
-    let Result<Maybe<i32>> ford_result = find_crew_member(crew, "Ford")
+    let Result<Maybe<i32>, StdError> ford_result = find_crew_member(crew, "Ford")
 
     match ford_result:
         Result.Ok(ford_pos) ->
             let i32 ford_index = ford_pos.expect("Ford must be on the crew")
             println("Ford is at index {ford_index}")
-        Result.Err() ->
+        Result.Err(e) ->
             println("Error searching for Ford")
 
     return Result.Ok(0)

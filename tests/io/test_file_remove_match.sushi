@@ -18,7 +18,7 @@ fn main() i32:
     match remove(test_file):
         Result.Ok(_) ->
             println("Remove: Success")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Remove: Failed")
             return Result.Ok(2)
 

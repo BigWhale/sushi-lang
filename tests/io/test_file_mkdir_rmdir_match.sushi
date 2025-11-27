@@ -10,14 +10,14 @@ fn main() i32:
     match mkdir(test_dir, 0o755):
         Result.Ok(_) ->
             println("Mkdir: Success")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Mkdir: Failed")
             return Result.Ok(1)
 
     match rmdir(test_dir):
         Result.Ok(_) ->
             println("Rmdir: Success")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Rmdir: Failed")
             return Result.Ok(2)
 

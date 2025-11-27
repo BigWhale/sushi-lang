@@ -292,7 +292,7 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter, ar
         try:
             for unit_path in stdlib_units:
                 # This will raise FileNotFoundError if unit doesn't exist
-                temp_cg._resolve_stdlib_unit(unit_path)
+                temp_cg.stdlib._resolve_stdlib_unit(unit_path)
         except FileNotFoundError as e:
             print(f"Error: {e}", file=sys.stderr)
             return 2  # Compilation failed

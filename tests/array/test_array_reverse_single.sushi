@@ -5,9 +5,9 @@ fn run_test() i32:
 
     # Verify element is unchanged
     if (answer.get(0)?? != 42):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (answer.len() != 1):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     return Result.Ok(0)
 

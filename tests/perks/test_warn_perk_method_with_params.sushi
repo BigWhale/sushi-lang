@@ -1,14 +1,14 @@
 # Test perk methods with parameters (including &self references)
 
 perk Comparable:
-    fn compare(&Point other) i32
+    fn compare(&poke Point other) i32
 
 struct Point:
     i32 x
     i32 y
 
 extend Point with Comparable:
-    fn compare(&Point other) i32:
+    fn compare(&poke Point other) i32:
         if (self.x < other.x):
             return -1
         if (self.x > other.x):
@@ -24,9 +24,9 @@ fn main() i32:
     let Point p2 = Point(5, 15)
     let Point p3 = Point(10, 20)
 
-    let i32 cmp1 = p1.compare(&p2)
-    let i32 cmp2 = p2.compare(&p1)
-    let i32 cmp3 = p1.compare(&p3)
+    let i32 cmp1 = p1.compare(&poke p2)
+    let i32 cmp2 = p2.compare(&poke p1)
+    let i32 cmp3 = p1.compare(&poke p3)
 
     println(cmp1)
     println(cmp2)

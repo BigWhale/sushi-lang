@@ -14,7 +14,7 @@ fn might_fail(bool succeed) i32:
     let i32[] temp = create_array()??  # RAII: must cleanup on error
     if (succeed):
         return Result.Ok(temp.len())
-    return Result.Err()  # Must free temp before returning via ??
+    return Result.Err(StdError.Error)  # Must free temp before returning via ??
 
 fn caller(bool flag) i32:
     let i32 result = might_fail(flag)??  # Another level of propagation

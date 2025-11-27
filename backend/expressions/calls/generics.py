@@ -37,6 +37,9 @@ def try_emit_result_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCa
     if isinstance(receiver_semantic_type, EnumType) and receiver_semantic_type.name.startswith("Result<"):
         from backend.generics.results import emit_builtin_result_method
         temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
+        # Copy resolved_enum_type from original expr if it exists
+        if hasattr(expr, 'resolved_enum_type'):
+            temp_expr.resolved_enum_type = expr.resolved_enum_type
         return emit_builtin_result_method(codegen, temp_expr, result_value, receiver_semantic_type, to_i1)
 
     return None

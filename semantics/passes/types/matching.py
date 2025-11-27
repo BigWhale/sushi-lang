@@ -53,6 +53,41 @@ def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optiona
     if scrutinee_type is None:
         return None  # Error already emitted during expression validation
 
+    # Special handling for ResultType - convert to EnumType for pattern matching
+    from semantics.typesys import ResultType, UnknownType
+    if isinstance(scrutinee_type, ResultType):
+        # Resolve UnknownType placeholders to actual types (for stdlib functions)
+        from semantics.type_resolution import resolve_unknown_type
+        ok_type = scrutinee_type.ok_type
+        err_type = scrutinee_type.err_type
+
+        if isinstance(ok_type, UnknownType):
+            ok_type = resolve_unknown_type(
+                ok_type,
+                validator.struct_table.by_name,
+                validator.enum_table.by_name
+            )
+
+        if isinstance(err_type, UnknownType):
+            err_type = resolve_unknown_type(
+                err_type,
+                validator.struct_table.by_name,
+                validator.enum_table.by_name
+            )
+
+        # Create/get the corresponding Result<T, E> enum
+        from backend.generics.results import ensure_result_type_in_table
+        result_enum = ensure_result_type_in_table(
+            validator.enum_table,
+            ok_type,
+            err_type
+        )
+        if result_enum:
+            scrutinee_type = result_enum
+        else:
+            er.emit(validator.reporter, er.ERR.CE2048, stmt.scrutinee.loc, got=str(scrutinee_type))
+            return None
+
     if not isinstance(scrutinee_type, EnumType):
         er.emit(validator.reporter, er.ERR.CE2048, stmt.scrutinee.loc, got=str(scrutinee_type))
         return None

@@ -1,10 +1,10 @@
-fn replace_array(&i32[] arr) ~:
+fn replace_array(&poke i32[] arr) ~:
     arr := from([1, 2, 3])
     return Result.Ok(~)
 
 fn run_test() i32:
     let i32[] original = from([99, 88])
-    replace_array(&original)
+    replace_array(&poke original)
     println(original.len())
     println(original.get(0)??)
     return Result.Ok(0)

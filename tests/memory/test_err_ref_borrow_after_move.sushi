@@ -1,7 +1,7 @@
 # Test: Error when trying to pass a moved variable as reference
 # Should fail with CE2405: cannot borrow moved variable
 
-fn modify_array(&i32[] arr) ~:
+fn modify_array(&poke i32[] arr) ~:
     arr.push(42)
     return Result.Ok(~)
 
@@ -10,5 +10,5 @@ fn main(string[] args) i32:
     let i32[] arr2 = new()
     arr2 := arr1  # Move arr1 to arr2
 
-    let Result<~> r = modify_array(&arr1)  # ERROR: arr1 has been moved
+    let Result<~, StdError> r = modify_array(&poke arr1)  # ERROR: arr1 has been moved
     return Result.Ok(0)

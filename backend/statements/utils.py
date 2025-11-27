@@ -8,6 +8,7 @@ GEP operations.
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from internals.errors import raise_internal_error
+from backend.utils import require_function
 
 if TYPE_CHECKING:
     from llvmlite import ir
@@ -161,8 +162,7 @@ def create_loop_blocks(codegen: 'LLVMCodegen', prefix: str = "loop") -> tuple['i
     Returns:
         Tuple of (cond_block, body_block, end_block).
     """
-    if codegen.func is None:
-        raise_internal_error("CE0010")
+    func = require_function(codegen)
     cond_bb = codegen.func.append_basic_block(name=f"{prefix}.cond")
     body_bb = codegen.func.append_basic_block(name=f"{prefix}.body")
     end_bb = codegen.func.append_basic_block(name=f"{prefix}.end")
@@ -189,8 +189,7 @@ def create_conditional_blocks(
         - end_block: The merge block after the conditional
         - else_block: The else block (None if has_else=False)
     """
-    if codegen.func is None:
-        raise_internal_error("CE0010")
+    func = require_function(codegen)
     arm_blocks = [codegen.func.append_basic_block(name=f"{prefix}.arm{i}") for i in range(num_arms)]
     end_block = codegen.func.append_basic_block(name=f"{prefix}.end")
     else_block = codegen.func.append_basic_block(name=f"{prefix}.else") if has_else else None

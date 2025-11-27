@@ -7,6 +7,7 @@ foreach loops, break, and continue statements.
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from internals.errors import raise_internal_error
+from backend.utils import require_builder, require_both_initialized
 
 if TYPE_CHECKING:
     from llvmlite import ir
@@ -79,11 +80,7 @@ def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
     from llvmlite import ir
     from semantics.typesys import IteratorType, BuiltinType
 
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
-
-    if codegen.func is None:
-        raise_internal_error("CE0010")
+    builder, func = require_both_initialized(codegen)
     if node.item_type is None:
         raise_internal_error("CE0015", message="foreach item_type not resolved by semantic analysis")
     codegen.utils.ensure_open_block()
@@ -516,11 +513,7 @@ def _emit_range_foreach(codegen: 'LLVMCodegen', node: 'Foreach', range_expr: 'Ra
     """
     from llvmlite import ir
 
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
-    if codegen.func is None:
-        raise_internal_error("CE0010")
-
+    builder, func = require_both_initialized(codegen)
     codegen.utils.ensure_open_block()
 
     # Emit start and end expressions (cast to i32)

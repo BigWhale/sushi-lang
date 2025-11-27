@@ -263,7 +263,7 @@ def _check_stdlib_function_codegen(codegen: 'LLVMCodegen', function_name: str) -
     func_table = codegen.func_table
 
     # Try common module paths
-    possible_modules = ["time", "sys/env", "math", "random", "io/files"]
+    possible_modules = ["time", "sys/env", "sys/process", "math", "random", "io/files"]
 
     for module_path in possible_modules:
         stdlib_func = func_table.lookup_stdlib_function(module_path, function_name)
@@ -297,6 +297,9 @@ def _emit_stdlib_function(codegen: 'LLVMCodegen', expr: Call, function_name: str
         return emit_time_function(codegen, expr, function_name, to_i1)
     elif module_path == "sys/env":
         return emit_env_function(codegen, expr, function_name, to_i1)
+    elif module_path == "sys/process":
+        from backend.expressions.calls.stdlib import emit_process_function
+        return emit_process_function(codegen, expr, function_name, to_i1)
     elif module_path == "math":
         return emit_math_function(codegen, expr, function_name, to_i1)
     elif module_path == "random":

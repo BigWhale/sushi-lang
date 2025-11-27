@@ -2,6 +2,87 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [0.2.0] - 2025-11-27
+
+### Added
+- Dual-mode borrow syntax replacing single `&` operator
+  - `&peek T`: Read-only borrow (multiple allowed simultaneously)
+  - `&poke T`: Read-write borrow (exclusive access)
+- Type coercion: `&poke T` can be passed where `&peek T` is expected
+- New error codes for borrow checking:
+  - CE2407: Cannot have &peek and &poke borrows simultaneously
+  - CE2408: Cannot modify through &peek reference (read-only)
+
+### Changed
+- Reference syntax now requires explicit borrow mode (peek or poke)
+  - Old: `fn process(&i32 x) ~`
+  - New: `fn process(&poke i32 x) ~` or `fn process(&peek i32 x) ~`
+- Borrow checker updated for dual-mode semantics
+- All tests migrated to new &peek/&poke syntax (29 files)
+
+### Breaking Changes
+- Plain `&T` syntax removed (no backward compatibility)
+- All existing code using `&T` must be updated to `&peek T` or `&poke T`
+
+## [0.1.0] - 2025-11-27
+
+### Added
+- Result<T, E> error type system implementation
+  - Custom error types with | syntax: fn foo() T | ErrorType
+  - Explicit Result<T, E> syntax for nested Results
+  - Six built-in error enums: StdError, MathError, FileError, IoError, ProcessError, EnvError
+  - Error type validation: CE2085 prevents mixing explicit Result with | syntax
+- sys/process stdlib module for process control
+  - exit(code) - Terminate process with exit code
+  - getpid() - Get current process ID
+  - sleep(seconds) - Sleep for N seconds (POSIX-compliant)
+- Hash functions for Result<T, E> types
+  - Enables Result types as HashMap keys
+  - FNV-1a combining hash for Ok/Err variants
+- Equality operations for Result<T, E> types
+  - Enables == and != comparisons between Result values
+- Warning CW2511 for ?? operator usage in main()
+  - Encourages explicit error handling in entry point
+  - Prevents propagation from top-level function
+
+### Fixed
+- Result<T, E> enum type size calculation for unit error types
+- Result type resolution for stdlib file operations in match statements
+- Result<T, E>.realise() type inference and integer conversions
+- Result<T, E> recursive type propagation and stdlib backend integration
+- Result<T, E> type propagation in Let statements
+- Result method validation with user-defined generic enums
+- Result<T, E> support for generic return types
+- Nested Result pattern matching with enhanced type resolution
+- Explicit Result<T, E> double-wrapping prevention
+- Struct field extraction from Result enums with LLVM padding handling
+- Result.Err() error type validation requiring error values
+- FuncSig parameter types synchronization when resolving GenericTypeRef
+- Result<T, E> boolean conditionals support (if/while statements)
+
+### Changed
+- Result.Err() now requires error value argument
+  - Old: Result.Err()
+  - New: Result.Err(StdError.Error)
+- Result type annotation syntax requires explicit error type
+  - Old: Result<T>
+  - New: Result<T, E>
+- Refactored type validation into modular components
+  - semantics/passes/types/resolution.py - Type resolution
+  - semantics/passes/types/propagation.py - Type propagation
+  - semantics/passes/types/result_validation.py - Result pattern validation
+- Refactored backend constants into modular architecture
+- Refactored stdlib string operations into modular structure
+- Refactored generics system (instantiate.py, monomorphize.py, collect.py)
+- Complete test suite migration to Result<T, E> syntax
+
+### Documentation
+- Updated all 25 documentation examples to Result<T, E> syntax
+- Updated language-reference.md with Result<T, E> type system
+- Comprehensive error handling documentation in docs/error-handling.md
+- sys/process module documentation in docs/stdlib/process.md
+- ?? operator usage guidelines and best practices
+
 ## [0.0.12] - 2025-11-17
 
 ### Added

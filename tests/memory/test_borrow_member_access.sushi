@@ -5,11 +5,11 @@ struct Config:
     i32 port
     string host
 
-fn print_port(&i32 p) ~:
+fn print_port(&poke i32 p) ~:
     println(p)
     return Result.Ok(~)
 
 fn main() i32:
     let Config cfg = Config(8080, "localhost")
-    print_port(&cfg.port)
+    print_port(&poke cfg.port)
     return Result.Ok(0)

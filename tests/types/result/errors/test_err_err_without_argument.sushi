@@ -1,0 +1,10 @@
+# Tests error for Err() without error argument
+
+enum MyError:
+    Error
+
+fn test_func() i32 | MyError:
+    return Result.Err(StdError.Error)
+
+fn main() i32:
+    return Result.Ok(0)

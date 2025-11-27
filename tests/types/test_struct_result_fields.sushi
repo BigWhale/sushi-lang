@@ -4,8 +4,8 @@
 # Test that Result<T> works in struct fields
 
 struct Response:
-    Result<i32> status_code
-    Result<string> message
+    Result<i32, StdError> status_code
+    Result<string, StdError> message
 
 fn main() i32:
     # Create a Response with Result fields

@@ -22,7 +22,7 @@ fn might_fail(bool succeed) i32:
     if (succeed):
         return Result.Ok(100)
 
-    return Result.Err()
+    return Result.Err(StdError.Error)
 
 fn calculate_with_propagation(bool succeed) i32:
     # Demonstrates ?? operator chaining multiple fallible operations

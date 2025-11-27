@@ -3,7 +3,7 @@
 fn might_fail(bool succeed) i32:
     if (succeed):
         return Result.Ok(42)
-    return Result.Err()
+    return Result.Err(StdError.Error)
 
 fn caller(bool flag) i32:
     # Pass flag to might_fail to test both success and error paths

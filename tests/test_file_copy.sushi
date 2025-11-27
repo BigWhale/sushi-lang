@@ -11,7 +11,7 @@ fn main() i32:
 
     match copy("/tmp/test_copy_src.txt", "/tmp/test_copy_dst.txt"):
         Result.Ok(_) -> println("Copied")
-        Result.Err() -> return Result.Ok(1)
+        Result.Err(_) -> return Result.Ok(1)
 
     if (not exists("/tmp/test_copy_src.txt")):
         println("ERROR: Source file should still exist")
@@ -23,11 +23,11 @@ fn main() i32:
 
     match remove("/tmp/test_copy_src.txt"):
         Result.Ok(_) -> println("Cleaned src")
-        Result.Err() -> return Result.Ok(1)
+        Result.Err(_) -> return Result.Ok(1)
 
     match remove("/tmp/test_copy_dst.txt"):
         Result.Ok(_) -> println("Cleaned dst")
-        Result.Err() -> return Result.Ok(1)
+        Result.Err(_) -> return Result.Ok(1)
 
     println("OK: copy() works")
     return Result.Ok(0)

@@ -52,4 +52,4 @@ fn main() i32:
   if (validation == 6):
     return Result.Ok(0)
   else:
-    return Result.Err()
+    return Result.Err(StdError.Error)

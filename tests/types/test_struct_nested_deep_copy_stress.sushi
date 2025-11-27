@@ -33,11 +33,11 @@ fn run_test() i32:
         # Verify data integrity
         if (nested.data.values.len() != 3):
             println("ERROR: Expected len 3, got {nested.data.values.len()}")
-            return Result.Err()
+            return Result.Err(StdError.Error)
 
         if (nested.data.values.get(0)?? != 42):
             println("ERROR: Expected 42, got {nested.data.values.get(0)??}")
-            return Result.Err()
+            return Result.Err(StdError.Error)
 
         if (i % 100 == 0):
             println("Iteration {i}/1000")

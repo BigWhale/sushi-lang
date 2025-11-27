@@ -33,59 +33,59 @@ const i32 MULTI_REF_RESULT = (MULTI_REF_A + MULTI_REF_B) * 2
 fn main() i32:
     # Verify complex arithmetic
     if (ARITHMETIC_COMPLEX != 100):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (NESTED_PARENS != 9):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Verify bitwise with arithmetic
     if (BITWISE_ARITHMETIC != 255 as u32):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (SHIFT_ARITHMETIC != 200 as u32):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Verify comparison with logical
     if (not COMPARISON_LOGICAL):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not NESTED_LOGICAL):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Verify mixed operations
     if (MIXED_OPS != 99):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (REF_MIXED != 109):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Verify boolean from comparison
     if (not BOOL_FROM_CMP):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Verify float complex
     if (FLOAT_COMPLEX < 10.0 or FLOAT_COMPLEX > 11.0):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (CAST_COMPLEX != 300):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Verify hex and binary complex
     if (HEX_COMPLEX != 255 as u32):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (BIN_COMPLEX != 63 as u32):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Verify precedence
     if (not PRECEDENCE_TEST):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not PAREN_OVERRIDE):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Verify multi-reference
     if (MULTI_REF_BASE != 10):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (MULTI_REF_A != 20):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (MULTI_REF_B != 15):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (MULTI_REF_RESULT != 70):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     println("All complex constant tests passed")
     return Result.Ok(0)

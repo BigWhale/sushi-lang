@@ -1,0 +1,10 @@
+# Tests error for wrong Ok type
+
+enum MyError:
+    Error
+
+fn test_func() i32 | MyError:
+    return Result.Ok("string")
+
+fn main() i32:
+    return Result.Ok(0)

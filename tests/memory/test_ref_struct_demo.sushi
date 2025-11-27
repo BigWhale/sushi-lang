@@ -7,7 +7,7 @@ struct Config:
     i32 port
     bool debug
 
-fn print_config(&Config cfg) ~:
+fn print_config(&poke Config cfg) ~:
     print("Config: host=")
     print(cfg.host)
     print(" port=")
@@ -16,23 +16,23 @@ fn print_config(&Config cfg) ~:
     println(cfg.debug)
     return Result.Ok(~)
 
-fn get_port(&Config cfg) i32:
+fn get_port(&poke Config cfg) i32:
     return Result.Ok(cfg.port)
 
-fn is_debug_enabled(&Config cfg) bool:
+fn is_debug_enabled(&poke Config cfg) bool:
     return Result.Ok(cfg.debug)
 
 fn run_test() i32:
     let Config cfg = Config("localhost", 8080, true)
 
     # Pass by reference - no copy, just a pointer
-    print_config(&cfg)??
+    print_config(&poke cfg)??
 
     # Access fields through reference parameters
-    let i32 port = get_port(&cfg)??
+    let i32 port = get_port(&poke cfg)??
     println(port)
 
-    let bool debug = is_debug_enabled(&cfg)??
+    let bool debug = is_debug_enabled(&poke cfg)??
     println(debug)
 
     # Direct field access (to suppress unused warning)

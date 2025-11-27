@@ -21,29 +21,29 @@ const f64 FLOAT_CHAIN = ((100 as f64) * 2.5) as f64
 fn main() i32:
     # Verify cast results
     if (PI < 3.14 or PI > 3.15):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (PI_INT != 3):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (PI_BACK < 2.9 or PI_BACK > 3.1):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     if (HUNDRED != 100):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (HUNDRED_FLOAT < 99.9 or HUNDRED_FLOAT > 100.1):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     if (SIGNED_VALUE != -42):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     if (LARGE_UNSIGNED != 255 as u32):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (BACK_TO_SIGNED != 255):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     if (INT_CHAIN != 150):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (FLOAT_CHAIN < 249.9 or FLOAT_CHAIN > 250.1):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     println("All constant cast tests passed")
     return Result.Ok(0)

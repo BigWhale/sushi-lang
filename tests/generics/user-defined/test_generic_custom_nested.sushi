@@ -10,13 +10,13 @@ struct Pair<T, U>:
 
 fn main() i32:
     # Create a pair with nested generics
-    let Pair<Result<i32>, Maybe<string>> pair = Pair(
+    let Pair<Result<i32, StdError>, Maybe<string>> pair = Pair(
         Result.Ok(42),
         Maybe.Some("Mostly Harmless")
     )
 
     # Access and verify both fields
-    let Result<i32> first_val = pair.first
+    let Result<i32, StdError> first_val = pair.first
     let Maybe<string> second_val = pair.second
 
     if (first_val):

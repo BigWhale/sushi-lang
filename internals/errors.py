@@ -549,6 +549,10 @@ _add(ErrorMessage("CE0112", Severity.ERROR,
     "division by zero in constant expression",
     Category.FUNC, "Constant expressions cannot divide by zero."))
 
+_add(ErrorMessage("CE0113", Severity.ERROR,
+    "{message}",
+    Category.INTERNAL, "Generic enum constructor requires type annotation from semantic analysis."))
+
 # Struct errors
 _add(ErrorMessage("CE0004", Severity.ERROR,
     "duplicate struct '{name}' (first defined at {prev_loc})",
@@ -682,6 +686,10 @@ _add(ErrorMessage("CE2032", Severity.ERROR,
     "blank type (~) can only be used as function return type",
     Category.TYPE, "Blank type cannot be used for variables, parameters, or constants."))
 
+_add(ErrorMessage("CE2039", Severity.ERROR,
+    "Err() error type mismatch: expected '{expected}', got '{got}'",
+    Category.TYPE, "The error value inside Err() must match the function's error type."))
+
 _add(ErrorMessage("CE2033", Severity.ERROR,
     "foreach requires an iterator, got '{got}'",
     Category.TYPE, "The expression in foreach must be an iterator (e.g., from calling .iter() on an array)."))
@@ -744,6 +752,10 @@ _add(ErrorMessage("CE2510", Severity.ERROR,
     "cannot use operator with mixed numeric types: {left_type} and {right_type} (use 'as' to explicitly cast one operand)",
     Category.TYPE, "Sushi does not allow implicit numeric type conversions in comparisons or arithmetic operations. Use the 'as' keyword to explicitly cast one operand to match the other's type. Example: if (x == 3.14 as f32) { ... }"))
 
+_add(ErrorMessage("CE2511", Severity.ERROR,
+    "error type mismatch in propagation: cannot propagate Result<{ok_type}, {inner_err}> to function returning Result<{ok_type}, {outer_err}>",
+    Category.TYPE, "The ?? operator requires error types to match exactly. Inner function returns Result<T, {inner_err}> but outer function returns Result<T, {outer_err}>. Error type conversion is not supported yet."))
+
 _add(ErrorMessage("CW2511", Severity.WARNING,
     "?? operator used in main function (consider explicit error handling for clarity)",
     Category.TYPE, "While ?? works in main, explicit error handling with .realise(), if statements, or match expressions makes error behavior clearer at the program entry point."))
@@ -762,8 +774,8 @@ _add(ErrorMessage("CE2402", Severity.ERROR,
     Category.TYPE, "A variable cannot be explicitly destroyed (.destroy()) while a reference to it is active."))
 
 _add(ErrorMessage("CE2403", Severity.ERROR,
-    "'{name}' is already borrowed (only one active borrow allowed)",
-    Category.TYPE, "A variable can only have one active borrow at a time to prevent aliasing issues."))
+    "'{name}' already has an active &poke borrow (only one exclusive borrow allowed)",
+    Category.TYPE, "A variable can only have one active &poke (read-write) borrow at a time to prevent aliasing issues."))
 
 _add(ErrorMessage("CE2404", Severity.ERROR,
     "cannot borrow '{expr}': expression has no stable address",
@@ -776,6 +788,18 @@ _add(ErrorMessage("CE2405", Severity.ERROR,
 _add(ErrorMessage("CE2406", Severity.ERROR,
     "use of destroyed variable '{name}'",
     Category.TYPE, "Variable was explicitly destroyed via .destroy() and is no longer valid."))
+
+_add(ErrorMessage("CE2407", Severity.ERROR,
+    "cannot have &peek and &poke borrows of '{name}' simultaneously",
+    Category.TYPE, "A variable cannot have both read-only (&peek) and read-write (&poke) borrows at the same time."))
+
+_add(ErrorMessage("CE2408", Severity.ERROR,
+    "cannot modify '{name}' through &peek reference (read-only)",
+    Category.TYPE, "&peek references are read-only. Use &poke for mutable access."))
+
+_add(ErrorMessage("CW2409", Severity.WARNING,
+    "re-borrowing '{name}' as &poke (nested mutable borrow)",
+    Category.TYPE, "Creating a &poke borrow of a &poke reference parameter passes through exclusive access. Ensure the original reference is not used until the nested borrow ends."))
 
 # Enum errors
 _add(ErrorMessage("CE2040", Severity.ERROR,
@@ -900,7 +924,15 @@ _add(ErrorMessage("CE2083", Severity.ERROR,
     "field '{field}' expects type '{expected}', got '{got}'",
     Category.TYPE, "Named struct constructor field type mismatch."))
 
-# CE2084-CE2089 reserved for future named parameter extensions
+_add(ErrorMessage("CE2084", Severity.ERROR,
+    "error type must be an enum, not '{type_name}'",
+    Category.TYPE, "Custom error types (fn foo() T | E) must be enums. Structs and primitives are not allowed as error types."))
+
+_add(ErrorMessage("CE2085", Severity.ERROR,
+    "cannot use '| {err_type}' syntax with explicit Result<T, E> return type",
+    Category.TYPE, "When using explicit Result<T, E> syntax, the error type is already specified. Remove the '| ErrorType' syntax or use implicit return type."))
+
+# CE2086-CE2089 reserved for future extensions
 
 # Unit Management Errors (CE3xxx)
 _add(ErrorMessage("CE3001", Severity.ERROR,

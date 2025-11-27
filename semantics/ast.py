@@ -69,6 +69,7 @@ class FuncDef(Node):
     body: "Block"
     is_public: bool = False          # True if declared with 'public' keyword
     type_params: Optional[List[BoundedTypeParam]] = None  # Generic type parameters with constraints
+    err_type: Optional[Type] = None  # Error type for Result<T, E> (None = StdError default)
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
 
@@ -399,14 +400,21 @@ class CastExpr(Node):
 
 @dataclass
 class Borrow(Node):
-    """Borrow expression: &expr
+    """Borrow expression: &peek expr or &poke expr
 
     Creates a reference (borrow) to a variable without transferring ownership.
     The borrowed variable cannot be moved, rebound, or destroyed while the borrow is active.
 
-    Example: process_array(&my_array)
+    Borrow modes:
+    - &peek: Read-only borrow (multiple allowed)
+    - &poke: Read-write borrow (exclusive access)
+
+    Examples:
+        read_value(&peek num)   # Read-only access
+        increment(&poke num)    # Read-write access
     """
     expr: "Expr"  # The expression being borrowed (typically a Name)
+    mutability: Literal["peek", "poke"]  # Borrow mode
 
 @dataclass
 class TryExpr(Node):

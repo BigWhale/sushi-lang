@@ -14,7 +14,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from internals import errors as er
-from semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType
+from semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType, ResultType
+from semantics.generics.types import GenericTypeRef
 from semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, IntLit, RangeExpr
 from semantics.type_predicates import is_numeric_type
 from .compatibility import is_valid_cast
@@ -157,28 +158,33 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
     # Get the type of the inner expression
     inner_type = validator.infer_expression_type(expr.expr)
 
-    # Check if inner expression is a supported enum (Result-like or Maybe-like)
+    # Check if inner expression is a supported type (Result<T, E>, Maybe<T>, or result-like enum)
     if inner_type is not None:
-        if not isinstance(inner_type, EnumType):
-            # CE2507: ?? operator requires Result<T>, Maybe<T>, or result-like enum
-            er.emit(validator.reporter, er.ERR.CE2507, expr.loc, got=str(inner_type))
-            return
+        # ResultType is always valid for ??
+        if isinstance(inner_type, ResultType):
+            # ResultType is a semantic type that is always valid for ?? operator
+            pass
+        elif isinstance(inner_type, EnumType):
+            # For EnumType, check if it matches Result-like or Maybe-like pattern
+            # Check for Result-like pattern: Ok(value) and Err(...)
+            ok_variant = inner_type.get_variant("Ok")
+            err_variant = inner_type.get_variant("Err")
+            is_result_like = (ok_variant and err_variant and
+                             len(ok_variant.associated_types) == 1)
 
-        # Check for Result-like pattern: Ok(value) and Err(...)
-        ok_variant = inner_type.get_variant("Ok")
-        err_variant = inner_type.get_variant("Err")
-        is_result_like = (ok_variant and err_variant and
-                         len(ok_variant.associated_types) == 1)
+            # Check for Maybe-like pattern: Some(value) and None()
+            some_variant = inner_type.get_variant("Some")
+            none_variant = inner_type.get_variant("None")
+            is_maybe_like = (some_variant and none_variant and
+                            len(some_variant.associated_types) == 1 and
+                            len(none_variant.associated_types) == 0)
 
-        # Check for Maybe-like pattern: Some(value) and None()
-        some_variant = inner_type.get_variant("Some")
-        none_variant = inner_type.get_variant("None")
-        is_maybe_like = (some_variant and none_variant and
-                        len(some_variant.associated_types) == 1 and
-                        len(none_variant.associated_types) == 0)
-
-        if not is_result_like and not is_maybe_like:
-            # Not a supported enum pattern
+            if not is_result_like and not is_maybe_like:
+                # Not a supported enum pattern
+                er.emit(validator.reporter, er.ERR.CE2507, expr.loc, got=str(inner_type))
+                return
+        else:
+            # Not an enum, ResultType, or MaybeType
             er.emit(validator.reporter, er.ERR.CE2507, expr.loc, got=str(inner_type))
             return
 
@@ -195,6 +201,7 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
         # Continue validation - this is just a warning
 
     # Get the function's return type
+    # For implicit syntax (fn foo() i32 | MyError), we need to construct ResultType
     func_return_type = validator.current_function.ret
 
     if func_return_type is None:
@@ -202,25 +209,104 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
         er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
         return
 
-    # Check if function returns a result-like enum (Result<T> or concrete result-like enum)
+    # If function uses implicit Result syntax (not explicitly Result<T, E>),
+    # construct the ResultType for validation
+    from semantics.generics.types import GenericTypeRef
+    if not isinstance(func_return_type, ResultType) and not (isinstance(func_return_type, GenericTypeRef) and func_return_type.base_name == "Result"):
+        # Implicit syntax: fn foo() i32 | MyError or fn foo() i32 (defaults to StdError)
+        # Construct ResultType(ok_type=i32, err_type=MyError or StdError)
+        from semantics.type_resolution import resolve_unknown_type
+        if validator.current_function.err_type is not None:
+            # Custom error type: fn foo() i32 | MyError
+            err_type = resolve_unknown_type(
+                validator.current_function.err_type,
+                validator.struct_table.by_name,
+                validator.enum_table.by_name
+            )
+        else:
+            # Default to StdError: fn foo() i32 or fn main() i32
+            err_type = validator.enum_table.by_name.get("StdError")
+            if err_type is None:
+                # StdError not found (shouldn't happen)
+                er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
+                return
+        func_return_type = ResultType(ok_type=func_return_type, err_type=err_type)
+    elif isinstance(func_return_type, GenericTypeRef) and func_return_type.base_name == "Result":
+        # Explicit Result<T, E> syntax - resolve to ResultType
+        from semantics.type_resolution import resolve_unknown_type
+        func_return_type = resolve_unknown_type(
+            func_return_type,
+            validator.struct_table.by_name,
+            validator.enum_table.by_name
+        )
+
+    # Check if function returns Result<T, E>
     # Note: When ?? is used with Maybe<T>, it still propagates as Result.Err()
-    # First try the monomorphized Result<T> pattern
-    result_enum_name = f"Result<{func_return_type}>"
-    if result_enum_name in validator.enum_table.by_name:
-        # Function returns Result<T> - this is valid
+
+    # ResultType is always valid
+    if isinstance(func_return_type, ResultType):
+        # Function returns Result<T, E> - validate error types match
+        inner_err_type = None
+        outer_err_type = func_return_type.err_type
+
+        # Extract inner error type
+        if isinstance(inner_type, ResultType):
+            inner_err_type = inner_type.err_type
+        elif isinstance(inner_type, EnumType):
+            err_variant = inner_type.get_variant("Err")
+            if err_variant and err_variant.associated_types:
+                inner_err_type = err_variant.associated_types[0]
+
+        # Strict error type matching - no conversions
+        # Compare by string representation since types might be different instances
+        if inner_err_type is not None and outer_err_type is not None:
+            if str(inner_err_type) != str(outer_err_type):
+                # Error type mismatch - emit CE2511
+                ok_type_str = str(func_return_type.ok_type) if hasattr(func_return_type, 'ok_type') else "T"
+                er.emit(validator.reporter, er.ERR.CE2511, expr.loc,
+                        ok_type=ok_type_str,
+                        inner_err=str(inner_err_type),
+                        outer_err=str(outer_err_type))
+                return
+
+        # Error types match - valid
         return
 
-    # Otherwise, check if func_return_type itself is a result-like enum (e.g., FileResult)
-    if isinstance(func_return_type, EnumType):
-        # Check for Ok and Err variants
-        ok_variant = func_return_type.get_variant("Ok")
-        err_variant = func_return_type.get_variant("Err")
-
-        if ok_variant and err_variant and len(ok_variant.associated_types) == 1:
-            # Function returns a result-like enum - this is valid
+    # GenericTypeRef with base_name "Result" is also valid (not yet resolved)
+    if isinstance(func_return_type, GenericTypeRef) and func_return_type.base_name == "Result":
+        # Verify it has exactly 2 type parameters
+        if len(func_return_type.type_args) != 2:
+            er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
             return
 
-    # Function doesn't return a result-like enum
+        # Extract error types for validation
+        inner_err_type = None
+        outer_err_type = func_return_type.type_args[1]
+
+        # Extract inner error type
+        if isinstance(inner_type, ResultType):
+            inner_err_type = inner_type.err_type
+        elif isinstance(inner_type, EnumType):
+            err_variant = inner_type.get_variant("Err")
+            if err_variant and err_variant.associated_types:
+                inner_err_type = err_variant.associated_types[0]
+
+        # Strict error type matching
+        # Compare by string representation since types might be different instances
+        if inner_err_type is not None and outer_err_type is not None:
+            if str(inner_err_type) != str(outer_err_type):
+                # Error type mismatch - emit CE2511
+                ok_type_str = str(func_return_type.type_args[0])
+                er.emit(validator.reporter, er.ERR.CE2511, expr.loc,
+                        ok_type=ok_type_str,
+                        inner_err=str(inner_err_type),
+                        outer_err=str(outer_err_type))
+                return
+
+        # Function returns Result<T, E> as GenericTypeRef and error types match - valid
+        return
+
+    # Function doesn't return Result<T, E>
     er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
 
 
@@ -250,11 +336,11 @@ def validate_bitwise_unary(validator: 'TypeValidator', expr: UnaryOp) -> None:
 
 
 def validate_boolean_condition(validator: 'TypeValidator', expr: Expr, context: str) -> None:
-    """Validate that an expression is boolean or Result<T> for control flow.
+    """Validate that an expression is boolean or Result<T, E> for control flow.
 
     Allows:
     - bool type (traditional boolean)
-    - Result<T> enum (checks if Ok variant)
+    - Result<T, E> in any representation (EnumType, ResultType, GenericTypeRef)
     """
     # First, validate the expression itself (this triggers visitor validation)
     validator.validate_expression(expr)
@@ -266,9 +352,72 @@ def validate_boolean_condition(validator: 'TypeValidator', expr: Expr, context: 
         if expr_type == BuiltinType.BOOL:
             return
 
-        # Allow Result<T> enum types (check if Ok)
+        # Allow Result<T, E> enum types (monomorphized representation)
         if isinstance(expr_type, EnumType) and expr_type.name.startswith("Result<"):
+            return
+
+        # Allow ResultType (semantic representation)
+        if isinstance(expr_type, ResultType):
+            return
+
+        # Allow GenericTypeRef("Result", ...) (parsed representation)
+        from semantics.generics.types import GenericTypeRef
+        if isinstance(expr_type, GenericTypeRef) and expr_type.base_name == "Result":
             return
 
         # All other types are invalid
         er.emit(validator.reporter, er.ERR.CE2005, expr.loc)
+
+
+def check_propagation_in_expression(expr: Expr) -> bool:
+    """Check if expression contains ?? operator (TryExpr).
+
+    Recursively traverses the expression tree to detect TryExpr nodes.
+    Used for CW2511 warning in main() function.
+
+    Args:
+        expr: The expression to check
+
+    Returns:
+        True if expression contains ??, False otherwise
+    """
+    if isinstance(expr, TryExpr):
+        return True
+
+    # Recursively check child expressions
+    from semantics.ast import (
+        BinaryOp, UnaryOp, Call, MethodCall, DotCall, IndexAccess, MemberAccess,
+        ArrayLiteral, EnumConstructor, CastExpr, RangeExpr
+    )
+
+    if isinstance(expr, (BinaryOp, RangeExpr)):
+        return (check_propagation_in_expression(expr.left) or
+                check_propagation_in_expression(expr.right))
+
+    elif isinstance(expr, UnaryOp):
+        return check_propagation_in_expression(expr.expr)
+
+    elif isinstance(expr, (Call, MethodCall, DotCall)):
+        # Check arguments
+        if hasattr(expr, 'args') and expr.args:
+            return any(check_propagation_in_expression(arg) for arg in expr.args)
+
+    elif isinstance(expr, IndexAccess):
+        return (check_propagation_in_expression(expr.array) or
+                check_propagation_in_expression(expr.index))
+
+    elif isinstance(expr, MemberAccess):
+        return check_propagation_in_expression(expr.receiver)
+
+    elif isinstance(expr, ArrayLiteral):
+        if expr.elements:
+            return any(check_propagation_in_expression(elem) for elem in expr.elements)
+
+    elif isinstance(expr, EnumConstructor):
+        if expr.args:
+            return any(check_propagation_in_expression(arg) for arg in expr.args)
+
+    elif isinstance(expr, CastExpr):
+        return check_propagation_in_expression(expr.expr)
+
+    return False

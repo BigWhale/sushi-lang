@@ -1,13 +1,13 @@
 # Test basic reference passing with primitive types
 
 
-fn add_one(&i32 x) i32:
+fn add_one(&poke i32 x) i32:
     let i32 val = x
     return Result.Ok(val + 1)
 
 fn main() i32:
     let i32 num = 42
-    let Result<i32> result = add_one(&num)
+    let Result<i32, StdError> result = add_one(&poke num)
 
     # Original variable still accessible
     println(num)

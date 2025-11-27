@@ -1,10 +1,10 @@
 # Test multiple sequential borrows (non-overlapping)
 
-fn print_len(&i32[] arr) ~:
+fn print_len(&poke i32[] arr) ~:
     println(arr.len())
     return Result.Ok(~)
 
-fn print_first(&i32[] arr) ~:
+fn print_first(&poke i32[] arr) ~:
     println(arr.get(0)??)
     return Result.Ok(~)
 
@@ -12,13 +12,13 @@ fn run_test() i32:
     let i32[] numbers = from([1, 2, 3, 4, 5])
 
     # First borrow
-    print_len(&numbers)
+    print_len(&poke numbers)
 
     # Second borrow (first has ended)
-    print_first(&numbers)
+    print_first(&poke numbers)
 
     # Third borrow
-    print_len(&numbers)
+    print_len(&poke numbers)
 
     # Original still valid
     println(numbers.get(2)??)

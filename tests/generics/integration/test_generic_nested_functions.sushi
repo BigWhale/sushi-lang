@@ -7,22 +7,20 @@
 fn compute_answer() Maybe<i32>:
     return Result.Ok(Maybe.Some(42))
 
-fn wrap_in_result(Maybe<i32> maybe_val) Result<Maybe<i32>>:
-    return Result.Ok(Result.Ok(maybe_val))
+fn wrap_in_result(Maybe<i32> maybe_val) Result<Maybe<i32>, StdError>:
+    return Result.Ok(maybe_val)
 
 fn main() i32:
-    let Result<Maybe<i32>> answer_result = compute_answer()
+    let Result<Maybe<i32>, StdError> answer_result = compute_answer()
 
     if (answer_result):
         let Maybe<i32> maybe_answer = answer_result.realise(Maybe.None())
-        let Result<Result<Maybe<i32>>> double_wrapped = wrap_in_result(maybe_answer)
+        let Result<Maybe<i32>, StdError> wrapped = wrap_in_result(maybe_answer)
 
-        if (double_wrapped):
-            let Result<Maybe<i32>> inner = double_wrapped.realise(Result.Err())
-            if (inner):
-                let Maybe<i32> maybe_val = inner.realise(Maybe.None())
-                let i32 answer = maybe_val.realise(0)
-                println("{answer}")
-                return Result.Ok(0)
+        if (wrapped):
+            let Maybe<i32> maybe_val = wrapped.realise(Maybe.None())
+            let i32 answer = maybe_val.realise(0)
+            println("{answer}")
+            return Result.Ok(0)
 
     return Result.Ok(1)

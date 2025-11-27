@@ -10,13 +10,13 @@ struct Rectangle:
     Point top_left
     Point bottom_right
 
-fn move_x(&i32 coord) ~:
+fn move_x(&poke i32 coord) ~:
     coord := coord + 10
     return Result.Ok(~)
 
 fn main() i32:
     let Rectangle rect = Rectangle(Point(0, 0), Point(10, 10))
     println(rect.top_left.x)
-    move_x(&rect.top_left.x)
+    move_x(&poke rect.top_left.x)
     println(rect.top_left.x)
     return Result.Ok(0)

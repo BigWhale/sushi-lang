@@ -285,6 +285,12 @@ class LLVMUtils:
         if isinstance(dst, ir.ArrayType):
             return self._cast_to_array(v, dst)
 
+        # Struct type checks (exact match required - no conversion between different struct types)
+        if isinstance(dst, ir.LiteralStructType) and isinstance(v.type, ir.LiteralStructType):
+            # If both are structs and structurally identical, no cast needed (caught by fast path above)
+            # If they differ, this is a type error that shouldn't happen after semantic analysis
+            raise_internal_error("CE0017", src=str(v.type), dst=str(dst))
+
         raise_internal_error("CE0017", src=str(v.type), dst=str(dst))
 
     def _cast_to_int_width(self, v: ir.Value, dst: ir.IntType) -> ir.Value:

@@ -17,8 +17,8 @@ fn main() i32:
     let i32[5] primes = [2, 3, 5, 7, 11]
 
     println("Fixed array length: {primes.len()}")
-    println("First prime: {primes.get(0)}")
-    println("Third prime: {primes.get(2)}")
+    println("First prime: {primes.get(0).realise(0)}")
+    println("Third prime: {primes.get(2).realise(0)}")
 
     # Dynamic array from literal
     let i32[] fibonacci = from([1, 1, 2, 3, 5, 8, 13])

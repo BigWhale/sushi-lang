@@ -14,6 +14,6 @@ fn add_coords(Point p) i32:
 
 fn main() i32:
     let Point p = Point(10, 20)
-    let Result<i32> result = add_coords(p)
+    let Result<i32, StdError> result = add_coords(p)
     println(result.realise(0))
     return Result.Ok(0)

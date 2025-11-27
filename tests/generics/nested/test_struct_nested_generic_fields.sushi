@@ -5,7 +5,7 @@
 # "The Infinite Improbability Drive is a wonderful new method of crossing interstellar distances"
 
 struct Config:
-    Result<Maybe<i32>> port
+    Result<Maybe<i32>, StdError> port
     Maybe<string> hostname
 
 fn main() i32:

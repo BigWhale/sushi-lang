@@ -184,12 +184,12 @@ fn greet(string name) ~:
 
 ### Return Types
 
-All functions implicitly return `Result<T>`:
+All functions implicitly return `Result<T, E>`:
 
 ```sushi
-fn divide(i32 a, i32 b) i32:  # Actually returns Result<i32>
+fn divide(i32 a, i32 b) i32:  # Actually returns Result<i32, StdError>
     if (b == 0):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     return Result.Ok(a / b)
 ```
 

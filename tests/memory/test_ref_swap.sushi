@@ -1,4 +1,4 @@
-fn swap(&i32 a, &i32 b) ~:
+fn swap(&poke i32 a, &poke i32 b) ~:
     let i32 temp = a
     a := b
     b := temp
@@ -7,7 +7,7 @@ fn swap(&i32 a, &i32 b) ~:
 fn main() i32:
     let i32 x = 10
     let i32 y = 20
-    swap(&x, &y)
+    swap(&poke x, &poke y)
     println(x)
     println(y)
     return Result.Ok(0)

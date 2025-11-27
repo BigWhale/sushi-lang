@@ -186,18 +186,30 @@ class FileMethodInferrer:
 
 @dataclass
 class ResultMethodInferrer:
-    """Type inferrer for Result<T> methods."""
+    """Type inferrer for Result<T, E> methods."""
     receiver_type: EnumType
     method_name: str
     validator: 'TypeValidator'
 
     def infer_return_type(self) -> Optional['Type']:
         from backend.generics.results import is_builtin_result_method
+        from backend.generics.maybe import ensure_maybe_type_in_table
         if is_builtin_result_method(self.method_name):
-            if self.method_name == "realise":
-                ok_variant = self.receiver_type.get_variant("Ok")
+            ok_variant = self.receiver_type.get_variant("Ok")
+            err_variant = self.receiver_type.get_variant("Err")
+
+            if self.method_name in ("is_ok", "is_err"):
+                return BuiltinType.BOOL
+            elif self.method_name == "realise":
                 if ok_variant and ok_variant.associated_types:
                     return ok_variant.associated_types[0]
+            elif self.method_name == "expect":
+                if ok_variant and ok_variant.associated_types:
+                    return ok_variant.associated_types[0]
+            elif self.method_name == "err":
+                if err_variant and err_variant.associated_types:
+                    err_type = err_variant.associated_types[0]
+                    return ensure_maybe_type_in_table(self.validator.enum_table, err_type)
         return None
 
 
@@ -292,7 +304,11 @@ class ListMethodInferrer:
                     return BuiltinType.BOOL
                 elif self.method_name == "insert":
                     from backend.generics.results import ensure_result_type_in_table
-                    return ensure_result_type_in_table(self.validator.enum_table, BuiltinType.BLANK)
+                    from semantics.typesys import EnumType
+                    std_error = self.validator.enum_table.by_name.get("StdError")
+                    if std_error is None:
+                        return None
+                    return ensure_result_type_in_table(self.validator.enum_table, BuiltinType.BLANK, std_error)
                 elif self.method_name == "iter":
                     from semantics.typesys import IteratorType
                     return IteratorType(element_type=element_type)

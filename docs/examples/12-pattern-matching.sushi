@@ -65,7 +65,7 @@ fn main() i32:
     println("")
 
     # Demonstrate the default pattern (_) usage - only InProgress is active
-    let bool active = is_journey_active(s2)??
+    let bool active = is_journey_active(s2).realise(false)
     println("InProgress is active: {active}")
 
     return Result.Ok(0)

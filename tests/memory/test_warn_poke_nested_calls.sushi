@@ -1,0 +1,26 @@
+# Test nested poke calls - poke a variable that's already poked
+# Two levels of nesting with same variable
+
+fn inner_modify(&poke i32 x) ~:
+    x := x * 2
+    return Result.Ok(~)
+
+fn outer_modify(&poke i32 x) ~:
+    # x is already borrowed via &poke, now we pass it again as &poke
+    let i32 before = x
+    let Result<~, StdError> inner_result = inner_modify(&poke x)
+    if (inner_result):
+        println(before)
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32 num = 21
+    println(num)
+
+    let Result<~, StdError> result = outer_modify(&poke num)
+    if (result):
+        # 21 * 2 = 42
+        if (num == 42):
+            return Result.Ok(0)
+
+    return Result.Ok(1)

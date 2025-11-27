@@ -6,12 +6,12 @@
 struct Counter:
     i32 count
 
-fn update_count(&Counter c) ~:
+fn update_count(&poke Counter c) ~:
     c.count := 100
     return Result.Ok(~)
 
 fn main() i32:
     let Counter c = Counter(0)
-    update_count(&c)
+    update_count(&poke c)
     println(c.count)
     return Result.Ok(0)

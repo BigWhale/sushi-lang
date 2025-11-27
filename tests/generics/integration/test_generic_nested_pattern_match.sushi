@@ -10,7 +10,7 @@ fn parse_answer(string s) Maybe<i32>:
     return Result.Ok(Maybe.None())
 
 fn main() i32:
-    let Result<Maybe<i32>> result = parse_answer("42")
+    let Result<Maybe<i32>, StdError> result = parse_answer("42")
 
     # Complex nested pattern matching
     match result:
@@ -24,6 +24,6 @@ fn main() i32:
         Result.Ok(Maybe.None()) ->
             println("No answer found")
             return Result.Ok(2)
-        Result.Err() ->
+        Result.Err(_) ->
             println("Computation failed")
             return Result.Ok(3)

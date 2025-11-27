@@ -1,7 +1,7 @@
 # Test RAII cleanup with ?? error propagation operator
 fn may_fail(i32 x) i32:
     if (x < 0):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     return Result.Ok(x * 2)
 
 fn test_cleanup(i32 x) i32:

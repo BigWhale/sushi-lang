@@ -6,7 +6,7 @@ fn test_case1() i32:
     match "hello".find("world"):
         Maybe.Some(_) ->
             println("ERROR: Should not find 'world' in 'hello'")
-            return Result.Err()
+            return Result.Err(StdError.Error)
         Maybe.None() ->
             println("Test 1: 'world' not found in 'hello' (expected)")
 
@@ -16,7 +16,7 @@ fn test_case2() i32:
     match "hello".find("xyz"):
         Maybe.Some(_) ->
             println("ERROR: Should not find xyz")
-            return Result.Err()
+            return Result.Err(StdError.Error)
         Maybe.None() ->
             println("Test 2: 'xyz' not found (expected)")
 
@@ -25,10 +25,10 @@ fn test_case2() i32:
 fn main() i32:
     let i32 r1 = test_case1().realise(1)
     if (r1 != 0):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     let i32 r2 = test_case2().realise(1)
     if (r2 != 0):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     return Result.Ok(0)

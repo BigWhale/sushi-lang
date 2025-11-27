@@ -67,9 +67,10 @@ def get_builtin_env_function_return_type(name: str) -> Type:
         return maybe_string_type
 
     elif name == 'setenv':
-        # setenv(string key, string value) -> Result<i32>
+        # setenv(string key, string value) -> Result<i32, EnvError>
         inner = BuiltinType('i32')
-        return ResultType(inner)
+        from semantics.typesys import UnknownType
+        return ResultType(ok_type=inner, err_type=UnknownType("EnvError"))
 
     raise ValueError(f"Unknown env function: {name}")
 

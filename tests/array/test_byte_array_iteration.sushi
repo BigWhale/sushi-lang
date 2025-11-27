@@ -45,7 +45,7 @@ fn main() i32:
     # Test 4: Sum all bytes
     println("Test 4: Sum bytes")
     let u8[] numbers = from([10, 20, 30, 40])
-    let Result<i32> total = sum_bytes(numbers)
+    let Result<i32, StdError> total = sum_bytes(numbers)
     println("Sum: {total.realise(0)}")  # Should be 100
 
     # Test 5: Break in iteration
@@ -73,7 +73,7 @@ fn main() i32:
     # Test 7: Count specific values
     println("Test 7: Count zeros")
     let u8[] with_zeros = from([1, 0, 2, 0, 3, 0])
-    let Result<i32> zero_count = count_zeros(with_zeros)
+    let Result<i32, StdError> zero_count = count_zeros(with_zeros)
     println("Zero count: {zero_count.realise(0)}")  # Should be 3
 
     # Test 8: Nested iteration

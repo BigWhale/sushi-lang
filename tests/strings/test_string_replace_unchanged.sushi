@@ -8,7 +8,7 @@ fn main() i32:
 
     if (babel != "Babel Fish"):
         println("ERROR: Expected 'Babel Fish', got '{babel}'")
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Test substring not present
     let string guide = "Don't Panic".replace("worry", "fear")
@@ -16,7 +16,7 @@ fn main() i32:
 
     if (guide != "Don't Panic"):
         println("ERROR: Expected 'Don't Panic', got '{guide}'")
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Test longer search string than original
     let string short = "Hi".replace("Hello", "Greetings")
@@ -24,7 +24,7 @@ fn main() i32:
 
     if (short != "Hi"):
         println("ERROR: Expected 'Hi', got '{short}'")
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     println("All unchanged tests passed!")
     return Result.Ok(0)

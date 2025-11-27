@@ -68,9 +68,10 @@ def get_builtin_time_function_return_type(name: str) -> Type:
     from semantics.typesys import BuiltinType, ResultType
 
     if name in {'nanosleep', 'sleep', 'msleep', 'usleep'}:
-        # All sleep functions return Result<i32>
+        # All sleep functions return Result<i32, StdError>
         inner = BuiltinType('i32')
-        return ResultType(inner)
+        from semantics.typesys import UnknownType
+        return ResultType(ok_type=inner, err_type=UnknownType("StdError"))
 
     raise ValueError(f"Unknown time function: {name}")
 

@@ -49,21 +49,21 @@ fn loop_cleanup() i32:
 
 fn main() i32:
     println("Test 1: Function scope cleanup")
-    let Result<i32> result1 = create_and_return()
+    let Result<i32, StdError> result1 = create_and_return()
     println("Result: {result1.realise(0)}")
 
     println("Test 2: Nested scopes")
-    let Result<i32> result2 = nested_scopes()
+    let Result<i32, StdError> result2 = nested_scopes()
     println("Result: {result2.realise(0)}")
 
     println("Test 3: Early return cleanup")
-    let Result<i32> result3a = early_return_cleanup(1)
+    let Result<i32, StdError> result3a = early_return_cleanup(1)
     println("Early return result: {result3a.realise(0)}")
-    let Result<i32> result3b = early_return_cleanup(0)
+    let Result<i32, StdError> result3b = early_return_cleanup(0)
     println("Normal return result: {result3b.realise(0)}")
 
     println("Test 4: Loop cleanup")
-    let Result<i32> result4 = loop_cleanup()
+    let Result<i32, StdError> result4 = loop_cleanup()
     println("Loop result: {result4.realise(0)}")
 
     println("Test 5: Main function scope")

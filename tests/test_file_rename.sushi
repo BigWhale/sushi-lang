@@ -11,7 +11,7 @@ fn main() i32:
 
     match rename("/tmp/test_rename_old.txt", "/tmp/test_rename_new.txt"):
         Result.Ok(_) -> println("Renamed")
-        Result.Err() -> return Result.Ok(1)
+        Result.Err(_) -> return Result.Ok(1)
 
     if (exists("/tmp/test_rename_old.txt")):
         println("ERROR: Old file should not exist")
@@ -23,7 +23,7 @@ fn main() i32:
 
     match remove("/tmp/test_rename_new.txt"):
         Result.Ok(_) -> println("Cleaned")
-        Result.Err() -> return Result.Ok(1)
+        Result.Err(_) -> return Result.Ok(1)
 
     println("OK: rename() works")
     return Result.Ok(0)

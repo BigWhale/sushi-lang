@@ -8,7 +8,7 @@ fn main() i32:
 
     if (panic != "Don't !"):
         println("ERROR: Expected 'Don't !', got '{panic}'")
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Test empty old string - should return original
     let string original = "Deep Thought".replace("", "something")
@@ -16,7 +16,7 @@ fn main() i32:
 
     if (original != "Deep Thought"):
         println("ERROR: Expected 'Deep Thought', got '{original}'")
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Test replacing spaces
     let string nospace = "So long and thanks".replace(" ", "")
@@ -24,7 +24,7 @@ fn main() i32:
 
     if (nospace != "Solongandthanks"):
         println("ERROR: Expected 'Solongandthanks', got '{nospace}'")
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     println("All edge case tests passed!")
     return Result.Ok(0)

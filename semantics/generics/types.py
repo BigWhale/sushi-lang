@@ -279,10 +279,10 @@ def _substitute_type_params(ty: Type, substitution: dict[str, Type]) -> Type:
         substituted_base = _substitute_type_params(ty.base_type, substitution)
         return DynamicArrayType(base_type=substituted_base)
 
-    # Reference type: substitute in referenced type
+    # Reference type: substitute in referenced type (preserve mutability)
     elif isinstance(ty, ReferenceType):
         substituted_ref = _substitute_type_params(ty.referenced_type, substitution)
-        return ReferenceType(referenced_type=substituted_ref)
+        return ReferenceType(referenced_type=substituted_ref, mutability=ty.mutability)
 
     # No substitution needed for other types
     else:

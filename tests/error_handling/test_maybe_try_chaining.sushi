@@ -15,21 +15,21 @@ fn find_both(string text) i32:
 
 fn main() i32:
     # Test with both present
-    let Result<i32> result1 = find_both("x hello y world")
+    let Result<i32, StdError> result1 = find_both("x hello y world")
     if (result1):
         println("Both found")
     else:
         println("One or both not found")
 
     # Test with first missing (should propagate)
-    let Result<i32> result2 = find_both("hello y world")
+    let Result<i32, StdError> result2 = find_both("hello y world")
     if (result2):
         println("Both found")
     else:
         println("First not found")
 
     # Test with second missing (should propagate)
-    let Result<i32> result3 = find_both("x hello world")
+    let Result<i32, StdError> result3 = find_both("x hello world")
     if (result3):
         println("Both found")
     else:

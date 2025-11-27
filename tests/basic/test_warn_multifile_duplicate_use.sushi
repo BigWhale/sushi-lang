@@ -4,5 +4,5 @@ use "helpers/foo_module"
 use "helpers/math_utils"
 
 fn main() i32:
-    let Result<i32> result = add(10, 20)
+    let Result<i32, StdError> result = add(10, 20)
     return Result.Ok(result.realise(0))

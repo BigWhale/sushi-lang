@@ -3,9 +3,9 @@
 # EXPECT_RUNTIME_EXIT: 0
 
 
-fn maybe_divide(i32 a, i32 b) i32:
+fn maybe_divide(i32 a, i32 b) i32 | MathError:
   if (b == 0):
-    return Result.Err()
+    return Result.Err(MathError.DivisionByZero)
   return Result.Ok(a / b)
 
 fn main() i32:

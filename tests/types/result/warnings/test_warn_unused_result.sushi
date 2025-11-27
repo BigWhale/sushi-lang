@@ -1,0 +1,7 @@
+# Tests warning for unused Result value (CW2001)
+# Warning only triggers when referencing a Result variable directly
+
+fn main() i32:
+    let Result<i32, StdError> result = Result.Ok(42)
+    result
+    return Result.Ok(0)

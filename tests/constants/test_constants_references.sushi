@@ -23,36 +23,36 @@ const f64 CIRCUMFERENCE = 2.0 * PI * RADIUS
 fn main() i32:
     # Verify reference results
     if (WIDTH != 100):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (HEIGHT != 50):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (AREA != 5000):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     if (BASE != 10):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (MULTIPLIER != 3):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (OFFSET != 5):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (RESULT != 35):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     if (A != 10):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (B != 30):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (C != 60):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (D != 50):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     if (PI < 3.14 or PI > 3.15):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (RADIUS < 9.9 or RADIUS > 10.1):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (CIRCUMFERENCE < 62.8 or CIRCUMFERENCE > 62.9):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     println("All constant reference tests passed")
     return Result.Ok(0)

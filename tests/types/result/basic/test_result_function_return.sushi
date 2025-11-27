@@ -1,0 +1,62 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: Explicit Ok return works
+# EXPECT_STDOUT_CONTAINS: PASS: Explicit Err return works
+# EXPECT_STDOUT_CONTAINS: PASS: Conditional return Ok works
+# EXPECT_STDOUT_CONTAINS: PASS: Conditional return Err works
+# EXPECT_STDERR_EMPTY: true
+
+# Tests Result as function return type with implicit annotation
+
+enum MyError:
+    Error
+
+fn explicit_return_ok() i32 | MyError:
+    return Result.Ok(42)
+
+fn explicit_return_err() i32 | MyError:
+    return Result.Err(MyError.Error)
+
+fn conditional_return(bool success) string | MyError:
+    if (success):
+        return Result.Ok("success")
+    else:
+        return Result.Err(MyError.Error)
+
+fn main() i32:
+    match explicit_return_ok():
+        Result.Ok(value) ->
+            if (value == 42):
+                println("PASS: Explicit Ok return works")
+            else:
+                println("FAIL: Wrong value")
+                return Result.Ok(1)
+        Result.Err(_) ->
+            println("FAIL: Got error")
+            return Result.Ok(1)
+
+    match explicit_return_err():
+        Result.Ok(_) ->
+            println("FAIL: Should get error")
+            return Result.Ok(1)
+        Result.Err(MyError.Error) ->
+            println("PASS: Explicit Err return works")
+
+    match conditional_return(true):
+        Result.Ok(msg) ->
+            if (msg == "success"):
+                println("PASS: Conditional return Ok works")
+            else:
+                println("FAIL: Wrong message")
+                return Result.Ok(1)
+        Result.Err(_) ->
+            println("FAIL: Got error on success")
+            return Result.Ok(1)
+
+    match conditional_return(false):
+        Result.Ok(_) ->
+            println("FAIL: Should get error on failure")
+            return Result.Ok(1)
+        Result.Err(MyError.Error) ->
+            println("PASS: Conditional return Err works")
+
+    return Result.Ok(0)

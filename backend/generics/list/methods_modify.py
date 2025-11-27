@@ -429,11 +429,12 @@ def emit_list_insert(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Str
     # Branch based on bounds check
     codegen.builder.cbranch(bounds_ok, in_bounds_block, out_of_bounds_block)
 
-    # Out of bounds: return Result.Err()
+    # Out of bounds: return Result.Err(StdError.Error)
     codegen.builder.position_at_end(out_of_bounds_block)
     from semantics.typesys import BuiltinType
     from backend.generics.results import ensure_result_type_in_table
-    result_type = ensure_result_type_in_table(codegen.enum_table, BuiltinType.BLANK)
+    std_error = codegen.enum_table.by_name.get("StdError")
+    result_type = ensure_result_type_in_table(codegen.enum_table, BuiltinType.BLANK, std_error)
     result_llvm_type = codegen.types.ll_type(result_type)
     # Result.Err() - tag = 1, no data
     err_enum = ir.Constant(result_llvm_type, ir.Undefined)

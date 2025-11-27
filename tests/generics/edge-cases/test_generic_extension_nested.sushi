@@ -5,7 +5,7 @@
 # "The impossible often has a kind of integrity to it which the merely improbable lacks"
 
 fn main() i32:
-    let Result<Maybe<i32>> nested = Result.Ok(Maybe.Some(42))
+    let Result<Maybe<i32>, StdError> nested = Result.Ok(Maybe.Some(42))
 
     # Use built-in extension methods on nested generic
     if (nested):

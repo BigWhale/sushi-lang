@@ -1,11 +1,11 @@
 # Test: Multiple array modifications through references
 # Should compile and run successfully
 
-fn add_element(&i32[] arr, i32 value) ~:
+fn add_element(&poke i32[] arr, i32 value) ~:
     arr.push(value)
     return Result.Ok(~)
 
-fn replace_with_new(&i32[] arr) ~:
+fn replace_with_new(&poke i32[] arr) ~:
     arr := from([100, 200, 300])
     return Result.Ok(~)
 
@@ -14,11 +14,11 @@ fn run_test() i32:
     println(numbers.len())
     println(numbers.get(0)??)
 
-    add_element(&numbers, 4)
+    add_element(&poke numbers, 4)
     println(numbers.len())
     println(numbers.get(3)??)
 
-    replace_with_new(&numbers)
+    replace_with_new(&poke numbers)
     println(numbers.len())
     println(numbers.get(0)??)
 

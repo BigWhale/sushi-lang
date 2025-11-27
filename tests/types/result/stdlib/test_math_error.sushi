@@ -1,0 +1,46 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: MathError.DivisionByZero works
+# EXPECT_STDOUT_CONTAINS: PASS: MathError.Overflow works
+# EXPECT_STDOUT_CONTAINS: PASS: MathError.InvalidInput works
+# EXPECT_STDERR_EMPTY: true
+
+# Tests MathError enum variants
+
+fn divide(i32 a, i32 b) i32 | MathError:
+    if (b == 0):
+        return Result.Err(MathError.DivisionByZero)
+    return Result.Ok(a / b)
+
+fn large_multiply(i32 a, i32 b) i32 | MathError:
+    if (a > 1000000 and b > 1000000):
+        return Result.Err(MathError.Overflow)
+    return Result.Ok(a * b)
+
+fn sqrt_check(i32 n) i32 | MathError:
+    if (n < 0):
+        return Result.Err(MathError.InvalidInput)
+    return Result.Ok(n)
+
+fn main() i32:
+    match divide(10, 0):
+        Result.Err(MathError.DivisionByZero) ->
+            println("PASS: MathError.DivisionByZero works")
+        _ ->
+            println("FAIL: DivisionByZero pattern failed")
+            return Result.Ok(1)
+
+    match large_multiply(2000000, 3000000):
+        Result.Err(MathError.Overflow) ->
+            println("PASS: MathError.Overflow works")
+        _ ->
+            println("FAIL: Overflow pattern failed")
+            return Result.Ok(1)
+
+    match sqrt_check(-5):
+        Result.Err(MathError.InvalidInput) ->
+            println("PASS: MathError.InvalidInput works")
+        _ ->
+            println("FAIL: InvalidInput pattern failed")
+            return Result.Ok(1)
+
+    return Result.Ok(0)

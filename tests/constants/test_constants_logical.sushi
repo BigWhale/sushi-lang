@@ -44,67 +44,67 @@ const bool IS_INVALID = (100 < 50) or (10 != 10)
 fn main() i32:
     # Verify logical AND results
     if (not AND_KEYWORD_TT):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (AND_KEYWORD_TF):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (AND_KEYWORD_FT):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (AND_KEYWORD_FF):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not AND_SYMBOL_TT):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (AND_SYMBOL_TF):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Verify logical OR results
     if (not OR_KEYWORD_TT):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not OR_KEYWORD_TF):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not OR_KEYWORD_FT):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (OR_KEYWORD_FF):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not OR_SYMBOL_TT):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (OR_SYMBOL_FF):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Verify logical XOR results
     if (XOR_KEYWORD_TT):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not XOR_KEYWORD_TF):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not XOR_KEYWORD_FT):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (XOR_KEYWORD_FF):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not XOR_SYMBOL_TF):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (XOR_SYMBOL_FF):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Verify logical NOT results
     if (NOT_KEYWORD_T):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not NOT_KEYWORD_F):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (NOT_SYMBOL_T):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not NOT_SYMBOL_F):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Verify complex expressions
     if (not COMPLEX_EXPR):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (not NESTED_EXPR):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     # Verify combined expressions
     if (not IS_VALID):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (IS_INVALID):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     println("All constant logical tests passed")
     return Result.Ok(0)

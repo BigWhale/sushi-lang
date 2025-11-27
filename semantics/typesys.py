@@ -1,10 +1,24 @@
 from __future__ import annotations
 from enum import Enum
-from typing import Optional, Mapping, Union
+from typing import Optional, Mapping, Union, Literal
 from dataclasses import dataclass
 
 # Import generic types
 from semantics.generics.types import TypeParameter, GenericEnumType, GenericTypeRef
+
+
+class BorrowMode(Enum):
+    """Borrow mode for reference types.
+
+    PEEK: Read-only borrow (multiple allowed)
+    POKE: Read-write borrow (exclusive access)
+    """
+    PEEK = "peek"  # Read-only
+    POKE = "poke"  # Read-write
+
+    def __str__(self) -> str:
+        return self.value
+
 
 class BuiltinType(Enum):
     I8 = "i8"
@@ -103,21 +117,25 @@ class StructType:
 
 @dataclass(frozen=True)
 class ResultType:
-    """Represents a Result<T> type for function returns.
+    """Represents a Result<T, E> type for function returns.
 
-    All functions implicitly return Result<T> where T is their declared return type.
-    This type is transparent to users but used internally for type checking.
+    All functions implicitly return Result<T, E> where T is their declared return type
+    and E is the error type. This type is transparent to users but used internally for
+    type checking.
     """
-    ok_type: "Type"  # The type wrapped in Ok(value)
+    ok_type: "Type"   # The type wrapped in Ok(value)
+    err_type: "Type"  # The type wrapped in Err(error)
 
     def __str__(self) -> str:
-        return f"Result<{self.ok_type}>"
+        return f"Result<{self.ok_type}, {self.err_type}>"
 
     def __hash__(self) -> int:
-        return hash(("result", self.ok_type))
+        return hash(("result", self.ok_type, self.err_type))
 
     def __eq__(self, other) -> bool:
-        return isinstance(other, ResultType) and self.ok_type == other.ok_type
+        return (isinstance(other, ResultType) and
+                self.ok_type == other.ok_type and
+                self.err_type == other.err_type)
 
 @dataclass(frozen=True)
 class IteratorType:
@@ -139,31 +157,50 @@ class IteratorType:
 
 @dataclass(frozen=True)
 class ReferenceType:
-    """Represents a borrowed reference to a value (&T).
+    """Represents a borrowed reference to a value (&peek T or &poke T).
 
     References allow temporary access to data without transferring ownership.
-    All references are mutable in Sushi (unlike Rust's &/&mut distinction).
+    Two borrow modes:
+    - &peek T: Read-only borrow (multiple allowed)
+    - &poke T: Read-write borrow (exclusive access)
 
     Borrow Rules (enforced at compile time):
-    - Only one active borrow per variable at a time
+    - Multiple &peek borrows allowed (read-only)
+    - Only one &poke borrow at a time (exclusive)
+    - Cannot have &peek and &poke borrows simultaneously
     - Can't move, rebind, or destroy a variable while it's borrowed
     - Borrows are function-scoped (end at function return)
 
+    Type Coercion:
+    - &poke T can be passed where &peek T is expected (safe downgrade)
+    - &peek T cannot be passed where &poke T is expected
+
     Usage:
-    - Function parameters: fn process(arr: &i32[]) ~
-    - Function returns: fn get_ref() &MyStruct
+    - Read-only params: fn read(&peek i32[] arr) i32
+    - Mutable params: fn modify(&poke i32 x) ~
     - Zero-cost: compiles to LLVM pointers
     """
     referenced_type: "Type"  # The type being borrowed (e.g., i32[], MyStruct)
+    mutability: BorrowMode = BorrowMode.POKE  # Default to poke for backward compat during migration
 
     def __str__(self) -> str:
-        return f"&{self.referenced_type}"
+        return f"&{self.mutability} {self.referenced_type}"
 
     def __hash__(self) -> int:
-        return hash(("reference", self.referenced_type))
+        return hash(("reference", self.referenced_type, self.mutability))
 
     def __eq__(self, other) -> bool:
-        return isinstance(other, ReferenceType) and self.referenced_type == other.referenced_type
+        return (isinstance(other, ReferenceType) and
+                self.referenced_type == other.referenced_type and
+                self.mutability == other.mutability)
+
+    def is_peek(self) -> bool:
+        """Returns True if this is a read-only borrow."""
+        return self.mutability == BorrowMode.PEEK
+
+    def is_poke(self) -> bool:
+        """Returns True if this is a read-write borrow."""
+        return self.mutability == BorrowMode.POKE
 
 @dataclass(frozen=True)
 class PointerType:

@@ -3,7 +3,7 @@
 
 fn main() i32:
     # Result containing a fixed-size array
-    let Result<i32[3]> result_array = Result.Ok([1, 2, 3])
+    let Result<i32[3], StdError> result_array = Result.Ok([1, 2, 3])
 
     # Maybe containing a string (builtin type)
     let Maybe<string> maybe_string = Maybe.Some("Don't Panic")

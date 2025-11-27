@@ -5,11 +5,11 @@ fn run_test() i32:
 
     # Verify all towels are clean
     if (towels.get(0)?? != "clean"):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (towels.get(1)?? != "clean"):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (towels.get(2)?? != "clean"):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     return Result.Ok(0)
 

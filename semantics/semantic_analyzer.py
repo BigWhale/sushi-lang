@@ -98,6 +98,9 @@ class SemanticAnalyzer:
         enum_instantiations = set()
         struct_instantiations = set()
         for base_name, type_args in instantiations:
+            # Skip Result<T, E> - it's handled specially as ResultType, not monomorphized
+            if base_name == "Result" and len(type_args) == 2:
+                continue
             if base_name in self.generic_enums.by_name:
                 enum_instantiations.add((base_name, type_args))
             elif base_name in self.generic_structs.by_name:
@@ -278,6 +281,9 @@ class SemanticAnalyzer:
         enum_instantiations = set()
         struct_instantiations = set()
         for base_name, type_args in type_instantiations:
+            # Skip Result<T, E> - it's handled specially as ResultType, not monomorphized
+            if base_name == "Result" and len(type_args) == 2:
+                continue
             if base_name in self.generic_enums.by_name:
                 enum_instantiations.add((base_name, type_args))
             elif base_name in self.generic_structs.by_name:

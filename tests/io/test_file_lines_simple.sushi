@@ -9,5 +9,5 @@ fn main() i32:
             f.lines()
             return Result.Ok(0)
         FileResult.Err(_) ->
-            return Result.Err()
+            return Result.Err(StdError.Error)
     return Result.Ok(0)

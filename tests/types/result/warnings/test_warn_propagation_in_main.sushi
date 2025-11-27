@@ -1,0 +1,10 @@
+# Tests warning for using ?? error propagation in main() function
+# Should emit CW2511 warning but compile successfully
+
+fn get_value() i32:
+    return Result.Ok(42)
+
+fn main() i32:
+    let i32 value = get_value()??
+    println("{value}")
+    return Result.Ok(0)

@@ -7,13 +7,75 @@ This module contains validation functions for various statement types:
 - Return statements
 - Rebind statements (variable reassignment)
 - Control flow statements (if, while, foreach)
+
+Architecture Overview
+--------------------
+
+Statement validation follows a three-phase pattern:
+
+1. **Type Resolution** (resolution.py)
+   - Converts declared types to concrete types
+   - Handles GenericTypeRef → EnumType/StructType/ResultType
+   - Handles UnknownType → resolved enum/struct types
+   - Validates special cases (HashMap key types, Result<T, E>)
+
+2. **Type Propagation** (propagation.py)
+   - MUST happen BEFORE validation
+   - Propagates expected types to constructors for type inference
+   - Sets resolved_enum_type/resolved_struct_type on AST nodes
+   - Enables generic type inference (Result<T>, Maybe<T>, Own<T>, etc.)
+   - Handles nested generics (Result<Maybe<T>>, HashMap<K, List<V>>)
+
+3. **Validation** (result_validation.py, compatibility.py, expressions.py)
+   - Validates expressions after type information is propagated
+   - Checks type compatibility and Result patterns
+   - Emits appropriate error codes
+
+Critical Ordering Requirement
+-----------------------------
+
+Type propagation MUST occur BEFORE expression validation. This ordering enables:
+- Generic type inference without explicit type arguments
+- Nested generic type resolution
+- Proper monomorphization of generic constructors
+
+Example flow for `let Maybe<i32> x = Maybe.Some(42)`:
+1. Resolution: Maybe<i32> → Maybe<i32> (concrete enum type)
+2. Propagation: Set Maybe.Some.resolved_enum_type = Maybe<i32>
+3. Validation: Check compatibility of 42 with i32
+
+AST Annotation Mechanism
+------------------------
+
+The propagation phase annotates AST nodes with resolved types:
+- resolved_enum_type: Set on EnumConstructor/DotCall for generic enums
+- resolved_struct_type: Set on DotCall for generic structs
+- callee.id update: For Call nodes, updates to concrete type name
+
+These annotations are used by the backend for:
+- Code generation of monomorphized generic types
+- LLVM IR emission with correct type information
+- Runtime type dispatch for generic functions
+
+Error Codes
+-----------
+
+Statement validation can emit:
+- CE2007: Missing type annotation (let statement)
+- CE2030: Return must use Result.Ok() or Result.Err()
+- CE2031: Result.Ok() value type mismatch
+- CE2039: Result.Err() error type mismatch
+- CE2032: Blank type cannot be used for variables
+- CE2058: HashMap key type cannot be dynamic array
+- CE2505: Unused Result warning (assigning Result without handling)
+- CW2511: Warning for ?? operator in main() function
 """
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from internals import errors as er
-from semantics.typesys import BuiltinType, DynamicArrayType, ArrayType, StructType, EnumType, UnknownType, IteratorType
-from semantics.ast import Let, Return, Rebind, If, While, Foreach, EnumConstructor, DotCall, MethodCall, Name
+from semantics.typesys import BuiltinType, DynamicArrayType, ArrayType, StructType, EnumType, UnknownType, IteratorType, ResultType
+from semantics.ast import Let, Return, Rebind, If, While, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess
 from semantics.type_resolution import resolve_unknown_type
 from .utils import validate_type_name
 from .compatibility import validate_assignment_compatibility, types_compatible
@@ -38,82 +100,25 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
         er.emit(validator.reporter, er.ERR.CE2032, stmt.type_span)
         return
 
-    # Add variable to type table (resolve UnknownType/GenericTypeRef to StructType/EnumType if needed)
-    from semantics.typesys import UnknownType, StructType
+    # Resolve variable type (handles UnknownType, GenericTypeRef, Result<T, E>, HashMap<K, V>, etc.)
+    from .resolution import resolve_variable_type
     from semantics.generics.types import GenericTypeRef
 
-    resolved_type = stmt.ty  # Track the resolved type for propagation
+    resolved_type = resolve_variable_type(validator, stmt.ty, stmt.type_span)
 
-    if isinstance(stmt.ty, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
-        validator.variable_types[stmt.name] = stmt.ty
-        resolved_type = stmt.ty
-    elif isinstance(stmt.ty, UnknownType):
-        # Resolve UnknownType to StructType or EnumType
-        resolved_type = resolve_unknown_type(stmt.ty, validator.struct_table.by_name, validator.enum_table.by_name)
+    # Store resolved type in variable table
+    validator.variable_types[stmt.name] = resolved_type
+
+    # Update AST node for backend (but keep GenericTypeRef for Result<T, E>)
+    if not (isinstance(stmt.ty, GenericTypeRef) and stmt.ty.base_name == "Result"):
         if resolved_type != stmt.ty:
-            validator.variable_types[stmt.name] = resolved_type
-            stmt.ty = resolved_type  # Update AST node for backend
-    elif isinstance(stmt.ty, GenericTypeRef):
-        # Validate HashMap key types BEFORE resolution (reject dynamic arrays)
-        if stmt.ty.base_name == "HashMap" and len(stmt.ty.type_args) >= 1:
-            key_type = stmt.ty.type_args[0]
-            if isinstance(key_type, DynamicArrayType):
-                er.emit(validator.reporter, er.ERR.CE2058, stmt.type_span, key_type=str(key_type))
+            stmt.ty = resolved_type
 
-        # Resolve GenericTypeRef to monomorphized EnumType or StructType
-        # Build type name: Result<i32> -> "Result<i32>", Box<i32> -> "Box<i32>"
-        type_args_str = ", ".join(str(arg) for arg in stmt.ty.type_args)
-        concrete_name = f"{stmt.ty.base_name}<{type_args_str}>"
-
-        # Try enum table first
-        if concrete_name in validator.enum_table.by_name:
-            resolved_type = validator.enum_table.by_name[concrete_name]
-            validator.variable_types[stmt.name] = resolved_type
-            stmt.ty = resolved_type  # Update AST node for backend
-        # Try struct table second
-        elif concrete_name in validator.struct_table.by_name:
-            resolved_type = validator.struct_table.by_name[concrete_name]
-            validator.variable_types[stmt.name] = resolved_type
-            stmt.ty = resolved_type  # Update AST node for backend
-
-    # If RHS is an enum constructor for a generic enum, propagate the expected type
-    if stmt.value and isinstance(stmt.value, (EnumConstructor, DotCall)):
-        # Check if this is a generic enum constructor (e.g., Maybe.Some(42))
-        enum_name = None
-        if isinstance(stmt.value, EnumConstructor):
-            enum_name = stmt.value.enum_name
-        elif isinstance(stmt.value, DotCall) and isinstance(stmt.value.receiver, Name):
-            enum_name = stmt.value.receiver.id
-
-        if (enum_name and enum_name in validator.generic_enum_table.by_name and
-            isinstance(resolved_type, EnumType)):
-            # Store the resolved enum type in the AST node for backend
-            stmt.value.resolved_enum_type = resolved_type
-
-    # If RHS is a struct constructor for a generic struct, propagate the expected type
-    # This allows `let Own<i32> ptr = Own.alloc(42)` to resolve correctly
-    if stmt.value and isinstance(stmt.value, DotCall) and isinstance(stmt.value.receiver, Name):
-        struct_name = stmt.value.receiver.id
-
-        # Check if this is a generic struct constructor (e.g., Own.alloc(42))
-        if (struct_name in validator.generic_struct_table.by_name and
-            isinstance(resolved_type, StructType)):
-            # Store the resolved struct type in the AST node for backend
-            stmt.value.resolved_struct_type = resolved_type
-
-    # If RHS is a struct constructor (Call node), propagate the expected type for generic structs
-    # This allows `let Box<i32> b = Box(42)` to resolve correctly
-    from semantics.ast import Call
-    if stmt.value and isinstance(stmt.value, Call) and hasattr(stmt.value.callee, 'id'):
-        struct_name = stmt.value.callee.id
-
-        # Check if this is a generic struct constructor
-        if (struct_name in validator.generic_struct_table.by_name and
-            isinstance(resolved_type, StructType)):
-            # Update the Call node's callee id to use the concrete type name
-            # This allows validate_struct_constructor to find the right struct
-            # e.g., Box -> Box<i32>
-            stmt.value.callee.id = resolved_type.name
+    # Propagate expected type to constructors BEFORE validation
+    # This is CRITICAL for generic type inference (Result<T>, Maybe<T>, Own<T>, etc.)
+    if stmt.value:
+        from .propagation import propagate_types_to_value
+        propagate_types_to_value(validator, stmt.value, resolved_type)
 
     # Validate assignment compatibility (CE2002)
     if stmt.value:
@@ -150,103 +155,35 @@ def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:
     if expected_type is None:
         return  # Functions without return type (shouldn't happen after CE0103)
 
-    # Resolve GenericTypeRef to concrete EnumType if needed
-    from semantics.generics.types import GenericTypeRef
-    if isinstance(expected_type, GenericTypeRef):
-        type_args_str = ", ".join(str(arg) for arg in expected_type.type_args)
-        enum_name = f"{expected_type.base_name}<{type_args_str}>"
-        if enum_name in validator.enum_table.by_name:
-            expected_type = validator.enum_table.by_name[enum_name]
+    # Resolve return type to ResultType (handles explicit Result<T, E> and implicit T | E)
+    from .resolution import resolve_return_type_to_result
+    expected_type = resolve_return_type_to_result(
+        validator,
+        expected_type,
+        validator.current_function.err_type
+    )
 
     if stmt.value:
-        # Propagate expected type to Result.Ok() and Result.Err() BEFORE validation
-        # This is CRITICAL: Result<T> is a generic enum, so Result.Ok needs resolved_enum_type set
-        if isinstance(stmt.value, (EnumConstructor, DotCall)):
-            # Check if this is Result.Ok() or Result.Err()
-            is_result_enum = False
-            variant_name = None
+        # Propagate expected type to constructors BEFORE validation
+        # This is CRITICAL for generic type inference (Result<T>, Maybe<T>, Own<T>, etc.)
+        from .propagation import propagate_types_to_value
+        propagate_types_to_value(validator, stmt.value, expected_type)
 
-            if isinstance(stmt.value, EnumConstructor):
-                is_result_enum = (stmt.value.enum_name == "Result")
-                variant_name = stmt.value.variant_name
-            elif isinstance(stmt.value, DotCall) and isinstance(stmt.value.receiver, Name):
-                is_result_enum = (stmt.value.receiver.id == "Result")
-                variant_name = stmt.value.method
-
-            if is_result_enum:
-                # Build the Result<T> type name from the function's return type
-                result_enum_name = f"Result<{expected_type}>"
-                if result_enum_name in validator.enum_table.by_name:
-                    # Set resolved_enum_type to Result<T>
-                    stmt.value.resolved_enum_type = validator.enum_table.by_name[result_enum_name]
-
-                # Also propagate type to nested generic enum constructors (e.g., Maybe.Some inside Result.Ok)
-                if variant_name == "Ok":
-                    if stmt.value.args and isinstance(stmt.value.args[0], (EnumConstructor, DotCall)):
-                        arg_constructor = stmt.value.args[0]
-                        # Check if nested constructor is for a generic enum
-                        nested_enum_name = None
-                        if isinstance(arg_constructor, EnumConstructor):
-                            nested_enum_name = arg_constructor.enum_name
-                        elif isinstance(arg_constructor, DotCall) and isinstance(arg_constructor.receiver, Name):
-                            nested_enum_name = arg_constructor.receiver.id
-
-                        if (nested_enum_name and nested_enum_name in validator.generic_enum_table.by_name and
-                            isinstance(expected_type, EnumType)):
-                            # Propagate the function's return type to the nested constructor
-                            arg_constructor.resolved_enum_type = expected_type
-
-        # First, validate the return expression to ensure it's properly formed
+        # Validate the return expression after type propagation
         validator.validate_expression(stmt.value)
 
-        # Check for Result.Ok() or Result.Err() patterns
-        # These can be EnumConstructor, DotCall, or MethodCall nodes
-        is_result_ok_or_err = False
+        # Validate Result.Ok() or Result.Err() pattern using extracted utilities
+        from .result_validation import validate_result_pattern
 
-        if isinstance(stmt.value, EnumConstructor):
-            # Old-style enum constructor parsing
-            if stmt.value.enum_name == "Result":
-                is_result_ok_or_err = True
-                if stmt.value.variant_name == "Ok":
-                    if stmt.value.args:
-                        value_type = validator.infer_expression_type(stmt.value.args[0])
-                        if value_type and expected_type and not types_compatible(validator, value_type, expected_type):
-                            er.emit(validator.reporter, er.ERR.CE2031, stmt.value.loc,
-                                   expected=str(expected_type), got=str(value_type))
-                # Err() is always valid - no type checking needed
-        elif isinstance(stmt.value, DotCall):
-            # DotCall: unified X.Y(args) node
-            if isinstance(stmt.value.receiver, Name) and stmt.value.receiver.id == "Result":
-                is_result_ok_or_err = True
-                if stmt.value.method == "Ok":
-                    if stmt.value.args:
-                        value_type = validator.infer_expression_type(stmt.value.args[0])
-                        if value_type and expected_type and not types_compatible(validator, value_type, expected_type):
-                            er.emit(validator.reporter, er.ERR.CE2031, stmt.value.loc,
-                                   expected=str(expected_type), got=str(value_type))
-                # Err() is always valid - no type checking needed
-        elif isinstance(stmt.value, MethodCall):
-            # Old parsing: Result.Ok() was parsed as MethodCall (legacy support)
-            # Check if this is actually an enum constructor (Result.Ok/Result.Err)
-            if isinstance(stmt.value.receiver, Name) and (
-                stmt.value.receiver.id in validator.enum_table.by_name or
-                stmt.value.receiver.id == "Result" or
-                stmt.value.receiver.id in validator.generic_enum_table.by_name
-            ):
-                # This is an enum constructor like Result.Ok() or FileMode.Read()
-                if stmt.value.receiver.id == "Result":
-                    is_result_ok_or_err = True
-                    if stmt.value.method == "Ok":
-                        if stmt.value.args:
-                            value_type = validator.infer_expression_type(stmt.value.args[0])
-                            if value_type and expected_type and not types_compatible(validator, value_type, expected_type):
-                                er.emit(validator.reporter, er.ERR.CE2031, stmt.value.loc,
-                                       expected=str(expected_type), got=str(value_type))
-                    # Err() is always valid - no type checking needed
-
-        if not is_result_ok_or_err:
+        if not validate_result_pattern(validator, stmt.value, expected_type):
             # Return statement must use Result.Ok() or Result.Err()
             er.emit(validator.reporter, er.ERR.CE2030, stmt.value.loc)
+
+        # Check for ?? in main() warning (CW2511)
+        if validator.current_function.name == "main":
+            from .expressions import check_propagation_in_expression
+            if check_propagation_in_expression(stmt.value):
+                er.emit(validator.reporter, er.ERR.CW2511, stmt.value.loc)
     else:
         # Bare "return" is no longer allowed - must use Ok() or Err()
         er.emit(validator.reporter, er.ERR.CE2030, stmt.loc)
@@ -297,20 +234,11 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
         validator.validate_expression(stmt.value)
         return
 
-    # If RHS is an enum constructor for a generic enum, propagate the expected type
-    # This is critical for user-defined generic enums (e.g., Either<T, U>)
-    if stmt.value and isinstance(stmt.value, (EnumConstructor, DotCall)):
-        # Check if this is a generic enum constructor (e.g., Either.Right("test"))
-        enum_name = None
-        if isinstance(stmt.value, EnumConstructor):
-            enum_name = stmt.value.enum_name
-        elif isinstance(stmt.value, DotCall) and isinstance(stmt.value.receiver, Name):
-            enum_name = stmt.value.receiver.id
-
-        if (enum_name and enum_name in validator.generic_enum_table.by_name and
-            isinstance(actual_type, EnumType)):
-            # Store the resolved enum type in the AST node for backend
-            stmt.value.resolved_enum_type = actual_type
+    # Propagate expected type to constructors BEFORE validation
+    # This is critical for generic type inference (user-defined generic enums, etc.)
+    if stmt.value:
+        from .propagation import propagate_types_to_value
+        propagate_types_to_value(validator, stmt.value, actual_type)
 
     # Validate the expression after propagating type information
     validator.validate_expression(stmt.value)

@@ -1,0 +1,49 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: Parsed red correctly
+# EXPECT_STDOUT_CONTAINS: PASS: InvalidColor error works
+# EXPECT_STDERR_EMPTY: true
+
+# Tests Result<T, E> where T is an enum
+
+enum Color:
+    Red
+    Green
+    Blue
+
+enum ParseError:
+    InvalidColor
+    EmptyString
+
+fn parse_color(string s) Color | ParseError:
+    if (s == ""):
+        return Result.Err(ParseError.EmptyString)
+    if (s == "red"):
+        return Result.Ok(Color.Red)
+    if (s == "green"):
+        return Result.Ok(Color.Green)
+    if (s == "blue"):
+        return Result.Ok(Color.Blue)
+    return Result.Err(ParseError.InvalidColor)
+
+fn main() i32:
+    match parse_color("red"):
+        Result.Ok(Color.Red) ->
+            println("PASS: Parsed red correctly")
+        Result.Ok(_) ->
+            println("FAIL: Got wrong color")
+            return Result.Ok(1)
+        Result.Err(_) ->
+            println("FAIL: Got error for valid color")
+            return Result.Ok(1)
+
+    match parse_color("invalid"):
+        Result.Ok(_) ->
+            println("FAIL: Should have gotten InvalidColor error")
+            return Result.Ok(1)
+        Result.Err(ParseError.InvalidColor) ->
+            println("PASS: InvalidColor error works")
+        Result.Err(_) ->
+            println("FAIL: Got wrong error type")
+            return Result.Ok(1)
+
+    return Result.Ok(0)

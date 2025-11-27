@@ -8,16 +8,16 @@ fn main() i32:
             println("Test 1: Found 'world' at position {pos}")
             if (pos != 6):
                 println("ERROR: Expected position 6, got {pos}")
-                return Result.Err()
+                return Result.Err(StdError.Error)
         Maybe.None() ->
             println("ERROR: 'world' should be found")
-            return Result.Err()
+            return Result.Err(StdError.Error)
 
     # Test 2: Find substring that doesn't exist
     match "hello world".find("xyz"):
         Maybe.Some(_) ->
             println("ERROR: Should not find 'xyz'")
-            return Result.Err()
+            return Result.Err(StdError.Error)
         Maybe.None() ->
             println("Test 2: 'xyz' not found (expected)")
 
@@ -27,10 +27,10 @@ fn main() i32:
             println("Test 3: Found 'hello' at position {pos}")
             if (pos != 0):
                 println("ERROR: Expected position 0, got {pos}")
-                return Result.Err()
+                return Result.Err(StdError.Error)
         Maybe.None() ->
             println("ERROR: 'hello' should be found")
-            return Result.Err()
+            return Result.Err(StdError.Error)
 
     println("All tests passed!")
     return Result.Ok(0)

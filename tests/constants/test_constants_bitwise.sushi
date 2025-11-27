@@ -15,21 +15,21 @@ const u32 SHIFT_RIGHT = (256 as u32) >> (2 as u32)
 fn main() i32:
     # Verify bitwise results
     if (FLAGS_A != 1 as u32):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (FLAGS_B != 2 as u32):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (FLAGS_C != 4 as u32):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (FLAGS_ALL != 7 as u32):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (FLAGS_AND != 15 as u32):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (FLAGS_XOR != 240 as u32):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (SHIFT_LEFT != 256 as u32):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     if (SHIFT_RIGHT != 64 as u32):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     println("All bitwise constant tests passed")
     return Result.Ok(0)

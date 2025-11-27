@@ -1,0 +1,103 @@
+use <sys/process>
+use <io/stdio>
+
+fn main() i32:
+    println("=== Process Control Tests ===")
+    println("")
+
+    # Test 1: getcwd() - Get current working directory
+    println("Test 1: getcwd()")
+    let Result<string, ProcessError> cwd_result = getcwd()
+    match cwd_result:
+        Result.Ok(path) ->
+            println("  Current directory: {path}")
+            println("  ✓ getcwd() succeeded")
+        Result.Err(_) ->
+            println("  ✗ getcwd() failed")
+            return Result.Ok(1)
+    println("")
+
+    # Test 2: getpid() - Get process ID
+    println("Test 2: getpid()")
+    let i32 pid = getpid()
+    if (pid > 0):
+        println("  Process ID: {pid}")
+        println("  ✓ getpid() succeeded")
+    else:
+        println("  ✗ getpid() returned invalid value")
+        return Result.Ok(1)
+    println("")
+
+    # Test 3: getuid() - Get user ID
+    println("Test 3: getuid()")
+    let i32 uid = getuid()
+    if (uid >= 0):
+        println("  User ID: {uid}")
+        println("  ✓ getuid() succeeded")
+    else:
+        println("  ✗ getuid() returned invalid value")
+        return Result.Ok(1)
+    println("")
+
+    # Test 4: chdir() to /tmp (should succeed on Unix-like systems)
+    println("Test 4: chdir() to /tmp")
+    let Result<i32, ProcessError> chdir_result = chdir("/tmp")
+    match chdir_result:
+        Result.Ok(code) ->
+            if (code == 0):
+                println("  ✓ chdir() to /tmp succeeded")
+
+                # Verify with getcwd()
+                let Result<string, ProcessError> new_cwd = getcwd()
+                match new_cwd:
+                    Result.Ok(path) ->
+                        println("  New directory: {path}")
+                    Result.Err(_) ->
+                        println("  ✗ getcwd() failed after chdir")
+            else:
+                println("  ✗ chdir() failed with code {code}")
+                return Result.Ok(1)
+        Result.Err(_) ->
+            println("  ✗ chdir() returned error")
+            return Result.Ok(1)
+    println("")
+
+    # Test 5: chdir() to non-existent directory (should fail)
+    println("Test 5: chdir() to non-existent directory")
+    let Result<i32, ProcessError> bad_chdir = chdir("/this/path/does/not/exist/hopefully")
+    match bad_chdir:
+        Result.Ok(code) ->
+            if (code == 0):
+                println("  ✗ chdir() unexpectedly succeeded")
+                return Result.Ok(1)
+            else:
+                println("  ✓ chdir() correctly failed with code {code}")
+        Result.Err(_) ->
+            println("  ✗ chdir() returned error (expected failure code, not error)")
+            return Result.Ok(1)
+    println("")
+
+    # Test 6: Change back to original directory
+    println("Test 6: Restore original directory")
+    let string original_cwd = cwd_result.realise("")
+    let Result<i32, ProcessError> restore_result = chdir(original_cwd)
+    match restore_result:
+        Result.Ok(code) ->
+            if (code == 0):
+                println("  ✓ Restored to original directory")
+                let Result<string, ProcessError> final_cwd = getcwd()
+                match final_cwd:
+                    Result.Ok(path) ->
+                        println("  Restored path: {path}")
+                    Result.Err(_) ->
+                        println("  ✗ getcwd() failed after restore")
+            else:
+                println("  ✗ Failed to restore directory")
+                return Result.Ok(1)
+        Result.Err(_) ->
+            println("  ✗ chdir() returned error")
+            return Result.Ok(1)
+    println("")
+
+    println("=== All Tests Passed ===")
+    return Result.Ok(0)

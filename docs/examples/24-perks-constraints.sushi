@@ -47,16 +47,16 @@ fn main() i32:
 
     # Generic function with type inference
     println("1. Using generic function with Robot:")
-    print_description(marvin)??
+    print_description(marvin)
 
     println("")
     println("2. Using generic function with Ship:")
-    print_description(hog)??
+    print_description(hog)
 
     println("")
     println("3. Getting description as string:")
-    let string desc1 = get_description(marvin)??
-    let string desc2 = get_description(hog)??
+    let string desc1 = get_description(marvin).realise("")
+    let string desc2 = get_description(hog).realise("")
     println("Desc 1: {desc1}")
     println("Desc 2: {desc2}")
 

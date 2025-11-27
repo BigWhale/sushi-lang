@@ -21,12 +21,22 @@ def is_builtin_files_function(name: str) -> bool:
 
 def get_builtin_files_function_return_type(func_name: str) -> Type:
     """Get the return type of a built-in files utility function."""
+    from semantics.typesys import EnumType
+
     if func_name in ["exists", "is_file", "is_dir"]:
         return BuiltinType.BOOL
     elif func_name == "file_size":
-        return ResultType(BuiltinType.I64)
+        # Return Result<i64, FileError> - FileError enum is defined in predefined_enums
+        # For now, we need to fetch FileError from the global enum table during compilation
+        # But since this is type inference, we'll use a placeholder approach
+        # The actual FileError will be resolved during code generation
+        from semantics.typesys import UnknownType
+        file_error = UnknownType("FileError")
+        return ResultType(ok_type=BuiltinType.I64, err_type=file_error)
     elif func_name in ["remove", "rename", "copy", "mkdir", "rmdir"]:
-        return ResultType(BuiltinType.I32)
+        from semantics.typesys import UnknownType
+        file_error = UnknownType("FileError")
+        return ResultType(ok_type=BuiltinType.I32, err_type=file_error)
     else:
         raise ValueError(f"Unknown files utility function: {func_name}")
 

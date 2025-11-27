@@ -120,6 +120,17 @@ def emit_enum_realise(
             elif isinstance(value_llvm_type, ir.FloatType) and isinstance(default_value.type, ir.DoubleType):
                 # f64 -> f32: truncate precision
                 default_value = codegen.builder.fptrunc(default_value, value_llvm_type)
+        # Handle integer-to-integer conversions (i8 <-> i32, i16 <-> i64, etc.)
+        elif isinstance(default_value.type, ir.IntType) and isinstance(value_llvm_type, ir.IntType):
+            src_width = default_value.type.width
+            dst_width = value_llvm_type.width
+            if src_width < dst_width:
+                # Extend: i8 -> i32, i32 -> i64, etc.
+                # Use sign extension for signed types (i32 is signed in Sushi)
+                default_value = codegen.builder.sext(default_value, value_llvm_type)
+            elif src_width > dst_width:
+                # Truncate: i32 -> i8, i64 -> i32, etc.
+                default_value = codegen.builder.trunc(default_value, value_llvm_type)
         else:
             # Type mismatch that shouldn't happen after proper semantic analysis
             raise_internal_error("CE0017", src=str(default_value.type), dst=str(value_llvm_type))

@@ -1,0 +1,9 @@
+# Tests error for Result in const declaration
+
+enum MyError:
+    Error
+
+const Result<i32, MyError> VALUE = Result.Ok(42)
+
+fn main() i32:
+    return Result.Ok(0)

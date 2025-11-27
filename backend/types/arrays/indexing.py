@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from llvmlite import ir
 from semantics.ast import IndexAccess, Name
 from internals.errors import raise_internal_error
+from backend.utils import require_builder
 
 if TYPE_CHECKING:
     from backend.codegen_llvm import LLVMCodegen
@@ -32,8 +33,7 @@ def emit_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, to_i1: bool = F
     Note:
         Emits runtime error RE2020 for out-of-bounds access on fixed arrays.
     """
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
+    builder = require_builder(codegen)
     # For array indexing, we need to get the array slot directly from the variable
     # rather than loading the array value
     if isinstance(expr.array, Name):

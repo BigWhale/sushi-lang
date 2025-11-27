@@ -33,9 +33,9 @@ fn main() i32:
     println("Testing generic type annotations")
 
     # Call the test functions to verify they compile
-    let Result<Either<i32, string>> ret = test_return_type()
-    let Result<i32> vt_result = test_variable_type()
-    let Result<i32> pt_result = test_parameter_type(Either.Right(123))
+    let Result<Either<i32, string>, StdError> ret = test_return_type()
+    let Result<i32, StdError> vt_result = test_variable_type()
+    let Result<i32, StdError> pt_result = test_parameter_type(Either.Right(123))
 
     # Use the variables to avoid warnings
     if (ret):

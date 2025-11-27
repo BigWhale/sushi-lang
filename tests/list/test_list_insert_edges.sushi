@@ -10,7 +10,7 @@ fn main() i32:
     match nums1.insert(0, 1):
         Result.Ok(_) ->
             println("Insert at beginning succeeded")
-        Result.Err() ->
+        Result.Err(_) ->
             println("ERROR: Insert at beginning should succeed")
             return Result.Ok(1)
 
@@ -31,7 +31,7 @@ fn main() i32:
     match nums2.insert(2, 3):
         Result.Ok(_) ->
             println("Insert at end succeeded")
-        Result.Err() ->
+        Result.Err(_) ->
             println("ERROR: Insert at end should succeed")
             return Result.Ok(4)
 
@@ -54,7 +54,7 @@ fn main() i32:
     match nums3.insert(0, 42):
         Result.Ok(_) ->
             println("Insert into empty list succeeded")
-        Result.Err() ->
+        Result.Err(_) ->
             println("ERROR: Insert into empty list at 0 should succeed")
             return Result.Ok(8)
 
@@ -80,7 +80,7 @@ fn main() i32:
     match nums4.insert(1, 99):
         Result.Ok(_) ->
             println("Insert with growth succeeded")
-        Result.Err() ->
+        Result.Err(_) ->
             println("ERROR: Insert with growth should succeed")
             return Result.Ok(12)
 

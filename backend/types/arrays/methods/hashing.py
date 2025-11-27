@@ -24,6 +24,7 @@ from backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from backend.llvm_constants import ZERO_I32, make_i32_const
 from internals import errors as er
 from internals.errors import raise_internal_error
+from backend.utils import require_builder
 from stdlib.src.common import register_builtin_method, BuiltinMethod, get_builtin_method
 from backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
 
@@ -123,8 +124,7 @@ def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
         if len(call.args) != 0:
             raise_internal_error("CE0054", got=len(call.args))
 
-        if codegen.builder is None:
-            raise_internal_error("CE0009")
+        builder = require_builder(codegen)
         builder = codegen.builder
         u64 = ir.IntType(INT64_BIT_WIDTH)
 
@@ -183,8 +183,7 @@ def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
         if len(call.args) != 0:
             raise_internal_error("CE0054", got=len(call.args))
 
-        if codegen.builder is None:
-            raise_internal_error("CE0009")
+        builder = require_builder(codegen)
         builder = codegen.builder
         i32 = ir.IntType(INT32_BIT_WIDTH)
         u64 = ir.IntType(INT64_BIT_WIDTH)
@@ -279,8 +278,7 @@ def _emit_element_hash(codegen: Any, element_value: ir.Value, element_type: Type
     Returns:
         Hash value as u64
     """
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
+    builder = require_builder(codegen)
     builder = codegen.builder
 
     # For primitive types, call their hash() method inline

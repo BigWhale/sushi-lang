@@ -3,7 +3,7 @@
 
 use <io/files>
 
-fn read_first_line(string path) string:
+fn read_first_line(string path) string | FileError:
     # Use ?? to unwrap FileResult from open()
     # If file doesn't exist, propagates FileResult.Err() to caller
     let file f = open(path, FileMode.Read())??
@@ -14,7 +14,7 @@ fn read_first_line(string path) string:
 
     return Result.Ok(line)
 
-fn process_config() string:
+fn process_config() string | FileError:
     # Use ?? to propagate errors from read_first_line()
     # If read_first_line returns Result.Err(), propagates to caller
     let string first_line = read_first_line("config.txt")??

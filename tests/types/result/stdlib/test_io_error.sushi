@@ -1,0 +1,40 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: IoError.ReadError works
+# EXPECT_STDOUT_CONTAINS: PASS: IoError.WriteError works
+# EXPECT_STDOUT_CONTAINS: PASS: IoError.FlushError works
+# EXPECT_STDERR_EMPTY: true
+
+# Tests IoError enum variants
+
+fn do_io(string op) i32 | IoError:
+    if (op == "read"):
+        return Result.Err(IoError.ReadError)
+    if (op == "write"):
+        return Result.Err(IoError.WriteError)
+    if (op == "flush"):
+        return Result.Err(IoError.FlushError)
+    return Result.Ok(100)
+
+fn main() i32:
+    match do_io("read"):
+        Result.Err(IoError.ReadError) ->
+            println("PASS: IoError.ReadError works")
+        _ ->
+            println("FAIL: ReadError pattern failed")
+            return Result.Ok(1)
+
+    match do_io("write"):
+        Result.Err(IoError.WriteError) ->
+            println("PASS: IoError.WriteError works")
+        _ ->
+            println("FAIL: WriteError pattern failed")
+            return Result.Ok(1)
+
+    match do_io("flush"):
+        Result.Err(IoError.FlushError) ->
+            println("PASS: IoError.FlushError works")
+        _ ->
+            println("FAIL: FlushError pattern failed")
+            return Result.Ok(1)
+
+    return Result.Ok(0)

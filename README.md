@@ -2,10 +2,10 @@
 
 <!-- For sushi-lang (public) repo, use: 5bfbd5156dec23acfe18dd7956e251ba -->
 <!-- For sushi (dev) repo, use: e893b92ba7b7561fae565f832f83159d -->
-[![Tests](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/BigWhale/5bfbd5156dec23acfe18dd7956e251ba/raw/badge_status.json)](https://github.com/BigWhale/sushi-lang/actions/workflows/test.yml)
-[![Total Tests](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/BigWhale/5bfbd5156dec23acfe18dd7956e251ba/raw/badge_total.json)](https://github.com/BigWhale/sushi-lang/actions/workflows/test.yml)
-[![Passed](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/BigWhale/5bfbd5156dec23acfe18dd7956e251ba/raw/badge_passed.json)](https://github.com/BigWhale/sushi-lang/actions/workflows/test.yml)
-[![Failed](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/BigWhale/5bfbd5156dec23acfe18dd7956e251ba/raw/badge_failed.json)](https://github.com/BigWhale/sushi-lang/actions/workflows/test.yml)
+[![Tests](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/BigWhale/e893b92ba7b7561fae565f832f83159d/raw/badge_status.json)](https://github.com/BigWhale/sushi-lang/actions/workflows/test.yml)
+[![Total Tests](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/BigWhale/e893b92ba7b7561fae565f832f83159d/raw/badge_total.json)](https://github.com/BigWhale/sushi-lang/actions/workflows/test.yml)
+[![Passed](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/BigWhale/e893b92ba7b7561fae565f832f83159d/raw/badge_passed.json)](https://github.com/BigWhale/sushi-lang/actions/workflows/test.yml)
+[![Failed](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/BigWhale/e893b92ba7b7561fae565f832f83159d/raw/badge_failed.json)](https://github.com/BigWhale/sushi-lang/actions/workflows/test.yml)
 
 A compiled programming language with a Lark parser frontend and
 LLVM backend that produces native binaries.

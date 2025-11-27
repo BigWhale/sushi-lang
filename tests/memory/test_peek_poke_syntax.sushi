@@ -1,0 +1,24 @@
+# Test peek/poke syntax parsing
+# This test verifies that the new borrow syntax is correctly parsed
+
+fn read_value(&peek i32 x) i32:
+    return Result.Ok(x)
+
+fn modify_value(&poke i32 x) ~:
+    x := x + 1
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32 num = 42
+
+    # Test read-only borrow
+    let Result<i32, StdError> read_result = read_value(&peek num)
+    println(read_result.realise(0))
+
+    # Test read-write borrow
+    let Result<~, StdError> mod_result = modify_value(&poke num)
+    if (mod_result):
+        println(num)
+        return Result.Ok(0)
+
+    return Result.Ok(1)

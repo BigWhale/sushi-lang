@@ -5,9 +5,9 @@
 fn main() i32:
     # Test 1: Maybe<Result<i32>> with literal constructor
     # The Answer to the Ultimate Question
-    let Maybe<Result<i32>> outer1 = Maybe.Some(Result.Ok(42))
+    let Maybe<Result<i32, StdError>> outer1 = Maybe.Some(Result.Ok(42))
     if (outer1.is_some()):
-        let Result<i32> inner1 = outer1.realise(Result.Err())
+        let Result<i32, StdError> inner1 = outer1.realise(Result.Err(StdError.Error))
         if (inner1):
             let i32 val = inner1.realise(0)
             if (val == 42):
@@ -21,7 +21,7 @@ fn main() i32:
 
     # Test 2: Result<Maybe<string>> with literal constructor
     # "Mostly Harmless" - Earth's entry in the Guide
-    let Result<Maybe<string>> outer2 = Result.Ok(Maybe.Some("Mostly Harmless"))
+    let Result<Maybe<string>, StdError> outer2 = Result.Ok(Maybe.Some("Mostly Harmless"))
     if (outer2):
         let Maybe<string> inner2 = outer2.realise(Maybe.None())
         if (inner2.is_some()):

@@ -2,12 +2,17 @@
 
 [← Back to Documentation](README.md)
 
-Comprehensive guide to error handling in Sushi using `Result<T>`, `Maybe<T>`, and the `??` operator.
+Comprehensive guide to error handling in Sushi using `Result<T, E>`, `Maybe<T>`, and the `??` operator.
 
 ## Table of Contents
 
 - [Philosophy](#philosophy)
-- [Result<T>](#resultt)
+- [Result<T, E>](#resultt-e)
+  - [Error Type Syntax](#error-type-syntax)
+  - [Standard Error Enums](#standard-error-enums)
+  - [Creating Results](#creating-results)
+  - [Handling Results](#handling-results)
+  - [Result Methods](#result-methods)
 - [Maybe<T>](#maybet)
 - [Error Propagation (??)](#error-propagation-)
 - [Patterns and Best Practices](#patterns-and-best-practices)
@@ -16,34 +21,79 @@ Comprehensive guide to error handling in Sushi using `Result<T>`, `Maybe<T>`, an
 
 Sushi makes errors explicit and impossible to ignore:
 
-1. **All functions return `Result<T>`** - Errors are part of the type system
+1. **All functions return `Result<T, E>`** - Errors are part of the type system with explicit error types
 2. **Compiler-enforced handling** - Cannot ignore errors accidentally
 3. **No exceptions** - Control flow is always visible
-4. **Zero runtime cost** - Compiles to efficient LLVM code
+4. **Type-safe error propagation** - Error types must match for propagation
+5. **Zero runtime cost** - Compiles to efficient LLVM code
 
-## Result<T>
+## Result<T, E>
 
-All functions implicitly return `Result<T>` where `T` is the declared return type.
+All functions implicitly return `Result<T, E>` where:
+- `T` is the declared return type (success value)
+- `E` is the error type (defaults to `StdError` if not specified)
 
-### Declaration
+### Error Type Syntax
+
+#### Implicit with Default Error (StdError)
 
 ```sushi
-# Function signature shows i32, but returns Result<i32>
-fn divide(i32 a, i32 b) i32:
-    if (b == 0):
-        return Result.Err()  # Error variant
-    return Result.Ok(a / b)  # Success variant
+fn add(i32 a, i32 b) i32:
+    return Result.Ok(a + b)
+# Actually returns Result<i32, StdError>
 ```
+
+#### Custom Error Type with | Syntax
+
+```sushi
+enum MathError:
+    DivisionByZero
+    Overflow
+
+fn divide(i32 a, i32 b) i32 | MathError:
+    if (b == 0):
+        return Result.Err(MathError.DivisionByZero)
+    return Result.Ok(a / b)
+# Returns Result<i32, MathError>
+```
+
+#### Explicit Result<T, E> Syntax
+
+```sushi
+fn foo() Result<i32, MyError>:
+    return Result.Ok(42)
+```
+
+### Standard Error Enums
+
+Sushi provides six built-in error types for common error conditions:
+
+- **StdError** - Generic fallback (`StdError.Error`)
+- **MathError** - Mathematical errors (`DivisionByZero`, `Overflow`, `Underflow`, `InvalidInput`)
+- **FileError** - File system errors (`NotFound`, `PermissionDenied`, `AlreadyExists`, `InvalidPath`, `IoError`)
+- **IoError** - I/O operation errors (`Read`, `Write`, `Flush`)
+- **ProcessError** - Process management (`Spawn`, `Exit`, `Signal`)
+- **EnvError** - Environment variables (`NotFound`, `InvalidValue`, `PermissionDenied`)
+
+See [Result<T, E> API Reference](stdlib/result.md) for complete details.
 
 ### Creating Results
 
 ```sushi
-# Success
+# Success - Always provide the value
 return Result.Ok(value)
 
-# Failure
-return Result.Err()
+# Failure - Must now include error data
+enum MathError:
+    DivisionByZero
+
+fn divide(i32 a, i32 b) i32 | MathError:
+    if (b == 0):
+        return Result.Err(MathError.DivisionByZero)  # Error with data
+    return Result.Ok(a / b)
 ```
+
+**Important:** `Result.Err()` without error data is **deprecated**. Always include the error value.
 
 ### Handling Results
 
@@ -65,17 +115,17 @@ fn main() i32:
 #### Using Conditionals
 
 ```sushi
-fn main() i32:
-    let Result<i32> result = divide(10, 2)
+fn main() i32 | MathError:
+    let Result<i32, MathError> result = divide(10, 2)
 
-    if (result):
+    if (result.is_ok()):
         # Success case
         let i32 value = result.realise(0)
         println("Result: {value}")
     else:
         # Error case
         println("Division failed")
-        return Result.Err()
+        return Result.Err(MathError.DivisionByZero)
 
     return Result.Ok(0)
 ```
@@ -83,15 +133,64 @@ fn main() i32:
 #### Using Pattern Matching
 
 ```sushi
-fn main() i32:
+fn main() i32 | MathError:
     match divide(10, 2):
         Result.Ok(value) ->
             println("Result: {value}")
-        Result.Err() ->
-            println("Division failed")
+        Result.Err(MathError.DivisionByZero) ->
+            println("Cannot divide by zero")
+        Result.Err(e) ->
+            println("Other error: {e}")
 
     return Result.Ok(0)
 ```
+
+### Result Methods
+
+Result<T, E> provides several methods for working with success and error values:
+
+#### `.is_ok() -> bool` and `.is_err() -> bool`
+
+Check which variant the Result contains:
+
+```sushi
+let Result<i32, MathError> result = divide(10, 2)
+
+if (result.is_ok()):
+    println("Success!")
+
+if (result.is_err()):
+    println("Failed!")
+```
+
+#### `.err() -> Maybe<E>`
+
+Extract the error value as a Maybe:
+
+```sushi
+let Result<i32, MathError> result = divide(10, 0)
+let Maybe<MathError> error = result.err()
+
+match error:
+    Maybe.Some(MathError.DivisionByZero) ->
+        println("Division by zero!")
+    Maybe.None() ->
+        println("No error")
+```
+
+#### `.expect(message: string) -> T`
+
+Unwrap the Ok value or panic with a custom message:
+
+```sushi
+let Result<i32, MathError> result = divide(10, 2)
+let i32 value = result.expect("Division should succeed")
+# Prints "ERROR: Division should succeed" and exits if Err
+```
+
+**Warning:** Use `.expect()` sparingly. It terminates the program on error.
+
+See [Result<T, E> API Reference](stdlib/result.md) for complete method documentation.
 
 ### Compiler Enforcement
 
@@ -100,17 +199,17 @@ fn get_value() i32:
     return Result.Ok(42)
 
 fn main() i32:
-    # ERROR CE2505: Cannot assign Result<i32> to i32
+    # ERROR CE2505: Cannot assign Result<i32, StdError> to i32
     # let i32 x = get_value()
 
     # CORRECT: Use .realise()
     let i32 x = get_value().realise(0)
 
-    # CORRECT: Store as Result<T>
-    let Result<i32> result = get_value()
+    # CORRECT: Store as Result<T, E>
+    let Result<i32, StdError> result = get_value()
     let i32 y = result.realise(0)
 
-    # WARNING CW2001: Unused Result<T> value
+    # WARNING CW2001: Unused Result<T, E> value
     # get_value()  # Must handle result
 
     return Result.Ok(0)
@@ -201,9 +300,9 @@ fn main() i32:
 
 ### Result vs Maybe
 
-**Use `Result<T>` when:**
+**Use `Result<T, E>` when:**
 - Operation can succeed or fail
-- Failure is an error condition
+- Failure is an error condition with specific error types
 - Example: File I/O, parsing, validation
 
 **Use `Maybe<T>` when:**
@@ -213,11 +312,11 @@ fn main() i32:
 
 ### Combining Result and Maybe
 
-Functions can return `Result<Maybe<T>>` for three states:
+Functions can return `Result<Maybe<T>, E>` for three states:
 
 1. **Success with value**: `Result.Ok(Maybe.Some(value))`
 2. **Success without value**: `Result.Ok(Maybe.None())`
-3. **Failure**: `Result.Err()`
+3. **Failure**: `Result.Err(error)`
 
 ```sushi
 fn load_optional_config() Maybe<string>:
@@ -245,7 +344,9 @@ fn main() i32:
 
 ## Error Propagation (??)
 
-The `??` operator unwraps `Result<T>` or `Maybe<T>`, propagating errors automatically.
+The `??` operator unwraps `Result<T, E>` or `Maybe<T>`, propagating errors automatically.
+
+**Important:** For Result<T, E>, error types must match exactly. The `??` operator does not perform automatic error type conversion.
 
 ### Basic Usage
 
@@ -346,6 +447,39 @@ fn main() i32:
 extend i32 squared() i32:
     # let i32 x = might_fail()??  # Not allowed here
     return Result.Ok(self * self)
+
+# ERROR CE2511: Error type mismatch in propagation
+enum ErrorA:
+    Error
+
+enum ErrorB:
+    Error
+
+fn inner() i32 | ErrorA:
+    return Result.Ok(42)
+
+fn outer() i32 | ErrorB:
+    # let i32 x = inner()??  # Cannot propagate ErrorA to ErrorB
+    return Result.Ok(0)
+```
+
+### Warning: Avoid ?? in main()
+
+Using `??` in the `main()` function generates a compiler warning (CW2511) and is highly discouraged:
+
+```sushi
+fn main() i32:
+    # ⚠️ Warning CW2511: ?? operator used in main function
+    # let i32 x = risky()??
+
+    # Instead, use explicit error handling:
+    match risky():
+        Result.Ok(x) ->
+            println("Success: {x}")
+        Result.Err(e) ->
+            println("Error occurred")
+
+    return Result.Ok(0)
 ```
 
 ## Patterns and Best Practices

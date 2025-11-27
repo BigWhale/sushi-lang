@@ -1,0 +1,24 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: Ok pattern match with binding works
+# EXPECT_STDERR_EMPTY: true
+
+# Tests pattern matching on Ok variant with binding
+
+enum MyError:
+    Error
+
+fn get_value() i32 | MyError:
+    return Result.Ok(100)
+
+fn main() i32:
+    match get_value():
+        Result.Ok(n) ->
+            if (n == 100):
+                println("PASS: Ok pattern match with binding works")
+                return Result.Ok(0)
+            else:
+                println("FAIL: Bound value is wrong")
+                return Result.Ok(1)
+        Result.Err(_) ->
+            println("FAIL: Got Err instead of Ok")
+            return Result.Ok(1)

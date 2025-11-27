@@ -15,7 +15,7 @@ fn write_test_file() ~:
             println("Failed to create test file")
     return Result.Ok(~)
 
-fn read_first_line(string path) string:
+fn read_first_line(string path) string | FileError:
     # Use ?? to unwrap FileResult from open()
     let file f = open(path, FileMode.Read())??
 

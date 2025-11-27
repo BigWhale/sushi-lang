@@ -1,0 +1,20 @@
+# Test poke to peek coercion
+# &poke T can be passed where &peek T is expected
+
+fn read_value(&peek i32 x) i32:
+    return Result.Ok(x)
+
+fn main() i32:
+    let i32 num = 42
+
+    # Print num directly to avoid CW1003 warning
+    println(num)
+
+    # Passing &poke where &peek is expected should work (safe downgrade)
+    let Result<i32, StdError> result = read_value(&poke num)
+    let i32 val = result.realise(0)
+
+    if (val == 42):
+        return Result.Ok(0)
+
+    return Result.Ok(1)

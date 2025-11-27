@@ -28,7 +28,7 @@ fn test_multiple_arrays() i32:
     return Result.Ok(0)
 
 fn main() i32:
-    let Result<i32> result = test_multiple_arrays()
+    let Result<i32, StdError> result = test_multiple_arrays()
     if (result):
         return Result.Ok(0)
-    return Result.Err()
+    return Result.Err(StdError.Error)

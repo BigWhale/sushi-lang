@@ -3,6 +3,6 @@
 
 
 fn main() i32:
-    let Result<i32> babelfish = Result.Ok(42)
+    let Result<i32, StdError> babelfish = Result.Ok(42)
     let i32 x = babelfish.realise(0)
     return Result.Ok(0)

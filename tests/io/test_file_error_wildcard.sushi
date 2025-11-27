@@ -13,7 +13,7 @@ fn main() i32:
         FileResult.Ok(f) ->
             stderr.write("Error: should not have succeeded!\n")
             f.close()
-            return Result.Err()
+            return Result.Err(StdError.Error)
         FileResult.Err(_) ->
             println("Error opening file - using wildcard pattern")
             println("Wildcard error handling successful")

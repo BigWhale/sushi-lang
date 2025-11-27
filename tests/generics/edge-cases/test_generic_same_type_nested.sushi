@@ -9,7 +9,7 @@ fn main() i32:
     let Maybe<Maybe<i32>> double_maybe = Maybe.Some(Maybe.Some(42))
 
     # Result nested within Result
-    let Result<Result<string>> double_result = Result.Ok(Result.Ok("Mostly Harmless"))
+    let Result<Result<string, StdError>, StdError> double_result = Result.Ok(Result.Ok("Mostly Harmless"))
 
     # Verify both work
     if (double_maybe.is_some()):

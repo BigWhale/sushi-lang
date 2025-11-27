@@ -1,0 +1,35 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: StdError with Ok works
+# EXPECT_STDOUT_CONTAINS: PASS: StdError.Error works
+# EXPECT_STDERR_EMPTY: true
+
+# Tests StdError enum usage
+
+fn simple_operation(i32 code) i32 | StdError:
+    if (code < 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(code * 2)
+
+fn main() i32:
+    match simple_operation(5):
+        Result.Ok(value) ->
+            if (value == 10):
+                println("PASS: StdError with Ok works")
+            else:
+                println("FAIL: Wrong value")
+                return Result.Ok(1)
+        Result.Err(_) ->
+            println("FAIL: Got error for valid input")
+            return Result.Ok(1)
+
+    match simple_operation(-1):
+        Result.Ok(_) ->
+            println("FAIL: Should have gotten StdError")
+            return Result.Ok(1)
+        Result.Err(StdError.Error) ->
+            println("PASS: StdError.Error works")
+        Result.Err(_) ->
+            println("FAIL: Wrong error variant")
+            return Result.Ok(1)
+
+    return Result.Ok(0)

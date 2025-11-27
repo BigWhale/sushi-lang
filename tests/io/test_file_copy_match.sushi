@@ -20,22 +20,22 @@ fn main() i32:
     match copy(src, dst):
         Result.Ok(_) ->
             println("Copy: Success")
-        Result.Err() ->
+        Result.Err(_) ->
             match remove(src):
                 Result.Ok(_) -> println("Cleaned on error")
-                Result.Err() -> println("Cleanup failed")
+                Result.Err(_) -> println("Cleanup failed")
             return Result.Ok(2)
 
     match remove(src):
         Result.Ok(_) ->
             println("Remove src: Success")
-        Result.Err() ->
+        Result.Err(_) ->
             return Result.Ok(3)
 
     match remove(dst):
         Result.Ok(_) ->
             println("Remove dst: Success")
-        Result.Err() ->
+        Result.Err(_) ->
             return Result.Ok(4)
 
     return Result.Ok(0)

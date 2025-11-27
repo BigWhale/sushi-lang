@@ -3,5 +3,5 @@
 
 fn main() i32:
     # UndefinedType does not exist - should cause compilation error
-    let Result<Maybe<UndefinedType>> bad = Result.Ok(Maybe.None())
+    let Result<Maybe<UndefinedType>, StdError> bad = Result.Ok(Maybe.None())
     return Result.Ok(0)

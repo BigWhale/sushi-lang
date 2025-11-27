@@ -1,6 +1,6 @@
 # Test reference to string
 
-fn print_string(&string s) ~:
+fn print_string(&poke string s) ~:
     println(s)
     return Result.Ok(~)
 
@@ -8,7 +8,7 @@ fn main() i32:
     let string message = "Hello, references!"
 
     # Borrow the string
-    print_string(&message)
+    print_string(&poke message)
 
     # String still valid
     println(message)

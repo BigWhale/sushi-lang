@@ -1,0 +1,17 @@
+# Tests error for wrong Err type
+# KNOWN BUG: Compiler does not validate Err() error type matches function declaration
+# This test currently PASSES when it should FAIL (exit code 2)
+# Bug location: semantics/passes/types/statements.py lines 243, 256, 276
+# TODO: Add error type validation for Result.Err()
+
+enum ErrorA:
+    Error
+
+enum ErrorB:
+    Error
+
+fn test_func() i32 | ErrorA:
+    return Result.Err(ErrorB.Error)
+
+fn main() i32:
+    return Result.Ok(0)

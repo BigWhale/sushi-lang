@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, List, Optional
 
 from internals.report import Span
 from internals import errors as er
-from semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType
+from semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType, ResultType
 from semantics.type_resolution import resolve_unknown_type
 
 if TYPE_CHECKING:
@@ -28,6 +28,14 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
     # Check if this is a GenericTypeRef
     from semantics.generics.types import GenericTypeRef
     if isinstance(type_obj, GenericTypeRef):
+        # Special handling for Result<T, E> - it doesn't get monomorphized, it gets resolved to ResultType
+        if type_obj.base_name == "Result" and len(type_obj.type_args) == 2:
+            # Validate type arguments recursively
+            for type_arg in type_obj.type_args:
+                validate_type_name(validator, type_arg, span)
+            # Result<T, E> is valid - it will be resolved to ResultType during type checking
+            return
+
         # Validate that the generic type base exists (check both enums and structs)
         is_generic_enum = type_obj.base_name in validator.generic_enum_table.by_name
         is_generic_struct = type_obj.base_name in validator.generic_struct_table.by_name
@@ -82,6 +90,10 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
             return
         # Recursively validate the base type
         validate_type_name(validator, type_obj.base_type, span)
+    elif isinstance(type_obj, ResultType):
+        # ResultType is a valid semantic type - recursively validate ok_type and err_type
+        validate_type_name(validator, type_obj.ok_type, span)
+        validate_type_name(validator, type_obj.err_type, span)
 
 
 def validate_and_register_parameters(validator: 'TypeValidator', params: List['Param']) -> None:
@@ -103,7 +115,7 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
             er.emit(validator.reporter, er.ERR.CE2032, param.type_span)
             continue
 
-        if isinstance(param.ty, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
+        if isinstance(param.ty, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType, ResultType)):
             validator.variable_types[param.name] = param.ty
         elif isinstance(param.ty, UnknownType):
             # Resolve UnknownType to StructType/EnumType for struct/enum-typed parameters
@@ -128,6 +140,15 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
                 if resolved_type is not None:
                     validator.variable_types[param.name] = resolved_type
                     param.ty = resolved_type  # Update AST node for backend
+
+                    # CRITICAL: Also update the FuncSig parameter in the function table
+                    # This ensures function call validation uses the resolved type for propagation
+                    if validator.current_function and validator.current_function.name in validator.func_table.by_name:
+                        func_sig = validator.func_table.by_name[validator.current_function.name]
+                        for sig_param in func_sig.params:
+                            if sig_param.name == param.name:
+                                sig_param.ty = resolved_type
+                                break
                 else:
                     # GenericTypeRef should have been monomorphized - this is an error
                     # but validation has already been done in validate_type_name
@@ -166,14 +187,14 @@ def propagate_enum_type_to_dotcall(
 ) -> None:
     """Propagate expected enum type to DotCall nodes for generic enums.
 
-    This allows enum constructors like Maybe.None(), Result.Ok(), etc.
+    This allows enum constructors like Maybe.None(), Result.Ok(), Either.Left(), etc.
     to be used directly as function/method arguments without requiring
     intermediate variables.
 
     The function sets the `resolved_enum_type` attribute on DotCall nodes
     when all conditions are met:
     1. arg is a DotCall node with a Name receiver
-    2. The receiver is a known generic enum name (like Maybe, Result)
+    2. The receiver is a generic enum name (built-in or user-defined)
     3. The expected_type can be resolved to a concrete EnumType
 
     Args:
@@ -190,34 +211,13 @@ def propagate_enum_type_to_dotcall(
         This function should be called BEFORE validate_expression() to ensure
         type propagation happens before enum constructor validation.
     """
-    from semantics.ast import DotCall, Name
-    from semantics.generics.types import GenericTypeRef
-
     # Early exit if no expected type
     if expected_type is None:
         return
 
-    # Only process DotCall nodes with Name receivers
-    if not isinstance(arg, DotCall) or not isinstance(arg.receiver, Name):
-        return
-
-    receiver_name = arg.receiver.id
-
-    # Check if receiver is a generic enum name (like Maybe, Result)
-    if receiver_name not in validator.generic_enum_table.by_name:
-        return
-
-    # Resolve the expected type to get the concrete enum type
-    resolved_type = expected_type
-    if isinstance(expected_type, GenericTypeRef):
-        # For GenericTypeRef, look up the concrete enum in the enum table
-        concrete_name = str(expected_type)  # e.g., "Maybe<i32>"
-        if concrete_name in validator.enum_table.by_name:
-            resolved_type = validator.enum_table.by_name[concrete_name]
-
-    # Set resolved_enum_type if we have a valid enum type
-    if isinstance(resolved_type, EnumType):
-        arg.resolved_enum_type = resolved_type
+    # Use the unified propagation function which handles recursion
+    from semantics.passes.types.propagation import propagate_types_to_value
+    propagate_types_to_value(validator, arg, expected_type)
 
 
 def propagate_struct_type_to_dotcall(
@@ -251,31 +251,10 @@ def propagate_struct_type_to_dotcall(
         This function should be called BEFORE validate_expression() to ensure
         type propagation happens before struct constructor validation.
     """
-    from semantics.ast import DotCall, Name
-    from semantics.generics.types import GenericTypeRef
-
     # Early exit if no expected type
     if expected_type is None:
         return
 
-    # Only process DotCall nodes with Name receivers
-    if not isinstance(arg, DotCall) or not isinstance(arg.receiver, Name):
-        return
-
-    receiver_name = arg.receiver.id
-
-    # Check if receiver is a generic struct name (like Own)
-    if receiver_name not in validator.generic_struct_table.by_name:
-        return
-
-    # Resolve the expected type to get the concrete struct type
-    resolved_type = expected_type
-    if isinstance(expected_type, GenericTypeRef):
-        # For GenericTypeRef, look up the concrete struct in the struct table
-        concrete_name = str(expected_type)  # e.g., "Own<i32>"
-        if concrete_name in validator.struct_table.by_name:
-            resolved_type = validator.struct_table.by_name[concrete_name]
-
-    # Set resolved_struct_type if we have a valid struct type
-    if isinstance(resolved_type, StructType):
-        arg.resolved_struct_type = resolved_type
+    # Use the unified propagation function which handles recursion
+    from semantics.passes.types.propagation import propagate_types_to_value
+    propagate_types_to_value(validator, arg, expected_type)

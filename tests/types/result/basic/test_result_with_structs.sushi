@@ -1,0 +1,45 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: Struct in Ok works
+# EXPECT_STDOUT_CONTAINS: PASS: InvalidName error works
+# EXPECT_STDERR_EMPTY: true
+
+# Tests Result<T, E> with struct types
+
+struct Person:
+    string name
+    i32 age
+
+enum CustomError:
+    InvalidAge
+    InvalidName
+
+fn create_person(string name, i32 age) Result<Person, CustomError>:
+    if (age < 0):
+        return Result.Err(CustomError.InvalidAge)
+    if (name == ""):
+        return Result.Err(CustomError.InvalidName)
+    return Result.Ok(Person(name, age))
+
+fn main() i32:
+    match create_person("Alice", 30):
+        Result.Ok(person) ->
+            if (person.name == "Alice" and person.age == 30):
+                println("PASS: Struct in Ok works")
+            else:
+                println("FAIL: Struct has wrong values")
+                return Result.Ok(1)
+        Result.Err(_) ->
+            println("FAIL: Got error for valid input")
+            return Result.Ok(1)
+
+    match create_person("", 30):
+        Result.Ok(_) ->
+            println("FAIL: Should have gotten InvalidName error")
+            return Result.Ok(1)
+        Result.Err(CustomError.InvalidName) ->
+            println("PASS: InvalidName error works")
+        Result.Err(_) ->
+            println("FAIL: Got wrong error type")
+            return Result.Ok(1)
+
+    return Result.Ok(0)

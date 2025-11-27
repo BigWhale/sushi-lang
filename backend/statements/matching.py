@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from internals.errors import raise_internal_error
 from backend import enum_utils
+from backend.utils import require_both_initialized
 
 if TYPE_CHECKING:
     from llvmlite import ir
@@ -31,11 +32,7 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     """
     from llvmlite import ir
 
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
-
-    if codegen.func is None:
-        raise_internal_error("CE0010")
+    builder, func = require_both_initialized(codegen)
     codegen.utils.ensure_open_block()
 
     # Emit the scrutinee and get its enum value
@@ -89,14 +86,113 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
     Returns:
         The monomorphized EnumType of the scrutinee, or None if not found.
     """
-    from semantics.ast import Name, DotCall, MethodCall, Call
-    from semantics.typesys import EnumType
+    from semantics.ast import Name, DotCall, MethodCall, Call, MemberAccess
+    from semantics.typesys import EnumType, ResultType, StructType
 
     # Try to get type from variable table if it's a Name
     if isinstance(scrutinee, Name):
         var_type = codegen.memory.find_semantic_type(scrutinee.id)
+
+        # Handle EnumType directly
         if isinstance(var_type, EnumType):
             return var_type
+
+        # Handle GenericTypeRef("Result", [T, E]) - resolve to Result<T, E> enum
+        from semantics.generics.types import GenericTypeRef
+        if isinstance(var_type, GenericTypeRef):
+            if var_type.base_name == "Result" and len(var_type.type_args) == 2:
+                from backend.generics.results import ensure_result_type_in_table
+                from semantics.type_resolution import resolve_unknown_type
+
+                # Resolve type arguments
+                ok_type = resolve_unknown_type(
+                    var_type.type_args[0],
+                    codegen.struct_table.by_name,
+                    codegen.enum_table.by_name
+                )
+                err_type = resolve_unknown_type(
+                    var_type.type_args[1],
+                    codegen.struct_table.by_name,
+                    codegen.enum_table.by_name
+                )
+
+                # Ensure Result<T, E> exists and return it
+                result_enum = ensure_result_type_in_table(
+                    codegen.enum_table,
+                    ok_type,
+                    err_type
+                )
+                return result_enum
+            else:
+                # Other generic type - look up in enum table
+                type_args_str = ", ".join(str(arg) for arg in var_type.type_args)
+                concrete_name = f"{var_type.base_name}<{type_args_str}>"
+                if concrete_name in codegen.enum_table.by_name:
+                    return codegen.enum_table.by_name[concrete_name]
+
+        # Handle ResultType - ensure it's in the enum table
+        elif isinstance(var_type, ResultType):
+            from backend.generics.results import ensure_result_type_in_table
+            result_enum = ensure_result_type_in_table(
+                codegen.enum_table,
+                var_type.ok_type,
+                var_type.err_type
+            )
+            return result_enum
+
+    # For MemberAccess (struct field access like op.result), infer the field type
+    if isinstance(scrutinee, MemberAccess):
+        # Get the struct type of the receiver
+        if isinstance(scrutinee.receiver, Name):
+            receiver_type = codegen.memory.find_semantic_type(scrutinee.receiver.id)
+            if isinstance(receiver_type, StructType):
+                # Find the field type
+                for field_name, field_type in receiver_type.fields:
+                    if field_name == scrutinee.member:
+                        # Handle GenericTypeRef("Result", [T, E]) - resolve to Result<T, E> enum
+                        from semantics.generics.types import GenericTypeRef
+                        if isinstance(field_type, GenericTypeRef):
+                            if field_type.base_name == "Result" and len(field_type.type_args) == 2:
+                                from backend.generics.results import ensure_result_type_in_table
+                                from semantics.type_resolution import resolve_unknown_type
+
+                                # Resolve type arguments
+                                ok_type = resolve_unknown_type(
+                                    field_type.type_args[0],
+                                    codegen.struct_table.by_name,
+                                    codegen.enum_table.by_name
+                                )
+                                err_type = resolve_unknown_type(
+                                    field_type.type_args[1],
+                                    codegen.struct_table.by_name,
+                                    codegen.enum_table.by_name
+                                )
+
+                                # Ensure Result<T, E> exists and return it
+                                result_enum = ensure_result_type_in_table(
+                                    codegen.enum_table,
+                                    ok_type,
+                                    err_type
+                                )
+                                return result_enum
+                            else:
+                                # Other generic type - look up in enum table
+                                type_args_str = ", ".join(str(arg) for arg in field_type.type_args)
+                                concrete_name = f"{field_type.base_name}<{type_args_str}>"
+                                if concrete_name in codegen.enum_table.by_name:
+                                    return codegen.enum_table.by_name[concrete_name]
+                        # If field type is ResultType, ensure it's in the enum table
+                        elif isinstance(field_type, ResultType):
+                            from backend.generics.results import ensure_result_type_in_table
+                            result_enum = ensure_result_type_in_table(
+                                codegen.enum_table,
+                                field_type.ok_type,
+                                field_type.err_type
+                            )
+                            return result_enum
+                        elif isinstance(field_type, EnumType):
+                            return field_type
+        return None
 
     # For Call nodes (function calls like simple_result()), infer the return type
     # which is Result<T> for most user functions
@@ -369,9 +465,8 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
             # Own pattern: unwrap Own<T> via .get() and bind inner pattern
             _extract_own_pattern(codegen, binding_item, field_value, binding_type, next_arm_bb)
 
-        # Calculate offset for next field
-        from backend.expressions.memory import calculate_llvm_type_size
-        offset += calculate_llvm_type_size(binding_llvm_type)
+        # Calculate offset for next field using semantic type size (accounts for padding/alignment)
+        offset += codegen.types.get_type_size_bytes(binding_type)
 
 
 def _extract_nested_pattern(codegen: 'LLVMCodegen', nested_pattern: 'Pattern', enum_value: 'ir.Value', enum_type: 'Type', next_arm_bb: 'ir.Block | None' = None) -> None:

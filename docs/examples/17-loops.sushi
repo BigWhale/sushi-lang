@@ -28,7 +28,7 @@ fn main() i32:
         println("T-minus {countdown}")
         countdown := countdown - 1
         # Add 200ms delay between countdown steps for dramatic effect
-        msleep(300 as i64)?? # The ?? here is used to prevent a compiler warning for not handling the Result<>
+        msleep(300 as i64).realise(0) # Using realise() for proper error handling in main()
 
     println("Jump!")
 

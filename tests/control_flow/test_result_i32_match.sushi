@@ -8,6 +8,6 @@ fn main() i32:
     match returns_i32():
         Result.Ok(val) ->
             println("Got {val}")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Error")
     return Result.Ok(0)

@@ -77,6 +77,7 @@ class StdlibRegistry:
         "time": "stdlib.src.time",
         "math": "stdlib.src.math",
         "sys/env": "stdlib.src.sys.env",
+        "sys/process": "stdlib.src.sys.process",
         "random": "stdlib.src.random",
         "io/files": "stdlib.src.io.files_funcs",
         # Future modules can be added here
@@ -175,6 +176,7 @@ class StdlibRegistry:
         common_names = {
             "time": ["sleep", "msleep", "usleep", "nanosleep"],
             "env": ["getenv", "setenv"],
+            "process": ["getcwd", "chdir", "exit", "getpid", "getuid"],
             "math": ["abs", "min", "max", "sqrt", "pow", "floor", "ceil", "round", "trunc"],
             "random": ["rand", "rand_range", "srand", "rand_f64"],
             "files": ["exists", "is_file", "is_dir", "file_size", "remove", "rename", "copy", "mkdir", "rmdir"],
@@ -186,8 +188,8 @@ class StdlibRegistry:
             if checker(name):
                 # Create closures that capture the specific values
                 # Note: Different modules have different type_resolver signatures
-                if module_name in ["time", "env", "random", "files"]:
-                    # time, env, random, files: get_builtin_*_function_return_type(name) -> Type
+                if module_name in ["time", "env", "process", "random", "files"]:
+                    # time, env, process, random, files: get_builtin_*_function_return_type(name) -> Type
                     def make_type_resolver(fn_name):
                         return lambda: type_resolver(fn_name)
                     get_ret_type = make_type_resolver(name)

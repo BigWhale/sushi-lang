@@ -5,7 +5,7 @@
 fn main() i32:
     # The Answer to the Ultimate Question
     let Maybe<i32> inner = Maybe.Some(42)
-    let Result<Maybe<i32>> outer = Result.Ok(inner)
+    let Result<Maybe<i32>, StdError> outer = Result.Ok(inner)
 
     # Use the outer variable to avoid warning
     if (outer):

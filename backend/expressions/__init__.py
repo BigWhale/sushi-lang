@@ -117,14 +117,31 @@ class ExpressionEmitter:
                         return enums.emit_enum_constructor(self.codegen, expr, is_dotcall=True)
                     # Check for resolved generic enum type (e.g., Result<T>)
                     elif hasattr(expr, 'resolved_enum_type') and expr.resolved_enum_type is not None:
-                        from backend.expressions import enums
-                        return enums.emit_enum_constructor(self.codegen, expr, is_dotcall=True)
+                        # CRITICAL: Verify method is actually a variant, not a method like realise()
+                        from semantics.typesys import EnumType
+                        resolved_type = expr.resolved_enum_type
+                        if isinstance(resolved_type, EnumType) and resolved_type.get_variant(expr.method) is not None:
+                            from backend.expressions import enums
+                            return enums.emit_enum_constructor(self.codegen, expr, is_dotcall=True)
+                        # Not a variant - fall through to method call dispatch
                 # Otherwise, it's a method call
                 from backend.expressions import calls
                 return calls.emit_method_call(self.codegen, expr, to_i1, is_dotcall=True)
 
-            # Structs
+            # Structs and enum variants (zero-argument)
             case MemberAccess():
+                # Check if this is enum variant access (EnumType.Variant)
+                if isinstance(expr.receiver, Name):
+                    receiver_name = expr.receiver.id
+                    if receiver_name in self.codegen.enum_table.by_name:
+                        # This is an enum variant, not struct field
+                        from backend.expressions import enums
+                        enum_type = self.codegen.enum_table.by_name[receiver_name]
+                        return enums.emit_enum_constructor_from_method_call(
+                            self.codegen, enum_type, expr.member, []
+                        )
+
+                # Regular struct member access
                 from backend.expressions import structs
                 return structs.emit_member_access(self.codegen, expr, to_i1)
 

@@ -7,6 +7,7 @@ with proper element-by-element initialization and memory management.
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from internals.errors import raise_internal_error
+from backend.utils import require_builder
 
 if TYPE_CHECKING:
     from llvmlite import ir
@@ -33,8 +34,7 @@ def initialize_array_literal(
         array_type: The LLVM array type.
     """
     from llvmlite import ir
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
+    builder = require_builder(codegen)
     # Initialize each element of the array
     for i, element_expr in enumerate(array_literal.elements):
         # Emit the element expression

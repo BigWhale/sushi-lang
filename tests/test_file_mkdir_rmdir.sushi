@@ -4,7 +4,7 @@ use <io/stdio>
 fn main() i32:
     match mkdir("/tmp/test_mkdir", 0o755):
         Result.Ok(_) -> println("Created")
-        Result.Err() -> return Result.Ok(1)
+        Result.Err(_) -> return Result.Ok(1)
 
     if (not exists("/tmp/test_mkdir")):
         println("ERROR: Directory should exist")
@@ -16,7 +16,7 @@ fn main() i32:
 
     match rmdir("/tmp/test_mkdir"):
         Result.Ok(_) -> println("Removed")
-        Result.Err() -> return Result.Ok(1)
+        Result.Err(_) -> return Result.Ok(1)
 
     if (exists("/tmp/test_mkdir")):
         println("ERROR: Directory should be removed")

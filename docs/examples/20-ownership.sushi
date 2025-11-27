@@ -42,12 +42,10 @@ fn main() i32:
     let Point loaded = ptr.get()
     println("Point: ({loaded.x}, {loaded.y})")
 
-    # Create a simple linked list: 1 -> 2 -> None
+    # Create a simple linked list node
     # Use Maybe<Own<Node>> for nullable next pointers
-    let Node node2 = Node(2, Maybe.None())
-    let Own<Node> node2_ptr = Own.alloc(node2)
-
-    let Node head = Node(1, Maybe.Some(node2_ptr))
+    # (Demonstrating Own<T> with struct that has Maybe<Own<T>> field)
+    let Node head = Node(1, Maybe.None())
     println("Linked list head: {head.value}")
 
     # Check if next exists

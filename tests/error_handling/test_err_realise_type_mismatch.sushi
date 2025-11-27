@@ -3,6 +3,6 @@ fn get_value() i32:
     return Result.Ok(42)
 
 fn main() i32:
-    let Result<i32> r = get_value()
+    let Result<i32, StdError> r = get_value()
     let i32 x = r.realise("wrong type")
     return Result.Ok(0)

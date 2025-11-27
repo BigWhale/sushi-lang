@@ -55,7 +55,7 @@ fn build_list(i32[] values) List<Node>:
             prev_idx := Maybe.Some(i - 1)
 
         # Create node with computed links
-        let i32 val = values.get(i)
+        let i32 val = values.get(i)??
         let Node node = Node(val, next_idx, prev_idx)
         nodes.push(node)
 
@@ -138,48 +138,57 @@ fn main() i32:
     # Build a simple list: 10 <-> 20 <-> 30
     println("=== Building list: [10, 20, 30] ===")
     let i32[] values1 = from([10, 20, 30])
-    let List<Node> list1 = build_list(values1)??
+    let Result<List<Node>, StdError> list1 = build_list(values1)
 
-    println("Nodes stored: {list1.len()}")
-    println("Head index: 0, Tail index: {list1.len() - 1}")
-    println("")
+    if (list1):
+        let List<Node> empty_list = List.new()
+        let List<Node> list_final = list1.realise(empty_list)
+        println("Nodes stored: {list_final.len()}")
+        println("Head index: 0, Tail index: {list_final.len() - 1}")
+        println("")
 
-    # Traverse forward from head
-    print_forward(list1, 0)
+        # Traverse forward from head
+        print_forward(list_final, 0)
 
-    # Traverse backward from tail
-    print_backward(list1, list1.len() - 1)
-    println("")
+        # Traverse backward from tail
+        print_backward(list_final, list_final.len() - 1)
+        println("")
 
-    # Calculate sum
-    let i32 sum1 = sum_list(list1, 0)??
-    println("Sum: {sum1}")
-    println("")
+        # Calculate sum
+        let i32 sum1 = sum_list(list_final, 0).realise(0)
+        println("Sum: {sum1}")
+        println("")
+    else:
+        println("Whoops, no list.")
 
     # Build a longer list
     println("=== Building list: [5, 15, 25, 35, 45, 55] ===")
     let i32[] values2 = from([5, 15, 25, 35, 45, 55])
-    let List<Node> list2 = build_list(values2)??
+    let Result<List<Node>, StdError> list2 = build_list(values2)
 
-    println("Nodes stored: {list2.len()}")
-    println("Head index: 0, Tail index: {list2.len() - 1}")
-    println("")
+    if (list2):
+        let List<Node> empty_list2 = List.new()
+        let List<Node> second_final = list2.realise(empty_list2)
 
-    print_forward(list2, 0)
-    print_backward(list2, list2.len() - 1)
+        println("Nodes stored: {second_final.len()}")
+        println("Head index: 0, Tail index: {second_final.len() - 1}")
+        println("")
 
-    let i32 sum2 = sum_list(list2, 0)??
-    println("Sum: {sum2}")
-    println("")
+        print_forward(second_final, 0)
+        print_backward(second_final, second_final.len() - 1)
 
-    # Show node structure
-    println("=== Node Structure ===")
-    match list2.get(2):
-        Maybe.Some(n) ->
-            println("Node at index 2: value={n.value}")
-        Maybe.None() ->
-            println("No node at index 2")
-    println("")
+        let i32 sum2 = sum_list(second_final, 0).realise(0)
+        println("Sum: {sum2}")
+        println("")
+
+        # Show node structure
+        println("=== Node Structure ===")
+        match second_final.get(2):
+            Maybe.Some(n) ->
+                println("Node at index 2: value={n.value}")
+            Maybe.None() ->
+                println("No node at index 2")
+        println("")
 
     # Explain the approach
     println("=== Arena Allocation Benefits ===")

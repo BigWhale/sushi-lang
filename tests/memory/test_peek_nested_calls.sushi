@@ -1,0 +1,25 @@
+# Test nested peek calls - peek a variable that's already peeked
+# Two levels of nesting with same variable
+
+fn inner_read(&peek i32 x) i32:
+    return Result.Ok(x * 2)
+
+fn outer_read(&peek i32 x) i32:
+    # x is already borrowed via &peek, now we pass it again as &peek
+    # Also access x directly to avoid CW1003 warning
+    let i32 local_val = x
+    let Result<i32, StdError> result = inner_read(&peek x)
+    return Result.Ok(result.realise(0) + local_val - local_val)
+
+fn main() i32:
+    let i32 num = 21
+    println(num)
+
+    let Result<i32, StdError> result = outer_read(&peek num)
+    let i32 val = result.realise(0)
+
+    # 21 * 2 = 42
+    if (val == 42):
+        return Result.Ok(0)
+
+    return Result.Ok(1)

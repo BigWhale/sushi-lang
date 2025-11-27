@@ -24,7 +24,7 @@ fn run_test() i32:
             data.destroy()
         FileResult.Err(_) ->
             stderr.write("Error: cannot create binary file\n")
-            return Result.Err()
+            return Result.Err(StdError.Error)
 
     # Read binary data from file
     let FileResult read_result = open("test_binary_output.bin", FileMode.ReadB())
@@ -47,7 +47,7 @@ fn run_test() i32:
             return Result.Ok(0)
         FileResult.Err(_) ->
             stderr.write("Error: cannot read binary file\n")
-            return Result.Err()
+            return Result.Err(StdError.Error)
 
     return Result.Ok(0)
 

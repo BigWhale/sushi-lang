@@ -5,6 +5,6 @@ fn main() i32:
 
     # Verify array is still empty
     if (void.len() != 0):
-        return Result.Err()
+        return Result.Err(StdError.Error)
 
     return Result.Ok(0)

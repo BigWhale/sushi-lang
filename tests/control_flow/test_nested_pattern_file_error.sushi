@@ -19,10 +19,10 @@ fn load_config() string:
             return Result.Ok("default=true")
         FileResult.Err(FileError.PermissionDenied) ->
             println("Error: Permission denied")
-            return Result.Err()
+            return Result.Err(StdError.Error)
         FileResult.Err(_) ->
             println("Error: Other I/O error")
-            return Result.Err()
+            return Result.Err(StdError.Error)
 
 fn main() i32:
     let string config = load_config().realise("")

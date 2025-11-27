@@ -30,12 +30,17 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
     type_params = parse_bounded_type_params(type_params_node) if type_params_node else None
 
     params_node = first_tree(t.children, "parameters")
-    # Look for any type node (including user-defined types via name_t)
-    ret_node = None
+
+    # Look for type nodes (return type and optional error type)
+    # Grammar: ")" type? ["|" type] ":"
+    # First type after params is return type, second type (if exists) is error type
+    type_nodes = []
     for child in t.children:
         if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):
-            ret_node = child
-            break
+            type_nodes.append(child)
+
+    ret_node = type_nodes[0] if len(type_nodes) >= 1 else None
+    err_node = type_nodes[1] if len(type_nodes) >= 2 else None
 
     body_node = first_tree(t.children, "block") or find_tree_recursive(t, "block")
     if body_node is None:
@@ -43,6 +48,8 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
 
     params = parse_params(params_node, ast_builder) if params_node else []
     ret_ty: Optional[Type] = ast_builder._parse_type(ret_node) if ret_node is not None else None
+    err_ty: Optional[Type] = ast_builder._parse_type(err_node) if err_node is not None else None
+
     return FuncDef(
         name=str(name_tok),
         params=params,
@@ -50,6 +57,7 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
         body=ast_builder._block(body_node),
         is_public=is_public,
         type_params=type_params,
+        err_type=err_ty,
         loc=span_of(t),
         name_span=span_of(name_tok),
         ret_span=span_of(ret_node),

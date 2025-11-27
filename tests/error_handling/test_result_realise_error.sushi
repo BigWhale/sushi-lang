@@ -7,14 +7,11 @@ enum Either<T, U>:
     Right(U)
 
 fn test_return_error() Either<i32, string>:
-    return Result.Err()
+    return Result.Err(StdError.Error)
 
 fn main() i32:
-    # Get a Result<Either<i32, string>> that is an error
-    let Result<Either<i32, string>> ret = test_return_error()
-
-    # Use .realise() to extract with default (should return the default)
-    let Either<i32, string> either_val = ret.realise(Either.Left(99))
+    # Use .realise() directly on function call to extract with default
+    let Either<i32, string> either_val = test_return_error().realise(Either.Left(99))
 
     # Verify we got the default value
     match either_val:

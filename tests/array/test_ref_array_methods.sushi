@@ -1,6 +1,6 @@
 # Test reference to dynamic array with method calls
 
-fn array_info(&i32[] arr) ~:
+fn array_info(&poke i32[] arr) ~:
     println(arr.len())
     println(arr.get(0)??)
     println(arr.get(2)??)
@@ -10,7 +10,7 @@ fn run_test() i32:
     let i32[] numbers = from([10, 20, 30])
 
     # Pass array by reference
-    array_info(&numbers)
+    array_info(&poke numbers)
 
     # Array still valid and unchanged
     println(numbers.len())

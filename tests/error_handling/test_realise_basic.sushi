@@ -3,7 +3,7 @@ fn get_value() i32:
     return Result.Ok(42)
 
 fn get_error() i32:
-    return Result.Err()
+    return Result.Err(StdError.Error)
 
 fn main() i32:
     let i32 x = get_value().realise(0)

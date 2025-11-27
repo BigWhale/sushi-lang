@@ -12,6 +12,7 @@ from backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from semantics.ast import Expr, Name, UnaryOp, BinaryOp, Borrow
 from internals.errors import raise_internal_error
 from backend import enum_utils
+from backend.utils import require_builder, require_both_initialized
 
 if TYPE_CHECKING:
     from backend.interfaces import CodegenProtocol
@@ -318,10 +319,7 @@ def emit_logic(codegen: 'CodegenProtocol', op: str, left_expr: Expr, right_expr:
     Returns:
         The logical operation result as i1 or i8.
     """
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
-    if codegen.func is None:
-        raise_internal_error("CE0010")
+    builder, func = require_both_initialized(codegen)
 
     # For xor, we need to evaluate both sides (no short-circuiting)
     if op == "xor":
@@ -402,19 +400,23 @@ def emit_name(codegen: 'CodegenProtocol', expr: Name, to_i1: bool) -> ir.Value:
 
 
 def emit_borrow(codegen: 'CodegenProtocol', expr: Borrow) -> ir.Value:
-    """Emit borrow expression (&expr) as pointer to expression.
+    """Emit borrow expression (&peek expr or &poke expr) as pointer to expression.
 
     Supports:
-    - Variables: &x -> slot pointer
-    - Member access: &obj.field -> GEP to field
-    - Nested member access: &obj.a.b -> nested GEP
+    - Variables: &peek x, &poke x -> slot pointer
+    - Member access: &peek obj.field, &poke obj.field -> GEP to field
+    - Nested member access: &peek obj.a.b, &poke obj.a.b -> nested GEP
 
-    References are zero-cost abstractions in Sushi. A borrow expression
-    simply returns the pointer to the memory location.
+    References are zero-cost abstractions in Sushi. Both &peek (read-only) and
+    &poke (read-write) borrows emit identical LLVM IR - they simply return the
+    pointer to the memory location. The semantic differences are enforced at
+    compile time by the borrow checker.
 
     The borrow checker (Pass 3 in semantic analysis) has already verified:
     - The borrowed expression is borrowable (variable or member access)
-    - Only one active borrow per variable at a time
+    - &poke borrows are exclusive (only one at a time)
+    - &peek borrows allow multiple simultaneous reads
+    - Cannot mix &peek and &poke borrows of the same variable
     - Cannot move/rebind/destroy while borrowed
     - Cannot borrow moved variables
 
@@ -565,42 +567,72 @@ def emit_try_expr(codegen: 'CodegenProtocol', expr: 'TryExpr') -> ir.Value:
 
     # 3. Extract success variant info (tag and unwrapped type)
     success_tag, unwrapped_type = _extract_success_variant_info(inner_type)
-    value_llvm_type = codegen.types.ll_type(unwrapped_type)  # LLVM type for T
 
     # 4. Extract tag and check if success variant
     is_success = enum_utils.check_enum_variant(
         codegen, result_value, success_tag, signed=True, name="is_success"
     )
 
-    # Extract the unwrapped value from the enum (both Result-like and Maybe-like use same structure)
-    _, unwrapped_value = codegen.functions._extract_value_from_result_enum(
-        result_value,
-        value_llvm_type,
-        unwrapped_type
-    )
+    # Extract the unwrapped Ok/Some value from the enum
+    unwrapped_value = _extract_variant_from_result(codegen, result_value, unwrapped_type)
 
-    # 5. Create basic blocks for error propagation and continuation
+    # 5. Extract error variant info for propagation (Result-like enums only)
+    error_tag = None
+    error_type = None
+    error_value = None
+
+    err_variant = inner_type.get_variant("Err")
+    if err_variant is not None:
+        error_tag, error_type = _extract_error_variant_info(inner_type)
+        error_value = _extract_variant_from_result(codegen, result_value, error_type)
+
+    # 6. Create basic blocks for error propagation and continuation
     propagate_block = codegen.func.append_basic_block(name="try_propagate_err")
     continue_block = codegen.func.append_basic_block(name="try_continue")
 
-    # 6. Branch based on enum tag: if success goto continue_block, else goto propagate_block
+    # 7. Branch based on enum tag: if success goto continue_block, else goto propagate_block
     codegen.builder.cbranch(is_success, continue_block, propagate_block)
 
-    # 7. Error path: RAII cleanup + early return with Err variant
+    # 8. Error path: Extract error, RAII cleanup, early return with Err variant
     codegen.builder.position_at_end(propagate_block)
 
     # Run RAII cleanup for all scopes (critical for resource safety)
     from backend.statements import utils
     utils.emit_scope_cleanup(codegen, cleanup_type='all')
 
-    # Construct Err variant for the enclosing function's return type
+    # Construct Err variant for the enclosing function's return type with actual error data
     func_return_type = codegen.current_function_ast.ret  # Semantic type
-    err_result = _construct_err_variant_for_type(codegen, func_return_type)
+
+    # If function uses implicit Result syntax (not explicitly Result<T, E>),
+    # construct the ResultType for propagation
+    from semantics.generics.types import GenericTypeRef
+    if not isinstance(func_return_type, ResultType) and not (isinstance(func_return_type, GenericTypeRef) and func_return_type.base_name == "Result"):
+        # Implicit syntax: fn foo() i32 | MyError or fn foo() i32 (defaults to StdError)
+        from semantics.type_resolution import resolve_unknown_type
+        if codegen.current_function_ast.err_type is not None:
+            # Custom error type: fn foo() i32 | MyError
+            err_type = resolve_unknown_type(
+                codegen.current_function_ast.err_type,
+                codegen.struct_table.by_name,
+                codegen.enum_table.by_name
+            )
+        else:
+            # Default to StdError: fn foo() i32 or fn main() i32
+            err_type = codegen.enum_table.by_name.get("StdError")
+            if err_type is None:
+                raise_internal_error("CE0040", variant="Err",
+                    type="StdError enum not found (implicit Result wrapping requires StdError)")
+        func_return_type = ResultType(ok_type=func_return_type, err_type=err_type)
+    elif isinstance(func_return_type, GenericTypeRef) and func_return_type.base_name == "Result":
+        # Explicit Result<T, E> syntax - already handled by _construct_result_err_variant
+        pass
+
+    err_result = _construct_result_err_variant(codegen, func_return_type, error_value)
 
     # Early return with Err variant
     codegen.builder.ret(err_result)
 
-    # 8. Success path: continue with unwrapped value
+    # 9. Success path: continue with unwrapped value
     codegen.builder.position_at_end(continue_block)
     return unwrapped_value
 
@@ -645,6 +677,53 @@ def _extract_success_variant_info(inner_type: 'EnumType') -> tuple[int, 'Type']:
 
     unwrapped_type = success_variant.associated_types[0]  # Semantic type T
     return success_tag, unwrapped_type
+
+
+def _extract_error_variant_info(inner_type: 'EnumType') -> tuple[int, 'Type']:
+    """Extract error variant tag and error type from Result-like enum.
+
+    Args:
+        inner_type: The enum type (must be Result-like with Err variant).
+
+    Returns:
+        Tuple of (error_tag, error_type) where error_type is E from Result<T, E>.
+
+    Raises:
+        RuntimeError: If Err variant missing or has no associated type.
+    """
+    err_variant = inner_type.get_variant("Err")
+    if err_variant is None:
+        raise_internal_error("CE0037", enum=inner_type.name, reason="Err variant not found")
+
+    if not err_variant.associated_types:
+        raise_internal_error("CE0037", enum=inner_type.name, reason="Err variant has no associated type")
+
+    error_tag = inner_type.get_variant_index("Err")
+    error_type = err_variant.associated_types[0]  # E from Result<T, E>
+    return error_tag, error_type
+
+
+def _extract_variant_from_result(codegen: 'CodegenProtocol', result_value: ir.Value, variant_type: 'Type') -> ir.Value:
+    """Extract variant data from Result/Maybe enum value.
+
+    DRY helper for extracting both Ok and Err values from Result-like enums.
+    Reuses the extraction logic from _extract_value_from_result_enum.
+
+    Args:
+        codegen: The LLVM codegen instance.
+        result_value: The Result/Maybe enum LLVM value.
+        variant_type: The semantic type of the variant data to extract.
+
+    Returns:
+        The extracted value with the specified type.
+    """
+    variant_llvm_type = codegen.types.ll_type(variant_type)
+    _, extracted_value = codegen.functions._extract_value_from_result_enum(
+        result_value,
+        variant_llvm_type,
+        variant_type
+    )
+    return extracted_value
 
 
 def _infer_try_expr_type(codegen: 'CodegenProtocol', expr: Expr) -> 'EnumType':
@@ -715,17 +794,42 @@ def _infer_call_return_type(codegen: 'CodegenProtocol', call_expr: 'Call') -> 'E
 
     result_type_obj = codegen.function_return_types[func_name]
 
-    # Extract T from Result<T>
-    if isinstance(result_type_obj, ResultType):
-        ret_type = result_type_obj.ok_type
-    else:
-        ret_type = result_type_obj
+    # Handle GenericTypeRef("Result") - resolve to ResultType then to EnumType
+    from semantics.generics.types import GenericTypeRef
+    if isinstance(result_type_obj, GenericTypeRef) and result_type_obj.base_name == "Result":
+        # Function explicitly declares Result<T, E>
+        from semantics.type_resolution import resolve_unknown_type
+        resolved = resolve_unknown_type(result_type_obj, codegen.struct_table.by_name, codegen.enum_table.by_name)
+        if isinstance(resolved, ResultType):
+            from backend.generics.results import ensure_result_type_in_table
+            result_enum = ensure_result_type_in_table(
+                codegen.enum_table,
+                resolved.ok_type,
+                resolved.err_type
+            )
+            if not result_enum:
+                raise_internal_error("CE0091", type=str(resolved))
+            return result_enum
+        else:
+            raise_internal_error("CE0091", type=str(result_type_obj))
 
-    # Functions implicitly return Result<T>
+    # Handle ResultType (implicit Result wrapping)
+    if isinstance(result_type_obj, ResultType):
+        from backend.generics.results import ensure_result_type_in_table
+        result_enum = ensure_result_type_in_table(
+            codegen.enum_table,
+            result_type_obj.ok_type,
+            result_type_obj.err_type
+        )
+        if not result_enum:
+            raise_internal_error("CE0091", type=str(result_type_obj))
+        return result_enum
+
+    # Old path: primitive return types (shouldn't reach here anymore)
+    ret_type = result_type_obj
     result_enum_name = f"Result<{ret_type}>"
     if result_enum_name not in codegen.enum_table.by_name:
         raise_internal_error("CE0091", type=result_enum_name)
-
     return codegen.enum_table.by_name[result_enum_name]
 
 
@@ -824,37 +928,50 @@ def _infer_dotcall_return_type(codegen: 'CodegenProtocol', dotcall_expr: 'DotCal
     raise_internal_error("CE0063", method=method_name)
 
 
-def _construct_err_variant_for_type(codegen: 'CodegenProtocol', return_type) -> ir.Value:
-    """Construct an Err variant enum value for a given return type.
+def _construct_result_err_variant(codegen: 'CodegenProtocol', return_type, error_value: ir.Value) -> ir.Value:
+    """Construct an Err variant enum value for Result<T, E> with actual error data.
 
-    Supports both Result<T> and concrete result-like enums (e.g., FileResult).
+    Applies SOLID principles: single responsibility (construct Err only), no backward compatibility.
 
     Args:
         codegen: The LLVM codegen instance.
-        return_type: The semantic type (T for Result<T>, or FileResult directly).
+        return_type: The semantic type (ResultType or GenericTypeRef with base_name "Result").
+        error_value: The LLVM value containing the error data to pack into Err variant.
 
     Returns:
-        An LLVM value representing the Err variant with the correct type.
+        An LLVM value representing the Err variant with error data packed.
     """
-    from semantics.typesys import EnumType
+    from semantics.typesys import ResultType
+    from semantics.generics.types import GenericTypeRef
+    from backend.generics.results import ensure_result_type_in_table
 
-    # Determine the enum type to return
-    # First try Result<T> pattern
-    result_enum_name = f"Result<{return_type}>"
-    if result_enum_name in codegen.enum_table.by_name:
-        enum_type = codegen.enum_table.by_name[result_enum_name]
-    elif isinstance(return_type, EnumType):
-        # Return type is already an enum (e.g., FileResult)
-        enum_type = return_type
+    # Handle ResultType (semantic Result<T, E>)
+    if isinstance(return_type, ResultType):
+        enum_type = ensure_result_type_in_table(
+            codegen.enum_table,
+            return_type.ok_type,
+            return_type.err_type
+        )
+    # Handle GenericTypeRef with base_name "Result" and two type args
+    elif isinstance(return_type, GenericTypeRef) and return_type.base_name == "Result":
+        if len(return_type.type_args) != 2:
+            raise_internal_error("CE0040", variant="Err",
+                type=f"Result must have exactly 2 type parameters, got {len(return_type.type_args)}")
+
+        enum_type = ensure_result_type_in_table(
+            codegen.enum_table,
+            return_type.type_args[0],
+            return_type.type_args[1]
+        )
     else:
-        raise_internal_error("CE0040", variant="Err", type=str(return_type))
+        raise_internal_error("CE0040", variant="Err",
+            type=f"Expected Result<T, E>, got {return_type}")
 
-    # Get the Err variant
+    # Get the Err variant and its tag
     err_variant = enum_type.get_variant("Err")
     if not err_variant:
         raise_internal_error("CE0035", variant="Err", enum=enum_type.name)
 
-    # Get the Err variant's tag index
     err_tag = enum_type.get_variant_index("Err")
     if err_tag is None:
         raise_internal_error("CE0035", variant="Err", enum=enum_type.name)
@@ -862,20 +979,37 @@ def _construct_err_variant_for_type(codegen: 'CodegenProtocol', return_type) -> 
     # Get the LLVM struct type for the enum
     enum_llvm_type = codegen.types.ll_type(enum_type)
 
-    # Construct Err enum value: {i32 tag, [N x i8] zeroinitializer}
-    # Note: Even if Err has associated data (like FileError), we don't have the actual error value
-    # so we use zeroinitializer. This is safe because the tag indicates it's an error.
-    tag_value = ir.Constant(codegen.types.i32, err_tag)
+    # Create enum value with tag set
+    enum_value = enum_utils.construct_enum_variant(
+        codegen, enum_llvm_type, err_tag,
+        data=None, name_prefix=f"{enum_type.name}_Err"
+    )
 
-    # Data field is zeroinitializer
-    # Get the data array type from the struct
-    data_type = enum_llvm_type.elements[1]  # [N x i8]
-    data_value = ir.Constant(data_type, None)  # zeroinitializer
+    # Pack error data into the enum data field
+    if error_value is not None:
+        # Allocate temporary storage for the data
+        data_array_type = enum_llvm_type.elements[1]  # [N x i8] array
+        temp_alloca = codegen.builder.alloca(data_array_type, name="err_data_temp")
 
-    # Build the struct constant
-    err_struct = ir.Constant.literal_struct([tag_value, data_value])
+        # Cast to i8* for byte operations
+        data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="err_data_ptr")
 
-    return err_struct
+        # Store error value at the beginning of data field
+        from backend.expressions import memory
+        error_llvm_type = error_value.type
+        error_ptr_typed = codegen.builder.bitcast(data_ptr, ir.PointerType(error_llvm_type), name="err_ptr_typed")
+        codegen.builder.store(error_value, error_ptr_typed)
+
+        # Load the packed data array
+        packed_data = codegen.builder.load(temp_alloca, name="packed_err_data")
+
+        # Insert the data into the enum struct
+        enum_value = enum_utils.set_enum_data(
+            codegen, enum_value, packed_data,
+            name=f"{enum_type.name}_Err_data"
+        )
+
+    return enum_value
 
 
 def _get_stdlib_function_return_type(codegen: 'CodegenProtocol', func_name: str) -> 'EnumType' | None:
@@ -907,35 +1041,49 @@ def _get_stdlib_function_return_type(codegen: 'CodegenProtocol', func_name: str)
             # Get the return type from the registry
             return_type = stdlib_func.get_return_type()
 
-            # Stdlib functions return Result<T>
-            # Check if return_type is already a ResultType or just the inner type
-            from semantics.typesys import ResultType, BuiltinType
+            # Stdlib functions return Result<T, E>
+            from semantics.typesys import ResultType, UnknownType
+            from backend.generics.results import ensure_result_type_in_table
+            from semantics.type_resolution import resolve_unknown_type
 
             if isinstance(return_type, ResultType):
-                # Extract the inner type from Result<T>
-                inner_type = return_type.ok_type
-            else:
-                # It's already the inner type
-                inner_type = return_type
+                # Resolve UnknownType placeholders to actual types
+                # This is necessary for stdlib functions that use UnknownType("FileError") etc.
+                ok_type = return_type.ok_type
+                err_type = return_type.err_type
 
-            # Determine the Result<T> enum name from the inner type
-            if inner_type == BuiltinType.I32:
-                result_enum_name = "Result<i32>"
-            elif inner_type == BuiltinType.F64:
-                result_enum_name = "Result<f64>"
-            elif inner_type == BuiltinType.STRING:
-                result_enum_name = "Result<string>"
-            elif hasattr(inner_type, 'value'):
-                # BuiltinType enum
-                result_enum_name = f"Result<{inner_type.value}>"
-            else:
-                # For other types, construct the name
-                result_enum_name = f"Result<{inner_type}>"
+                if isinstance(ok_type, UnknownType):
+                    ok_type = resolve_unknown_type(
+                        ok_type,
+                        codegen.struct_table.by_name,
+                        codegen.enum_table.by_name
+                    )
 
-            if result_enum_name not in codegen.enum_table.by_name:
+                if isinstance(err_type, UnknownType):
+                    err_type = resolve_unknown_type(
+                        err_type,
+                        codegen.struct_table.by_name,
+                        codegen.enum_table.by_name
+                    )
+
+                # Already a ResultType with ok_type and err_type
+                result_enum = ensure_result_type_in_table(
+                    codegen.enum_table,
+                    ok_type,
+                    err_type
+                )
+                if result_enum:
+                    return result_enum
+                # Fallback: look it up by string representation
+                result_enum_name = str(return_type)
+                if result_enum_name in codegen.enum_table.by_name:
+                    return codegen.enum_table.by_name[result_enum_name]
                 from internals.errors import raise_internal_error
                 raise_internal_error("CE0091", type=result_enum_name)
-
-            return codegen.enum_table.by_name[result_enum_name]
+            else:
+                # Old-style: just the inner type, shouldn't happen anymore
+                # but keep for backward compatibility
+                from internals.errors import raise_internal_error
+                raise_internal_error("CE0091", type=f"Result<{return_type}> (missing error type)")
     
     return None

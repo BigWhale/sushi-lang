@@ -6,7 +6,7 @@
 
 struct Config:
     Maybe<i32> port
-    Result<string> host
+    Result<string, StdError> host
 
 fn main() i32:
     # Create a struct with nested generics

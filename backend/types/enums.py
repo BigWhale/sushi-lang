@@ -24,6 +24,7 @@ import llvmlite.ir as ir
 from backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from internals import errors as er
 from internals.errors import raise_internal_error
+from backend.utils import require_builder
 from stdlib.src.common import register_builtin_method, BuiltinMethod
 from backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
 from backend import enum_utils
@@ -133,8 +134,7 @@ def _emit_enum_hash(enum_type: Type) -> Any:
         if len(call.args) != 0:
             raise_internal_error("CE0054", got=len(call.args))
 
-        if codegen.builder is None:
-            raise_internal_error("CE0009")
+        builder = require_builder(codegen)
         builder = codegen.builder
         u64 = ir.IntType(INT64_BIT_WIDTH)
         i32 = codegen.types.i32
@@ -229,8 +229,7 @@ def _emit_variant_data_hash(codegen: Any, enum_value: ir.Value, variant: Any, in
     """
     from semantics.ast import MethodCall, Name
 
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
+    builder = require_builder(codegen)
     builder = codegen.builder
     u64 = ir.IntType(INT64_BIT_WIDTH)
 
@@ -291,8 +290,7 @@ def _emit_associated_value_hash(codegen: Any, value: ir.Value, value_type: Type)
     """
     from semantics.ast import MethodCall, Name
 
-    if codegen.builder is None:
-        raise_internal_error("CE0009")
+    builder = require_builder(codegen)
     # For primitive types, call their hash() method inline
     if isinstance(value_type, BuiltinType):
         # Ensure hash methods are registered

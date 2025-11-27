@@ -7,6 +7,6 @@ fn helper(string[] args) i32:
 
 fn main() i32:
     let string[] test_array = new()
-    let Result<i32> result = helper(test_array)
+    let Result<i32, StdError> result = helper(test_array)
     print("Helper function works normally")
     return Result.Ok(result.realise(0))

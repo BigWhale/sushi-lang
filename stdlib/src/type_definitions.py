@@ -145,32 +145,63 @@ def get_file_type() -> ir.PointerType:
 
 
 # ==============================================================================
+# Enum Type Helpers
+# ==============================================================================
+
+def get_unit_enum_type() -> ir.LiteralStructType:
+    """Get the LLVM type for a unit enum (enum with no associated data).
+
+    Unit enums have only discriminant tags, no variant data.
+    LLVM layout: {i32 tag, [1 x i8] data}
+    The data array has minimum 1 byte even though variants have no data.
+
+    Examples: SeekFrom, FileMode, ProcessError, StdError
+
+    Returns:
+        LLVM struct type for unit enums
+    """
+    i8 = ir.IntType(8)
+    i32 = ir.IntType(32)
+    return ir.LiteralStructType([i32, ir.ArrayType(i8, 1)])
+
+
+# ==============================================================================
 # Result and Maybe Types (for future use)
 # ==============================================================================
 
-def get_result_type(ok_type: ir.Type) -> ir.LiteralStructType:
-    """Get the Result<T> enum type.
+def get_result_type(ok_type: ir.Type, err_type: ir.Type = None) -> ir.LiteralStructType:
+    """Get the Result<T, E> enum type.
 
     Result structure: { i32 tag, [N x i8] data }
-    - Field 0: i32 tag - discriminant (0=Err, 1=Ok)
+    - Field 0: i32 tag - discriminant (0=Ok, 1=Err)
     - Field 1: [N x i8] data - byte array containing the packed value
 
     This matches the actual LLVM layout used by the backend.
-    The data field size N is determined by sizeof(ok_type).
+    The data field size N is max(sizeof(ok_type), sizeof(err_type), 1).
 
     Args:
         ok_type: Type of the Ok value
+        err_type: Type of the Err value (optional, defaults to calculating from ok_type only)
 
     Returns:
-        Result<T> struct type
+        Result<T, E> struct type
     """
     from backend.expressions.memory import calculate_llvm_type_size
 
     i8 = ir.IntType(8)
     i32 = ir.IntType(32)
 
-    # Calculate size of ok_type in bytes using existing infrastructure
-    size_bytes = calculate_llvm_type_size(ok_type)
+    # Calculate size of ok_type in bytes
+    ok_size = calculate_llvm_type_size(ok_type)
+
+    # Calculate size of err_type if provided
+    if err_type is not None:
+        err_size = calculate_llvm_type_size(err_type)
+        # Use the maximum of ok_type and err_type sizes, with minimum 1 byte
+        size_bytes = max(ok_size, err_size, 1)
+    else:
+        # Legacy behavior: use only ok_type size
+        size_bytes = max(ok_size, 1)
 
     data_array = ir.ArrayType(i8, size_bytes)
     return ir.LiteralStructType([i32, data_array])
