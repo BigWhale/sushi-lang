@@ -2,46 +2,56 @@
 #
 # This example demonstrates Sushi's borrowing system. Borrowing allows a function
 # to temporarily access a variable without taking ownership of it. In Sushi,
-# borrowing is implemented through references - when you pass a variable by
-# reference (using the & prefix), you are "borrowing" that variable.
+# borrowing is implemented through references with explicit borrow modes:
+#
+# - &peek T: Read-only borrow (multiple allowed simultaneously)
+# - &poke T: Read-write borrow (exclusive access, only one at a time)
 #
 # Key concepts covered:
 # - Borrowing: Temporary access to a variable without ownership transfer
-# - Mutable references (&T): The mechanism for borrowing in Sushi
-# - Reference parameters allow in-place modification
+# - &poke references for in-place modification
+# - &peek references for read-only access
 # - No ownership transfer - original variable remains valid after call
-# - Compile-time borrow checking (one active borrow per variable)
+# - Compile-time borrow checking enforces safety rules
 # - Unit return type (~) for side-effect-only functions
 #
 # Note: Unlike dynamic arrays which use move semantics, primitives and strings
 # use copy semantics. Borrowing via references avoids copies and enables mutation.
 
-fn increment_count(&i32 counter) ~:
+fn increment_count(&poke i32 counter) ~:
     # Modify the referenced variable in-place
     # The caller's variable is directly updated
     counter := counter + 1
     return Result.Ok(~)
 
-fn double_value(&i32 value) ~:
+fn double_value(&poke i32 value) ~:
     # Another example of in-place modification via reference
     value := value * 2
+    return Result.Ok(~)
+
+# Read-only function using &peek - cannot modify the value
+fn display_value(&peek i32 value) ~:
+    println("Current value: {value}")
     return Result.Ok(~)
 
 fn main() i32:
     let i32 towels = 0
 
-    # Borrow towels using & prefix - this passes a reference to the function
+    # Borrow towels with &poke - this passes a mutable reference
     # The function can modify towels, but we retain ownership
-    increment_count(&towels)
-    increment_count(&towels)
-    increment_count(&towels)
+    increment_count(&poke towels)
+    increment_count(&poke towels)
+    increment_count(&poke towels)
 
     println("Towels collected: {towels}")  # Prints: 3
 
     let i32 answer = 21
 
-    # Borrow answer - the function modifies it in-place via the reference
-    double_value(&answer)
+    # Use &peek for read-only access - multiple &peek borrows allowed
+    display_value(&peek answer)
+
+    # Use &poke for modification - exclusive access required
+    double_value(&poke answer)
 
     println("Doubled answer: {answer}")  # Prints: 42
 

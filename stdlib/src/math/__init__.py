@@ -44,6 +44,54 @@ Available Functions:
     trunc(f64 x) -> f64
         Returns x with the fractional part removed.
 
+    sin(f64 x) -> f64
+        Returns the sine of x (radians).
+
+    cos(f64 x) -> f64
+        Returns the cosine of x (radians).
+
+    tan(f64 x) -> f64
+        Returns the tangent of x (radians).
+
+    asin(f64 x) -> f64
+        Returns the arc sine of x in radians.
+
+    acos(f64 x) -> f64
+        Returns the arc cosine of x in radians.
+
+    atan(f64 x) -> f64
+        Returns the arc tangent of x in radians.
+
+    atan2(f64 y, f64 x) -> f64
+        Returns the arc tangent of y/x in radians, using signs to determine quadrant.
+
+    sinh(f64 x) -> f64
+        Returns the hyperbolic sine of x.
+
+    cosh(f64 x) -> f64
+        Returns the hyperbolic cosine of x.
+
+    tanh(f64 x) -> f64
+        Returns the hyperbolic tangent of x.
+
+    log(f64 x) -> f64
+        Returns the natural logarithm (base e) of x.
+
+    log2(f64 x) -> f64
+        Returns the base-2 logarithm of x.
+
+    log10(f64 x) -> f64
+        Returns the base-10 logarithm of x.
+
+    exp(f64 x) -> f64
+        Returns e raised to the power x.
+
+    exp2(f64 x) -> f64
+        Returns 2 raised to the power x.
+
+    hypot(f64 x, f64 y) -> f64
+        Returns sqrt(x*x + y*y), the Euclidean distance.
+
 Example Usage:
     use <math>
 
@@ -62,6 +110,14 @@ Example Usage:
         let f64 power = pow(2.0, 10.0)      # 1024.0
         let f64 rounded = floor(3.7)        # 3.0
 
+        # Trigonometry
+        let f64 sine = sin(PI / 2.0)        # 1.0
+        let f64 angle = atan2(1.0, 1.0)     # PI/4
+
+        # Logarithms
+        let f64 ln_e = log(E)               # 1.0
+        let f64 log_1000 = log10(1000.0)    # 3.0
+
         return Result.Ok(0)
 
 Implementation Notes:
@@ -70,6 +126,11 @@ Implementation Notes:
     - abs() uses conditional negation for signed types, pass-through for unsigned
     - min/max use simple comparison and selection
     - sqrt, pow, floor, ceil, round, trunc use LLVM intrinsics for efficiency
+    - sin, cos use LLVM intrinsics; tan is implemented as sin/cos
+    - asin, acos, atan, atan2 use libc for correctness
+    - sinh, cosh, tanh are implemented using exp intrinsic
+    - log, log2, log10, exp, exp2 use LLVM intrinsics
+    - hypot is implemented using sqrt intrinsic
 """
 from __future__ import annotations
 import typing
@@ -85,6 +146,7 @@ from stdlib.src import type_converters
 def is_builtin_math_function(name: str) -> bool:
     """Check if name is a built-in math module function."""
     return name in {
+        # Basic
         'abs',
         'min',
         'max',
@@ -94,6 +156,28 @@ def is_builtin_math_function(name: str) -> bool:
         'ceil',
         'round',
         'trunc',
+        # Trigonometric
+        'sin',
+        'cos',
+        'tan',
+        # Inverse trigonometric
+        'asin',
+        'acos',
+        'atan',
+        'atan2',
+        # Hyperbolic
+        'sinh',
+        'cosh',
+        'tanh',
+        # Logarithmic
+        'log',
+        'log2',
+        'log10',
+        # Exponential
+        'exp',
+        'exp2',
+        # Utility
+        'hypot',
     }
 
 
@@ -130,7 +214,16 @@ def get_builtin_math_function_return_type(name: str, param_types: list[Type]) ->
             raise TypeError(f"{name} requires at least one parameter")
         return param_types[0]
 
-    elif name in {'sqrt', 'pow', 'floor', 'ceil', 'round', 'trunc'}:
+    elif name in {
+        # All f64-only functions
+        'sqrt', 'pow', 'floor', 'ceil', 'round', 'trunc',
+        'sin', 'cos', 'tan',
+        'asin', 'acos', 'atan', 'atan2',
+        'sinh', 'cosh', 'tanh',
+        'log', 'log2', 'log10',
+        'exp', 'exp2',
+        'hypot',
+    }:
         # These always return f64
         return BuiltinType('f64')
 
@@ -154,6 +247,19 @@ def validate_math_function_call(name: str, signature: Signature) -> None:
     float_types = {
         BuiltinType('f32'), BuiltinType('f64'),
     }
+
+    # Single-argument f64 functions
+    f64_single_arg_funcs = {
+        'sqrt', 'floor', 'ceil', 'round', 'trunc',
+        'sin', 'cos', 'tan',
+        'asin', 'acos', 'atan',
+        'sinh', 'cosh', 'tanh',
+        'log', 'log2', 'log10',
+        'exp', 'exp2',
+    }
+
+    # Two-argument f64 functions
+    f64_two_arg_funcs = {'pow', 'atan2', 'hypot'}
 
     if name == 'abs':
         # abs(T value) -> T where T is signed int or float
@@ -181,36 +287,27 @@ def validate_math_function_call(name: str, signature: Signature) -> None:
         if param1_type != param2_type:
             raise TypeError(f"{name} expects both parameters to have the same type, got {param1_type} and {param2_type}")
 
-    elif name == 'sqrt':
-        # sqrt(f64 x) -> f64
-        if len(signature.params) != 1:
-            raise TypeError(f"sqrt expects 1 argument, got {len(signature.params)}")
-
-        param_type = signature.params[0].type
-        if param_type != BuiltinType('f64'):
-            raise TypeError(f"sqrt expects f64, got {param_type}")
-
-    elif name == 'pow':
-        # pow(f64 base, f64 exponent) -> f64
-        if len(signature.params) != 2:
-            raise TypeError(f"pow expects 2 arguments, got {len(signature.params)}")
-
-        param1_type = signature.params[0].type
-        param2_type = signature.params[1].type
-
-        if param1_type != BuiltinType('f64'):
-            raise TypeError(f"pow expects f64 for base, got {param1_type}")
-        if param2_type != BuiltinType('f64'):
-            raise TypeError(f"pow expects f64 for exponent, got {param2_type}")
-
-    elif name in {'floor', 'ceil', 'round', 'trunc'}:
-        # floor/ceil/round/trunc(f64 x) -> f64
+    elif name in f64_single_arg_funcs:
+        # func(f64 x) -> f64
         if len(signature.params) != 1:
             raise TypeError(f"{name} expects 1 argument, got {len(signature.params)}")
 
         param_type = signature.params[0].type
         if param_type != BuiltinType('f64'):
             raise TypeError(f"{name} expects f64, got {param_type}")
+
+    elif name in f64_two_arg_funcs:
+        # func(f64 a, f64 b) -> f64
+        if len(signature.params) != 2:
+            raise TypeError(f"{name} expects 2 arguments, got {len(signature.params)}")
+
+        param1_type = signature.params[0].type
+        param2_type = signature.params[1].type
+
+        if param1_type != BuiltinType('f64'):
+            raise TypeError(f"{name} expects f64 for first argument, got {param1_type}")
+        if param2_type != BuiltinType('f64'):
+            raise TypeError(f"{name} expects f64 for second argument, got {param2_type}")
 
 
 def generate_module_ir() -> ir.Module:
@@ -229,5 +326,33 @@ def generate_module_ir() -> ir.Module:
     operations.generate_ceil(module)
     operations.generate_round(module)
     operations.generate_trunc(module)
+
+    # Trigonometric
+    operations.generate_sin(module)
+    operations.generate_cos(module)
+    operations.generate_tan(module)
+
+    # Inverse trigonometric (libc)
+    operations.generate_asin(module)
+    operations.generate_acos(module)
+    operations.generate_atan(module)
+    operations.generate_atan2(module)
+
+    # Hyperbolic
+    operations.generate_sinh(module)
+    operations.generate_cosh(module)
+    operations.generate_tanh(module)
+
+    # Logarithmic
+    operations.generate_log(module)
+    operations.generate_log2(module)
+    operations.generate_log10(module)
+
+    # Exponential
+    operations.generate_exp(module)
+    operations.generate_exp2(module)
+
+    # Utility
+    operations.generate_hypot(module)
 
     return module

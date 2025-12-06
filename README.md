@@ -90,6 +90,11 @@ and LLVM-powered code generation.
 # Optimization levels
 ./sushic --opt O2 program.sushi       # Recommended: balanced performance
 ./sushic --opt O3 program.sushi       # Maximum performance
+
+# Create and use libraries
+./sushic --lib mylib.sushi -o mylib.bc  # Compile to library
+export SUSHI_LIB_PATH=.                  # Set library path
+./sushic main.sushi                      # use <lib/mylib> in source
 ```
 
 ### Hello World
@@ -128,6 +133,7 @@ fn main() i32:
 ### Compiler
 - [Compiler Reference](docs/compiler-reference.md) - CLI options and
   optimization levels
+- [Libraries](docs/libraries.md) - Creating and using precompiled libraries
 - [Architecture](docs/internals/architecture.md) - Compiler design
   and structure
 - [Semantic Passes](docs/internals/semantic-passes.md) - Pass-by-

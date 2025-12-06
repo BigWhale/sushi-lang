@@ -213,7 +213,33 @@ def load_unit_recursively(unit_manager: UnitManager, unit_name: str, loaded: set
     reporter.items.extend(unit_reporter.items)
     return True
 
-def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter, args) -> int:
+
+def _activate_generic_provider(unit_path: str) -> None:
+    """Activate generic type provider for a stdlib unit if applicable.
+
+    Maps stdlib unit paths to generic type providers and activates them
+    in the GenericTypeRegistry. This must be called BEFORE semantic analysis
+    so that Pass 0 (CollectorPass) can register the types.
+
+    Args:
+        unit_path: Stdlib unit path like "collections/hashmap"
+    """
+    from semantics.generics.providers.registry import GenericTypeRegistry
+
+    # Map stdlib unit paths to generic type names
+    generic_type_map = {
+        "collections/hashmap": "HashMap",
+        # Future: "collections/list": "List",
+        #         "collections/set": "Set",
+    }
+
+    # Check if this unit path corresponds to a generic type
+    generic_name = generic_type_map.get(unit_path)
+    if generic_name is not None:
+        GenericTypeRegistry.activate(generic_name)
+
+
+def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter, args, is_library: bool = False) -> int:
     """
     Handle multi-file compilation when use statements are present.
 
@@ -222,10 +248,17 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter, ar
         src_path: Path to the main source file
         reporter: Reporter for error/warning collection
         args: Command line arguments
+        is_library: If True, compile to library bitcode (no main() required)
 
     Returns:
         Exit code (0=success, 1=warnings, 2=errors) or None to continue with single-file compilation
     """
+    # Initialize generic type provider registry
+    from semantics.generics.providers import register_all_providers
+    from semantics.generics.providers.registry import GenericTypeRegistry
+    register_all_providers()  # Ensure providers are registered
+    GenericTypeRegistry.deactivate_all()  # Reset activation state for clean compilation
+
     # Infer main unit name from file path
     # For now, just use the stem (filename without extension)
     main_unit_name = src_path.stem
@@ -268,13 +301,19 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter, ar
         # Error already reported
         return 2
 
-    # Collect stdlib unit imports from all units
+    # Collect stdlib and library imports from all units
     stdlib_units = set()
+    library_imports = set()
     for unit in compilation_order:
         if unit.ast:
             for use_stmt in unit.ast.uses:
                 if use_stmt.is_stdlib:
                     stdlib_units.add(use_stmt.path)
+                    # Activate generic type providers for stdlib generics
+                    # This must happen BEFORE semantic analysis so types are available in Pass 0
+                    _activate_generic_provider(use_stmt.path)
+                elif use_stmt.is_library:
+                    library_imports.add(use_stmt.path)
 
     # Display compilation units only if there are multiple units (i.e., user has dependencies)
     if len(compilation_order) > 1:
@@ -313,8 +352,32 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter, ar
     # Note: The actual registration will happen during Pass 0 (CollectorPass)
     # Here we just ensure the registry is initialized and available
 
+    # Validate and load library imports
+    library_linker = None
+    if library_imports:
+        from backend.library_linker import LibraryLinker, LibraryError
+        library_linker = LibraryLinker()
+
+        print(f"Linking {len(library_imports)} custom libraries:")
+        for lib_path in sorted(library_imports):
+            try:
+                bc_path, manifest_path = library_linker.resolve_library(lib_path)
+                manifest = library_linker.load_manifest(manifest_path)
+                library_linker.loaded_libraries[manifest["library_name"]] = manifest
+
+                # Format as "lib / mylib" instead of "lib/mylib"
+                formatted_path = " / ".join(lib_path.split('/'))
+                print(f"  - {formatted_path}")
+
+                # TODO: Register library types with semantic analyzer for type checking
+                # This would allow using types defined in libraries
+            except LibraryError as e:
+                print(f"{e}", file=sys.stderr)
+                return 2
+        print()
+
     # Run multi-file semantic analysis
-    multi_file_analyzer = SemanticAnalyzer(reporter, filename=main_unit_name, unit_manager=unit_manager)
+    multi_file_analyzer = SemanticAnalyzer(reporter, filename=main_unit_name, unit_manager=unit_manager, library_linker=library_linker)
     try:
         multi_file_analyzer.check(main_ast)  # The main AST is passed but multi-file mode is detected
     except ValueError as e:
@@ -345,27 +408,57 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter, ar
             if not out_path.is_absolute():
                 out_path = effective_cwd / out_path
         else:
-            # Default to source filename without extension
+            # Default to source filename without extension (or .bc for libraries)
             source_name = src_path.stem  # e.g., "hello.sushi" -> "hello"
-            out_path = effective_cwd / source_name
+            if is_library:
+                out_path = effective_cwd / (source_name + ".bc")
+            else:
+                out_path = effective_cwd / source_name
+
         # Pass monomorphized extension methods to codegen
         monomorphized_extensions = getattr(multi_file_analyzer, 'monomorphized_extensions', [])
 
-        cg.compile_multi_unit(compilation_order, out=out_path, cc="cc",
-                              debug=bool(args.dump_ll), opt=args.opt,
-                              verify=not args.no_verify, keep_object=args.keep_object,
-                              main_expects_args=multi_file_analyzer.main_expects_args,
-                              monomorphized_extensions=monomorphized_extensions)
+        if is_library:
+            # Library compilation - generate bitcode only
+            cg.compile_to_bitcode(compilation_order, out=out_path,
+                                  debug=bool(args.dump_ll), opt=args.opt,
+                                  verify=not args.no_verify,
+                                  monomorphized_extensions=monomorphized_extensions)
 
-        if args.write_ll:
-            try:
-                ll_path = out_path.with_suffix(".ll")
-                ll_path.write_text(str(cg.module), encoding="utf-8")
-                print(f"wrote LLVM IR: {ll_path}")
-            except Exception as e:
-                print(f"(warn) failed to write LLVM IR: {e}", file=sys.stderr)
+            # Generate manifest file
+            from backend.library_manifest import LibraryManifestGenerator
+            manifest_path = out_path.with_suffix('.sushilib')
+            manifest_gen = LibraryManifestGenerator(multi_file_analyzer)
+            manifest_gen.generate(compilation_order, manifest_path)
 
-        print(f"Success! Wrote native binary: {out_path}")
+            if args.write_ll:
+                try:
+                    ll_path = out_path.with_suffix(".ll")
+                    ll_path.write_text(str(cg.module), encoding="utf-8")
+                    print(f"wrote LLVM IR: {ll_path}")
+                except Exception as e:
+                    print(f"(warn) failed to write LLVM IR: {e}", file=sys.stderr)
+
+            print(f"Success! Wrote library: {out_path}")
+            print(f"Generated manifest: {manifest_path}")
+        else:
+            # Normal compilation - generate executable
+            cg.compile_multi_unit(compilation_order, out=out_path, cc="cc",
+                                  debug=bool(args.dump_ll), opt=args.opt,
+                                  verify=not args.no_verify, keep_object=args.keep_object,
+                                  main_expects_args=multi_file_analyzer.main_expects_args,
+                                  monomorphized_extensions=monomorphized_extensions,
+                                  library_linker=library_linker)
+
+            if args.write_ll:
+                try:
+                    ll_path = out_path.with_suffix(".ll")
+                    ll_path.write_text(str(cg.module), encoding="utf-8")
+                    print(f"wrote LLVM IR: {ll_path}")
+                except Exception as e:
+                    print(f"(warn) failed to write LLVM IR: {e}", file=sys.stderr)
+
+            print(f"Success! Wrote native binary: {out_path}")
 
         # Check for warnings after successful compilation
         if reporter.has_warnings:
@@ -421,12 +514,24 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Rebuild standard library from source",
     )
-
+    ap.add_argument(
+        "--lib",
+        action="store_true",
+        help="Compile to library bitcode (no main() required)",
+    )
     args = ap.parse_args(argv)
 
     # Handle --version flag
     if args.version:
         return 0
+
+    # Validate --lib flag
+    if args.lib:
+        if args.out and not args.out.endswith('.bc'):
+            from internals.errors import ERR
+            msg = ERR["CE3500"]
+            print(f"{msg.code}: {msg.text.format(path=args.out)}", file=sys.stderr)
+            return 2
 
     # Handle --build-stdlib flag
     if args.build_stdlib:
@@ -489,7 +594,7 @@ def main(argv: list[str] | None = None) -> int:
 
         # Always use multi-file compilation mode
         # This handles both files with and without use statements uniformly
-        result = compile_multi_file(ast, src_path, reporter, args)
+        result = compile_multi_file(ast, src_path, reporter, args, is_library=args.lib)
         if result is not None:
             # Print errors/warnings before returning
             reporter.print()

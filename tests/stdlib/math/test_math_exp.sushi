@@ -1,0 +1,56 @@
+# Test exponential functions: exp, exp2
+use <math>
+
+fn main() i32:
+    # Test exp (e^x)
+    let f64 exp_0 = exp(0.0)
+    let f64 exp_1 = exp(1.0)
+    let f64 exp_2 = exp(2.0)
+
+    # Test exp2 (2^x)
+    let f64 exp2_0 = exp2(0.0)
+    let f64 exp2_1 = exp2(1.0)
+    let f64 exp2_3 = exp2(3.0)
+    let f64 exp2_10 = exp2(10.0)
+
+    # Verify exp(0) = 1
+    if (abs(exp_0 - 1.0) > 0.0001):
+        return Result.Ok(1)
+
+    # Verify exp(1) = E
+    if (abs(exp_1 - E) > 0.0001):
+        return Result.Ok(2)
+
+    # Verify exp(2) = E^2
+    let f64 e_squared = E * E
+    if (abs(exp_2 - e_squared) > 0.0001):
+        return Result.Ok(3)
+
+    # Verify exp2(0) = 1
+    if (abs(exp2_0 - 1.0) > 0.0001):
+        return Result.Ok(4)
+
+    # Verify exp2(1) = 2
+    if (abs(exp2_1 - 2.0) > 0.0001):
+        return Result.Ok(5)
+
+    # Verify exp2(3) = 8
+    if (abs(exp2_3 - 8.0) > 0.0001):
+        return Result.Ok(6)
+
+    # Verify exp2(10) = 1024
+    if (abs(exp2_10 - 1024.0) > 0.0001):
+        return Result.Ok(7)
+
+    # Verify exp/log round-trip
+    let f64 x = 3.5
+    let f64 roundtrip = exp(log(x))
+    if (abs(roundtrip - x) > 0.0001):
+        return Result.Ok(8)
+
+    # Verify exp2/log2 round-trip
+    let f64 roundtrip2 = exp2(log2(x))
+    if (abs(roundtrip2 - x) > 0.0001):
+        return Result.Ok(9)
+
+    return Result.Ok(0)

@@ -2,6 +2,48 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [0.3.0] - 2025-12-06
+
+### Added
+- Library system for creating and using precompiled libraries
+  - `--lib` flag compiles source to reusable bitcode (`.bc`) with manifest (`.sushilib`)
+  - `use <lib/name>` syntax imports precompiled libraries
+  - `SUSHI_LIB_PATH` environment variable for library search paths
+  - Two-phase linking with priority-based symbol resolution (Main > Library > Stdlib > Runtime)
+  - Dead code elimination removes unused library functions
+  - Platform mismatch warnings (CW3505)
+- Library error codes (CE35xx)
+  - CE3500: Library output path must have .bc extension
+  - CE3502: Library not found in search paths
+  - CE3503: Invalid library manifest
+  - CE3507: Failed to link library
+- Library type registration from manifests
+  - Structs, enums, and functions from libraries are registered in semantic analysis
+  - Local definitions take precedence over library definitions
+- Library integration tests in `tests/libs/`
+  - Runtime symbol deduplication
+  - Circular function calls
+  - Symbol priority/override
+  - Dead code elimination
+- GenericTypeProvider interface for plugin-style generic types
+  - HashMap now conditionally loaded via `use <collections/hashmap>`
+- Math module enhancements (`use <math>`)
+  - Trigonometric: `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`
+  - Hyperbolic: `sinh`, `cosh`, `tanh`
+  - Logarithmic: `log`, `log10`, `log2`
+  - Exponential: `exp`, `pow`
+
+### Changed
+- Removed `--link` flag (breaking change)
+  - Libraries are now imported via `use <lib/...>` statements in source code
+  - This simplifies the compilation model to a single mechanism
+
+### Documentation
+- New documentation: `docs/libraries.md` - Complete library system guide
+- Updated `docs/compiler-reference.md` with library options
+- Updated `docs/examples/26-libraries.sushi` library usage example
+- Updated `docs/stdlib/math.md` with new math functions
+
 ## [0.2.0] - 2025-11-27
 
 ### Added

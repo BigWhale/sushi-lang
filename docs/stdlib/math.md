@@ -242,15 +242,149 @@ fn main() i32:
 - `trunc_f32(f32 value) -> f32`
 - `trunc_f64(f64 value) -> f64`
 
-## Type-Specific Function Naming
+## Trigonometric Functions
 
-All functions use type-specific suffixes to indicate which type they operate on:
+All trigonometric functions operate on radians.
 
-- `_i8`, `_i16`, `_i32`, `_i64` - Signed integers
-- `_u8`, `_u16`, `_u32`, `_u64` - Unsigned integers
-- `_f32`, `_f64` - Floating-point numbers
+### sin, cos, tan
 
-This ensures type safety and avoids ambiguity at compile time.
+```sushi
+use <math>
+
+fn main() i32:
+    let f64 angle = PI / 4.0
+
+    let f64 s = sin(angle)   # ~0.707
+    let f64 c = cos(angle)   # ~0.707
+    let f64 t = tan(angle)   # ~1.0
+
+    # Pythagorean identity
+    let f64 identity = s * s + c * c  # 1.0
+
+    return Result.Ok(0)
+```
+
+**Functions:**
+- `sin(f64 x) -> f64` - Sine of x (radians)
+- `cos(f64 x) -> f64` - Cosine of x (radians)
+- `tan(f64 x) -> f64` - Tangent of x (radians)
+
+### Inverse Trigonometric (asin, acos, atan, atan2)
+
+```sushi
+use <math>
+
+fn main() i32:
+    let f64 a = asin(1.0)         # PI/2
+    let f64 b = acos(0.0)         # PI/2
+    let f64 c = atan(1.0)         # PI/4
+    let f64 d = atan2(1.0, 1.0)   # PI/4 (y/x with quadrant)
+
+    return Result.Ok(0)
+```
+
+**Functions:**
+- `asin(f64 x) -> f64` - Arc sine, returns radians in [-PI/2, PI/2]
+- `acos(f64 x) -> f64` - Arc cosine, returns radians in [0, PI]
+- `atan(f64 x) -> f64` - Arc tangent, returns radians in [-PI/2, PI/2]
+- `atan2(f64 y, f64 x) -> f64` - Arc tangent of y/x, using signs to determine quadrant
+
+## Hyperbolic Functions
+
+```sushi
+use <math>
+
+fn main() i32:
+    let f64 x = 1.0
+
+    let f64 s = sinh(x)   # ~1.175
+    let f64 c = cosh(x)   # ~1.543
+    let f64 t = tanh(x)   # ~0.762
+
+    # Identity: cosh^2 - sinh^2 = 1
+    let f64 identity = c * c - s * s  # 1.0
+
+    return Result.Ok(0)
+```
+
+**Functions:**
+- `sinh(f64 x) -> f64` - Hyperbolic sine
+- `cosh(f64 x) -> f64` - Hyperbolic cosine
+- `tanh(f64 x) -> f64` - Hyperbolic tangent
+
+## Logarithmic Functions
+
+```sushi
+use <math>
+
+fn main() i32:
+    let f64 ln_e = log(E)        # 1.0 (natural log)
+    let f64 log2_8 = log2(8.0)   # 3.0
+    let f64 log_100 = log10(100.0)  # 2.0
+
+    return Result.Ok(0)
+```
+
+**Functions:**
+- `log(f64 x) -> f64` - Natural logarithm (base e)
+- `log2(f64 x) -> f64` - Base-2 logarithm
+- `log10(f64 x) -> f64` - Base-10 logarithm
+
+**Note:** Logarithm of non-positive values produces NaN or -Infinity.
+
+## Exponential Functions
+
+```sushi
+use <math>
+
+fn main() i32:
+    let f64 e_squared = exp(2.0)   # ~7.389 (e^2)
+    let f64 two_cubed = exp2(3.0)  # 8.0 (2^3)
+
+    return Result.Ok(0)
+```
+
+**Functions:**
+- `exp(f64 x) -> f64` - e raised to power x
+- `exp2(f64 x) -> f64` - 2 raised to power x
+
+## Utility Functions
+
+### hypot
+
+Compute hypotenuse (Euclidean distance from origin).
+
+```sushi
+use <math>
+
+fn main() i32:
+    # Classic 3-4-5 right triangle
+    let f64 h = hypot(3.0, 4.0)  # 5.0
+
+    # Equivalent to sqrt(x*x + y*y)
+    let f64 dist = hypot(6.0, 8.0)  # 10.0
+
+    return Result.Ok(0)
+```
+
+**Function:**
+- `hypot(f64 x, f64 y) -> f64` - sqrt(x*x + y*y)
+
+## Polymorphic Functions
+
+The `abs`, `min`, and `max` functions are polymorphic and work with any numeric type:
+
+```sushi
+use <math>
+
+fn main() i32:
+    let i32 a = abs(-42)        # 42
+    let f64 b = abs(-3.14)      # 3.14
+    let i32 c = min(10, 20)     # 10
+    let f64 d = max(1.5, 2.5)   # 2.5
+
+    return Result.Ok(0)
+```
 
 ## Performance
 
@@ -276,14 +410,7 @@ use <math>
 fn distance(f64 x1, f64 y1, f64 x2, f64 y2) f64:
     let f64 dx = x2 - x1
     let f64 dy = y2 - y1
-
-    let f64 dx_squared = pow_f64(dx, 2.0)
-    let f64 dy_squared = pow_f64(dy, 2.0)
-
-    let f64 sum = dx_squared + dy_squared
-    let f64 dist = sqrt_f64(sum)
-
-    return Result.Ok(dist)
+    return Result.Ok(hypot(dx, dy))
 
 fn main() i32:
     let f64 d = distance(0.0, 0.0, 3.0, 4.0).realise(0.0)

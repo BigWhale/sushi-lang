@@ -37,7 +37,7 @@ def extract_element_type(list_type: StructType, codegen: Any) -> Type:
     type_str = name[5:-1].strip()  # Remove "List<" and ">"
 
     # Parse the type string (might be builtin, struct, enum, or nested generic)
-    from backend.generics.hashmap.types import resolve_type_from_string
+    from stdlib.generics.collections.hashmap.types import resolve_type_from_string
     return resolve_type_from_string(type_str, codegen)
 
 

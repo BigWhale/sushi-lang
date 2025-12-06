@@ -1,0 +1,6 @@
+# Test that dynamic arrays are rejected as HashMap keys (CE2058)
+
+use <collections/hashmap>
+fn main() i32:
+    let HashMap<i32[], string> map = HashMap.new()
+    return Result.Ok(0)

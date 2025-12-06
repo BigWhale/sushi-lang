@@ -1,0 +1,69 @@
+# Test HashMap with struct keys
+
+use <collections/hashmap>
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    # Create a HashMap with Point keys and string values
+    let HashMap<Point, string> labels = HashMap.new()
+
+    # Insert some entries
+    labels.insert(Point(0, 0), "origin")
+    labels.insert(Point(10, 20), "point A")
+    labels.insert(Point(-5, 15), "point B")
+
+    # Check size
+    if (labels.len() == 3):
+        println("✓ HashMap has 3 entries")
+    else:
+        println("✗ Expected 3 entries")
+
+    # Test get with existing key
+    let Maybe<string> result1 = labels.get(Point(0, 0))
+    match result1:
+        Maybe.Some(label) ->
+            println("Found origin: {label}")
+        Maybe.None() ->
+            println("✗ origin not found")
+
+    # Test get with non-existing key
+    let Maybe<string> result2 = labels.get(Point(100, 200))
+    match result2:
+        Maybe.Some(label) ->
+            println("✗ Unexpected: found {label}")
+        Maybe.None() ->
+            println("✓ Point(100, 200) not found as expected")
+
+    # Test contains_key with struct key
+    if (labels.contains_key(Point(10, 20))):
+        println("✓ Point(10, 20) exists")
+    else:
+        println("✗ Point(10, 20) should exist")
+
+    # Update existing key
+    labels.insert(Point(0, 0), "updated origin")
+
+    let Maybe<string> result3 = labels.get(Point(0, 0))
+    match result3:
+        Maybe.Some(label) ->
+            println("Updated label: {label}")
+        Maybe.None() ->
+            println("✗ Updated origin not found")
+
+    # Remove a key
+    let Maybe<string> result4 = labels.remove(Point(10, 20))
+    match result4:
+        Maybe.Some(removed) ->
+            println("Removed: {removed}")
+        Maybe.None() ->
+            println("✗ Failed to remove")
+
+    # Verify size after removal
+    if (labels.len() == 2):
+        println("✓ HashMap has 2 entries after removal")
+    else:
+        println("✗ Expected 2 entries after removal")
+
+    return Result.Ok(0)

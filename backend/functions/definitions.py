@@ -52,7 +52,8 @@ class FunctionDefinitions:
             TypeError: If the return type is not supported.
         """
         # Special handling for main function - needs wrapper for C compatibility
-        if fn.name == 'main':
+        # Skip wrapper in library mode (no main() entry point)
+        if fn.name == 'main' and not getattr(self.codegen, 'is_library_mode', False):
             if self.codegen.main_expects_args:
                 return main_wrapper.emit_main_with_args(
                     fn, begin_function_fn, end_function_fn,

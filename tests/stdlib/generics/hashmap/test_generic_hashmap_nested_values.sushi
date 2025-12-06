@@ -1,0 +1,31 @@
+# TEST_TYPE: runtime
+# EXPECTED_OUTPUT: 42
+
+# Test HashMap with nested generic values: HashMap<string, Maybe<i32>>
+# "The Babel fish is small, yellow, leech-like, and probably the oddest thing in the Universe"
+
+use <collections/hashmap>
+fn main() i32:
+    let HashMap<string, Maybe<i32>> map = HashMap.new()
+
+    # Insert entries with Maybe values
+    map.insert("answer", Maybe.Some(42))
+    map.insert("unknown", Maybe.None())
+    map.insert("vogon-poetry-rating", Maybe.Some(-1))
+
+    # Retrieve and check
+    let Maybe<Maybe<i32>> result = map.get("answer")
+
+    match result:
+        Maybe.Some(inner_maybe) ->
+            match inner_maybe:
+                Maybe.Some(value) ->
+                    println("{value}")
+                    map.free()
+                    return Result.Ok(0)
+                Maybe.None() ->
+                    map.free()
+                    return Result.Ok(1)
+        Maybe.None() ->
+            map.free()
+            return Result.Ok(2)

@@ -106,7 +106,8 @@ def try_emit_own_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]
 
 def try_emit_hashmap_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as HashMap<K, V> method. Returns None if not a HashMap<K, V> method."""
-    from backend.generics.hashmap import is_builtin_hashmap_method
+    # Import from stdlib location
+    from stdlib.generics.collections.hashmap import is_builtin_hashmap_method, emit_hashmap_method
     from backend.expressions.calls.utils import infer_semantic_type, emit_receiver_as_pointer
 
     method = expr.method
@@ -120,7 +121,6 @@ def try_emit_hashmap_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     if method == "new":
         receiver_semantic_type = infer_semantic_type(codegen, expr, None, "HashMap<", StructType)
         if isinstance(receiver_semantic_type, StructType) and receiver_semantic_type.name.startswith("HashMap<"):
-            from backend.generics.hashmap import emit_hashmap_method
             temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
             return emit_hashmap_method(codegen, temp_expr, None, receiver_semantic_type, to_i1)
     else:
@@ -129,7 +129,6 @@ def try_emit_hashmap_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
         if hashmap_ptr is not None:
             receiver_semantic_type = infer_semantic_type(codegen, expr, None, "HashMap<", StructType)
             if isinstance(receiver_semantic_type, StructType) and receiver_semantic_type.name.startswith("HashMap<"):
-                from backend.generics.hashmap import emit_hashmap_method
                 temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
                 return emit_hashmap_method(codegen, temp_expr, hashmap_ptr, receiver_semantic_type, to_i1)
         else:
@@ -137,7 +136,6 @@ def try_emit_hashmap_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
             hashmap_value = codegen.expressions.emit_expr(receiver)
             receiver_semantic_type = infer_semantic_type(codegen, expr, hashmap_value, "HashMap<", StructType)
             if isinstance(receiver_semantic_type, StructType) and receiver_semantic_type.name.startswith("HashMap<"):
-                from backend.generics.hashmap import emit_hashmap_method
                 temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
                 return emit_hashmap_method(codegen, temp_expr, hashmap_value, receiver_semantic_type, to_i1)
 

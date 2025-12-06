@@ -1,0 +1,12 @@
+use <collections/hashmap>
+fn main() i32:
+    let HashMap<string, i32> map = HashMap.new()
+
+    # Insert some values
+    map.insert("alice", 30)
+    map.insert("bob", 25)
+
+    println("=== HashMap Debug ===")
+    map.debug()
+
+    return Result.Ok(0)

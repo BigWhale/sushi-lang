@@ -1,0 +1,38 @@
+# Test circular function calls in library
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "foo(5) = 21"
+# EXPECT_STDOUT_CONTAINS: "bar(5) = 24"
+# EXPECT_STDOUT_CONTAINS: "All circular tests passed"
+#
+# Tests mutually recursive functions: foo() calls bar(), bar() calls foo().
+# The linker must correctly handle function references that form cycles.
+
+use <lib/circular_lib>
+
+fn main() i32:
+    # foo(5) = 5 + bar(4) = 5 + (8 + foo(3)) = ... = 21
+    let Result<i32, StdError> r1 = foo(5)
+    match r1:
+        Result.Ok(result_foo) ->
+            println("foo(5) = {result_foo}")
+            if (result_foo != 21):
+                println("FAIL: Expected foo(5) = 21")
+                return Result.Ok(1)
+        Result.Err(_) ->
+            println("FAIL: foo(5) returned error")
+            return Result.Ok(1)
+
+    # bar(5) = 5*2 + foo(4) = 10 + (4 + bar(3)) = ... = 24
+    let Result<i32, StdError> r2 = bar(5)
+    match r2:
+        Result.Ok(result_bar) ->
+            println("bar(5) = {result_bar}")
+            if (result_bar != 24):
+                println("FAIL: Expected bar(5) = 24")
+                return Result.Ok(1)
+        Result.Err(_) ->
+            println("FAIL: bar(5) returned error")
+            return Result.Ok(1)
+
+    println("All circular tests passed")
+    return Result.Ok(0)

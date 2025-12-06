@@ -42,10 +42,30 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 |---------------|----------------------------------------------------|
 | `-o NAME`     | Specify output executable name                     |
 | `--opt LEVEL` | Set optimization level (none, mem2reg, O1, O2, O3) |
+| `--lib`       | Compile to library bitcode instead of executable   |
 | `--traceback` | Show full Python traceback on errors               |
 | `--dump-ast`  | Print abstract syntax tree                         |
 | `--dump-ll`   | Print LLVM IR to terminal                          |
 | `--write-ll`  | Write LLVM IR to `<output>.ll` file                |
+
+### Library Compilation
+
+```bash
+# Compile source to reusable library
+./sushic --lib mylib.sushi -o mylib.bc
+```
+
+Libraries are used via `use <lib/...>` statements in source code:
+
+```sushi
+use <lib/mylib>
+
+fn main() i32:
+    # Library functions/types are now available
+    return Result.Ok(0)
+```
+
+See [Libraries](libraries.md) for complete documentation.
 
 ## Optimization Levels
 

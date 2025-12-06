@@ -1,0 +1,23 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+
+# Test HashMap.values() iterator with primitive types
+
+use <collections/hashmap>
+fn main() i32:
+    let HashMap<i32, bool> flags = HashMap.new()
+    flags.insert(1, true)
+    flags.insert(2, false)
+    flags.insert(3, true)
+
+    # Count true values
+    let i32 true_count = 0
+    foreach(flag in flags.values()):
+        if (flag):
+            true_count := true_count + 1
+
+    # Should have 2 true values
+    if (true_count == 2):
+        return Result.Ok(0)
+
+    return Result.Ok(1)

@@ -1,0 +1,22 @@
+# Test HashMap.get() with primitive i32 key
+
+use <collections/hashmap>
+fn main() i32:
+    println("Creating HashMap...")
+    let HashMap<i32, bool> map = HashMap.new()
+
+    println("Inserting key 42...")
+    map.insert(42, true)
+
+    println("Calling get(42)...")
+    match map.get(42):
+        Maybe.Some(_) -> println("Found: true")
+        Maybe.None() -> println("ERROR: Should have found 42")
+
+    println("Calling get(99) (not in map)...")
+    match map.get(99):
+        Maybe.Some(_) -> println("ERROR: Should not have found 99")
+        Maybe.None() -> println("Correctly not found")
+
+    println("Test passed")
+    return Result.Ok(0)

@@ -1,0 +1,59 @@
+# Test inverse trigonometric functions: asin, acos, atan, atan2
+use <math>
+
+fn main() i32:
+    # Test asin
+    let f64 asin_0 = asin(0.0)
+    let f64 asin_1 = asin(1.0)
+
+    # Test acos
+    let f64 acos_0 = acos(0.0)
+    let f64 acos_1 = acos(1.0)
+
+    # Test atan
+    let f64 atan_0 = atan(0.0)
+    let f64 atan_1 = atan(1.0)
+
+    # Test atan2
+    let f64 atan2_1_1 = atan2(1.0, 1.0)
+    let f64 atan2_1_0 = atan2(1.0, 0.0)
+
+    # Verify asin(0) = 0
+    if (abs(asin_0) > 0.0001):
+        return Result.Ok(1)
+
+    # Verify asin(1) = PI/2
+    if (abs(asin_1 - PI / 2.0) > 0.0001):
+        return Result.Ok(2)
+
+    # Verify acos(0) = PI/2
+    if (abs(acos_0 - PI / 2.0) > 0.0001):
+        return Result.Ok(3)
+
+    # Verify acos(1) = 0
+    if (abs(acos_1) > 0.0001):
+        return Result.Ok(4)
+
+    # Verify atan(0) = 0
+    if (abs(atan_0) > 0.0001):
+        return Result.Ok(5)
+
+    # Verify atan(1) = PI/4
+    if (abs(atan_1 - PI / 4.0) > 0.0001):
+        return Result.Ok(6)
+
+    # Verify atan2(1, 1) = PI/4
+    if (abs(atan2_1_1 - PI / 4.0) > 0.0001):
+        return Result.Ok(7)
+
+    # Verify atan2(1, 0) = PI/2
+    if (abs(atan2_1_0 - PI / 2.0) > 0.0001):
+        return Result.Ok(8)
+
+    # Verify round-trip: sin(asin(x)) = x
+    let f64 x = 0.5
+    let f64 roundtrip = sin(asin(x))
+    if (abs(roundtrip - x) > 0.0001):
+        return Result.Ok(9)
+
+    return Result.Ok(0)

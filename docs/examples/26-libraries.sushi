@@ -1,0 +1,58 @@
+# Example 26: Libraries
+#
+# This example demonstrates how to create and use libraries in Sushi.
+#
+# Libraries allow you to compile reusable code that can be linked into
+# multiple programs. This enables modular architecture and code sharing.
+#
+# LIBRARY COMPILATION:
+#
+#   # Step 1: Compile source to library bitcode
+#   ./sushic --lib docs/examples/mathlib.sushi -o /tmp/mathlib.bc
+#
+#   This creates:
+#     - /tmp/mathlib.bc      (LLVM bitcode)
+#     - /tmp/mathlib.sushilib (JSON manifest)
+#
+# USING THE LIBRARY:
+#
+#   # Step 2: Set library search path and compile program
+#   export SUSHI_LIB_PATH=/tmp
+#   ./sushic docs/examples/26-libraries.sushi -o program
+#
+#   The use <lib/mathlib> statement tells the compiler to:
+#   1. Load mathlib.sushilib manifest for type information
+#   2. Link mathlib.bc into the final executable
+#
+# For this example to work with precompiled libraries:
+#   1. Run: ./sushic --lib docs/examples/mathlib.sushi -o /tmp/mathlib.bc
+#   2. Run: export SUSHI_LIB_PATH=/tmp
+#   3. Run: ./sushic docs/examples/26-libraries.sushi
+#
+# Alternatively, use source import for development:
+#   use "mathlib"  # Import source file directly
+
+use "mathlib"
+
+fn main() i32:
+    println("Library Functions Demo")
+    println("======================")
+
+    # Use functions from mathlib.sushi (imported as source)
+    # .realise(default) safely unwraps Result.Ok or returns default on error
+    let i32 sum = add(10, 20).realise(0)
+    println("add(10, 20) = {sum}")
+
+    let i32 product = multiply(7, 8).realise(0)
+    println("multiply(7, 8) = {product}")
+
+    let i32 fact = factorial(5).realise(0)
+    println("factorial(5) = {fact}")
+
+    let i32 doubled = double(21).realise(0)
+    println("double(21) = {doubled}")
+
+    println("")
+    println("All library functions work correctly!")
+
+    return Result.Ok(0)

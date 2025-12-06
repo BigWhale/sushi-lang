@@ -1,0 +1,31 @@
+# Test basic HashMap methods: new(), len(), is_empty(), tombstone_count()
+
+use <collections/hashmap>
+fn main() i32:
+    # Create empty HashMap
+    let HashMap<string, i32> map = HashMap.new()
+
+    # Test initial state
+    let i32 size = map.len()
+    let bool empty = map.is_empty()
+    let i32 tombs = map.tombstone_count()
+
+    println("Initial size: {size}")
+    println("Is empty: {empty}")
+    println("Tombstones: {tombs}")
+
+    # Verify initial state
+    if (size != 0):
+        println("ERROR: Initial size should be 0")
+        return Result.Ok(1)
+
+    if (not empty):
+        println("ERROR: Initial map should be empty")
+        return Result.Ok(2)
+
+    if (tombs != 0):
+        println("ERROR: Initial tombstones should be 0")
+        return Result.Ok(3)
+
+    println("All basic methods working!")
+    return Result.Ok(0)

@@ -23,6 +23,7 @@ class Stmt(Node):
 class UseStatement(Node):
     path: str                        # Path string like "math/integer" or "core/results"
     is_stdlib: bool = False          # True for <module>, False for "module"
+    is_library: bool = False         # True for <lib/module>, False otherwise
 
 @dataclass
 class Program(Node):

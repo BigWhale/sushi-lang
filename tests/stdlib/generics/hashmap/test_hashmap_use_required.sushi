@@ -1,0 +1,17 @@
+# Test that HashMap works correctly with use statement
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap<i32, string> map = HashMap.new()
+    map.insert(1, "one")
+    let Maybe<string> val = map.get(1)
+
+    if (val.is_some()):
+        println("Got value: {val.realise('')}")
+    else:
+        println("ERROR: Expected value")
+        return Result.Ok(1)
+
+    map.free()
+    println("Mostly Harmless")
+    return Result.Ok(0)

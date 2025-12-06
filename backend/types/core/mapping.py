@@ -256,7 +256,7 @@ class TypeMapper:
 
     def _create_hashmap_struct_type(self, struct_type: StructType) -> ir.LiteralStructType:
         """Create LLVM struct type for HashMap<K, V>."""
-        from backend.generics.hashmap.types import extract_key_value_types, get_entry_type
+        from stdlib.generics.collections.hashmap.types import extract_key_value_types, get_entry_type
 
         # Need TypeSystemWrapper for generic helpers
         from backend.llvm_types import TypeSystemWrapper

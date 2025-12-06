@@ -177,7 +177,22 @@ class StdlibRegistry:
             "time": ["sleep", "msleep", "usleep", "nanosleep"],
             "env": ["getenv", "setenv"],
             "process": ["getcwd", "chdir", "exit", "getpid", "getuid"],
-            "math": ["abs", "min", "max", "sqrt", "pow", "floor", "ceil", "round", "trunc"],
+            "math": [
+                # Basic
+                "abs", "min", "max", "sqrt", "pow", "floor", "ceil", "round", "trunc",
+                # Trigonometric
+                "sin", "cos", "tan",
+                # Inverse trigonometric
+                "asin", "acos", "atan", "atan2",
+                # Hyperbolic
+                "sinh", "cosh", "tanh",
+                # Logarithmic
+                "log", "log2", "log10",
+                # Exponential
+                "exp", "exp2",
+                # Utility
+                "hypot",
+            ],
             "random": ["rand", "rand_range", "srand", "rand_f64"],
             "files": ["exists", "is_file", "is_dir", "file_size", "remove", "rename", "copy", "mkdir", "rmdir"],
         }

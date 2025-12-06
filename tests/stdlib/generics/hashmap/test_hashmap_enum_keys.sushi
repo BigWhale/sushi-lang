@@ -1,0 +1,80 @@
+# Test HashMap with enum keys
+
+use <collections/hashmap>
+enum Color:
+    Red()
+    Green()
+    Blue()
+    Custom(i32)
+
+fn main() i32:
+    # Create a HashMap with Color enum keys and string values
+    let HashMap<Color, string> names = HashMap.new()
+
+    # Insert entries with different enum variants
+    names.insert(Color.Red(), "red color")
+    names.insert(Color.Green(), "green color")
+    names.insert(Color.Blue(), "blue color")
+    names.insert(Color.Custom(255), "custom color")
+
+    # Check size
+    if (names.len() == 4):
+        println("✓ HashMap has 4 entries")
+    else:
+        println("✗ Expected 4 entries")
+
+    # Test get with unit variant
+    let Maybe<string> result1 = names.get(Color.Red())
+    match result1:
+        Maybe.Some(name) ->
+            println("Found red: {name}")
+        Maybe.None() ->
+            println("✗ Red not found")
+
+    # Test get with data variant
+    let Maybe<string> result2 = names.get(Color.Custom(255))
+    match result2:
+        Maybe.Some(name) ->
+            println("Found custom: {name}")
+        Maybe.None() ->
+            println("✗ Custom(255) not found")
+
+    # Test get with non-existing key
+    let Maybe<string> result3 = names.get(Color.Custom(128))
+    match result3:
+        Maybe.Some(name) ->
+            println("✗ Unexpected: found {name}")
+        Maybe.None() ->
+            println("✓ Custom(128) not found as expected")
+
+    # Test contains_key
+    if (names.contains_key(Color.Green())):
+        println("✓ Green exists")
+    else:
+        println("✗ Green should exist")
+
+    # Update existing key
+    names.insert(Color.Red(), "updated red")
+
+    let Maybe<string> result4 = names.get(Color.Red())
+    match result4:
+        Maybe.Some(name) ->
+            println("Updated: {name}")
+        Maybe.None() ->
+            println("✗ Updated red not found")
+
+    # Remove a key
+    let Maybe<string> result5 = names.remove(Color.Blue())
+    match result5:
+        Maybe.Some(removed) ->
+            println("Removed: {removed}")
+        Maybe.None() ->
+            println("✗ Failed to remove")
+
+    # Verify size after removal
+    if (names.len() == 3):
+        println("✓ HashMap has 3 entries after removal")
+    else:
+        println("✗ Expected 3 entries after removal")
+
+    return Result.Ok(0)

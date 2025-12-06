@@ -184,9 +184,9 @@ fn main() i32:
 - **Primitives and strings**: Passed by copy (cheap, no ownership transfer)
 - **Dynamic arrays**: Passed by move (ownership transfers to the callee)
 - **Structs**: Passed by move if they contain dynamic arrays
-- **References**: Use `&T` to pass mutable references without transferring ownership
+- **References**: Use `&peek T` for read-only or `&poke T` for read-write references without transferring ownership
 
-If you need to keep using a dynamic array after passing it to a function, either pass a reference (`&i32[]`) or explicitly clone it (`.clone()`) before passing.
+If you need to keep using a dynamic array after passing it to a function, either pass a reference (`&peek i32[]` for read-only or `&poke i32[]` for modification) or explicitly clone it (`.clone()`) before passing.
 
 ## Control Flow
 
@@ -734,29 +734,43 @@ Sushi provides memory safety without garbage collection through a combination of
 
 ### Borrowing, aka References
 
-Mutable references (`&T`) allow functions to modify values without taking ownership. Sushi's borrow checker ensures that references are always valid and that aliasing rules are enforced at compile time:
+References allow functions to access values without taking ownership. Sushi has two borrow modes:
+
+- **`&peek T`** - Read-only borrow (multiple allowed simultaneously)
+- **`&poke T`** - Read-write borrow (exclusive access)
+
+Sushi's borrow checker ensures that references are always valid and that aliasing rules are enforced at compile time:
 
 ```sushi
-fn increment(&i32 counter) ~:
+fn increment(&poke i32 counter) ~:
     counter := counter + 1
+    return Result.Ok(~)
+
+fn display(&peek i32 value) ~:
+    println("Value: {value}")
     return Result.Ok(~)
 
 fn main() i32:
     let i32 count = 0
-    increment(&count)
-    increment(&count)
+    increment(&poke count)
+    increment(&poke count)
+    display(&peek count)  # Read-only access
     println("Count: {count}")  # Prints: Count: 2
 
     return Result.Ok(0)
 ```
 
 **Borrowing Rules**:
-- **One active borrow per variable**: You cannot have multiple active borrows of the same variable simultaneously
+- **Multiple `&peek` allowed**: You can have multiple read-only borrows of the same variable simultaneously
+- **One `&poke` at a time**: Mutable borrows require exclusive access
+- **Cannot mix modes**: Cannot have `&peek` and `&poke` borrows of the same variable at the same time
+- **`&poke` coerces to `&peek`**: A mutable reference can be passed where a read-only reference is expected
 - **References must be valid**: The borrow checker ensures references never outlive the data they point to
 - **Zero cost**: References compile to simple pointers with no runtime overhead
 
 **What references allow**:
-- Modifying function arguments in-place without copying large structures
+- Reading function arguments without copying (use `&peek`)
+- Modifying function arguments in-place without copying large structures (use `&poke`)
 - Building efficient data structures that reference existing data
 - Avoiding expensive clones when you just need to read or modify a value
 
@@ -765,10 +779,14 @@ fn main() i32:
 struct LargeData:
     i32[1000] values
 
-fn process(&LargeData data) ~:
+fn process(&poke LargeData data) ~:
     # Can access and modify data.values without copying 4000 bytes
     data.values[0] := 42
     return Result.Ok(~)
+
+fn read_only(&peek LargeData data) i32:
+    # Read-only access - cannot modify
+    return Result.Ok(data.values[0])
 ```
 
 The borrow checker runs at compile time (Pass 3 in the semantic analysis pipeline), so there's no runtime cost to these safety guarantees.

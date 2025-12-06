@@ -1,0 +1,15 @@
+# override_lib.sushi - Library with functions that can be overridden
+#
+# Tests that main program functions take priority over library functions.
+# The library provides get_value() but main should be able to define its own.
+
+public fn get_value() i32:
+    return Result.Ok(100)
+
+public fn use_value() i32:
+    # This should call main's get_value() if main defines one,
+    # otherwise falls back to this library's version
+    return Result.Ok(get_value()?? * 2)
+
+public fn library_only() i32:
+    return Result.Ok(42)

@@ -45,7 +45,8 @@ class FunctionDeclarations:
         # Special handling for main function - it needs C-compatible signature
         # Main always needs a wrapper because Sushi functions return Result<T>
         # but C expects int main()
-        if fn.name == 'main':
+        # Skip wrapper in library mode (main is just a regular function)
+        if fn.name == 'main' and not getattr(self.codegen, 'is_library_mode', False):
             if self.codegen.main_expects_args:
                 # Generate C-style main signature: int main(int argc, char** argv)
                 ll_param_tys = [
@@ -105,10 +106,11 @@ class FunctionDeclarations:
                 llvm_fn.args[i].name = pname
 
         # Set linkage based on visibility:
-        # - main function: always external linkage (required by linker)
+        # - main function (not in library mode): always external linkage (required by linker)
         # - public functions: external linkage (accessible across units and for linking)
         # - private functions: internal linkage (only accessible within this module)
-        if fn.name == 'main':
+        is_library_mode = getattr(self.codegen, 'is_library_mode', False)
+        if fn.name == 'main' and not is_library_mode:
             llvm_fn.linkage = 'external'
         else:
             llvm_fn.linkage = 'external' if fn.is_public else 'internal'

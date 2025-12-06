@@ -57,6 +57,8 @@ class StdlibLinker:
         are imported. For example, if "core/primitives" is imported, method calls like
         i32.to_str() will emit external function calls instead of inline IR.
 
+        Also activates generic type providers for stdlib generic types (e.g., HashMap).
+
         Args:
             program: The program AST containing use statements.
         """
@@ -70,6 +72,32 @@ class StdlibLinker:
                 parts = use_stmt.path.split('/')
                 for i in range(1, len(parts)):
                     stdlib_units.add('/'.join(parts[:i]))
+
+                # Activate generic type providers for stdlib generics
+                self._activate_generic_provider(use_stmt.path)
+
+    def _activate_generic_provider(self, unit_path: str) -> None:
+        """Activate generic type provider for a stdlib unit if applicable.
+
+        Maps stdlib unit paths to generic type providers and activates them
+        in the GenericTypeRegistry.
+
+        Args:
+            unit_path: Stdlib unit path like "collections/hashmap"
+        """
+        from semantics.generics.providers.registry import GenericTypeRegistry
+
+        # Map stdlib unit paths to generic type names
+        generic_type_map = {
+            "collections/hashmap": "HashMap",
+            # Future: "collections/list": "List",
+            #         "collections/set": "Set",
+        }
+
+        # Check if this unit path corresponds to a generic type
+        generic_name = generic_type_map.get(unit_path)
+        if generic_name is not None:
+            GenericTypeRegistry.activate(generic_name)
 
     def has_stdlib_unit(self, unit_path: str) -> bool:
         """Check if a stdlib unit has been imported.
@@ -124,25 +152,37 @@ class StdlibLinker:
                 except Exception as e:
                     print(f"Warning: Failed to link stdlib unit {bc_path}: {e}")
 
+    # Virtual stdlib units that don't have .bc files (generic types emitted inline)
+    _virtual_units = {
+        "collections/hashmap",
+        # Future: "collections/list", "collections/set"
+    }
+
     def _resolve_stdlib_unit(self, unit_path: str) -> list[Path]:
         """Resolve stdlib unit path to .bc file(s).
 
         Supports both individual units and directory imports with platform-specific resolution:
         - "core/primitives" -> [stdlib/dist/darwin/core/primitives.bc]
         - "io" -> [stdlib/dist/darwin/io/stdio.bc, stdlib/dist/darwin/io/files.bc]
+        - "collections/hashmap" -> [] (virtual unit, no .bc file)
 
         Search order:
-        1. Platform-specific path (e.g., dist/darwin/io/stdio.bc)
+        1. Virtual units (no .bc files - emitted inline)
+        2. Platform-specific path (e.g., dist/darwin/io/stdio.bc)
 
         Args:
             unit_path: Unit path like "core/primitives" or "io"
 
         Returns:
-            List of paths to .bc files
+            List of paths to .bc files (empty for virtual units)
 
         Raises:
             FileNotFoundError: If the stdlib unit does not exist or is empty
         """
+        # Virtual units have no .bc files - they're emitted inline during codegen
+        if unit_path in self._virtual_units:
+            return []
+
         platform_dir = self.stdlib_dir / self.platform
 
         # Check if it's a directory import (platform-specific)
@@ -190,6 +230,9 @@ class StdlibLinker:
             List of available unit paths (e.g., ["core/primitives", "io/stdio"])
         """
         available = []
+
+        # Include virtual units (generic types without .bc files)
+        available.extend(self._virtual_units)
 
         # Find all .bc files recursively
         for bc_file in stdlib_dist.rglob("*.bc"):

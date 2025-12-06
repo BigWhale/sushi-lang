@@ -58,8 +58,13 @@ class Unit:
             self.dependencies = []
             return
 
-        # Only include non-stdlib dependencies (stdlib imports are handled separately)
-        self.dependencies = [use_stmt.path for use_stmt in self.ast.uses if not use_stmt.is_stdlib]
+        # Only include source file dependencies (not stdlib or library imports)
+        # Stdlib imports are handled by stdlib_linker
+        # Library imports are handled by library_linker
+        self.dependencies = [
+            use_stmt.path for use_stmt in self.ast.uses
+            if not use_stmt.is_stdlib and not use_stmt.is_library
+        ]
 
     def _extract_public_symbols(self) -> None:
         """Extract public symbols (functions and constants) from the AST."""

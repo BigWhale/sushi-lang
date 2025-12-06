@@ -1,0 +1,55 @@
+# Test hyperbolic functions: sinh, cosh, tanh
+use <math>
+
+fn main() i32:
+    # Test sinh
+    let f64 sinh_0 = sinh(0.0)
+    let f64 sinh_1 = sinh(1.0)
+
+    # Test cosh
+    let f64 cosh_0 = cosh(0.0)
+    let f64 cosh_1 = cosh(1.0)
+
+    # Test tanh
+    let f64 tanh_0 = tanh(0.0)
+    let f64 tanh_1 = tanh(1.0)
+
+    # Verify sinh(0) = 0
+    if (abs(sinh_0) > 0.0001):
+        return Result.Ok(1)
+
+    # Verify sinh(1) ~= 1.1752 (known value)
+    if (abs(sinh_1 - 1.1752) > 0.001):
+        return Result.Ok(2)
+
+    # Verify cosh(0) = 1
+    if (abs(cosh_0 - 1.0) > 0.0001):
+        return Result.Ok(3)
+
+    # Verify cosh(1) ~= 1.5431 (known value)
+    if (abs(cosh_1 - 1.5431) > 0.001):
+        return Result.Ok(4)
+
+    # Verify tanh(0) = 0
+    if (abs(tanh_0) > 0.0001):
+        return Result.Ok(5)
+
+    # Verify tanh(1) ~= 0.7616 (known value)
+    if (abs(tanh_1 - 0.7616) > 0.001):
+        return Result.Ok(6)
+
+    # Verify identity: cosh^2 - sinh^2 = 1
+    let f64 x = 0.5
+    let f64 s = sinh(x)
+    let f64 c = cosh(x)
+    let f64 identity = c * c - s * s
+    if (abs(identity - 1.0) > 0.0001):
+        return Result.Ok(7)
+
+    # Verify: tanh = sinh/cosh
+    let f64 t = tanh(x)
+    let f64 ratio = s / c
+    if (abs(t - ratio) > 0.0001):
+        return Result.Ok(8)
+
+    return Result.Ok(0)

@@ -1,0 +1,35 @@
+{
+  "sushi_lib_version": "1.0",
+  "library_name": "override_lib",
+  "compiled_at": "2025-12-06T21:41:24.049665+00:00",
+  "platform": "darwin",
+  "compiler_version": "0.1.0",
+  "public_functions": [
+    {
+      "name": "get_value",
+      "params": [],
+      "return_type": "i32",
+      "is_generic": false,
+      "type_params": []
+    },
+    {
+      "name": "use_value",
+      "params": [],
+      "return_type": "i32",
+      "is_generic": false,
+      "type_params": []
+    },
+    {
+      "name": "library_only",
+      "params": [],
+      "return_type": "i32",
+      "is_generic": false,
+      "type_params": []
+    }
+  ],
+  "public_constants": [],
+  "structs": [],
+  "enums": [],
+  "generic_types": [],
+  "dependencies": []
+}

@@ -1,0 +1,8 @@
+# Test that HashMap requires use statement (variable declaration)
+# Expected: CE2001 error for unknown type 'HashMap' (not registered without use statement)
+
+fn main() i32:
+    # Should fail: HashMap not imported
+    let HashMap<i32, string> map = HashMap.new()
+    return Result.Ok(0)
+

@@ -2,6 +2,7 @@
 # EXPECTED_OUTPUT: Hashing successful
 
 # Test hashing nested generics in HashMap
+use <collections/hashmap>
 # "In the beginning the Universe was created. This has made a lot of people very angry."
 
 struct Config:

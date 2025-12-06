@@ -1,0 +1,23 @@
+# Test automatic HashMap resize with more debugging
+
+use <collections/hashmap>
+fn main() i32:
+    let HashMap<i32, string> map = HashMap.new()
+
+    # Initial capacity should be 16
+    # Load factor threshold is 0.75
+    # Resize should happen when (size + tombstones) * 4 > capacity * 3
+    # With capacity 16: resize when size > 12
+
+    # Insert items one by one and check when resize happens
+    let i32 i = 1
+    while (i <= 15):
+        map.insert(i, "value")
+        let i32 size = map.len()
+        println("After inserting {i}: size = {size}")
+        i := i + 1
+
+    println("\nFinal state:")
+    map.debug()
+
+    return Result.Ok(0)

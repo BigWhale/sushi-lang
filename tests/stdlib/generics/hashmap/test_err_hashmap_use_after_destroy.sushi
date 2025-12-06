@@ -1,0 +1,12 @@
+use <collections/hashmap>
+fn main() i32:
+    let HashMap<string, i32> map = HashMap.new()
+    map.insert("a", 1)
+
+    # Destroy the map
+    map.destroy()
+
+    # ERROR CE2406: use of destroyed variable 'map'
+    println(map.len())
+
+    return Result.Ok(0)

@@ -388,7 +388,7 @@ def _emit_hashmap_foreach(
     """
     from llvmlite import ir
     from backend.statements import utils
-    from backend.generics.hashmap.types import extract_key_value_types, get_entry_type, ENTRY_OCCUPIED
+    from stdlib.generics.collections.hashmap.types import extract_key_value_types, get_entry_type, ENTRY_OCCUPIED
 
     # Extract K and V types from HashMap<K, V>
     key_type, value_type = extract_key_value_types(hashmap_type, codegen)

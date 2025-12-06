@@ -4,8 +4,9 @@ program: (_NEWLINE | toplevel)+
 toplevel: use_stmt | const_def | struct_def | enum_def | perk_def | function_def | extend_stmt
 
 const_def: CONST type NAME "=" expr _NEWLINE
-use_stmt: USE (stdlib_import | user_import) _NEWLINE
+use_stmt: USE (stdlib_import | lib_import | user_import) _NEWLINE
 stdlib_import: LT use_path GT
+lib_import: LT "lib" "/" use_path GT
 user_import: STRING
 use_path: NAME ("/" NAME)*
 struct_def: STRUCT NAME [type_params] ":" _NEWLINE _INDENT struct_field+ _DEDENT

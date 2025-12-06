@@ -1,0 +1,21 @@
+use <collections/hashmap>
+fn main() i32:
+    let HashMap<i32[3], string> map = HashMap.new()
+
+    let i32[3] key1 = [1, 2, 3]
+    let i32[3] key2 = [4, 5, 6]
+    let i32[3] key3 = [1, 2, 3]
+
+    map.insert(key1, "first")
+    map.insert(key2, "second")
+
+    let Maybe<string> val1 = map.get(key3)
+    if (val1.is_some()):
+        println(val1.realise(""))
+
+    if (map.contains_key(key1)):
+        println("Found key1")
+
+    map.free()
+
+    return Result.Ok(0)

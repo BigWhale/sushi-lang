@@ -1,0 +1,50 @@
+# mathlib.sushi - Example Library
+#
+# This is a sample library demonstrating how to create reusable code.
+# Compile with: ./sushic --lib mathlib.sushi -o mathlib.bc
+#
+# This generates:
+#   - mathlib.bc      (LLVM bitcode)
+#   - mathlib.sushilib (JSON manifest with type signatures)
+
+# Public functions are accessible from other compilation units.
+# Only mark functions as public if they are part of your API.
+
+# Adds two integers.
+public fn add(i32 a, i32 b) i32:
+    return Result.Ok(a + b)
+
+# Subtracts b from a.
+public fn subtract(i32 a, i32 b) i32:
+    return Result.Ok(a - b)
+
+# Multiplies two integers.
+public fn multiply(i32 a, i32 b) i32:
+    return Result.Ok(a * b)
+
+# Computes the factorial of n.
+# Returns 1 for n <= 1.
+public fn factorial(i32 n) i32:
+    if (n <= 1):
+        return Result.Ok(1)
+    let i32 prev = factorial(n - 1)??
+    return Result.Ok(n * prev)
+
+# Computes the nth Fibonacci number.
+public fn fibonacci(i32 n) i32:
+    if (n <= 0):
+        return Result.Ok(0)
+    if (n == 1):
+        return Result.Ok(1)
+    let i32 a = fibonacci(n - 1)??
+    let i32 b = fibonacci(n - 2)??
+    return Result.Ok(a + b)
+
+# Internal helper - not accessible from outside.
+# Functions without 'public' are only visible within this library.
+fn internal_helper(i32 x) i32:
+    return Result.Ok(x * 2)
+
+# Public function that uses internal helper.
+public fn double(i32 x) i32:
+    return Result.Ok(internal_helper(x)??)

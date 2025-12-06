@@ -264,3 +264,81 @@ def contains_unresolvable_unknown_type(
         )
 
     return False
+
+
+def parse_type_string(
+    type_str: str,
+    struct_table: Dict[str, 'StructType'],
+    enum_table: Dict[str, 'EnumType']
+) -> 'Type':
+    """Parse a type string from a manifest file back to a Type object.
+
+    Supports:
+    - Primitive types: i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, bool, string
+    - Blank type: ~
+    - Array types: i32[], string[]
+    - Fixed arrays: i32[10]
+    - Struct types (looked up in struct_table)
+    - Enum types (looked up in enum_table)
+
+    Args:
+        type_str: Type string from manifest (e.g., "i32", "Result<bool, StdError>")
+        struct_table: Dictionary mapping struct names to StructType instances
+        enum_table: Dictionary mapping enum names to EnumType instances
+
+    Returns:
+        Parsed Type object
+    """
+    from semantics.typesys import (
+        BuiltinType, ArrayType, DynamicArrayType, UnknownType
+    )
+
+    type_str = type_str.strip()
+
+    # Blank type
+    if type_str == "~":
+        return BuiltinType.BLANK
+
+    # Primitive types
+    primitives = {
+        "i8": BuiltinType.I8,
+        "i16": BuiltinType.I16,
+        "i32": BuiltinType.I32,
+        "i64": BuiltinType.I64,
+        "u8": BuiltinType.U8,
+        "u16": BuiltinType.U16,
+        "u32": BuiltinType.U32,
+        "u64": BuiltinType.U64,
+        "f32": BuiltinType.F32,
+        "f64": BuiltinType.F64,
+        "bool": BuiltinType.BOOL,
+        "string": BuiltinType.STRING,
+    }
+    if type_str in primitives:
+        return primitives[type_str]
+
+    # Dynamic arrays: type[]
+    if type_str.endswith("[]"):
+        base_str = type_str[:-2]
+        base_type = parse_type_string(base_str, struct_table, enum_table)
+        return DynamicArrayType(base_type=base_type)
+
+    # Fixed arrays: type[size]
+    if type_str.endswith("]") and "[" in type_str:
+        bracket_idx = type_str.rfind("[")
+        size_str = type_str[bracket_idx+1:-1]
+        base_str = type_str[:bracket_idx]
+        if size_str.isdigit():
+            base_type = parse_type_string(base_str, struct_table, enum_table)
+            return ArrayType(base_type=base_type, size=int(size_str))
+
+    # Check struct table
+    if type_str in struct_table:
+        return struct_table[type_str]
+
+    # Check enum table
+    if type_str in enum_table:
+        return enum_table[type_str]
+
+    # Unknown type - will be resolved later or cause error
+    return UnknownType(name=type_str)

@@ -1,0 +1,17 @@
+# dead_code_lib.sushi - Library with unused functions
+#
+# Tests that the two-phase linker eliminates unused functions.
+# Only used_function() should be included when only it is called.
+
+public fn used_function() i32:
+    return Result.Ok(42)
+
+public fn unused_function_a() i32:
+    return Result.Ok(100)
+
+public fn unused_function_b() string:
+    return Result.Ok("This should not be in the final binary")
+
+public fn unused_function_c() ~:
+    println("This should never appear")
+    return Result.Ok(~)

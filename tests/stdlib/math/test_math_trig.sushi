@@ -1,0 +1,49 @@
+# Test trigonometric functions: sin, cos, tan
+use <math>
+
+fn main() i32:
+    # Test sin at known values
+    let f64 sin_0 = sin(0.0)
+    let f64 sin_pi_2 = sin(PI / 2.0)
+
+    # Test cos at known values
+    let f64 cos_0 = cos(0.0)
+    let f64 cos_pi = cos(PI)
+
+    # Test tan at known values
+    let f64 tan_0 = tan(0.0)
+    let f64 tan_pi_4 = tan(PI / 4.0)
+
+    # Verify sin(0) = 0
+    if (abs(sin_0) > 0.0001):
+        return Result.Ok(1)
+
+    # Verify sin(PI/2) = 1
+    if (abs(sin_pi_2 - 1.0) > 0.0001):
+        return Result.Ok(2)
+
+    # Verify cos(0) = 1
+    if (abs(cos_0 - 1.0) > 0.0001):
+        return Result.Ok(3)
+
+    # Verify cos(PI) = -1
+    if (abs(cos_pi + 1.0) > 0.0001):
+        return Result.Ok(4)
+
+    # Verify tan(0) = 0
+    if (abs(tan_0) > 0.0001):
+        return Result.Ok(5)
+
+    # Verify tan(PI/4) = 1
+    if (abs(tan_pi_4 - 1.0) > 0.0001):
+        return Result.Ok(6)
+
+    # Verify sin^2 + cos^2 = 1 (Pythagorean identity)
+    let f64 angle = 0.7
+    let f64 s = sin(angle)
+    let f64 c = cos(angle)
+    let f64 identity = s * s + c * c
+    if (abs(identity - 1.0) > 0.0001):
+        return Result.Ok(7)
+
+    return Result.Ok(0)

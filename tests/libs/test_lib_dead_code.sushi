@@ -1,0 +1,33 @@
+# Test dead code elimination in library linking
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "used_function() = 42"
+# EXPECT_STDOUT_CONTAINS: "All dead code tests passed"
+#
+# Tests that the two-phase linker eliminates unused library functions.
+# The library has four public functions but we only call used_function().
+# The other functions (unused_function_a, b, c) should be eliminated.
+#
+# Note: We can't directly verify elimination from Sushi code, but this
+# test ensures the linker correctly handles partial library usage.
+
+use <lib/dead_code_lib>
+
+fn main() i32:
+    # Only call used_function(), leaving unused_function_{a,b,c} uncalled
+    let Result<i32, StdError> r = used_function()
+    match r:
+        Result.Ok(result) ->
+            println("used_function() = {result}")
+            if (result != 42):
+                println("FAIL: Expected used_function() = 42")
+                return Result.Ok(1)
+        Result.Err(_) ->
+            println("FAIL: used_function() returned error")
+            return Result.Ok(1)
+
+    # The unused functions should be eliminated by dead code elimination.
+    # If they weren't, the binary would be larger, but we can't measure that here.
+    # This test mainly verifies partial library usage works correctly.
+
+    println("All dead code tests passed")
+    return Result.Ok(0)

@@ -1,0 +1,27 @@
+# Test library runtime symbol deduplication
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "Hello, World!"
+# EXPECT_STDOUT_CONTAINS: "Goodbye from library!"
+# EXPECT_STDOUT_CONTAINS: "Main also uses println"
+# EXPECT_STDOUT_CONTAINS: "All runtime conflict tests passed"
+#
+# Both the library and main program use println(), which is a runtime symbol.
+# The two-phase linker must deduplicate these symbols correctly.
+
+use <lib/runtime_lib>
+
+fn main() i32:
+    # Call library functions that use println()
+    let Result<~, StdError> r1 = greet("World")
+    if (not r1):
+        return Result.Ok(1)
+
+    let Result<~, StdError> r2 = say_goodbye()
+    if (not r2):
+        return Result.Ok(1)
+
+    # Main also uses println() directly
+    println("Main also uses println")
+
+    println("All runtime conflict tests passed")
+    return Result.Ok(0)

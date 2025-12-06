@@ -7,6 +7,13 @@ Implements mathematical functions:
 - sqrt: Square root using LLVM intrinsic
 - pow: Power function using LLVM intrinsic
 - floor/ceil/round/trunc: Rounding functions using LLVM intrinsics
+- sin/cos: Trigonometric using LLVM intrinsics
+- tan: Trigonometric using pure LLVM IR (sin/cos)
+- asin/acos/atan/atan2: Inverse trig using libc
+- sinh/cosh/tanh: Hyperbolic using pure LLVM IR (exp)
+- log/log2/log10: Logarithmic using LLVM intrinsics
+- exp/exp2: Exponential using LLVM intrinsics
+- hypot: Utility using pure LLVM IR (sqrt)
 
 All functions use LLVM intrinsics where available for optimal performance.
 """
@@ -373,4 +380,474 @@ def generate_trunc(module: ir.Module) -> None:
 
     # Call LLVM intrinsic
     result = builder.call(intrinsic, [x_param])
+    builder.ret(result)
+
+
+# =============================================================================
+# Trigonometric Functions
+# =============================================================================
+
+def generate_sin(module: ir.Module) -> None:
+    """Generate sin function: sin(f64) -> f64
+
+    Uses LLVM's sin intrinsic.
+    """
+    f64 = ir.DoubleType()
+
+    intrinsic_name = "llvm.sin.f64"
+    intrinsic_type = ir.FunctionType(f64, [f64])
+    intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
+
+    func_type = ir.FunctionType(f64, [f64])
+    func = ir.Function(module, func_type, name="sushi_sin")
+
+    x_param = func.args[0]
+    x_param.name = "x"
+
+    entry = func.append_basic_block("entry")
+    builder = ir.IRBuilder(entry)
+
+    result = builder.call(intrinsic, [x_param])
+    builder.ret(result)
+
+
+def generate_cos(module: ir.Module) -> None:
+    """Generate cos function: cos(f64) -> f64
+
+    Uses LLVM's cos intrinsic.
+    """
+    f64 = ir.DoubleType()
+
+    intrinsic_name = "llvm.cos.f64"
+    intrinsic_type = ir.FunctionType(f64, [f64])
+    intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
+
+    func_type = ir.FunctionType(f64, [f64])
+    func = ir.Function(module, func_type, name="sushi_cos")
+
+    x_param = func.args[0]
+    x_param.name = "x"
+
+    entry = func.append_basic_block("entry")
+    builder = ir.IRBuilder(entry)
+
+    result = builder.call(intrinsic, [x_param])
+    builder.ret(result)
+
+
+def generate_tan(module: ir.Module) -> None:
+    """Generate tan function: tan(f64) -> f64
+
+    Implemented as sin(x) / cos(x) in pure LLVM IR.
+    """
+    f64 = ir.DoubleType()
+
+    # Get or declare sin and cos intrinsics
+    sin_intrinsic = module.globals.get("llvm.sin.f64")
+    if sin_intrinsic is None:
+        sin_type = ir.FunctionType(f64, [f64])
+        sin_intrinsic = ir.Function(module, sin_type, name="llvm.sin.f64")
+
+    cos_intrinsic = module.globals.get("llvm.cos.f64")
+    if cos_intrinsic is None:
+        cos_type = ir.FunctionType(f64, [f64])
+        cos_intrinsic = ir.Function(module, cos_type, name="llvm.cos.f64")
+
+    func_type = ir.FunctionType(f64, [f64])
+    func = ir.Function(module, func_type, name="sushi_tan")
+
+    x_param = func.args[0]
+    x_param.name = "x"
+
+    entry = func.append_basic_block("entry")
+    builder = ir.IRBuilder(entry)
+
+    sin_x = builder.call(sin_intrinsic, [x_param], name="sin_x")
+    cos_x = builder.call(cos_intrinsic, [x_param], name="cos_x")
+    result = builder.fdiv(sin_x, cos_x, name="tan_x")
+    builder.ret(result)
+
+
+# =============================================================================
+# Inverse Trigonometric Functions (libc)
+# =============================================================================
+
+def generate_asin(module: ir.Module) -> None:
+    """Generate asin function: asin(f64) -> f64
+
+    Uses libc asin().
+    """
+    f64 = ir.DoubleType()
+
+    # Declare libc asin
+    libc_asin_type = ir.FunctionType(f64, [f64])
+    libc_asin = ir.Function(module, libc_asin_type, name="asin")
+
+    func_type = ir.FunctionType(f64, [f64])
+    func = ir.Function(module, func_type, name="sushi_asin")
+
+    x_param = func.args[0]
+    x_param.name = "x"
+
+    entry = func.append_basic_block("entry")
+    builder = ir.IRBuilder(entry)
+
+    result = builder.call(libc_asin, [x_param])
+    builder.ret(result)
+
+
+def generate_acos(module: ir.Module) -> None:
+    """Generate acos function: acos(f64) -> f64
+
+    Uses libc acos().
+    """
+    f64 = ir.DoubleType()
+
+    libc_acos_type = ir.FunctionType(f64, [f64])
+    libc_acos = ir.Function(module, libc_acos_type, name="acos")
+
+    func_type = ir.FunctionType(f64, [f64])
+    func = ir.Function(module, func_type, name="sushi_acos")
+
+    x_param = func.args[0]
+    x_param.name = "x"
+
+    entry = func.append_basic_block("entry")
+    builder = ir.IRBuilder(entry)
+
+    result = builder.call(libc_acos, [x_param])
+    builder.ret(result)
+
+
+def generate_atan(module: ir.Module) -> None:
+    """Generate atan function: atan(f64) -> f64
+
+    Uses libc atan().
+    """
+    f64 = ir.DoubleType()
+
+    libc_atan_type = ir.FunctionType(f64, [f64])
+    libc_atan = ir.Function(module, libc_atan_type, name="atan")
+
+    func_type = ir.FunctionType(f64, [f64])
+    func = ir.Function(module, func_type, name="sushi_atan")
+
+    x_param = func.args[0]
+    x_param.name = "x"
+
+    entry = func.append_basic_block("entry")
+    builder = ir.IRBuilder(entry)
+
+    result = builder.call(libc_atan, [x_param])
+    builder.ret(result)
+
+
+def generate_atan2(module: ir.Module) -> None:
+    """Generate atan2 function: atan2(f64 y, f64 x) -> f64
+
+    Uses libc atan2().
+    """
+    f64 = ir.DoubleType()
+
+    libc_atan2_type = ir.FunctionType(f64, [f64, f64])
+    libc_atan2 = ir.Function(module, libc_atan2_type, name="atan2")
+
+    func_type = ir.FunctionType(f64, [f64, f64])
+    func = ir.Function(module, func_type, name="sushi_atan2")
+
+    y_param = func.args[0]
+    x_param = func.args[1]
+    y_param.name = "y"
+    x_param.name = "x"
+
+    entry = func.append_basic_block("entry")
+    builder = ir.IRBuilder(entry)
+
+    result = builder.call(libc_atan2, [y_param, x_param])
+    builder.ret(result)
+
+
+# =============================================================================
+# Hyperbolic Functions (pure LLVM IR using exp)
+# =============================================================================
+
+def generate_sinh(module: ir.Module) -> None:
+    """Generate sinh function: sinh(f64) -> f64
+
+    Implemented as (exp(x) - exp(-x)) / 2 in pure LLVM IR.
+    """
+    f64 = ir.DoubleType()
+
+    # Get or declare exp intrinsic
+    exp_intrinsic = module.globals.get("llvm.exp.f64")
+    if exp_intrinsic is None:
+        exp_type = ir.FunctionType(f64, [f64])
+        exp_intrinsic = ir.Function(module, exp_type, name="llvm.exp.f64")
+
+    func_type = ir.FunctionType(f64, [f64])
+    func = ir.Function(module, func_type, name="sushi_sinh")
+
+    x_param = func.args[0]
+    x_param.name = "x"
+
+    entry = func.append_basic_block("entry")
+    builder = ir.IRBuilder(entry)
+
+    # exp(x)
+    exp_x = builder.call(exp_intrinsic, [x_param], name="exp_x")
+
+    # -x
+    neg_x = builder.fneg(x_param, name="neg_x")
+
+    # exp(-x)
+    exp_neg_x = builder.call(exp_intrinsic, [neg_x], name="exp_neg_x")
+
+    # exp(x) - exp(-x)
+    diff = builder.fsub(exp_x, exp_neg_x, name="diff")
+
+    # (exp(x) - exp(-x)) / 2
+    two = ir.Constant(f64, 2.0)
+    result = builder.fdiv(diff, two, name="sinh_x")
+    builder.ret(result)
+
+
+def generate_cosh(module: ir.Module) -> None:
+    """Generate cosh function: cosh(f64) -> f64
+
+    Implemented as (exp(x) + exp(-x)) / 2 in pure LLVM IR.
+    """
+    f64 = ir.DoubleType()
+
+    exp_intrinsic = module.globals.get("llvm.exp.f64")
+    if exp_intrinsic is None:
+        exp_type = ir.FunctionType(f64, [f64])
+        exp_intrinsic = ir.Function(module, exp_type, name="llvm.exp.f64")
+
+    func_type = ir.FunctionType(f64, [f64])
+    func = ir.Function(module, func_type, name="sushi_cosh")
+
+    x_param = func.args[0]
+    x_param.name = "x"
+
+    entry = func.append_basic_block("entry")
+    builder = ir.IRBuilder(entry)
+
+    exp_x = builder.call(exp_intrinsic, [x_param], name="exp_x")
+    neg_x = builder.fneg(x_param, name="neg_x")
+    exp_neg_x = builder.call(exp_intrinsic, [neg_x], name="exp_neg_x")
+
+    # exp(x) + exp(-x)
+    sum_val = builder.fadd(exp_x, exp_neg_x, name="sum")
+
+    two = ir.Constant(f64, 2.0)
+    result = builder.fdiv(sum_val, two, name="cosh_x")
+    builder.ret(result)
+
+
+def generate_tanh(module: ir.Module) -> None:
+    """Generate tanh function: tanh(f64) -> f64
+
+    Implemented as (exp(x) - exp(-x)) / (exp(x) + exp(-x)) in pure LLVM IR.
+    """
+    f64 = ir.DoubleType()
+
+    exp_intrinsic = module.globals.get("llvm.exp.f64")
+    if exp_intrinsic is None:
+        exp_type = ir.FunctionType(f64, [f64])
+        exp_intrinsic = ir.Function(module, exp_type, name="llvm.exp.f64")
+
+    func_type = ir.FunctionType(f64, [f64])
+    func = ir.Function(module, func_type, name="sushi_tanh")
+
+    x_param = func.args[0]
+    x_param.name = "x"
+
+    entry = func.append_basic_block("entry")
+    builder = ir.IRBuilder(entry)
+
+    exp_x = builder.call(exp_intrinsic, [x_param], name="exp_x")
+    neg_x = builder.fneg(x_param, name="neg_x")
+    exp_neg_x = builder.call(exp_intrinsic, [neg_x], name="exp_neg_x")
+
+    # numerator: exp(x) - exp(-x)
+    numer = builder.fsub(exp_x, exp_neg_x, name="numer")
+
+    # denominator: exp(x) + exp(-x)
+    denom = builder.fadd(exp_x, exp_neg_x, name="denom")
+
+    result = builder.fdiv(numer, denom, name="tanh_x")
+    builder.ret(result)
+
+
+# =============================================================================
+# Logarithmic Functions
+# =============================================================================
+
+def generate_log(module: ir.Module) -> None:
+    """Generate log function: log(f64) -> f64 (natural logarithm)
+
+    Uses LLVM's log intrinsic.
+    """
+    f64 = ir.DoubleType()
+
+    intrinsic_name = "llvm.log.f64"
+    intrinsic_type = ir.FunctionType(f64, [f64])
+    intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
+
+    func_type = ir.FunctionType(f64, [f64])
+    func = ir.Function(module, func_type, name="sushi_log")
+
+    x_param = func.args[0]
+    x_param.name = "x"
+
+    entry = func.append_basic_block("entry")
+    builder = ir.IRBuilder(entry)
+
+    result = builder.call(intrinsic, [x_param])
+    builder.ret(result)
+
+
+def generate_log2(module: ir.Module) -> None:
+    """Generate log2 function: log2(f64) -> f64
+
+    Uses LLVM's log2 intrinsic.
+    """
+    f64 = ir.DoubleType()
+
+    intrinsic_name = "llvm.log2.f64"
+    intrinsic_type = ir.FunctionType(f64, [f64])
+    intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
+
+    func_type = ir.FunctionType(f64, [f64])
+    func = ir.Function(module, func_type, name="sushi_log2")
+
+    x_param = func.args[0]
+    x_param.name = "x"
+
+    entry = func.append_basic_block("entry")
+    builder = ir.IRBuilder(entry)
+
+    result = builder.call(intrinsic, [x_param])
+    builder.ret(result)
+
+
+def generate_log10(module: ir.Module) -> None:
+    """Generate log10 function: log10(f64) -> f64
+
+    Uses LLVM's log10 intrinsic.
+    """
+    f64 = ir.DoubleType()
+
+    intrinsic_name = "llvm.log10.f64"
+    intrinsic_type = ir.FunctionType(f64, [f64])
+    intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
+
+    func_type = ir.FunctionType(f64, [f64])
+    func = ir.Function(module, func_type, name="sushi_log10")
+
+    x_param = func.args[0]
+    x_param.name = "x"
+
+    entry = func.append_basic_block("entry")
+    builder = ir.IRBuilder(entry)
+
+    result = builder.call(intrinsic, [x_param])
+    builder.ret(result)
+
+
+# =============================================================================
+# Exponential Functions
+# =============================================================================
+
+def generate_exp(module: ir.Module) -> None:
+    """Generate exp function: exp(f64) -> f64
+
+    Uses LLVM's exp intrinsic.
+    """
+    f64 = ir.DoubleType()
+
+    # Get or declare exp intrinsic (may already exist from hyperbolic functions)
+    intrinsic = module.globals.get("llvm.exp.f64")
+    if intrinsic is None:
+        intrinsic_type = ir.FunctionType(f64, [f64])
+        intrinsic = ir.Function(module, intrinsic_type, name="llvm.exp.f64")
+
+    func_type = ir.FunctionType(f64, [f64])
+    func = ir.Function(module, func_type, name="sushi_exp")
+
+    x_param = func.args[0]
+    x_param.name = "x"
+
+    entry = func.append_basic_block("entry")
+    builder = ir.IRBuilder(entry)
+
+    result = builder.call(intrinsic, [x_param])
+    builder.ret(result)
+
+
+def generate_exp2(module: ir.Module) -> None:
+    """Generate exp2 function: exp2(f64) -> f64
+
+    Uses LLVM's exp2 intrinsic.
+    """
+    f64 = ir.DoubleType()
+
+    # Get or declare exp2 intrinsic
+    intrinsic = module.globals.get("llvm.exp2.f64")
+    if intrinsic is None:
+        intrinsic_type = ir.FunctionType(f64, [f64])
+        intrinsic = ir.Function(module, intrinsic_type, name="llvm.exp2.f64")
+
+    func_type = ir.FunctionType(f64, [f64])
+    func = ir.Function(module, func_type, name="sushi_exp2")
+
+    x_param = func.args[0]
+    x_param.name = "x"
+
+    entry = func.append_basic_block("entry")
+    builder = ir.IRBuilder(entry)
+
+    result = builder.call(intrinsic, [x_param])
+    builder.ret(result)
+
+
+# =============================================================================
+# Utility Functions
+# =============================================================================
+
+def generate_hypot(module: ir.Module) -> None:
+    """Generate hypot function: hypot(f64 x, f64 y) -> f64
+
+    Implemented as sqrt(x*x + y*y) in pure LLVM IR.
+    """
+    f64 = ir.DoubleType()
+
+    # Get or declare sqrt intrinsic
+    sqrt_intrinsic = module.globals.get("llvm.sqrt.f64")
+    if sqrt_intrinsic is None:
+        sqrt_type = ir.FunctionType(f64, [f64])
+        sqrt_intrinsic = ir.Function(module, sqrt_type, name="llvm.sqrt.f64")
+
+    func_type = ir.FunctionType(f64, [f64, f64])
+    func = ir.Function(module, func_type, name="sushi_hypot")
+
+    x_param = func.args[0]
+    y_param = func.args[1]
+    x_param.name = "x"
+    y_param.name = "y"
+
+    entry = func.append_basic_block("entry")
+    builder = ir.IRBuilder(entry)
+
+    # x * x
+    x_sq = builder.fmul(x_param, x_param, name="x_sq")
+
+    # y * y
+    y_sq = builder.fmul(y_param, y_param, name="y_sq")
+
+    # x*x + y*y
+    sum_sq = builder.fadd(x_sq, y_sq, name="sum_sq")
+
+    # sqrt(x*x + y*y)
+    result = builder.call(sqrt_intrinsic, [sum_sq], name="hypot")
     builder.ret(result)

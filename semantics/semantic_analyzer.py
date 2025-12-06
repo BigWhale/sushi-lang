@@ -29,10 +29,11 @@ class SemanticAnalyzer:
     Supports both single-file and multi-file compilation modes.
     """
 
-    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None) -> None:
+    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional['LibraryLinker'] = None) -> None:
         self.reporter = reporter
         self.filename = filename
         self.unit_manager = unit_manager
+        self.library_linker = library_linker
         self.constants: Optional[ConstantTable] = None
         self.structs: Optional[StructTable] = None
         self.enums: Optional[EnumTable] = None
@@ -244,6 +245,13 @@ class SemanticAnalyzer:
         self.generic_extensions = global_generic_extensions
         self.generic_funcs = global_generic_funcs
 
+        # Register library types if any libraries are loaded
+        # Order: structs first, then enums (may reference structs), then functions (may reference both)
+        if self.library_linker is not None:
+            self._register_library_structs()
+            self._register_library_enums()
+            self._register_library_functions()
+
         # Check if main function expects command line arguments (across all units)
         self._check_main_function_args_multi_file(compilation_order)
 
@@ -397,6 +405,134 @@ class SemanticAnalyzer:
             for extend_def in self.monomorphized_extensions:
                 type_validator._validate_extension_method(extend_def)
 
+
+    def _register_library_functions(self) -> None:
+        """Register functions from loaded libraries into the function table.
+
+        This enables type checking and call validation for library functions.
+        """
+        from semantics.passes.collect.functions import FuncSig, Param
+        from semantics.type_resolution import parse_type_string
+
+        if self.library_linker is None or self.funcs is None:
+            return
+
+        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+            for func_info in manifest.get("public_functions", []):
+                func_name = func_info["name"]
+
+                # Skip if already defined (local functions take precedence)
+                if func_name in self.funcs.by_name:
+                    continue
+
+                # Parse parameters
+                params = []
+                for idx, p in enumerate(func_info.get("params", [])):
+                    param_type = parse_type_string(
+                        p["type"],
+                        self.structs.by_name if self.structs else {},
+                        self.enums.by_name if self.enums else {}
+                    )
+                    params.append(Param(
+                        name=p["name"],
+                        ty=param_type,
+                        name_span=None,
+                        type_span=None,
+                        index=idx
+                    ))
+
+                # Parse return type
+                ret_type_str = func_info.get("return_type", "~")
+                ret_type = parse_type_string(
+                    ret_type_str,
+                    self.structs.by_name if self.structs else {},
+                    self.enums.by_name if self.enums else {}
+                )
+
+                # Create function signature
+                func_sig = FuncSig(
+                    name=func_name,
+                    loc=None,
+                    name_span=None,
+                    ret_type=ret_type,
+                    ret_span=None,
+                    params=params,
+                    is_public=True,
+                )
+
+                # Register in function table
+                self.funcs.by_name[func_name] = func_sig
+                self.funcs.order.append(func_name)
+
+    def _register_library_structs(self) -> None:
+        """Register struct definitions from loaded libraries.
+
+        This enables type checking for struct types defined in libraries.
+        Local struct definitions take precedence over library definitions.
+        """
+        from semantics.typesys import StructType
+        from semantics.type_resolution import parse_type_string
+
+        if self.library_linker is None or self.structs is None:
+            return
+
+        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+            for struct_info in manifest.get("structs", []):
+                struct_name = struct_info["name"]
+
+                # Skip if already defined (local structs take precedence)
+                if struct_name in self.structs.by_name:
+                    continue
+
+                # StructType.fields expects tuple of (field_name, field_type) tuples
+                fields = []
+                for f in struct_info.get("fields", []):
+                    field_type = parse_type_string(
+                        f["type"],
+                        self.structs.by_name if self.structs else {},
+                        self.enums.by_name if self.enums else {}
+                    )
+                    fields.append((f["name"], field_type))
+
+                struct_type = StructType(name=struct_name, fields=tuple(fields))
+                self.structs.by_name[struct_name] = struct_type
+
+    def _register_library_enums(self) -> None:
+        """Register enum definitions from loaded libraries.
+
+        This enables type checking for enum types defined in libraries.
+        Local enum definitions take precedence over library definitions.
+        """
+        from semantics.typesys import EnumType, EnumVariantInfo
+        from semantics.type_resolution import parse_type_string
+
+        if self.library_linker is None or self.enums is None:
+            return
+
+        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+            for enum_info in manifest.get("enums", []):
+                enum_name = enum_info["name"]
+
+                # Skip if already defined (local enums take precedence)
+                if enum_name in self.enums.by_name:
+                    continue
+
+                variants = []
+                for v in enum_info.get("variants", []):
+                    # Manifest uses "data_type" (single type), not "types" (list)
+                    assoc_types: tuple = ()
+                    if v.get("has_data") and v.get("data_type"):
+                        data_type = parse_type_string(
+                            v["data_type"],
+                            self.structs.by_name if self.structs else {},
+                            self.enums.by_name if self.enums else {}
+                        )
+                        assoc_types = (data_type,)
+
+                    variants.append(EnumVariantInfo(name=v["name"], associated_types=assoc_types))
+
+                enum_type = EnumType(name=enum_name, variants=tuple(variants))
+                self.enums.by_name[enum_name] = enum_type
 
     def _merge_unit_symbols(self, unit: Unit, unit_constants: ConstantTable, unit_structs: StructTable, unit_enums: EnumTable,
                           unit_generic_enums: GenericEnumTable, unit_generic_structs: GenericStructTable, unit_perks: PerkTable, unit_perk_impls: PerkImplementationTable, unit_funcs: FunctionTable, unit_extensions: ExtensionTable, unit_generic_extensions: 'GenericExtensionTable', unit_generic_funcs: GenericFunctionTable,

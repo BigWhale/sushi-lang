@@ -104,6 +104,14 @@ File operations: reading, writing, error handling.
 ### 22-linked-list.sushi
 Implementing a linked list with `Own<T>` for recursive structures.
 
+## Libraries
+
+### 26-libraries.sushi
+Using precompiled libraries - demonstrates library linking.
+
+### mathlib.sushi
+Sample library source - compile with `--lib` to create reusable bitcode.
+
 ---
 
 **Tip**: Examples are numbered for suggested reading order, but feel free to explore based on your interests!

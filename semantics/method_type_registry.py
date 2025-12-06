@@ -241,7 +241,7 @@ class HashMapMethodInferrer:
     validator: 'TypeValidator'
 
     def infer_return_type(self) -> Optional['Type']:
-        from backend.generics.hashmap.validation import is_builtin_hashmap_method, parse_hashmap_types
+        from stdlib.generics.collections.hashmap.validation import is_builtin_hashmap_method, parse_hashmap_types
         if is_builtin_hashmap_method(self.method_name):
             key_type, value_type = parse_hashmap_types(self.receiver_type, self.validator)
             if key_type is not None and value_type is not None:

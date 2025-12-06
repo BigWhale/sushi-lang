@@ -1,0 +1,38 @@
+{
+  "sushi_lib_version": "1.0",
+  "library_name": "circular_lib",
+  "compiled_at": "2025-12-06T21:41:23.394537+00:00",
+  "platform": "darwin",
+  "compiler_version": "0.1.0",
+  "public_functions": [
+    {
+      "name": "foo",
+      "params": [
+        {
+          "name": "n",
+          "type": "i32"
+        }
+      ],
+      "return_type": "i32",
+      "is_generic": false,
+      "type_params": []
+    },
+    {
+      "name": "bar",
+      "params": [
+        {
+          "name": "n",
+          "type": "i32"
+        }
+      ],
+      "return_type": "i32",
+      "is_generic": false,
+      "type_params": []
+    }
+  ],
+  "public_constants": [],
+  "structs": [],
+  "enums": [],
+  "generic_types": [],
+  "dependencies": []
+}

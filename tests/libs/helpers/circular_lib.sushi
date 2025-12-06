@@ -1,0 +1,14 @@
+# circular_lib.sushi - Library with circular function calls
+#
+# Tests that mutually recursive public functions work correctly.
+# foo() calls bar(), bar() calls foo() with a termination condition.
+
+public fn foo(i32 n) i32:
+    if (n <= 0):
+        return Result.Ok(0)
+    return Result.Ok(n + bar(n - 1)??)
+
+public fn bar(i32 n) i32:
+    if (n <= 0):
+        return Result.Ok(0)
+    return Result.Ok(n * 2 + foo(n - 1)??)

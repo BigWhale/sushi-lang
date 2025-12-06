@@ -1,0 +1,13 @@
+# runtime_lib.sushi - Library that uses println() (runtime symbol)
+#
+# This library uses println() which comes from the runtime.
+# When linked with a main program that also uses println(),
+# the two-phase linker must correctly deduplicate the runtime symbols.
+
+public fn greet(string name) ~:
+    println("Hello, {name}!")
+    return Result.Ok(~)
+
+public fn say_goodbye() ~:
+    println("Goodbye from library!")
+    return Result.Ok(~)

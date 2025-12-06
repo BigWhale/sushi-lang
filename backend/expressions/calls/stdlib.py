@@ -558,7 +558,14 @@ def emit_math_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
 
         # Declare the function with the appropriate signature
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, arg_type, [arg_type] * len(args))
-    elif func_name in {'sqrt', 'floor', 'ceil', 'round', 'trunc'}:
+    elif func_name in {
+        'sqrt', 'floor', 'ceil', 'round', 'trunc',
+        'sin', 'cos', 'tan',
+        'asin', 'acos', 'atan',
+        'sinh', 'cosh', 'tanh',
+        'log', 'log2', 'log10',
+        'exp', 'exp2',
+    }:
         # These take f64 and return f64
         f64 = ir.DoubleType()
         stdlib_func_name = f"sushi_{func_name}"
@@ -570,8 +577,8 @@ def emit_math_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
                 args[0] = cast_int_to_float(codegen, args[0], f64)
             else:
                 args[0] = cast_float_to_float(codegen, args[0], f64)
-    elif func_name == 'pow':
-        # pow takes two f64 arguments and returns f64
+    elif func_name in {'pow', 'atan2', 'hypot'}:
+        # These take two f64 arguments and return f64
         f64 = ir.DoubleType()
         stdlib_func_name = f"sushi_{func_name}"
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, f64, [f64, f64])

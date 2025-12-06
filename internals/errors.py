@@ -568,8 +568,8 @@ _add(ErrorMessage("CE0006", Severity.ERROR,
 
 # Scope errors
 _add(ErrorMessage("CE1001", Severity.ERROR,
-    "use of undeclared variable '{name}'",
-    Category.SCOPE, "A variable was used before it was declared with 'let'."
+    "use of undeclared identifier '{name}'",
+    Category.SCOPE, "The identifier was used before it was declared or is not in scope."
 ))
 
 _add(ErrorMessage("CE1002", Severity.ERROR,
@@ -1022,6 +1022,39 @@ _add(ErrorMessage("CW3001", Severity.WARNING,
 # These are emitted as runtime checks in the generated LLVM code.
 # Convention: RE prefix indicates Runtime Error
 #
+
+# Library System Errors (CE35xx)
+_add(ErrorMessage("CE3500", Severity.ERROR,
+    "library output path must have .bc extension: '{path}'",
+    Category.UNIT, "Library compilation requires output file with .bc extension."))
+
+_add(ErrorMessage("CE3501", Severity.ERROR,
+    "main() function not allowed in library mode",
+    Category.UNIT, "Libraries cannot have a main() function. Remove it or compile as executable."))
+
+_add(ErrorMessage("CE3502", Severity.ERROR,
+    "library not found: '{lib}' (searched: {paths})",
+    Category.UNIT, "Library bitcode and manifest files not found in search paths."))
+
+_add(ErrorMessage("CE3503", Severity.ERROR,
+    "invalid library manifest '{path}': {reason}",
+    Category.UNIT, "Library manifest file is malformed or missing required fields."))
+
+_add(ErrorMessage("CE3504", Severity.ERROR,
+    "platform mismatch: library compiled for '{lib_platform}', current platform is '{current_platform}'",
+    Category.UNIT, "Libraries must be compiled for the same platform they are used on."))
+
+_add(ErrorMessage("CW3505", Severity.WARNING,
+    "platform mismatch: library compiled for '{lib_platform}', current platform is '{current_platform}'",
+    Category.UNIT, "Library was compiled for a different platform. This may cause runtime issues."))
+
+_add(ErrorMessage("CE3506", Severity.ERROR,
+    "cannot use --lib with --link: libraries cannot link other libraries yet",
+    Category.UNIT, "Transitive library dependencies are not yet supported."))
+
+_add(ErrorMessage("CE3507", Severity.ERROR,
+    "failed to link library '{lib}': {reason}",
+    Category.UNIT, "LLVM bitcode linking failed for the specified library."))
 
 # Array bounds errors
 _add(ErrorMessage("RE2020", Severity.ERROR,

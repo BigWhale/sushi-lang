@@ -106,6 +106,12 @@ class LLVMCodegen:
         # Command line arguments support
         self.main_expects_args: bool = False
 
+        # Library compilation mode (no main() wrapper)
+        self.is_library_mode: bool = False
+
+        # Library linker for custom library functions
+        self.library_linker: Optional['LibraryLinker'] = None
+
         # Monomorphized generic extension methods (for codegen)
         self.monomorphized_extensions: list['ExtendDef'] = []
 
@@ -252,6 +258,7 @@ class LLVMCodegen:
         keep_object: bool = False,
         main_expects_args: bool = False,
         monomorphized_extensions: list['ExtendDef'] = None,
+        library_linker: 'LibraryLinker' = None,
     ) -> Path:
         """Complete multi-unit compilation pipeline from multiple ASTs to native executable.
 
@@ -263,6 +270,9 @@ class LLVMCodegen:
             opt: Optimization level (none/mem2reg/o1/o2/o3).
             verify: Enable IR verification.
             keep_object: Retain object files after linking.
+            main_expects_args: Whether main() expects command line args.
+            monomorphized_extensions: List of monomorphized extension methods.
+            library_linker: LibraryLinker instance with loaded libraries.
 
         Returns:
             Path to the generated executable.
@@ -273,11 +283,131 @@ class LLVMCodegen:
         # Store monomorphized extensions for emission
         self.monomorphized_extensions = monomorphized_extensions or []
 
+        # Store library linker for function declarations
+        self.library_linker = library_linker
+
         # Build high-level IR for all units
         mod_ir: ir.Module = self.build_module_multi_unit(units)
 
         if debug:
             print(";; Multi-unit IR (pre-opt)")
+            ir_text = str(mod_ir)
+            for i, line in enumerate(ir_text.splitlines(), 1):
+                print(f"{i:4} {line}")
+
+        # Convert to binding ModuleRef
+        llmod = llvm.parse_assembly(str(mod_ir))
+
+        # Collect all library and stdlib modules to link
+        library_paths = set()
+        stdlib_units = set()
+
+        for unit in units:
+            if unit.ast is not None:
+                for use_stmt in unit.ast.uses:
+                    if use_stmt.is_library:
+                        library_paths.add(use_stmt.path)
+                    elif use_stmt.is_stdlib:
+                        stdlib_units.add(use_stmt.path)
+
+        # Use two-phase linking if we have libraries to link
+        if library_linker is not None and library_paths:
+            from backend.library_linker import TwoPhaseLinker
+
+            # Get target info for the linker
+            target_triple = llmod.triple if hasattr(llmod, 'triple') else ""
+            data_layout = llmod.data_layout if hasattr(llmod, 'data_layout') else ""
+
+            two_phase = TwoPhaseLinker(target_triple, data_layout, verbose=False)
+
+            # Add main module
+            two_phase.add_main_module(llmod, "main")
+
+            # Add library modules
+            for lib_path in library_paths:
+                try:
+                    bc_path, manifest_path = library_linker.resolve_library(lib_path)
+                    manifest = library_linker.load_manifest(manifest_path)
+                    library_linker.loaded_libraries[manifest["library_name"]] = manifest
+
+                    with open(bc_path, 'rb') as f:
+                        lib_mod = llvm.parse_bitcode(f.read())
+                        two_phase.add_library_module(lib_mod, manifest["library_name"])
+                except Exception as e:
+                    raise RuntimeError(f"Failed to load library {lib_path}: {e}")
+
+            # Add stdlib modules
+            for stdlib_path in stdlib_units:
+                bc_paths = self.stdlib._resolve_stdlib_unit(stdlib_path)
+                for bc_path in bc_paths:
+                    with open(bc_path, 'rb') as f:
+                        stdlib_mod = llvm.parse_bitcode(f.read())
+                        two_phase.add_stdlib_module(stdlib_mod, stdlib_path)
+
+            # Perform two-phase linking with full symbol deduplication
+            llmod = two_phase.link()
+
+        else:
+            # No libraries - just link stdlib directly
+            for unit in units:
+                if unit.ast is not None:
+                    self.stdlib.link_stdlib_modules(llmod, unit.ast)
+
+        # Set up target information
+        self.optimizer.ensure_target(llmod)
+
+        if verify:
+            self.optimizer.verify(llmod, "pre-optimization")
+
+        # Optimize if requested
+        if opt != "none":
+            self.optimizer.optimize(llmod, opt)
+
+        if verify:
+            self.optimizer.verify(llmod, "post-optimization")
+
+        # Update self.module with optimized IR (for --emit-ll to work correctly)
+        self.module = llvm.parse_assembly(str(llmod))
+
+        # Generate native executable
+        out_path = out or Path("a.out")
+        return self._link_executable(llmod, out_path, cc, debug, keep_object=keep_object)
+
+    def compile_to_bitcode(
+        self,
+        units: list[Unit],
+        out: Path | None = None,
+        debug: bool = False,
+        opt: str = "mem2reg",
+        verify: bool = True,
+        monomorphized_extensions: list['ExtendDef'] = None,
+    ) -> Path:
+        """Compile units to LLVM bitcode without linking to executable.
+
+        Used for library compilation (--lib flag). Does not require main() function.
+
+        Args:
+            units: List of compilation units.
+            out: Output .bc file path.
+            debug: Enable debug information.
+            opt: Optimization level.
+            verify: Enable IR verification.
+            monomorphized_extensions: List of monomorphized extension methods.
+
+        Returns:
+            Path to generated .bc file.
+        """
+        # Store monomorphized extensions for emission
+        self.monomorphized_extensions = monomorphized_extensions or []
+
+        # Mark as library mode to skip main() wrapper
+        self.is_library_mode = True
+
+        # Build high-level IR for all units
+        mod_ir: ir.Module = self.build_module_multi_unit(units)
+
+        if debug:
+            print(";; Library IR (pre-opt)")
             ir_text = str(mod_ir)
             for i, line in enumerate(ir_text.splitlines(), 1):
                 print(f"{i:4} {line}")
@@ -303,12 +433,15 @@ class LLVMCodegen:
         if verify:
             self.optimizer.verify(llmod, "post-optimization")
 
-        # Update self.module with optimized IR (for --emit-ll to work correctly)
+        # Update self.module with optimized IR (for --write-ll to work correctly)
         self.module = llvm.parse_assembly(str(llmod))
 
-        # Generate native executable
-        out_path = out or Path("a.out")
-        return self._link_executable(llmod, out_path, cc, debug, keep_object=keep_object)
+        # Write bitcode to file
+        out_path = out or Path("a.bc")
+        with open(out_path, 'wb') as f:
+            f.write(llmod.as_bitcode())
+
+        return out_path
 
     def _link_executable(
         self,
@@ -444,6 +577,10 @@ class LLVMCodegen:
         for ext in self.monomorphized_extensions:
             self.functions.emit_extension_method_decl(ext)
 
+        # Declare library function prototypes if any libraries are loaded
+        if hasattr(self, 'library_linker') and self.library_linker is not None:
+            self._declare_library_functions()
+
         # Pass 2: Emit function bodies from all units
         for unit in units:
             if unit.ast is None:
@@ -483,6 +620,66 @@ class LLVMCodegen:
         # Emit monomorphized generic extension method bodies
         for ext in self.monomorphized_extensions:
             self.functions.emit_extension_method_def(ext)
+
+    def _declare_library_functions(self) -> None:
+        """Declare library function prototypes for external library functions.
+
+        This creates LLVM function declarations (prototypes without bodies) for
+        public functions from loaded libraries. The actual function bodies will
+        be linked in from the library bitcode during the linking phase.
+        """
+        from semantics.type_resolution import parse_type_string
+        from semantics.typesys import ResultType
+
+        if self.library_linker is None:
+            return
+
+        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+            for func_info in manifest.get("public_functions", []):
+                func_name = func_info["name"]
+
+                # Skip if already declared (shouldn't happen)
+                if func_name in self.funcs:
+                    continue
+
+                # Parse parameter types
+                param_types = []
+                for p in func_info.get("params", []):
+                    param_type = parse_type_string(
+                        p["type"],
+                        self.struct_table.by_name if self.struct_table else {},
+                        self.enum_table.by_name if self.enum_table else {}
+                    )
+                    param_types.append(self.types.ll_type(param_type))
+
+                # Parse return type and wrap in Result
+                ret_type_str = func_info.get("return_type", "~")
+                ret_type = parse_type_string(
+                    ret_type_str,
+                    self.struct_table.by_name if self.struct_table else {},
+                    self.enum_table.by_name if self.enum_table else {}
+                )
+
+                # Library functions return Result<T, StdError> (like regular functions)
+                std_error = self.enum_table.by_name.get("StdError") if self.enum_table else None
+                result_type = ResultType(ok_type=ret_type, err_type=std_error if std_error else ret_type)
+                ll_ret = self.types.ll_type(result_type)
+
+                # Declare function prototype
+                fnty = ir.FunctionType(ll_ret, param_types)
+                llvm_fn = ir.Function(self.module, fnty, name=func_name)
+                llvm_fn.linkage = 'external'  # Will be resolved at link time
+
+                # Set parameter names for debugging
+                for i, p in enumerate(func_info.get("params", [])):
+                    if i < len(llvm_fn.args):
+                        llvm_fn.args[i].name = p["name"]
+
+                # Register in codegen's function table
+                self.funcs[func_name] = llvm_fn
+
+                # Register return type for ?? operator handling
+                self.function_return_types[func_name] = result_type
 
     def _emit_global_constant(self, const: ConstDef) -> None:
         """Emit a global constant definition.
