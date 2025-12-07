@@ -18,9 +18,90 @@ import argparse
 import subprocess
 import sys
 import json
+import os
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 import time
+
+
+def build_stdlib(project_root: Path, verbose: bool = False) -> bool:
+    """Build the standard library. Returns True on success."""
+    if verbose:
+        print("Building standard library...")
+
+    try:
+        result = subprocess.run(
+            [sys.executable, str(project_root / "stdlib" / "build.py")],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            timeout=120
+        )
+        if result.returncode != 0:
+            print(f"Failed to build stdlib: {result.stderr}")
+            return False
+        if verbose:
+            print(result.stdout)
+        return True
+    except subprocess.TimeoutExpired:
+        print("Stdlib build timed out")
+        return False
+    except Exception as e:
+        print(f"Error building stdlib: {e}")
+        return False
+
+
+def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:
+    """Build test helper libraries. Returns True on success."""
+    helpers_dir = project_root / "tests" / "libs" / "helpers"
+    bin_dir = project_root / "tests" / "libs" / "bin"
+    sushic = project_root / "sushic"
+
+    if not helpers_dir.exists():
+        if verbose:
+            print("No test helpers directory found, skipping...")
+        return True
+
+    helper_files = list(helpers_dir.glob("*.sushi"))
+    if not helper_files:
+        if verbose:
+            print("No test helper libraries found, skipping...")
+        return True
+
+    if verbose:
+        print("Building test helper libraries...")
+
+    bin_dir.mkdir(parents=True, exist_ok=True)
+
+    for lib_file in helper_files:
+        name = lib_file.stem
+        output_path = bin_dir / f"{name}.slib"
+
+        if verbose:
+            print(f"  Compiling {name}...")
+
+        try:
+            result = subprocess.run(
+                [str(sushic), "--lib", str(lib_file), "-o", str(output_path)],
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            if result.returncode != 0:
+                print(f"Failed to compile {name}: {result.stderr}")
+                return False
+        except subprocess.TimeoutExpired:
+            print(f"Compilation of {name} timed out")
+            return False
+        except Exception as e:
+            print(f"Error compiling {name}: {e}")
+            return False
+
+    if verbose:
+        print(f"  Libraries compiled to {bin_dir}")
+
+    return True
 
 def get_expected_exit_code(test_file: Path) -> int:
     """Determine expected exit code based on filename convention.
@@ -96,6 +177,8 @@ def main():
                        help="Use enhanced test runner with runtime testing support")
     parser.add_argument("--json", action="store_true",
                        help="Output results in JSON format")
+    parser.add_argument("--skip-build", action="store_true",
+                       help="Skip building stdlib and test helpers")
 
     args = parser.parse_args()
 
@@ -114,6 +197,8 @@ def main():
                 sys.argv.extend(["--jobs", str(args.jobs)])
             if args.json:
                 sys.argv.append("--json")
+            if args.skip_build:
+                sys.argv.append("--skip-build")
             return enhanced_test_runner.main()
         except ImportError:
             if not args.json:
@@ -132,8 +217,24 @@ def main():
     bin_dir.mkdir(exist_ok=True)
 
     # Change to project root for running sushic
-    import os
     os.chdir(project_root)
+
+    # Build stdlib and test helpers unless skipped
+    if not args.skip_build:
+        if not args.json:
+            print("Building stdlib and test helpers...")
+        if not build_stdlib(project_root, args.verbose):
+            if not args.json:
+                print("Failed to build stdlib, aborting tests")
+            return 1
+        if not build_test_helpers(project_root, args.verbose):
+            if not args.json:
+                print("Failed to build test helpers, aborting tests")
+            return 1
+
+    # Set SUSHI_LIB_PATH for library tests
+    libs_bin_dir = tests_dir / "libs" / "bin"
+    os.environ["SUSHI_LIB_PATH"] = str(libs_bin_dir)
 
     # Find all test files in tests directory recursively, excluding helper/build directories
     test_files = list(tests_dir.rglob("test_*.sushi"))

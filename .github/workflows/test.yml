@@ -39,30 +39,13 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           LLVM_CONFIG=/usr/bin/llvm-config-20 uv sync
 
-      - name: Build standard library for Linux
-        run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          uv run python stdlib/build.py
-
       - name: Make sushic executable
         run: chmod +x sushic
-
-      - name: Build library test helpers
-        run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          ./tests/libs/setup_libs.sh
-
-      - name: Test compiler setup
-        run: |
-          echo "Testing sushic..."
-          llvm-config-20 --version
-          ./sushic --help || echo "sushic --help failed with exit code $?"
 
       - name: Run tests
         id: run_tests
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          export SUSHI_LIB_PATH=$GITHUB_WORKSPACE/tests/libs/bin
           uv run python tests/run_tests.py --json > test_results.json || true
           cat test_results.json
         continue-on-error: true

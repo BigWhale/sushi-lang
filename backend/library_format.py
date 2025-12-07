@@ -33,12 +33,73 @@ from __future__ import annotations
 
 import struct
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import BinaryIO
 
 import msgpack
 
-if TYPE_CHECKING:
-    pass
+
+def _read_bytes(f: BinaryIO, size: int, path: str, section: str) -> bytes:
+    """Read exact number of bytes with truncation detection.
+
+    Args:
+        f: File handle.
+        size: Expected number of bytes.
+        path: File path for error messages.
+        section: Section name for error messages ("metadata" or "bitcode").
+
+    Returns:
+        Bytes read.
+
+    Raises:
+        LibraryError: CE3510/CE3511 if truncated.
+    """
+    from backend.library_linker import LibraryError
+
+    data = f.read(size)
+    if len(data) != size:
+        code = "CE3510" if section == "metadata" else "CE3511"
+        raise LibraryError(code, path=path, expected=size, actual=len(data))
+    return data
+
+
+def _read_header_and_metadata(f: BinaryIO, path: str) -> dict:
+    """Read and validate header, return deserialized metadata.
+
+    Args:
+        f: File handle positioned at start.
+        path: File path for error messages.
+
+    Returns:
+        Deserialized metadata dictionary.
+
+    Raises:
+        LibraryError: CE3508-CE3512 for format errors.
+    """
+    from backend.library_linker import LibraryError
+
+    # Read and validate magic (16 bytes)
+    magic = _read_bytes(f, 16, path, "metadata")
+    if magic != LibraryFormat.MAGIC:
+        raise LibraryError("CE3508", path=path)
+
+    # Read version + spares (28 bytes)
+    header_rest = _read_bytes(f, 28, path, "metadata")
+    version = struct.unpack("<I", header_rest[0:4])[0]
+
+    # Check version compatibility
+    if version != LibraryFormat.VERSION:
+        raise LibraryError("CE3509", path=path,
+                           version=version, supported=LibraryFormat.VERSION)
+
+    # Read metadata length + blob
+    meta_len = struct.unpack("<Q", _read_bytes(f, 8, path, "metadata"))[0]
+    metadata_blob = _read_bytes(f, meta_len, path, "metadata")
+
+    # Deserialize metadata
+    try:
+        return msgpack.unpackb(metadata_blob, raw=False)
+    except Exception as e:
+        raise LibraryError("CE3512", path=path, reason=str(e))
 
 
 class LibraryFormat:
@@ -59,7 +120,6 @@ class LibraryFormat:
             metadata: Library metadata dictionary.
             bitcode: Raw LLVM bitcode bytes.
         """
-        # Serialize metadata to MessagePack
         metadata_blob = msgpack.packb(metadata, use_bin_type=True)
 
         with open(output_path, 'wb') as f:
@@ -67,7 +127,6 @@ class LibraryFormat:
             f.write(LibraryFormat.MAGIC)
 
             # Write version + spares (28 bytes total)
-            # Format: version(4) + spare1(4) + spare2(4) + spare3(8) + spare4(8)
             f.write(struct.pack("<I", LibraryFormat.VERSION))
             f.write(struct.pack("<I", 0))  # SPARE_1
             f.write(struct.pack("<I", 0))  # SPARE_2
@@ -97,70 +156,20 @@ class LibraryFormat:
         """
         from backend.library_linker import LibraryError
 
+        path = str(library_path)
+
         with open(library_path, 'rb') as f:
-            # Read and validate magic (16 bytes)
-            magic = f.read(16)
-            if len(magic) < 16:
-                raise LibraryError("CE3510", path=str(library_path),
-                                   expected=16, actual=len(magic))
+            metadata = _read_header_and_metadata(f, path)
 
-            if magic != LibraryFormat.MAGIC:
-                raise LibraryError("CE3508", path=str(library_path))
-
-            # Read version + spares (28 bytes)
-            header_rest = f.read(28)
-            if len(header_rest) < 28:
-                raise LibraryError("CE3510", path=str(library_path),
-                                   expected=28, actual=len(header_rest))
-
-            version = struct.unpack("<I", header_rest[0:4])[0]
-            # spare1 = struct.unpack("<I", header_rest[4:8])[0]
-            # spare2 = struct.unpack("<I", header_rest[8:12])[0]
-            # spare3 = struct.unpack("<Q", header_rest[12:20])[0]
-            # spare4 = struct.unpack("<Q", header_rest[20:28])[0]
-
-            # Check version compatibility
-            if version != LibraryFormat.VERSION:
-                raise LibraryError("CE3509", path=str(library_path),
-                                   version=version, supported=LibraryFormat.VERSION)
-
-            # Read metadata length
-            meta_len_bytes = f.read(8)
-            if len(meta_len_bytes) != 8:
-                raise LibraryError("CE3510", path=str(library_path),
-                                   expected=8, actual=len(meta_len_bytes))
-            meta_len = struct.unpack("<Q", meta_len_bytes)[0]
-
-            # Read metadata blob
-            metadata_blob = f.read(meta_len)
-            if len(metadata_blob) != meta_len:
-                raise LibraryError("CE3510", path=str(library_path),
-                                   expected=meta_len, actual=len(metadata_blob))
-
-            # Read bitcode length
-            bc_len_bytes = f.read(8)
-            if len(bc_len_bytes) != 8:
-                raise LibraryError("CE3511", path=str(library_path),
-                                   expected=8, actual=len(bc_len_bytes))
-            bc_len = struct.unpack("<Q", bc_len_bytes)[0]
-
-            # Read bitcode blob
-            bitcode = f.read(bc_len)
-            if len(bitcode) != bc_len:
-                raise LibraryError("CE3511", path=str(library_path),
-                                   expected=bc_len, actual=len(bitcode))
+            # Read bitcode length + blob
+            bc_len = struct.unpack("<Q", _read_bytes(f, 8, path, "bitcode"))[0]
+            bitcode = _read_bytes(f, bc_len, path, "bitcode")
 
             # Check file size sanity
-            total_size = 16 + 28 + 8 + meta_len + 8 + bc_len
+            total_size = f.tell()
             if total_size > LibraryFormat.MAX_FILE_SIZE:
-                raise LibraryError("CE3513", path=str(library_path),
+                raise LibraryError("CE3513", path=path,
                                    size=total_size, max_size=LibraryFormat.MAX_FILE_SIZE)
-
-        # Deserialize metadata
-        try:
-            metadata = msgpack.unpackb(metadata_blob, raw=False)
-        except Exception as e:
-            raise LibraryError("CE3512", path=str(library_path), reason=str(e))
 
         return metadata, bitcode
 
@@ -179,46 +188,5 @@ class LibraryFormat:
         Raises:
             LibraryError: CE3508-CE3512 for format errors.
         """
-        from backend.library_linker import LibraryError
-
         with open(library_path, 'rb') as f:
-            # Read and validate magic
-            magic = f.read(16)
-            if len(magic) < 16:
-                raise LibraryError("CE3510", path=str(library_path),
-                                   expected=16, actual=len(magic))
-
-            if magic != LibraryFormat.MAGIC:
-                raise LibraryError("CE3508", path=str(library_path))
-
-            # Read version (skip spares)
-            header_rest = f.read(28)
-            if len(header_rest) < 28:
-                raise LibraryError("CE3510", path=str(library_path),
-                                   expected=28, actual=len(header_rest))
-
-            version = struct.unpack("<I", header_rest[0:4])[0]
-            if version != LibraryFormat.VERSION:
-                raise LibraryError("CE3509", path=str(library_path),
-                                   version=version, supported=LibraryFormat.VERSION)
-
-            # Read metadata length
-            meta_len_bytes = f.read(8)
-            if len(meta_len_bytes) != 8:
-                raise LibraryError("CE3510", path=str(library_path),
-                                   expected=8, actual=len(meta_len_bytes))
-            meta_len = struct.unpack("<Q", meta_len_bytes)[0]
-
-            # Read metadata blob
-            metadata_blob = f.read(meta_len)
-            if len(metadata_blob) != meta_len:
-                raise LibraryError("CE3510", path=str(library_path),
-                                   expected=meta_len, actual=len(metadata_blob))
-
-        # Deserialize metadata
-        try:
-            metadata = msgpack.unpackb(metadata_blob, raw=False)
-        except Exception as e:
-            raise LibraryError("CE3512", path=str(library_path), reason=str(e))
-
-        return metadata
+            return _read_header_and_metadata(f, str(library_path))

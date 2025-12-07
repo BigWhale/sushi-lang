@@ -23,6 +23,7 @@ import time
 import os
 
 from test_metadata import parse_test_metadata, get_test_category, should_run_runtime_test, TestMetadata
+from run_tests import build_stdlib, build_test_helpers
 
 
 @dataclass
@@ -468,9 +469,33 @@ def main():
         help="Output results in JSON format"
     )
 
+    parser.add_argument(
+        "--skip-build",
+        action="store_true",
+        help="Skip building stdlib and test helpers"
+    )
+
     args = parser.parse_args()
 
     tests_dir = Path(__file__).parent
+    project_root = tests_dir.parent
+
+    # Build stdlib and test helpers unless skipped
+    if not args.skip_build:
+        if not args.json:
+            print("Building stdlib and test helpers...")
+        if not build_stdlib(project_root, args.verbose):
+            if not args.json:
+                print("Failed to build stdlib, aborting tests")
+            return 1
+        if not build_test_helpers(project_root, args.verbose):
+            if not args.json:
+                print("Failed to build test helpers, aborting tests")
+            return 1
+
+    # Set SUSHI_LIB_PATH for library tests
+    libs_bin_dir = tests_dir / "libs" / "bin"
+    os.environ["SUSHI_LIB_PATH"] = str(libs_bin_dir)
 
     with TestRunner(tests_dir, args.mode, args.verbose, args.jobs, args.json) as runner:
         results = runner.run_all_tests(filter_pattern=args.filter)
