@@ -52,7 +52,10 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 
 ```bash
 # Compile source to reusable library
-./sushic --lib mylib.sushi -o mylib.bc
+./sushic --lib mylib.sushi -o mylib.slib
+
+# Inspect library metadata
+./sushic --lib-info mylib.slib
 ```
 
 Libraries are used via `use <lib/...>` statements in source code:

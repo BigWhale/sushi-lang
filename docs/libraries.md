@@ -10,7 +10,8 @@ Sushi supports compiling code to reusable libraries and linking them into progra
 - [Creating Libraries](#creating-libraries)
 - [Using Libraries](#using-libraries)
 - [Library Search Path](#library-search-path)
-- [Manifest Files](#manifest-files)
+- [Inspecting Libraries](#inspecting-libraries)
+- [Library Format](#library-format)
 - [Symbol Resolution](#symbol-resolution)
 - [Best Practices](#best-practices)
 
@@ -18,12 +19,12 @@ Sushi supports compiling code to reusable libraries and linking them into progra
 
 The library system has two main operations:
 
-1. **Compile to library**: Convert Sushi source files to reusable bitcode (`.bc`) with metadata (`.sushilib`)
+1. **Compile to library**: Convert Sushi source files to a binary library file (`.slib`)
 2. **Use libraries**: Import precompiled libraries using `use <lib/...>` syntax
 
 ```bash
 # Create a library
-./sushic --lib mathutils.sushi -o mathutils.bc
+./sushic --lib mathutils.sushi -o mathutils.slib
 
 # Use the library in a program (via use statement in source)
 ./sushic program.sushi -o program
@@ -36,12 +37,12 @@ The library system has two main operations:
 Use `--lib` to compile source files into a library instead of an executable:
 
 ```bash
-./sushic --lib mylib.sushi -o mylib.bc
+./sushic --lib mylib.sushi -o mylib.slib
 ```
 
-This generates two files:
-- `mylib.bc` - LLVM bitcode containing compiled functions
-- `mylib.sushilib` - JSON manifest with type signatures and metadata
+This generates a single `.slib` file containing both:
+- LLVM bitcode (compiled functions)
+- Binary metadata (type signatures, function declarations)
 
 ### Public Functions
 
@@ -104,8 +105,8 @@ fn main() i32:
 ```
 
 The compiler will:
-1. Search for `mathutils.bc` and `mathutils.sushilib` in the library search path
-2. Register all functions, structs, and enums from the manifest
+1. Search for `mathutils.slib` in the library search path
+2. Read metadata and register all functions, structs, and enums
 3. Link the bitcode into the final executable
 
 ### Multiple Libraries
@@ -125,7 +126,7 @@ fn main() i32:
 
 ### SUSHI_LIB_PATH Environment Variable
 
-The compiler searches for `.bc` and `.sushilib` files in directories specified by `SUSHI_LIB_PATH`:
+The compiler searches for `.slib` files in directories specified by `SUSHI_LIB_PATH`:
 
 ```bash
 export SUSHI_LIB_PATH=/usr/local/lib/sushi:./libs:~/mylibs
@@ -146,13 +147,10 @@ Libraries can be organized in subdirectories:
 ```
 libs/
   math/
-    vectors.bc
-    vectors.sushilib
-    matrices.bc
-    matrices.sushilib
+    vectors.slib
+    matrices.slib
   utils/
-    strings.bc
-    strings.sushilib
+    strings.slib
 ```
 
 Import with the path:
@@ -162,50 +160,64 @@ use <lib/math/vectors>
 use <lib/utils/strings>
 ```
 
-## Manifest Files
+## Inspecting Libraries
 
-The `.sushilib` manifest is a JSON file containing library metadata:
+### The `--lib-info` Flag
 
-```json
-{
-  "sushi_lib_version": "1.0",
-  "library_name": "mylib",
-  "compiled_at": "2025-12-06T10:30:00Z",
-  "platform": "darwin",
-  "compiler_version": "0.1.0",
-  "public_functions": [
-    {
-      "name": "add",
-      "params": [
-        {"name": "a", "type": "i32"},
-        {"name": "b", "type": "i32"}
-      ],
-      "return_type": "Result<i32, StdError>",
-      "is_generic": false
-    }
-  ],
-  "structs": [
-    {
-      "name": "Point",
-      "fields": [
-        {"name": "x", "type": "i32"},
-        {"name": "y", "type": "i32"}
-      ]
-    }
-  ],
-  "enums": [
-    {
-      "name": "Color",
-      "variants": [
-        {"name": "Red", "has_data": false},
-        {"name": "Green", "has_data": false},
-        {"name": "Blue", "has_data": false}
-      ]
-    }
-  ],
-  "dependencies": ["io/stdio"]
-}
+Use `--lib-info` to display metadata from a compiled library:
+
+```bash
+./sushic --lib-info mylib.slib
 ```
+
+Example output:
+
+```
+Library: mylib
+Platform: darwin
+Compiler: 0.3.0
+Compiled: 2025-12-07T10:30:00+00:00
+Protocol: 1.0
+
+Public Functions (2):
+  fn add(i32 a, i32 b) i32
+  fn multiply(i32 a, i32 b) i32
+
+Structs (1):
+  struct Point:
+    i32 x
+    i32 y
+
+Enums (1):
+  enum Color:
+    Red
+    Green
+    Blue
+
+Dependencies (1):
+  <io/stdio>
+
+Bitcode: 5,432 bytes
+```
+
+This is useful for:
+- Checking what functions a library exports
+- Verifying platform compatibility
+- Understanding library dependencies
+
+## Library Format
+
+### Binary `.slib` Format
+
+Libraries use a binary format that combines metadata and bitcode in a single file:
+
+```
+[Magic: 16 bytes] [Version: 4 bytes] [Reserved: 24 bytes]
+[Metadata Length: 8 bytes] [Metadata: MessagePack]
+[Bitcode Length: 8 bytes] [Bitcode: LLVM]
+```
+
+The format uses MessagePack for efficient metadata serialization.
 
 ### Platform Compatibility
 
@@ -276,19 +288,19 @@ Use directory structure to organize related libraries:
 myproject/
   libs/
     math/
-      basic.bc
-      advanced.bc
+      basic.slib
+      advanced.slib
     io/
-      network.bc
-      files.bc
+      network.slib
+      files.slib
 ```
 
 ### 4. Version Your Libraries
 
-Include version information in your library names or use the manifest:
+Include version information in your library names:
 
 ```bash
-./sushic --lib mylib.sushi -o mylib-1.0.bc
+./sushic --lib mylib.sushi -o mylib-1.0.slib
 ```
 
 ### 5. Test Libraries Independently

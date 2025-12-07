@@ -356,14 +356,15 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter, ar
     library_linker = None
     if library_imports:
         from backend.library_linker import LibraryLinker, LibraryError
+        from backend.library_format import LibraryFormat
         library_linker = LibraryLinker()
 
         print(f"Linking {len(library_imports)} custom libraries:")
         for lib_path in sorted(library_imports):
             try:
-                bc_path, manifest_path = library_linker.resolve_library(lib_path)
-                manifest = library_linker.load_manifest(manifest_path)
-                library_linker.loaded_libraries[manifest["library_name"]] = manifest
+                slib_path = library_linker.resolve_library(lib_path)
+                metadata = LibraryFormat.read_metadata_only(slib_path)
+                library_linker.loaded_libraries[metadata["library_name"]] = metadata
 
                 # Format as "lib / mylib" instead of "lib/mylib"
                 formatted_path = " / ".join(lib_path.split('/'))
@@ -408,10 +409,10 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter, ar
             if not out_path.is_absolute():
                 out_path = effective_cwd / out_path
         else:
-            # Default to source filename without extension (or .bc for libraries)
+            # Default to source filename without extension (or .slib for libraries)
             source_name = src_path.stem  # e.g., "hello.sushi" -> "hello"
             if is_library:
-                out_path = effective_cwd / (source_name + ".bc")
+                out_path = effective_cwd / (source_name + ".slib")
             else:
                 out_path = effective_cwd / source_name
 
@@ -419,17 +420,16 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter, ar
         monomorphized_extensions = getattr(multi_file_analyzer, 'monomorphized_extensions', [])
 
         if is_library:
-            # Library compilation - generate bitcode only
-            cg.compile_to_bitcode(compilation_order, out=out_path,
-                                  debug=bool(args.dump_ll), opt=args.opt,
-                                  verify=not args.no_verify,
-                                  monomorphized_extensions=monomorphized_extensions)
+            # Library compilation - generate bitcode and package as .slib
+            bitcode = cg.compile_to_bitcode(compilation_order,
+                                            debug=bool(args.dump_ll), opt=args.opt,
+                                            verify=not args.no_verify,
+                                            monomorphized_extensions=monomorphized_extensions)
 
-            # Generate manifest file
+            # Generate .slib binary library file
             from backend.library_manifest import LibraryManifestGenerator
-            manifest_path = out_path.with_suffix('.sushilib')
             manifest_gen = LibraryManifestGenerator(multi_file_analyzer)
-            manifest_gen.generate(compilation_order, manifest_path)
+            manifest_gen.generate(compilation_order, out_path, bitcode)
 
             if args.write_ll:
                 try:
@@ -440,7 +440,6 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter, ar
                     print(f"(warn) failed to write LLVM IR: {e}", file=sys.stderr)
 
             print(f"Success! Wrote library: {out_path}")
-            print(f"Generated manifest: {manifest_path}")
         else:
             # Normal compilation - generate executable
             cg.compile_multi_unit(compilation_order, out=out_path, cc="cc",
@@ -471,6 +470,106 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter, ar
             import traceback
             traceback.print_exc()
         return 2  # Backend compilation failed
+
+def print_library_info(library_path: Path) -> int:
+    """Print formatted metadata from a .slib library file.
+
+    Args:
+        library_path: Path to .slib file.
+
+    Returns:
+        0 on success, 2 on error.
+    """
+    from backend.library_format import LibraryFormat
+    from backend.library_linker import LibraryError
+
+    if not library_path.exists():
+        print(f"Error: file not found: {library_path}", file=sys.stderr)
+        return 2
+
+    if not library_path.suffix == '.slib':
+        print(f"Error: expected .slib file, got: {library_path}", file=sys.stderr)
+        return 2
+
+    try:
+        metadata, bitcode = LibraryFormat.read(library_path)
+    except LibraryError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 2
+
+    # Header
+    print(f"Library: {metadata['library_name']}")
+    print(f"Platform: {metadata['platform']}")
+    print(f"Compiler: {metadata['compiler_version']}")
+    print(f"Compiled: {metadata['compiled_at']}")
+    print(f"Protocol: {metadata['sushi_lib_version']}")
+    print()
+
+    # Public functions
+    funcs = metadata.get('public_functions', [])
+    if funcs:
+        print(f"Public Functions ({len(funcs)}):")
+        for func in funcs:
+            params = ', '.join(f"{p['type']} {p['name']}" for p in func['params'])
+            generic = ""
+            if func.get('is_generic') and func.get('type_params'):
+                type_params = ', '.join(func['type_params'])
+                generic = f"<{type_params}>"
+            print(f"  fn {func['name']}{generic}({params}) {func['return_type']}")
+        print()
+
+    # Public constants
+    consts = metadata.get('public_constants', [])
+    if consts:
+        print(f"Public Constants ({len(consts)}):")
+        for const in consts:
+            print(f"  const {const['type']} {const['name']}")
+        print()
+
+    # Structs
+    structs = metadata.get('structs', [])
+    if structs:
+        print(f"Structs ({len(structs)}):")
+        for struct in structs:
+            generic = ""
+            if struct.get('is_generic') and struct.get('type_params'):
+                type_params = ', '.join(struct['type_params'])
+                generic = f"<{type_params}>"
+            print(f"  struct {struct['name']}{generic}:")
+            for field in struct['fields']:
+                print(f"    {field['type']} {field['name']}")
+        print()
+
+    # Enums
+    enums = metadata.get('enums', [])
+    if enums:
+        print(f"Enums ({len(enums)}):")
+        for enum in enums:
+            generic = ""
+            if enum.get('is_generic') and enum.get('type_params'):
+                type_params = ', '.join(enum['type_params'])
+                generic = f"<{type_params}>"
+            print(f"  enum {enum['name']}{generic}:")
+            for variant in enum['variants']:
+                if variant.get('has_data'):
+                    print(f"    {variant['name']}({variant['data_type']})")
+                else:
+                    print(f"    {variant['name']}")
+        print()
+
+    # Dependencies
+    deps = metadata.get('dependencies', [])
+    if deps:
+        print(f"Dependencies ({len(deps)}):")
+        for dep in deps:
+            print(f"  <{dep}>")
+        print()
+
+    # Size info
+    print(f"Bitcode: {len(bitcode):,} bytes")
+
+    return 0
+
 
 def main(argv: list[str] | None = None) -> int:
     # Always print banner first
@@ -519,15 +618,24 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Compile to library bitcode (no main() required)",
     )
+    ap.add_argument(
+        "--lib-info",
+        metavar="FILE",
+        help="Display metadata from a .slib library file",
+    )
     args = ap.parse_args(argv)
 
     # Handle --version flag
     if args.version:
         return 0
 
+    # Handle --lib-info flag
+    if args.lib_info:
+        return print_library_info(Path(args.lib_info))
+
     # Validate --lib flag
     if args.lib:
-        if args.out and not args.out.endswith('.bc'):
+        if args.out and not args.out.endswith('.slib'):
             from internals.errors import ERR
             msg = ERR["CE3500"]
             print(f"{msg.code}: {msg.text.format(path=args.out)}", file=sys.stderr)

@@ -7,12 +7,10 @@
 #
 # LIBRARY COMPILATION:
 #
-#   # Step 1: Compile source to library bitcode
-#   ./sushic --lib docs/examples/mathlib.sushi -o /tmp/mathlib.bc
+#   # Step 1: Compile source to library
+#   ./sushic --lib docs/examples/mathlib.sushi -o /tmp/mathlib.slib
 #
-#   This creates:
-#     - /tmp/mathlib.bc      (LLVM bitcode)
-#     - /tmp/mathlib.sushilib (JSON manifest)
+#   This creates a single .slib file containing bitcode and metadata.
 #
 # USING THE LIBRARY:
 #
@@ -21,11 +19,11 @@
 #   ./sushic docs/examples/26-libraries.sushi -o program
 #
 #   The use <lib/mathlib> statement tells the compiler to:
-#   1. Load mathlib.sushilib manifest for type information
-#   2. Link mathlib.bc into the final executable
+#   1. Load mathlib.slib and read metadata for type information
+#   2. Link the bitcode into the final executable
 #
 # For this example to work with precompiled libraries:
-#   1. Run: ./sushic --lib docs/examples/mathlib.sushi -o /tmp/mathlib.bc
+#   1. Run: ./sushic --lib docs/examples/mathlib.sushi -o /tmp/mathlib.slib
 #   2. Run: export SUSHI_LIB_PATH=/tmp
 #   3. Run: ./sushic docs/examples/26-libraries.sushi
 #

@@ -2,6 +2,34 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [0.4.0] - 2025-12-07
+
+### Added
+- Unified binary library format (`.slib`)
+  - Single file combines LLVM bitcode and MessagePack-encoded metadata
+  - Magic bytes: sushi emoji surrounding "SUSHILIB"
+  - Version field and reserved space for future extensions
+- `--lib-info` CLI command for library introspection
+  - Displays library name, platform, compiler version, compile timestamp
+  - Lists public functions with full signatures
+  - Shows structs, enums, constants, and dependencies
+  - Reports bitcode size
+- New error codes for library format validation
+  - CE3508: Invalid magic bytes
+  - CE3509: Unsupported format version
+  - CE3510: Metadata section truncated
+  - CE3511: Bitcode section truncated
+  - CE3512: Invalid metadata (MessagePack decode error)
+  - CE3513: File too large
+
+### Changed
+- Library output now uses `.slib` extension instead of `.bc`
+- Removed separate `.sushilib` JSON manifest files
+- Updated CE3500 error message for `.slib` extension requirement
+
+### Dependencies
+- Added `msgpack>=1.0` for binary metadata serialization
+
 ## [0.3.0] - 2025-12-06
 
 ### Added

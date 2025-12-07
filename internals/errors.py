@@ -1025,8 +1025,8 @@ _add(ErrorMessage("CW3001", Severity.WARNING,
 
 # Library System Errors (CE35xx)
 _add(ErrorMessage("CE3500", Severity.ERROR,
-    "library output path must have .bc extension: '{path}'",
-    Category.UNIT, "Library compilation requires output file with .bc extension."))
+    "library output path must have .slib extension: '{path}'",
+    Category.UNIT, "Library compilation requires output file with .slib extension."))
 
 _add(ErrorMessage("CE3501", Severity.ERROR,
     "main() function not allowed in library mode",
@@ -1055,6 +1055,31 @@ _add(ErrorMessage("CE3506", Severity.ERROR,
 _add(ErrorMessage("CE3507", Severity.ERROR,
     "failed to link library '{lib}': {reason}",
     Category.UNIT, "LLVM bitcode linking failed for the specified library."))
+
+# Binary library format errors (.slib)
+_add(ErrorMessage("CE3508", Severity.ERROR,
+    "invalid library file '{path}': not a valid .slib file (bad magic)",
+    Category.UNIT, "File does not start with SUSHILIB magic bytes."))
+
+_add(ErrorMessage("CE3509", Severity.ERROR,
+    "unsupported library format version '{version}' in '{path}' (compiler supports version {supported})",
+    Category.UNIT, "Library was created with incompatible format version."))
+
+_add(ErrorMessage("CE3510", Severity.ERROR,
+    "corrupted library file '{path}': metadata section truncated (expected {expected} bytes, got {actual})",
+    Category.UNIT, "Library file is incomplete or corrupted."))
+
+_add(ErrorMessage("CE3511", Severity.ERROR,
+    "corrupted library file '{path}': bitcode section truncated (expected {expected} bytes, got {actual})",
+    Category.UNIT, "Library file is incomplete or corrupted."))
+
+_add(ErrorMessage("CE3512", Severity.ERROR,
+    "invalid library metadata in '{path}': {reason}",
+    Category.UNIT, "MessagePack decoding failed or metadata schema is invalid."))
+
+_add(ErrorMessage("CE3513", Severity.ERROR,
+    "library file too large '{path}': {size} bytes exceeds maximum {max_size} bytes",
+    Category.UNIT, "Library file exceeds reasonable size limit."))
 
 # Array bounds errors
 _add(ErrorMessage("RE2020", Severity.ERROR,

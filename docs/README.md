@@ -60,8 +60,9 @@ Each example includes detailed comments explaining concepts and patterns.
 ./sushic --dump-ll program.sushi   # Show LLVM IR
 
 # Libraries
-./sushic --lib mylib.sushi -o mylib.bc  # Compile library
-# In main.sushi: use <lib/mylib>        # Import library
+./sushic --lib mylib.sushi -o mylib.slib  # Compile library
+./sushic --lib-info mylib.slib            # Inspect library
+# In main.sushi: use <lib/mylib>          # Import library
 ```
 
 ### Quick Syntax

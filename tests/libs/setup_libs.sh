@@ -19,7 +19,7 @@ echo "Compiling library test helpers..."
 for lib in "$HELPERS_DIR"/*.sushi; do
     name=$(basename "$lib" .sushi)
     echo "  Compiling $name..."
-    ./sushic --lib "$lib" -o "$BIN_DIR/$name.bc"
+    ./sushic --lib "$lib" -o "$BIN_DIR/$name.slib"
 done
 
 echo "Done. Libraries compiled to $BIN_DIR"

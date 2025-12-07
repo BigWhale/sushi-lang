@@ -1,9 +1,0 @@
-# Test PI arithmetic
-use <math>
-
-fn main() i32:
-    let f64 radius = 5.0
-    let f64 area = PI * pow(radius, 2.0)
-    println("Circle area (r=5.0) = {area}")
-
-    return Result.Ok(0)

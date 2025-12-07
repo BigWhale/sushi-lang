@@ -324,15 +324,15 @@ class LLVMCodegen:
             two_phase.add_main_module(llmod, "main")
 
             # Add library modules
+            from backend.library_format import LibraryFormat
             for lib_path in library_paths:
                 try:
-                    bc_path, manifest_path = library_linker.resolve_library(lib_path)
-                    manifest = library_linker.load_manifest(manifest_path)
-                    library_linker.loaded_libraries[manifest["library_name"]] = manifest
+                    slib_path = library_linker.resolve_library(lib_path)
+                    metadata, bitcode = LibraryFormat.read(slib_path)
+                    library_linker.loaded_libraries[metadata["library_name"]] = metadata
 
-                    with open(bc_path, 'rb') as f:
-                        lib_mod = llvm.parse_bitcode(f.read())
-                        two_phase.add_library_module(lib_mod, manifest["library_name"])
+                    lib_mod = llvm.parse_bitcode(bitcode)
+                    two_phase.add_library_module(lib_mod, metadata["library_name"])
                 except Exception as e:
                     raise RuntimeError(f"Failed to load library {lib_path}: {e}")
 
@@ -376,26 +376,24 @@ class LLVMCodegen:
     def compile_to_bitcode(
         self,
         units: list[Unit],
-        out: Path | None = None,
         debug: bool = False,
         opt: str = "mem2reg",
         verify: bool = True,
         monomorphized_extensions: list['ExtendDef'] = None,
-    ) -> Path:
+    ) -> bytes:
         """Compile units to LLVM bitcode without linking to executable.
 
         Used for library compilation (--lib flag). Does not require main() function.
 
         Args:
             units: List of compilation units.
-            out: Output .bc file path.
             debug: Enable debug information.
             opt: Optimization level.
             verify: Enable IR verification.
             monomorphized_extensions: List of monomorphized extension methods.
 
         Returns:
-            Path to generated .bc file.
+            LLVM bitcode as bytes.
         """
         # Store monomorphized extensions for emission
         self.monomorphized_extensions = monomorphized_extensions or []
@@ -436,12 +434,7 @@ class LLVMCodegen:
         # Update self.module with optimized IR (for --write-ll to work correctly)
         self.module = llvm.parse_assembly(str(llmod))
 
-        # Write bitcode to file
-        out_path = out or Path("a.bc")
-        with open(out_path, 'wb') as f:
-            f.write(llmod.as_bitcode())
-
-        return out_path
+        return llmod.as_bitcode()
 
     def _link_executable(
         self,

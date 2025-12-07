@@ -1,11 +1,9 @@
 # mathlib.sushi - Example Library
 #
 # This is a sample library demonstrating how to create reusable code.
-# Compile with: ./sushic --lib mathlib.sushi -o mathlib.bc
+# Compile with: ./sushic --lib mathlib.sushi -o mathlib.slib
 #
-# This generates:
-#   - mathlib.bc      (LLVM bitcode)
-#   - mathlib.sushilib (JSON manifest with type signatures)
+# This generates a single .slib file containing bitcode and metadata.
 
 # Public functions are accessible from other compilation units.
 # Only mark functions as public if they are part of your API.

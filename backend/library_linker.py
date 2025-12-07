@@ -1,10 +1,9 @@
 """Custom library linking utilities.
 
-This module handles loading and linking precompiled Sushi libraries (.bc files)
-along with their metadata manifests (.sushilib files).
+This module handles loading and linking precompiled Sushi libraries (.slib files).
 """
 from __future__ import annotations
-import json
+
 import os
 import platform
 from pathlib import Path
@@ -71,14 +70,14 @@ class LibraryLinker:
 
         return paths
 
-    def resolve_library(self, lib_path: str) -> tuple[Path, Path]:
-        """Resolve library path to .bc and .sushilib files.
+    def resolve_library(self, lib_path: str) -> Path:
+        """Resolve library path to .slib file.
 
         Args:
             lib_path: Library path like "lib/mylib" or "lib/acme/utils".
 
         Returns:
-            Tuple of (bitcode_path, manifest_path).
+            Path to .slib file.
 
         Raises:
             LibraryError: CE3502 if library not found in search paths.
@@ -89,62 +88,19 @@ class LibraryLinker:
 
         # Search each path in order
         for search_dir in self.search_paths:
-            bc_path = search_dir / f"{lib_path}.bc"
-            manifest_path = search_dir / f"{lib_path}.sushilib"
-
-            if bc_path.exists() and manifest_path.exists():
-                return (bc_path, manifest_path)
+            slib_path = search_dir / f"{lib_path}.slib"
+            if slib_path.exists():
+                return slib_path
 
             # Also try without subdirectory (flat structure)
             lib_name = Path(lib_path).name
-            bc_path_flat = search_dir / f"{lib_name}.bc"
-            manifest_path_flat = search_dir / f"{lib_name}.sushilib"
-
-            if bc_path_flat.exists() and manifest_path_flat.exists():
-                return (bc_path_flat, manifest_path_flat)
+            slib_path_flat = search_dir / f"{lib_name}.slib"
+            if slib_path_flat.exists():
+                return slib_path_flat
 
         # Not found - generate helpful error with formal error code
         search_str = ', '.join(str(p) for p in self.search_paths)
         raise LibraryError("CE3502", lib=lib_path, paths=search_str)
-
-    def load_manifest(self, manifest_path: Path) -> dict:
-        """Load and parse .sushilib manifest file.
-
-        Args:
-            manifest_path: Path to .sushilib file.
-
-        Returns:
-            Parsed manifest dictionary.
-
-        Raises:
-            LibraryError: CE3503 if manifest is invalid or malformed.
-        """
-        try:
-            with open(manifest_path, 'r', encoding='utf-8') as f:
-                manifest = json.load(f)
-        except json.JSONDecodeError as e:
-            raise LibraryError("CE3503", path=str(manifest_path), reason=str(e))
-
-        # Validate required fields
-        required = ["sushi_lib_version", "library_name", "platform"]
-        for field in required:
-            if field not in manifest:
-                raise LibraryError("CE3503", path=str(manifest_path),
-                                   reason=f"missing required field: {field}")
-
-        # Check platform compatibility
-        from backend.platform_detect import get_current_platform
-        current_platform = get_current_platform()
-        lib_platform = manifest["platform"]
-
-        current_name = "darwin" if current_platform.is_darwin else "linux" if current_platform.is_linux else "unknown"
-
-        if lib_platform != current_name:
-            # Use warning code CW3505 for platform mismatch (non-fatal)
-            msg = ERR["CW3505"]
-            print(f"{msg.code}: {msg.text.format(lib_platform=lib_platform, current_platform=current_name)}")
-
-        return manifest
 
     def link_library(self, llmod: llvm.ModuleRef, lib_path: str) -> None:
         """Link a custom library into the LLVM module.
@@ -153,27 +109,35 @@ class LibraryLinker:
             llmod: The main LLVM module.
             lib_path: Library path like "lib/mylib".
         """
-        # Resolve library files
-        bc_path, manifest_path = self.resolve_library(lib_path)
+        from backend.library_format import LibraryFormat
+        from backend.platform_detect import get_current_platform
 
-        # Load and validate manifest
-        manifest = self.load_manifest(manifest_path)
+        # Resolve library file
+        slib_path = self.resolve_library(lib_path)
 
-        # Store manifest for symbol resolution
-        lib_name = manifest["library_name"]
-        self.loaded_libraries[lib_name] = manifest
+        # Read .slib format
+        metadata, bitcode = LibraryFormat.read(slib_path)
+
+        # Store metadata for symbol resolution
+        lib_name = metadata["library_name"]
+        self.loaded_libraries[lib_name] = metadata
+
+        # Check platform compatibility
+        current_platform = get_current_platform()
+        lib_platform = metadata.get("platform", "unknown")
+        current_name = "darwin" if current_platform.is_darwin else "linux" if current_platform.is_linux else "unknown"
+
+        if lib_platform != current_name:
+            msg = ERR["CW3505"]
+            print(f"{msg.code}: {msg.text.format(lib_platform=lib_platform, current_platform=current_name)}")
 
         # Link bitcode into module
-        # Use preserve=False to allow the main module's definitions to take precedence
-        # This handles cases where both library and main program have stdlib runtime functions
-        with open(bc_path, 'rb') as f:
-            bc_data = f.read()
-            try:
-                lib_mod = llvm.parse_bitcode(bc_data)
-                llmod.link_in(lib_mod, preserve=False)
-                print(f"Linked library: {lib_name} ({bc_path})")
-            except Exception as e:
-                raise LibraryError("CE3507", lib=str(bc_path), reason=str(e))
+        try:
+            lib_mod = llvm.parse_bitcode(bitcode)
+            llmod.link_in(lib_mod, preserve=False)
+            print(f"Linked library: {lib_name} ({slib_path})")
+        except Exception as e:
+            raise LibraryError("CE3507", lib=str(slib_path), reason=str(e))
 
     def get_library_functions(self, lib_name: str) -> list[dict]:
         """Get public functions from a loaded library.

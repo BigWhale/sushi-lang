@@ -47,6 +47,11 @@ jobs:
       - name: Make sushic executable
         run: chmod +x sushic
 
+      - name: Build library test helpers
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          ./tests/libs/setup_libs.sh
+
       - name: Test compiler setup
         run: |
           echo "Testing sushic..."
@@ -57,6 +62,7 @@ jobs:
         id: run_tests
         run: |
           export PATH="$HOME/.local/bin:$PATH"
+          export SUSHI_LIB_PATH=$GITHUB_WORKSPACE/tests/libs/bin
           uv run python tests/run_tests.py --json > test_results.json || true
           cat test_results.json
         continue-on-error: true
