@@ -21,14 +21,7 @@ rm -rf .claude
 rm -f test-docker-build.sh
 rm -f memory_monitor.sh
 
-# Self-destruct
-SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
-rm -f "$SCRIPT_PATH"
-
 echo "Staging changes..."
 git add -A
 
-echo "Committing..."
-git commit -m "Sync with main"
-
-echo "Ready to push: git push --dry-run public sushi-public:main"
+echo "Ready to commit and push with: git push --dry-run public sushi-public:main"

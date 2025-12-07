@@ -2,6 +2,13 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [0.4.1] - 2025-12-07
+
+### Changed
+- Refactored library_format.py to eliminate DRY violation
+- Reorganized tests into appropriate subdirectories
+- Test cleanup, added test lib build to run_tests.py
+
 ## [0.4.0] - 2025-12-07
 
 ### Added
