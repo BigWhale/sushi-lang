@@ -1,22 +1,40 @@
 """
 AST Visitor Pattern implementation for the Sushi language compiler.
 
-This module provides base visitor classes and concrete implementations for
-traversing and processing AST nodes using the Visitor Pattern, eliminating
-the need for large match/isinstance chains.
+This module provides base visitor classes for traversing and processing AST nodes
+using the Visitor Pattern, eliminating the need for large match/isinstance chains.
+
+Usage:
+    1. Subclass NodeVisitor[T] for visitors that return values
+    2. Subclass RecursiveVisitor for analysis passes (void return)
+    3. Subclass NodeTransformer for AST transformations
+
+Example:
+    class MyAnalyzer(RecursiveVisitor):
+        def visit_let(self, node: Let) -> None:
+            # Custom handling for let statements
+            print(f"Found let statement: {node.name}")
+            super().visit_let(node)  # Continue traversal
+
+    analyzer = MyAnalyzer()
+    analyzer.visit(ast_node)
 """
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from typing import Any, Optional, TypeVar, Generic
+from abc import ABC
+from typing import Any, Optional, TypeVar, Generic, TYPE_CHECKING
 
-from semantics.ast import Node, Stmt, Expr, Block
+from semantics.ast import Node, Stmt, Block
 from semantics.ast import (
     # Statements
     Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, MatchArm, Break, Continue,
     # Expressions
-    Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
-    UnaryOp, BinaryOp, Call, MethodCall, DynamicArrayNew, DynamicArrayFrom, CastExpr
+    Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
+    UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, StructConstructor, EnumConstructor,
+    DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr
 )
+
+if TYPE_CHECKING:
+    from semantics.ast import Program, FuncDef, ExtendDef
 
 T = TypeVar('T')
 
@@ -216,3 +234,87 @@ class RecursiveVisitor(NodeVisitor[None]):
     def visit_castexpr(self, node: CastExpr) -> None:
         """Visit a cast expression. Default: visit the source expression."""
         self.visit(node.expr)
+
+    def visit_dotcall(self, node: DotCall) -> None:
+        """Visit a dot call (method-like). Default: visit receiver and arguments."""
+        self.visit(node.receiver)
+        for arg in node.args:
+            self.visit(arg)
+
+    def visit_memberaccess(self, node: MemberAccess) -> None:
+        """Visit a member access (obj.field). Default: visit the receiver."""
+        self.visit(node.receiver)
+
+    def visit_structconstructor(self, node: StructConstructor) -> None:
+        """Visit a struct constructor. Default: visit all field values."""
+        for value in node.values:
+            self.visit(value)
+
+    def visit_enumconstructor(self, node: EnumConstructor) -> None:
+        """Visit an enum constructor. Default: visit all arguments."""
+        for arg in node.args:
+            self.visit(arg)
+
+    def visit_borrow(self, node: Borrow) -> None:
+        """Visit a borrow expression. Default: visit the borrowed expression."""
+        self.visit(node.expr)
+
+    def visit_tryexpr(self, node: TryExpr) -> None:
+        """Visit a try expression (??). Default: visit the inner expression."""
+        self.visit(node.expr)
+
+    def visit_rangeexpr(self, node: RangeExpr) -> None:
+        """Visit a range expression. Default: visit start and end."""
+        self.visit(node.start)
+        self.visit(node.end)
+
+    def visit_blanklit(self, node: BlankLit) -> None:
+        """Visit a blank literal (~). Default: no action."""
+        pass
+
+
+class ASTPassRunner:
+    """
+    Utility class for running visitor passes over entire programs.
+
+    Handles the common pattern of iterating over all top-level definitions
+    (functions, extensions, constants) and applying a visitor to each.
+
+    Usage:
+        class MyPass(RecursiveVisitor):
+            def visit_let(self, node):
+                # handle let statements
+
+        runner = ASTPassRunner(MyPass())
+        runner.run(program)
+    """
+
+    def __init__(self, visitor: RecursiveVisitor) -> None:
+        """Initialize with a visitor instance."""
+        self.visitor = visitor
+
+    def run(self, program: 'Program') -> None:
+        """Run the visitor over all top-level definitions."""
+        self.run_functions(program)
+        self.run_extensions(program)
+
+    def run_functions(self, program: 'Program') -> None:
+        """Run visitor over all function bodies."""
+        for func in program.functions:
+            if hasattr(func, 'body') and func.body:
+                self.visitor.visit(func.body)
+
+    def run_extensions(self, program: 'Program') -> None:
+        """Run visitor over all extension method bodies."""
+        for ext in program.extensions:
+            if hasattr(ext, 'body') and ext.body:
+                self.visitor.visit(ext.body)
+
+    def run_function(self, func: 'FuncDef') -> None:
+        """Run visitor over a single function body."""
+        if hasattr(func, 'body') and func.body:
+            self.visitor.visit(func.body)
+
+    def run_block(self, block: Block) -> None:
+        """Run visitor over a single block."""
+        self.visitor.visit(block)

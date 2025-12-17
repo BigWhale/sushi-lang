@@ -126,12 +126,12 @@ def try_emit_hashmap_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     else:
         # For other methods, we need the HashMap as a POINTER for mutation
         hashmap_ptr = emit_receiver_as_pointer(codegen, receiver)
-        if hashmap_ptr is not None:
-            receiver_semantic_type = infer_semantic_type(codegen, expr, None, "HashMap<", StructType)
-            if isinstance(receiver_semantic_type, StructType) and receiver_semantic_type.name.startswith("HashMap<"):
-                temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
-                return emit_hashmap_method(codegen, temp_expr, hashmap_ptr, receiver_semantic_type, to_i1)
-        else:
+        receiver_semantic_type = infer_semantic_type(codegen, expr, None, "HashMap<", StructType)
+
+        if hashmap_ptr is not None and isinstance(receiver_semantic_type, StructType) and receiver_semantic_type.name.startswith("HashMap<"):
+            temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
+            return emit_hashmap_method(codegen, temp_expr, hashmap_ptr, receiver_semantic_type, to_i1)
+        elif hashmap_ptr is None:
             # For other receiver types, emit normally
             hashmap_value = codegen.expressions.emit_expr(receiver)
             receiver_semantic_type = infer_semantic_type(codegen, expr, hashmap_value, "HashMap<", StructType)

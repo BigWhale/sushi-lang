@@ -17,12 +17,26 @@ if TYPE_CHECKING:
 
 
 def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: str) -> Optional[StructType]:
-    """Infer generic struct type (Own<T>) from receiver using multiple strategies."""
+    """Infer generic struct type (Own<T>, HashMap<K,V>, List<T>) from receiver using multiple strategies."""
+    from semantics.typesys import ReferenceType
+    from semantics.generics.types import GenericTypeRef
+
     # Strategy 1: Check if receiver is a Name (variable)
     if isinstance(receiver, Name):
         semantic_type = codegen.memory.find_semantic_type(receiver.id)
+        # Unwrap ReferenceType if present (for &peek T or &poke T parameters)
+        if isinstance(semantic_type, ReferenceType):
+            semantic_type = semantic_type.referenced_type
+
         if isinstance(semantic_type, StructType) and semantic_type.name.startswith(prefix):
             return semantic_type
+
+        # Handle GenericTypeRef (e.g., HashMap<string, string> before resolution)
+        # Resolve it to the actual StructType from the struct table
+        if isinstance(semantic_type, GenericTypeRef):
+            type_name = str(semantic_type)  # e.g., "HashMap<string, string>"
+            if type_name.startswith(prefix) and type_name in codegen.struct_table.by_name:
+                return codegen.struct_table.by_name[type_name]
 
     # Strategy 2: For Own.new(), receiver might be a type name from let statement type annotation
     # This would be handled during type inference in semantic analysis
@@ -32,11 +46,25 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
 
 def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_value: ir.Value, prefix: str) -> Optional[EnumType]:
     """Infer generic enum type (Result<T> or Maybe<T>) from receiver using multiple strategies."""
+    from semantics.typesys import ReferenceType
+    from semantics.generics.types import GenericTypeRef
+
     # Strategy 1: Check if receiver is a Name (variable)
     if isinstance(receiver, Name):
         semantic_type = codegen.memory.find_semantic_type(receiver.id)
+        # Unwrap ReferenceType if present (for &peek T or &poke T parameters)
+        if isinstance(semantic_type, ReferenceType):
+            semantic_type = semantic_type.referenced_type
+
         if isinstance(semantic_type, EnumType) and semantic_type.name.startswith(prefix):
             return semantic_type
+
+        # Handle GenericTypeRef (e.g., Result<i32> before resolution)
+        # Resolve it to the actual EnumType from the enum table
+        if isinstance(semantic_type, GenericTypeRef):
+            type_name = str(semantic_type)  # e.g., "Result<i32>"
+            if type_name.startswith(prefix) and type_name in codegen.enum_table.by_name:
+                return codegen.enum_table.by_name[type_name]
 
     # Strategy 2: Infer from function call return type (for Call expressions)
     if isinstance(receiver, Call):
@@ -172,6 +200,9 @@ def emit_receiver_as_pointer(codegen: 'LLVMCodegen', receiver: Expr) -> Optional
 
     This is used by HashMap and List methods that need to mutate the receiver.
 
+    For reference parameters (&peek T or &poke T), the slot contains a pointer
+    to the actual variable, so we need to load that pointer first.
+
     Args:
         codegen: The LLVM code generator
         receiver: Receiver expression
@@ -179,6 +210,12 @@ def emit_receiver_as_pointer(codegen: 'LLVMCodegen', receiver: Expr) -> Optional
     Returns:
         Pointer to receiver if receiver is a Name, None otherwise
     """
+    from backend.expressions import type_utils
+
     if isinstance(receiver, Name):
-        return codegen.memory.find_local_slot(receiver.id)
+        slot = codegen.memory.find_local_slot(receiver.id)
+        # Check if this is a reference parameter - if so, load the pointer
+        if type_utils.is_reference_parameter(codegen, receiver.id):
+            return codegen.builder.load(slot, name=f"{receiver.id}_ref_ptr")
+        return slot
     return None

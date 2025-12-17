@@ -38,29 +38,16 @@ class StringOperations:
     def emit_string_literal(self, string_value: str) -> ir.Value:
         """Generate a global string constant and return a fat pointer struct.
 
+        Uses the centralized StringConstantManager for deduplication.
+
         Args:
             string_value: The string literal value.
 
         Returns:
             Fat pointer struct {i8* data, i32 size} for the string literal.
         """
-        # Create the global string constant WITHOUT null terminator
-        string_data = string_value.encode('utf-8')
-        size = len(string_data)
-        string_type = ir.ArrayType(self.codegen.i8, size)
-
-        # Create a unique name for this string literal
-        str_name = f"_str_{len(string_value)}_{hash(string_value) & 0xFFFFFFFF}"
-
-        # Check if this string already exists in the module
-        existing = self.codegen.module.globals.get(str_name)
-        if existing is not None:
-            global_str = existing
-        else:
-            global_str = ir.GlobalVariable(self.codegen.module, string_type, name=str_name)
-            global_str.initializer = ir.Constant(string_type, bytearray(string_data))
-            global_str.linkage = 'internal'
-            global_str.global_constant = True
+        # Use StringConstantManager for deduplication (no null terminator for fat pointers)
+        global_str = self.codegen.string_manager.get_or_create_raw(string_value)
 
         # Get pointer to the string data
         zero = ir.Constant(self.codegen.i32, 0)
@@ -68,6 +55,7 @@ class StringOperations:
 
         # Build fat pointer struct: {i8* data, i32 size}
         string_struct_type = self.codegen.types.string_struct
+        size = len(string_value.encode('utf-8'))
         size_value = ir.Constant(self.codegen.i32, size)
 
         # Use insertvalue to build the struct

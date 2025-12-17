@@ -1,0 +1,129 @@
+# Example 27: Markov Chain with Improbability Drive
+#
+# A simple Markov Chain text generator demonstrating HashMap, random,
+# and string operations. Themed around the Infinite Improbability Drive from
+# the Heart of Gold (Hitchhiker's Guide to the Galaxy).
+#
+# A Markov Chain predicts the next word based on the current word using
+# transition probabilities learned from training text. The Improbability
+# Drive adds controlled chaos - occasionally jumping to random words instead
+# of following the chain.
+#
+# Key concepts covered:
+# - HashMap<string, string> for transition storage
+# - Random number generation with rand(), rand_range(), rand_f64()
+# - String manipulation with split() and array indexing
+# - Seeding RNG with srand() for reproducibility
+# - Pattern matching for safe HashMap/array access
+# - References (&poke) for mutable HashMap parameter passing
+
+use <random>
+use <collections/hashmap>
+use <collections/strings>
+
+# Pick random word from vocabulary
+fn random_word(string[] vocab) string:
+    let i32 idx = rand_range(0, vocab.len())
+    return Result.Ok(vocab[idx])
+
+# Pick word from pipe-delimited options
+fn pick_from_options(string options) string:
+    let string[] choices = options.split("|")
+    let i32 idx = rand_range(0, choices.len())
+    return Result.Ok(choices[idx])
+
+# Build the Markov chain from word pairs (mutates the chain)
+fn build_chain(&poke HashMap<string, string> chain, string[] words) ~:
+    let i32 i = 0
+    while (i < words.len() - 1):
+        let string current = words[i]
+        let string next_word = words[i + 1]
+
+        match chain.get(current):
+            Maybe.Some(existing) ->
+                let string updated = "{existing}|{next_word}"
+                chain.insert(current, updated)
+            Maybe.None() ->
+                chain.insert(current, next_word)
+
+        i := i + 1
+    return Result.Ok(~)
+
+# Generate text using the chain with improbability factor
+fn generate_text(&peek HashMap<string, string> chain, string[] vocab, f64 factor, i32 count) ~:
+    let string current = "the"
+    let i32 c = 0
+
+    while (c < count):
+        let f64 roll = rand_f64()
+        if (roll < factor):
+            current := random_word(vocab).realise("")
+        else:
+            match chain.get(current):
+                Maybe.Some(opts) ->
+                    current := pick_from_options(opts).realise("")
+                Maybe.None() ->
+                    current := random_word(vocab).realise("")
+        print(" {current}")
+        c := c + 1
+    return Result.Ok(~)
+
+fn main() i32:
+    # Seed the RNG for reproducible output
+    # 42 is, of course, the answer to everything
+    srand(42 as u64)
+
+    println("=== Infinite Improbability Drive Text Generator ===")
+    println("")
+
+    # Training corpus - text about the Heart of Gold
+    let string corpus = "the ship hung in the air the way that bricks do not the ship was called the heart of gold the drive was infinite the drive was improbable the answer was forty two"
+
+    # Build transition map: word -> pipe-separated list of possible next words
+    let HashMap<string, string> chain = HashMap.new()
+    let string[] all_words = corpus.split(" ")
+
+    # Build the chain by learning word pairs
+    build_chain(&poke chain, all_words)
+
+    # Vocabulary for random word selection
+    let string[] vocab = from([
+        "the", "ship", "hung", "in", "air", "way", "that",
+        "bricks", "do", "not", "was", "called", "heart", "of",
+        "gold", "drive", "infinite", "improbable", "answer", "forty", "two"
+    ])
+
+    println("Training corpus:")
+    println("  \"{corpus}\"")
+    println("")
+    println("Learned {chain.len()} unique word transitions")
+    println("")
+
+    # Generate text with different improbability levels
+    println("--- Generating 12 words starting with 'the' ---")
+    println("")
+
+    # Improbability factors: 0.0 = pure Markov, 1.0 = pure chaos
+    let f64[5] factors = [0.0, 0.2, 0.42, 0.8, 1.0]
+    let string[5] labels = [
+        "Normal (0.0):      ",
+        "Mild (0.2):        ",
+        "Mostly Harmless:   ",
+        "Chaotic (0.8):     ",
+        "Infinite (1.0):    "
+    ]
+
+    let i32 f = 0
+    while (f < 5):
+        print("{labels[f]}the")
+        generate_text(&peek chain, vocab, factors[f], 12)
+        println("")
+        f := f + 1
+
+    println("")
+    println("=== Don't Panic ===")
+
+    chain.free()
+
+    return Result.Ok(0)
+

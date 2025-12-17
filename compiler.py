@@ -447,7 +447,8 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter, ar
                                   verify=not args.no_verify, keep_object=args.keep_object,
                                   main_expects_args=multi_file_analyzer.main_expects_args,
                                   monomorphized_extensions=monomorphized_extensions,
-                                  library_linker=library_linker)
+                                  library_linker=library_linker,
+                                  library_registry=multi_file_analyzer.library_registry)
 
             if args.write_ll:
                 try:

@@ -504,8 +504,8 @@ def _extract_ok_type_from_result(result_type: EnumType) -> Type:
 def ensure_result_type_in_table(enum_table: Any, ok_type: Type, err_type: Type) -> Optional[EnumType]:
     """Ensure that Result<T, E> exists in the enum table, creating it if necessary.
 
-    This is the core function that works with just an enum table, making it usable
-    from both semantic analysis and code generation phases.
+    This is a convenience wrapper around ResultBuilder for backward compatibility.
+    New code should use ResultBuilder directly for better caching and the full API.
 
     Args:
         enum_table: The enum table to register the type in.
@@ -515,46 +515,6 @@ def ensure_result_type_in_table(enum_table: Any, ok_type: Type, err_type: Type) 
     Returns:
         The EnumType for Result<T, E>, or None if it couldn't be created.
     """
-    from semantics.typesys import EnumType, EnumVariantInfo, BuiltinType
-
-    # Format the type name
-    if isinstance(ok_type, BuiltinType):
-        ok_str = str(ok_type).lower()
-    else:
-        ok_str = str(ok_type)
-
-    if isinstance(err_type, BuiltinType):
-        err_str = str(err_type).lower()
-    else:
-        err_str = str(err_type)
-
-    result_enum_name = f"Result<{ok_str}, {err_str}>"
-
-    # Check if it already exists
-    if result_enum_name in enum_table.by_name:
-        return enum_table.by_name[result_enum_name]
-
-    # Create the Result<T, E> enum type on the fly
-    # Define variants: Ok(T) and Err(E)
-    ok_variant = EnumVariantInfo(name="Ok", associated_types=(ok_type,))
-    err_variant = EnumVariantInfo(name="Err", associated_types=(err_type,))
-
-    # Create enum type
-    result_enum = EnumType(
-        name=result_enum_name,
-        variants=(ok_variant, err_variant)
-    )
-
-    # Register in enum table
-    enum_table.by_name[result_enum_name] = result_enum
-    enum_table.order.append(result_enum_name)
-
-    # Register hash method for the Result enum if hashable
-    # This must happen immediately after creation, since Result enums are created
-    # on-demand AFTER Pass 1.8 (hash registration pass) has already run
-    from backend.types.enums import can_enum_be_hashed, register_enum_hash_method
-    can_hash, reason = can_enum_be_hashed(result_enum)
-    if can_hash:
-        register_enum_hash_method(result_enum)
-
-    return result_enum
+    from backend.generics.result_builder import ResultBuilder
+    builder = ResultBuilder(enum_table)
+    return builder.ensure_type(ok_type, err_type)

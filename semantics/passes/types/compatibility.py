@@ -15,7 +15,7 @@ from internals.report import Span
 from internals import errors as er
 from semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, EnumType, ReferenceType, BorrowMode
 from semantics.ast import Expr, ArrayLiteral, DynamicArrayNew, DynamicArrayFrom, IntLit
-from semantics.type_resolution import resolve_unknown_type
+from semantics.type_resolution import resolve_unknown_type, TypeResolver
 from .inference import infer_dynamic_array_from_type
 
 if TYPE_CHECKING:
@@ -85,6 +85,8 @@ def validate_return_compatibility(validator: 'TypeValidator', expected_type: Typ
 def resolve_generic_type_ref(validator: 'TypeValidator', ty: Type) -> Type:
     """Resolve GenericTypeRef to monomorphized EnumType or StructType.
 
+    Uses the centralized TypeResolver for consistent resolution logic.
+
     Args:
         validator: The TypeValidator instance.
         ty: The type to resolve (may be GenericTypeRef or any other type).
@@ -93,22 +95,8 @@ def resolve_generic_type_ref(validator: 'TypeValidator', ty: Type) -> Type:
         The resolved EnumType or StructType if ty is a GenericTypeRef with a monomorphized version,
         otherwise returns ty unchanged.
     """
-    from semantics.generics.types import GenericTypeRef
-
-    if isinstance(ty, GenericTypeRef):
-        # Build type name from generic type ref: Result<i32> -> "Result<i32>", Box<i32> -> "Box<i32>"
-        type_args_str = ", ".join(str(arg) for arg in ty.type_args)
-        concrete_name = f"{ty.base_name}<{type_args_str}>"
-
-        # Check if it's a monomorphized enum
-        if concrete_name in validator.enum_table.by_name:
-            return validator.enum_table.by_name[concrete_name]
-
-        # Check if it's a monomorphized struct
-        if concrete_name in validator.struct_table.by_name:
-            return validator.struct_table.by_name[concrete_name]
-
-    return ty
+    resolver = TypeResolver(validator.struct_table.by_name, validator.enum_table.by_name)
+    return resolver.resolve_generic_type_ref(ty)
 
 
 def compare_resolved_types(validator: 'TypeValidator', actual: Type, expected: Type) -> bool:

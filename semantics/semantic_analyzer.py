@@ -10,6 +10,7 @@ from semantics.passes.types import TypeValidator
 from semantics.passes.borrow import BorrowChecker
 from semantics.units import UnitManager, Unit
 from semantics.typesys import BuiltinType
+from semantics.symbol_merger import SymbolTableMerger
 
 
 class SemanticAnalyzer:
@@ -29,11 +30,12 @@ class SemanticAnalyzer:
     Supports both single-file and multi-file compilation modes.
     """
 
-    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional['LibraryLinker'] = None) -> None:
+    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional['LibraryLinker'] = None, library_registry: Optional['LibraryRegistry'] = None) -> None:
         self.reporter = reporter
         self.filename = filename
         self.unit_manager = unit_manager
         self.library_linker = library_linker
+        self.library_registry = library_registry
         self.constants: Optional[ConstantTable] = None
         self.structs: Optional[StructTable] = None
         self.enums: Optional[EnumTable] = None
@@ -222,6 +224,8 @@ class SemanticAnalyzer:
         global_generic_extensions = GenericExtensionTable()
         global_generic_funcs = GenericFunctionTable()
 
+        symbol_merger = SymbolTableMerger()
+
         for unit in compilation_order:
             if unit.ast is None:
                 continue
@@ -230,8 +234,14 @@ class SemanticAnalyzer:
             unit_constants, unit_structs, unit_enums, unit_generic_enums, unit_generic_structs, unit_perks, unit_perk_impls, unit_funcs, unit_extensions, unit_generic_extensions, unit_generic_funcs = collector.run(unit.ast, unit_name=unit.name)
 
             # Merge unit symbols into global tables, considering visibility
-            self._merge_unit_symbols(unit, unit_constants, unit_structs, unit_enums, unit_generic_enums, unit_generic_structs, unit_perks, unit_perk_impls, unit_funcs, unit_extensions, unit_generic_extensions, unit_generic_funcs,
-                                   global_constants, global_structs, global_enums, global_generic_enums, global_generic_structs, global_perks, global_perk_impls, global_funcs, global_extensions, global_generic_extensions, global_generic_funcs)
+            symbol_merger.merge_all(
+                unit, unit_constants, unit_structs, unit_enums, unit_generic_enums,
+                unit_generic_structs, unit_perks, unit_perk_impls, unit_funcs,
+                unit_extensions, unit_generic_extensions, unit_generic_funcs,
+                global_constants, global_structs, global_enums, global_generic_enums,
+                global_generic_structs, global_perks, global_perk_impls, global_funcs,
+                global_extensions, global_generic_extensions, global_generic_funcs
+            )
 
         self.constants = global_constants
         self.structs = global_structs
@@ -247,7 +257,9 @@ class SemanticAnalyzer:
 
         # Register library types if any libraries are loaded
         # Order: structs first, then enums (may reference structs), then functions (may reference both)
-        if self.library_linker is not None:
+        if self.library_linker is not None and self.library_registry is None:
+            self._build_library_registry()
+        if self.library_registry is not None or self.library_linker is not None:
             self._register_library_structs()
             self._register_library_enums()
             self._register_library_functions()
@@ -406,26 +418,57 @@ class SemanticAnalyzer:
                 type_validator._validate_extension_method(extend_def)
 
 
+    def _build_library_registry(self) -> None:
+        """Build LibraryRegistry from loaded library manifests.
+
+        Creates a LibraryRegistry with pre-parsed type information,
+        eliminating duplicate parsing in codegen.
+        """
+        if self.library_linker is None:
+            return
+
+        from backend.library_registry import LibraryRegistry
+        from pathlib import Path
+
+        self.library_registry = LibraryRegistry()
+
+        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+            lib_path = Path(manifest.get("library_path", lib_name))
+            self.library_registry.register_library(
+                lib_path=lib_path,
+                manifest=manifest,
+                struct_table=self.structs.by_name if self.structs else {},
+                enum_table=self.enums.by_name if self.enums else {},
+            )
+
     def _register_library_functions(self) -> None:
         """Register functions from loaded libraries into the function table.
 
-        This enables type checking and call validation for library functions.
+        Uses pre-parsed data from LibraryRegistry if available, otherwise
+        falls back to manual parsing from library_linker manifests.
         """
+        if self.funcs is None:
+            return
+
+        if self.library_registry is not None:
+            for func_name, func_sig in self.library_registry.get_all_functions().items():
+                if func_name not in self.funcs.by_name:
+                    self.funcs.by_name[func_name] = func_sig
+                    self.funcs.order.append(func_name)
+            return
+
+        if self.library_linker is None:
+            return
+
         from semantics.passes.collect.functions import FuncSig, Param
         from semantics.type_resolution import parse_type_string
-
-        if self.library_linker is None or self.funcs is None:
-            return
 
         for lib_name, manifest in self.library_linker.loaded_libraries.items():
             for func_info in manifest.get("public_functions", []):
                 func_name = func_info["name"]
-
-                # Skip if already defined (local functions take precedence)
                 if func_name in self.funcs.by_name:
                     continue
 
-                # Parse parameters
                 params = []
                 for idx, p in enumerate(func_info.get("params", [])):
                     param_type = parse_type_string(
@@ -441,7 +484,6 @@ class SemanticAnalyzer:
                         index=idx
                     ))
 
-                # Parse return type
                 ret_type_str = func_info.get("return_type", "~")
                 ret_type = parse_type_string(
                     ret_type_str,
@@ -449,7 +491,6 @@ class SemanticAnalyzer:
                     self.enums.by_name if self.enums else {}
                 )
 
-                # Create function signature
                 func_sig = FuncSig(
                     name=func_name,
                     loc=None,
@@ -460,31 +501,36 @@ class SemanticAnalyzer:
                     is_public=True,
                 )
 
-                # Register in function table
                 self.funcs.by_name[func_name] = func_sig
                 self.funcs.order.append(func_name)
 
     def _register_library_structs(self) -> None:
         """Register struct definitions from loaded libraries.
 
-        This enables type checking for struct types defined in libraries.
+        Uses pre-parsed data from LibraryRegistry if available.
         Local struct definitions take precedence over library definitions.
         """
+        if self.structs is None:
+            return
+
+        if self.library_registry is not None:
+            for struct_name, struct_type in self.library_registry.get_all_structs().items():
+                if struct_name not in self.structs.by_name:
+                    self.structs.by_name[struct_name] = struct_type
+            return
+
+        if self.library_linker is None:
+            return
+
         from semantics.typesys import StructType
         from semantics.type_resolution import parse_type_string
-
-        if self.library_linker is None or self.structs is None:
-            return
 
         for lib_name, manifest in self.library_linker.loaded_libraries.items():
             for struct_info in manifest.get("structs", []):
                 struct_name = struct_info["name"]
-
-                # Skip if already defined (local structs take precedence)
                 if struct_name in self.structs.by_name:
                     continue
 
-                # StructType.fields expects tuple of (field_name, field_type) tuples
                 fields = []
                 for f in struct_info.get("fields", []):
                     field_type = parse_type_string(
@@ -500,26 +546,32 @@ class SemanticAnalyzer:
     def _register_library_enums(self) -> None:
         """Register enum definitions from loaded libraries.
 
-        This enables type checking for enum types defined in libraries.
+        Uses pre-parsed data from LibraryRegistry if available.
         Local enum definitions take precedence over library definitions.
         """
+        if self.enums is None:
+            return
+
+        if self.library_registry is not None:
+            for enum_name, enum_type in self.library_registry.get_all_enums().items():
+                if enum_name not in self.enums.by_name:
+                    self.enums.by_name[enum_name] = enum_type
+            return
+
+        if self.library_linker is None:
+            return
+
         from semantics.typesys import EnumType, EnumVariantInfo
         from semantics.type_resolution import parse_type_string
-
-        if self.library_linker is None or self.enums is None:
-            return
 
         for lib_name, manifest in self.library_linker.loaded_libraries.items():
             for enum_info in manifest.get("enums", []):
                 enum_name = enum_info["name"]
-
-                # Skip if already defined (local enums take precedence)
                 if enum_name in self.enums.by_name:
                     continue
 
                 variants = []
                 for v in enum_info.get("variants", []):
-                    # Manifest uses "data_type" (single type), not "types" (list)
                     assoc_types: tuple = ()
                     if v.get("has_data") and v.get("data_type"):
                         data_type = parse_type_string(
@@ -533,98 +585,6 @@ class SemanticAnalyzer:
 
                 enum_type = EnumType(name=enum_name, variants=tuple(variants))
                 self.enums.by_name[enum_name] = enum_type
-
-    def _merge_unit_symbols(self, unit: Unit, unit_constants: ConstantTable, unit_structs: StructTable, unit_enums: EnumTable,
-                          unit_generic_enums: GenericEnumTable, unit_generic_structs: GenericStructTable, unit_perks: PerkTable, unit_perk_impls: PerkImplementationTable, unit_funcs: FunctionTable, unit_extensions: ExtensionTable, unit_generic_extensions: 'GenericExtensionTable', unit_generic_funcs: GenericFunctionTable,
-                          global_constants: ConstantTable, global_structs: StructTable, global_enums: EnumTable,
-                          global_generic_enums: GenericEnumTable, global_generic_structs: GenericStructTable, global_perks: PerkTable, global_perk_impls: PerkImplementationTable, global_funcs: FunctionTable, global_extensions: ExtensionTable, global_generic_extensions: 'GenericExtensionTable', global_generic_funcs: GenericFunctionTable) -> None:
-        """Merge symbols from a unit into global tables, respecting visibility rules."""
-        # Merge constants (all constants are global by design)
-        for name, const_sig in unit_constants.by_name.items():
-            if name not in global_constants.by_name:
-                global_constants.by_name[name] = const_sig
-                global_constants.order.append(name)
-
-        # Merge structs (all structs are global - visible across units)
-        for name, struct_type in unit_structs.by_name.items():
-            if name not in global_structs.by_name:
-                global_structs.by_name[name] = struct_type
-                global_structs.order.append(name)
-
-        # Merge enums (all enums are global - visible across units)
-        for name, enum_type in unit_enums.by_name.items():
-            if name not in global_enums.by_name:
-                global_enums.by_name[name] = enum_type
-                global_enums.order.append(name)
-
-        # Merge generic enums (all generic enums are global - visible across units)
-        for name, generic_enum in unit_generic_enums.by_name.items():
-            if name not in global_generic_enums.by_name:
-                global_generic_enums.by_name[name] = generic_enum
-                global_generic_enums.order.append(name)
-
-        # Merge generic structs (all generic structs are global - visible across units)
-        for name, generic_struct in unit_generic_structs.by_name.items():
-            if name not in global_generic_structs.by_name:
-                global_generic_structs.by_name[name] = generic_struct
-                global_generic_structs.order.append(name)
-
-        # Merge perks (all perks are global - visible across units)
-        for name, perk_def in unit_perks.by_name.items():
-            if name not in global_perks.by_name:
-                global_perks.by_name[name] = perk_def
-                global_perks.order.append(name)
-
-        # Merge perk implementations (all perk implementations are global - visible across units)
-        for key, impl in unit_perk_impls.implementations.items():
-            if key not in global_perk_impls.implementations:
-                type_name, perk_name = key
-                global_perk_impls.implementations[key] = impl
-                # Update indexes
-                if type_name not in global_perk_impls.by_type:
-                    global_perk_impls.by_type[type_name] = set()
-                global_perk_impls.by_type[type_name].add(perk_name)
-                if perk_name not in global_perk_impls.by_perk:
-                    global_perk_impls.by_perk[perk_name] = set()
-                global_perk_impls.by_perk[perk_name].add(type_name)
-
-        # Merge functions (both public and private functions are tracked)
-        # Note: Visibility checking is done during type validation, not during merge
-        # All functions need to be in the global table so that we can check visibility
-        for name, func_sig in unit_funcs.by_name.items():
-            # Add function to global table (visibility is checked later during validation)
-            if name not in global_funcs.by_name:
-                global_funcs.by_name[name] = func_sig
-                global_funcs.order.append(name)
-
-        # Merge stdlib functions (registered from use <module> statements)
-        for key, stdlib_func in unit_funcs._stdlib_functions.items():
-            if key not in global_funcs._stdlib_functions:
-                global_funcs._stdlib_functions[key] = stdlib_func
-
-        # Merge extension methods (all extension methods are global)
-        for target_type, methods in unit_extensions.by_type.items():
-            if target_type not in global_extensions.by_type:
-                global_extensions.by_type[target_type] = {}
-            for method_name, method in methods.items():
-                # Extension methods are always global, but we should check for conflicts
-                if method_name not in global_extensions.by_type[target_type]:
-                    global_extensions.by_type[target_type][method_name] = method
-
-        # Merge generic extension methods (all generic extension methods are global)
-        for base_type_name, methods in unit_generic_extensions.by_type.items():
-            if base_type_name not in global_generic_extensions.by_type:
-                global_generic_extensions.by_type[base_type_name] = {}
-            for method_name, method in methods.items():
-                # Generic extension methods are always global
-                if method_name not in global_generic_extensions.by_type[base_type_name]:
-                    global_generic_extensions.by_type[base_type_name][method_name] = method
-
-        # Merge generic functions (all generic functions are global)
-        for name, generic_func in unit_generic_funcs.by_name.items():
-            if name not in global_generic_funcs.by_name:
-                global_generic_funcs.by_name[name] = generic_func
-                global_generic_funcs.order.append(name)
 
     def _check_main_function_args(self, program: Program) -> None:
         """

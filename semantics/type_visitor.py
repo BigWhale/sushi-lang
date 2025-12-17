@@ -473,6 +473,11 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         # Look up variable type from variable table
         var_type = self.type_validator.variable_types.get(node.id)
         if var_type is not None:
+            # Auto-dereference reference types - using a reference variable
+            # yields the referenced value, not the reference itself
+            from semantics.typesys import ReferenceType
+            if isinstance(var_type, ReferenceType):
+                return var_type.referenced_type
             return var_type
 
         # If not found in variables, check constants
@@ -683,11 +688,22 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         receiver_type = self.type_validator.infer_expression_type(node.receiver)
         from semantics.typesys import StructType, EnumType, ReferenceType
 
+
         # Unwrap ReferenceType to get the underlying type
         # Methods on &T are the same as methods on T
         actual_type = receiver_type
         if isinstance(receiver_type, ReferenceType):
             actual_type = receiver_type.referenced_type
+
+        # Handle GenericTypeRef by resolving to actual StructType
+        from semantics.generics.types import GenericTypeRef
+        if isinstance(actual_type, GenericTypeRef):
+            type_args_str = ", ".join(str(arg) for arg in actual_type.type_args)
+            type_name = f"{actual_type.base_name}<{type_args_str}>"
+            if type_name in self.type_validator.struct_table.by_name:
+                actual_type = self.type_validator.struct_table.by_name[type_name]
+            elif type_name in self.type_validator.enum_table.by_name:
+                actual_type = self.type_validator.enum_table.by_name[type_name]
 
         if actual_type is not None and isinstance(actual_type, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
             # Try the method type registry first (handles all built-in types)

@@ -20,8 +20,9 @@ import sys
 import json
 import os
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+from tqdm import tqdm
 
 
 def build_stdlib(project_root: Path, verbose: bool = False) -> bool:
@@ -262,9 +263,20 @@ def main():
 
     start_time = time.time()
 
-    # Run tests in parallel
+    # Run tests in parallel with progress bar
+    results = []
+    show_progress = not args.json and not args.verbose
     with ThreadPoolExecutor(max_workers=args.jobs) as executor:
-        results = list(executor.map(lambda f: run_single_test(f, bin_dir, args.verbose), test_files))
+        futures = {executor.submit(run_single_test, f, bin_dir, args.verbose): f for f in test_files}
+        if show_progress:
+            pbar = tqdm(total=len(test_files), desc="Running tests", unit="test",
+                       bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]")
+        for future in as_completed(futures):
+            results.append(future.result())
+            if show_progress:
+                pbar.update(1)
+        if show_progress:
+            pbar.close()
 
     end_time = time.time()
 

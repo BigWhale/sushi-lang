@@ -1,0 +1,39 @@
+# Test passing HashMap by reference to a function
+# Regression test for: HashMap cannot be passed to functions
+
+use <collections/strings>
+use <collections/hashmap>
+
+fn build_chain(&poke HashMap<string, string> chain, string[] words) ~:
+    let i32 i = 0
+    while (i < words.len() - 1):
+        let string current = words[i]
+        let string next_word = words[i + 1]
+        chain.insert(current, next_word)
+        i := i + 1
+    return Result.Ok(~)
+
+fn run_test() i32:
+    let string corpus = "hello world test foo bar"
+    let string[] words = corpus.split(" ")
+    let HashMap<string, string> chain = HashMap.new()
+
+    build_chain(&poke chain, words)
+
+    if (chain.len() != 4):
+        return Result.Err(StdError.Error)
+
+    chain.free()
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)
+
+
+
+
+
+
+
+

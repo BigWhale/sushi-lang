@@ -11,4 +11,4 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Run the compiler with the original working directory as an environment variable
-exec env SUSHI_CWD="$ORIGINAL_CWD" uv run --active python -m compiler "$@"
+exec env SUSHI_CWD="$ORIGINAL_CWD" uv run --frozen --active python -m compiler "$@"

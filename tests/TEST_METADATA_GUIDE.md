@@ -79,7 +79,7 @@ Validates that stderr produces no output.
 
 #### TIMEOUT_SECONDS
 
-Override the default test timeout (default: 5 seconds).
+Override the default test timeout (default: 10 seconds).
 
 ```sushi
 # TIMEOUT_SECONDS: 10

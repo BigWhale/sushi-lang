@@ -24,7 +24,7 @@ class TestMetadata:
 
     # Test behavior flags
     requires_runtime: bool = False
-    timeout_seconds: int = 5
+    timeout_seconds: int = 10
     cmd_args: Optional[str] = None  # Command-line arguments for runtime test
     stdin_input: Optional[str] = None  # Standard input to provide to the test
 

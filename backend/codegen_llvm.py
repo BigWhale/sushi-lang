@@ -112,6 +112,9 @@ class LLVMCodegen:
         # Library linker for custom library functions
         self.library_linker: Optional['LibraryLinker'] = None
 
+        # Library registry for pre-parsed library metadata
+        self.library_registry: Optional['LibraryRegistry'] = None
+
         # Monomorphized generic extension methods (for codegen)
         self.monomorphized_extensions: list['ExtendDef'] = []
 
@@ -259,6 +262,7 @@ class LLVMCodegen:
         main_expects_args: bool = False,
         monomorphized_extensions: list['ExtendDef'] = None,
         library_linker: 'LibraryLinker' = None,
+        library_registry: 'LibraryRegistry' = None,
     ) -> Path:
         """Complete multi-unit compilation pipeline from multiple ASTs to native executable.
 
@@ -273,6 +277,7 @@ class LLVMCodegen:
             main_expects_args: Whether main() expects command line args.
             monomorphized_extensions: List of monomorphized extension methods.
             library_linker: LibraryLinker instance with loaded libraries.
+            library_registry: LibraryRegistry with pre-parsed library metadata.
 
         Returns:
             Path to the generated executable.
@@ -285,6 +290,9 @@ class LLVMCodegen:
 
         # Store library linker for function declarations
         self.library_linker = library_linker
+
+        # Store library registry for pre-parsed metadata
+        self.library_registry = library_registry
 
         # Build high-level IR for all units
         mod_ir: ir.Module = self.build_module_multi_unit(units)
@@ -620,22 +628,29 @@ class LLVMCodegen:
         This creates LLVM function declarations (prototypes without bodies) for
         public functions from loaded libraries. The actual function bodies will
         be linked in from the library bitcode during the linking phase.
+
+        Uses pre-parsed FuncSig objects from LibraryRegistry when available,
+        eliminating duplicate manifest parsing.
         """
-        from semantics.type_resolution import parse_type_string
         from semantics.typesys import ResultType
 
+        # Use library_registry if available (pre-parsed metadata)
+        if self.library_registry is not None:
+            self._declare_library_functions_from_registry()
+            return
+
+        # Fallback to manual parsing from library_linker
         if self.library_linker is None:
             return
+
+        from semantics.type_resolution import parse_type_string
 
         for lib_name, manifest in self.library_linker.loaded_libraries.items():
             for func_info in manifest.get("public_functions", []):
                 func_name = func_info["name"]
-
-                # Skip if already declared (shouldn't happen)
                 if func_name in self.funcs:
                     continue
 
-                # Parse parameter types
                 param_types = []
                 for p in func_info.get("params", []):
                     param_type = parse_type_string(
@@ -645,7 +660,6 @@ class LLVMCodegen:
                     )
                     param_types.append(self.types.ll_type(param_type))
 
-                # Parse return type and wrap in Result
                 ret_type_str = func_info.get("return_type", "~")
                 ret_type = parse_type_string(
                     ret_type_str,
@@ -653,26 +667,46 @@ class LLVMCodegen:
                     self.enum_table.by_name if self.enum_table else {}
                 )
 
-                # Library functions return Result<T, StdError> (like regular functions)
                 std_error = self.enum_table.by_name.get("StdError") if self.enum_table else None
                 result_type = ResultType(ok_type=ret_type, err_type=std_error if std_error else ret_type)
                 ll_ret = self.types.ll_type(result_type)
 
-                # Declare function prototype
                 fnty = ir.FunctionType(ll_ret, param_types)
                 llvm_fn = ir.Function(self.module, fnty, name=func_name)
-                llvm_fn.linkage = 'external'  # Will be resolved at link time
+                llvm_fn.linkage = 'external'
 
-                # Set parameter names for debugging
                 for i, p in enumerate(func_info.get("params", [])):
                     if i < len(llvm_fn.args):
                         llvm_fn.args[i].name = p["name"]
 
-                # Register in codegen's function table
                 self.funcs[func_name] = llvm_fn
-
-                # Register return type for ?? operator handling
                 self.function_return_types[func_name] = result_type
+
+    def _declare_library_functions_from_registry(self) -> None:
+        """Declare library functions using pre-parsed FuncSig from registry."""
+        from semantics.typesys import ResultType
+
+        for func_name, func_sig in self.library_registry.get_all_functions().items():
+            if func_name in self.funcs:
+                continue
+
+            param_types = [self.types.ll_type(p.ty) for p in func_sig.params]
+            ret_type = func_sig.ret_type
+
+            std_error = self.enum_table.by_name.get("StdError") if self.enum_table else None
+            result_type = ResultType(ok_type=ret_type, err_type=std_error if std_error else ret_type)
+            ll_ret = self.types.ll_type(result_type)
+
+            fnty = ir.FunctionType(ll_ret, param_types)
+            llvm_fn = ir.Function(self.module, fnty, name=func_name)
+            llvm_fn.linkage = 'external'
+
+            for i, p in enumerate(func_sig.params):
+                if i < len(llvm_fn.args):
+                    llvm_fn.args[i].name = p.name
+
+            self.funcs[func_name] = llvm_fn
+            self.function_return_types[func_name] = result_type
 
     def _emit_global_constant(self, const: ConstDef) -> None:
         """Emit a global constant definition.

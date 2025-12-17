@@ -131,7 +131,7 @@ def validate_range_expression(validator: 'TypeValidator', expr: 'RangeExpr') -> 
 
 
 def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None:
-    """Validate ?? operator usage.
+    """Validate ?? operator usage and annotate AST with inferred types.
 
     Validates that:
     1. The inner expression is Result<T>, Maybe<T>, or another result-like enum (CE2507)
@@ -145,25 +145,49 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
     - Some(value) unwraps to value
     - None() propagates as Result.Err() to the enclosing function
 
+    After validation, annotates the TryExpr AST node with:
+    - inferred_inner_type: The EnumType of the inner expression
+    - inferred_unwrapped_type: The success type T
+    - inferred_success_tag: Variant index for Ok/Some
+    - inferred_error_type: The error type E (None for Maybe-like)
+    - inferred_error_tag: Variant index for Err (None for Maybe-like)
+    - inferred_func_return_type: The enclosing function's ResultType
+
     Args:
         validator: The TypeValidator instance.
-        expr: The TryExpr node to validate.
+        expr: The TryExpr node to validate and annotate.
     """
-    # Import TryExpr for type checking
-    from semantics.ast import TryExpr
-
     # First validate the inner expression
     validator.validate_expression(expr.expr)
 
     # Get the type of the inner expression
     inner_type = validator.infer_expression_type(expr.expr)
 
+    # Variables for AST annotation
+    unwrapped_type = None
+    success_tag = None
+    error_type = None
+    error_tag = None
+
     # Check if inner expression is a supported type (Result<T, E>, Maybe<T>, or result-like enum)
     if inner_type is not None:
         # ResultType is always valid for ??
         if isinstance(inner_type, ResultType):
-            # ResultType is a semantic type that is always valid for ?? operator
-            pass
+            # ResultType is a semantic type - convert to EnumType for backend
+            # The enum table should have the corresponding Result<T, E> enum
+            result_enum_name = f"Result<{inner_type.ok_type}, {inner_type.err_type}>"
+            if result_enum_name in validator.enum_table.by_name:
+                inner_type = validator.enum_table.by_name[result_enum_name]
+            # Extract variant info from ResultType
+            if isinstance(inner_type, EnumType):
+                ok_variant = inner_type.get_variant("Ok")
+                if ok_variant and ok_variant.associated_types:
+                    unwrapped_type = ok_variant.associated_types[0]
+                    success_tag = inner_type.get_variant_index("Ok")
+                err_variant = inner_type.get_variant("Err")
+                if err_variant and err_variant.associated_types:
+                    error_type = err_variant.associated_types[0]
+                    error_tag = inner_type.get_variant_index("Err")
         elif isinstance(inner_type, EnumType):
             # For EnumType, check if it matches Result-like or Maybe-like pattern
             # Check for Result-like pattern: Ok(value) and Err(...)
@@ -183,6 +207,20 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
                 # Not a supported enum pattern
                 er.emit(validator.reporter, er.ERR.CE2507, expr.loc, got=str(inner_type))
                 return
+
+            # Extract variant info for annotation
+            if is_result_like:
+                unwrapped_type = ok_variant.associated_types[0]
+                success_tag = inner_type.get_variant_index("Ok")
+                if err_variant.associated_types:
+                    error_type = err_variant.associated_types[0]
+                error_tag = inner_type.get_variant_index("Err")
+            else:  # is_maybe_like
+                unwrapped_type = some_variant.associated_types[0]
+                success_tag = inner_type.get_variant_index("Some")
+                # Maybe-like has no error variant with data
+                error_type = None
+                error_tag = None
         else:
             # Not an enum, ResultType, or MaybeType
             er.emit(validator.reporter, er.ERR.CE2507, expr.loc, got=str(inner_type))
@@ -212,33 +250,32 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
     # If function uses implicit Result syntax (not explicitly Result<T, E>),
     # construct the ResultType for validation
     from semantics.generics.types import GenericTypeRef
+    from semantics.type_resolution import TypeResolver
     if not isinstance(func_return_type, ResultType) and not (isinstance(func_return_type, GenericTypeRef) and func_return_type.base_name == "Result"):
         # Implicit syntax: fn foo() i32 | MyError or fn foo() i32 (defaults to StdError)
         # Construct ResultType(ok_type=i32, err_type=MyError or StdError)
-        from semantics.type_resolution import resolve_unknown_type
         if validator.current_function.err_type is not None:
             # Custom error type: fn foo() i32 | MyError
-            err_type = resolve_unknown_type(
-                validator.current_function.err_type,
+            resolver = TypeResolver(
                 validator.struct_table.by_name,
                 validator.enum_table.by_name
             )
+            err_type_resolved = resolver.resolve(validator.current_function.err_type)
         else:
             # Default to StdError: fn foo() i32 or fn main() i32
-            err_type = validator.enum_table.by_name.get("StdError")
-            if err_type is None:
+            err_type_resolved = validator.enum_table.by_name.get("StdError")
+            if err_type_resolved is None:
                 # StdError not found (shouldn't happen)
                 er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
                 return
-        func_return_type = ResultType(ok_type=func_return_type, err_type=err_type)
+        func_return_type = ResultType(ok_type=func_return_type, err_type=err_type_resolved)
     elif isinstance(func_return_type, GenericTypeRef) and func_return_type.base_name == "Result":
         # Explicit Result<T, E> syntax - resolve to ResultType
-        from semantics.type_resolution import resolve_unknown_type
-        func_return_type = resolve_unknown_type(
-            func_return_type,
+        resolver = TypeResolver(
             validator.struct_table.by_name,
             validator.enum_table.by_name
         )
+        func_return_type = resolver.resolve(func_return_type)
 
     # Check if function returns Result<T, E>
     # Note: When ?? is used with Maybe<T>, it still propagates as Result.Err()
@@ -269,7 +306,9 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
                         outer_err=str(outer_err_type))
                 return
 
-        # Error types match - valid
+        # Validation passed - annotate AST
+        _annotate_try_expr(expr, inner_type, unwrapped_type, success_tag,
+                          error_type, error_tag, func_return_type)
         return
 
     # GenericTypeRef with base_name "Result" is also valid (not yet resolved)
@@ -303,11 +342,49 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
                         outer_err=str(outer_err_type))
                 return
 
-        # Function returns Result<T, E> as GenericTypeRef and error types match - valid
+        # Validation passed - annotate AST (convert GenericTypeRef to ResultType)
+        resolved_func_return = ResultType(
+            ok_type=func_return_type.type_args[0],
+            err_type=func_return_type.type_args[1]
+        )
+        _annotate_try_expr(expr, inner_type, unwrapped_type, success_tag,
+                          error_type, error_tag, resolved_func_return)
         return
 
     # Function doesn't return Result<T, E>
     er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
+
+
+def _annotate_try_expr(
+    expr: 'TryExpr',
+    inner_type: 'EnumType',
+    unwrapped_type: 'Type',
+    success_tag: int,
+    error_type: 'Optional[Type]',
+    error_tag: 'Optional[int]',
+    func_return_type: 'ResultType'
+) -> None:
+    """Annotate TryExpr AST node with inferred type information.
+
+    These annotations are used by the backend to emit code without
+    re-inferring types, following the principle of separating semantic
+    analysis from code generation.
+
+    Args:
+        expr: The TryExpr node to annotate.
+        inner_type: The EnumType of the inner expression.
+        unwrapped_type: The success type T.
+        success_tag: Variant index for Ok/Some.
+        error_type: The error type E (None for Maybe-like).
+        error_tag: Variant index for Err (None for Maybe-like).
+        func_return_type: The enclosing function's ResultType.
+    """
+    expr.inferred_inner_type = inner_type
+    expr.inferred_unwrapped_type = unwrapped_type
+    expr.inferred_success_tag = success_tag
+    expr.inferred_error_type = error_type
+    expr.inferred_error_tag = error_tag
+    expr.inferred_func_return_type = func_return_type
 
 
 def validate_bitwise_operation(validator: 'TypeValidator', expr: BinaryOp) -> None:

@@ -237,15 +237,16 @@ class FunctionCollector:
         This is the core method that detects GenericTypeRef instances and
         records them in the instantiations set.
         """
-        from semantics.type_resolution import resolve_unknown_type, contains_unresolvable_unknown_type
+        # Use TypeResolver from expression_scanner for centralized resolution
+        resolver = self.expression_scanner._resolver
 
         if isinstance(ty, GenericTypeRef):
             # Found a generic type instantiation!
-            # Try to resolve any UnknownType instances to StructType or EnumType
-            resolved_type_args = self._resolve_type_args(ty.type_args)
+            # Use centralized resolver
+            resolved_type_args = resolver.resolve_type_args(ty.type_args)
 
             # Skip if any type argument is still UnknownType (can't be resolved)
-            if self._contains_unresolvable_unknown_type_in_tuple(resolved_type_args):
+            if resolver.contains_unresolvable_in_tuple(resolved_type_args):
                 return
 
             # Record it as (base_name, type_args) tuple with resolved types
@@ -292,52 +293,3 @@ class FunctionCollector:
                     self._collect_from_type(assoc_type)
 
             self.visited_types.discard(type_key)  # Allow revisiting from different paths
-
-    def _resolve_type_args(self, type_args: tuple["Type", ...]) -> tuple["Type", ...]:
-        """Resolve all UnknownType instances in type_args to StructType or EnumType if possible."""
-        from semantics.typesys import ArrayType, DynamicArrayType
-        from semantics.type_resolution import resolve_unknown_type
-
-        resolved_args = []
-        for arg in type_args:
-            resolved_arg = resolve_unknown_type(
-                arg,
-                self.expression_scanner.type_inferrer.struct_table or {},
-                self.expression_scanner.type_inferrer.enum_table or {}
-            )
-
-            # Recursively resolve nested types
-            if isinstance(resolved_arg, (ArrayType, DynamicArrayType)):
-                resolved_base = resolve_unknown_type(
-                    resolved_arg.base_type,
-                    self.expression_scanner.type_inferrer.struct_table or {},
-                    self.expression_scanner.type_inferrer.enum_table or {}
-                )
-                if isinstance(resolved_arg, ArrayType):
-                    resolved_arg = ArrayType(base_type=resolved_base, size=resolved_arg.size)
-                else:
-                    resolved_arg = DynamicArrayType(base_type=resolved_base)
-            elif isinstance(resolved_arg, GenericTypeRef):
-                resolved_nested_args = self._resolve_type_args(resolved_arg.type_args)
-                resolved_arg = GenericTypeRef(base_name=resolved_arg.base_name, type_args=resolved_nested_args)
-
-            resolved_args.append(resolved_arg)
-
-        return tuple(resolved_args)
-
-    def _contains_unresolvable_unknown_type_in_tuple(self, type_args: tuple["Type", ...]) -> bool:
-        """Check if any type argument tuple contains UnknownType that cannot be resolved.
-
-        This is a wrapper around the centralized contains_unresolvable_unknown_type
-        that handles tuple iteration.
-        """
-        from semantics.type_resolution import contains_unresolvable_unknown_type
-
-        for arg in type_args:
-            if contains_unresolvable_unknown_type(
-                arg,
-                self.expression_scanner.type_inferrer.struct_table or {},
-                self.expression_scanner.type_inferrer.enum_table or {}
-            ):
-                return True
-        return False

@@ -8,6 +8,16 @@ Own<T>, user-defined generics, etc.).
 
 Type propagation MUST happen BEFORE validation to enable proper type resolution.
 
+PUBLIC API:
+    propagate_types_to_value() - Unified entry point for all type propagation
+
+All other functions are private (prefixed with _) and should not be called
+directly. The public entry point handles all propagation cases:
+- Result<T, E> propagation to Result.Ok/Err
+- Generic enum propagation (Maybe<T>, Either<T, U>, user-defined)
+- Generic struct propagation (Own<T>, Box<T>, Pair<T, U>, user-defined)
+- Nested generic propagation (Result.Ok(Maybe.Some(x)))
+
 Extracted from validate_return_statement() and validate_let_statement() to
 eliminate duplication across statement validators.
 """
@@ -85,8 +95,8 @@ def _propagate_to_struct_args(validator: 'TypeValidator', node: Expr,
             propagate_types_to_value(validator, arg, field_type)
 
 
-def propagate_result_enum_type(validator: 'TypeValidator', node: Expr,
-                               result_type: ResultType) -> None:
+def _propagate_result_enum_type(validator: 'TypeValidator', node: Expr,
+                                result_type: ResultType) -> None:
     """Propagate ResultType to Result.Ok/Result.Err constructors.
 
     Sets resolved_enum_type on EnumConstructor or DotCall nodes to enable
@@ -125,8 +135,8 @@ def propagate_result_enum_type(validator: 'TypeValidator', node: Expr,
             _propagate_to_enum_args(validator, node, result_enum)
 
 
-def propagate_generic_enum_type(validator: 'TypeValidator', node: Expr,
-                                enum_type: EnumType) -> None:
+def _propagate_generic_enum_type(validator: 'TypeValidator', node: Expr,
+                                 enum_type: EnumType) -> None:
     """Propagate generic enum type (Maybe, Either, user-defined) to constructor.
 
     Sets resolved_enum_type on EnumConstructor or DotCall nodes.
@@ -158,8 +168,8 @@ def propagate_generic_enum_type(validator: 'TypeValidator', node: Expr,
         _propagate_to_enum_args(validator, node, enum_type)
 
 
-def propagate_nested_enum_type(validator: 'TypeValidator', ok_node: Expr,
-                               expected_ok_type: 'Type') -> None:
+def _propagate_nested_enum_type(validator: 'TypeValidator', ok_node: Expr,
+                                expected_ok_type: 'Type') -> None:
     """Propagate type to nested enum constructors inside Result.Ok().
 
     Handles cases like Result.Ok(Maybe.Some(42)) where the Maybe.Some
@@ -231,8 +241,8 @@ def propagate_nested_enum_type(validator: 'TypeValidator', ok_node: Expr,
         arg_constructor.resolved_enum_type = nested_expected_type
 
 
-def propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
-                                 struct_type: StructType) -> None:
+def _propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
+                                   struct_type: StructType) -> None:
     """Propagate generic struct type (Own, Box, Pair, user-defined) to constructor.
 
     Handles both DotCall constructors (Own.alloc) and Call constructors (Box).
@@ -273,8 +283,8 @@ def propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
             _propagate_to_struct_args(validator, node, struct_type)
 
 
-def propagate_nested_struct_type(validator: 'TypeValidator', ok_node: Expr,
-                                 expected_ok_type: 'Type') -> None:
+def _propagate_nested_struct_type(validator: 'TypeValidator', ok_node: Expr,
+                                  expected_ok_type: 'Type') -> None:
     """Propagate type to nested struct constructors inside Result.Ok().
 
     Handles cases like Result.Ok(Pair(1, 2)) where the Pair constructor
@@ -345,18 +355,18 @@ def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
     """
     # Handle Result<T, E> propagation
     if isinstance(expected_type, ResultType):
-        propagate_result_enum_type(validator, value_expr, expected_type)
+        _propagate_result_enum_type(validator, value_expr, expected_type)
 
         # Also propagate to nested enum constructors inside Result.Ok()
-        propagate_nested_enum_type(validator, value_expr, expected_type.ok_type)
+        _propagate_nested_enum_type(validator, value_expr, expected_type.ok_type)
 
         # Also propagate to nested struct constructors inside Result.Ok()
-        propagate_nested_struct_type(validator, value_expr, expected_type.ok_type)
+        _propagate_nested_struct_type(validator, value_expr, expected_type.ok_type)
 
     # Handle generic enum propagation (Maybe, Either, user-defined)
     elif isinstance(expected_type, EnumType):
-        propagate_generic_enum_type(validator, value_expr, expected_type)
+        _propagate_generic_enum_type(validator, value_expr, expected_type)
 
     # Handle generic struct propagation (Own, Box, Pair, user-defined)
     elif isinstance(expected_type, StructType):
-        propagate_generic_struct_type(validator, value_expr, expected_type)
+        _propagate_generic_struct_type(validator, value_expr, expected_type)

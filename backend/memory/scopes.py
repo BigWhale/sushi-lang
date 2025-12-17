@@ -4,12 +4,17 @@ Variable scope management with O(1) lookup and RAII cleanup.
 This module handles:
 - Lexical scope stack for nested blocks
 - Local variable allocation and tracking
-- O(1) variable lookup via flat cache
+- O(1) variable lookup via flat cache (primary storage)
 - Struct variable tracking for automatic cleanup
 - Move semantics tracking for ownership transfer
+
+Architecture:
+The flat caches are the primary storage for variable lookups.
+Scope tracking uses lightweight sets of variable names per scope level,
+avoiding duplicate storage of alloca/type information.
 """
 from __future__ import annotations
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional, Set, TYPE_CHECKING
 
 from llvmlite import ir
 from internals.errors import raise_internal_error
@@ -20,7 +25,11 @@ if TYPE_CHECKING:
 
 
 class ScopeManager:
-    """Manages variable scoping and alloca tracking for LLVM code generation."""
+    """Manages variable scoping and alloca tracking for LLVM code generation.
+
+    Uses flat caches as primary storage for O(1) lookups while maintaining
+    lightweight scope tracking for cleanup and shadowing support.
+    """
 
     def __init__(self, codegen: 'LLVMCodegen') -> None:
         """Initialize scope manager with reference to main codegen instance.
@@ -30,27 +39,27 @@ class ScopeManager:
         """
         self.codegen = codegen
 
-        # Scope stack for nested variable visibility
-        self.locals: List[Dict[str, ir.AllocaInstr]] = []
+        # Current scope depth (starts at 0 when first scope is pushed)
+        self._scope_depth: int = -1
 
-        # Parallel scope stack for semantic type information
-        self.semantic_types: List[Dict[str, 'Type']] = []
+        # Lightweight scope tracking: just variable names per scope level
+        # Used for cleanup and popping - no duplicate storage of allocas
+        self._scope_vars: List[Set[str]] = []
 
-        # Parallel scope stack for tracking struct variables that need cleanup
-        # Maps variable_name -> (StructType, alloca_instruction)
-        self.struct_variables: List[Dict[str, tuple['StructType', ir.AllocaInstr]]] = []
+        # Primary storage: flat caches for O(1) lookup
+        # Maps variable name -> stack of (scope_level, value) for shadowing support
+        self._locals: Dict[str, List[tuple[int, ir.AllocaInstr]]] = {}
+        self._types: Dict[str, List[tuple[int, 'Type']]] = {}
+
+        # Struct cleanup tracking: variable name -> (StructType, alloca)
+        # Only stores structs that need RAII cleanup (not duplicated per scope)
+        self._struct_cleanup: Dict[str, tuple['StructType', ir.AllocaInstr]] = {}
 
         # Track which structs have already been cleaned up (to avoid double cleanup)
-        self.cleaned_up_structs: set[str] = set()
+        self.cleaned_up_structs: Set[str] = set()
 
         # Track which struct variables have been moved (ownership transferred)
-        # Moved structs are excluded from RAII cleanup
-        self.moved_structs: set[str] = set()
-
-        # O(1) lookup cache: maps variable name to stack of (scope_level, alloca/type)
-        # Each variable name has a stack to handle shadowing - innermost scope is last
-        self._flat_locals_cache: Dict[str, List[tuple[int, ir.AllocaInstr]]] = {}
-        self._flat_types_cache: Dict[str, List[tuple[int, 'Type']]] = {}
+        self.moved_structs: Set[str] = set()
 
     def push_scope(self) -> None:
         """Push a new lexical scope onto the scope stack.
@@ -59,9 +68,8 @@ class ScopeManager:
         like if statements, while loops, and function bodies. Also pushes
         a corresponding scope for dynamic array tracking.
         """
-        self.locals.append({})
-        self.semantic_types.append({})
-        self.struct_variables.append({})
+        self._scope_depth += 1
+        self._scope_vars.append(set())
 
         # Also push dynamic array scope if the manager is initialized
         if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
@@ -79,45 +87,42 @@ class ScopeManager:
         Raises:
             IndexError: If there are no scopes to pop.
         """
+        if self._scope_depth < 0:
+            raise IndexError("No scopes to pop")
+
+        # Get variables in current scope
+        current_vars = self._scope_vars[self._scope_depth]
+
         # Clean up struct variables with dynamic array fields before popping scope
-        if self.struct_variables and hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
-            current_struct_scope = self.struct_variables[-1]
-            for var_name, (struct_type, alloca) in current_struct_scope.items():
-                # Skip cleanup if:
-                # 1. Already cleaned (e.g., by early return)
-                # 2. Marked as moved (ownership transferred via return)
-                if var_name not in self.cleaned_up_structs and not self.is_struct_moved(var_name):
-                    self.codegen.dynamic_arrays.emit_struct_field_cleanup(var_name, struct_type, alloca)
-                    self.cleaned_up_structs.add(var_name)
+        if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
+            for var_name in current_vars:
+                if var_name in self._struct_cleanup:
+                    # Skip cleanup if already cleaned or moved
+                    if var_name not in self.cleaned_up_structs and not self.is_struct_moved(var_name):
+                        struct_type, alloca = self._struct_cleanup[var_name]
+                        self.codegen.dynamic_arrays.emit_struct_field_cleanup(var_name, struct_type, alloca)
+                        self.cleaned_up_structs.add(var_name)
+                    # Remove from cleanup tracking when leaving scope
+                    del self._struct_cleanup[var_name]
 
-        # Remove variables from flat cache before popping
-        current_scope_level = len(self.locals) - 1
-        current_locals = self.locals[-1]
-        current_types = self.semantic_types[-1]
+        # Remove variables from flat caches
+        for var_name in current_vars:
+            # Remove from locals cache
+            if var_name in self._locals and self._locals[var_name]:
+                if self._locals[var_name][-1][0] == self._scope_depth:
+                    self._locals[var_name].pop()
+                    if not self._locals[var_name]:
+                        del self._locals[var_name]
 
-        # Remove entries from flat locals cache
-        for var_name in current_locals.keys():
-            if var_name in self._flat_locals_cache:
-                # Remove the last entry (should match current scope level)
-                if self._flat_locals_cache[var_name] and self._flat_locals_cache[var_name][-1][0] == current_scope_level:
-                    self._flat_locals_cache[var_name].pop()
-                    # Clean up empty lists
-                    if not self._flat_locals_cache[var_name]:
-                        del self._flat_locals_cache[var_name]
+            # Remove from types cache
+            if var_name in self._types and self._types[var_name]:
+                if self._types[var_name][-1][0] == self._scope_depth:
+                    self._types[var_name].pop()
+                    if not self._types[var_name]:
+                        del self._types[var_name]
 
-        # Remove entries from flat types cache
-        for var_name in current_types.keys():
-            if var_name in self._flat_types_cache:
-                # Remove the last entry (should match current scope level)
-                if self._flat_types_cache[var_name] and self._flat_types_cache[var_name][-1][0] == current_scope_level:
-                    self._flat_types_cache[var_name].pop()
-                    # Clean up empty lists
-                    if not self._flat_types_cache[var_name]:
-                        del self._flat_types_cache[var_name]
-
-        self.locals.pop()
-        self.semantic_types.pop()
-        self.struct_variables.pop()
+        self._scope_vars.pop()
+        self._scope_depth -= 1
 
         # Also pop dynamic array scope if the manager is initialized
         if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
@@ -139,10 +144,8 @@ class ScopeManager:
         Raises:
             KeyError: If the variable is not found in any scope.
         """
-        # O(1) lookup via flat cache
-        if name in self._flat_locals_cache and self._flat_locals_cache[name]:
-            # Return the most recent entry (innermost scope)
-            return self._flat_locals_cache[name][-1][1]
+        if name in self._locals and self._locals[name]:
+            return self._locals[name][-1][1]
         raise KeyError(f"undefined name: {name}")
 
     def find_semantic_type(self, name: str) -> Optional['Type']:
@@ -157,10 +160,8 @@ class ScopeManager:
         Returns:
             The semantic type of the variable, or None if not found.
         """
-        # O(1) lookup via flat cache
-        if name in self._flat_types_cache and self._flat_types_cache[name]:
-            # Return the most recent entry (innermost scope)
-            return self._flat_types_cache[name][-1][1]
+        if name in self._types and self._types[name]:
+            return self._types[name][-1][1]
         return None
 
     def create_local(self, name: str, ty: ir.Type, init: Optional[ir.Value] = None, semantic_ty: Optional['Type'] = None) -> ir.AllocaInstr:
@@ -180,30 +181,26 @@ class ScopeManager:
             The alloca instruction for the variable.
         """
         slot = self.entry_alloca(ty, name)
-        current_scope_level = len(self.locals) - 1
 
-        # Add to scope stack
-        self.locals[-1][name] = slot
+        # Track variable in current scope
+        self._scope_vars[self._scope_depth].add(name)
 
-        # Update flat cache for O(1) lookup
-        if name not in self._flat_locals_cache:
-            self._flat_locals_cache[name] = []
-        self._flat_locals_cache[name].append((current_scope_level, slot))
+        # Add to flat cache (primary storage)
+        if name not in self._locals:
+            self._locals[name] = []
+        self._locals[name].append((self._scope_depth, slot))
 
         if semantic_ty is not None:
-            self.semantic_types[-1][name] = semantic_ty
-
-            # Update flat cache for semantic types
-            if name not in self._flat_types_cache:
-                self._flat_types_cache[name] = []
-            self._flat_types_cache[name].append((current_scope_level, semantic_ty))
+            if name not in self._types:
+                self._types[name] = []
+            self._types[name].append((self._scope_depth, semantic_ty))
 
             # Track struct variables that need cleanup
             from semantics.typesys import StructType
             if isinstance(semantic_ty, StructType):
                 if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
                     if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
-                        self.struct_variables[-1][name] = (semantic_ty, slot)
+                        self._struct_cleanup[name] = (semantic_ty, slot)
 
         if init is not None:
             if self.codegen.builder is None:
@@ -229,35 +226,31 @@ class ScopeManager:
         Raises:
             KeyError: If a variable with the same name already exists in current scope.
         """
-        if name in self.locals[-1]:
+        # Check for duplicate in current scope
+        if name in self._scope_vars[self._scope_depth]:
             raise KeyError(f"duplicate local in same scope: {name}")
 
         slot = self.entry_alloca(ty, name)
-        current_scope_level = len(self.locals) - 1
 
-        # Add to scope stack
-        self.locals[-1][name] = slot
+        # Track variable in current scope
+        self._scope_vars[self._scope_depth].add(name)
 
-        # Update flat cache for O(1) lookup
-        if name not in self._flat_locals_cache:
-            self._flat_locals_cache[name] = []
-        self._flat_locals_cache[name].append((current_scope_level, slot))
+        # Add to flat cache (primary storage)
+        if name not in self._locals:
+            self._locals[name] = []
+        self._locals[name].append((self._scope_depth, slot))
 
         if semantic_ty is not None:
-            self.semantic_types[-1][name] = semantic_ty
-
-            # Update flat cache for semantic types
-            if name not in self._flat_types_cache:
-                self._flat_types_cache[name] = []
-            self._flat_types_cache[name].append((current_scope_level, semantic_ty))
+            if name not in self._types:
+                self._types[name] = []
+            self._types[name].append((self._scope_depth, semantic_ty))
 
             # Track struct variables that need cleanup
             from semantics.typesys import StructType
             if isinstance(semantic_ty, StructType):
                 if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
-                    needs_cleanup = self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty)
-                    if needs_cleanup:
-                        self.struct_variables[-1][name] = (semantic_ty, slot)
+                    if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
+                        self._struct_cleanup[name] = (semantic_ty, slot)
 
         return slot
 
@@ -317,17 +310,15 @@ class ScopeManager:
         Typically used when ending function processing or resetting the memory manager state.
         """
         # Pop all scopes to trigger cleanup
-        while len(self.locals) > 0:
+        while self._scope_depth >= 0:
             self.pop_scope()
 
-        # Clear all stacks (should already be empty after popping)
-        self.locals = []
-        self.semantic_types = []
-        self.struct_variables = []
-
-        # Clear flat caches (should already be empty after popping)
-        self._flat_locals_cache.clear()
-        self._flat_types_cache.clear()
+        # Clear all state (should already be empty after popping)
+        self._scope_vars = []
+        self._scope_depth = -1
+        self._locals.clear()
+        self._types.clear()
+        self._struct_cleanup.clear()
 
         # Clear cleanup tracking (function boundary)
         self.cleaned_up_structs.clear()
@@ -341,7 +332,7 @@ class ScopeManager:
         Returns:
             The number of nested scopes currently active.
         """
-        return len(self.locals)
+        return self._scope_depth + 1
 
     def get_current_scope_vars(self) -> Dict[str, ir.AllocaInstr]:
         """Get variables in the current (innermost) scope.
@@ -353,9 +344,13 @@ class ScopeManager:
         Raises:
             IndexError: If no scopes are active.
         """
-        if not self.locals:
+        if self._scope_depth < 0:
             raise IndexError("No active scopes")
-        return self.locals[-1].copy()
+        result = {}
+        for name in self._scope_vars[self._scope_depth]:
+            if name in self._locals and self._locals[name]:
+                result[name] = self._locals[name][-1][1]
+        return result
 
     def has_variable_in_scope(self, name: str, scope_level: int = -1) -> bool:
         """Check if a variable exists in a specific scope level.
@@ -371,7 +366,48 @@ class ScopeManager:
             IndexError: If the scope level is invalid.
         """
         if scope_level < 0:
-            scope_level = len(self.locals) + scope_level
-        if scope_level < 0 or scope_level >= len(self.locals):
+            scope_level = self._scope_depth + 1 + scope_level
+        if scope_level < 0 or scope_level > self._scope_depth:
             raise IndexError(f"Invalid scope level: {scope_level}")
-        return name in self.locals[scope_level]
+        return name in self._scope_vars[scope_level]
+
+    # Backward compatibility properties
+    @property
+    def locals(self) -> List[Dict[str, ir.AllocaInstr]]:
+        """Backward compatible access to locals (deprecated, use flat cache directly)."""
+        # Reconstruct scope-based view for legacy code
+        result = []
+        for level, scope_vars in enumerate(self._scope_vars):
+            scope_dict = {}
+            for name in scope_vars:
+                if name in self._locals:
+                    for lvl, alloca in self._locals[name]:
+                        if lvl == level:
+                            scope_dict[name] = alloca
+                            break
+            result.append(scope_dict)
+        return result
+
+    @property
+    def semantic_types(self) -> List[Dict[str, 'Type']]:
+        """Backward compatible access to semantic types (deprecated, use flat cache directly)."""
+        result = []
+        for level, scope_vars in enumerate(self._scope_vars):
+            scope_dict = {}
+            for name in scope_vars:
+                if name in self._types:
+                    for lvl, ty in self._types[name]:
+                        if lvl == level:
+                            scope_dict[name] = ty
+                            break
+            result.append(scope_dict)
+        return result
+
+    @property
+    def struct_variables(self) -> List[Dict[str, tuple['StructType', ir.AllocaInstr]]]:
+        """Backward compatible access to struct variables (deprecated)."""
+        # For backward compatibility, return single-level view
+        result = [{}] * (self._scope_depth + 1) if self._scope_depth >= 0 else []
+        if result:
+            result[-1] = dict(self._struct_cleanup)
+        return result

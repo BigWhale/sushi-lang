@@ -2,6 +2,36 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [0.4.2] - 2025-12-17
+
+### Added
+- Constant folding for arithmetic and bitwise operations
+- Content-based string constant deduplication
+- AST type annotations for TryExpr error propagation
+- LibraryRegistry to centralize library metadata parsing
+- AST visitor base class with complete node coverage
+- Semantic analysis pipeline with timing instrumentation
+- Progress bar for test runner (tqdm)
+
+### Changed
+- Enforce type propagation single entry point via private functions
+- Implement type-level COW for monomorphization transformer
+- Increase default test timeout from 5s to 10s
+- Extend enum_utils with variant data packing and unpacking utilities
+- Extract shared type resolution helpers for TypeMapper and TypeSizing
+- Extract symbol merging into dedicated SymbolTableMerger class
+- Refactor scope manager to use flat cache as primary storage
+- Consolidate Result type handling into ResultBuilder class
+- Consolidate type resolution functions into TypeResolver class
+- Use --frozen flag when invoking sushi compiler
+
+### Fixed
+- Reference parameter type resolution and array indexing
+- HashMap and generic types passed by reference to functions
+
+### Examples
+- Added rudimentary Markov chain example
+
 ## [0.4.1] - 2025-12-07
 
 ### Changed

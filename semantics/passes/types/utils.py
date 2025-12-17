@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, List, Optional
 
 from internals.report import Span
 from internals import errors as er
-from semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType, ResultType
+from semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType, ResultType, ReferenceType
 from semantics.type_resolution import resolve_unknown_type
 
 if TYPE_CHECKING:
@@ -113,6 +113,21 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
         # Blank type cannot be used for parameters
         if param.ty == BuiltinType.BLANK:
             er.emit(validator.reporter, er.ERR.CE2032, param.type_span)
+            continue
+
+        # Handle ReferenceType by registering the full reference type
+        # This is important for pattern matching and method resolution on reference params
+        if isinstance(param.ty, ReferenceType):
+            # Resolve the referenced type if it's an UnknownType
+            ref_type = param.ty.referenced_type
+            if isinstance(ref_type, UnknownType):
+                ref_type = resolve_unknown_type(ref_type, validator.struct_table.by_name, validator.enum_table.by_name)
+            # Create a new ReferenceType with the resolved inner type
+            resolved_ref = ReferenceType(
+                referenced_type=ref_type,
+                mutability=param.ty.mutability
+            )
+            validator.variable_types[param.name] = resolved_ref
             continue
 
         if isinstance(param.ty, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType, ResultType)):

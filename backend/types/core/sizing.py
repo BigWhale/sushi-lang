@@ -15,6 +15,7 @@ from semantics.typesys import (
 )
 from internals.errors import raise_internal_error
 from backend.constants import FAT_POINTER_SIZE_BYTES, DYNAMIC_ARRAY_SIZE_BYTES, ITERATOR_SIZE_BYTES, ENUM_TAG_SIZE_BYTES
+from backend.types.core.resolution import resolve_unknown_type, resolve_generic_type_ref, calculate_max_variant_size
 
 
 class TypeSizing:
@@ -45,14 +46,11 @@ class TypeSizing:
         Raises:
             InternalError: If the semantic type is not supported.
         """
-        # Resolve UnknownType first
+        # Resolve UnknownType first using shared helper
         if isinstance(semantic_type, UnknownType):
-            if semantic_type.name in self.struct_table.by_name:
-                semantic_type = self.struct_table.by_name[semantic_type.name]
-            elif semantic_type.name in self.enum_table.by_name:
-                semantic_type = self.enum_table.by_name[semantic_type.name]
-            else:
-                raise_internal_error("CE0020", type=semantic_type.name)
+            semantic_type = resolve_unknown_type(
+                semantic_type, self.struct_table.by_name, self.enum_table.by_name
+            )
 
         # Builtin types
         if isinstance(semantic_type, BuiltinType):
@@ -86,12 +84,9 @@ class TypeSizing:
                 return element_size * semantic_type.size
             case EnumType():
                 # Enum: {i32 tag, [max_size x i8] data}
-                # Calculate max variant size
-                max_variant_size = 0
-                for variant in semantic_type.variants:
-                    if variant.associated_types:
-                        variant_size = sum(self.get_type_size_bytes(t) for t in variant.associated_types)
-                        max_variant_size = max(max_variant_size, variant_size)
+                max_variant_size = calculate_max_variant_size(
+                    semantic_type, self.get_type_size_bytes
+                )
                 # Tag (4 bytes) + data array (max_variant_size, minimum 1)
                 return ENUM_TAG_SIZE_BYTES + max(max_variant_size, 1)
             case IteratorType():
@@ -113,30 +108,12 @@ class TypeSizing:
                 )
                 return self.get_type_size_bytes(result_enum)
             case _:
-                # Check if this is a GenericTypeRef (e.g., Maybe<i32>, Box<i32>, Result<T, E>)
-                from semantics.generics.types import GenericTypeRef
-                if isinstance(semantic_type, GenericTypeRef):
-                    # Special handling for Result<T, E> - convert to ResultType (already imported at top)
-                    if semantic_type.base_name == "Result" and len(semantic_type.type_args) == 2:
-                        result_type = ResultType(ok_type=semantic_type.type_args[0], err_type=semantic_type.type_args[1])
-                        return self.get_type_size_bytes(result_type)
-
-                    # Resolve GenericTypeRef to monomorphized enum or struct
-                    # Build type name: Maybe<i32> -> "Maybe<i32>", Box<i32> -> "Box<i32>"
-                    type_args_str = ", ".join(str(arg) for arg in semantic_type.type_args)
-                    concrete_name = f"{semantic_type.base_name}<{type_args_str}>"
-
-                    # Check if it's a monomorphized enum
-                    if concrete_name in self.enum_table.by_name:
-                        enum_type = self.enum_table.by_name[concrete_name]
-                        return self.get_type_size_bytes(enum_type)
-
-                    # Check if it's a monomorphized struct
-                    if concrete_name in self.struct_table.by_name:
-                        struct_type = self.struct_table.by_name[concrete_name]
-                        return self.get_type_size_bytes(struct_type)
-
-                    raise_internal_error("CE0045", type=concrete_name)
+                # Check if this is a GenericTypeRef using shared helper
+                resolved = resolve_generic_type_ref(
+                    semantic_type, self.struct_table.by_name, self.enum_table.by_name
+                )
+                if resolved is not None:
+                    return self.get_type_size_bytes(resolved)
                 raise_internal_error("CE0021", type=str(semantic_type))
 
     def _calculate_struct_size(self, struct_type: StructType) -> int:

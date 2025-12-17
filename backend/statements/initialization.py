@@ -82,21 +82,18 @@ def initialize_dynamic_array(
     alloca = codegen.dynamic_arrays.declare_dynamic_array(name, array_type)
 
     # Register the alloca with the regular memory manager for name resolution
-    current_scope_level = len(codegen.memory.locals) - 1
-    codegen.memory.locals[-1][name] = alloca
+    current_scope_level = codegen.memory._scope_depth
+    codegen.memory._scope_vars[current_scope_level].add(name)
 
     # Update flat cache for O(1) lookup
-    if name not in codegen.memory._flat_locals_cache:
-        codegen.memory._flat_locals_cache[name] = []
-    codegen.memory._flat_locals_cache[name].append((current_scope_level, alloca))
+    if name not in codegen.memory._locals:
+        codegen.memory._locals[name] = []
+    codegen.memory._locals[name].append((current_scope_level, alloca))
 
     # Also register semantic type for method dispatch (e.g., .iter())
-    codegen.memory.semantic_types[-1][name] = array_type
-
-    # Update flat cache for semantic types
-    if name not in codegen.memory._flat_types_cache:
-        codegen.memory._flat_types_cache[name] = []
-    codegen.memory._flat_types_cache[name].append((current_scope_level, array_type))
+    if name not in codegen.memory._types:
+        codegen.memory._types[name] = []
+    codegen.memory._types[name].append((current_scope_level, array_type))
 
     # Then initialize based on constructor type
     if isinstance(constructor_expr, DynamicArrayNew):

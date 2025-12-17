@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
 import time
 import os
+from tqdm import tqdm
 
 from test_metadata import parse_test_metadata, get_test_category, should_run_runtime_test, TestMetadata
 from run_tests import build_stdlib, build_test_helpers
@@ -111,12 +112,17 @@ class TestRunner:
 
         start_time = time.time()
 
-        # Run tests in parallel
+        # Run tests in parallel with progress bar
         results = {}
+        show_progress = not self.json_output and not self.verbose
         with ThreadPoolExecutor(max_workers=self.parallel_jobs) as executor:
             # Submit all test jobs
             future_to_test = {executor.submit(self.run_single_test, test_file): test_file.name
                              for test_file in test_files}
+
+            if show_progress:
+                pbar = tqdm(total=len(test_files), desc="Running tests", unit="test",
+                           bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]")
 
             # Collect results as they complete
             for future in as_completed(future_to_test):
@@ -136,6 +142,11 @@ class TestRunner:
                         compilation_message=f"Test runner exception: {e}",
                         skipped_runtime=True
                     )
+                if show_progress:
+                    pbar.update(1)
+
+            if show_progress:
+                pbar.close()
 
         end_time = time.time()
 

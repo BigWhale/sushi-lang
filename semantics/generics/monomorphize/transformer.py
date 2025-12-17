@@ -4,8 +4,8 @@ Type parameter substitution and AST transformation.
 
 This module handles the core substitution logic for monomorphization:
 - Recursively substituting type parameters with concrete types
-- Deep copying and transforming function bodies
-- Substituting types in statements and expressions
+- Deep copying function bodies for each monomorphized instance
+- Type-aware substitution with copy-on-write for immutable types
 """
 from __future__ import annotations
 from typing import Dict, TYPE_CHECKING
@@ -30,6 +30,10 @@ class TypeSubstitutor:
     - Nested generic types (Result<Maybe<T>> → Result<Maybe<i32>>)
     - Array and pointer types
     - Function bodies (statements and expressions)
+
+    Type objects use copy-on-write (types are immutable after substitution).
+    AST nodes (blocks, statements, expressions) are always copied because
+    they may be annotated with resolved types during later compiler passes.
     """
 
     def __init__(self, monomorphizer):
@@ -157,7 +161,11 @@ class TypeSubstitutor:
         return ty
 
     def substitute_body(self, body: 'Block', substitution: Dict[str, Type]) -> 'Block':
-        """Deep copy a function body and substitute type parameters.
+        """Substitute type parameters in a function body.
+
+        Always creates a new Block for each monomorphized function.
+        This is necessary because each concrete function needs its own AST
+        structure that may be annotated differently during later passes.
 
         Args:
             body: Original function body
@@ -166,19 +174,23 @@ class TypeSubstitutor:
         Returns:
             New Block with substituted types
         """
-        # Deep copy all statements
+        # Process all statements
         new_statements = []
         for stmt in body.statements:
             new_stmt = self.substitute_statement(stmt, substitution)
             new_statements.append(new_stmt)
 
-        # Copy the Block and update statements
+        # Always create a new Block for the monomorphized function
         result = copy.copy(body)
         result.statements = new_statements
         return result
 
     def substitute_statement(self, stmt, substitution: Dict[str, Type]):
         """Recursively substitute types in a statement.
+
+        Always creates a new statement for each monomorphized function.
+        This is necessary because expressions within statements may be
+        annotated with resolved types during later passes.
 
         Args:
             stmt: Statement AST node
@@ -211,7 +223,6 @@ class TypeSubstitutor:
         # If statement
         if isinstance(stmt, If):
             result = copy.copy(stmt)
-            # If has arms (list of condition-block pairs), substitute each condition
             result.arms = [
                 (self.substitute_expr(cond, substitution), self.substitute_body(block, substitution))
                 for cond, block in stmt.arms
@@ -270,25 +281,29 @@ class TypeSubstitutor:
             result.expr = self.substitute_expr(stmt.expr, substitution)
             return result
 
-        # Break/Continue - no substitution needed
+        # Break/Continue - copy for unique instances
         if isinstance(stmt, (Break, Continue)):
             return copy.copy(stmt)
 
-        # Unknown statement type - just copy
+        # Unknown statement type - fallback to deep copy (conservative)
         return copy.deepcopy(stmt)
 
     def substitute_expr(self, expr, substitution: Dict[str, Type]):
         """Recursively substitute types in an expression.
 
-        Most expressions don't contain type annotations, so this is mostly
-        a deep copy operation. The main exception is type casts (CastExpr).
+        Always creates new expression nodes because expressions may be annotated
+        with resolved types during later passes (e.g., resolved_enum_type).
+        Uses copy.copy for composite expressions and copy.deepcopy as fallback.
+
+        Type substitution only affects CastExpr nodes which have explicit type
+        annotations; other expressions are copied without modification.
 
         Args:
             expr: Expression AST node
             substitution: Type substitution map
 
         Returns:
-            New expression (usually a deep copy)
+            New expression with substituted types
         """
         from semantics.ast import CastExpr, TryExpr
 

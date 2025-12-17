@@ -27,6 +27,7 @@ from semantics.typesys import (
     PointerType,
 )
 from internals.errors import raise_internal_error
+from backend.types.core.resolution import resolve_unknown_type, resolve_generic_type_ref, calculate_max_variant_size
 
 
 class TypeMapper:
@@ -165,44 +166,28 @@ class TypeMapper:
                 return ir.PointerType(pointee_llvm_type)
             case UnknownType():
                 # UnknownType might be a struct or enum type that needs resolution
-                if t.name in self.struct_table.by_name:
-                    struct_type = self.struct_table.by_name[t.name]
-                    return self._get_struct_type(struct_type)
-                elif t.name in self.enum_table.by_name:
-                    enum_type = self.enum_table.by_name[t.name]
-                    return self._get_enum_type(enum_type)
-                raise_internal_error("CE0020", type=t.name)
+                resolved = resolve_unknown_type(
+                    t, self.struct_table.by_name, self.enum_table.by_name
+                )
+                if isinstance(resolved, StructType):
+                    return self._get_struct_type(resolved)
+                return self._get_enum_type(resolved)
             case _:
                 # Check if this is a TypeParameter (should not reach codegen)
                 from semantics.generics.types import TypeParameter
                 if isinstance(t, TypeParameter):
                     raise_internal_error("CE0045", type=t.name)
 
-                # Check if this is a GenericTypeRef
-                from semantics.generics.types import GenericTypeRef
-                if isinstance(t, GenericTypeRef):
-                    # Special handling for Result<T, E> - convert to ResultType and process
-                    if t.base_name == "Result" and len(t.type_args) == 2:
-                        # Create ResultType and recursively map it (ResultType already imported at top)
-                        result_type = ResultType(ok_type=t.type_args[0], err_type=t.type_args[1])
-                        return self.ll_type(result_type)
-
-                    # Resolve GenericTypeRef to monomorphized enum or struct type
-                    # Build type name: Maybe<i32> -> "Maybe<i32>", Box<i32> -> "Box<i32>"
-                    type_args_str = ", ".join(str(arg) for arg in t.type_args)
-                    concrete_name = f"{t.base_name}<{type_args_str}>"
-
-                    # Check if it's a monomorphized enum
-                    if concrete_name in self.enum_table.by_name:
-                        enum_type = self.enum_table.by_name[concrete_name]
-                        return self._get_enum_type(enum_type)
-
-                    # Check if it's a monomorphized struct
-                    if concrete_name in self.struct_table.by_name:
-                        struct_type = self.struct_table.by_name[concrete_name]
-                        return self._get_struct_type(struct_type)
-
-                    raise_internal_error("CE0045", type=concrete_name)
+                # Check if this is a GenericTypeRef using shared helper
+                resolved = resolve_generic_type_ref(
+                    t, self.struct_table.by_name, self.enum_table.by_name
+                )
+                if resolved is not None:
+                    if isinstance(resolved, ResultType):
+                        return self.ll_type(resolved)
+                    if isinstance(resolved, StructType):
+                        return self._get_struct_type(resolved)
+                    return self._get_enum_type(resolved)
                 raise_internal_error("CE0022", type=str(t))
 
     def _create_dynamic_array_struct_type(self, element_type: ir.Type) -> ir.LiteralStructType:
@@ -302,16 +287,10 @@ class TypeMapper:
         if cached is not None:
             return cached
 
-        # Calculate the maximum size needed for variant data
-        # Need to import get_type_size_bytes from sizing module
+        # Calculate the maximum size needed for variant data using shared helper
         from backend.types.core.sizing import TypeSizing
         sizing = TypeSizing(self.struct_table, self.enum_table)
-
-        max_size = 0
-        for variant in enum_type.variants:
-            if variant.associated_types:
-                variant_size = sum(sizing.get_type_size_bytes(t) for t in variant.associated_types)
-                max_size = max(max_size, variant_size)
+        max_size = calculate_max_variant_size(enum_type, sizing.get_type_size_bytes)
 
         # Create tagged union: {i32 tag, [max_size x i8] data}
         # Ensure minimum 1 byte for data array to match sizing.py calculation

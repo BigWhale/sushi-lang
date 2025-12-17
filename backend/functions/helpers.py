@@ -256,22 +256,20 @@ class FunctionHelpers:
             # rather than loading through it. This allows us to use the reference transparently.
             # When the parameter is used (in _emit_name), we'll load through this pointer.
             slot = self.codegen.memory.entry_alloca(arg.type, pname)
-            current_scope_level = len(self.codegen.memory.locals) - 1
-            self.codegen.memory.locals[-1][pname] = slot
+            current_scope_level = self.codegen.memory._scope_depth
+            self.codegen.memory._scope_vars[current_scope_level].add(pname)
 
             # Update flat cache for O(1) lookup
-            if pname not in self.codegen.memory._flat_locals_cache:
-                self.codegen.memory._flat_locals_cache[pname] = []
-            self.codegen.memory._flat_locals_cache[pname].append((current_scope_level, slot))
+            if pname not in self.codegen.memory._locals:
+                self.codegen.memory._locals[pname] = []
+            self.codegen.memory._locals[pname].append((current_scope_level, slot))
 
             # IMPORTANT: Register semantic type for pattern matching support
             if semantic_type is not None:
-                self.codegen.memory.semantic_types[-1][pname] = semantic_type
-
                 # Update flat cache for semantic types
-                if pname not in self.codegen.memory._flat_types_cache:
-                    self.codegen.memory._flat_types_cache[pname] = []
-                self.codegen.memory._flat_types_cache[pname].append((current_scope_level, semantic_type))
+                if pname not in self.codegen.memory._types:
+                    self.codegen.memory._types[pname] = []
+                self.codegen.memory._types[pname].append((current_scope_level, semantic_type))
 
             param_slots.append((arg, slot))
 

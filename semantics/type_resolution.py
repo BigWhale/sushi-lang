@@ -6,15 +6,178 @@ This module centralizes the logic for resolving UnknownType instances to their
 concrete types (StructType or EnumType) using struct and enum tables. This pattern
 appears in multiple places across the semantic analysis passes and is now unified here.
 
-Key Functions:
+Key Components:
+- TypeResolver: Centralized class for all type resolution operations
 - resolve_unknown_type(): Resolve a single UnknownType to StructType/EnumType
 - resolve_type_recursively(): Recursively resolve UnknownType in nested types (arrays, etc.)
 """
 from __future__ import annotations
-from typing import Dict, Optional, Set, TYPE_CHECKING
+from typing import Dict, Optional, Set, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from semantics.typesys import Type, StructType, EnumType
+
+
+class TypeResolver:
+    """Centralized type resolution with caching and validation.
+
+    This class consolidates all type resolution logic previously scattered across:
+    - semantics/type_resolution.py (resolve_unknown_type, resolve_type_recursively)
+    - semantics/passes/types/resolution.py (resolve_return_type_to_result, resolve_variable_type)
+    - semantics/passes/types/compatibility.py (resolve_generic_type_ref)
+    - semantics/generics/instantiate/expressions.py (_resolve_type_args)
+    - semantics/generics/instantiate/functions.py (_resolve_type_args)
+
+    Usage:
+        resolver = TypeResolver(struct_table, enum_table)
+        resolved = resolver.resolve(some_type)
+        resolved_args = resolver.resolve_type_args(type_args_tuple)
+    """
+
+    def __init__(
+        self,
+        struct_table: Dict[str, 'StructType'],
+        enum_table: Dict[str, 'EnumType']
+    ):
+        """Initialize resolver with type tables.
+
+        Args:
+            struct_table: Dictionary mapping struct names to StructType instances
+            enum_table: Dictionary mapping enum names to EnumType instances
+        """
+        self.struct_table = struct_table
+        self.enum_table = enum_table
+
+    def resolve(self, ty: 'Type') -> 'Type':
+        """Single entry point for all type resolution.
+
+        Resolves UnknownType and GenericTypeRef to concrete types.
+        Delegates to resolve_unknown_type for the actual resolution.
+
+        Args:
+            ty: The type to resolve
+
+        Returns:
+            Resolved concrete type or original if no resolution needed
+        """
+        return resolve_unknown_type(ty, self.struct_table, self.enum_table)
+
+    def resolve_recursively(self, ty: 'Type') -> 'Type':
+        """Recursively resolve UnknownType in nested type structures.
+
+        Delegates to resolve_type_recursively for the actual resolution.
+
+        Args:
+            ty: The type to resolve (may contain nested UnknownType instances)
+
+        Returns:
+            Resolved type with all nested UnknownType instances resolved
+        """
+        return resolve_type_recursively(ty, self.struct_table, self.enum_table)
+
+    def resolve_type_args(self, type_args: Tuple['Type', ...]) -> Tuple['Type', ...]:
+        """Resolve all UnknownType instances in type_args tuple.
+
+        This centralizes the logic previously duplicated in:
+        - semantics/generics/instantiate/expressions.py (_resolve_type_args)
+        - semantics/generics/instantiate/functions.py (_resolve_type_args)
+
+        Args:
+            type_args: Tuple of types to resolve
+
+        Returns:
+            Tuple of resolved types
+        """
+        from semantics.typesys import ArrayType, DynamicArrayType
+        from semantics.generics.types import GenericTypeRef
+
+        resolved_args = []
+        for arg in type_args:
+            resolved_arg = resolve_unknown_type(arg, self.struct_table, self.enum_table)
+
+            # Recursively resolve nested types
+            if isinstance(resolved_arg, (ArrayType, DynamicArrayType)):
+                resolved_base = resolve_unknown_type(
+                    resolved_arg.base_type,
+                    self.struct_table,
+                    self.enum_table
+                )
+                if isinstance(resolved_arg, ArrayType):
+                    resolved_arg = ArrayType(base_type=resolved_base, size=resolved_arg.size)
+                else:
+                    resolved_arg = DynamicArrayType(base_type=resolved_base)
+            elif isinstance(resolved_arg, GenericTypeRef):
+                resolved_nested_args = self.resolve_type_args(resolved_arg.type_args)
+                resolved_arg = GenericTypeRef(
+                    base_name=resolved_arg.base_name,
+                    type_args=resolved_nested_args
+                )
+
+            resolved_args.append(resolved_arg)
+
+        return tuple(resolved_args)
+
+    def resolve_generic_type_ref(self, ty: 'Type') -> 'Type':
+        """Resolve GenericTypeRef to monomorphized EnumType or StructType.
+
+        This centralizes the logic previously in:
+        - semantics/passes/types/compatibility.py (resolve_generic_type_ref)
+
+        Args:
+            ty: The type to resolve (may be GenericTypeRef or any other type)
+
+        Returns:
+            The resolved EnumType or StructType if ty is a GenericTypeRef
+            with a monomorphized version, otherwise returns ty unchanged.
+        """
+        from semantics.generics.types import GenericTypeRef
+
+        if isinstance(ty, GenericTypeRef):
+            # Build type name: Result<i32> -> "Result<i32>", Box<i32> -> "Box<i32>"
+            type_args_str = ", ".join(str(arg) for arg in ty.type_args)
+            concrete_name = f"{ty.base_name}<{type_args_str}>"
+
+            # Check if it's a monomorphized enum
+            if concrete_name in self.enum_table:
+                return self.enum_table[concrete_name]
+
+            # Check if it's a monomorphized struct
+            if concrete_name in self.struct_table:
+                return self.struct_table[concrete_name]
+
+        return ty
+
+    def contains_unresolvable(self, ty: 'Type', visited: Optional[Set[str]] = None) -> bool:
+        """Check if a type contains UnknownType that cannot be resolved.
+
+        Delegates to contains_unresolvable_unknown_type for the actual check.
+
+        Args:
+            ty: The type to check
+            visited: Set of visited type names to prevent infinite recursion
+
+        Returns:
+            True if there are unresolvable UnknownType instances
+        """
+        return contains_unresolvable_unknown_type(
+            ty, self.struct_table, self.enum_table, visited
+        )
+
+    def contains_unresolvable_in_tuple(self, type_args: Tuple['Type', ...]) -> bool:
+        """Check if any type in a tuple contains unresolvable UnknownType.
+
+        This is a convenience wrapper that handles tuple iteration.
+
+        Args:
+            type_args: Tuple of types to check
+
+        Returns:
+            True if any type contains unresolvable UnknownType
+        """
+        for arg in type_args:
+            if self.contains_unresolvable(arg):
+                return True
+        return False
 
 
 def resolve_unknown_type(

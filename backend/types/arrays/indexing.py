@@ -33,12 +33,19 @@ def emit_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, to_i1: bool = F
     Note:
         Emits runtime error RE2020 for out-of-bounds access on fixed arrays.
     """
+    from backend.expressions import type_utils
+
     builder = require_builder(codegen)
     # For array indexing, we need to get the array slot directly from the variable
     # rather than loading the array value
     if isinstance(expr.array, Name):
         # Get the array slot directly from memory manager
         array_slot = codegen.memory.find_local_slot(expr.array.id)
+
+        # For reference parameters, the slot contains a pointer to the actual array
+        # We need to load that pointer to get the array's address
+        if type_utils.is_reference_parameter(codegen, expr.array.id):
+            array_slot = codegen.builder.load(array_slot, name=f"{expr.array.id}_ref_ptr")
     else:
         # For more complex array expressions, emit normally
         array_value = codegen.expressions.emit_expr(expr.array)

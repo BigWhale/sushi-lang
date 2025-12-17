@@ -426,8 +426,24 @@ class TryExpr(Node):
     If the expression evaluates to Result.Err(), immediately returns Result.Err() from the enclosing function.
 
     Example: let file f = open("file.txt", FileMode.Read())??
+
+    AST Annotations (set during semantic analysis Pass 2):
+    - inferred_inner_type: The EnumType of the inner expression (Result<T,E>, Maybe<T>)
+    - inferred_unwrapped_type: The success type T (extracted from Ok(T) or Some(T))
+    - inferred_success_tag: Variant index for Ok/Some
+    - inferred_error_type: The error type E (for Result-like enums, None for Maybe)
+    - inferred_error_tag: Variant index for Err (for Result-like enums)
+    - inferred_func_return_type: The enclosing function's return type as ResultType
     """
     expr: "Expr"  # The expression being unwrapped (must be Result<T>)
+
+    # AST annotations set during semantic analysis (Pass 2)
+    inferred_inner_type: "Optional[Type]" = None
+    inferred_unwrapped_type: "Optional[Type]" = None
+    inferred_success_tag: "Optional[int]" = None
+    inferred_error_type: "Optional[Type]" = None
+    inferred_error_tag: "Optional[int]" = None
+    inferred_func_return_type: "Optional[Type]" = None
 
 @dataclass
 class RangeExpr(Node):
