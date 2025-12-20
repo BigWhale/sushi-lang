@@ -20,6 +20,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check for code changes
+        if: github.event_name == 'pull_request'
         uses: dorny/paths-filter@v3
         id: changes
         with:
@@ -33,13 +34,13 @@ jobs:
               - 'sushic'
 
       - name: Install system dependencies
-        if: steps.changes.outputs.code == 'true'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: |
           apt-get update
           apt-get install -y wget ca-certificates gnupg lsb-release curl build-essential cmake git jq
 
       - name: Install LLVM 20
-        if: steps.changes.outputs.code == 'true'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: |
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
           echo "deb http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee /etc/apt/sources.list.d/llvm.list
@@ -48,23 +49,23 @@ jobs:
           apt-get install -y llvm-20 llvm-20-dev
 
       - name: Install uv from Astral
-        if: steps.changes.outputs.code == 'true'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Install Python dependencies with uv
-        if: steps.changes.outputs.code == 'true'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           LLVM_CONFIG=/usr/bin/llvm-config-20 uv sync --extra dev
 
       - name: Make sushic executable
-        if: steps.changes.outputs.code == 'true'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: chmod +x sushic
 
       - name: Run tests
-        if: steps.changes.outputs.code == 'true'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         id: run_tests
         run: |
           export PATH="$HOME/.local/bin:$PATH"
@@ -73,7 +74,7 @@ jobs:
         continue-on-error: true
 
       - name: Generate badge data
-        if: steps.changes.outputs.code == 'true'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           uv run python << 'EOF'
@@ -152,7 +153,7 @@ jobs:
           EOF
 
       - name: Update Gist with badge data
-        if: steps.changes.outputs.code == 'true'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         env:
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
         run: |
@@ -199,7 +200,7 @@ jobs:
           echo "Successfully updated Gist with badge data"
 
       - name: Fail job if tests failed
-        if: steps.changes.outputs.code == 'true'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           FAILED=$(uv run python -c "import json; print(json.load(open('test_results.json'))['failed'])")
