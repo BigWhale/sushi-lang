@@ -37,7 +37,7 @@ jobs:
       - name: Install Python dependencies with uv
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          LLVM_CONFIG=/usr/bin/llvm-config-20 uv sync
+          LLVM_CONFIG=/usr/bin/llvm-config-20 uv sync --extra dev
 
       - name: Make sushic executable
         run: chmod +x sushic

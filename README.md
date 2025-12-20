@@ -296,20 +296,22 @@ learning:
 
 ```
 sushi/
-├── compiler.py              # Main compiler entry point
-├── grammar.lark             # Lark grammar specification
-├── semantics/               # Semantic analysis passes
-│   ├── passes/              # Multi-pass type checking
-│   └── generics/            # Generic type system
-├── backend/                 # LLVM code generation
-│   ├── expressions/         # Expression emission
-│   ├── statements/          # Statement emission
-│   └── types/               # Type-specific codegen
-├── stdlib/                  # Standard library
-│   ├── src/                 # Python IR generators
-│   └── dist/                # Precompiled .bc files
-├── tests/                   # Test suite
-└── docs/                    # Documentation
+├── sushi_lang/                  # Main package (installed to site-packages)
+│   ├── compiler.py              # Main compiler entry point
+│   ├── grammar.lark             # Lark grammar specification
+│   ├── semantics/               # Semantic analysis passes
+│   │   ├── passes/              # Multi-pass type checking
+│   │   └── generics/            # Generic type system
+│   ├── backend/                 # LLVM code generation
+│   │   ├── expressions/         # Expression emission
+│   │   ├── statements/          # Statement emission
+│   │   └── types/               # Type-specific codegen
+│   └── sushi_stdlib/            # Standard library
+│       ├── src/                 # Python IR generators
+│       └── dist/                # Precompiled .bc files
+├── sushic                       # Development wrapper script
+├── tests/                       # Test suite
+└── docs/                        # Documentation
 ```
 
 ## Philosophy
@@ -343,7 +345,7 @@ brew install llvm@20
 uv sync --dev
 
 # Build standard library
-uv run python stdlib/build.py
+uv run python sushi_lang/sushi_stdlib/build.py
 
 # Test installation
 ./sushic --help
@@ -370,6 +372,58 @@ uv run python tests/run_tests.py
 # Run with runtime validation
 uv run python tests/run_tests.py --enhanced
 ```
+
+## Building a Distribution Package
+
+Sushi can be packaged as a Python wheel for easy installation without
+requiring users to set up LLVM or clone the repository.
+
+### Building the Wheel
+
+```bash
+# Build the wheel (requires hatchling)
+uv build --wheel
+
+# The wheel will be created in dist/
+ls dist/
+# sushi_lang-0.4.2-py3-none-any.whl
+```
+
+### Installing from Wheel
+
+```bash
+# Install in a virtual environment
+pip install sushi_lang-0.4.2-py3-none-any.whl
+
+# The sushic command is now available
+sushic program.sushi
+```
+
+### What's Included
+
+The wheel contains:
+- The `sushi_lang` package with all compiler modules
+- Grammar file (sushi_lang/grammar.lark)
+- Standard library Python modules (sushi_lang/sushi_stdlib/src/, sushi_lang/sushi_stdlib/generics/)
+- Precompiled stdlib bitcode for macOS and Linux (sushi_lang/sushi_stdlib/dist/)
+
+Users don't need to install LLVM - the `llvmlite` dependency bundles
+LLVM binaries in its wheels.
+
+### Release Workflow
+
+GitHub releases automatically build wheels with fresh stdlib for both
+platforms via `.github/workflows/release.yml`. The workflow:
+
+1. Builds stdlib .bc files on Linux (Debian Trixie) and macOS
+2. Merges artifacts and builds the wheel
+3. Attaches the wheel to the GitHub release
+
+To create a release:
+1. Tag a commit: `git tag v0.4.2`
+2. Push the tag: `git push origin v0.4.2`
+3. Create a release on GitHub from the tag
+4. The workflow will automatically build and attach the wheel
 
 ## Contributing
 

@@ -2,6 +2,18 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [0.5.0] - 2025-12-20
+
+### Changed
+- Restructured package into single `sushi_lang` directory for cleaner pip installation
+- Updated all internal imports to use new package structure
+- Release workflow now extracts changelog for GitHub release notes automatically
+- Test workflow installs dev dependencies (tqdm) via `--extra dev`
+
+### Added
+- Package entry points (`__init__.py`, `__main__.py`) for proper Python module support
+- PACKAGE.md with packaging and release documentation
+
 ## [0.4.2] - 2025-12-17
 
 ### Added

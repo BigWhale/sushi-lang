@@ -1,6 +1,10 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "sushi-lang"
-version = "0.4.2"
+version = "0.5.0"
 description = "Sushi Lang — a small compiled language with Lark front-end and an llvmlite/LLVM backend."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -19,11 +23,10 @@ classifiers = [
 ]
 
 dependencies = [
-    "lark>=1.2,<1.3",
-    "llvmlite>=0.45,<0.46",
-    "colorama>=0.4",
-    "msgpack>=1.0",
-    "tqdm>=4.67,<5"
+  "lark>=1.2,<1.3",
+  "llvmlite>=0.45,<0.46",
+  "colorama>=0.4",
+  "msgpack>=1.0",
 ]
 
 [project.optional-dependencies]
@@ -32,9 +35,25 @@ dev = [
   "ruff>=0.13",
   "black>=25.9",
   "mypy>=1.18",
+  "tqdm>=4.67,<5"
 ]
 
+[project.scripts]
+sushic = "sushi_lang.compiler:main"
+
 [tool.hatch.build.targets.wheel]
-include = [
-  "grammar.lark",
+packages = ["sushi_lang"]
+exclude = [
+  "sushi_lang/sushi_stdlib/build.py",
 ]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "sushic",
+  "tests",
+  ".github",
+  "docs",
+  "editor-support",
+  "frontend",
+]
+

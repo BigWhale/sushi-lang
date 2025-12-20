@@ -1,0 +1,131 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-stdlib-linux:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie-slim
+
+    steps:
+      - name: Install git and checkout deps
+        run: |
+          apt-get update
+          apt-get install -y git ca-certificates
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          apt-get install -y wget curl build-essential cmake gnupg lsb-release
+
+      - name: Install LLVM 20
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          echo "deb http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee /etc/apt/sources.list.d/llvm.list
+          apt-get update
+          apt-get install -y llvm-20 llvm-20-dev
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Build stdlib
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          LLVM_CONFIG=/usr/bin/llvm-config-20 uv sync
+          uv run python sushi_lang/sushi_stdlib/build.py
+
+      - name: Upload Linux stdlib
+        uses: actions/upload-artifact@v4
+        with:
+          name: stdlib-linux
+          path: sushi_lang/sushi_stdlib/dist/linux/
+
+  build-stdlib-darwin:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install LLVM
+        run: brew install llvm@20
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
+
+      - name: Build stdlib
+        run: |
+          export LLVM_CONFIG=$(brew --prefix llvm@20)/bin/llvm-config
+          uv sync --python 3.13
+          uv run python sushi_lang/sushi_stdlib/build.py
+
+      - name: Upload Darwin stdlib
+        uses: actions/upload-artifact@v4
+        with:
+          name: stdlib-darwin
+          path: sushi_lang/sushi_stdlib/dist/darwin/
+
+  build-wheel:
+    needs: [build-stdlib-linux, build-stdlib-darwin]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Linux stdlib
+        uses: actions/download-artifact@v4
+        with:
+          name: stdlib-linux
+          path: sushi_lang/sushi_stdlib/dist/linux/
+
+      - name: Download Darwin stdlib
+        uses: actions/download-artifact@v4
+        with:
+          name: stdlib-darwin
+          path: sushi_lang/sushi_stdlib/dist/darwin/
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
+
+      - name: Build wheel
+        run: uv build --wheel --python 3.13
+
+      - name: Extract changelog for release
+        id: changelog
+        run: |
+          # Extract version from tag (e.g., v0.4.2 -> 0.4.2)
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          # Extract the section for this version from CHANGELOG.md
+          awk -v ver="$VERSION" '
+            /^## \[/ {
+              if (found) exit
+              if ($0 ~ "\\[" ver "\\]") found=1
+              next
+            }
+            found { print }
+          ' CHANGELOG.md > release_notes.md
+
+          echo "Extracted release notes for version $VERSION"
+          cat release_notes.md
+
+      - name: Upload wheel to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.whl
+          body_path: release_notes.md

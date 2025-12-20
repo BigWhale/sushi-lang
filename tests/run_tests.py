@@ -32,7 +32,7 @@ def build_stdlib(project_root: Path, verbose: bool = False) -> bool:
 
     try:
         result = subprocess.run(
-            [sys.executable, str(project_root / "stdlib" / "build.py")],
+            [sys.executable, str(project_root / "sushi_lang" / "sushi_stdlib" / "build.py")],
             cwd=project_root,
             capture_output=True,
             text=True,
