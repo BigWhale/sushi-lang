@@ -18,37 +18,28 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Check for code changes
+        uses: dorny/paths-filter@v3
         id: changes
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="${{ github.event.pull_request.base.sha }}"
-            HEAD="${{ github.event.pull_request.head.sha }}"
-          else
-            BASE="${{ github.event.before }}"
-            HEAD="${{ github.sha }}"
-          fi
-
-          # Check if any non-doc files changed
-          if git diff --name-only "$BASE" "$HEAD" | grep -qvE '^(docs/|.*\.md$|LICENSE$)'; then
-            echo "has_code_changes=true" >> $GITHUB_OUTPUT
-            echo "Code changes detected - running tests"
-          else
-            echo "has_code_changes=false" >> $GITHUB_OUTPUT
-            echo "Only documentation changes - skipping tests"
-          fi
+        with:
+          filters: |
+            code:
+              - 'sushi_lang/**'
+              - 'tests/**'
+              - '.github/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'sushic'
 
       - name: Install system dependencies
-        if: steps.changes.outputs.has_code_changes == 'true'
+        if: steps.changes.outputs.code == 'true'
         run: |
           apt-get update
           apt-get install -y wget ca-certificates gnupg lsb-release curl build-essential cmake git jq
 
       - name: Install LLVM 20
-        if: steps.changes.outputs.has_code_changes == 'true'
+        if: steps.changes.outputs.code == 'true'
         run: |
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
           echo "deb http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee /etc/apt/sources.list.d/llvm.list
@@ -57,23 +48,23 @@ jobs:
           apt-get install -y llvm-20 llvm-20-dev
 
       - name: Install uv from Astral
-        if: steps.changes.outputs.has_code_changes == 'true'
+        if: steps.changes.outputs.code == 'true'
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Install Python dependencies with uv
-        if: steps.changes.outputs.has_code_changes == 'true'
+        if: steps.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           LLVM_CONFIG=/usr/bin/llvm-config-20 uv sync --extra dev
 
       - name: Make sushic executable
-        if: steps.changes.outputs.has_code_changes == 'true'
+        if: steps.changes.outputs.code == 'true'
         run: chmod +x sushic
 
       - name: Run tests
-        if: steps.changes.outputs.has_code_changes == 'true'
+        if: steps.changes.outputs.code == 'true'
         id: run_tests
         run: |
           export PATH="$HOME/.local/bin:$PATH"
@@ -82,7 +73,7 @@ jobs:
         continue-on-error: true
 
       - name: Generate badge data
-        if: steps.changes.outputs.has_code_changes == 'true'
+        if: steps.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           uv run python << 'EOF'
@@ -161,7 +152,7 @@ jobs:
           EOF
 
       - name: Update Gist with badge data
-        if: steps.changes.outputs.has_code_changes == 'true'
+        if: steps.changes.outputs.code == 'true'
         env:
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
         run: |
@@ -208,7 +199,7 @@ jobs:
           echo "Successfully updated Gist with badge data"
 
       - name: Fail job if tests failed
-        if: steps.changes.outputs.has_code_changes == 'true'
+        if: steps.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           FAILED=$(uv run python -c "import json; print(json.load(open('test_results.json'))['failed'])")
