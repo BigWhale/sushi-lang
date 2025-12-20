@@ -25,9 +25,11 @@ advanced features and compiler internals.
 **Using and understanding the compiler:**
 - [Compiler Reference](compiler-reference.md) - CLI options, optimization levels, error codes
 - [Libraries](libraries.md) - Creating and linking precompiled libraries
+- [Library Format](library-format.md) - `.slib` binary format specification
 - [Internals: Architecture](internals/architecture.md) - Compiler pipeline and design
 - [Internals: Semantic Passes](internals/semantic-passes.md) - Pass-by-pass analysis details
 - [Internals: Backend](internals/backend.md) - LLVM code generation
+- [Internals: Stdlib Build](internals/stdlib-build.md) - Building the standard library
 
 ## Examples
 
