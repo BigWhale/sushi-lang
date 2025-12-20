@@ -233,10 +233,22 @@ def validate_result_realise_method_with_validator(
     # Validate the default argument's type matches T
     default_arg = call.args[0]
 
+    # Resolve GenericTypeRef to concrete type for propagation
+    # This handles cases like HashMap<i32, string> which may be stored as GenericTypeRef
+    from sushi_lang.semantics.type_resolution import TypeResolver
+    from sushi_lang.semantics.typesys import StructType
+    type_resolver = TypeResolver(validator.struct_table.by_name, validator.enum_table.by_name)
+    resolved_t_type = type_resolver.resolve_generic_type_ref(t_type)
+
     # Propagate expected type to DotCall nodes for generic enums (before validation)
     # This allows result.realise(Maybe.None()) to work correctly
-    from sushi_lang.semantics.passes.types.utils import propagate_enum_type_to_dotcall
-    propagate_enum_type_to_dotcall(validator, default_arg, t_type)
+    from sushi_lang.semantics.passes.types.utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
+    propagate_enum_type_to_dotcall(validator, default_arg, resolved_t_type)
+
+    # Propagate expected type to DotCall nodes for generic structs (before validation)
+    # This allows result.realise(HashMap.new()) to work correctly
+    if isinstance(resolved_t_type, StructType):
+        propagate_struct_type_to_dotcall(validator, default_arg, resolved_t_type)
 
     # First validate the argument expression
     validator.validate_expression(default_arg)
