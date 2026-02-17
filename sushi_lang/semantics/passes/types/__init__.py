@@ -285,11 +285,11 @@ class TypeValidator:
         validate_perk_implementation(impl, perk_def, self.reporter)
 
         # Check for conflicts with regular extension methods
-        # This extracts type name from impl.target_type for lookup
-        from sushi_lang.semantics.passes.types.perks import _get_type_name_from_impl
-        type_name = _get_type_name_from_impl(impl, self.struct_table, self.enum_table)
-        if type_name:
-            check_no_conflicts_with_regular_methods(type_name, impl, self.extension_table, self.reporter)
+        resolved_type = impl.target_type
+        if isinstance(impl.target_type, UnknownType):
+            resolved_type = resolve_unknown_type(impl.target_type, self.struct_table.by_name, self.enum_table.by_name)
+        if resolved_type is not None:
+            check_no_conflicts_with_regular_methods(resolved_type, impl, self.extension_table, self.reporter)
 
         # Validate each method in the implementation
         for method in impl.methods:

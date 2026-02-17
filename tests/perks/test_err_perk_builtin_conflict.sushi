@@ -1,0 +1,16 @@
+# Test CE4007: Perk method conflicts with regular extension on builtin type
+
+perk Describable:
+    fn describe() string
+
+# Regular extension method on i32
+extend i32 describe() string:
+    return ("number")
+
+# Perk implementation with same method name - should conflict (CE4007)
+extend i32 with Describable:
+    fn describe() string:
+        return ("number")
+
+fn main() i32:
+    return Result.Ok(0)

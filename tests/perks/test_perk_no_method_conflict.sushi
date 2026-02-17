@@ -1,0 +1,22 @@
+# Test that different method names between perk and extension don't conflict
+
+perk Displayable:
+    fn display() string
+
+struct Point:
+    i32 x
+    i32 y
+
+# Regular extension method with different name - no conflict
+extend Point describe() string:
+    return ("point")
+
+extend Point with Displayable:
+    fn display() string:
+        return ("point")
+
+fn main() i32:
+    let Point p = Point(10, 20)
+    p.describe()
+    p.display()
+    return Result.Ok(0)
