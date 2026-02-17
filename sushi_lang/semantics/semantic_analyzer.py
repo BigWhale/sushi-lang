@@ -517,6 +517,7 @@ class SemanticAnalyzer:
             for struct_name, struct_type in self.library_registry.get_all_structs().items():
                 if struct_name not in self.structs.by_name:
                     self.structs.by_name[struct_name] = struct_type
+                    self.structs.order.append(struct_name)
             return
 
         if self.library_linker is None:
@@ -542,6 +543,7 @@ class SemanticAnalyzer:
 
                 struct_type = StructType(name=struct_name, fields=tuple(fields))
                 self.structs.by_name[struct_name] = struct_type
+                self.structs.order.append(struct_name)
 
     def _register_library_enums(self) -> None:
         """Register enum definitions from loaded libraries.
@@ -556,6 +558,7 @@ class SemanticAnalyzer:
             for enum_name, enum_type in self.library_registry.get_all_enums().items():
                 if enum_name not in self.enums.by_name:
                     self.enums.by_name[enum_name] = enum_type
+                    self.enums.order.append(enum_name)
             return
 
         if self.library_linker is None:
@@ -585,6 +588,7 @@ class SemanticAnalyzer:
 
                 enum_type = EnumType(name=enum_name, variants=tuple(variants))
                 self.enums.by_name[enum_name] = enum_type
+                self.enums.order.append(enum_name)
 
     def _check_main_function_args(self, program: Program) -> None:
         """

@@ -1,0 +1,9 @@
+# Test type mismatch when passing wrong type to library function expecting Point
+# Should produce a type error (CE2006)
+
+use <lib/types_lib>
+
+fn main() i32:
+    let i32 sum = point_sum(42)??
+    println(sum)
+    return Result.Ok(0)
