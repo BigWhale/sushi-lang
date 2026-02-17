@@ -42,11 +42,11 @@ jobs:
       - name: Install LLVM 20
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: |
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-          echo "deb http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee /etc/apt/sources.list.d/llvm.list
-          echo "deb-src http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee -a /etc/apt/sources.list.d/llvm.list
-          apt-get update
-          apt-get install -y llvm-20 llvm-20-dev
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg allow-insecure=yes] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee /etc/apt/sources.list.d/llvm.list
+          echo "deb-src [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg allow-insecure=yes] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee -a /etc/apt/sources.list.d/llvm.list
+          apt-get update -o Acquire::AllowInsecureRepositories=true
+          apt-get install -y --allow-unauthenticated llvm-20 llvm-20-dev
 
       - name: Install uv from Astral
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
