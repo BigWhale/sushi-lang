@@ -7,7 +7,7 @@ Generic growable array with automatic memory management.
 ## Import
 
 ```sushi
-use <collections>
+# List<T> is built-in - no import required
 ```
 
 ## Overview

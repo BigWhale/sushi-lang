@@ -26,7 +26,7 @@ Phase 3: Borrow Checking
 
 ## Phase 0: Headers and Constants
 
-**File:** `semantics/passes/phase0.py`
+**Files:** `semantics/passes/collect/*.py`
 
 ### Purpose
 
@@ -63,7 +63,7 @@ Constants can only be literal values (no expressions).
 
 ## Phase 1: Scope and Variable Analysis
 
-**File:** `semantics/passes/phase1.py`
+**File:** `semantics/passes/scope.py`
 
 ### Purpose
 
@@ -115,7 +115,7 @@ fn example() i32:
 
 ## Phase 1.5: Generic Instantiation Collection
 
-**File:** `semantics/passes/phase1_5.py`
+**Files:** `semantics/generics/instantiate/*.py`
 
 ### Purpose
 
@@ -148,7 +148,7 @@ names.push("Alice")                   # Collect: List<string>.push
 
 ## Phase 1.6: Monomorphization
 
-**File:** `semantics/passes/phase1_6.py`
+**Files:** `semantics/generics/monomorphize/*.py`
 
 ### Purpose
 
@@ -237,7 +237,7 @@ string_len("hello")
 
 ## Phase 1.8: Hash Function Derivation
 
-**File:** `semantics/passes/phase1_8.py`
+**File:** `semantics/passes/hash_registration.py`
 
 ### Purpose
 
@@ -282,7 +282,7 @@ Nested arrays cannot be hashed (type system constraint).
 
 ## Phase 2: Type Validation
 
-**File:** `semantics/passes/phase2.py` + `semantics/passes/types/*.py`
+**Files:** `semantics/passes/types/*.py`
 
 ### Purpose
 

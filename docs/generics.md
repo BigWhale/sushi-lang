@@ -363,7 +363,7 @@ fn main() i32:
 ### Collections of Generics
 
 ```sushi
-use <collections>
+# List<T> is built-in, no import required
 
 fn main() i32:
     # List<Maybe<i32>>
@@ -505,7 +505,7 @@ For more information on perks, see the [Perks documentation](PERKS.md) in the re
 Putting it all together:
 
 ```sushi
-use <collections>
+# List<T> is built-in, no import required
 
 struct Pair<T, U>:
     T first

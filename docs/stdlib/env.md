@@ -7,7 +7,7 @@ System environment variable access and manipulation.
 ## Import
 
 ```sushi
-use <env>
+use <sys/env>
 ```
 
 ## Overview
@@ -34,7 +34,7 @@ fn getenv(string key) -> Maybe<string>
 **Example:**
 
 ```sushi
-use <env>
+use <sys/env>
 
 fn main() i32:
     match getenv("PATH"):
@@ -49,7 +49,7 @@ fn main() i32:
 **Common environment variables:**
 
 ```sushi
-use <env>
+use <sys/env>
 
 fn main() i32:
     # User information
@@ -92,7 +92,7 @@ fn setenv(string key, string value, i32 overwrite) -> Result<i32>
 **Example:**
 
 ```sushi
-use <env>
+use <sys/env>
 
 fn main() i32:
     # Set a custom environment variable
@@ -111,7 +111,7 @@ fn main() i32:
 **Using the overwrite parameter:**
 
 ```sushi
-use <env>
+use <sys/env>
 
 fn main() i32:
     # Set only if not already defined
@@ -138,7 +138,7 @@ Both functions integrate with Sushi's error handling system:
 Since `getenv` returns `Maybe<string>`, use pattern matching or `.realise()`:
 
 ```sushi
-use <env>
+use <sys/env>
 
 fn main() i32:
     # With pattern matching
@@ -163,7 +163,7 @@ fn main() i32:
 Since `setenv` returns `Result<i32>`, use error propagation or pattern matching:
 
 ```sushi
-use <env>
+use <sys/env>
 
 fn main() i32:
     # With error propagation (??)
@@ -204,7 +204,7 @@ Windows support is planned but not yet fully implemented.
 Environment variables may contain sensitive information:
 
 ```sushi
-use <env>
+use <sys/env>
 
 fn main() i32:
     # Be cautious when logging or displaying env vars
@@ -223,7 +223,7 @@ fn main() i32:
 Always validate environment variable values:
 
 ```sushi
-use <env>
+use <sys/env>
 
 fn is_valid_port(string port) bool:
     # Add validation logic
@@ -254,7 +254,7 @@ Invalid names will cause `setenv` to return `Result.Err()`.
 ## Example: Configuration from Environment
 
 ```sushi
-use <env>
+use <sys/env>
 
 struct Config:
     string host
@@ -290,7 +290,7 @@ fn main() i32:
 Test files can use `setenv` to set up test conditions:
 
 ```sushi
-use <env>
+use <sys/env>
 
 fn test_env_vars() i32:
     # Setup test environment

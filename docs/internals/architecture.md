@@ -13,7 +13,7 @@ Source Code (.sushi)
     ↓
 Lark Parser (grammar.lark)
     ↓
-AST Builder (semantics/ast_builder.py)
+AST Builder (semantics/ast_builder/)
     ↓
 Multi-Pass Semantic Analysis (semantics/passes/)
     ↓
@@ -33,29 +33,92 @@ sushi/
 ├── compiler.py                 # Main compiler entry point
 ├── grammar.lark                # Lark grammar specification
 ├── semantics/
-│   ├── ast_builder.py         # Lark → Typed AST
+│   ├── ast_builder/           # Modular AST construction (40 modules)
+│   │   ├── builder.py         # Main orchestrator
+│   │   ├── declarations/      # Top-level constructs
+│   │   │   ├── functions.py   # Function parsing
+│   │   │   ├── structs.py     # Struct definitions
+│   │   │   ├── enums.py       # Enum definitions
+│   │   │   ├── extensions.py  # Extension methods
+│   │   │   ├── perks.py       # Perk definitions
+│   │   │   ├── constants.py   # Constant declarations
+│   │   │   └── imports.py     # Use statements
+│   │   ├── expressions/       # Expression parsing
+│   │   │   ├── parser.py      # Main expression parser
+│   │   │   ├── literals.py    # Literal values
+│   │   │   ├── operators.py   # Binary/unary operators
+│   │   │   ├── calls.py       # Function calls
+│   │   │   ├── members.py     # Member access
+│   │   │   ├── arrays.py      # Array expressions
+│   │   │   └── chains.py      # Chained expressions
+│   │   ├── statements/        # Statement parsing
+│   │   │   ├── parser.py      # Main statement parser
+│   │   │   ├── variables.py   # Let/rebind
+│   │   │   ├── returns.py     # Return statements
+│   │   │   ├── control_flow.py # If/elif/else
+│   │   │   ├── loops.py       # While/foreach
+│   │   │   ├── matching.py    # Pattern matching
+│   │   │   ├── blocks.py      # Block statements
+│   │   │   ├── flow.py        # Break/continue
+│   │   │   ├── io.py          # Print/println
+│   │   │   └── calls.py       # Statement-level calls
+│   │   ├── types/             # Type parsing
+│   │   │   ├── parser.py      # Main type parser
+│   │   │   ├── generics.py    # Generic types
+│   │   │   ├── arrays.py      # Array types
+│   │   │   ├── references.py  # Reference types
+│   │   │   └── user_defined.py # Struct/enum types
+│   │   ├── utils/             # Shared utilities
+│   │   │   ├── tree_navigation.py # Tree traversal
+│   │   │   ├── expression_discovery.py # Expression finding
+│   │   │   └── string_processing.py # String handling
+│   │   └── exceptions.py      # Custom parsing exceptions
 │   ├── passes/
-│   │   ├── phase0.py          # Constants, function headers, generics
-│   │   ├── phase1.py          # Scope and variable analysis
-│   │   ├── phase1_5.py        # Generic instantiation collection
-│   │   ├── phase1_6.py        # Monomorphization
-│   │   ├── phase1_7.py        # AST transformation, type resolution
-│   │   ├── phase1_8.py        # Hash function auto-derivation
-│   │   ├── phase2.py          # Type validation
-│   │   ├── phase3.py          # Borrow checking
-│   │   ├── pass_error_reporter.py  # Helper for error reporting
-│   │   └── types/             # Modular type validation
+│   │   ├── collect/           # Phase 0: Collection passes
+│   │   │   ├── constants.py   # Constant definitions
+│   │   │   ├── functions.py   # Function signatures
+│   │   │   ├── structs.py     # Struct definitions
+│   │   │   ├── enums.py       # Enum definitions
+│   │   │   ├── perks.py       # Perk definitions
+│   │   │   └── utils.py       # Collection utilities
+│   │   ├── scope.py           # Phase 1: Scope and variable analysis
+│   │   ├── ast_transform.py   # Phase 1.7: AST transformation
+│   │   ├── const_eval.py      # Constant evaluation
+│   │   ├── hash_registration.py # Phase 1.8: Hash function derivation
+│   │   ├── borrow.py          # Phase 3: Borrow checking
+│   │   └── types/             # Phase 2: Modular type validation
 │   │       ├── utils.py       # Type utilities
 │   │       ├── inference.py   # Type inference
 │   │       ├── compatibility.py # Type compatibility
+│   │       ├── propagation.py # Type propagation
+│   │       ├── resolution.py  # Type resolution
+│   │       ├── result_validation.py # Result handling
+│   │       ├── field_matcher.py # Struct field matching
+│   │       ├── perks.py       # Perk constraint checking
 │   │       ├── expressions.py # Expression type checking
 │   │       ├── matching.py    # Pattern match validation
-│   │       ├── calls.py       # Function call validation
-│   │       └── statements.py  # Statement validation
+│   │       ├── statements.py  # Statement validation
+│   │       └── calls/         # Function call validation
+│   │           ├── user_defined.py # User function calls
+│   │           ├── methods.py # Method calls
+│   │           ├── structs.py # Struct construction
+│   │           ├── enums.py   # Enum construction
+│   │           └── generics.py # Generic calls
 │   └── generics/
-│       ├── collector.py       # Collect generic instantiations
-│       ├── monomorphize.py    # Generic → Concrete types
-│       └── instantiator.py    # Type substitution
+│       ├── types.py           # Generic type definitions
+│       ├── name_mangling.py   # Name mangling for monomorphization
+│       ├── constraints.py     # Perk constraints
+│       ├── instantiate/       # Phase 1.5: Instantiation collection
+│       │   ├── types.py       # Type instantiations
+│       │   ├── functions.py   # Function instantiations
+│       │   └── expressions.py # Expression instantiations
+│       ├── monomorphize/      # Phase 1.6: Monomorphization
+│       │   ├── transformer.py # Main transformer
+│       │   ├── types.py       # Type monomorphization
+│       │   └── functions.py   # Function monomorphization
+│       └── providers/         # Generic type providers
+│           ├── interface.py   # Provider protocol
+│           └── registry.py    # Provider registry
 ├── backend/
 │   ├── codegen_llvm.py        # Main LLVM orchestrator
 │   ├── interfaces.py          # Protocol definitions (reduces circular deps)
@@ -172,13 +235,17 @@ sushi/
     │   │       └── binary.py
     │   ├── math/              # Math operations
     │   │   └── operations.py
-    │   ├── time.py            # Time/sleep functions
-    │   ├── env.py             # Environment variables
+    │   ├── time/              # Time/sleep functions
+    │   ├── random/            # Random number generation
+    │   │   └── generators.py
+    │   ├── sys/               # System modules
+    │   │   ├── env/           # Environment variables
+    │   │   └── process/       # Process control
     │   └── _platform/         # Platform-specific implementations
     │       ├── __init__.py    # get_platform_module() helper
-    │       └── darwin/        # macOS implementations
-    │           ├── env.py
-    │           └── time.py
+    │       ├── posix/         # POSIX implementations
+    │       ├── darwin/        # macOS implementations
+    │       └── linux/         # Linux implementations
     └── dist/                  # Platform-organized precompiled .bc files
         ├── darwin/            # macOS
         │   ├── collections/strings.bc
@@ -186,7 +253,10 @@ sushi/
         │   ├── io/files.bc
         │   ├── math.bc
         │   ├── time.bc
-        │   └── env.bc
+        │   ├── random.bc
+        │   └── sys/
+        │       ├── env.bc
+        │       └── process.bc
         └── linux/             # Linux (similar structure)
 ```
 
@@ -194,12 +264,14 @@ sushi/
 
 ### Phase 0: Headers and Constants
 
-**File:** `semantics/passes/phase0.py`
+**Files:** `semantics/passes/collect/*.py`
 
 **Responsibilities:**
-- Parse constant definitions
-- Collect function signatures
-- Register generic type definitions
+- Parse constant definitions (`collect/constants.py`)
+- Collect function signatures (`collect/functions.py`)
+- Register struct definitions (`collect/structs.py`)
+- Register enum definitions (`collect/enums.py`)
+- Register perk definitions (`collect/perks.py`)
 - Build initial symbol table
 
 **Output:**
@@ -209,7 +281,7 @@ sushi/
 
 ### Phase 1: Scope and Variables
 
-**File:** `semantics/passes/phase1.py`
+**File:** `semantics/passes/scope.py`
 
 **Responsibilities:**
 - Variable declaration and usage tracking
@@ -224,11 +296,12 @@ sushi/
 
 ### Phase 1.5: Generic Instantiation Collection
 
-**File:** `semantics/passes/phase1_5.py`
+**Files:** `semantics/generics/instantiate/*.py`
 
 **Responsibilities:**
-- Detect generic method calls
-- Infer type arguments from usage
+- Detect generic type usage (`instantiate/types.py`)
+- Detect generic method calls (`instantiate/functions.py`)
+- Infer type arguments from usage (`instantiate/expressions.py`)
 - Collect all required instantiations
 
 **Example:**
@@ -239,12 +312,12 @@ nums.push(42)                     # Collect: List<i32>.push
 
 ### Phase 1.6: Monomorphization
 
-**File:** `semantics/passes/phase1_6.py`
+**Files:** `semantics/generics/monomorphize/*.py`
 
 **Responsibilities:**
-- Substitute generic type parameters
-- Create concrete types from generic definitions
-- Generate specialized function/method instances
+- Substitute generic type parameters (`monomorphize/transformer.py`)
+- Create concrete types from generic definitions (`monomorphize/types.py`)
+- Generate specialized function/method instances (`monomorphize/functions.py`)
 
 **Example:**
 ```
@@ -273,7 +346,7 @@ array_len(arr)  # Function call
 
 ### Phase 1.8: Hash Function Derivation
 
-**File:** `semantics/passes/phase1_8.py`
+**File:** `semantics/passes/hash_registration.py`
 
 **Responsibilities:**
 - Auto-generate `.hash()` methods for all types
@@ -288,7 +361,7 @@ array_len(arr)  # Function call
 
 ### Phase 2: Type Validation
 
-**File:** `semantics/passes/phase2.py` + `semantics/passes/types/`
+**Files:** `semantics/passes/types/*.py`
 
 **Responsibilities:**
 - Type checking all expressions
@@ -297,10 +370,17 @@ array_len(arr)  # Function call
 - Type compatibility checking
 
 **Modular type checking:**
+- `types/resolution.py` - Type resolution (Result<T> wrapping)
+- `types/propagation.py` - Type propagation to constructors
+- `types/result_validation.py` - Result.Ok/Err validation
 - `types/expressions.py` - Expression type checking
 - `types/statements.py` - Statement validation
-- `types/calls.py` - Function call validation
+- `types/calls/*.py` - Function call validation (user-defined, methods, structs, enums, generics)
 - `types/matching.py` - Pattern match validation
+- `types/compatibility.py` - Type compatibility checking
+- `types/inference.py` - Type inference
+- `types/perks.py` - Perk constraint checking
+- `types/field_matcher.py` - Struct field matching
 
 ### Phase 3: Borrow Checking
 

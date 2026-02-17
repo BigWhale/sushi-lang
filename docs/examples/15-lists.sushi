@@ -5,7 +5,7 @@
 # as you add elements. It uses exponential growth (2x) for amortized O(1) push.
 #
 # Key concepts covered:
-# - Importing standard library modules with use <collections>
+# - List<T> is a built-in generic (no import required)
 # - Generic collection List<T> with compile-time type specialization
 # - List creation: .new() and .with_capacity()
 # - Adding elements: .push() with automatic resizing
