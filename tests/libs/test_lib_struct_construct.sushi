@@ -1,0 +1,14 @@
+# Test direct construction of library-exported struct
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "15"
+
+use <lib/types_lib>
+
+fn main() i32:
+    let Point p = Point(5, 10)
+    let Result<i32, StdError> r = point_sum(p)
+    match r:
+        Result.Ok(sum) -> println(sum)
+        Result.Err(_) -> return Result.Ok(1)
+
+    return Result.Ok(0)

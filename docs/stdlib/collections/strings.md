@@ -23,8 +23,6 @@ println("{s1.pad_left(20, '*')}")    # Single quotes for args
 
 ```sushi
 use <collections/strings>
-# Or import the entire collections module:
-use <collections>
 ```
 
 ## Overview

@@ -1,0 +1,27 @@
+# Test pattern matching on library-exported enum
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "got red"
+# EXPECT_STDOUT_CONTAINS: "got blue 42"
+
+use <lib/types_lib>
+
+fn main() i32:
+    let Result<Color, StdError> r1 = get_color(0)
+    match r1:
+        Result.Ok(c1) ->
+            match c1:
+                Color.Red -> println("got red")
+                Color.Green -> println("got green")
+                Color.Blue(intensity) -> println("got blue {intensity}")
+        Result.Err(_) -> return Result.Ok(1)
+
+    let Result<Color, StdError> r2 = get_color(42)
+    match r2:
+        Result.Ok(c2) ->
+            match c2:
+                Color.Red -> println("got red")
+                Color.Green -> println("got green")
+                Color.Blue(intensity) -> println("got blue {intensity}")
+        Result.Err(_) -> return Result.Ok(1)
+
+    return Result.Ok(0)

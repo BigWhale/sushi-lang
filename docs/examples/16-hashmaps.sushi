@@ -1,7 +1,7 @@
 # Example 16: HashMap<K, V>
 #
-# This example demonstrates Sushi's HashMap<K, V> generic hash table, a built-in
-# type that provides O(1) average-case lookups using open addressing with linear
+# This example demonstrates Sushi's HashMap<K, V> generic hash table, which
+# provides O(1) average-case lookups using open addressing with linear
 # probing and automatic resizing at 0.75 load factor.
 #
 # Key concepts covered:
@@ -16,6 +16,8 @@
 #
 # Note: HashMap uses power-of-two capacities for fast indexing via bitwise AND.
 # Keys must implement .hash() -> u64 (auto-derived for primitives, strings, structs, enums).
+
+use <collections/hashmap>
 
 fn main() i32:
     # Create empty hash map with default capacity

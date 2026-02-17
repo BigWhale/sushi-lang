@@ -40,6 +40,7 @@ class LibCStdio:
         self.fclose: ir.Function
         self.fgets: ir.Function
         self.fgetc: ir.Function
+        self.getline: ir.Function
         self.fputc: ir.Function
         self.fread: ir.Function
         self.fwrite: ir.Function
@@ -62,6 +63,7 @@ class LibCStdio:
         self._declare_fclose()
         self._declare_fgets()
         self._declare_fgetc()
+        self._declare_getline()
         self._declare_fputc()
         self._declare_fread()
         self._declare_fwrite()
@@ -137,6 +139,20 @@ class LibCStdio:
             self.fgets = existing
         else:
             self.fgets = ir.Function(self.codegen.module, fn_ty, name="fgets")
+
+    def _declare_getline(self) -> None:
+        """Declare getline: ssize_t getline(char **lineptr, size_t *n, FILE *stream)"""
+        i8_ptr = self.codegen.i8.as_pointer()
+        size_t_ty = ir.IntType(INT64_BIT_WIDTH)
+        fn_ty = ir.FunctionType(
+            size_t_ty,
+            [i8_ptr.as_pointer(), size_t_ty.as_pointer(), i8_ptr]
+        )
+        existing = self.codegen.module.globals.get("getline")
+        if isinstance(existing, ir.Function):
+            self.getline = existing
+        else:
+            self.getline = ir.Function(self.codegen.module, fn_ty, name="getline")
 
     def _declare_fgetc(self) -> None:
         """Declare fgetc: int fgetc(FILE* stream)"""

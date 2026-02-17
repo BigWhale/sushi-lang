@@ -1,0 +1,34 @@
+# types_lib.sushi - Library that exports struct and enum types
+#
+# Tests that library-defined types can be used by consumers
+# for type checking, construction, and pattern matching.
+
+struct Point:
+    i32 x
+    i32 y
+
+enum Color:
+    Red
+    Green
+    Blue(i32)
+
+public fn make_point(i32 x, i32 y) Point:
+    let Point p = Point(x, y)
+    return Result.Ok(p)
+
+public fn point_sum(Point p) i32:
+    return Result.Ok(p.x + p.y)
+
+public fn get_color(i32 code) Color:
+    if (code == 0):
+        return Result.Ok(Color.Red)
+    if (code == 1):
+        return Result.Ok(Color.Green)
+    return Result.Ok(Color.Blue(code))
+
+public fn color_name(Color c) string:
+    match c:
+        Color.Red -> return Result.Ok("red")
+        Color.Green -> return Result.Ok("green")
+        Color.Blue(intensity) -> return Result.Ok("blue {intensity}")
+    return Result.Ok("unknown")

@@ -142,10 +142,12 @@ class LibraryManifestGenerator:
 
                 variants = []
                 for variant in enum_def.variants:
+                    has_data = len(variant.associated_types) > 0
+                    data_type = self._type_to_string(variant.associated_types[0]) if has_data else None
                     variants.append({
                         "name": variant.name,
-                        "has_data": variant.data_type is not None,
-                        "data_type": self._type_to_string(variant.data_type) if variant.data_type else None,
+                        "has_data": has_data,
+                        "data_type": data_type,
                     })
 
                 enums.append({

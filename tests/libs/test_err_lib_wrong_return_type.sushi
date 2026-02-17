@@ -1,0 +1,9 @@
+# Test type mismatch when assigning library return type to wrong variable type
+# Should produce a type error
+
+use <lib/types_lib>
+
+fn main() i32:
+    let i32 p = make_point(10, 20)??
+    println(p)
+    return Result.Ok(0)

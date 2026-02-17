@@ -1,6 +1,8 @@
 # Perks
 
-Perks are Sushi's trait/interface system that enables generic constraints and polymorphic behavior through static dispatch. They allow you to define behavior that multiple types can implement, enabling compile-time generic programming with zero runtime overhead.
+Perks are Sushi's trait/interface system that enables generic constraints and polymorphic behavior through static 
+dispatch. They allow you to define behavior that multiple types can implement, enabling compile-time generic 
+programming with zero runtime overhead.
 
 ## Table of Contents
 

@@ -251,6 +251,17 @@ def declare_fprintf(module: ir.Module) -> ir.Function:
 # File I/O
 # ==============================================================================
 
+def declare_getline(module: ir.Module) -> ir.Function:
+    """Declare getline: ssize_t getline(char **lineptr, size_t *n, FILE *stream)"""
+    if "getline" in module.globals:
+        return module.globals["getline"]
+
+    i64 = ir.IntType(64)
+    i8_ptr = ir.IntType(8).as_pointer()
+    fn_ty = ir.FunctionType(i64, [i8_ptr.as_pointer(), i64.as_pointer(), i8_ptr])
+    return ir.Function(module, fn_ty, name="getline")
+
+
 def declare_fgets(module: ir.Module) -> ir.Function:
     """Declare fgets: char* fgets(char* str, int n, FILE* stream)"""
     if "fgets" in module.globals:

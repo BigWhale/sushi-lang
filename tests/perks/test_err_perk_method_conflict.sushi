@@ -1,0 +1,20 @@
+# Test CE4007: Perk method conflicts with regular extension method
+
+perk Displayable:
+    fn display() string
+
+struct Point:
+    i32 x
+    i32 y
+
+# Regular extension method
+extend Point display() string:
+    return ("point")
+
+# Perk implementation with same method name - should conflict (CE4007)
+extend Point with Displayable:
+    fn display() string:
+        return ("point")
+
+fn main() i32:
+    return Result.Ok(0)

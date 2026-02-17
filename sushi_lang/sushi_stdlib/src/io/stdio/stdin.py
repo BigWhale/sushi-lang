@@ -9,8 +9,8 @@ This module implements IR generation for stdin methods:
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.libc_declarations import (
-    declare_malloc, declare_strlen, declare_realloc,
-    declare_fgets, declare_fgetc, declare_fread
+    declare_malloc, declare_free, declare_realloc,
+    declare_getline, declare_fgetc, declare_fread
 )
 from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer
 from sushi_lang.sushi_stdlib.src.error_emission import emit_runtime_error
@@ -20,16 +20,17 @@ from sushi_lang.sushi_stdlib.src.io.stdio.common import declare_stdin_handle
 def generate_stdin_readln(module: ir.Module) -> None:
     """Generate IR for stdin.readln() -> string.
 
-    Reads one line from stdin, removes trailing newline if present.
-    Returns fat pointer struct {i8*, i32}.
+    Uses POSIX getline() to read one line from stdin with dynamic buffer allocation.
+    Handles lines of any length, strips trailing \\n and \\r\\n.
+    Returns empty string on EOF.
 
     Args:
         module: The LLVM module to add the function to.
     """
     # Declare external functions
     malloc_fn = declare_malloc(module)
-    fgets_fn = declare_fgets(module)
-    strlen_fn = declare_strlen(module)
+    free_fn = declare_free(module)
+    getline_fn = declare_getline(module)
     stdin_handle = declare_stdin_handle(module)
 
     # Function signature: {ptr, i32} @sushi_stdin_readln()
@@ -39,71 +40,113 @@ def generate_stdin_readln(module: ir.Module) -> None:
     fn_ty = ir.FunctionType(string_struct_ty, [])
     func = ir.Function(module, fn_ty, name="sushi_stdin_readln")
 
-    # Create entry block
     block = func.append_basic_block(name="entry")
     builder = ir.IRBuilder(block)
 
-    # Common types
     i8 = ir.IntType(8)
     i32 = ir.IntType(32)
     i64 = ir.IntType(64)
 
-    # Allocate buffer for the line (1024 bytes)
-    buffer_size_i64 = ir.Constant(i64, 1024)
-    buffer_size_i32 = ir.Constant(i32, 1024)
-    buffer = builder.call(malloc_fn, [buffer_size_i64], name="buffer")
+    # Allocate lineptr (i8*) and n (i64) for getline
+    lineptr_alloca = builder.alloca(i8_ptr, name="lineptr")
+    n_alloca = builder.alloca(i64, name="n")
+    builder.store(ir.Constant(i8_ptr, None), lineptr_alloca)
+    builder.store(ir.Constant(i64, 0), n_alloca)
 
-    # Call fgets(buffer, 1024, stdin)
+    # Call getline(&lineptr, &n, stdin) -> ssize_t (i64)
     stdin_ptr = builder.load(stdin_handle, name="stdin")
-    result = builder.call(fgets_fn, [buffer, buffer_size_i32, stdin_ptr], name="fgets_result")
+    bytes_read = builder.call(getline_fn, [lineptr_alloca, n_alloca, stdin_ptr], name="bytes_read")
 
-    # Get string length
-    strlen_result = builder.call(strlen_fn, [buffer], name="len")
+    # Check if getline returned < 0 (EOF or error)
+    zero_i64 = ir.Constant(i64, 0)
+    is_eof = builder.icmp_signed('<', bytes_read, zero_i64, name="is_eof")
 
-    # Check if length > 0
-    zero = ir.Constant(i32, 0)
-    has_chars = builder.icmp_signed('>', strlen_result, zero, name="has_chars")
+    eof_block = builder.append_basic_block(name="eof")
+    success_block = builder.append_basic_block(name="success")
+    builder.cbranch(is_eof, eof_block, success_block)
 
-    # Variable to store final length (may be decremented if newline is removed)
+    # EOF path: free getline buffer (if any), return empty string
+    builder.position_at_end(eof_block)
+    eof_lineptr = builder.load(lineptr_alloca, name="eof_lineptr")
+    eof_null = ir.Constant(i8_ptr, None)
+    eof_has_buf = builder.icmp_unsigned('!=', eof_lineptr, eof_null, name="eof_has_buf")
+    eof_free_block = builder.append_basic_block(name="eof_free")
+    eof_ret_block = builder.append_basic_block(name="eof_ret")
+    builder.cbranch(eof_has_buf, eof_free_block, eof_ret_block)
+
+    builder.position_at_end(eof_free_block)
+    builder.call(free_fn, [eof_lineptr])
+    builder.branch(eof_ret_block)
+
+    builder.position_at_end(eof_ret_block)
+    # Return empty string: malloc(1) with null terminator
+    empty_buf = builder.call(malloc_fn, [ir.Constant(i64, 1)], name="empty_buf")
+    builder.store(ir.Constant(i8, 0), empty_buf)
+    from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer_with_len
+    empty_fat = cstr_to_fat_pointer_with_len(builder, empty_buf, ir.Constant(i32, 0))
+    builder.ret(empty_fat)
+
+    # Success path: strip trailing \n and \r\n
+    builder.position_at_end(success_block)
+    lineptr_val = builder.load(lineptr_alloca, name="lineptr")
+
+    # Truncate bytes_read from i64 to i32 for the fat pointer length
+    len_i32 = builder.trunc(bytes_read, i32, name="len_i32")
     final_length = builder.alloca(i32, name="final_length")
-    builder.store(strlen_result, final_length)
+    builder.store(len_i32, final_length)
 
-    # Create blocks for newline removal
+    # Check for trailing \n
+    one_i32 = ir.Constant(i32, 1)
+    has_chars = builder.icmp_signed('>', len_i32, ir.Constant(i32, 0), name="has_chars")
+
     check_newline_block = builder.append_basic_block(name="check_newline")
     exit_block = builder.append_basic_block(name="exit")
-
     builder.cbranch(has_chars, check_newline_block, exit_block)
 
-    # Check and remove trailing newline
+    # Check and strip trailing \n
     builder.position_at_end(check_newline_block)
-
-    # Get pointer to last character (length - 1)
-    one = ir.Constant(i32, 1)
-    last_index = builder.sub(strlen_result, one, name="last_index")
-    last_char_ptr = builder.gep(buffer, [last_index], name="last_char_ptr")
-    last_char = builder.load(last_char_ptr, name="last_char")
-
-    # Check if it's a newline
+    cur_len = builder.load(final_length, name="cur_len")
+    last_idx = builder.sub(cur_len, one_i32, name="last_idx")
+    last_ptr = builder.gep(lineptr_val, [last_idx], name="last_ptr")
+    last_char = builder.load(last_ptr, name="last_char")
     newline = ir.Constant(i8, ord('\n'))
     is_newline = builder.icmp_signed('==', last_char, newline, name="is_newline")
 
-    # Create blocks for newline removal
-    remove_newline_block = builder.append_basic_block(name="remove_newline")
-    builder.cbranch(is_newline, remove_newline_block, exit_block)
+    strip_newline_block = builder.append_basic_block(name="strip_newline")
+    builder.cbranch(is_newline, strip_newline_block, exit_block)
 
-    # Remove newline
-    builder.position_at_end(remove_newline_block)
-    null_char = ir.Constant(i8, 0)
-    builder.store(null_char, last_char_ptr)
-    # Decrement final length
-    builder.store(last_index, final_length)
+    # Strip \n, then check for \r
+    builder.position_at_end(strip_newline_block)
+    null_byte = ir.Constant(i8, 0)
+    builder.store(null_byte, last_ptr)
+    new_len = builder.sub(cur_len, one_i32, name="new_len_no_lf")
+    builder.store(new_len, final_length)
+
+    # Check for \r (i.e., \r\n line ending)
+    has_more = builder.icmp_signed('>', new_len, ir.Constant(i32, 0), name="has_more")
+    check_cr_block = builder.append_basic_block(name="check_cr")
+    builder.cbranch(has_more, check_cr_block, exit_block)
+
+    builder.position_at_end(check_cr_block)
+    cr_idx = builder.sub(new_len, one_i32, name="cr_idx")
+    cr_ptr = builder.gep(lineptr_val, [cr_idx], name="cr_ptr")
+    cr_char = builder.load(cr_ptr, name="cr_char")
+    cr_byte = ir.Constant(i8, ord('\r'))
+    is_cr = builder.icmp_signed('==', cr_char, cr_byte, name="is_cr")
+
+    strip_cr_block = builder.append_basic_block(name="strip_cr")
+    builder.cbranch(is_cr, strip_cr_block, exit_block)
+
+    builder.position_at_end(strip_cr_block)
+    builder.store(null_byte, cr_ptr)
+    len_no_crlf = builder.sub(new_len, one_i32, name="new_len_no_crlf")
+    builder.store(len_no_crlf, final_length)
     builder.branch(exit_block)
 
-    # Exit block: convert C string to fat pointer, passing pre-computed length
+    # Exit: return fat pointer with getline's buffer
     builder.position_at_end(exit_block)
     final_len_val = builder.load(final_length, name="final_len")
-    from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer_with_len
-    fat_ptr = cstr_to_fat_pointer_with_len(builder, buffer, final_len_val)
+    fat_ptr = cstr_to_fat_pointer_with_len(builder, lineptr_val, final_len_val)
     builder.ret(fat_ptr)
 
 

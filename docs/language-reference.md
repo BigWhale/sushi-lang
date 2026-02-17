@@ -528,7 +528,9 @@ fn private_helper() i32:
 Import stdlib modules with `use`:
 
 ```sushi
-use <collections>        # List<T>
+# List<T> is built-in (no import needed)
+# HashMap requires explicit import:
+use <collections/hashmap>
 use <collections/strings> # String utilities
 use <io/stdio>           # stdio functions
 ```

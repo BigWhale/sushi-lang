@@ -20,6 +20,7 @@ Complete reference for Sushi's standard library modules and types.
 
 ### System Modules
 - [Math](stdlib/math.md) - Mathematical operations (abs, min, max, sqrt, pow, trig)
+- [Random](stdlib/random.md) - Pseudo-random number generation (rand, rand_range, rand_f64, srand)
 - [Time](stdlib/time.md) - High-precision sleep functions
 - [Environment](stdlib/env.md) - Environment variables and system information
 - [Process Control](stdlib/process.md) - Process management (getcwd, chdir, exit, getpid, getuid)
@@ -31,10 +32,10 @@ Complete reference for Sushi's standard library modules and types.
 
 ```sushi
 use <collections/strings>  # String methods
-use <collections>          # List<T>, HashMap<K, V>
 use <io/stdio>             # Console I/O
 use <io/files>             # File operations
 use <math>                 # Math functions
+use <random>               # Random number generation
 use <time>                 # Sleep functions
 use <sys/env>              # Environment variables
 use <sys/process>          # Process control
@@ -77,20 +78,22 @@ let Maybe<i32> pos = text.find("world")
 #### Collections
 
 ```sushi
-# List<T>
+use <collections/hashmap>
+
+# List<T> - no import required
 let List<i32> numbers = List.new()
 numbers.push(1)
 numbers.push(2)
 numbers.push(3)
 
-# HashMap<K, V>
+# HashMap<K, V> - requires import
 let HashMap<string, i32> ages = HashMap.new()
 ages.insert("Alice", 30)
 match ages.get("Alice"):
     Maybe.Some(age) -> println("Age: {age}")
     Maybe.None() -> println("Not found")
 
-# Arrays
+# Arrays - built-in
 let i32[] arr = from([1, 2, 3])
 arr.push(4)
 foreach(n in arr.iter()):
@@ -100,11 +103,13 @@ foreach(n in arr.iter()):
 #### String Processing
 
 ```sushi
+use <collections/strings>
+
 let string text = "  Hello World  "
 let string clean = text.trim().lower()  # "hello world"
 
-let string[] parts = "a,b,c".split(",")
-let string joined = ",".join(parts)  # "a,b,c"
+let string[] parts = "a,b,c".split(',')
+let string joined = ','.join(parts)  # "a,b,c"
 
 let string path = "/home/user/file.txt"
 let string filename = path.strip_prefix("/home/user/")  # "file.txt"
@@ -113,6 +118,8 @@ let string filename = path.strip_prefix("/home/user/")  # "file.txt"
 #### File I/O
 
 ```sushi
+use <io/files>
+
 # Reading files
 match open("data.txt", FileMode.Read()):
     FileResult.Ok(f) ->
@@ -135,16 +142,16 @@ match open("output.txt", FileMode.Write()):
 
 ## Module Overview
 
-### Collections (`use <collections>`)
+### Collections
 
-**List<T>** - Generic dynamic array with:
+**List<T>** - Generic dynamic array (built-in, no import required):
 - Construction: `new()`, `with_capacity()`
 - Access: `get()`, `len()`, `is_empty()`
 - Modification: `push()`, `pop()`, `insert()`, `remove()`, `clear()`
 - Iteration: `iter()` for foreach loops
 - Memory: `free()`, `destroy()`
 
-**HashMap<K, V>** - Generic hash table with:
+**HashMap<K, V>** - Generic hash table (`use <collections/hashmap>`):
 - Construction: `new()`
 - Operations: `insert()`, `get()`, `remove()`, `contains_key()`
 - Iteration: `keys()`, `values()`
@@ -158,7 +165,7 @@ match open("output.txt", FileMode.Write()):
 - Safe access with `get()` returns `Maybe<T>`
 - Unsafe direct indexing: `arr[i]`
 
-**Strings** - 33 methods covering:
+**Strings** - 33 methods (`use <collections/strings>`):
 - Inspection, slicing, transformation, padding, stripping
 - Splitting/joining, case conversion, parsing
 - UTF-8 aware where needed

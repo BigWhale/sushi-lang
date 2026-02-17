@@ -1,0 +1,5 @@
+use <time>
+
+fn main() i32:
+    let i32 result = sleep("hello").realise(1)
+    return Result.Ok(result)

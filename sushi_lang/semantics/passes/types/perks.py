@@ -8,10 +8,9 @@ Validates:
 - Generic perk constraints are satisfied
 """
 
-from typing import Dict, Set, Optional, List
 from sushi_lang.semantics.ast import ExtendWithDef, PerkDef, FuncDef, PerkMethodSignature
-from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType, UnknownType
-from sushi_lang.semantics.passes.collect import PerkTable, PerkImplementationTable, ExtensionTable, StructTable, EnumTable
+from sushi_lang.semantics.typesys import Type
+from sushi_lang.semantics.passes.collect import ExtensionTable
 from sushi_lang.internals.report import Reporter
 from sushi_lang.internals import errors as er
 
@@ -83,7 +82,7 @@ def _signatures_match(impl: FuncDef, required: PerkMethodSignature) -> bool:
 
 
 def check_no_conflicts_with_regular_methods(
-    type_name: str,
+    resolved_type: Type,
     perk_impl: ExtendWithDef,
     extension_table: ExtensionTable,
     reporter: Reporter
@@ -96,35 +95,19 @@ def check_no_conflicts_with_regular_methods(
 
     This prevents ambiguity about which method gets called.
     """
-    # Get existing extension methods for this type
-    # Note: ExtensionTable uses Type objects as keys, not string names
-    # For now, we skip this check and will implement it properly when integrating with TypeValidator
-    # The TypeValidator has access to the proper Type objects
+    existing_methods = extension_table.by_type.get(resolved_type, {})
+    if not existing_methods:
+        return True
 
-    # TODO: Implement proper type-based lookup when integrated with TypeValidator
-    # For Phase 2, we just return True as this check will be done in TypeValidator
-    return True
+    perk_method_names = {m.name for m in perk_impl.methods}
+    conflicts = perk_method_names & set(existing_methods.keys())
 
+    if not conflicts:
+        return True
 
-def _get_type_name_from_impl(
-    impl: ExtendWithDef,
-    struct_table: StructTable,
-    enum_table: EnumTable
-) -> Optional[str]:
-    """Extract a string type name from an ExtendWithDef for conflict checking."""
-    target_type = impl.target_type
+    for method in perk_impl.methods:
+        if method.name in conflicts:
+            er.emit(reporter, er.ERR.CE4007, method.loc,
+                    method=method.name, perk=perk_impl.perk_name)
 
-    if isinstance(target_type, BuiltinType):
-        return target_type.value
-    elif isinstance(target_type, StructType):
-        return target_type.name
-    elif isinstance(target_type, EnumType):
-        return target_type.name
-    elif isinstance(target_type, UnknownType):
-        # Try to resolve to struct or enum
-        if target_type.name in struct_table.by_name:
-            return target_type.name
-        elif target_type.name in enum_table.by_name:
-            return target_type.name
-
-    return None
+    return False

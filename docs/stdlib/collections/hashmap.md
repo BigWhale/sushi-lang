@@ -7,7 +7,7 @@ Generic hash table with open addressing (linear probing).
 ## Import
 
 ```sushi
-use <collections>
+use <collections/hashmap>
 ```
 
 ## Overview
@@ -160,7 +160,7 @@ The hash function is auto-derived for all types:
 ## Example Usage
 
 ```sushi
-use <collections>
+use <collections/hashmap>
 
 fn main() i32:
     let HashMap<string, i32> scores = HashMap.new()
