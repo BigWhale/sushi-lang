@@ -180,23 +180,68 @@ def check_stdlib_function(validator: 'TypeValidator', call: Call) -> Optional[an
 
 
 def validate_stdlib_function(validator: 'TypeValidator', call: Call, module_and_func: tuple) -> None:
-    """
-    Validate a stdlib function call.
-
-    For now, this just validates that arguments are expressions.
-    Full type validation will be added when we integrate stdlib validators properly.
-
-    Args:
-        validator: Type validator instance
-        call: Function call AST node
-        module_and_func: Tuple of (module_path, StdlibFunction)
-    """
+    """Validate a stdlib function call (arg count and types)."""
     module_path, stdlib_func = module_and_func
-
-    # Validate all argument expressions
+    function_name = call.callee.id
     args = call.args if hasattr(call, 'args') else []
+
+    # Validate all argument expressions first
     for arg in args:
         validator.validate_expression(arg)
 
-    # TODO: Add proper type validation using stdlib validators
-    # For now, we're just ensuring the expressions are valid
+    # Polymorphic functions need special handling
+    if stdlib_func.params is None:
+        _validate_polymorphic_math(validator, call, function_name)
+        return
+
+    expected_params = stdlib_func.params
+
+    # Check argument count
+    if len(args) != len(expected_params):
+        er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
+               name=function_name, expected=len(expected_params), got=len(args))
+        return
+
+    # Check each argument type
+    for i, (arg, expected_type) in enumerate(zip(args, expected_params)):
+        arg_type = validator.infer_expression_type(arg)
+        if arg_type is not None and not types_compatible(validator, arg_type, expected_type):
+            er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
+                   index=i+1, expected=str(expected_type), got=str(arg_type))
+
+
+def _validate_polymorphic_math(validator: 'TypeValidator', call: Call, function_name: str) -> None:
+    """Validate polymorphic math functions (abs, min, max)."""
+    args = call.args if hasattr(call, 'args') else []
+
+    SIGNED_INTS = {BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64}
+    ALL_INTS = SIGNED_INTS | {BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64}
+    FLOATS = {BuiltinType.F32, BuiltinType.F64}
+    NUMERIC = ALL_INTS | FLOATS
+
+    if function_name == "abs":
+        if len(args) != 1:
+            er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
+                   name="abs", expected=1, got=len(args))
+            return
+        arg_type = validator.infer_expression_type(args[0])
+        if arg_type is not None and arg_type not in (SIGNED_INTS | FLOATS):
+            er.emit(validator.reporter, er.ERR.CE2006, args[0].loc,
+                   index=1, expected="signed integer or float", got=str(arg_type))
+
+    elif function_name in ("min", "max"):
+        if len(args) != 2:
+            er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
+                   name=function_name, expected=2, got=len(args))
+            return
+        type_a = validator.infer_expression_type(args[0])
+        type_b = validator.infer_expression_type(args[1])
+        if type_a is not None and type_a not in NUMERIC:
+            er.emit(validator.reporter, er.ERR.CE2006, args[0].loc,
+                   index=1, expected="numeric type", got=str(type_a))
+        if type_b is not None and type_b not in NUMERIC:
+            er.emit(validator.reporter, er.ERR.CE2006, args[1].loc,
+                   index=2, expected="numeric type", got=str(type_b))
+        if type_a is not None and type_b is not None and type_a != type_b:
+            er.emit(validator.reporter, er.ERR.CE2006, args[1].loc,
+                   index=2, expected=str(type_a), got=str(type_b))

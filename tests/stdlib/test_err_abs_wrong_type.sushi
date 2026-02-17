@@ -1,0 +1,5 @@
+use <math>
+
+fn main() i32:
+    let i32 result = abs("hello").realise(0)
+    return Result.Ok(result)

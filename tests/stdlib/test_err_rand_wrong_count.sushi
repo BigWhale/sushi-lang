@@ -1,0 +1,5 @@
+use <random>
+
+fn main() i32:
+    let u64 r = rand(42)
+    return Result.Ok(0)

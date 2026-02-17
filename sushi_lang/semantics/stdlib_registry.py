@@ -42,6 +42,7 @@ class StdlibFunction:
     is_constant: bool = False
     get_return_type: Optional[Callable] = None
     validator: Optional[Callable] = None
+    params: Optional[List] = None  # None=polymorphic, []=no args, [Type,...]=typed args
 
 
 @dataclass
@@ -59,6 +60,70 @@ class StdlibModule:
     python_module: any  # The imported Python module
     functions: Dict[str, StdlibFunction] = field(default_factory=dict)
     constants: Dict[str, StdlibFunction] = field(default_factory=dict)
+
+
+_param_specs_cache = None
+
+def _get_param_specs():
+    """Lazily build parameter specs for stdlib functions.
+
+    Returns a dict keyed by (module_short_name, func_name) -> list of BuiltinType or None.
+    None means polymorphic (needs special validation). [] means no args.
+    """
+    global _param_specs_cache
+    if _param_specs_cache is not None:
+        return _param_specs_cache
+
+    from sushi_lang.semantics.typesys import BuiltinType
+    I32, I64, U64, F64, STRING = (
+        BuiltinType.I32, BuiltinType.I64, BuiltinType.U64, BuiltinType.F64, BuiltinType.STRING
+    )
+
+    specs = {}
+
+    # time module
+    for fn in ("sleep", "msleep", "usleep"):
+        specs[("time", fn)] = [I64]
+    specs[("time", "nanosleep")] = [I64, I64]
+
+    # sys/env module
+    specs[("env", "getenv")] = [STRING]
+    specs[("env", "setenv")] = [STRING, STRING]
+
+    # sys/process module
+    for fn in ("getcwd", "getpid", "getuid"):
+        specs[("process", fn)] = []
+    specs[("process", "chdir")] = [STRING]
+    specs[("process", "exit")] = [I32]
+
+    # math module - polymorphic
+    for fn in ("abs", "min", "max"):
+        specs[("math", fn)] = None
+    # math module - f64 unary
+    for fn in ("sqrt", "floor", "ceil", "round", "trunc",
+               "sin", "cos", "tan", "asin", "acos", "atan",
+               "sinh", "cosh", "tanh", "log", "log2", "log10", "exp", "exp2"):
+        specs[("math", fn)] = [F64]
+    # math module - f64 binary
+    for fn in ("pow", "atan2", "hypot"):
+        specs[("math", fn)] = [F64, F64]
+
+    # random module
+    for fn in ("rand", "rand_f64"):
+        specs[("random", fn)] = []
+    specs[("random", "rand_range")] = [I32, I32]
+    specs[("random", "srand")] = [U64]
+
+    # io/files module - string unary
+    for fn in ("exists", "is_file", "is_dir", "file_size", "remove", "rmdir"):
+        specs[("files", fn)] = [STRING]
+    # io/files module - string binary
+    for fn in ("rename", "copy"):
+        specs[("files", fn)] = [STRING, STRING]
+    specs[("files", "mkdir")] = [STRING, I32]
+
+    _param_specs_cache = specs
+    return _param_specs_cache
 
 
 class StdlibRegistry:
@@ -217,12 +282,15 @@ class StdlibRegistry:
                 def make_validator(fn_name):
                     return lambda sig: validator(fn_name, sig)
 
+                param_spec = _get_param_specs().get((module_name, name))
+
                 func = StdlibFunction(
                     name=name,
                     module_path=module.path,
                     is_constant=False,
                     get_return_type=get_ret_type,
-                    validator=make_validator(name)
+                    validator=make_validator(name),
+                    params=param_spec
                 )
                 module.functions[name] = func
                 self._function_lookup[(module.path, name)] = func

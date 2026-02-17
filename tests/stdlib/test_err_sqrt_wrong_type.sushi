@@ -1,0 +1,5 @@
+use <math>
+
+fn main() i32:
+    let f64 result = sqrt(42).realise(0.0)
+    return Result.Ok(0)
