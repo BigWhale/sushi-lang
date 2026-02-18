@@ -6,6 +6,7 @@ Generates LLVM bitcode (.bc) files from Python stdlib implementations.
 Organizes output by target platform for multiplatform support.
 """
 
+import argparse
 import sys
 import os
 from pathlib import Path
@@ -159,7 +160,16 @@ def build_sys_process(platform_dir: Path):
 
 
 def main():
-    """Build all stdlib units for the current platform."""
+    """Build all stdlib units for the current or specified platform."""
+    parser = argparse.ArgumentParser(description="Sushi Standard Library Build Script")
+    parser.add_argument(
+        "--platform",
+        choices=["darwin", "linux"],
+        default=None,
+        help="Target platform for output directory (default: auto-detect)",
+    )
+    args = parser.parse_args()
+
     print("=" * 60)
     print("Sushi Standard Library Build Script")
     print("=" * 60)
@@ -188,7 +198,9 @@ def main():
     print()
 
     # Determine platform directory name
-    if platform.is_darwin:
+    if args.platform:
+        platform_name = args.platform
+    elif platform.is_darwin:
         platform_name = "darwin"
     elif platform.is_linux:
         platform_name = "linux"
