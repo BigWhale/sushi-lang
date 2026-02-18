@@ -1,0 +1,24 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+
+# Test HashMap.entries() iterator with foreach loop
+
+use <collections/hashmap>
+fn main() i32:
+    let HashMap<i32, string> map = HashMap.new()
+    map.insert(1, "one")
+    map.insert(2, "two")
+    map.insert(3, "three")
+
+    # Iterate over entries
+    let i32 count = 0
+    foreach(entry in map.entries()):
+        print(entry.key)
+        print(entry.value)
+        count := count + 1
+
+    # Should have iterated over all 3 entries
+    if (count == 3):
+        return Result.Ok(0)
+
+    return Result.Ok(1)

@@ -22,6 +22,7 @@ Methods:
         contains_key(K) -> bool
         keys() -> Iterator<K>
         values() -> Iterator<V>
+        entries() -> Iterator<Entry<K, V>>
         debug() -> ~
 
     Instance (mutating):
@@ -62,6 +63,7 @@ from .methods import (
     emit_hashmap_debug,
     emit_hashmap_keys,
     emit_hashmap_values,
+    emit_hashmap_entries,
 )
 
 if TYPE_CHECKING:
@@ -128,6 +130,8 @@ def emit_hashmap_method(
         result = emit_hashmap_keys(codegen, expr, receiver_value, receiver_type)
     elif method == "values":
         result = emit_hashmap_values(codegen, expr, receiver_value, receiver_type)
+    elif method == "entries":
+        result = emit_hashmap_entries(codegen, expr, receiver_value, receiver_type)
     else:
         raise_internal_error("CE0085", method=method)
 
@@ -196,6 +200,7 @@ class HashMapProvider:
             'contains_key': MethodSpec('contains_key', [('key', 'K')], BuiltinType.BOOL),
             'keys': MethodSpec('keys', [], 'Iterator<K>'),
             'values': MethodSpec('values', [], 'Iterator<V>'),
+            'entries': MethodSpec('entries', [], 'Iterator<Entry<K, V>>'),
             'debug': MethodSpec('debug', [], BuiltinType.BLANK),
 
             # Mutating instance methods
@@ -284,4 +289,5 @@ __all__ = [
     'emit_hashmap_debug',
     'emit_hashmap_keys',
     'emit_hashmap_values',
+    'emit_hashmap_entries',
 ]

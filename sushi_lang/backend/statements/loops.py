@@ -114,9 +114,9 @@ def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
     hashmap_type = None
     hashmap_method = None
 
-    # Check for HashMap.keys() or HashMap.values()
+    # Check for HashMap.keys(), HashMap.values(), or HashMap.entries()
     if isinstance(node.iterable, DotCall):
-        if node.iterable.method in ("keys", "values"):
+        if node.iterable.method in ("keys", "values", "entries"):
             # The receiver should be a Name node referring to a HashMap variable
             if isinstance(node.iterable.receiver, Name):
                 var_name = node.iterable.receiver.id
@@ -376,7 +376,7 @@ def _emit_hashmap_foreach(
     hashmap_type: 'StructType',
     method: str
 ) -> None:
-    """Emit foreach for HashMap.keys() and HashMap.values() iterators.
+    """Emit foreach for HashMap.keys(), HashMap.values(), and HashMap.entries() iterators.
 
     Args:
         codegen: The main LLVMCodegen instance.
@@ -384,18 +384,26 @@ def _emit_hashmap_foreach(
         iterator_slot: The iterator slot allocation.
         zero: Constant zero for GEP operations.
         hashmap_type: The HashMap<K, V> struct type.
-        method: Either "keys" or "values".
+        method: One of "keys", "values", or "entries".
     """
     from llvmlite import ir
     from sushi_lang.backend.statements import utils
-    from sushi_lang.sushi_stdlib.generics.collections.hashmap.types import extract_key_value_types, get_entry_type, ENTRY_OCCUPIED
+    from sushi_lang.sushi_stdlib.generics.collections.hashmap.types import (
+        extract_key_value_types, get_entry_type, get_user_entry_type,
+        ensure_entry_type_in_struct_table, ENTRY_OCCUPIED,
+    )
 
     # Extract K and V types from HashMap<K, V>
     key_type, value_type = extract_key_value_types(hashmap_type, codegen)
-    element_type = key_type if method == "keys" else value_type
+
+    is_entries = (method == "entries")
+    if is_entries:
+        element_type = ensure_entry_type_in_struct_table(codegen.struct_table, key_type, value_type)
+    else:
+        element_type = key_type if method == "keys" else value_type
     entry_field_index = 0 if method == "keys" else 1  # 0=key, 1=value in Entry<K,V>
 
-    # Get Entry<K,V> LLVM type
+    # Get internal Entry<K,V> LLVM type (3-field: key, value, state)
     entry_type = get_entry_type(codegen, key_type, value_type)
 
     # Create basic blocks
@@ -416,8 +424,8 @@ def _emit_hashmap_foreach(
     capacity_ptr = utils.gep_struct_field(codegen, iterator_slot, 1, "capacity_ptr")
     marked_capacity = codegen.builder.load(capacity_ptr, name="marked_capacity")
 
-    # Extract actual capacity: marked_capacity & 0x3FFFFFFF (mask off bits 30-31)
-    capacity_mask = ir.Constant(codegen.types.i32, 0x3FFFFFFF)
+    # Extract actual capacity: marked_capacity & 0x1FFFFFFF (mask off bits 29-31)
+    capacity_mask = ir.Constant(codegen.types.i32, 0x1FFFFFFF)
     actual_capacity = codegen.builder.and_(marked_capacity, capacity_mask, name="actual_capacity")
 
     # Check: current_index < actual_capacity
@@ -427,18 +435,18 @@ def _emit_hashmap_foreach(
     # === Check if current entry is Occupied ===
     codegen.builder.position_at_end(check_occupied_bb)
 
-    # Get the Entry<K,V>* array pointer (stored as K* or V* in iterator)
+    # Get the data pointer (stored as element type pointer in iterator)
     data_ptr_ptr = utils.gep_struct_field(codegen, iterator_slot, 2, "data_ptr_ptr")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="entries_ptr_as_element")
 
-    # Cast to Entry<K,V>* to access the entry structure
+    # Cast to internal Entry<K,V,state>* to access the entry structure
     entry_ptr_type = ir.PointerType(entry_type)
     entries_ptr = codegen.builder.bitcast(data_ptr, entry_ptr_type, name="entries_ptr")
 
     # Get pointer to current entry: entries_ptr[current_index]
     current_entry_ptr = codegen.builder.gep(entries_ptr, [current_index], name="current_entry_ptr")
 
-    # Access the state field (field 2) of Entry<K,V>
+    # Access the state field (field 2) of internal Entry<K,V,state>
     state_ptr = utils.gep_struct_field(codegen, current_entry_ptr, 2, "state_ptr")
     state = codegen.builder.load(state_ptr, name="entry_state")
 
@@ -446,18 +454,37 @@ def _emit_hashmap_foreach(
     is_occupied = codegen.builder.icmp_unsigned("==", state, ir.Constant(codegen.types.i8, ENTRY_OCCUPIED), name="is_occupied")
     codegen.builder.cbranch(is_occupied, body_bb, increment_bb)
 
-    # === Body: Extract key/value and execute foreach body ===
+    # === Body: Extract element and execute foreach body ===
     codegen.builder.position_at_end(body_bb)
     codegen.loop_stack.append((cond_bb, end_bb))
     codegen.memory.push_scope()
 
-    # Extract the key (field 0) or value (field 1) from the current entry
-    element_ptr = utils.gep_struct_field(codegen, current_entry_ptr, entry_field_index, "element_ptr")
-    element_value = codegen.builder.load(element_ptr, name=node.item_name)
+    if is_entries:
+        # Construct user-facing Entry<K, V> struct {key, value} from internal {key, value, state}
+        user_entry_llvm = get_user_entry_type(codegen, key_type, value_type)
 
-    # Create slot for loop variable
-    element_ll_type = codegen.types.ll_type(element_type)
-    codegen.memory.create_local(node.item_name, element_ll_type, element_value, element_type)
+        key_ptr = utils.gep_struct_field(codegen, current_entry_ptr, 0, "entry_key_ptr")
+        key_val = codegen.builder.load(key_ptr, name="entry_key")
+
+        value_ptr = utils.gep_struct_field(codegen, current_entry_ptr, 1, "entry_value_ptr")
+        value_val = codegen.builder.load(value_ptr, name="entry_value")
+
+        # Build the 2-field struct
+        entry_val = ir.Constant(user_entry_llvm, ir.Undefined)
+        entry_val = codegen.builder.insert_value(entry_val, key_val, 0, name="entry_with_key")
+        entry_val = codegen.builder.insert_value(entry_val, value_val, 1, name="entry_with_value")
+
+        element_ll_type = user_entry_llvm
+        codegen.memory.create_local(node.item_name, element_ll_type, entry_val, element_type)
+        # Register type for field access (entry.key, entry.value)
+        codegen.variable_types[node.item_name] = element_type
+    else:
+        # Extract the key (field 0) or value (field 1) from the current entry
+        element_ptr = utils.gep_struct_field(codegen, current_entry_ptr, entry_field_index, "element_ptr")
+        element_value = codegen.builder.load(element_ptr, name=node.item_name)
+
+        element_ll_type = codegen.types.ll_type(element_type)
+        codegen.memory.create_local(node.item_name, element_ll_type, element_value, element_type)
 
     # Emit the foreach body
     _emit_block(codegen, node.body)

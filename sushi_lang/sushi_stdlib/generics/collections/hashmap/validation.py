@@ -25,7 +25,7 @@ def is_builtin_hashmap_method(method_name: str) -> bool:
     return method_name in (
         "new", "insert", "get", "contains_key", "remove",
         "len", "is_empty", "tombstone_count", "rehash", "free", "destroy", "debug",
-        "keys", "values"
+        "keys", "values", "entries"
     )
 
 
@@ -75,6 +75,8 @@ def validate_hashmap_method_with_validator(
         _validate_hashmap_keys(call, hashmap_type, reporter)
     elif method == "values":
         _validate_hashmap_values(call, hashmap_type, reporter)
+    elif method == "entries":
+        _validate_hashmap_entries(call, hashmap_type, reporter)
     else:
         # Unknown method - should not happen if is_builtin_hashmap_method was called first
         raise_internal_error("CE0085", method=method)
@@ -610,3 +612,22 @@ def _validate_hashmap_values(
     # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="values", expected=0, got=len(call.args))
+
+
+def _validate_hashmap_entries(
+    call: MethodCall,
+    hashmap_type: StructType,
+    reporter: Any
+) -> None:
+    """Validate HashMap<K, V>.entries() method call.
+
+    Validates that no arguments are provided.
+
+    Args:
+        call: The method call AST node.
+        hashmap_type: The HashMap<K, V> struct type.
+        reporter: Error reporter for emitting validation errors.
+    """
+    # Validate argument count
+    if len(call.args) != 0:
+        er.emit(reporter, er.ERR.CE2016, call.loc, method="entries", expected=0, got=len(call.args))
