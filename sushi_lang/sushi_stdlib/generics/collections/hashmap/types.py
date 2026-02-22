@@ -6,7 +6,7 @@ and Entry<K, V>, along with constants for entry states and prime capacity tables
 """
 
 from typing import Any, Optional
-from sushi_lang.semantics.typesys import Type, StructType, BuiltinType, EnumType, ArrayType, DynamicArrayType
+from sushi_lang.semantics.typesys import Type, StructType, BuiltinType, EnumType, ArrayType, DynamicArrayType, IteratorType
 import llvmlite.ir as ir
 from sushi_lang.internals.errors import raise_internal_error
 import re
@@ -321,3 +321,59 @@ def extract_key_value_types(hashmap_type: StructType, codegen: Any) -> tuple[Typ
     value_type = resolve_type_from_string(value_type_str, codegen)
 
     return (key_type, value_type)
+
+
+def get_entry_type_name(key_type: Type, value_type: Type) -> str:
+    """Get the name for a user-facing Entry<K, V> struct type."""
+    key_str = str(key_type).lower() if isinstance(key_type, BuiltinType) else str(key_type)
+    val_str = str(value_type).lower() if isinstance(value_type, BuiltinType) else str(value_type)
+    return f"Entry<{key_str}, {val_str}>"
+
+
+def ensure_entry_type_in_struct_table(struct_table: Any, key_type: Type, value_type: Type) -> StructType:
+    """Ensure that a user-facing Entry<K, V> struct exists in the struct table.
+
+    The user-facing Entry<K, V> has two fields: key (K) and value (V).
+    This is distinct from the internal 3-field Entry used by HashMap buckets.
+
+    Args:
+        struct_table: The struct table with by_name dict.
+        key_type: The key type K.
+        value_type: The value type V.
+
+    Returns:
+        The StructType for Entry<K, V>.
+    """
+    entry_name = get_entry_type_name(key_type, value_type)
+
+    if entry_name in struct_table.by_name:
+        return struct_table.by_name[entry_name]
+
+    entry_struct = StructType(
+        name=entry_name,
+        fields=(("key", key_type), ("value", value_type)),
+        generic_base="Entry",
+        generic_args=(key_type, value_type),
+    )
+
+    struct_table.by_name[entry_name] = entry_struct
+    if hasattr(struct_table, 'order'):
+        struct_table.order.append(entry_name)
+
+    return entry_struct
+
+
+def get_user_entry_type(codegen: Any, key_type: Type, value_type: Type) -> 'ir.Type':
+    """Get LLVM struct type for the user-facing Entry<K, V> (key + value only).
+
+    Args:
+        codegen: LLVM codegen instance.
+        key_type: The key type K.
+        value_type: The value type V.
+
+    Returns:
+        LLVM literal struct type for user-facing Entry<K, V>.
+    """
+    key_llvm = codegen.types.ll_type(key_type)
+    value_llvm = codegen.types.ll_type(value_type)
+    return ir.LiteralStructType([key_llvm, value_llvm])

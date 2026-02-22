@@ -262,6 +262,14 @@ class HashMapMethodInferrer:
                     # Return Iterator<V>
                     from sushi_lang.semantics.typesys import IteratorType
                     return IteratorType(element_type=value_type)
+                elif self.method_name == "entries":
+                    # Return Iterator<Entry<K, V>>
+                    from sushi_lang.semantics.typesys import IteratorType
+                    from sushi_lang.sushi_stdlib.generics.collections.hashmap.types import ensure_entry_type_in_struct_table
+                    entry_type = ensure_entry_type_in_struct_table(
+                        self.validator.struct_table, key_type, value_type
+                    )
+                    return IteratorType(element_type=entry_type)
         return None
 
 
