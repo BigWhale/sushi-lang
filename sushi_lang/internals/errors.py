@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Optional
 
-from sushi_lang.internals.report import Span, Reporter
+from sushi_lang.internals.report import Span, Reporter, DiagnosticBuilder
 
 
 class Severity(str, Enum):
@@ -57,6 +57,13 @@ def emit(r: Reporter, em: ErrorMessage, span: Optional[Span], **kwargs) -> None:
         r.error(em.code, text, span)
     else:
         r.warn(em.code, text, span)
+
+def emit_with(r: Reporter, em: ErrorMessage, span: Optional[Span], **kwargs) -> DiagnosticBuilder:
+    text = _fmt(em.code, **kwargs)
+    if em.severity == Severity.ERROR:
+        return r.error_with(em.code, text, span)
+    else:
+        return r.warn_with(em.code, text, span)
 
 def raise_internal_error(code: str, **kwargs) -> None:
     """Raise a RuntimeError for internal compiler errors.
@@ -501,7 +508,7 @@ _add(ErrorMessage("CE0100", Severity.ERROR,
 
 # Function/header errors
 _add(ErrorMessage("CE0101", Severity.ERROR,
-    "duplicate function '{name}' (first defined at {prev_loc})",
+    "duplicate function '{name}'",
     Category.FUNC, "Two functions share the same name in a compilation unit."))
 
 _add(ErrorMessage("CE0102", Severity.ERROR,
@@ -517,7 +524,7 @@ _add(ErrorMessage("CE0104", Severity.ERROR,
     Category.FUNC, "Constant declarations must specify an explicit type."))
 
 _add(ErrorMessage("CE0105", Severity.ERROR,
-    "duplicate constant '{name}' (first defined at {prev_loc})",
+    "duplicate constant '{name}'",
     Category.FUNC, "Two constants share the same name in a compilation unit."))
 
 _add(ErrorMessage("CE0106", Severity.ERROR,
@@ -555,7 +562,7 @@ _add(ErrorMessage("CE0113", Severity.ERROR,
 
 # Struct errors
 _add(ErrorMessage("CE0004", Severity.ERROR,
-    "duplicate struct '{name}' (first defined at {prev_loc})",
+    "duplicate struct '{name}'",
     Category.TYPE, "Two structs share the same name in a compilation unit."))
 
 _add(ErrorMessage("CE0005", Severity.ERROR,
@@ -563,7 +570,7 @@ _add(ErrorMessage("CE0005", Severity.ERROR,
     Category.TYPE, "A struct declares the same field name more than once."))
 
 _add(ErrorMessage("CE0006", Severity.ERROR,
-    "enum '{name}' already defined as struct '{prev_loc}'",
+    "enum '{name}' already defined as struct",
     Category.TYPE, "An enum is declared with the same name as a struct."))
 
 # Scope errors
@@ -827,7 +834,7 @@ _add(ErrorMessage("CE2045", Severity.ERROR,
     Category.TYPE, "The specified variant does not exist in the enum type."))
 
 _add(ErrorMessage("CE2046", Severity.ERROR,
-    "duplicate enum '{name}' (first defined at {prev_loc})",
+    "duplicate enum '{name}'",
     Category.TYPE, "Two enums share the same name in a compilation unit."))
 
 _add(ErrorMessage("CE2047", Severity.ERROR,
@@ -1003,7 +1010,7 @@ _add(ErrorMessage("CW1001", Severity.WARNING,
     "A variable was declared with 'let' but never used."))
 
 _add(ErrorMessage("CW1002", Severity.WARNING,
-    "declared variable '{name}' already exists in an outer scope (first declared at {prev_loc})", Category.SCOPE,
+    "declared variable '{name}' already exists in an outer scope", Category.SCOPE,
     "A variable was declared with 'let' outside of this scope."))
 
 _add(ErrorMessage("CW1003", Severity.WARNING,
@@ -1012,7 +1019,7 @@ _add(ErrorMessage("CW1003", Severity.WARNING,
 
 # Unit/module warnings
 _add(ErrorMessage("CW3001", Severity.WARNING,
-    "duplicate use statement for unit '{unit}' (first used at {prev_loc})", Category.UNIT,
+    "duplicate use statement for unit '{unit}'", Category.UNIT,
     "A unit was already imported earlier in this file. The duplicate use statement has no effect."))
 
 #

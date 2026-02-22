@@ -1,0 +1,6 @@
+# Diagnostic test: CE2002 with note pointing to declaration
+# Exercises: note with secondary span
+
+fn main() i32:
+    let i32 x = true
+    return Result.Ok(0)

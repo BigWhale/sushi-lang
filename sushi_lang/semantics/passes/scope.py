@@ -110,9 +110,8 @@ class ScopeAnalyzer:
         for outer_scope in self.scopes[:-1]:
             if name in outer_scope:
                 outer_var = outer_scope[name]
-                prev_loc_str = f"{outer_var.declared_at.line}:{outer_var.declared_at.col}" if outer_var.declared_at else "unknown"
-                self.err.emit(er.ERR.CW1002, span,
-                       name=name, prev_loc=prev_loc_str)
+                self.err.emit_with(er.ERR.CW1002, span, name=name) \
+                    .note("first declared here", outer_var.declared_at).emit()
                 break
 
         current_scope = self.scopes[-1]

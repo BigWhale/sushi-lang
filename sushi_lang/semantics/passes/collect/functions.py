@@ -30,7 +30,7 @@ from sushi_lang.semantics.generics.types import (
     TypeParam,
 )
 
-from .utils import extract_type_param_names, format_location, param_from_node
+from .utils import extract_type_param_names, param_from_node
 
 
 def is_explicit_result_type(ty: Optional[Type]) -> bool:
@@ -434,14 +434,14 @@ class FunctionCollector:
         # Check for duplicates in ALL function tables
         if name in self.funcs.by_name:
             prev = self.funcs.by_name[name]
-            prev_loc = format_location(self.r, prev.name_span)
-            er.emit(self.r, ERR.CE0101, name_span, name=name, prev_loc=prev_loc)
+            er.emit_with(self.r, ERR.CE0101, name_span, name=name) \
+                .note("first defined here", prev.name_span).emit()
             return
 
         if name in self.generic_funcs.by_name:
             prev = self.generic_funcs.by_name[name]
-            prev_loc = format_location(self.r, prev.name_span)
-            er.emit(self.r, ERR.CE0101, name_span, name=name, prev_loc=prev_loc)
+            er.emit_with(self.r, ERR.CE0101, name_span, name=name) \
+                .note("first defined here", prev.name_span).emit()
             return
 
         sig = FuncSig(
@@ -490,14 +490,14 @@ class FunctionCollector:
         # Check for duplicates in ALL function tables
         if name in self.generic_funcs.by_name:
             prev = self.generic_funcs.by_name[name]
-            prev_loc = format_location(self.r, prev.name_span)
-            er.emit(self.r, ERR.CE0101, name_span, name=name, prev_loc=prev_loc)
+            er.emit_with(self.r, ERR.CE0101, name_span, name=name) \
+                .note("first defined here", prev.name_span).emit()
             return
 
         if name in self.funcs.by_name:
             prev = self.funcs.by_name[name]
-            prev_loc = format_location(self.r, prev.name_span)
-            er.emit(self.r, ERR.CE0101, name_span, name=name, prev_loc=prev_loc)
+            er.emit_with(self.r, ERR.CE0101, name_span, name=name) \
+                .note("first defined here", prev.name_span).emit()
             return
 
         # Preserve BoundedTypeParam objects for perk constraints
@@ -648,10 +648,9 @@ class FunctionCollector:
             # Check for duplicate generic extension methods
             existing = self.generic_extensions.get_method(base_type_name, name)
             if existing is not None:
-                prev_loc = format_location(self.r, existing.name_span)
-                er.emit(self.r, ERR.CE0101, name_span,
-                       name=f"extension method '{name}' for '{base_type_name}<...>'",
-                       prev_loc=prev_loc)
+                er.emit_with(self.r, ERR.CE0101, name_span,
+                       name=f"extension method '{name}' for '{base_type_name}<...>'") \
+                    .note("first defined here", existing.name_span).emit()
                 return
 
             self.generic_extensions.add_method(generic_method)
@@ -684,10 +683,9 @@ class FunctionCollector:
             if resolved_type is not None and isinstance(resolved_type, (BuiltinType, ArrayType, StructType, EnumType)):
                 existing = self.extensions.get_method(resolved_type, name)
                 if existing is not None:
-                    prev_loc = format_location(self.r, existing.name_span)
-                    er.emit(self.r, ERR.CE0101, name_span,
-                           name=f"extension method '{name}' for '{resolved_type}'",
-                           prev_loc=prev_loc)
+                    er.emit_with(self.r, ERR.CE0101, name_span,
+                           name=f"extension method '{name}' for '{resolved_type}'") \
+                        .note("first defined here", existing.name_span).emit()
                     return
 
             # Add method to table (skip duplicate checking for unknown types)

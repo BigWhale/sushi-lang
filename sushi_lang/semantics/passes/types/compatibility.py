@@ -50,8 +50,11 @@ def validate_assignment_compatibility(validator: 'TypeValidator', declared_type:
             if inferred_type is None:
                 return  # Error already reported or empty array
             if not types_compatible(validator, inferred_type, declared_type):
-                er.emit(validator.reporter, er.ERR.CE2002, value_span,
+                b = er.emit_with(validator.reporter, er.ERR.CE2002, value_span,
                        got=str(inferred_type), expected=str(declared_type))
+                if declared_span:
+                    b.note("declared here", declared_span)
+                b.emit()
             return
         # For other expressions (function calls, ??, etc.), fall through to general validation
 
@@ -62,8 +65,11 @@ def validate_assignment_compatibility(validator: 'TypeValidator', declared_type:
 
     # Check for type mismatch (using types_compatible to handle struct types)
     if not types_compatible(validator, value_type, declared_type):
-        er.emit(validator.reporter, er.ERR.CE2002, value_span,
+        b = er.emit_with(validator.reporter, er.ERR.CE2002, value_span,
                got=str(value_type), expected=str(declared_type))
+        if declared_span:
+            b.note("declared here", declared_span)
+        b.emit()
 
 
 def validate_return_compatibility(validator: 'TypeValidator', expected_type: Type, return_expr: Expr, return_span: Optional[Span]) -> None:

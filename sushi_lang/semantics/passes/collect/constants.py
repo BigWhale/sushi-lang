@@ -11,7 +11,6 @@ from sushi_lang.internals.errors import ERR
 from sushi_lang.semantics.ast import ConstDef, Program
 from sushi_lang.semantics.typesys import Type
 
-from .utils import format_location
 
 
 @dataclass
@@ -97,8 +96,8 @@ class ConstantCollector:
         # Check for duplicate constant names
         if name in self.constants.by_name:
             prev = self.constants.by_name[name]
-            prev_loc = format_location(self.r, prev.name_span)
-            er.emit(self.r, ERR.CE0105, name_span, name=name, prev_loc=prev_loc)
+            er.emit_with(self.r, ERR.CE0105, name_span, name=name) \
+                .note("first defined here", prev.name_span).emit()
             return
 
         self.constants.order.append(name)

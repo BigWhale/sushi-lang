@@ -1,0 +1,11 @@
+# Diagnostic test: CE0101 with note pointing to first definition
+# Exercises: note with secondary span
+
+fn foo() i32:
+    return Result.Ok(1)
+
+fn foo() i32:
+    return Result.Ok(2)
+
+fn main() i32:
+    return Result.Ok(0)

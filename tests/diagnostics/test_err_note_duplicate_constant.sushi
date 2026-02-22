@@ -1,0 +1,8 @@
+# Diagnostic test: CE0105 with note pointing to first definition
+# Exercises: note with secondary span
+
+const i32 MAX = 100
+const i32 MAX = 200
+
+fn main() i32:
+    return Result.Ok(0)

@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 
 from sushi_lang.semantics.ast import *
 from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, Type
-from sushi_lang.internals.report import Reporter
+from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 
@@ -47,6 +47,7 @@ class BorrowState:
     peek_borrow_count: int = 0  # Number of active &peek borrows (unlimited)
     is_moved: bool = False  # Ownership has been transferred
     is_destroyed: bool = False  # Variable has been explicitly destroyed (via .destroy())
+    first_borrow_span: Optional[Span] = None  # Location of the first active borrow
 
     @property
     def is_borrowed(self) -> bool:
@@ -359,21 +360,27 @@ class BorrowChecker:
             if is_poke:
                 # &poke: exclusive borrow - no other borrows allowed
                 if state.poke_borrow_count > 0:
-                    self.err.emit(er.ERR.CE2403, borrow.loc, name=var_name)
+                    self.err.emit_with(er.ERR.CE2403, borrow.loc, name=var_name) \
+                        .note("first borrowed here", state.first_borrow_span).emit()
                     return
                 if state.peek_borrow_count > 0:
-                    self.err.emit(er.ERR.CE2407, borrow.loc, name=var_name)
+                    self.err.emit_with(er.ERR.CE2407, borrow.loc, name=var_name) \
+                        .note("first borrowed here", state.first_borrow_span).emit()
                     return
                 # Warn when creating &poke of a variable that is itself a &poke reference
                 # This is a nested mutable borrow - potentially dangerous but allowed
                 if isinstance(state.var_type, ReferenceType) and state.var_type.is_poke():
                     self.err.emit(er.ERR.CW2409, borrow.loc, name=var_name)
                 state.poke_borrow_count = 1
+                state.first_borrow_span = borrow.loc
             else:
                 # &peek: shared borrow - only check for poke conflict
                 if state.poke_borrow_count > 0:
-                    self.err.emit(er.ERR.CE2407, borrow.loc, name=var_name)
+                    self.err.emit_with(er.ERR.CE2407, borrow.loc, name=var_name) \
+                        .note("first borrowed here", state.first_borrow_span).emit()
                     return
+                if state.peek_borrow_count == 0:
+                    state.first_borrow_span = borrow.loc
                 state.peek_borrow_count += 1
 
             self.active_borrows.add(var_name)
@@ -402,17 +409,23 @@ class BorrowChecker:
             if is_poke:
                 # &poke: exclusive borrow - no other borrows allowed
                 if state.poke_borrow_count > 0:
-                    self.err.emit(er.ERR.CE2403, borrow.loc, name=base_var)
+                    self.err.emit_with(er.ERR.CE2403, borrow.loc, name=base_var) \
+                        .note("first borrowed here", state.first_borrow_span).emit()
                     return
                 if state.peek_borrow_count > 0:
-                    self.err.emit(er.ERR.CE2407, borrow.loc, name=base_var)
+                    self.err.emit_with(er.ERR.CE2407, borrow.loc, name=base_var) \
+                        .note("first borrowed here", state.first_borrow_span).emit()
                     return
                 state.poke_borrow_count = 1
+                state.first_borrow_span = borrow.loc
             else:
                 # &peek: shared borrow - only check for poke conflict
                 if state.poke_borrow_count > 0:
-                    self.err.emit(er.ERR.CE2407, borrow.loc, name=base_var)
+                    self.err.emit_with(er.ERR.CE2407, borrow.loc, name=base_var) \
+                        .note("first borrowed here", state.first_borrow_span).emit()
                     return
+                if state.peek_borrow_count == 0:
+                    state.first_borrow_span = borrow.loc
                 state.peek_borrow_count += 1
 
             self.active_borrows.add(base_var)

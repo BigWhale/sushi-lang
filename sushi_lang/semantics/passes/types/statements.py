@@ -177,7 +177,8 @@ def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:
 
         if not validate_result_pattern(validator, stmt.value, expected_type):
             # Return statement must use Result.Ok() or Result.Err()
-            er.emit(validator.reporter, er.ERR.CE2030, stmt.value.loc)
+            er.emit_with(validator.reporter, er.ERR.CE2030, stmt.value.loc) \
+                .help("wrap return value: return Result.Ok(value)").emit()
 
         # Check for ?? in main() warning (CW2511)
         if validator.current_function.name == "main":
@@ -186,7 +187,8 @@ def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:
                 er.emit(validator.reporter, er.ERR.CW2511, stmt.value.loc)
     else:
         # Bare "return" is no longer allowed - must use Ok() or Err()
-        er.emit(validator.reporter, er.ERR.CE2030, stmt.loc)
+        er.emit_with(validator.reporter, er.ERR.CE2030, stmt.loc) \
+            .help("wrap return value: return Result.Ok(value)").emit()
 
 
 def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:

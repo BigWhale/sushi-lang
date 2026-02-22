@@ -36,9 +36,8 @@ def check_duplicate_uses(ast: Program, reporter: Reporter) -> None:
     for use_stmt in ast.uses:
         if use_stmt.path in seen_units:
             prev_loc = seen_units[use_stmt.path]
-            er.emit(reporter, er.ERR.CW3001, use_stmt.loc,
-                   unit=use_stmt.path,
-                   prev_loc=f"{prev_loc.line}:{prev_loc.col}")
+            er.emit_with(reporter, er.ERR.CW3001, use_stmt.loc, unit=use_stmt.path) \
+                .note("first imported here", prev_loc).emit()
         else:
             seen_units[use_stmt.path] = use_stmt.loc
 
