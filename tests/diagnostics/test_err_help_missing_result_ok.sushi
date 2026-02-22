@@ -1,0 +1,8 @@
+# Diagnostic test: CE2030 with help message
+# Exercises: help message (no span)
+
+fn add(i32 a, i32 b) i32:
+    return a + b
+
+fn main() i32:
+    return Result.Ok(0)

@@ -1,0 +1,9 @@
+# Diagnostic test: CE2046 with text-only note
+# Exercises: note without span (predefined generic conflict)
+
+enum Maybe:
+    Something
+    Nothing
+
+fn main() i32:
+    return Result.Ok(0)

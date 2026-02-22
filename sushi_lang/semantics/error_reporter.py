@@ -17,7 +17,7 @@ This eliminates the need to pass self.reporter on every error emission call.
 """
 
 from typing import Optional
-from sushi_lang.internals.report import Span, Reporter
+from sushi_lang.internals.report import Span, Reporter, DiagnosticBuilder
 from sushi_lang.internals import errors as er
 
 
@@ -60,3 +60,7 @@ class PassErrorReporter:
             >>> self.err.emit(er.ERR.CE2002, span, expected="i32", got="string")
         """
         er.emit(self.reporter, error_msg, span, **kwargs)
+
+    def emit_with(self, error_msg: er.ErrorMessage, span: Optional[Span], **kwargs) -> DiagnosticBuilder:
+        """Emit an error or warning and return a builder for attaching notes/help."""
+        return er.emit_with(self.reporter, error_msg, span, **kwargs)

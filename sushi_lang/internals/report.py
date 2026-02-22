@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Any
 
 from lark import Token
@@ -11,6 +11,7 @@ class C:
     DIM   = "\x1b[2m"
     RED   = "\x1b[31m"
     YELLOW = "\x1b[33m"
+    BLUE  = "\x1b[34m"
     CYAN  = "\x1b[36m"
     GRAY  = "\x1b[90m"
 
@@ -22,12 +23,20 @@ class Span:
     end_col: int
 
 @dataclass
+class SubDiagnostic:
+    kind: str  # "note", "help"
+    message: str
+    span: Optional[Span] = None
+    filename: Optional[str] = None
+
+@dataclass
 class Diagnostic:
     kind: str
     code: str
     message: str
     span: Optional[Span] = None
-    filename: Optional[str] = None  # Unit-specific filename for multi-file reporting
+    filename: Optional[str] = None
+    sub: List[SubDiagnostic] = field(default_factory=list)
 
 def span_of(t: Any) -> Optional[Span]:
     m = getattr(t, "meta", None)
@@ -43,6 +52,26 @@ def span_of(t: Any) -> Optional[Span]:
     return None
 
 
+class DiagnosticBuilder:
+    """Builder for attaching sub-diagnostics (notes, help) before emitting."""
+
+    def __init__(self, reporter: Reporter, diagnostic: Diagnostic):
+        self._reporter = reporter
+        self._diagnostic = diagnostic
+
+    def note(self, message: str, span: Optional[Span] = None, filename: Optional[str] = None) -> DiagnosticBuilder:
+        self._diagnostic.sub.append(SubDiagnostic("note", message, span, filename))
+        return self
+
+    def help(self, message: str) -> DiagnosticBuilder:
+        self._diagnostic.sub.append(SubDiagnostic("help", message))
+        return self
+
+    def emit(self) -> None:
+        # Diagnostic was already appended in error_with/warn_with
+        pass
+
+
 class Reporter:
     def __init__(self, source: Optional[str] = None, filename: str = "<input>") -> None:
         self.source = source
@@ -55,6 +84,16 @@ class Reporter:
     def warn(self, code: str, msg: str, span: Optional[Span]):
         self.items.append(Diagnostic("warning", code, msg, span, filename=self.filename))
 
+    def error_with(self, code: str, msg: str, span: Optional[Span]) -> DiagnosticBuilder:
+        d = Diagnostic("error", code, msg, span, filename=self.filename)
+        self.items.append(d)
+        return DiagnosticBuilder(self, d)
+
+    def warn_with(self, code: str, msg: str, span: Optional[Span]) -> DiagnosticBuilder:
+        d = Diagnostic("warning", code, msg, span, filename=self.filename)
+        self.items.append(d)
+        return DiagnosticBuilder(self, d)
+
     @property
     def has_errors(self) -> bool:
         return any(d.kind == "error" for d in self.items)
@@ -63,35 +102,77 @@ class Reporter:
     def has_warnings(self) -> bool:
         return any(d.kind == "warning" for d in self.items)
 
-    def format(self, use_color: bool = True, use_unicode: bool = True) -> str:
-        """Render all diagnostics.
+    def _resolve_filename(self, filename: str) -> str:
+        """Convert absolute path to relative path with ./ prefix."""
+        try:
+            from pathlib import Path
+            abs_path = Path(filename).resolve()
+            cwd = Path.cwd()
+            rel_path = abs_path.relative_to(cwd)
+            return f"./{rel_path}"
+        except (ValueError, Exception):
+            from pathlib import Path
+            return Path(filename).name
 
-        use_color   → ANSI colorize location/kind/guide/markers
-        use_unicode → use │ / ╰ / ╯ and a separate caret line above the guide
-        """
+    def _get_source_lines(self, filename: str, src_lines: Optional[List[str]]) -> Optional[List[str]]:
+        """Get source lines for a file, reading from disk if needed."""
+        if filename == self.filename:
+            return src_lines
+        try:
+            from pathlib import Path
+            return Path(filename).read_text(encoding="utf-8").splitlines()
+        except Exception:
+            return None
+
+    def _render_snippet(self, span: Span, source_lines: Optional[List[str]],
+                        color: str, use_color: bool, use_unicode: bool,
+                        out: List[str], prefix: str = "  ") -> None:
+        """Render a source code snippet with underline marker."""
+        if source_lines is not None:
+            line_idx = span.line - 1
+            line_text = source_lines[line_idx] if 0 <= line_idx < len(source_lines) else ""
+        else:
+            line_text = ""
+
+        start = max(1, span.col)
+        end = max(start, span.end_col)
+        span_len = end - start + 1
+
+        if use_unicode:
+            if span_len <= 1:
+                marker = " " * (start - 1) + "\u252c"
+            else:
+                left = span_len // 2
+                right = span_len - left - 1
+                marker = " " * (start - 1) + "\u2500" * left + "\u252c" + "\u2500" * right
+            if use_color:
+                gray = lambda s: f"{C.GRAY}{s}{C.RESET}"
+                out.append(f"{gray(prefix + chr(0x2502))}{' ' * 1}{line_text}")
+                out.append(f"{gray(prefix + chr(0x2502))}{' ' * 1}{color}{marker}{C.RESET}")
+            else:
+                out.append(f"{prefix}\u2502  {line_text}")
+                out.append(f"{prefix}\u2502  {marker}")
+        else:
+            if span_len <= 1:
+                ascii_marker = " " * (start - 1) + "^"
+            else:
+                left = span_len // 2
+                right = span_len - left - 1
+                ascii_marker = " " * (start - 1) + "-" * left + "+" + "-" * right
+            out.append(f"{prefix}| {line_text}")
+            out.append(f"{prefix}` {ascii_marker}")
+
+    def format(self, use_color: bool = True, use_unicode: bool = True) -> str:
+        """Render all diagnostics."""
         out: List[str] = []
         src_lines = self.source.splitlines() if self.source else None
 
         for d in self.items:
-            # ----- header (same as before, abbreviated) -----
-            # Use diagnostic-specific filename if available (for multi-file reporting), otherwise fall back to reporter filename
             filename = d.filename or self.filename
-
-            # Convert absolute path to relative path with ./ prefix
-            try:
-                from pathlib import Path
-                abs_path = Path(filename).resolve()
-                cwd = Path.cwd()
-                rel_path = abs_path.relative_to(cwd)
-                filename = f"./{rel_path}"
-            except (ValueError, Exception):
-                # If relative_to fails (different drives, etc), just use basename
-                from pathlib import Path
-                filename = Path(filename).name
+            filename = self._resolve_filename(filename)
 
             loc = f"{filename}:{d.span.line}:{d.span.col}" if d.span else filename
 
-            # Ensure message ends with period
             message = d.message if d.message.endswith('.') else f"{d.message}."
 
             if use_color:
@@ -100,19 +181,8 @@ class Reporter:
             else:
                 head = f"{loc}: {d.kind} [{d.code}]: {message}"
 
-            # ----- snippet block -----
             if d.span:
-                # Determine which source to use for this diagnostic
-                diagnostic_src_lines = src_lines
-
-                # If diagnostic has a different filename, read its source
-                if d.filename and d.filename != self.filename:
-                    try:
-                        from pathlib import Path
-                        diagnostic_source = Path(d.filename).read_text(encoding="utf-8")
-                        diagnostic_src_lines = diagnostic_source.splitlines()
-                    except Exception:
-                        diagnostic_src_lines = None  # Fallback if we can't read the file
+                diagnostic_src_lines = self._get_source_lines(d.filename or self.filename, src_lines)
 
                 if diagnostic_src_lines is not None:
                     line_idx = d.span.line - 1
@@ -120,69 +190,124 @@ class Reporter:
                 else:
                     line_text = ""
 
-                # 1-based columns; ensure at least one column
                 start = max(1, d.span.col)
-                end = max(start, d.span.end_col)  # kept for future multi-char spans
+                end = max(start, d.span.end_col)
 
                 if use_unicode:
-                    # New format with top curve
                     if use_color:
                         gray = lambda s: f"{C.GRAY}{s}{C.RESET}"
                         error_color = C.RED if d.kind == "error" else C.YELLOW
 
-                    # Line 1: Top curve with error message
                     top_curve = "  ╭──┤ "
                     if use_color:
                         out.append(f"{gray(top_curve)}{head}")
                     else:
                         out.append(f"{top_curve}{head}")
 
-                    # Line 2: Source code line (indented by 1 space)
                     line_prefix = "  │  "
                     if use_color:
                         out.append(f"{gray('  │')}{' ' * 1}{line_text}")
                     else:
                         out.append(f"{line_prefix}{line_text}")
 
-                    # Line 3: Caret line (indented by 1 space to align with source)
-                    caret_prefix = "  │  "
-                    caret = " " * (start - 1) + "┯"
-                    if use_color:
-                        colored_caret = f"{error_color}{caret}{C.RESET}"
-                        out.append(f"{gray('  │')}{' ' * 1}{colored_caret}")
+                    span_len = end - start + 1
+                    if span_len <= 1:
+                        marker = " " * (start - 1) + "\u252c"
                     else:
-                        out.append(f"{caret_prefix}{caret}")
+                        left = span_len // 2
+                        right = span_len - left - 1
+                        marker = " " * (start - 1) + "\u2500" * left + "\u252c" + "\u2500" * right
 
-                    # Line 4: Bottom curve
-                    guide_len = start  # +1 for the indent space
-                    guide = "─" * guide_len + "╯"
-                    guide_prefix = "  ╰"
                     if use_color:
-                        colored_guide = f"{C.GRAY}{'─' * guide_len}{C.RESET}" + \
-                                       f"{error_color}╯{C.RESET}"
-                        out.append(f"{gray(guide_prefix)}{colored_guide}")
+                        out.append(f"{gray('  \u2502')}{' ' * 1}{error_color}{marker}{C.RESET}")
                     else:
-                        out.append(f"{guide_prefix}{guide}")
+                        out.append(f"{line_prefix}{marker}")
+
+                    # Check if any sub-diagnostics have spans (continuous box)
+                    has_span_subs = any(s.span for s in d.sub)
+
+                    guide_len = start + (span_len // 2 if span_len > 1 else 0)
+
+                    if not has_span_subs:
+                        if use_color:
+                            out.append(f"{gray('  \u2570')}{C.GRAY}{'\u2500' * guide_len}{C.RESET}{error_color}\u256f{C.RESET}")
+                        else:
+                            out.append(f"  \u2570{'\u2500' * guide_len}\u256f")
+                    else:
+                        if use_color:
+                            out.append(f"{gray('  \u251c')}{C.GRAY}{'\u2500' * guide_len}{C.RESET}{error_color}\u256f{C.RESET}")
+                        else:
+                            out.append(f"  \u251c{'\u2500' * guide_len}\u256f")
 
                 else:
-                    # ASCII fallback: header on top, then source and caret
                     out.append(head)
                     line_prefix  = "  | "
                     caret_prefix = "  ` "
+                    span_len = end - start + 1
+                    if span_len <= 1:
+                        ascii_marker = " " * (start - 1) + "^"
+                    else:
+                        left = span_len // 2
+                        right = span_len - left - 1
+                        ascii_marker = " " * (start - 1) + "-" * left + "+" + "-" * right
                     out.append(f"{line_prefix}{line_text}")
-                    out.append(f"{caret_prefix}{' ' * (start - 1) + '^'}")
+                    out.append(f"{caret_prefix}{ascii_marker}")
             else:
-                # No span - just output the header
                 out.append(head)
+
+            # Render sub-diagnostics (notes, help)
+            span_subs = [s for s in d.sub if s.span]
+            no_span_subs = [s for s in d.sub if not s.span]
+
+            for i, sub in enumerate(span_subs):
+                sub_filename = sub.filename or d.filename or self.filename
+                sub_filename = self._resolve_filename(sub_filename)
+                sub_loc = f"{sub_filename}:{sub.span.line}:{sub.span.col}"
+                sub_src_lines = self._get_source_lines(sub.filename or d.filename or self.filename, src_lines)
+                is_last = (i == len(span_subs) - 1)
+
+                if use_unicode:
+                    sub_kind_color = C.BLUE if sub.kind == "note" else C.BOLD
+                    if use_color:
+                        out.append(f"{C.GRAY}  \u2502{C.RESET}")
+                        sub_label = f"{C.CYAN}{sub_loc}{C.RESET}: {sub_kind_color}{sub.kind}{C.RESET}: {sub.message}"
+                        out.append(f"{C.GRAY}  \u251c\u2500\u2500\u2524{C.RESET} {sub_label}")
+                    else:
+                        out.append(f"  \u2502")
+                        out.append(f"  \u251c\u2500\u2500\u2524 {sub_loc}: {sub.kind}: {sub.message}")
+                    note_color = C.BLUE if use_color else ""
+                    self._render_snippet(sub.span, sub_src_lines, note_color, use_color, use_unicode, out)
+
+                    if is_last:
+                        sub_start = max(1, sub.span.col)
+                        sub_end = max(sub_start, sub.span.end_col)
+                        sub_span_len = sub_end - sub_start + 1
+                        sub_guide = sub_start + (sub_span_len // 2 if sub_span_len > 1 else 0)
+                        if use_color:
+                            out.append(f"{C.GRAY}  \u2570{'\u2500' * sub_guide}\u256f{C.RESET}")
+                        else:
+                            out.append(f"  \u2570{'\u2500' * sub_guide}\u256f")
+                else:
+                    sub_kind_color = C.BLUE if (use_color and sub.kind == "note") else (C.BOLD if use_color else "")
+                    if use_color:
+                        out.append(f"  = {sub_kind_color}{sub.kind}{C.RESET}: {sub.message}")
+                        out.append(f"    {C.CYAN}{sub_loc}{C.RESET}")
+                    else:
+                        out.append(f"  = {sub.kind}: {sub.message}")
+                        out.append(f"    {sub_loc}")
+                    self._render_snippet(sub.span, sub_src_lines, "", use_color, use_unicode, out, prefix="    ")
+
+            for sub in no_span_subs:
+                sub_kind_color = C.BLUE if sub.kind == "note" else C.BOLD
+                if use_color:
+                    out.append(f"  = {sub_kind_color}{sub.kind}{C.RESET}: {sub.message}")
+                else:
+                    out.append(f"  = {sub.kind}: {sub.message}")
 
         return "\n".join(out)
 
     def print(self, stream=None, use_color: Optional[bool] = None, use_unicode: Optional[bool] = None) -> None:
-        """Print diagnostics to `stream` (default: sys.stderr).
-
-        Color is auto-enabled for TTY unless NO_COLOR or TERM=dumb.
-        Unicode prefixes (│ / ╰) are auto-enabled for TTY unless NO_UNICODE or TERM=dumb.
-        """
+        """Print diagnostics to `stream` (default: sys.stderr)."""
         import os, sys
         stream = stream or sys.stderr
 

@@ -443,7 +443,8 @@ def validate_boolean_condition(validator: 'TypeValidator', expr: Expr, context: 
             return
 
         # All other types are invalid
-        er.emit(validator.reporter, er.ERR.CE2005, expr.loc)
+        er.emit_with(validator.reporter, er.ERR.CE2005, expr.loc) \
+            .help("use '== 0' or '!= 0' for integer conditions").emit()
 
 
 def check_propagation_in_expression(expr: Expr) -> bool:

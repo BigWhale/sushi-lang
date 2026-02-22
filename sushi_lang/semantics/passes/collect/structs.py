@@ -95,14 +95,12 @@ class StructCollector:
 
         # Check for duplicate struct names (both regular and generic namespaces)
         if name in self.structs.by_name:
-            prev = self.structs.by_name[name]
-            # Struct types don't have a direct name_span, so use the struct name
-            er.emit(self.r, ERR.CE0004, name_span, name=name, prev_loc=str(prev))
+            er.emit(self.r, ERR.CE0004, name_span, name=name)
             return
 
         if name in self.generic_structs.by_name:
-            # Duplicate with existing generic struct
-            er.emit(self.r, ERR.CE0004, name_span, name=name, prev_loc="<predefined generic>")
+            er.emit_with(self.r, ERR.CE0004, name_span, name=name) \
+                .note("predefined as generic struct").emit()
             return
 
         # Collect struct fields

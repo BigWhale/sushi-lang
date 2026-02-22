@@ -263,23 +263,21 @@ class EnumCollector:
 
         # Check for duplicate enum names (both regular and generic namespaces)
         if name in self.enums.by_name:
-            prev = self.enums.by_name[name]
-            # Use CE2046 for duplicate enum error
-            er.emit(self.r, ERR.CE2046, name_span, name=name, prev_loc=str(prev))
+            er.emit(self.r, ERR.CE2046, name_span, name=name)
             return
 
         if name in self.structs.by_name:
-            prev = self.structs.by_name[name]
-            er.emit(self.r, ERR.CE0006, name_span, name=name, prev_loc=str(prev))
+            er.emit(self.r, ERR.CE0006, name_span, name=name)
             return
 
         if name in self.generic_structs.by_name:
-            er.emit(self.r, ERR.CE0006, name_span, name=name, prev_loc="<predefined generic>")
+            er.emit_with(self.r, ERR.CE0006, name_span, name=name) \
+                .note("predefined as generic struct").emit()
             return
 
         if name in self.generic_enums.by_name:
-            # Duplicate with existing generic enum
-            er.emit(self.r, ERR.CE2046, name_span, name=name, prev_loc="<predefined generic>")
+            er.emit_with(self.r, ERR.CE2046, name_span, name=name) \
+                .note("predefined as generic enum").emit()
             return
 
         # Collect enum variants

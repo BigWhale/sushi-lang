@@ -1,0 +1,7 @@
+# Diagnostic test: CE2509 with help message
+# Exercises: help message (no span)
+
+fn main() i32:
+    let string a = "hello"
+    let string b = a + " world"
+    return Result.Ok(0)

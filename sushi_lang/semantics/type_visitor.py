@@ -173,7 +173,8 @@ class ExpressionValidator(RecursiveVisitor):
         if node.op == "+":
             # Emit error if either operand is a string
             if left_type == BuiltinType.STRING or right_type == BuiltinType.STRING:
-                er.emit(self.type_validator.reporter, er.ERR.CE2509, node.loc)
+                er.emit_with(self.type_validator.reporter, er.ERR.CE2509, node.loc) \
+                    .help("use string interpolation: \"{a}{b}\"").emit()
 
         # Check for mixed numeric types in comparison and arithmetic operations
         if node.op in ["==", "!=", "<", "<=", ">", ">=", "+", "-", "*", "/", "%"]:

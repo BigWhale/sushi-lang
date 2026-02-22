@@ -1,0 +1,8 @@
+# Diagnostic test: CE2005 with help message
+# Exercises: help message (no span)
+
+fn main() i32:
+    let i32 x = 1
+    if (x):
+        let i32 y = 2
+    return Result.Ok(0)

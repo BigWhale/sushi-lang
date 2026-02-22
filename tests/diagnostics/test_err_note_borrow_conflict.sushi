@@ -1,0 +1,18 @@
+# Diagnostic test: CE2407 with note pointing to first borrow
+# Exercises: note with secondary span (peek/poke conflict)
+
+fn read_val(&peek i32 a) i32:
+    return Result.Ok(a)
+
+fn write_val(&poke i32 b) ~:
+    b := b + 1
+    return Result.Ok(~)
+
+fn both(&peek i32 a, &poke i32 b) ~:
+    b := a
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32 x = 42
+    both(&peek x, &poke x)??
+    return Result.Ok(0)

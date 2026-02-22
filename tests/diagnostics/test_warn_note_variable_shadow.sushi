@@ -1,0 +1,8 @@
+# Diagnostic test: CW1002 with note pointing to first declaration
+# Exercises: note with secondary span on warning
+
+fn main() i32:
+    let i32 x = 1
+    if (true):
+        let i32 x = 2
+    return Result.Ok(0)
