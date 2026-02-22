@@ -2,6 +2,17 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [0.6.1] - 2026-02-22
+
+### Added
+- End-to-end release tests that validate wheels before publishing
+  - Installs wheel into clean venv, compiles and runs 5 sushi programs
+  - Tests basic compilation, stdlib linking, generics, HashMap, multi-file builds
+  - Runs on both Linux and macOS in CI
+
+### Changed
+- Release workflow restructured: wheels are tested on both platforms before publishing to GitHub Releases
+
 ## [0.6.0] - 2026-02-22
 
 ### Added
