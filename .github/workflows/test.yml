@@ -11,6 +11,7 @@ on:
 
 jobs:
   test:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     container:
       image: debian:trixie-slim
@@ -66,6 +67,47 @@ jobs:
 
       - name: Run tests
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run python tests/run_tests.py
+
+  badges:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie-slim
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          apt-get update
+          apt-get install -y wget ca-certificates gnupg lsb-release curl build-essential cmake git jq
+
+      - name: Install LLVM 20
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg allow-insecure=yes] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee /etc/apt/sources.list.d/llvm.list
+          echo "deb-src [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg allow-insecure=yes] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee -a /etc/apt/sources.list.d/llvm.list
+          apt-get update -o Acquire::AllowInsecureRepositories=true
+          apt-get install -y --allow-unauthenticated llvm-20 llvm-20-dev
+
+      - name: Install uv from Astral
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install Python dependencies with uv
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          LLVM_CONFIG=/usr/bin/llvm-config-20 uv sync --extra dev
+
+      - name: Make sushic executable
+        run: chmod +x sushic
+
+      - name: Run tests
         id: run_tests
         run: |
           export PATH="$HOME/.local/bin:$PATH"
@@ -74,7 +116,6 @@ jobs:
         continue-on-error: true
 
       - name: Generate badge data
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           uv run python << 'EOF'
@@ -153,7 +194,6 @@ jobs:
           EOF
 
       - name: Update Gist with badge data
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         env:
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
         run: |
@@ -198,13 +238,3 @@ jobs:
           EOF
 
           echo "Successfully updated Gist with badge data"
-
-      - name: Fail job if tests failed
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
-        run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          FAILED=$(uv run python -c "import json; print(json.load(open('test_results.json'))['failed'])")
-          if [ "$FAILED" != "0" ]; then
-            echo "Tests failed: $FAILED test(s) failed"
-            exit 1
-          fi
