@@ -388,14 +388,14 @@ uv build --wheel
 
 # The wheel will be created in dist/
 ls dist/
-# sushi_lang-0.4.2-py3-none-any.whl
+# sushi_lang-0.6.0-py3-none-any.whl
 ```
 
 ### Installing from Wheel
 
 ```bash
 # Install in a virtual environment
-pip install sushi_lang-0.4.2-py3-none-any.whl
+pip install sushi_lang-0.6.0-py3-none-any.whl
 
 # The sushic command is now available
 sushic program.sushi
@@ -422,8 +422,8 @@ platforms via `.github/workflows/release.yml`. The workflow:
 3. Attaches the wheel to the GitHub release
 
 To create a release:
-1. Tag a commit: `git tag v0.4.2`
-2. Push the tag: `git push origin v0.4.2`
+1. Tag a commit: `git tag v0.6.0`
+2. Push the tag: `git push upstream v0.6.0`
 3. Create a release on GitHub from the tag
 4. The workflow will automatically build and attach the wheel
 

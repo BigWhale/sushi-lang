@@ -2,6 +2,36 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [0.6.0] - 2026-02-22
+
+### Added
+- Incremental compilation with per-unit object file caching
+  - Each .sushi unit compiles to its own .o file, cached in `__sushi_cache__/`
+  - Cache invalidation via content-based SHA-256 semantic fingerprints
+  - Stdlib and library imports also cached as separate .o files
+  - Monomorphized generics use `linkonce_odr` linkage for linker deduplication
+- New CLI flags: `--no-incremental`, `--clean-cache`, `--cache-dir`
+- HashMap `.entries()` method returning `Iterator<Entry<K, V>>` for key-value pair iteration
+- `Entry<K, V>` struct with `.key` and `.value` fields
+- Error diagnostic infrastructure with note/help sub-diagnostics
+  - Polished rendering with T-junction markers, continuous box drawing, colored notes
+- `--platform` flag for stdlib build script
+
+### Changed
+- Multi-unit compilation now uses two-path architecture: monolithic (single-file) and incremental (multi-unit)
+- Semantic analysis remains whole-program; only LLVM codegen is cached per-unit
+
+### Fixed
+- Struct type propagation in `Result.realise()` method
+- Missing Linux stdlib .bc files
+- CI workflow: always run tests on push, skip only for docs-only PRs
+- Reliable code change detection using dorny/paths-filter
+
+### Documentation
+- Stdlib build and library format documentation
+- Updated compiler reference with incremental compilation section
+- Updated architecture docs with incremental compilation internals
+
 ## [0.5.0] - 2025-12-20
 
 ### Changed

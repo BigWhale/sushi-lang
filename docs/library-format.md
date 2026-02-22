@@ -166,7 +166,7 @@ Example output:
 ```
 Library: mylib
 Platform: darwin
-Compiler: 0.5.0
+Compiler: 0.6.0
 Compiled: 2025-12-20T10:30:00+00:00
 Protocol: 1.0
 
