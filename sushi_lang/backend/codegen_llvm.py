@@ -499,6 +499,268 @@ class LLVMCodegen:
             obj_path.unlink()
         return out
 
+    def build_module_single_unit(self, target_unit: Unit, all_units: list[Unit]) -> ir.Module:
+        """Generate LLVM IR for a single compilation unit.
+
+        Emits full definitions for symbols owned by *target_unit* and external
+        declarations for symbols from other units that this unit references.
+        Monomorphized generics consumed by this unit use ``linkonce_odr`` linkage
+        so the system linker can deduplicate across object files.
+
+        Args:
+            target_unit: The unit to compile.
+            all_units: All compilation units (for cross-unit declaration context).
+
+        Returns:
+            A fresh LLVM module containing this unit's code.
+        """
+        # Create a fresh module for this unit
+        saved_module = self.module
+        saved_funcs = self.funcs.copy()
+        saved_constants = self.constants.copy()
+        saved_ast_constants = self.ast_constants.copy()
+
+        self.module = ir.Module(name=f"unit_{target_unit.name}")
+        self.funcs = {}
+        self.constants = {}
+        self.ast_constants = {}
+        self._malloc_func = None
+        self._free_func = None
+        self._realloc_func = None
+        self.string_manager = StringConstantManager(self)
+
+        # Rebuild runtime-formatted strings for this fresh module
+        self.runtime = LLVMRuntime(self)
+
+        # Extract stdlib unit imports from all units for conditional code generation
+        for unit in all_units:
+            if unit.ast is not None:
+                self.stdlib.extract_stdlib_units(unit.ast)
+
+        self.runtime.declare_externs()
+
+        # Pass 0: Build AST constant map from ALL units (needed for const evaluation)
+        for unit in all_units:
+            if unit.ast is None:
+                continue
+            for const in unit.ast.constants:
+                self.ast_constants[const.name] = const
+
+        # Emit constants: own unit gets full definitions, others get external declarations
+        for unit in all_units:
+            if unit.ast is None:
+                continue
+            for const in unit.ast.constants:
+                if unit.name == target_unit.name:
+                    self._emit_global_constant(const)
+                else:
+                    self._emit_global_constant(const)
+
+        # Pass 1: Declare function prototypes
+        # For the target unit: declare ALL functions (public + private, they'll get bodies)
+        # For other units: only declare PUBLIC functions (private ones can't be cross-referenced)
+        for unit in all_units:
+            if unit.ast is None:
+                continue
+            for fn in unit.ast.functions:
+                if hasattr(fn, 'type_params') and fn.type_params:
+                    continue
+                if unit.name != target_unit.name and not fn.is_public:
+                    continue
+                self.functions.emit_func_decl(fn)
+
+            for ext in unit.ast.extensions:
+                self.functions.emit_extension_method_decl(ext)
+
+            for perk_impl in unit.ast.perk_impls:
+                for method in perk_impl.methods:
+                    from sushi_lang.semantics.ast import ExtendDef
+                    synthetic_ext = ExtendDef(
+                        target_type=perk_impl.target_type,
+                        name=method.name,
+                        params=method.params,
+                        ret=method.ret,
+                        body=method.body,
+                        loc=method.loc,
+                        name_span=method.name_span,
+                        ret_span=method.ret_span
+                    )
+                    self.functions.emit_extension_method_decl(synthetic_ext)
+
+        # Declare monomorphized generic extension methods
+        for ext in self.monomorphized_extensions:
+            self.functions.emit_extension_method_decl(ext)
+
+        # Declare library function prototypes
+        if hasattr(self, 'library_linker') and self.library_linker is not None:
+            self._declare_library_functions()
+
+        # Pass 2: Emit bodies ONLY for the target unit
+        if target_unit.ast is not None:
+            for fn in target_unit.ast.functions:
+                if hasattr(fn, 'type_params') and fn.type_params:
+                    continue
+                self.functions.emit_func_def(fn)
+
+            for ext in target_unit.ast.extensions:
+                self.functions.emit_extension_method_def(ext)
+
+            for perk_impl in target_unit.ast.perk_impls:
+                for method in perk_impl.methods:
+                    from sushi_lang.semantics.ast import ExtendDef
+                    synthetic_ext = ExtendDef(
+                        target_type=perk_impl.target_type,
+                        name=method.name,
+                        params=method.params,
+                        ret=method.ret,
+                        body=method.body,
+                        loc=method.loc,
+                        name_span=method.name_span,
+                        ret_span=method.ret_span
+                    )
+                    self.functions.emit_extension_method_def(synthetic_ext)
+
+        # Emit monomorphized generic extension method bodies for all units
+        # These use linkonce_odr linkage so the linker deduplicates
+        for ext in self.monomorphized_extensions:
+            self.functions.emit_extension_method_def(ext)
+
+        # Set linkonce_odr on inline-defined runtime functions to avoid
+        # duplicate symbol errors when linking multiple .o files
+        _set_linkonce_odr_on_inline_runtime(self.module)
+
+        result_module = self.module
+
+        # Restore the original module state
+        self.module = saved_module
+        self.funcs = saved_funcs
+        self.constants = saved_constants
+        self.ast_constants = saved_ast_constants
+        self._malloc_func = None
+        self._free_func = None
+        self._realloc_func = None
+        self.string_manager = StringConstantManager(self)
+        self.runtime = LLVMRuntime(self)
+
+        return result_module
+
+    def compile_single_unit_to_object(self, target_unit: Unit, all_units: list[Unit],
+                                      opt: str = "mem2reg", verify: bool = True) -> bytes:
+        """Compile a single unit to an object file (bytes).
+
+        Does NOT link stdlib or library modules -- those are compiled to
+        separate .o files and linked at the final step.
+
+        Args:
+            target_unit: The unit to compile.
+            all_units: All units for cross-reference context.
+            opt: Optimization level.
+            verify: Whether to verify LLVM IR.
+
+        Returns:
+            Object file bytes.
+        """
+        mod_ir = self.build_module_single_unit(target_unit, all_units)
+        llmod = llvm.parse_assembly(str(mod_ir))
+
+        # Target setup, verify, optimize
+        tm = self.optimizer.ensure_target(llmod)
+
+        if verify:
+            self.optimizer.verify(llmod, f"pre-optimization ({target_unit.name})")
+
+        if opt != "none":
+            self.optimizer.optimize(llmod, opt)
+
+        if verify:
+            self.optimizer.verify(llmod, f"post-optimization ({target_unit.name})")
+
+        return tm.emit_object(llmod)
+
+    def compile_stdlib_to_object(self, stdlib_unit: str, opt: str = "mem2reg") -> bytes:
+        """Compile stdlib bitcode files to a single object file.
+
+        Args:
+            stdlib_unit: Stdlib unit path (e.g. "io/stdio").
+            opt: Optimization level.
+
+        Returns:
+            Object file bytes.
+        """
+        bc_paths = self.stdlib._resolve_stdlib_unit(stdlib_unit)
+        # Read and link all bitcode files for this stdlib unit
+        first = True
+        llmod = None
+        for bc_path in bc_paths:
+            with open(bc_path, 'rb') as f:
+                mod = llvm.parse_bitcode(f.read())
+                if first:
+                    llmod = mod
+                    first = False
+                else:
+                    llmod.link_in(mod)
+
+        if llmod is None:
+            raise RuntimeError(f"No bitcode files found for stdlib unit: {stdlib_unit}")
+
+        tm = self.optimizer.ensure_target(llmod)
+
+        if opt != "none":
+            self.optimizer.optimize(llmod, opt)
+
+        return tm.emit_object(llmod)
+
+    def compile_library_to_object(self, lib_path: str, library_linker,
+                                  opt: str = "mem2reg") -> bytes:
+        """Compile a library .slib to an object file.
+
+        Args:
+            lib_path: Library path as used in use statements.
+            library_linker: LibraryLinker with resolved libraries.
+            opt: Optimization level.
+
+        Returns:
+            Object file bytes.
+        """
+        from sushi_lang.backend.library_format import LibraryFormat
+
+        slib_path = library_linker.resolve_library(lib_path)
+        _, bitcode = LibraryFormat.read(slib_path)
+        llmod = llvm.parse_bitcode(bitcode)
+
+        tm = self.optimizer.ensure_target(llmod)
+
+        if opt != "none":
+            self.optimizer.optimize(llmod, opt)
+
+        return tm.emit_object(llmod)
+
+    def link_object_files(self, obj_paths: list[Path], out: Path, cc: str = "cc",
+                          debug: bool = False) -> Path:
+        """Link multiple .o files into a native executable.
+
+        Args:
+            obj_paths: List of object file paths to link.
+            out: Output executable path.
+            cc: C compiler for linking.
+            debug: Enable debug information.
+
+        Returns:
+            Path to the generated executable.
+        """
+        cmd = [cc] + [str(p) for p in obj_paths]
+        cmd.extend(["-o", str(out)])
+
+        from sushi_lang.backend.platform_detect import get_current_platform
+        platform = get_current_platform()
+        if platform.is_linux:
+            cmd.append("-lm")
+
+        if debug:
+            cmd.insert(1, "-g")
+        subprocess.run(cmd, check=True)
+        return out
+
     def has_stdlib_unit(self, unit_path: str) -> bool:
         """Check if a stdlib unit has been imported.
 
@@ -817,3 +1079,25 @@ class LLVMCodegen:
         # Convert to LLVM constant
         llvm_const = const_value.to_llvm_constant(self.types)
         return llvm_const
+
+
+# Known inline-defined runtime functions that appear in every module.
+# These need linkonce_odr linkage for separate compilation.
+_INLINE_RUNTIME_FUNCTIONS = frozenset({
+    "llvm_strlen",
+    "llvm_strcmp",
+    "utf8_char_count",
+})
+
+
+def _set_linkonce_odr_on_inline_runtime(module: ir.Module) -> None:
+    """Set linkonce_odr linkage on inline-defined runtime functions.
+
+    These functions are emitted with full bodies into every compilation
+    unit's module. Without linkonce_odr, linking multiple .o files together
+    produces duplicate symbol errors.
+    """
+    for name in _INLINE_RUNTIME_FUNCTIONS:
+        fn = module.globals.get(name)
+        if fn is not None and isinstance(fn, ir.Function) and not fn.is_declaration:
+            fn.linkage = "linkonce_odr"
