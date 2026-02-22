@@ -137,11 +137,17 @@ jobs:
           name: wheel
           path: dist/
 
+      - name: Install Python 3.13
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv python install 3.13
+
       - name: Run e2e release tests
         run: |
           export PATH="$HOME/.local/bin:$PATH"
+          PYTHON=$(uv python find 3.13)
           WHEEL=$(ls dist/*.whl | head -1)
-          python3.13 tests/e2e/run_release_test.py --wheel "$WHEEL" --python python3.13
+          $PYTHON tests/e2e/run_release_test.py --wheel "$WHEEL"
 
   test-wheel-darwin:
     needs: [build-wheel]
@@ -151,7 +157,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Python
+      - name: Install uv and Python
         uses: astral-sh/setup-uv@v4
         with:
           python-version: "3.13"
@@ -164,8 +170,9 @@ jobs:
 
       - name: Run e2e release tests
         run: |
+          PYTHON=$(uv python find 3.13)
           WHEEL=$(ls dist/*.whl | head -1)
-          python3 tests/e2e/run_release_test.py --wheel "$WHEEL"
+          $PYTHON tests/e2e/run_release_test.py --wheel "$WHEEL"
 
   publish-release:
     needs: [test-wheel-linux, test-wheel-darwin]
