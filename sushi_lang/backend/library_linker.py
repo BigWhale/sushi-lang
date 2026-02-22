@@ -43,30 +43,36 @@ class LibraryLinker:
         self.loaded_libraries: dict[str, dict] = {}  # lib_name -> manifest dict
 
     def _get_search_paths(self) -> list[Path]:
-        """Get library search paths from SUSHI_LIB_PATH environment variable.
+        """Get library search paths.
 
-        Returns:
-            List of directories to search for libraries.
-
-        Default:
-            [current_directory] if SUSHI_LIB_PATH not set.
+        Search order:
+            1. SUSHI_LIB_PATH directories (if set)
+            2. Nori bento packages (~/.sushi/bento/*/lib/)
+            3. Current directory (always included as fallback)
         """
+        paths: list[Path] = []
+
+        # 1. SUSHI_LIB_PATH
         lib_path = os.environ.get('SUSHI_LIB_PATH')
-        if not lib_path:
-            return [Path.cwd()]
+        if lib_path:
+            separator = ';' if platform.system() == 'Windows' else ':'
+            for path_str in lib_path.split(separator):
+                path_str = path_str.strip()
+                if path_str:
+                    paths.append(Path(path_str).expanduser())
 
-        # Split by : on Unix, ; on Windows
-        separator = ';' if platform.system() == 'Windows' else ':'
+        # 2. Nori bento packages
+        bento_dir = Path.home() / ".sushi" / "bento"
+        if bento_dir.is_dir():
+            for pkg_dir in sorted(bento_dir.iterdir()):
+                lib_dir = pkg_dir / "lib"
+                if lib_dir.is_dir():
+                    paths.append(lib_dir)
 
-        paths = []
-        for path_str in lib_path.split(separator):
-            path_str = path_str.strip()
-            if path_str:
-                paths.append(Path(path_str).expanduser())
-
-        # Always include current directory as fallback
-        if Path.cwd() not in paths:
-            paths.append(Path.cwd())
+        # 3. Current directory as fallback
+        cwd = Path.cwd()
+        if cwd not in paths:
+            paths.append(cwd)
 
         return paths
 

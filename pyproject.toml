@@ -40,6 +40,7 @@ dev = [
 
 [project.scripts]
 sushic = "sushi_lang.compiler:main"
+nori = "sushi_lang.packager:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["sushi_lang"]

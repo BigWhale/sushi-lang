@@ -20,6 +20,11 @@ advanced features and compiler internals.
 - [Generics](generics.md) - Generic types, functions, and monomorphization
 - [Perks](perks.md) - Traits/interfaces for polymorphic behavior with static dispatch
 
+## Tooling
+
+**Package management and distribution:**
+- [Nori Package Manager](package-manager.md) - Packaging, installing, and managing Sushi libraries
+
 ## Compiler Documentation
 
 **Using and understanding the compiler:**
@@ -65,6 +70,13 @@ Each example includes detailed comments explaining concepts and patterns.
 ./sushic --lib mylib.sushi -o mylib.slib  # Compile library
 ./sushic --lib-info mylib.slib            # Inspect library
 # In main.sushi: use <lib/mylib>          # Import library
+
+# Package management (Nori)
+nori init                                  # Create nori.toml manifest
+nori build                                 # Build .nori package archive
+nori install ./dist/pkg-1.0.0.nori         # Install a package
+nori list                                  # List installed packages
+nori remove my-package                     # Remove a package
 ```
 
 ### Quick Syntax

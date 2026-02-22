@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Capture the original working directory
+ORIGINAL_CWD="$(pwd)"
+
+# Get the directory where nori is located (the sushi project root)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Change to the sushi project directory to ensure Python can find the module
+cd "$SCRIPT_DIR"
+
+# Run nori with the original working directory restored
+exec env NORI_CWD="$ORIGINAL_CWD" uv run --frozen --active python -c "
+import os, sys
+os.chdir(os.environ['NORI_CWD'])
+from sushi_lang.packager import main
+main()
+" "$@"

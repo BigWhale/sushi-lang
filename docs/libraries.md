@@ -124,9 +124,18 @@ fn main() i32:
 
 ## Library Search Path
 
+### Automatic Discovery via Nori
+
+Libraries installed with the [Nori package manager](package-manager.md) are found automatically by the compiler. No environment variable configuration is needed:
+
+```bash
+nori install math-utils from ./dist/
+./sushic program.sushi    # finds math-utils.slib automatically
+```
+
 ### SUSHI_LIB_PATH Environment Variable
 
-The compiler searches for `.slib` files in directories specified by `SUSHI_LIB_PATH`:
+For libraries not managed by Nori, the compiler searches directories specified by `SUSHI_LIB_PATH`:
 
 ```bash
 export SUSHI_LIB_PATH=/usr/local/lib/sushi:./libs:~/mylibs
@@ -138,7 +147,8 @@ The path is colon-separated on Unix (semicolon on Windows).
 ### Search Order
 
 1. Each directory in `SUSHI_LIB_PATH` (in order)
-2. Current working directory (always searched last)
+2. Nori packages (`~/.sushi/bento/*/lib/`)
+3. Current working directory (always searched last)
 
 ### Hierarchical Namespaces
 
@@ -334,6 +344,7 @@ These limitations may be addressed in future versions.
 
 ## See Also
 
+- [Nori Package Manager](package-manager.md) - Packaging and distributing libraries
 - [Compiler Reference](compiler-reference.md) - All compiler options
 - [Getting Started](getting-started.md) - Introduction to Sushi
 - [Standard Library](standard-library.md) - Built-in library modules
