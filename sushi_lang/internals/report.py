@@ -11,6 +11,7 @@ class C:
     DIM   = "\x1b[2m"
     RED   = "\x1b[31m"
     YELLOW = "\x1b[33m"
+    BLUE  = "\x1b[34m"
     CYAN  = "\x1b[36m"
     GRAY  = "\x1b[90m"
 
@@ -136,22 +137,30 @@ class Reporter:
         start = max(1, span.col)
         end = max(start, span.end_col)
         span_len = end - start + 1
-        if span_len <= 1:
-            marker = " " * (start - 1) + "^"
-        else:
-            marker = " " * (start - 1) + "~" * span_len
 
         if use_unicode:
+            if span_len <= 1:
+                marker = " " * (start - 1) + "\u252c"
+            else:
+                left = span_len // 2
+                right = span_len - left - 1
+                marker = " " * (start - 1) + "\u2500" * left + "\u252c" + "\u2500" * right
             if use_color:
                 gray = lambda s: f"{C.GRAY}{s}{C.RESET}"
-                out.append(f"{gray(prefix + '│')}{' ' * 1}{line_text}")
-                out.append(f"{gray(prefix + '│')}{' ' * 1}{color}{marker}{C.RESET}")
+                out.append(f"{gray(prefix + chr(0x2502))}{' ' * 1}{line_text}")
+                out.append(f"{gray(prefix + chr(0x2502))}{' ' * 1}{color}{marker}{C.RESET}")
             else:
-                out.append(f"{prefix}│  {line_text}")
-                out.append(f"{prefix}│  {marker}")
+                out.append(f"{prefix}\u2502  {line_text}")
+                out.append(f"{prefix}\u2502  {marker}")
         else:
+            if span_len <= 1:
+                ascii_marker = " " * (start - 1) + "^"
+            else:
+                left = span_len // 2
+                right = span_len - left - 1
+                ascii_marker = " " * (start - 1) + "-" * left + "+" + "-" * right
             out.append(f"{prefix}| {line_text}")
-            out.append(f"{prefix}` {marker}")
+            out.append(f"{prefix}` {ascii_marker}")
 
     def format(self, use_color: bool = True, use_unicode: bool = True) -> str:
         """Render all diagnostics."""
@@ -203,20 +212,32 @@ class Reporter:
 
                     span_len = end - start + 1
                     if span_len <= 1:
-                        marker = " " * (start - 1) + "^"
+                        marker = " " * (start - 1) + "\u252c"
                     else:
-                        marker = " " * (start - 1) + "~" * span_len
+                        left = span_len // 2
+                        right = span_len - left - 1
+                        marker = " " * (start - 1) + "\u2500" * left + "\u252c" + "\u2500" * right
 
                     if use_color:
-                        out.append(f"{gray('  │')}{' ' * 1}{error_color}{marker}{C.RESET}")
+                        out.append(f"{gray('  \u2502')}{' ' * 1}{error_color}{marker}{C.RESET}")
                     else:
                         out.append(f"{line_prefix}{marker}")
 
-                    guide_len = start
-                    if use_color:
-                        out.append(f"{gray('  ╰')}{C.GRAY}{'─' * guide_len}{C.RESET}{error_color}╯{C.RESET}")
+                    # Check if any sub-diagnostics have spans (continuous box)
+                    has_span_subs = any(s.span for s in d.sub)
+
+                    guide_len = start + (span_len // 2 if span_len > 1 else 0)
+
+                    if not has_span_subs:
+                        if use_color:
+                            out.append(f"{gray('  \u2570')}{C.GRAY}{'\u2500' * guide_len}{C.RESET}{error_color}\u256f{C.RESET}")
+                        else:
+                            out.append(f"  \u2570{'\u2500' * guide_len}\u256f")
                     else:
-                        out.append(f"  ╰{'─' * guide_len}╯")
+                        if use_color:
+                            out.append(f"{gray('  \u251c')}{C.GRAY}{'\u2500' * guide_len}{C.RESET}{error_color}\u256f{C.RESET}")
+                        else:
+                            out.append(f"  \u251c{'\u2500' * guide_len}\u256f")
 
                 else:
                     out.append(head)
@@ -226,46 +247,62 @@ class Reporter:
                     if span_len <= 1:
                         ascii_marker = " " * (start - 1) + "^"
                     else:
-                        ascii_marker = " " * (start - 1) + "~" * span_len
+                        left = span_len // 2
+                        right = span_len - left - 1
+                        ascii_marker = " " * (start - 1) + "-" * left + "+" + "-" * right
                     out.append(f"{line_prefix}{line_text}")
                     out.append(f"{caret_prefix}{ascii_marker}")
             else:
                 out.append(head)
 
             # Render sub-diagnostics (notes, help)
-            for sub in d.sub:
-                if sub.span:
-                    sub_filename = sub.filename or d.filename or self.filename
-                    sub_filename = self._resolve_filename(sub_filename)
-                    sub_loc = f"{sub_filename}:{sub.span.line}:{sub.span.col}"
-                    sub_src_lines = self._get_source_lines(sub.filename or d.filename or self.filename, src_lines)
+            span_subs = [s for s in d.sub if s.span]
+            no_span_subs = [s for s in d.sub if not s.span]
 
-                    if use_unicode:
-                        if use_color:
-                            sub_label = f"{C.CYAN}{sub_loc}{C.RESET}: {C.BOLD}{sub.kind}{C.RESET}: {sub.message}"
-                            out.append(f"{C.GRAY}  ├──┤{C.RESET} {sub_label}")
-                        else:
-                            out.append(f"  ├──┤ {sub_loc}: {sub.kind}: {sub.message}")
-                        note_color = C.CYAN if use_color else ""
-                        self._render_snippet(sub.span, sub_src_lines, note_color, use_color, use_unicode, out)
-                        sub_start = max(1, sub.span.col)
-                        if use_color:
-                            out.append(f"{C.GRAY}  ╰{'─' * sub_start}╯{C.RESET}")
-                        else:
-                            out.append(f"  ╰{'─' * sub_start}╯")
-                    else:
-                        if use_color:
-                            out.append(f"  = {C.BOLD}{sub.kind}{C.RESET}: {sub.message}")
-                            out.append(f"    {C.CYAN}{sub_loc}{C.RESET}")
-                        else:
-                            out.append(f"  = {sub.kind}: {sub.message}")
-                            out.append(f"    {sub_loc}")
-                        self._render_snippet(sub.span, sub_src_lines, "", use_color, use_unicode, out, prefix="    ")
-                else:
+            for i, sub in enumerate(span_subs):
+                sub_filename = sub.filename or d.filename or self.filename
+                sub_filename = self._resolve_filename(sub_filename)
+                sub_loc = f"{sub_filename}:{sub.span.line}:{sub.span.col}"
+                sub_src_lines = self._get_source_lines(sub.filename or d.filename or self.filename, src_lines)
+                is_last = (i == len(span_subs) - 1)
+
+                if use_unicode:
+                    sub_kind_color = C.BLUE if sub.kind == "note" else C.BOLD
                     if use_color:
-                        out.append(f"  = {C.BOLD}{sub.kind}{C.RESET}: {sub.message}")
+                        out.append(f"{C.GRAY}  \u2502{C.RESET}")
+                        sub_label = f"{C.CYAN}{sub_loc}{C.RESET}: {sub_kind_color}{sub.kind}{C.RESET}: {sub.message}"
+                        out.append(f"{C.GRAY}  \u251c\u2500\u2500\u2524{C.RESET} {sub_label}")
+                    else:
+                        out.append(f"  \u2502")
+                        out.append(f"  \u251c\u2500\u2500\u2524 {sub_loc}: {sub.kind}: {sub.message}")
+                    note_color = C.BLUE if use_color else ""
+                    self._render_snippet(sub.span, sub_src_lines, note_color, use_color, use_unicode, out)
+
+                    if is_last:
+                        sub_start = max(1, sub.span.col)
+                        sub_end = max(sub_start, sub.span.end_col)
+                        sub_span_len = sub_end - sub_start + 1
+                        sub_guide = sub_start + (sub_span_len // 2 if sub_span_len > 1 else 0)
+                        if use_color:
+                            out.append(f"{C.GRAY}  \u2570{'\u2500' * sub_guide}\u256f{C.RESET}")
+                        else:
+                            out.append(f"  \u2570{'\u2500' * sub_guide}\u256f")
+                else:
+                    sub_kind_color = C.BLUE if (use_color and sub.kind == "note") else (C.BOLD if use_color else "")
+                    if use_color:
+                        out.append(f"  = {sub_kind_color}{sub.kind}{C.RESET}: {sub.message}")
+                        out.append(f"    {C.CYAN}{sub_loc}{C.RESET}")
                     else:
                         out.append(f"  = {sub.kind}: {sub.message}")
+                        out.append(f"    {sub_loc}")
+                    self._render_snippet(sub.span, sub_src_lines, "", use_color, use_unicode, out, prefix="    ")
+
+            for sub in no_span_subs:
+                sub_kind_color = C.BLUE if sub.kind == "note" else C.BOLD
+                if use_color:
+                    out.append(f"  = {sub_kind_color}{sub.kind}{C.RESET}: {sub.message}")
+                else:
+                    out.append(f"  = {sub.kind}: {sub.message}")
 
         return "\n".join(out)
 
