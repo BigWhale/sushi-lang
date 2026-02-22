@@ -157,6 +157,21 @@ def main(argv: list[str] | None = None) -> int:
         metavar="FILE",
         help="Display metadata from a .slib library file",
     )
+    ap.add_argument(
+        "--no-incremental",
+        action="store_true",
+        help="Force full rebuild, ignoring cached object files",
+    )
+    ap.add_argument(
+        "--clean-cache",
+        action="store_true",
+        help="Remove __sushi_cache__/ directory and exit",
+    )
+    ap.add_argument(
+        "--cache-dir",
+        metavar="PATH",
+        help="Custom cache directory location (default: __sushi_cache__/)",
+    )
     args = ap.parse_args(argv)
 
     if args.version:
@@ -164,6 +179,19 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.lib_info:
         return print_library_info(Path(args.lib_info))
+
+    if args.clean_cache:
+        from sushi_lang.compiler.cache import CacheManager
+        effective_cwd = Path(args.source).resolve().parent if args.source else Path.cwd()
+        cache_dir = Path(args.cache_dir) if args.cache_dir else None
+        cm = CacheManager(effective_cwd, cache_dir=cache_dir)
+        if cm.cache_path.exists():
+            cm.wipe()
+            print(f"Removed cache: {cm.cache_path}")
+        else:
+            print("No cache found.")
+        if not args.source:
+            return 0
 
     if args.lib:
         if args.out and not args.out.endswith('.slib'):

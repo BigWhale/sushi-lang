@@ -38,15 +38,18 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 
 ### Options
 
-| Option        | Description                                        |
-|---------------|----------------------------------------------------|
-| `-o NAME`     | Specify output executable name                     |
-| `--opt LEVEL` | Set optimization level (none, mem2reg, O1, O2, O3) |
-| `--lib`       | Compile to library bitcode instead of executable   |
-| `--traceback` | Show full Python traceback on errors               |
-| `--dump-ast`  | Print abstract syntax tree                         |
-| `--dump-ll`   | Print LLVM IR to terminal                          |
-| `--write-ll`  | Write LLVM IR to `<output>.ll` file                |
+| Option              | Description                                        |
+|---------------------|----------------------------------------------------|
+| `-o NAME`           | Specify output executable name                     |
+| `--opt LEVEL`       | Set optimization level (none, mem2reg, O1, O2, O3) |
+| `--lib`             | Compile to library bitcode instead of executable   |
+| `--traceback`       | Show full Python traceback on errors               |
+| `--dump-ast`        | Print abstract syntax tree                         |
+| `--dump-ll`         | Print LLVM IR to terminal                          |
+| `--write-ll`        | Write LLVM IR to `<output>.ll` file                |
+| `--no-incremental`  | Force full rebuild, ignoring cached object files   |
+| `--clean-cache`     | Remove `__sushi_cache__/` directory and exit       |
+| `--cache-dir PATH`  | Custom cache directory location                    |
 
 ### Library Compilation
 
@@ -69,6 +72,59 @@ fn main() i32:
 ```
 
 See [Libraries](libraries.md) for complete documentation.
+
+### Incremental Compilation
+
+Multi-unit projects (those with `use` statements to other `.sushi` files) automatically use incremental compilation. Each unit is compiled to its own `.o` file and cached in `__sushi_cache__/`. Only units whose content or dependencies change are recompiled.
+
+```bash
+# First build: compiles all units
+./sushic main.sushi
+
+# Second build: reuses cached .o files (near-instant codegen)
+./sushic main.sushi
+
+# Force full rebuild
+./sushic --no-incremental main.sushi
+
+# Clean cache and exit
+./sushic --clean-cache
+
+# Custom cache directory
+./sushic --cache-dir /tmp/my_cache main.sushi
+```
+
+**How it works:**
+- Semantic analysis always runs whole-program (fast, pure Python)
+- After analysis, a content-based fingerprint is computed per unit
+- If the fingerprint matches the cached `.o` file, codegen is skipped
+- Stdlib and library imports are also cached as `.o` files
+- All `.o` files are linked together at the end
+
+**Cache invalidation triggers:**
+- Source file content changes
+- Dependency public API changes (transitive)
+- Compiler version mismatch
+- Optimization level change
+- Platform/target triple change
+
+**Output example:**
+```
+Code generation:
+  main                           [cached]
+  helpers/math                   [rebuilt]
+  helpers/strings                [cached]
+
+Codegen: 3 units (2 cached, 1 rebuilt) in 0.05s
+Linking: 3 units + 1 stdlib in 0.03s
+Success! Wrote native binary: main
+```
+
+**Notes:**
+- Single-file programs skip incremental compilation entirely
+- `--dump-ll` forces the monolithic (non-incremental) path
+- `--write-ll` is not supported in incremental mode
+- The cache directory (`__sushi_cache__/`) is already in `.gitignore`
 
 ## Optimization Levels
 

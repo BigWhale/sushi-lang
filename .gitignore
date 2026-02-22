@@ -32,3 +32,6 @@ a.out
 # direnv
 .direnv/
 .envrc.local
+
+# Incremental compilation cache
+__sushi_cache__/

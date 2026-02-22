@@ -77,6 +77,7 @@ and LLVM-powered code generation.
 - Automatic memory management (RAII) for structs and arrays
 - Full UTF-8 Unicode support
 - Native code generation via LLVM
+- Incremental compilation with per-unit object file caching
 
 ## Quick Start
 
@@ -298,6 +299,7 @@ learning:
 sushi/
 ├── sushi_lang/                  # Main package (installed to site-packages)
 │   ├── compiler.py              # Main compiler entry point
+│   ├── compiler/                # Compilation pipeline & caching
 │   ├── grammar.lark             # Lark grammar specification
 │   ├── semantics/               # Semantic analysis passes
 │   │   ├── passes/              # Multi-pass type checking

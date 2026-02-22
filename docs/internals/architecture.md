@@ -15,22 +15,35 @@ Lark Parser (grammar.lark)
     ↓
 AST Builder (semantics/ast_builder/)
     ↓
-Multi-Pass Semantic Analysis (semantics/passes/)
+Multi-Pass Semantic Analysis (semantics/passes/)     ← always whole-program
     ↓
-LLVM IR Generation (backend/codegen_llvm.py)
+Per-Unit Fingerprint Computation                      ← cache check
+    ↓
+LLVM IR Generation (backend/codegen_llvm.py)          ← per-unit, cached .o files
     ↓
 LLVM Optimization Pipeline
     ↓
-Clang Linking
+Clang Linking (all .o files)
     ↓
 Native Executable
 ```
+
+For multi-unit projects, the compiler uses **incremental compilation**: each unit
+is compiled to its own `.o` file and cached in `__sushi_cache__/`. Only units
+whose semantic fingerprint has changed are recompiled. Single-file programs use
+the direct monolithic path.
 
 ## Directory Structure
 
 ```
 sushi/
 ├── compiler.py                 # Main compiler entry point
+├── compiler/
+│   ├── pipeline.py            # Multi-file compilation orchestration
+│   ├── loader.py              # Unit loading and dependency resolution
+│   ├── cli.py                 # CLI argument parsing
+│   ├── cache.py               # Incremental compilation cache manager
+│   └── fingerprint.py         # Per-unit semantic fingerprint computation
 ├── grammar.lark                # Lark grammar specification
 ├── semantics/
 │   ├── ast_builder/           # Modular AST construction (40 modules)
@@ -396,6 +409,63 @@ array_len(arr)  # Function call
 - CE1004: Use of moved variable
 - CE1007: Cannot rebind while borrowed
 - CE2406: Use of destroyed variable
+
+## Incremental Compilation
+
+Multi-unit projects use per-unit `.o` file caching to avoid redundant LLVM codegen.
+
+### Architecture
+
+```
+Parse all .sushi files                           (always)
+  → Whole-program semantic analysis              (always, fast Python)
+  → Compute per-unit semantic fingerprints       (always, fast)
+  → Per-unit LLVM codegen → .o file              (only if fingerprint changed)
+  → Link all .o files → executable               (always)
+```
+
+Semantic analysis (passes 0-3) remains whole-program because generic instantiation
+collection and monomorphization need the complete call graph. This is pure Python
+and runs in well under a second. The expensive part — LLVM codegen + optimization +
+object emission — is cached per-unit.
+
+### Cache Structure
+
+```
+__sushi_cache__/
+  cache.json                    ← manifest (compiler version, platform, opt level)
+  units/
+    main.o                      ← cached object file
+    main.o.fingerprint          ← semantic fingerprint
+    helpers/math.o
+    helpers/math.o.fingerprint
+  stdlib/
+    io_stdio.o                  ← compiled stdlib bitcode
+  libs/
+    mylib.o                     ← compiled library bitcode
+```
+
+### Fingerprint Computation
+
+Each unit's fingerprint is a SHA-256 hash of:
+- Source file content
+- Public symbol signatures from dependencies
+- AST structure (structs, enums, extensions, perk impls, use statements)
+- Monomorphized extensions consumed by this unit
+
+### Linkage Rules
+
+- Public functions/constants: `external` linkage
+- Private functions/constants: `internal` linkage
+- Monomorphized generics: `linkonce_odr` linkage (linker deduplicates across units)
+- Inline runtime functions (`llvm_strlen`, `llvm_strcmp`, `utf8_char_count`): `linkonce_odr`
+
+### Key Files
+
+- `compiler/pipeline.py` — orchestrates monolithic vs incremental compilation paths
+- `compiler/cache.py` — `CacheManager` class: directory management, manifest, staleness detection
+- `compiler/fingerprint.py` — `compute_unit_fingerprint()`, `compute_stdlib_fingerprint()`, `compute_lib_fingerprint()`
+- `backend/codegen_llvm.py` — `build_module_single_unit()`, `compile_single_unit_to_object()`, `link_object_files()`
 
 ## Backend Architecture
 
