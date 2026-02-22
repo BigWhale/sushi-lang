@@ -1,0 +1,7 @@
+fn main() i32:
+    let i32 a = 6
+    let i32 b = 7
+    let i32 result = a * b
+    if (result == 42):
+        return Result.Ok(0)
+    return Result.Ok(1)

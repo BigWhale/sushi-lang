@@ -1,0 +1,9 @@
+use "helpers/math_helper"
+
+fn main() i32:
+    let i32 result = double(21).realise(0)
+    if (result == MAGIC):
+        println("PASS")
+        return Result.Ok(0)
+    println("FAIL")
+    return Result.Ok(1)

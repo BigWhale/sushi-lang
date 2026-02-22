@@ -1,0 +1,26 @@
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap<string, i32> map = HashMap.new()
+    map.insert("answer", 42)
+    map.insert("towels", 1)
+    let i32 size = map.len()
+    if (size != 2):
+        println("FAIL: wrong size")
+        map.free()
+        return Result.Ok(1)
+    let Maybe<i32> val = map.get("answer")
+    match val:
+        Maybe.Some(v) ->
+            if (v == 42):
+                println("PASS")
+                map.free()
+                return Result.Ok(0)
+            else:
+                println("FAIL: wrong value")
+                map.free()
+                return Result.Ok(1)
+        Maybe.None() ->
+            println("FAIL: key not found")
+            map.free()
+            return Result.Ok(1)
