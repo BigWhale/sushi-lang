@@ -1,0 +1,14 @@
+use <collections/strings>
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let i32 length = s.len()
+    println(length)
+    let string upper = s.upper()
+    println(upper)
+    let bool found = s.contains("Harm")
+    if (found and length == 15):
+        println("PASS")
+        return Result.Ok(0)
+    println("FAIL")
+    return Result.Ok(1)

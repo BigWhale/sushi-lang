@@ -1,0 +1,4 @@
+const i32 MAGIC = 42
+
+public fn double(i32 x) i32:
+    return Result.Ok(x * 2)

@@ -105,13 +105,92 @@ jobs:
       - name: Build wheel
         run: uv build --wheel --python 3.13
 
-      - name: Extract changelog for release
-        id: changelog
-        run: |
-          # Extract version from tag (e.g., v0.4.2 -> 0.4.2)
-          VERSION="${GITHUB_REF_NAME#v}"
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel
+          path: dist/*.whl
 
-          # Extract the section for this version from CHANGELOG.md
+  test-wheel-linux:
+    needs: [build-wheel]
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie-slim
+
+    steps:
+      - name: Install system dependencies
+        run: |
+          apt-get update
+          apt-get install -y git ca-certificates curl build-essential
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wheel
+          path: dist/
+
+      - name: Install Python 3.13
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv python install 3.13
+
+      - name: Run e2e release tests
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          PYTHON=$(uv python find 3.13)
+          WHEEL=$(ls dist/*.whl | head -1)
+          $PYTHON tests/e2e/run_release_test.py --wheel "$WHEEL"
+
+  test-wheel-darwin:
+    needs: [build-wheel]
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
+
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wheel
+          path: dist/
+
+      - name: Run e2e release tests
+        run: |
+          PYTHON=$(uv python find 3.13)
+          WHEEL=$(ls dist/*.whl | head -1)
+          $PYTHON tests/e2e/run_release_test.py --wheel "$WHEEL"
+
+  publish-release:
+    needs: [test-wheel-linux, test-wheel-darwin]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wheel
+          path: dist/
+
+      - name: Extract changelog for release
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
           awk -v ver="$VERSION" '
             /^## \[/ {
               if (found) exit
@@ -120,7 +199,6 @@ jobs:
             }
             found { print }
           ' CHANGELOG.md > release_notes.md
-
           echo "Extracted release notes for version $VERSION"
           cat release_notes.md
 

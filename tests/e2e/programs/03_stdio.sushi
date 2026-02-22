@@ -1,0 +1,5 @@
+use <io/stdio>
+
+fn main() i32:
+    stdout.write("Mostly Harmless\n")
+    return Result.Ok(0)
