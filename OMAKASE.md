@@ -10,7 +10,7 @@ Every package version is uniquely identified by the composite key `(name, versio
 
 | Field         | Type     | Description                                      |
 |---------------|----------|--------------------------------------------------|
-| `name`        | string   | Package name (validated by `NAME_PATTERN`)        |
+| `name`        | string   | Package name (validated by `NAME_PATTERN`)       |
 | `description` | string   | Short description (max 500 chars)                |
 | `author`      | string   | Author name or handle                            |
 | `license`     | string   | SPDX license identifier                          |
@@ -20,9 +20,9 @@ Every package version is uniquely identified by the composite key `(name, versio
 
 | Field         | Type     | Description                                          |
 |---------------|----------|------------------------------------------------------|
-| `version`     | string   | Semver string (validated by `VERSION_PATTERN`)        |
+| `version`     | string   | Semver string (validated by `VERSION_PATTERN`)       |
 | `namespace`   | string   | `stable` or `testing`                                |
-| `platform`    | string   | Target platform: `darwin`, `linux`, `windows`, `any`  |
+| `platform`    | string   | Target platform: `darwin`, `linux`, `windows`, `any` |
 | `sha256`      | string   | Hex-encoded SHA-256 of the `.nori` archive           |
 | `size`        | integer  | Archive size in bytes                                |
 | `libraries`   | string[] | Library files included                               |
@@ -42,28 +42,31 @@ Reuses existing patterns from `sushi_lang/packager/manifest.py`:
 
 ## User Model
 
-| Field            | Type     | Description                                             |
-|------------------|----------|---------------------------------------------------------|
-| `username`       | string   | Unique identifier (validated by `NAME_PATTERN`)          |
-| `email`          | string   | Unique email address                                    |
-| `password`       | string   | bcrypt hash (never returned in API responses)            |
-| `is_superadmin`  | boolean  | Grants full administrative privileges                   |
-| `created_at`     | datetime | Account creation timestamp                              |
-| `updated_at`     | datetime | Last modification timestamp                             |
+| Field            | Type     | Description                                                                     |
+|------------------|----------|---------------------------------------------------------------------------------|
+| `username`       | string   | Unique identifier (validated by `NAME_PATTERN`)                                 |
+| `email`          | string   | Unique email address                                                            |
+| `password`       | string   | bcrypt hash (never returned in API responses)                                   |
+| `is_superadmin`  | boolean  | Grants full administrative privileges                                           |
+| `is_active`      | boolean  | Account status (default: `true`). Inactive users cannot log in or authenticate. |
+| `created_at`     | datetime | Account creation timestamp                                                      |
+| `updated_at`     | datetime | Last modification timestamp                                                     |
 
 - Usernames follow the same `NAME_PATTERN` as package names: lowercase alphanumeric + hyphens, 1-64 chars, starts with a letter.
 - Email is visible only to the user themselves and superadmins.
 - Usernames, group names, and package names share a single flat namespace (no collisions allowed).
+- The first registered user automatically becomes a superadmin.
+- Inactive users (`is_active: false`) are rejected at authentication: login returns `FORBIDDEN`, and existing sessions/tokens stop working.
 
 ## Group Model
 
-| Field       | Type     | Description                                          |
-|-------------|----------|------------------------------------------------------|
-| `name`      | string   | Unique identifier (validated by `NAME_PATTERN`)       |
-| `owner`     | string   | Username of the group owner                          |
-| `members`   | string[] | List of member usernames (always includes `owner`)    |
-| `created_at`| datetime | Group creation timestamp                             |
-| `updated_at`| datetime | Last modification timestamp                          |
+| Field       | Type     | Description                                        |
+|-------------|----------|----------------------------------------------------|
+| `name`      | string   | Unique identifier (validated by `NAME_PATTERN`)    |
+| `owner`     | string   | Username of the group owner                        |
+| `members`   | string[] | List of member usernames (always includes `owner`) |
+| `created_at`| datetime | Group creation timestamp                           |
+| `updated_at`| datetime | Last modification timestamp                        |
 
 - Group names follow the same `NAME_PATTERN` as package names.
 - Only the group owner (or a superadmin) can add/remove members.
@@ -72,16 +75,16 @@ Reuses existing patterns from `sushi_lang/packager/manifest.py`:
 
 ## API Token Model
 
-| Field          | Type              | Description                                      |
-|----------------|-------------------|--------------------------------------------------|
-| `id`           | UUID              | Unique token identifier                          |
-| `name`         | string            | Human-readable label (e.g. "CI deploy")          |
-| `token_prefix` | string            | First 8 characters of the token (for display)    |
+| Field          | Type              | Description                                         |
+|----------------|-------------------|-----------------------------------------------------|
+| `id`           | UUID              | Unique token identifier                             |
+| `name`         | string            | Human-readable label (e.g. "CI deploy")             |
+| `token_prefix` | string            | First 8 characters of the token (for display)       |
 | `token_hash`   | string            | SHA-256 hash of the full token (stored server-side) |
-| `user`         | string            | Username that owns this token                    |
-| `created_at`   | datetime          | Token creation timestamp                         |
-| `last_used_at` | datetime          | Last time the token was used for authentication  |
-| `expires_at`   | datetime or null  | Expiration timestamp (null = never expires)       |
+| `user`         | string            | Username that owns this token                       |
+| `created_at`   | datetime          | Token creation timestamp                            |
+| `last_used_at` | datetime          | Last time the token was used for authentication     |
+| `expires_at`   | datetime or null  | Expiration timestamp (null = never expires)         |
 
 - Token format: `nori_` prefix followed by 48 cryptographically random URL-safe characters (e.g. `nori_a3Bf9x...`).
 - The full token is returned only once at creation. The server stores only `token_hash`.
@@ -90,11 +93,11 @@ Reuses existing patterns from `sushi_lang/packager/manifest.py`:
 
 ## Package Ownership
 
-| Field        | Type   | Description                                            |
-|--------------|--------|--------------------------------------------------------|
-| `package_name` | string | The package this record applies to                  |
-| `owner_kind` | string | `user` or `group`                                     |
-| `owner_name` | string | Username or group name                                |
+| Field          | Type   | Description                         |
+|----------------|--------|-------------------------------------|
+| `package_name` | string | The package this record applies to  |
+| `owner_kind`   | string | `user` or `group`                   |
+| `owner_name`   | string | Username or group name              |
 
 - First publish of a new package name claims ownership for the publishing user.
 - Group ownership: any group member can publish new versions of the package.
@@ -126,29 +129,29 @@ All error responses follow this structure:
 
 Error codes:
 
-| Code                    | HTTP Status | Description                              |
-|-------------------------|-------------|------------------------------------------|
-| `PACKAGE_NOT_FOUND`     | 404         | Package name does not exist              |
-| `VERSION_NOT_FOUND`     | 404         | Specific version does not exist          |
-| `USER_NOT_FOUND`        | 404         | Username does not exist                  |
-| `GROUP_NOT_FOUND`       | 404         | Group name does not exist                |
-| `TOKEN_NOT_FOUND`       | 404         | Token ID does not exist                  |
-| `MEMBER_NOT_FOUND`      | 404         | Username is not a member of the group    |
-| `DUPLICATE_VERSION`     | 409         | Version already exists for this key      |
-| `DUPLICATE_USER`        | 409         | Username or email already registered     |
-| `DUPLICATE_GROUP`       | 409         | Group name already taken                 |
-| `NAME_CONFLICT`         | 409         | Name already exists in another namespace (user/group/package) |
-| `UNAUTHORIZED`          | 401         | Missing or invalid authentication        |
-| `INVALID_CREDENTIALS`   | 401         | Wrong username or password               |
-| `FORBIDDEN`             | 403         | Authenticated but insufficient permissions |
-| `VALIDATION_ERROR`      | 422         | Invalid name, version, or metadata       |
-| `OWNER_CANNOT_BE_REMOVED` | 422      | Cannot remove the group owner from members |
-| `OWNERSHIP_REQUIRED`    | 422         | Group cannot be deleted while it owns packages |
-| `ARCHIVE_TOO_LARGE`    | 413         | Archive exceeds 50 MB limit              |
-| `CHECKSUM_MISMATCH`     | 422         | SHA-256 does not match archive content   |
-| `MANIFEST_MISMATCH`     | 422         | Archive nori.toml does not match metadata|
-| `TOKEN_LIMIT_REACHED`   | 429         | User already has 10 active tokens        |
-| `INTERNAL_ERROR`        | 500         | Unexpected server error                  |
+| Code                      | HTTP Status | Description                                                   |
+|---------------------------|-------------|---------------------------------------------------------------|
+| `PACKAGE_NOT_FOUND`       | 404         | Package name does not exist                                   |
+| `VERSION_NOT_FOUND`       | 404         | Specific version does not exist                               |
+| `USER_NOT_FOUND`          | 404         | Username does not exist                                       |
+| `GROUP_NOT_FOUND`         | 404         | Group name does not exist                                     |
+| `TOKEN_NOT_FOUND`         | 404         | Token ID does not exist                                       |
+| `MEMBER_NOT_FOUND`        | 404         | Username is not a member of the group                         |
+| `DUPLICATE_VERSION`       | 409         | Version already exists for this key                           |
+| `DUPLICATE_USER`          | 409         | Username or email already registered                          |
+| `DUPLICATE_GROUP`         | 409         | Group name already taken                                      |
+| `NAME_CONFLICT`           | 409         | Name already exists in another namespace (user/group/package) |
+| `UNAUTHORIZED`            | 401         | Missing or invalid authentication                             |
+| `INVALID_CREDENTIALS`     | 401         | Wrong username or password                                    |
+| `FORBIDDEN`               | 403         | Authenticated but insufficient permissions                    |
+| `VALIDATION_ERROR`        | 422         | Invalid name, version, or metadata                            |
+| `OWNER_CANNOT_BE_REMOVED` | 422         | Cannot remove the group owner from members                    |
+| `OWNERSHIP_REQUIRED`      | 422         | Group cannot be deleted while it owns packages                |
+| `ARCHIVE_TOO_LARGE`       | 413         | Archive exceeds 50 MB limit                                   |
+| `CHECKSUM_MISMATCH`       | 422         | SHA-256 does not match archive content                        |
+| `MANIFEST_MISMATCH`       | 422         | Archive nori.toml does not match metadata                     |
+| `TOKEN_LIMIT_REACHED`     | 429         | User already has 10 active tokens                             |
+| `INTERNAL_ERROR`          | 500         | Unexpected server error                                       |
 
 ---
 
@@ -156,21 +159,21 @@ Error codes:
 
 #### POST /auth/register
 
-Create a new user account. Public endpoint.
+Create a new user account. Public endpoint. The first registered user automatically becomes a superadmin.
 
 **Request**:
 
 ```json
 {
-  "username": "whale",
+  "username": "arthur",
   "email": "whale@example.com",
-  "password": "s3cret"
+  "password": "trillian123"
 }
 ```
 
 **Validation:**
 
-1. `username` matches `NAME_PATTERN` (or `VALIDATION_ERROR`)
+1. `username` matches `NAME_PATTERN` (or `VALIDATION_ERROR`). If the input contains uppercase letters, the error message specifically states "Username must be lowercase".
 2. `username` does not collide with any existing user, group, or package name (`DUPLICATE_USER` if username taken, `NAME_CONFLICT` if name exists as group or package)
 3. `email` is a valid email format and not already registered (`DUPLICATE_USER`)
 4. `password` is at least 8 characters (or `VALIDATION_ERROR`)
@@ -200,7 +203,7 @@ Authenticate a user. Returns an API token if `token_name` is provided, otherwise
 }
 ```
 
-The `token_name` field is optional. When present, the response includes a newly created API token instead of setting a session cookie. Returns `INVALID_CREDENTIALS` if username or password is wrong. Returns `TOKEN_LIMIT_REACHED` if the user already has 10 active tokens and `token_name` is provided.
+The `token_name` field is optional. When present, the response includes a newly created API token instead of setting a session cookie. Returns `INVALID_CREDENTIALS` if username or password is wrong. Returns `FORBIDDEN` if the user account is inactive. Returns `TOKEN_LIMIT_REACHED` if the user already has 10 active tokens and `token_name` is provided.
 
 **Response** `200 OK` (with `token_name`):
 
@@ -500,13 +503,13 @@ Search and list packages with pagination.
 
 **Query Parameters:**
 
-| Parameter   | Type    | Default  | Description                          |
-|-------------|---------|----------|--------------------------------------|
+| Parameter   | Type    | Default  | Description                              |
+|-------------|---------|----------|------------------------------------------|
 | `q`         | string  | (none)   | Search query (matches name, description) |
-| `namespace` | string  | `stable` | Filter by namespace                  |
-| `platform`  | string  | (none)   | Filter by platform                   |
-| `page`      | integer | 1        | Page number (1-indexed)              |
-| `per_page`  | integer | 20       | Results per page (max 100)           |
+| `namespace` | string  | `stable` | Filter by namespace                      |
+| `platform`  | string  | (none)   | Filter by platform                       |
+| `page`      | integer | 1        | Page number (1-indexed)                  |
+| `per_page`  | integer | 20       | Results per page (max 100)               |
 
 **Response** `200 OK`:
 
@@ -537,8 +540,8 @@ Package detail with all versions.
 
 **Query Parameters:**
 
-| Parameter   | Type   | Default  | Description             |
-|-------------|--------|----------|-------------------------|
+| Parameter   | Type   | Default  | Description                  |
+|-------------|--------|----------|------------------------------|
 | `namespace` | string | `stable` | Filter versions by namespace |
 
 **Response** `200 OK`:
@@ -617,10 +620,10 @@ Download the `.nori` archive.
 
 **Query Parameters:**
 
-| Parameter   | Type   | Default            | Description               |
-|-------------|--------|--------------------|---------------------------|
-| `namespace` | string | `stable`           | Namespace to download from|
-| `platform`  | string | (caller's platform)| Target platform           |
+| Parameter   | Type   | Default            | Description                 |
+|-------------|--------|--------------------|-----------------------------|
+| `namespace` | string | `stable`           | Namespace to download from  |
+| `platform`  | string | (caller's platform)| Target platform             |
 
 **Response** `200 OK`:
 - `Content-Type: application/octet-stream`
@@ -645,10 +648,10 @@ For new package names (first publish), any authenticated user can publish. The p
 
 **Request**: `Content-Type: multipart/form-data`
 
-| Part       | Type               | Description                     |
-|------------|--------------------|---------------------------------|
-| `metadata` | `application/json` | Version metadata (see below)    |
-| `archive`  | `application/octet-stream` | The `.nori` archive file |
+| Part       | Type                        | Description                      |
+|------------|-----------------------------|----------------------------------|
+| `metadata` | `application/json`          | Version metadata (see below)     |
+| `archive`  | `application/octet-stream`  | The `.nori` archive file         |
 
 **Metadata JSON:**
 
@@ -691,6 +694,118 @@ If any check fails, the entire publish is rejected. Nothing is stored.
 }
 ```
 
+---
+
+### Administration
+
+All administration endpoints require superadmin privileges. Returns `UNAUTHORIZED` if not authenticated or `FORBIDDEN` if authenticated but not a superadmin.
+
+Superadmins cannot deactivate, demote, or delete their own account (returns `VALIDATION_ERROR`).
+
+#### GET /admin/users
+
+List all users with optional search and filtering.
+
+**Query Parameters:**
+
+| Parameter   | Type    | Default  | Description                                  |
+|-------------|---------|----------|----------------------------------------------|
+| `q`         | string  | (none)   | Search query (matches username or email)     |
+| `is_active` | boolean | (none)   | Filter by account status                     |
+| `page`      | integer | 1        | Page number (1-indexed)                      |
+| `per_page`  | integer | 20       | Results per page (max 100)                   |
+
+**Response** `200 OK`:
+
+```json
+{
+  "users": [
+    {
+      "username": "arthur",
+      "email": "arthur@example.com",
+      "is_superadmin": true,
+      "is_active": true,
+      "created_at": "2026-02-23T10:00:00Z",
+      "updated_at": "2026-02-23T10:00:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "per_page": 20,
+    "total": 1
+  }
+}
+```
+
+---
+
+#### GET /admin/users/{username}
+
+Get detailed administrative view of a user account.
+
+**Response** `200 OK`:
+
+```json
+{
+  "username": "arthur",
+  "email": "arthur@example.com",
+  "is_superadmin": true,
+  "is_active": true,
+  "token_count": 2,
+  "group_count": 1,
+  "package_count": 5,
+  "created_at": "2026-02-23T10:00:00Z",
+  "updated_at": "2026-02-23T10:00:00Z"
+}
+```
+
+---
+
+#### PATCH /admin/users/{username}
+
+Update a user's administrative flags. Supports partial updates.
+
+**Request**:
+
+```json
+{
+  "is_active": false,
+  "is_superadmin": true
+}
+```
+
+Both fields are optional. Only provided fields are updated.
+
+**Self-protection rules:**
+- A superadmin cannot set `is_active: false` on their own account (`VALIDATION_ERROR`)
+- A superadmin cannot set `is_superadmin: false` on their own account (`VALIDATION_ERROR`)
+
+**Response** `200 OK`:
+
+```json
+{
+  "username": "whale",
+  "email": "whale@example.com",
+  "is_superadmin": true,
+  "is_active": true,
+  "updated_at": "2026-02-23T12:00:00Z"
+}
+```
+
+---
+
+#### DELETE /admin/users/{username}
+
+Delete a user account. Removes the user from the name registry, deletes all associated API tokens and group memberships.
+
+A superadmin cannot delete their own account (`VALIDATION_ERROR`).
+
+**Note:** Packages owned by the deleted user become unowned. Transfer package ownership before deletion if needed.
+
+**Response** `204 No Content`
+
+---
+
 ## Authorization Matrix
 
 Every endpoint mapped to the required access level.
@@ -701,22 +816,26 @@ Every endpoint mapped to the required access level.
 | `POST /auth/login`                             | x      |               |              |            |
 | `POST /auth/logout`                            |        | x             |              |            |
 | `GET /tokens`                                  |        | x             |              |            |
-| `DELETE /tokens/{id}`                           |        | x             |              |            |
+| `DELETE /tokens/{id}`                          |        | x             |              |            |
 | `GET /users/me`                                |        | x             |              |            |
 | `GET /users/{username}`                        | x      |               |              |            |
 | `POST /groups`                                 |        | x             |              |            |
 | `GET /groups/{name}`                           | x      |               |              |            |
-| `PUT /groups/{name}/members/{username}`         |        |               | group owner  | x          |
-| `DELETE /groups/{name}/members/{username}`       |        |               | group owner  | x          |
-| `DELETE /groups/{name}`                         |        |               | group owner  | x          |
+| `PUT /groups/{name}/members/{username}`        |        |               | group owner  | x          |
+| `DELETE /groups/{name}/members/{username}`     |        |               | group owner  | x          |
+| `DELETE /groups/{name}`                        |        |               | group owner  | x          |
 | `GET /packages`                                | x      |               |              |            |
 | `GET /packages/{name}`                         | x      |               |              |            |
-| `GET /packages/{name}/{version}/metadata`       | x      |               |              |            |
-| `GET /packages/{name}/{version}/download`       | x      |               |              |            |
-| `POST /packages/{name}/{version}/publish`       |        | x (new pkg)   | owner/member | x          |
+| `GET /packages/{name}/{version}/metadata`      | x      |               |              |            |
+| `GET /packages/{name}/{version}/download`      | x      |               |              |            |
+| `POST /packages/{name}/{version}/publish`      |        | x (new pkg)   | owner/member | x          |
 | `GET /packages/{name}/owner`                   | x      |               |              |            |
 | `PUT /packages/{name}/owner`                   |        |               | pkg owner    | x          |
 | `GET /packages/{name}/stats`                   | x      |               |              |            |
+| `GET /admin/users`                             |        |               |              | x          |
+| `GET /admin/users/{username}`                  |        |               |              | x          |
+| `PATCH /admin/users/{username}`                |        |               |              | x          |
+| `DELETE /admin/users/{username}`               |        |               |              | x          |
 
 **Legend:**
 - **Public**: no authentication required
@@ -894,7 +1013,8 @@ Flow:
 - **First-publish ownership race**: two users simultaneously publishing a new package name. The server must serialize first-publish operations per name. One succeeds and becomes owner; the other gets `FORBIDDEN`.
 - **Token revocation during upload**: if a token is revoked while a publish request is in-flight, the server should reject the request with `UNAUTHORIZED`. Validation step 0 (authentication) happens before any storage writes.
 - **Group deletion with owned packages**: a group that owns packages cannot be deleted. Transfer or remove ownership first (`OWNERSHIP_REQUIRED`).
-- **Orphaned packages on user deletion**: user deletion (future feature) must handle owned packages. Options: transfer to another user, transfer to a designated "orphan" account, or block deletion until packages are transferred.
+- **User deletion and package ownership**: when a user is deleted via the admin API, packages they own become unowned. Superadmins should transfer ownership before deleting users if continuity is needed.
+- **Inactive user authentication**: deactivated users are rejected at all authentication points — login returns `FORBIDDEN`, existing session cookies and API tokens silently stop working (treated as unauthenticated).
 
 ## Future Considerations (Out of Scope)
 
@@ -905,8 +1025,9 @@ These features are explicitly not part of the current specification:
 - **Signed packages**: cryptographic signatures for archive integrity beyond SHA-256
 - **Rate limiting**: per-client request throttling
 - **Webhooks**: notifications on publish events
-- **User deletion**: account removal with package ownership transfer
 - **Two-factor authentication (2FA)**: TOTP or WebAuthn second factor
 - **Organization hierarchy**: nested groups, roles, inherited permissions
 - **Scoped packages**: `@org/package-name` style namespacing
 - **Issue and bug reporting**: per-package issue tracker
+- **Admin group management**: list, search, and manage groups via admin endpoints
+- **Admin package management**: delete packages, manage versions via admin endpoints
