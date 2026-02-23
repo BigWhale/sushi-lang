@@ -28,6 +28,8 @@ Every package version is uniquely identified by the composite key `(name, versio
 | `libraries`   | string[] | Library files included                               |
 | `executables` | string[] | Executable files included                            |
 | `data`        | string[] | Data files/directories included                      |
+| `url`         | string   | Relative URL for direct archive download             |
+| `location`    | string   | Physical path relative to storage root on disk       |
 | `published_at`| datetime | When this version was published                      |
 
 ### Validation Rules
@@ -166,7 +168,7 @@ Create a new user account. Public endpoint. The first registered user automatica
 ```json
 {
   "username": "arthur",
-  "email": "whale@example.com",
+  "email": "arthur@example.com",
   "password": "trillian123"
 }
 ```
@@ -182,7 +184,7 @@ Create a new user account. Public endpoint. The first registered user automatica
 
 ```json
 {
-  "username": "whale",
+  "username": "arthur",
   "created_at": "2026-02-23T10:00:00Z"
 }
 ```
@@ -197,7 +199,7 @@ Authenticate a user. Returns an API token if `token_name` is provided, otherwise
 
 ```json
 {
-  "username": "whale",
+  "username": "arthur",
   "password": "s3cret",
   "token_name": "my-laptop"
 }
@@ -223,7 +225,7 @@ Sets `Set-Cookie` header with a session cookie. Response body:
 
 ```json
 {
-  "username": "whale"
+  "username": "arthur"
 }
 ```
 
@@ -280,8 +282,8 @@ Get the authenticated user's profile, including email.
 
 ```json
 {
-  "username": "whale",
-  "email": "whale@example.com",
+  "username": "arthur",
+  "email": "arthur@example.com",
   "is_superadmin": false,
   "packages": ["sushi-utils", "sushi-json"],
   "created_at": "2026-02-23T10:00:00Z"
@@ -298,7 +300,7 @@ Get a user's public profile. Public endpoint. Returns `USER_NOT_FOUND` if the us
 
 ```json
 {
-  "username": "whale",
+  "username": "arthur",
   "packages": ["sushi-utils", "sushi-json"],
   "created_at": "2026-02-23T10:00:00Z"
 }
@@ -330,8 +332,8 @@ Create a new group. Authenticated endpoint. The authenticated user becomes the g
 ```json
 {
   "name": "sushi-team",
-  "owner": "whale",
-  "members": ["whale"],
+  "owner": "arthur",
+  "members": ["arthur"],
   "created_at": "2026-02-23T10:00:00Z"
 }
 ```
@@ -347,8 +349,8 @@ Get a group's profile with members and owned packages. Public endpoint. Returns 
 ```json
 {
   "name": "sushi-team",
-  "owner": "whale",
-  "members": ["whale", "dolphin"],
+  "owner": "arthur",
+  "members": ["arthur", "trillian"],
   "packages": ["sushi-core"],
   "created_at": "2026-02-23T10:00:00Z"
 }
@@ -370,7 +372,7 @@ Add a member to a group. Requires group owner or superadmin.
 ```json
 {
   "name": "sushi-team",
-  "members": ["whale", "dolphin"]
+  "members": ["arthur", "ford"]
 }
 ```
 
@@ -390,7 +392,7 @@ Remove a member from a group. Requires group owner or superadmin.
 ```json
 {
   "name": "sushi-team",
-  "members": ["whale"]
+  "members": ["arthur"]
 }
 ```
 
@@ -416,7 +418,7 @@ Get the owner of a package. Public endpoint.
 {
   "package_name": "sushi-utils",
   "owner_kind": "user",
-  "owner_name": "whale"
+  "owner_name": "arthur"
 }
 ```
 
@@ -633,6 +635,8 @@ Download the `.nori` archive.
 
 Each successful download increments the download counter for this `(name, version, namespace, platform)` record.
 
+Alternatively, clients can fetch the archive directly via the `url` field from the Version Record, which is served as a static file and bypasses the API.
+
 ---
 
 #### POST /packages/{name}/{version}/publish
@@ -681,6 +685,8 @@ The `sha256` field is the hex-encoded SHA-256 hash of the archive, computed by t
 8. No existing record for `(name, version, namespace, platform)` composite key
 
 If any check fails, the entire publish is rejected. Nothing is stored.
+
+On success, the server writes both the `.nori` archive and a `metadata.json` backup to disk following the Package Storage layout, and populates the `url` and `location` fields on the Version Record.
 
 **Response** `201 Created`:
 
@@ -806,6 +812,31 @@ A superadmin cannot delete their own account (`VALIDATION_ERROR`).
 
 ---
 
+#### GET /admin/owners/search
+
+Search users and groups by name. Intended for ownership transfer autocomplete in admin interfaces.
+
+**Query Parameters:**
+
+| Parameter | Type   | Default | Description                          |
+|-----------|--------|---------|--------------------------------------|
+| `q`       | string | —       | Search query (min 1 character)       |
+
+**Response** `200 OK`:
+
+```json
+{
+  "results": [
+    { "name": "arthur", "kind": "user" },
+    { "name": "sushi-team", "kind": "group" }
+  ]
+}
+```
+
+Returns up to 15 results (10 users + 10 groups, merged and sorted alphabetically, truncated to 15).
+
+---
+
 ## Authorization Matrix
 
 Every endpoint mapped to the required access level.
@@ -836,6 +867,7 @@ Every endpoint mapped to the required access level.
 | `GET /admin/users/{username}`                  |        |               |              | x          |
 | `PATCH /admin/users/{username}`                |        |               |              | x          |
 | `DELETE /admin/users/{username}`               |        |               |              | x          |
+| `GET /admin/owners/search`                     |        |               |              | x          |
 
 **Legend:**
 - **Public**: no authentication required
@@ -892,9 +924,51 @@ Logical components (deployment details are out of scope):
 - **API Service**: stateless HTTP server handling all REST endpoints. Validates requests, orchestrates storage, returns responses.
 - **Metadata Store**: persistent storage for package and version records. Indexed by `(name, version, namespace, platform)`.
 - **Auth Store**: persistent storage for user accounts, API tokens, groups, and package ownership records. Enforces the shared namespace uniqueness constraint across users, groups, and packages.
-- **Archive Store**: blob storage for `.nori` archive files. Keyed by `{name}/{version}/{namespace}/{platform}/{name}-{version}.nori`.
+- **Archive Store**: blob storage for `.nori` archive files. Directory layout described in **Package Storage** below.
 - **Search Index**: text search over package names and descriptions. Updated on publish.
 - **CDN**: optional cache layer for archive downloads. Keyed by the same path as archive store.
+
+## Package Storage
+
+Archives are stored in a two-level prefix directory structure. The prefix is the first two characters of the package name, distributing packages across up to ~962 buckets (`a-z` first character, `a-z`/`0-9`/`-` second character).
+
+### Directory Layout
+
+```
+{storage_root}/
+  {prefix}/                          # first 2 chars of name (e.g. "su")
+    {name}/                          # package directory
+      {version}/                     # version directory
+        {namespace}/                 # "stable" or "testing"
+          {platform}/                # "darwin", "linux", "windows", "any"
+            {name}-{version}.nori    # the archive
+            metadata.json            # backup of the version record
+```
+
+Example for `sushi-utils` v1.2.0, stable, darwin:
+
+```
+su/sushi-utils/1.2.0/stable/darwin/sushi-utils-1.2.0.nori
+su/sushi-utils/1.2.0/stable/darwin/metadata.json
+```
+
+### URL Mapping
+
+The `url` field in the Version Record stores the path relative to `/archives/`, enabling direct downloads at:
+
+```
+https://omakase.lubica.net/archives/su/sushi-utils/1.2.0/stable/darwin/sushi-utils-1.2.0.nori
+```
+
+The `/archives/` path is served by a static file server (nginx, CDN) pointing at the storage root. No authentication required for direct links.
+
+### Metadata Backup
+
+Each archive is accompanied by a `metadata.json` file: a JSON dump of the Version Record from the database, written at publish time. This serves as a disaster recovery backup and is not used by the API at runtime.
+
+### Scalability
+
+With 10,000 packages averaging 5 versions and 2 platforms, that is ~100,000 files across ~962 prefix buckets (~100 packages per bucket). Each package directory contains only its own versions, keeping directory listings small.
 
 ## CLI Integration
 
