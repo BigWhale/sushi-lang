@@ -28,8 +28,6 @@ Every package version is uniquely identified by the composite key `(name, versio
 | `libraries`   | string[] | Library files included                               |
 | `executables` | string[] | Executable files included                            |
 | `data`        | string[] | Data files/directories included                      |
-| `url`         | string   | Relative URL for direct archive download             |
-| `location`    | string   | Physical path relative to storage root on disk       |
 | `published_at`| datetime | When this version was published                      |
 
 ### Validation Rules
@@ -350,7 +348,7 @@ Get a group's profile with members and owned packages. Public endpoint. Returns 
 {
   "name": "sushi-team",
   "owner": "arthur",
-  "members": ["arthur", "trillian"],
+  "members": ["arthur", "dolphin"],
   "packages": ["sushi-core"],
   "created_at": "2026-02-23T10:00:00Z"
 }
@@ -372,7 +370,7 @@ Add a member to a group. Requires group owner or superadmin.
 ```json
 {
   "name": "sushi-team",
-  "members": ["arthur", "ford"]
+  "members": ["arthur", "dolphin"]
 }
 ```
 
@@ -521,7 +519,7 @@ Search and list packages with pagination.
     {
       "name": "sushi-utils",
       "description": "Common utilities for Sushi programs",
-      "author": "whale",
+      "author": "arthur",
       "latest_version": "1.2.0",
       "updated_at": "2026-02-20T15:30:00Z"
     }
@@ -552,12 +550,12 @@ Package detail with all versions.
 {
   "name": "sushi-utils",
   "description": "Common utilities for Sushi programs",
-  "author": "whale",
+  "author": "arthur",
   "license": "MIT",
   "created_at": "2026-01-15T10:00:00Z",
   "owner": {
     "kind": "user",
-    "name": "whale"
+    "name": "arthur"
   },
   "total_downloads": 1542,
   "versions": [
@@ -603,7 +601,7 @@ Version-specific metadata for a single platform.
   "namespace": "stable",
   "platform": "darwin",
   "description": "Common utilities for Sushi programs",
-  "author": "whale",
+  "author": "arthur",
   "license": "MIT",
   "sha256": "a1b2c3d4e5f6...",
   "size": 24576,
@@ -635,8 +633,6 @@ Download the `.nori` archive.
 
 Each successful download increments the download counter for this `(name, version, namespace, platform)` record.
 
-Alternatively, clients can fetch the archive directly via the `url` field from the Version Record, which is served as a static file and bypasses the API.
-
 ---
 
 #### POST /packages/{name}/{version}/publish
@@ -664,7 +660,7 @@ For new package names (first publish), any authenticated user can publish. The p
   "namespace": "stable",
   "platform": "darwin",
   "description": "Common utilities for Sushi programs",
-  "author": "whale",
+  "author": "arthur",
   "license": "MIT",
   "sha256": "a1b2c3d4e5f6..."
 }
@@ -685,8 +681,6 @@ The `sha256` field is the hex-encoded SHA-256 hash of the archive, computed by t
 8. No existing record for `(name, version, namespace, platform)` composite key
 
 If any check fails, the entire publish is rejected. Nothing is stored.
-
-On success, the server writes both the `.nori` archive and a `metadata.json` backup to disk following the Package Storage layout, and populates the `url` and `location` fields on the Version Record.
 
 **Response** `201 Created`:
 
@@ -790,8 +784,8 @@ Both fields are optional. Only provided fields are updated.
 
 ```json
 {
-  "username": "whale",
-  "email": "whale@example.com",
+  "username": "arthur",
+  "email": "arthur@example.com",
   "is_superadmin": true,
   "is_active": true,
   "updated_at": "2026-02-23T12:00:00Z"
@@ -924,51 +918,9 @@ Logical components (deployment details are out of scope):
 - **API Service**: stateless HTTP server handling all REST endpoints. Validates requests, orchestrates storage, returns responses.
 - **Metadata Store**: persistent storage for package and version records. Indexed by `(name, version, namespace, platform)`.
 - **Auth Store**: persistent storage for user accounts, API tokens, groups, and package ownership records. Enforces the shared namespace uniqueness constraint across users, groups, and packages.
-- **Archive Store**: blob storage for `.nori` archive files. Directory layout described in **Package Storage** below.
+- **Archive Store**: blob storage for `.nori` archive files. Keyed by `{name}/{version}/{namespace}/{platform}/{name}-{version}.nori`.
 - **Search Index**: text search over package names and descriptions. Updated on publish.
 - **CDN**: optional cache layer for archive downloads. Keyed by the same path as archive store.
-
-## Package Storage
-
-Archives are stored in a two-level prefix directory structure. The prefix is the first two characters of the package name, distributing packages across up to ~962 buckets (`a-z` first character, `a-z`/`0-9`/`-` second character).
-
-### Directory Layout
-
-```
-{storage_root}/
-  {prefix}/                          # first 2 chars of name (e.g. "su")
-    {name}/                          # package directory
-      {version}/                     # version directory
-        {namespace}/                 # "stable" or "testing"
-          {platform}/                # "darwin", "linux", "windows", "any"
-            {name}-{version}.nori    # the archive
-            metadata.json            # backup of the version record
-```
-
-Example for `sushi-utils` v1.2.0, stable, darwin:
-
-```
-su/sushi-utils/1.2.0/stable/darwin/sushi-utils-1.2.0.nori
-su/sushi-utils/1.2.0/stable/darwin/metadata.json
-```
-
-### URL Mapping
-
-The `url` field in the Version Record stores the path relative to `/archives/`, enabling direct downloads at:
-
-```
-https://omakase.lubica.net/archives/su/sushi-utils/1.2.0/stable/darwin/sushi-utils-1.2.0.nori
-```
-
-The `/archives/` path is served by a static file server (nginx, CDN) pointing at the storage root. No authentication required for direct links.
-
-### Metadata Backup
-
-Each archive is accompanied by a `metadata.json` file: a JSON dump of the Version Record from the database, written at publish time. This serves as a disaster recovery backup and is not used by the API at runtime.
-
-### Scalability
-
-With 10,000 packages averaging 5 versions and 2 platforms, that is ~100,000 files across ~962 prefix buckets (~100 packages per bucket). Each package directory contains only its own versions, keeping directory listings small.
 
 ## CLI Integration
 
