@@ -166,7 +166,7 @@ Create a new user account. Public endpoint. The first registered user automatica
 ```json
 {
   "username": "arthur",
-  "email": "arthur@example.com",
+  "email": "whale@example.com",
   "password": "trillian123"
 }
 ```
@@ -182,7 +182,7 @@ Create a new user account. Public endpoint. The first registered user automatica
 
 ```json
 {
-  "username": "arthur",
+  "username": "whale",
   "created_at": "2026-02-23T10:00:00Z"
 }
 ```
@@ -197,7 +197,7 @@ Authenticate a user. Returns an API token if `token_name` is provided, otherwise
 
 ```json
 {
-  "username": "arthur",
+  "username": "whale",
   "password": "s3cret",
   "token_name": "my-laptop"
 }
@@ -223,7 +223,7 @@ Sets `Set-Cookie` header with a session cookie. Response body:
 
 ```json
 {
-  "username": "arthur"
+  "username": "whale"
 }
 ```
 
@@ -280,8 +280,8 @@ Get the authenticated user's profile, including email.
 
 ```json
 {
-  "username": "arthur",
-  "email": "arthur@example.com",
+  "username": "whale",
+  "email": "whale@example.com",
   "is_superadmin": false,
   "packages": ["sushi-utils", "sushi-json"],
   "created_at": "2026-02-23T10:00:00Z"
@@ -298,7 +298,7 @@ Get a user's public profile. Public endpoint. Returns `USER_NOT_FOUND` if the us
 
 ```json
 {
-  "username": "arthur",
+  "username": "whale",
   "packages": ["sushi-utils", "sushi-json"],
   "created_at": "2026-02-23T10:00:00Z"
 }
@@ -330,8 +330,8 @@ Create a new group. Authenticated endpoint. The authenticated user becomes the g
 ```json
 {
   "name": "sushi-team",
-  "owner": "arthur",
-  "members": ["arthur"],
+  "owner": "whale",
+  "members": ["whale"],
   "created_at": "2026-02-23T10:00:00Z"
 }
 ```
@@ -347,8 +347,8 @@ Get a group's profile with members and owned packages. Public endpoint. Returns 
 ```json
 {
   "name": "sushi-team",
-  "owner": "arthur",
-  "members": ["arthur", "dolphin"],
+  "owner": "whale",
+  "members": ["whale", "dolphin"],
   "packages": ["sushi-core"],
   "created_at": "2026-02-23T10:00:00Z"
 }
@@ -370,7 +370,7 @@ Add a member to a group. Requires group owner or superadmin.
 ```json
 {
   "name": "sushi-team",
-  "members": ["arthur", "dolphin"]
+  "members": ["whale", "dolphin"]
 }
 ```
 
@@ -390,7 +390,7 @@ Remove a member from a group. Requires group owner or superadmin.
 ```json
 {
   "name": "sushi-team",
-  "members": ["arthur"]
+  "members": ["whale"]
 }
 ```
 
@@ -416,7 +416,7 @@ Get the owner of a package. Public endpoint.
 {
   "package_name": "sushi-utils",
   "owner_kind": "user",
-  "owner_name": "arthur"
+  "owner_name": "whale"
 }
 ```
 
@@ -519,7 +519,7 @@ Search and list packages with pagination.
     {
       "name": "sushi-utils",
       "description": "Common utilities for Sushi programs",
-      "author": "arthur",
+      "author": "whale",
       "latest_version": "1.2.0",
       "updated_at": "2026-02-20T15:30:00Z"
     }
@@ -550,12 +550,12 @@ Package detail with all versions.
 {
   "name": "sushi-utils",
   "description": "Common utilities for Sushi programs",
-  "author": "arthur",
+  "author": "whale",
   "license": "MIT",
   "created_at": "2026-01-15T10:00:00Z",
   "owner": {
     "kind": "user",
-    "name": "arthur"
+    "name": "whale"
   },
   "total_downloads": 1542,
   "versions": [
@@ -601,7 +601,7 @@ Version-specific metadata for a single platform.
   "namespace": "stable",
   "platform": "darwin",
   "description": "Common utilities for Sushi programs",
-  "author": "arthur",
+  "author": "whale",
   "license": "MIT",
   "sha256": "a1b2c3d4e5f6...",
   "size": 24576,
@@ -660,7 +660,7 @@ For new package names (first publish), any authenticated user can publish. The p
   "namespace": "stable",
   "platform": "darwin",
   "description": "Common utilities for Sushi programs",
-  "author": "arthur",
+  "author": "whale",
   "license": "MIT",
   "sha256": "a1b2c3d4e5f6..."
 }
@@ -784,8 +784,8 @@ Both fields are optional. Only provided fields are updated.
 
 ```json
 {
-  "username": "arthur",
-  "email": "arthur@example.com",
+  "username": "whale",
+  "email": "whale@example.com",
   "is_superadmin": true,
   "is_active": true,
   "updated_at": "2026-02-23T12:00:00Z"
@@ -821,7 +821,7 @@ Search users and groups by name. Intended for ownership transfer autocomplete in
 ```json
 {
   "results": [
-    { "name": "arthur", "kind": "user" },
+    { "name": "whale", "kind": "user" },
     { "name": "sushi-team", "kind": "group" }
   ]
 }
