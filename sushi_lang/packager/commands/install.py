@@ -1,9 +1,24 @@
 """nori install - install a package from a local or remote source."""
 import argparse
+import os
 from pathlib import Path
 
-from sushi_lang.packager.constants import BIN_DIR, ARCHIVE_EXT
+from sushi_lang.packager.constants import (
+    BIN_DIR, ARCHIVE_EXT, DEFAULT_REPOSITORY, REPOSITORY_ENV_VAR,
+)
 from sushi_lang.packager.installer import PackageInstaller
+
+
+def _is_path(value: str) -> bool:
+    """Check if the value looks like a filesystem path."""
+    return value.startswith(("./", "../", "/", "~"))
+
+
+def _resolve_repository(args: argparse.Namespace) -> str:
+    """Resolve repository URL: CLI arg > env var > default."""
+    if args.repository:
+        return args.repository
+    return os.environ.get(REPOSITORY_ENV_VAR, DEFAULT_REPOSITORY)
 
 
 def cmd_install(args: argparse.Namespace) -> int:
@@ -19,18 +34,22 @@ def cmd_install(args: argparse.Namespace) -> int:
     if source is not None:
         return _install_from_source(package, source)
 
-    # No source - check if package arg is a path
-    path = Path(package)
-    if path.exists():
+    # Path-like argument -> local install
+    if _is_path(package):
+        path = Path(package).expanduser().resolve()
+        if not path.exists():
+            print(f"Path not found: {package}")
+            return 1
         if path.is_file() and path.name.endswith(ARCHIVE_EXT):
             return _install_archive(path)
         if path.is_dir():
             return _install_directory(path)
+        print(f"Cannot install from: {package}")
+        return 1
 
-    # Default: omakase registry
-    print(f"Omakase repository is not yet available.")
-    print(f"Install from a local source: nori install <package> from <path>")
-    return 1
+    # Package name -> remote repository
+    repository = _resolve_repository(args)
+    return _install_remote(package, repository)
 
 
 def _install_from_source(package: str, source: str) -> int:
@@ -72,6 +91,13 @@ def _install_directory(path: Path) -> int:
     print(f"Installed {manifest.name} v{manifest.version}")
     _print_path_hint()
     return 0
+
+
+def _install_remote(package: str, repository: str) -> int:
+    """Stub for installing a package from a remote repository."""
+    print(f"Remote install from {repository} is not yet implemented.")
+    print(f"Install from a local source: nori install <package> from <path>")
+    return 1
 
 
 def _print_path_hint() -> None:

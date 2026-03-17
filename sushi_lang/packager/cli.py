@@ -33,7 +33,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--version", action="store_true", help="Show version and exit",
     )
-
     subparsers = parser.add_subparsers(dest="command")
 
     # nori init
@@ -44,6 +43,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     # nori install <pkg> from <source>
     install_parser = subparsers.add_parser("install", help="Install a package")
+    install_parser.add_argument(
+        "--repository", default=None,
+        help="Package repository URL (default: omakase.lubica.net)",
+    )
     install_parser.add_argument("package", help="Package name or .nori file path")
     install_parser.add_argument("from_keyword", nargs="?", metavar="from", help=argparse.SUPPRESS)
     install_parser.add_argument("source", nargs="?", default=None, help="Source path (local directory or .nori file)")
