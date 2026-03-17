@@ -17,11 +17,20 @@ def cmd_search(args: argparse.Namespace) -> int:
         params["namespace"] = args.namespace
     if args.platform:
         params["platform"] = args.platform
+    if args.sort:
+        params["sort"] = args.sort
+    if args.page != 1:
+        params["page"] = args.page
+    if args.per_page != 20:
+        params["per_page"] = args.per_page
 
     url = f"https://{repository}/api/v1/packages?{urllib.parse.urlencode(params)}"
 
     try:
-        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        req = urllib.request.Request(url, headers={
+            "Accept": "application/json",
+            "User-Agent": "nori/1.0",
+        })
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
@@ -40,11 +49,22 @@ def cmd_search(args: argparse.Namespace) -> int:
     for pkg in packages:
         name = pkg.get("name", "")
         version = pkg.get("latest_version") or "---"
+        license_ = pkg.get("license", "")
+        downloads = pkg.get("total_downloads", 0)
         description = pkg.get("description", "")
-        if len(description) > 60:
-            description = description[:57] + "..."
-        print(f"  {name} v{version}    {description}")
+        if len(description) > 50:
+            description = description[:47] + "..."
+        parts = [f"  {name} v{version}"]
+        if license_:
+            parts.append(license_)
+        parts.append(f"{downloads} downloads")
+        parts.append(description)
+        print("  ".join(parts))
 
-    total = data.get("pagination", {}).get("total", len(packages))
-    print(f"\n  {total} package(s) found")
+    pagination = data.get("pagination", {})
+    total = pagination.get("total", len(packages))
+    page = pagination.get("page", 1)
+    per_page = pagination.get("per_page", 20)
+    total_pages = (total + per_page - 1) // per_page if per_page else 1
+    print(f"\n  {total} package(s) found (page {page}/{total_pages})")
     return 0

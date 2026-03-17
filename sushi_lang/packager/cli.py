@@ -66,6 +66,18 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["darwin", "linux", "windows", "any"],
         help="Filter by platform",
     )
+    search_parser.add_argument(
+        "--sort", default="relevance",
+        choices=["relevance", "name", "downloads", "updated"],
+        help="Sort order (default: relevance)",
+    )
+    search_parser.add_argument(
+        "--page", type=int, default=1, help="Page number (default: 1)",
+    )
+    search_parser.add_argument(
+        "--per-page", type=int, default=20, dest="per_page",
+        help="Results per page (default: 20)",
+    )
     search_parser.add_argument("query", help="Search query")
 
     # nori list
