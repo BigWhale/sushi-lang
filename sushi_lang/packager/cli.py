@@ -51,6 +51,23 @@ def build_parser() -> argparse.ArgumentParser:
     install_parser.add_argument("from_keyword", nargs="?", metavar="from", help=argparse.SUPPRESS)
     install_parser.add_argument("source", nargs="?", default=None, help="Source path (local directory or .nori file)")
 
+    # nori search <query>
+    search_parser = subparsers.add_parser("search", help="Search for packages")
+    search_parser.add_argument(
+        "--repository", default=None,
+        help="Package repository URL (default: omakase.lubica.net)",
+    )
+    search_parser.add_argument(
+        "--namespace", default="stable", choices=["stable", "testing"],
+        help="Package namespace (default: stable)",
+    )
+    search_parser.add_argument(
+        "--platform", default=None,
+        choices=["darwin", "linux", "windows", "any"],
+        help="Filter by platform",
+    )
+    search_parser.add_argument("query", help="Search query")
+
     # nori list
     subparsers.add_parser("list", help="List installed packages")
 
@@ -85,6 +102,10 @@ def run(args: argparse.Namespace) -> int:
     if args.command == "install":
         from sushi_lang.packager.commands.install import cmd_install
         return cmd_install(args)
+
+    if args.command == "search":
+        from sushi_lang.packager.commands.search import cmd_search
+        return cmd_search(args)
 
     if args.command == "list":
         from sushi_lang.packager.commands.list_cmd import cmd_list

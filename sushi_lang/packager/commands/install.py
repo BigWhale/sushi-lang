@@ -1,24 +1,15 @@
 """nori install - install a package from a local or remote source."""
 import argparse
-import os
 from pathlib import Path
 
-from sushi_lang.packager.constants import (
-    BIN_DIR, ARCHIVE_EXT, DEFAULT_REPOSITORY, REPOSITORY_ENV_VAR,
-)
+from sushi_lang.packager.constants import BIN_DIR, ARCHIVE_EXT
 from sushi_lang.packager.installer import PackageInstaller
+from sushi_lang.packager.repository import resolve_repository
 
 
 def _is_path(value: str) -> bool:
     """Check if the value looks like a filesystem path."""
     return value.startswith(("./", "../", "/", "~"))
-
-
-def _resolve_repository(args: argparse.Namespace) -> str:
-    """Resolve repository URL: CLI arg > env var > default."""
-    if args.repository:
-        return args.repository
-    return os.environ.get(REPOSITORY_ENV_VAR, DEFAULT_REPOSITORY)
 
 
 def cmd_install(args: argparse.Namespace) -> int:
@@ -48,7 +39,7 @@ def cmd_install(args: argparse.Namespace) -> int:
         return 1
 
     # Package name -> remote repository
-    repository = _resolve_repository(args)
+    repository = resolve_repository(args)
     return _install_remote(package, repository)
 
 
