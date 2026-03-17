@@ -35,3 +35,6 @@ a.out
 
 # Incremental compilation cache
 __sushi_cache__/
+
+# Omakase API (separate repo)
+omakase-api/
