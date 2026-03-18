@@ -6,9 +6,13 @@ import shutil
 from pathlib import Path
 
 from sushi_lang.packager.archive import PackageArchive
-from sushi_lang.packager.constants import BIN_DIR, CACHE_DIR, BENTO_DIR, MANIFEST_NAME
+from sushi_lang.packager.constants import (
+    BIN_DIR, CACHE_DIR, BENTO_DIR, STORE_DIR, MANIFEST_NAME, LOCAL_DEPS_DIR,
+)
 from sushi_lang.packager.manifest import NoriManifest, load_manifest
-from sushi_lang.packager.paths import ensure_sushi_home, package_dir
+from sushi_lang.packager.paths import (
+    ensure_sushi_home, package_dir, store_package_dir, project_deps_dir,
+)
 
 
 class InstallError(Exception):
@@ -163,6 +167,141 @@ class PackageInstaller:
             link = BIN_DIR / exe.name
             if link.is_symlink() and link.resolve().parent == bin_src.resolve():
                 link.unlink()
+
+    # --- Store-based installation (for project-level dependencies) ---
+
+    def install_archive_to_store(self, archive_path: Path) -> NoriManifest:
+        """Install a package from a .nori archive into the global store."""
+        archive_path = archive_path.resolve()
+        if not archive_path.exists():
+            raise InstallError(f"Archive not found: {archive_path}")
+
+        manifest = PackageArchive.read_manifest(archive_path)
+        dest = store_package_dir(manifest.name, manifest.version)
+
+        if dest.exists():
+            shutil.rmtree(dest)
+
+        # Cache the archive
+        cached = CACHE_DIR / archive_path.name
+        if cached != archive_path:
+            shutil.copy2(archive_path, cached)
+
+        # Extract to store
+        extracted = PackageArchive.extract(archive_path, STORE_DIR)
+        # The archive extracts as {name}-{version}/ which matches our store layout
+        if extracted != dest:
+            if dest.exists():
+                shutil.rmtree(dest)
+            extracted.rename(dest)
+
+        self._stamp_store_source(manifest.name, manifest.version, str(archive_path))
+        return manifest
+
+    def install_directory_to_store(self, source_dir: Path) -> NoriManifest:
+        """Install from a directory containing nori.toml into the global store."""
+        source_dir = source_dir.resolve()
+        manifest = load_manifest(source_dir)
+        dest = store_package_dir(manifest.name, manifest.version)
+
+        if dest.exists():
+            shutil.rmtree(dest)
+        dest.mkdir(parents=True)
+
+        # Copy manifest
+        shutil.copy2(source_dir / MANIFEST_NAME, dest / MANIFEST_NAME)
+
+        # Copy libraries
+        if manifest.libraries:
+            lib_dir = dest / "lib"
+            lib_dir.mkdir(exist_ok=True)
+            for lib in manifest.libraries:
+                src = source_dir / lib
+                if src.exists():
+                    shutil.copy2(src, lib_dir / src.name)
+
+        # Copy executables
+        if manifest.executables:
+            bin_dir = dest / "bin"
+            bin_dir.mkdir(exist_ok=True)
+            for exe in manifest.executables:
+                src = source_dir / exe
+                if src.exists():
+                    shutil.copy2(src, bin_dir / src.name)
+
+        # Copy data
+        if manifest.data:
+            data_dir = dest / "data"
+            data_dir.mkdir(exist_ok=True)
+            for data_entry in manifest.data:
+                src = source_dir / data_entry
+                if src.is_file():
+                    shutil.copy2(src, data_dir / src.name)
+                elif src.is_dir():
+                    shutil.copytree(src, data_dir / src.name, dirs_exist_ok=True)
+
+        self._stamp_store_source(manifest.name, manifest.version, str(source_dir))
+        return manifest
+
+    def link_to_project(self, project_root: Path, name: str, version: str) -> None:
+        """Create a symlink in the project's .sushi_bento/ pointing to the store."""
+        store_dir = store_package_dir(name, version)
+        if not store_dir.exists():
+            raise InstallError(f"Package {name} v{version} not found in store")
+
+        deps_dir = project_deps_dir(project_root)
+        deps_dir.mkdir(exist_ok=True)
+
+        link_path = deps_dir / name
+        if link_path.exists() or link_path.is_symlink():
+            link_path.unlink()
+
+        link_path.symlink_to(store_dir)
+
+    def unlink_from_project(self, project_root: Path, name: str) -> bool:
+        """Remove a package symlink from the project's .sushi_bento/."""
+        deps_dir = project_deps_dir(project_root)
+        link_path = deps_dir / name
+        if link_path.exists() or link_path.is_symlink():
+            link_path.unlink()
+            # Remove deps dir if empty
+            if deps_dir.exists() and not any(deps_dir.iterdir()):
+                deps_dir.rmdir()
+            return True
+        return False
+
+    def is_in_store(self, name: str, version: str) -> bool:
+        return store_package_dir(name, version).exists()
+
+    def get_project_packages(self, project_root: Path) -> list[NoriManifest]:
+        """List packages installed in a project's .sushi_bento/."""
+        deps_dir = project_deps_dir(project_root)
+        packages = []
+        if not deps_dir.exists():
+            return packages
+        for pkg_link in sorted(deps_dir.iterdir()):
+            manifest_path = pkg_link / MANIFEST_NAME
+            if manifest_path.exists():
+                import tomllib
+                with open(manifest_path, "rb") as f:
+                    data = tomllib.load(f)
+                from sushi_lang.packager.manifest import _parse_manifest
+                try:
+                    packages.append(_parse_manifest(data))
+                except Exception:
+                    pass
+        return packages
+
+    def _stamp_store_source(self, pkg_name: str, version: str, source: str) -> None:
+        """Append [install] section to the store manifest."""
+        manifest_path = store_package_dir(pkg_name, version) / MANIFEST_NAME
+        if not manifest_path.exists():
+            return
+        today = datetime.date.today().isoformat()
+        with open(manifest_path, "a") as f:
+            f.write(f"\n[install]\n")
+            f.write(f'source = "{source}"\n')
+            f.write(f'date = "{today}"\n')
 
     def _stamp_source(self, pkg_name: str, source: str) -> None:
         """Append [install] section with source info to the installed manifest."""

@@ -29,6 +29,7 @@ class NoriManifest:
     libraries: list[str] = field(default_factory=list)
     executables: list[str] = field(default_factory=list)
     data: list[str] = field(default_factory=list)
+    dependencies: dict[str, str] = field(default_factory=dict)
     source: str = ""
 
     def validate(self) -> None:
@@ -69,10 +70,22 @@ def _parse_manifest(data: dict) -> NoriManifest:
     pkg = data.get("package", {})
     files = data.get("files", {})
     install = data.get("install", {})
+    deps = data.get("dependencies", {})
     if not pkg.get("name"):
         raise ManifestError("Missing required field: [package] name")
     if not pkg.get("version"):
         raise ManifestError("Missing required field: [package] version")
+
+    # Validate dependency versions
+    for dep_name, dep_version in deps.items():
+        if not isinstance(dep_version, str):
+            raise ManifestError(f"Dependency '{dep_name}' version must be a string")
+        if not VERSION_PATTERN.match(dep_version):
+            raise ManifestError(
+                f"Invalid version '{dep_version}' for dependency '{dep_name}'. "
+                "Must be in major.minor.patch format (e.g. 1.0.0)."
+            )
+
     manifest = NoriManifest(
         name=pkg["name"],
         version=pkg["version"],
@@ -82,6 +95,7 @@ def _parse_manifest(data: dict) -> NoriManifest:
         libraries=files.get("libraries", []),
         executables=files.get("executables", []),
         data=files.get("data", []),
+        dependencies=deps,
         source=install.get("source", ""),
     )
     manifest.validate()

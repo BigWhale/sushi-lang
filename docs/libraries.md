@@ -147,8 +147,11 @@ The path is colon-separated on Unix (semicolon on Windows).
 ### Search Order
 
 1. Each directory in `SUSHI_LIB_PATH` (in order)
-2. Nori packages (`~/.sushi/bento/*/lib/`)
-3. Current working directory (always searched last)
+2. Project-local Nori packages (`.sushi_bento/*/lib/`)
+3. Global Nori packages (`~/.sushi/bento/*/lib/`)
+4. Current working directory (always searched last)
+
+Project-local packages take precedence over global ones, so a version pinned in `.sushi_bento/` always wins. See [Project Environments](package-manager.md#project-environments) for details on how `.sushi_bento/` is populated.
 
 ### Hierarchical Namespaces
 

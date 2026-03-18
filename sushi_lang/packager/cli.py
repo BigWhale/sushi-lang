@@ -41,13 +41,17 @@ def build_parser() -> argparse.ArgumentParser:
     # nori build
     subparsers.add_parser("build", help="Build a .nori package archive")
 
-    # nori install <pkg> from <source>
+    # nori install [pkg] [from <source>] [--global]
     install_parser = subparsers.add_parser("install", help="Install a package")
     install_parser.add_argument(
         "--repository", default=None,
         help="Package repository URL (default: omakase.lubica.net)",
     )
-    install_parser.add_argument("package", help="Package name or .nori file path")
+    install_parser.add_argument(
+        "--global", dest="is_global", action="store_true", default=False,
+        help="Install globally (to ~/.sushi/bento/) even when in a project",
+    )
+    install_parser.add_argument("package", nargs="?", default=None, help="Package name or .nori file path")
     install_parser.add_argument("from_keyword", nargs="?", metavar="from", help=argparse.SUPPRESS)
     install_parser.add_argument("source", nargs="?", default=None, help="Source path (local directory or .nori file)")
 
@@ -80,15 +84,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     search_parser.add_argument("query", help="Search query")
 
-    # nori list
-    subparsers.add_parser("list", help="List installed packages")
+    # nori list [--global]
+    list_parser = subparsers.add_parser("list", help="List installed packages")
+    list_parser.add_argument(
+        "--global", dest="is_global", action="store_true", default=False,
+        help="List global packages (ignore project context)",
+    )
 
     # nori info <pkg>
     info_parser = subparsers.add_parser("info", help="Show package details")
     info_parser.add_argument("package", help="Package name")
 
-    # nori remove <pkg>
+    # nori remove <pkg> [--global]
     remove_parser = subparsers.add_parser("remove", help="Remove an installed package")
+    remove_parser.add_argument(
+        "--global", dest="is_global", action="store_true", default=False,
+        help="Remove from global packages (ignore project context)",
+    )
     remove_parser.add_argument("package", help="Package name")
 
     return parser
