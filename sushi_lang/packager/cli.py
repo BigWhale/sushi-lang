@@ -103,6 +103,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     remove_parser.add_argument("package", help="Package name")
 
+    # nori login <api-key>
+    login_parser = subparsers.add_parser("login", help="Authenticate with an Omakase repository")
+    login_parser.add_argument(
+        "--repository", default=None,
+        help="Package repository URL (default: omakase.lubica.net)",
+    )
+    login_parser.add_argument("api_key", help="API key (starts with nori_)")
+
+    # nori status
+    status_parser = subparsers.add_parser("status", help="Show login status and published packages")
+    status_parser.add_argument(
+        "--repository", default=None,
+        help="Package repository URL (default: omakase.lubica.net)",
+    )
+
     return parser
 
 
@@ -142,6 +157,14 @@ def run(args: argparse.Namespace) -> int:
     if args.command == "remove":
         from sushi_lang.packager.commands.remove import cmd_remove
         return cmd_remove(args)
+
+    if args.command == "login":
+        from sushi_lang.packager.commands.login import cmd_login
+        return cmd_login(args)
+
+    if args.command == "status":
+        from sushi_lang.packager.commands.status import cmd_status
+        return cmd_status(args)
 
     return 0
 
