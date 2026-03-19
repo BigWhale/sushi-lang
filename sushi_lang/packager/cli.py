@@ -103,6 +103,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     remove_parser.add_argument("package", help="Package name")
 
+    # nori publish
+    publish_parser = subparsers.add_parser("publish", help="Publish a package to an Omakase repository")
+    publish_parser.add_argument(
+        "--repository", default=None,
+        help="Package repository URL (default: omakase.lubica.net)",
+    )
+    publish_parser.add_argument(
+        "--namespace", default="stable", choices=["stable", "testing"],
+        help="Package namespace (default: stable)",
+    )
+    publish_parser.add_argument(
+        "--platform", default=None,
+        choices=["darwin", "linux", "windows", "any"],
+        help="Target platform (default: auto-detect from OS)",
+    )
+
     # nori help
     subparsers.add_parser("help", help="Show this help message")
 
@@ -160,6 +176,10 @@ def run(args: argparse.Namespace) -> int:
     if args.command == "remove":
         from sushi_lang.packager.commands.remove import cmd_remove
         return cmd_remove(args)
+
+    if args.command == "publish":
+        from sushi_lang.packager.commands.publish import cmd_publish
+        return cmd_publish(args)
 
     if args.command == "login":
         from sushi_lang.packager.commands.login import cmd_login
