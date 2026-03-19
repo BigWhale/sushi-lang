@@ -103,6 +103,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     remove_parser.add_argument("package", help="Package name")
 
+    # nori help
+    subparsers.add_parser("help", help="Show this help message")
+
     # nori login <api-key>
     login_parser = subparsers.add_parser("login", help="Authenticate with an Omakase repository")
     login_parser.add_argument(
@@ -126,7 +129,7 @@ def run(args: argparse.Namespace) -> int:
         _print_banner()
         return 0
 
-    if args.command is None:
+    if args.command is None or args.command == "help":
         build_parser().print_help()
         return 0
 
