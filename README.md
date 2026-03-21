@@ -432,6 +432,37 @@ To create a release:
 Contributions welcome! See documentation for compiler internals and
 architecture.
 
+## Glossary
+
+**Sushi (すし)** — The programming language and its compiler.
+> In Japanese, sushi refers to a dish of vinegared rice accompanied by
+> various ingredients such as raw fish, seafood, and vegetables. It is
+> one of the most recognized symbols of Japanese cuisine worldwide.
+> Just as sushi combines simple ingredients into something refined, the
+> Sushi language aims to blend safety, simplicity, and performance
+> into a cohesive whole.
+
+**Nori (海苔)** — The package manager for Sushi Lang.
+> Nori is edible seaweed, most commonly used as the dark green wrapper
+> that holds sushi rolls together. In the Sushi ecosystem, Nori is the
+> tool that wraps everything up — it packages compiled libraries into
+> distributable `.nori` archives, manages project manifests
+> (`nori.toml`), and handles installing and publishing packages.
+
+**Bento (弁当)** — The package storage directory structure.
+> A bento is a Japanese meal served in a compartmentalized box, with
+> each section neatly holding a different dish. Similarly, the bento
+> directories (`~/.sushi/bento/` for global packages, `.sushi_bento/`
+> for project-local dependencies) serve as organized containers where
+> installed packages are stored, each in its own compartment.
+
+**Omakase (お任せ)** — The central package repository.
+> Omakase literally means "I'll leave it up to you" and refers to a
+> style of dining where the chef selects and serves the best available
+> dishes. The Omakase repository at omakase.lubica.net is the curated
+> central hub where Nori packages are published, discovered, and
+> shared — the chef's choice of the Sushi ecosystem.
+
 ---
 
 **[📚 Read the full documentation](docs/)** | **[🚀 Get started](docs/getting-started.md)** | **[💡 See examples](docs/examples/)**
