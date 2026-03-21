@@ -141,8 +141,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run(args: argparse.Namespace) -> int:
+    _print_banner()
+
     if args.version:
-        _print_banner()
         return 0
 
     if args.command is None or args.command == "help":
