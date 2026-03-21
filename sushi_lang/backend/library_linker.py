@@ -47,8 +47,9 @@ class LibraryLinker:
 
         Search order:
             1. SUSHI_LIB_PATH directories (if set)
-            2. Nori bento packages (~/.sushi/bento/*/lib/)
-            3. Current directory (always included as fallback)
+            2. Project-local .sushi_bento/*/lib/ (if in a project)
+            3. Nori bento packages (~/.sushi/bento/*/lib/)
+            4. Current directory (always included as fallback)
         """
         paths: list[Path] = []
 
@@ -61,7 +62,18 @@ class LibraryLinker:
                 if path_str:
                     paths.append(Path(path_str).expanduser())
 
-        # 2. Nori bento packages
+        # 2. Project-local dependencies
+        from sushi_lang.packager.paths import find_project_root, project_deps_dir
+        project_root = find_project_root()
+        if project_root:
+            deps_dir = project_deps_dir(project_root)
+            if deps_dir.is_dir():
+                for pkg_dir in sorted(deps_dir.iterdir()):
+                    lib_dir = pkg_dir / "lib"
+                    if lib_dir.is_dir():
+                        paths.append(lib_dir)
+
+        # 3. Nori bento packages (global)
         bento_dir = Path.home() / ".sushi" / "bento"
         if bento_dir.is_dir():
             for pkg_dir in sorted(bento_dir.iterdir()):
@@ -69,7 +81,7 @@ class LibraryLinker:
                 if lib_dir.is_dir():
                     paths.append(lib_dir)
 
-        # 3. Current directory as fallback
+        # 4. Current directory as fallback
         cwd = Path.cwd()
         if cwd not in paths:
             paths.append(cwd)

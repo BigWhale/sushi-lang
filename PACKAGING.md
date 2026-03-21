@@ -77,6 +77,13 @@ The compiler searches for libraries in this order:
 2. Nori bento packages (`~/.sushi/bento/*/lib/`)
 3. Current directory
 
+## Omakase - Central Package Repository
+
+Omakase is the central online Nori package repository, hosted at **omakase.lubica.net**. It provides package publishing, search, and download via a REST API.
+
+- Backend API repo: `sushi-omakase-api` (cloned locally to `omakase-api/`)
+- Frontend repo: `sushi-omakase-front`
+
 ## Archive Format
 
 `.nori` files are gzip-compressed tarballs containing:
