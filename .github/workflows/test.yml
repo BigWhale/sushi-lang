@@ -69,7 +69,55 @@ jobs:
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          uv run python tests/run_tests.py
+          uv run python tests/run_tests.py --enhanced
+
+  test-macos:
+    if: github.event_name != 'push'
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for code changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            code:
+              - 'sushi_lang/**'
+              - 'tests/**'
+              - '.github/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'sushic'
+
+      - name: Install LLVM 20
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        run: brew install llvm@20
+
+      - name: Install uv from Astral
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install Python dependencies with uv
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          LLVM_CONFIG="$(brew --prefix llvm@20)/bin/llvm-config" uv sync --extra dev --python 3.13
+
+      - name: Make sushic executable
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        run: chmod +x sushic
+
+      - name: Run tests
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run --python 3.13 python tests/run_tests.py --enhanced
 
   badges:
     if: github.event_name == 'push'
