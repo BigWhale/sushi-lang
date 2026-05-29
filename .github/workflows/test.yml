@@ -10,7 +10,65 @@ on:
   workflow_dispatch:
 
 jobs:
+  pytest:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie-slim
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for code changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            code:
+              - 'sushi_lang/**'
+              - 'tests/**'
+              - '.github/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'sushic'
+
+      - name: Install system dependencies
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        run: |
+          apt-get update
+          apt-get install -y wget ca-certificates gnupg lsb-release curl build-essential cmake git jq
+
+      - name: Install LLVM 20
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg allow-insecure=yes] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee /etc/apt/sources.list.d/llvm.list
+          echo "deb-src [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg allow-insecure=yes] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee -a /etc/apt/sources.list.d/llvm.list
+          apt-get update -o Acquire::AllowInsecureRepositories=true
+          apt-get install -y --allow-unauthenticated llvm-20 llvm-20-dev
+
+      - name: Install uv from Astral
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install Python dependencies with uv
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          LLVM_CONFIG=/usr/bin/llvm-config-20 uv sync --extra dev
+
+      - name: Run unit tests (pytest)
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run pytest -q
+
   test:
+    needs: pytest
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
     container:
@@ -72,6 +130,7 @@ jobs:
           uv run python tests/run_tests.py --enhanced
 
   test-macos:
+    needs: pytest
     if: github.event_name != 'push'
     runs-on: macos-15
 
