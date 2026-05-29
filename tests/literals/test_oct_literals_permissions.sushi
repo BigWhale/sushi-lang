@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: Mostly Harmless
 # Test octal literals for Unix permissions
 
 fn main() i32:
