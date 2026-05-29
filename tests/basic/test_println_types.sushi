@@ -1,3 +1,7 @@
+# EXPECT_STDOUT_CONTAINS: 42
+# EXPECT_STDOUT_CONTAINS: 3.14
+# EXPECT_STDOUT_CONTAINS: Hello, World!
+# EXPECT_STDOUT_CONTAINS: Goodbye
 fn main() i32:
     println(42)
     println(3.14)

@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: Point hash: 14687699039417897699
 # Test that basic struct hashing still works with dual registration (Pass 0 + Pass 1.8)
 
 struct Point:

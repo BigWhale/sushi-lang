@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_EXACT: "42\n"
 # TEST_TYPE: compilation
 # Test for Phase 4.2 - Let Statement Validation
 # This test checks if we can declare variables with Result<T> type

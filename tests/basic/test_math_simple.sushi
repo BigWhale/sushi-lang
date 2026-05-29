@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: PI = 3.14159
+# EXPECT_STDOUT_CONTAINS: abs(-42) = 42
 # Simple math module test
 use <math>
 

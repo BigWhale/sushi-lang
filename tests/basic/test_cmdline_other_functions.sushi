@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: Helper function works normally
 # Test that other functions can have string[] args parameters without issues
 
 
