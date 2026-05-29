@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: Descending exclusive:
+# EXPECT_STDOUT_CONTAINS: Descending inclusive:
 fn main() i32:
     println("Descending exclusive:")
     foreach(i in 10..5):
