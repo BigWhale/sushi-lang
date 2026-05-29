@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: Signed: -8 >> 2 = -2
+# EXPECT_STDOUT_CONTAINS: Unsigned: 248 >> 2 = 62
+# EXPECT_STDOUT_CONTAINS: All right shift tests passed!
 use <io/stdio>
 
 fn main() i32:

@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: -4
+# EXPECT_STDOUT_CONTAINS: 252
 fn main() i32:
     # Test arithmetic right shift with signed types (sign-extend)
     let i32 a = -16

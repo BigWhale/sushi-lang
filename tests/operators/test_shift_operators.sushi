@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: 20
+# EXPECT_STDOUT_CONTAINS: 5
+# EXPECT_STDOUT_CONTAINS: -2
 fn main() i32:
     # Test left shift
     let i32 a = 5
