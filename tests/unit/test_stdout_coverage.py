@@ -41,7 +41,7 @@ from pathlib import Path
 # no EXPECT_STDOUT_CONTAINS or EXPECT_STDOUT_EXACT in their header (the "gap").
 # After each backfill pass this MUST be lowered to the new gap count — it may
 # never increase (that would mean new unasserted printing tests were added).
-BASELINE = 443
+BASELINE = 257
 
 TESTS_ROOT = Path(__file__).parent.parent  # tests/
 EXCLUDED_DIRS = {"helpers", "bin"}
