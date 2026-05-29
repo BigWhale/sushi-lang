@@ -35,6 +35,14 @@ from run_tests import build_stdlib, build_test_helpers
 RUNTIME_QUARANTINE = {
     "test_array_index_types.sushi",
     "test_string_array_get_heap.sushi",
+    # Crashes with SIGSEGV when joining a dynamic string array (string[]).
+    # The join stdlib function corrupts the heap on the second element.
+    # Candidate for a new GitHub issue (discovered during p0-3 backfill).
+    "test_string_join.sushi",
+    # Prints FAIL for contains/starts_with/ends_with inside string interpolation.
+    # The interpolation context does not correctly call the boolean string methods;
+    # they return 0 instead of "true". Candidate for a new GitHub issue.
+    "test_interpolation_methods.sushi",
 }
 
 

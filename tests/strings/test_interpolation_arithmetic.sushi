@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: Sum: 30, Product: 200
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 

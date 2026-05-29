@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: PASS: pad_left with single-quote char
+# EXPECT_STDOUT_CONTAINS: PASS: replace with single-quote args
 # Test string interpolation with single-quote arguments
 
 use <collections/strings>

@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: Value: 42
 fn main() i32:
   let i32 x = 42
   print("Value: {x}")

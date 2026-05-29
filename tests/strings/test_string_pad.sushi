@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: PASS: pad_left basic test
+# EXPECT_STDOUT_CONTAINS: PASS: pad_right basic test
 use <collections/strings>
 
 fn test_pad_left_basic() ~:

@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: PASS: Basic strip_prefix
+# EXPECT_STDOUT_CONTAINS: PASS: strip_prefix with UTF-8
 use <collections/strings>
 
 fn test_basic_strip() ~:

@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: PASS: ASCII ss(0, 5)
+# EXPECT_STDOUT_CONTAINS: PASS: ss full string
 use <collections/strings>
 
 fn test_ascii() ~:
