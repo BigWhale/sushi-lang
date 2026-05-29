@@ -29,10 +29,12 @@ from run_tests import build_stdlib, build_test_helpers
 
 # Tests whose runtime validation is temporarily quarantined. Compilation is still
 # checked; only execution of the compiled binary is skipped. Re-enable once fixed.
-#   test_array_index_types.sushi: aborts with SIGABRT on Linux CI only (passes on
-#   macOS); under investigation, possibly a runner-specific issue.
+# Both reproduce the same bug: .get() on a dynamic array of strings (string[])
+# corrupts the heap and aborts (SIGABRT) on glibc, while passing on macOS.
+# See GitHub issue #24.
 RUNTIME_QUARANTINE = {
     "test_array_index_types.sushi",
+    "test_string_array_get_heap.sushi",
 }
 
 
