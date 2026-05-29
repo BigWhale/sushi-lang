@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: Crew member: Ford Prefect
+# EXPECT_STDOUT_CONTAINS: RAII string cleanup passed!
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test RAII cleanup with List<string> containing heap-allocated strings

@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: List<f32> {
+# EXPECT_STDOUT_CONTAINS: 3.140000
 fn main() i32:
     let List<f32> floats = List.new()
 

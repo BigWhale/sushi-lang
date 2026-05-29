@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: === Iterating over empty List ===
+# EXPECT_STDOUT_CONTAINS: Done (should not print any numbers)
 fn main() i32:
     let List<i32> empty = List.new()
 

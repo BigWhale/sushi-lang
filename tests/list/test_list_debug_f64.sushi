@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: List<f64> {
+# EXPECT_STDOUT_CONTAINS: 3.141590
 fn main() i32:
     let List<f64> doubles = List.new()
 

@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: Initial size: 0
+# EXPECT_STDOUT_CONTAINS: All basic methods working!
 # Test basic List<T> methods: new(), len(), is_empty(), capacity()
 fn main() i32:
     # Create empty List

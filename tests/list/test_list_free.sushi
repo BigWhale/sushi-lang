@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: free tests passed!
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<T> free method (reset to empty but still usable)

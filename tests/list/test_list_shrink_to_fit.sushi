@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: shrink_to_fit tests passed!
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<T> shrink_to_fit method
