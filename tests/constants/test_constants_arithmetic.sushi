@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: All arithmetic constant tests passed
 # Test arithmetic operations in constant expressions
 
 const i32 BASE = 10

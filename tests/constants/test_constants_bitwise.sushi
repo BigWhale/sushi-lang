@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: All bitwise constant tests passed
 # Test bitwise operations in constant expressions
 
 const u32 FLAGS_A = 0x01 as u32

@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: Debug mode enabled
 # EXPECT_RUNTIME_EXIT: 103
 # TEST_TYPE: runtime
 const f64 PI = 3.14159

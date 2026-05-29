@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_EXACT: "SushiLang\n"
 const string APP_NAME = "SushiLang"
 
 fn main() i32:
