@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: Dynamic array [10, 20, 30].hash() = 1369094724173641924
+# EXPECT_STDOUT_CONTAINS: Same dynamic array values produce same hash
+# EXPECT_STDOUT_CONTAINS: Hash after push matches expected
 # Test hash method for dynamic arrays
 
 fn main() i32:

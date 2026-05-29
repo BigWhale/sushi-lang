@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: Test 1: numbers.len() = 3
+# EXPECT_STDOUT_CONTAINS: All tests passed!
 # Test direct initialization of dynamic arrays from function calls
 # This test verifies that the limitation "Cannot directly initialize dynamic arrays
 # with function call results" has been removed.

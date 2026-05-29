@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: Hash: 11406684929655442258
 # TEST_TYPE: error
 # Test that structs with array fields show clear error messages
 

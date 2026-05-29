@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: Fixed array [10, 20, 30].hash() = 1369094724173641924
+# EXPECT_STDOUT_CONTAINS: Same fixed array values produce same hash
 # Test hash method for fixed arrays
 
 fn main() i32:

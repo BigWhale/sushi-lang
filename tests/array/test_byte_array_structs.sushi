@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: Buffer1 length: 3
+# EXPECT_STDOUT_CONTAINS: All struct integration tests completed!
 # Test byte arrays in structs with RAII cleanup
 use <collections/strings>
 

@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: P: 0
+# EXPECT_STDOUT_CONTAINS: S: 32
 struct Point:
     i32 x
     i32 y

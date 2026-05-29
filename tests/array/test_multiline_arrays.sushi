@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: Test 1: Multi-line string array
+# EXPECT_STDOUT_CONTAINS: First: Argle
+# EXPECT_STDOUT_CONTAINS: All multi-line tests completed!
 # Test multi-line array literals and function calls
 
 

@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: Container name: test
+# EXPECT_STDOUT_CONTAINS: Person name: Arthur
+# EXPECT_STDOUT_CONTAINS: Fourth hobby: swimming
 # Test structs with dynamic array fields
 # This validates that structs can contain dynamic arrays and that
 # methods can be called on those array fields (Rust-style GEP access)

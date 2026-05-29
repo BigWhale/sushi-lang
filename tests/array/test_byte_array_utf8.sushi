@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: ASCII text: Hello
+# EXPECT_STDOUT_CONTAINS: Mixed: Hello
+# EXPECT_STDOUT_CONTAINS: Bytes: 20
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: ASCII text: Hello
 # EXPECTED_OUTPUT: Multi-byte char: 世

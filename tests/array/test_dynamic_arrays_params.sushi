@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: 4hello36032
 # Test dynamic array function parameters
 
 

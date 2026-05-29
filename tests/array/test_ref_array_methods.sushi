@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: 3
+# EXPECT_STDOUT_CONTAINS: 10
+# EXPECT_STDOUT_CONTAINS: 30
 # Test reference to dynamic array with method calls
 
 fn array_info(&poke i32[] arr) ~:

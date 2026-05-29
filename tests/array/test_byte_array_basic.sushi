@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: Initial length: 0
+# EXPECT_STDOUT_CONTAINS: First byte: 65
+# EXPECT_STDOUT_CONTAINS: Converted text: Hello
 # Test basic byte array operations
 fn run_test() i32:
     # Create empty byte array

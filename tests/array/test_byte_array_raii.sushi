@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: Test 1: Function scope cleanup
+# EXPECT_STDOUT_CONTAINS: All RAII tests completed successfully!
 # Test RAII automatic cleanup for byte arrays in various scopes
 
 

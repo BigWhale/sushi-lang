@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: Outer name: outer
+# EXPECT_STDOUT_CONTAINS: First value: 100
+# EXPECT_STDOUT_CONTAINS: Values length: 3
 # Test nested struct with dynamic array fields
 # This validates that nested struct field access works correctly
 

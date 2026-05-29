@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: 313
 fn run_test() i32:
   let i32[] numbers = from([1, 2, 3])
   print(numbers.len())      # Should print 3

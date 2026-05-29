@@ -1,3 +1,7 @@
+# EXPECT_STDOUT_CONTAINS: Length: 3
+# EXPECT_STDOUT_CONTAINS: First element: 10
+# EXPECT_STDOUT_CONTAINS: Popped: 30
+# EXPECT_STDOUT_CONTAINS: Array destroyed
 # Test core array functionality
 # Arrays are a CORE language feature (not stdlib) that use inline emission
 # This test validates that array methods work correctly
