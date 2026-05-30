@@ -348,11 +348,13 @@ def _emit_destroy_elements_loop(codegen: Any, data_ptr: ir.Value, count: ir.Valu
     # Loop body: destroy element at data[counter]
     codegen.builder.position_at_end(loop_body)
     element_ptr = gep_utils.gep_array_element(codegen, data_ptr, counter, "element_ptr")
-    element_value = codegen.builder.load(element_ptr, name="element_to_destroy")
 
-    # Use recursive destructor
+    # Use recursive destructor. emit_value_destructor expects a POINTER to the
+    # element (it GEPs into structs/enums/arrays); passing the loaded value made
+    # the enum destructor GEP an IntType. Primitive/string elements no-op, which
+    # is why the loaded-value form happened to work for them.
     from sushi_lang.backend.destructors import emit_value_destructor
-    emit_value_destructor(codegen, codegen.builder, element_value, element_type)
+    emit_value_destructor(codegen, codegen.builder, element_ptr, element_type)
 
     # Increment counter
     one = ir.Constant(codegen.types.i32, 1)
