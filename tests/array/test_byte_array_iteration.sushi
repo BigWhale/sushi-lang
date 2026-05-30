@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: Test 1: Simple iteration
+# EXPECT_STDOUT_CONTAINS: Sum: 100
+# EXPECT_STDOUT_CONTAINS: All iteration tests completed!
 # Test iteration over byte arrays with various patterns
 
 

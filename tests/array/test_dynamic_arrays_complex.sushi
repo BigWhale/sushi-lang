@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: 4000000580001200410000003345
 # Test complex dynamic array scenarios
 fn run_test() i32:
   # Test basic operations with multiple arrays

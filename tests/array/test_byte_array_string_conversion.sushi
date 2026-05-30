@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: Manual byte count: 5
+# EXPECT_STDOUT_CONTAINS: Converted: Hello
 # Test byte array string conversion methods - basic test
 fn main() i32:
     # Create a simple byte array manually

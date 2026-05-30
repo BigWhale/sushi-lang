@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: Before free: len=3
+# EXPECT_STDOUT_CONTAINS: After free: len=0
+# EXPECT_STDOUT_CONTAINS: Array.free() works correctly!
 fn main() i32:
     # Test Array.free() - should clear array but keep it usable
     let i32[] arr = from([1, 2, 3])

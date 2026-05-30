@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: Mostly Harmless
 # Test binary literals in constants
 
 const i32 BIN_CONST = 0b11110000

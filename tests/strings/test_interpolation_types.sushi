@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: Integer: 42
+# EXPECT_STDOUT_CONTAINS: String: Sushi
+# EXPECT_STDOUT_CONTAINS: Sum: 30
 # Test valid string interpolation with all supported types
 # This test should compile and run successfully
 

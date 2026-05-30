@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: Polygon(
+# EXPECT_STDOUT_CONTAINS: Same struct values with arrays produce same hash
 # Test hash method for structs containing arrays
 
 struct Point:

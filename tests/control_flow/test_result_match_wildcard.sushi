@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: Success: 100
+# EXPECT_STDOUT_CONTAINS: Other case
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Success: 100
 # EXPECTED_OUTPUT: Other case

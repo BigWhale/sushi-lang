@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: -6
+# EXPECT_STDOUT_CONTAINS: -1
+# EXPECT_STDOUT_CONTAINS: 42
 fn main() i32:
     # Basic bitwise NOT tests
     let i32 a = 5

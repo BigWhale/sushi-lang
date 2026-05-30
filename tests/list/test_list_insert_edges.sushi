@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: Edge cases test passed!
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<T> insert method - edge cases

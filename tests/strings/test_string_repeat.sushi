@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: PASS: Basic repeat (abc * 3)
+# EXPECT_STDOUT_CONTAINS: PASS: Repeat with n=0
 use <collections/strings>
 
 fn test_repeat_basic() ~:

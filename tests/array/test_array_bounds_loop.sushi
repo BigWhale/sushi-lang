@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: 45
 # Test array bounds checking with loop iteration
 # This test demonstrates proper iteration within bounds
 

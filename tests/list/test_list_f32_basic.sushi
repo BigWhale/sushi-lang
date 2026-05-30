@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: Created list with floats
 fn main() i32:
     let List<f32> floats = List.new()
 

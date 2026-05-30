@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: Crew member 2: Zaphod Beeblebrox
+# EXPECT_STDOUT_CONTAINS: String list tests passed!
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<string> with string elements

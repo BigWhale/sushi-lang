@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: Dynamic range:
+# EXPECT_STDOUT_CONTAINS: Expression range:
 fn main() i32:
     let i32 start = 2
     let i32 end = 7

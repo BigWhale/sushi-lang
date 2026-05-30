@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_EXACT: "Value: 255\n"
 fn main() i32:
     let u32 x = 255 as u32
     println("Value: {x}")

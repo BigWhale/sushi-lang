@@ -67,7 +67,7 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           uv run pytest -q
 
-  test:
+  test-linux:
     needs: pytest
     if: github.event_name != 'push'
     runs-on: ubuntu-latest

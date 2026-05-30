@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: RAII cleanup tests passed!
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<T> RAII automatic cleanup on scope exit

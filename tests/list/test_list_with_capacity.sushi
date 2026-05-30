@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: with_capacity tests passed!
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<T> with_capacity constructor

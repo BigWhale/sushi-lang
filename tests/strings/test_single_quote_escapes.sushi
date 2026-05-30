@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: PASS: Escaped single quote
+# EXPECT_STDOUT_CONTAINS: PASS: Newline escape
 use <collections/strings>
 
 fn test_escaped_single_quote() ~:

@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: Test 1: Return byte array
+# EXPECT_STDOUT_CONTAINS: Returned string: Hello
+# EXPECT_STDOUT_CONTAINS: All function tests completed!
 # Test byte arrays as function parameters and return values
 
 fn create_hello() u8[]:

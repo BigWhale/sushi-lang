@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: Rectangle hash: 12303218980686071687
 # Test that nested structs can now be hashed (Pass 1.8 uses topological sort)
 
 struct Point:

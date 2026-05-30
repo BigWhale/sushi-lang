@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: Loop completed successfully
 # Test that using a variable as the source of a rebind doesn't mark it as moved
 # This test ensures that i can be used multiple times without being considered "moved"
 

@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: No command line args processing
 # Test that functions without string[] args parameter work normally
 # This should NOT trigger command line argument processing
 

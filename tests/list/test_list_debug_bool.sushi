@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: List<bool> {
+# EXPECT_STDOUT_CONTAINS: [0] true
+# EXPECT_STDOUT_CONTAINS: [1] false
 fn main() i32:
     let List<bool> flags = List.new()
 

@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: With break:
+# EXPECT_STDOUT_CONTAINS: With continue:
+# EXPECT_STDOUT_CONTAINS: 9
 fn main() i32:
     println("With break:")
     foreach(i in 0..10):

@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: 530002030
 # Test dynamic array manual destroy functionality
 fn run_test() i32:
   # Test explicit destroy

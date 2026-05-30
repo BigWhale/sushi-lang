@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: Empty length: 0
+# EXPECT_STDOUT_CONTAINS: Single length: 1
+# EXPECT_STDOUT_CONTAINS: Large array length: 100
 # Test edge cases for byte arrays
 
 use <collections/strings>

@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: Parameter named 'arguments', not 'args'
 # Test that string[] parameter with wrong name doesn't trigger special handling
 
 fn main(string[] arguments) i32:

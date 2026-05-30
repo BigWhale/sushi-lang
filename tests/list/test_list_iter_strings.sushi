@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: === Iterating over List<string> ===
+# EXPECT_STDOUT_CONTAINS: Alice
+# EXPECT_STDOUT_CONTAINS: Charlie
 fn main() i32:
     let List<string> names = List.new()
 

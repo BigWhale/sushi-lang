@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: PASS: pad_left with single-quote char
+# EXPECT_STDOUT_CONTAINS: PASS: count with single-quote needle
 use <collections/strings>
 
 fn test_pad_left() ~:

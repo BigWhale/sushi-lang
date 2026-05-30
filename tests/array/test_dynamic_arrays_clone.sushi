@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: 3
+# EXPECT_STDOUT_CONTAINS: 42
 # Test clone() method for dynamic arrays
 # This test verifies that clone creates independent deep copies
 

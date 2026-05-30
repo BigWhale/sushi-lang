@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: 202130042
 # Test method calls on array parameters
 
 fn safe_get(i32[] arr, i32 index) i32:

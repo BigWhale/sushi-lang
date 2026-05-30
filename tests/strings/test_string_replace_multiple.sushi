@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: All multiple replacement tests passed!
 # TEST_TYPE: runtime
 use <collections/strings>
 

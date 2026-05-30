@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: Life
 struct Pair<T, U>:
     T first
     U second

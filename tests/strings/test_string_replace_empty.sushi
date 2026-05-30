@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_CONTAINS: All edge case tests passed!
 # TEST_TYPE: runtime
 use <collections/strings>
 

@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_EXACT: "55\n"
 # Test runtime memory allocation with safety checks
 # This test exercises the allocation paths with RE2021 runtime error checks
 # The program should compile successfully and run without errors under normal conditions

@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: PASS: find_last('o') in 'hello world' = 7
+# EXPECT_STDOUT_CONTAINS: PASS: find_last not found returns None
 use <collections/strings>
 
 fn test_find_last_basic() ~:

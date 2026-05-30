@@ -4,9 +4,43 @@
 
 The Sushi test suite supports two modes of testing:
 
-1. **Compilation-only mode** (default): Tests whether code compiles successfully, fails compilation, or generates 
+1. **Compilation-only mode** (default): Tests whether code compiles successfully, fails compilation, or generates
 warnings
 2. **Enhanced runtime mode** (`--enhanced` flag): Also executes compiled binaries and validates runtime behavior
+
+## Output Assertion Convention (REQUIRED)
+
+**Any success-category test (`test_*.sushi`) that calls `print(` or `println(` MUST include at least one
+`EXPECT_STDOUT_CONTAINS` or `EXPECT_STDOUT_EXACT` directive in its first 20 lines.**
+
+Rationale: compilation-only mode cannot detect regressions in computed results. A test that prints `"Sum: 42"` but
+only validates that it compiled gives no protection against the compiler emitting wrong arithmetic. Runtime assertions
+close this gap.
+
+### When to use each assertion form
+
+- `EXPECT_STDOUT_CONTAINS: <substring>` — preferred for most tests. Choose a **computed result** or a unique token
+  that identifies the test actually ran successfully (e.g., `Sum: 30`, `All tests passed`, `Value: 42`).
+- `EXPECT_STDOUT_EXACT: "<full output>"` — use only for small, fully-deterministic programs where the complete output
+  can be expressed in a single quoted string on one line. This form catches extraneous output as well.
+- Multiple `EXPECT_STDOUT_CONTAINS` directives are allowed; all must be present in stdout.
+
+### When NOT to add a stdout assertion
+
+- `test_err_*` and `test_warn_*` files — these test compilation failure/warnings only; never run in enhanced mode.
+- Tests with no print statements (compilation-only is sufficient).
+- Tests that produce nondeterministic output: HashMap/`.keys()`/`.values()`/`.entries()` iteration order, pointer
+  addresses, RAII debug addresses, platform-specific float formatting. For those, either choose a stable substring
+  or skip with a comment explaining why.
+- Tests that crash (SIGSEGV/abort) due to known compiler bugs — add to `RUNTIME_QUARANTINE` in
+  `tests/enhanced_test_runner.py` and file a GitHub issue.
+
+### Lowering the coverage ratchet
+
+The pytest unit test `tests/unit/test_stdout_coverage.py` tracks a `BASELINE` constant (the count of in-scope tests
+that print but lack an assertion). After backfilling a new directory, run
+`uv run --extra dev pytest tests/unit/test_stdout_coverage.py` to confirm it passes, then lower `BASELINE` to the
+new gap count and commit.
 
 All happy path tests (`test_*.sushi`, not `test_err_*` or `test_warn_*`) should include metadata to support enhanced
 runtime validation.

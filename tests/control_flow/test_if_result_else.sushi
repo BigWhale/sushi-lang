@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: Got OK value
+# EXPECT_STDOUT_CONTAINS: Got ERR
 fn get_value(i32 should_fail) i32:
     if (should_fail == 1):
         return Result.Err(StdError.Error)

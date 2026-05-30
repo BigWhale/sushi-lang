@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: PASS: Empty single-quote string
+# EXPECT_STDOUT_CONTAINS: PASS: Special characters
 # Test edge cases for single-quote strings
 
 use <collections/strings>
