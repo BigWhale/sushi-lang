@@ -357,18 +357,24 @@ class DynamicArrayManager:
         return self.codegen.types.ll_type(element_type)
 
     def _get_element_size_bytes(self, element_type: Type) -> ir.Value:
-        """Get the size in bytes of an element type as an LLVM i32 constant.
+        """Get the per-element allocation stride in bytes as an LLVM i32 constant.
 
-        Delegates to the centralized type size calculation in LLVMTypeSystem.
+        Uses the LLVM ABI alloc size of the element's LLVM type, which is the
+        stride getelementptr uses to index the element pointer. This can exceed
+        the semantic data size for padded types -- a string fat pointer {i8*, i32}
+        has a 12-byte data size but a 16-byte alloc size -- and allocating with the
+        smaller data size while GEP strides by the alloc size corrupts the heap
+        past element 0 (issues #24 / #29).
 
         Args:
             element_type: The Sushi language type of array elements.
 
         Returns:
-            LLVM i32 constant representing the size in bytes.
+            LLVM i32 constant representing the allocation stride in bytes.
         """
-        # Delegate to centralized size calculation (single source of truth)
-        return self.codegen.types.get_type_size_constant(element_type)
+        from sushi_lang.backend.expressions import memory
+        element_llvm_type = self._get_llvm_type_for_element(element_type)
+        return memory.get_element_size_constant(self.codegen, element_llvm_type)
 
     def _next_power_of_2(self, n: int) -> int:
         """Return the next power of 2 >= n. Used for capacity growth.
