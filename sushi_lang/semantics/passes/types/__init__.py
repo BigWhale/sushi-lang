@@ -24,24 +24,27 @@ The TypeValidator class coordinates type validation by delegating to specialized
 - statements: Statement validation
 """
 from __future__ import annotations
-import sys
 from typing import Dict, List, Optional, Set
 
-from sushi_lang.internals.report import Reporter, Span
-from sushi_lang.internals import errors as er
+from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.semantics.ast import (
     Program, FuncDef, ConstDef, ExtendDef, ExtendWithDef, Block, Stmt, Let, Return, While, Foreach, Match,
-    If, Expr, Param
+    If, Expr
 )
-from sushi_lang.semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType
+from sushi_lang.semantics.typesys import Type, BuiltinType
 from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, EnumTable, FunctionTable, ExtensionTable, PerkTable, PerkImplementationTable
 from sushi_lang.semantics.type_visitor import StatementValidator, ExpressionValidator, TypeInferenceVisitor
-from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
 # Import validation functions from specialized modules
-from .utils import validate_type_name, validate_and_register_parameters
-from .compatibility import validate_assignment_compatibility, types_compatible
+from .compatibility import types_compatible
+from .constants import validate_constant
+from .signatures import (
+    validate_function,
+    validate_extension_method,
+    validate_perk_implementation_method,
+)
+from .control_flow import block_always_returns, statement_always_returns
 from .statements import (
     validate_let_statement,
     validate_return_statement,
@@ -70,10 +73,6 @@ from .inference import (
     infer_array_literal_type,
     infer_index_access_type,
     infer_dynamic_array_from_type
-)
-from .perks import (
-    validate_perk_implementation,
-    check_no_conflicts_with_regular_methods
 )
 
 
@@ -163,207 +162,28 @@ class TypeValidator:
         return self.type_inference_visitor.visit(expr)
 
     def _validate_constant(self, const: ConstDef) -> None:
-        """Validate a constant definition."""
-        # Validate the constant's type annotation
-        validate_type_name(self, const.ty, const.type_span)
-
-        # Blank type cannot be used for constants
-        if const.ty == BuiltinType.BLANK:
-            self.err.emit(er.ERR.CE2032, const.type_span)
-            return
-
-        # Constants should not use dynamic arrays (they don't make sense for compile-time values)
-        if isinstance(const.ty, DynamicArrayType):
-            self.err.emit(er.ERR.CE2015, const.type_span, name=const.name)
-            return
-
-        # Evaluate constant expression at compile-time
-        from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
-        evaluator = ConstantEvaluator(self.reporter, self.const_table, self.ast_constants)
-        const_value = evaluator.evaluate(const.value, const.ty, const.loc)
-
-        if const_value is None:
-            # Error already emitted by evaluator
-            return
-
-        # Validate value type matches declared type
-        validate_assignment_compatibility(self, const.ty, const.value, const.type_span, const.loc)
+        """Delegate to constants module."""
+        validate_constant(self, const)
 
     def _validate_function(self, func: FuncDef) -> None:
-        """Validate types within a function."""
-        self.current_function = func
-        self.variable_types = {}  # Reset for each function
-        self.destroyed_arrays = [set()]  # Reset for each function with initial scope
-
-        # Validate parameter types and add them to variable table
-        validate_and_register_parameters(self, func.params)
-
-        # Validate return type (blank type is allowed here)
-        validate_type_name(self, func.ret, func.ret_span)
-
-        # Validate error type if specified (must be an enum)
-        if func.err_type is not None:
-            # First validate the type name itself
-            validate_type_name(self, func.err_type, func.ret_span)  # Use ret_span since we don't have err_span
-
-            # Then check if it's an enum
-            from sushi_lang.semantics.generics.types import GenericTypeRef
-            resolved_err_type = func.err_type
-
-            # Resolve UnknownType to actual type
-            if isinstance(func.err_type, UnknownType):
-                resolved_err_type = resolve_unknown_type(
-                    func.err_type,
-                    self.struct_table.by_name,
-                    self.enum_table.by_name
-                )
-
-            # Check if resolved type is an enum
-            if not isinstance(resolved_err_type, EnumType):
-                # Error type must be an enum, not a struct or primitive
-                self.err.emit(er.ERR.CE2084, func.ret_span,
-                             type_name=str(func.err_type))
-
-        # Validate function body
-        self._validate_block(func.body)
-
-        # Check if function returns a value on all code paths
-        # Skip this check for functions returning blank (~)
-        if func.ret != BuiltinType.BLANK:
-            if not self._block_always_returns(func.body):
-                self.err.emit(er.ERR.CE0107, func.name_span, name=func.name)
-
-        self.current_function = None
+        """Delegate to signatures module."""
+        validate_function(self, func)
 
     def _validate_extension_method(self, ext: ExtendDef) -> None:
-        """Validate types within an extension method."""
-        self.current_function = None  # Extension methods are not functions, but we can reuse some logic
-        self.variable_types = {}  # Reset for each extension method
-        self.destroyed_arrays = [set()]  # Reset for each extension method with initial scope
-
-        # Validate target type
-        validate_type_name(self, ext.target_type, ext.target_type_span)
-
-        # Blank type cannot be used as target type for extension methods
-        if ext.target_type == BuiltinType.BLANK:
-            self.err.emit(er.ERR.CE2032, ext.target_type_span)
-
-        # Add 'self' parameter with target type to variable table
-        if isinstance(ext.target_type, (BuiltinType, ArrayType, DynamicArrayType, StructType)):
-            self.variable_types["self"] = ext.target_type
-        elif isinstance(ext.target_type, UnknownType):
-            # Resolve UnknownType to StructType for struct-typed self
-            resolved_type = resolve_unknown_type(ext.target_type, self.struct_table.by_name, self.enum_table.by_name)
-            if resolved_type != ext.target_type:
-                self.variable_types["self"] = resolved_type
-
-        # Validate explicit parameter types and add them to variable table
-        validate_and_register_parameters(self, ext.params)
-
-        # Validate return type (blank type is allowed here)
-        validate_type_name(self, ext.ret, ext.ret_span)
-
-        # Validate extension method body
-        self._validate_block(ext.body)
-
-        # Check if extension method returns a value on all code paths
-        # Skip this check for methods returning blank (~)
-        if ext.ret != BuiltinType.BLANK:
-            if not self._block_always_returns(ext.body):
-                self.err.emit(er.ERR.CE0107, ext.name_span, name=ext.name)
+        """Delegate to signatures module."""
+        validate_extension_method(self, ext)
 
     def _validate_perk_implementation(self, impl: ExtendWithDef) -> None:
-        """Validate a perk implementation."""
-        # Look up the perk definition
-        perk_def = self.perk_table.by_name.get(impl.perk_name)
-        if not perk_def:
-            # Error should have been caught in collection phase, but double check
-            self.err.emit(er.ERR.CE4003, impl.perk_name_span, perk=impl.perk_name)
-            return
-
-        # Validate that implementation satisfies perk requirements
-        validate_perk_implementation(impl, perk_def, self.reporter)
-
-        # Check for conflicts with regular extension methods
-        resolved_type = impl.target_type
-        if isinstance(impl.target_type, UnknownType):
-            resolved_type = resolve_unknown_type(impl.target_type, self.struct_table.by_name, self.enum_table.by_name)
-        if resolved_type is not None:
-            check_no_conflicts_with_regular_methods(resolved_type, impl, self.extension_table, self.reporter)
-
-        # Validate each method in the implementation
-        for method in impl.methods:
-            # Treat perk implementation methods like extension methods
-            self.current_function = None
-            self.variable_types = {}
-            self.destroyed_arrays = [set()]
-
-            # Validate target type
-            validate_type_name(self, impl.target_type, impl.target_type_span)
-
-            # Add 'self' parameter with target type
-            if isinstance(impl.target_type, (BuiltinType, ArrayType, DynamicArrayType, StructType)):
-                self.variable_types["self"] = impl.target_type
-            elif isinstance(impl.target_type, UnknownType):
-                resolved_type = resolve_unknown_type(impl.target_type, self.struct_table.by_name, self.enum_table.by_name)
-                if resolved_type != impl.target_type:
-                    self.variable_types["self"] = resolved_type
-
-            # Validate method parameters
-            validate_and_register_parameters(self, method.params)
-
-            # Validate return type
-            validate_type_name(self, method.ret, method.ret_span)
-
-            # Validate method body
-            self._validate_block(method.body)
-
-            # Check if method returns on all code paths
-            if method.ret != BuiltinType.BLANK:
-                if not self._block_always_returns(method.body):
-                    self.err.emit(er.ERR.CE0107, method.name_span, name=method.name)
+        """Delegate to signatures module."""
+        validate_perk_implementation_method(self, impl)
 
     def _block_always_returns(self, block: Block) -> bool:
-        """Check if a block always returns on all code paths."""
-        for stmt in block.statements:
-            if self._statement_always_returns(stmt):
-                return True
-        return False
+        """Delegate to control_flow module."""
+        return block_always_returns(self, block)
 
     def _statement_always_returns(self, stmt: Stmt) -> bool:
-        """Check if a statement always returns on all code paths."""
-        from sushi_lang.semantics.ast import Break, Continue, ExprStmt, Let, Rebind, Print, PrintLn, Foreach, While
-
-        # Return statements always return
-        if isinstance(stmt, Return):
-            return True
-
-        # If statements return if all branches return
-        if isinstance(stmt, If):
-            # Check if all arms return
-            all_arms_return = all(self._block_always_returns(block) for _, block in stmt.arms)
-            # If statement returns only if all arms return AND there's an else block that returns
-            if stmt.else_block:
-                return all_arms_return and self._block_always_returns(stmt.else_block)
-            return False  # No else block means some paths don't return
-
-        # Match statements return if all arms return
-        if isinstance(stmt, Match):
-            return all(
-                self._block_always_returns(arm.body) if isinstance(arm.body, Block) else False
-                for arm in stmt.arms
-            )
-
-        # Loops never guarantee a return (they might not execute or might break)
-        if isinstance(stmt, (While, Foreach)):
-            return False
-
-        # Other statements don't return
-        if isinstance(stmt, (Let, Rebind, ExprStmt, Print, PrintLn, Break, Continue)):
-            return False
-
-        # Unknown statement type - conservatively return False
-        return False
+        """Delegate to control_flow module."""
+        return statement_always_returns(self, stmt)
 
     def _validate_block(self, block: Block) -> None:
         """Validate statements in a block."""
