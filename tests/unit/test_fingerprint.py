@@ -10,8 +10,6 @@ below hold the on-disk file bytes constant and vary only the parsed AST.
 """
 from __future__ import annotations
 
-import pytest
-
 from sushi_lang.internals.parser import parse_to_ast
 from sushi_lang.semantics.units import Unit, UnitManager
 from sushi_lang.compiler.fingerprint import (
@@ -66,13 +64,6 @@ def test_fingerprint_changes_with_struct_field(tmp_path):
     assert compute_unit_fingerprint(a) != compute_unit_fingerprint(b)
 
 
-@pytest.mark.xfail(
-    reason="fingerprint.py:_hash_ast_structure reads EnumVariant.has_data/.data_type, "
-           "but EnumVariant has associated_types; compute_unit_fingerprint crashes on "
-           "any unit containing an enum. Tracked in issue #26 (remove xfail when fixed).",
-    raises=AttributeError,
-    strict=True,
-)
 def test_fingerprint_changes_with_enum_variant(tmp_path):
     a = _unit_with_ast(tmp_path, "enum Status:\n    Active()\n    Inactive()\n" + CLEAN)
     b = _unit_with_ast(tmp_path, "enum Status:\n    Active()\n    Inactive()\n    Pending()\n" + CLEAN)
