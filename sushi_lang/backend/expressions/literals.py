@@ -177,6 +177,12 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
                         if hasattr(part, 'inferred_return_type'):
                             from sushi_lang.semantics.typesys import BuiltinType
                             inferred_type = part.inferred_return_type
+                            # bool-returning methods (contains/starts_with/ends_with)
+                            # lower to i8, not i1, so they fall through to the
+                            # integer path; format them as true/false explicitly.
+                            if inferred_type == BuiltinType.BOOL:
+                                string_values.append(codegen.runtime.formatting.emit_bool_to_string(expr_value))
+                                continue
                             if inferred_type in [BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64]:
                                 is_signed = False
                         # Method 2: For Name nodes, look up variable type
