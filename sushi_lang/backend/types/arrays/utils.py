@@ -56,9 +56,15 @@ def create_dynamic_array_from_elements(codegen: 'LLVMCodegen', element_type, ele
     while capacity < initial_len:
         capacity *= 2
 
-    # Allocate memory
-    # Use centralized size calculation with semantic type
-    element_size = codegen.types.get_type_size_constant(element_type)
+    # Allocate memory.
+    # Use the LLVM ABI alloc size of the element type, which equals the stride
+    # used by getelementptr on the element pointer. The semantic data size can be
+    # smaller than the alloc size for padded types -- e.g. a string fat pointer
+    # {i8*, i32} has a 12-byte data size but a 16-byte alloc size (8-byte aligned).
+    # Allocating with the data size while GEP strides by the alloc size overflows
+    # the buffer past element 0 and corrupts the heap (issues #24 / #29). The
+    # grow, clone, and new() paths already size with this helper.
+    element_size = memory.get_element_size_constant(codegen, element_llvm_type)
     capacity_val = ir.Constant(codegen.types.i32, capacity)
     total_bytes = codegen.builder.mul(capacity_val, element_size, name="total_bytes")
 

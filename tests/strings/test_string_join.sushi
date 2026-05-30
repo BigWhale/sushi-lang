@@ -1,3 +1,13 @@
+# Regression test for issue #29: joining a dynamic string array (string[]) used
+# to SIGSEGV -- the same string[] heap-corruption root cause as #24 (allocation
+# sized by the string data size, 12 bytes, while GEP strides by the 16-byte
+# alloc size). Asserting the PASS lines guards the fix.
+#
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: join basic test
+# EXPECT_STDOUT_CONTAINS: PASS: join two elements
+# EXPECT_STDOUT_CONTAINS: PASS: join with UTF-8 strings
+
 use <collections/strings>
 
 fn test_join_basic() ~:

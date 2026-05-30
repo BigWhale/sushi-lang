@@ -31,18 +31,6 @@ from run_tests import build_stdlib, build_test_helpers, COMPILATION_QUARANTINE
 # checked; only execution of the compiled binary is skipped. Each entry notes the
 # tracking issue; re-enable once the bug is fixed.
 RUNTIME_QUARANTINE = {
-    # Operations on dynamic arrays of strings (string[]) corrupt the heap and abort
-    # on glibc, while passing on macOS. i32[] is unaffected. Issue #24.
-    #   get()/clone()/capacity() on string[]; the three below crash before any
-    #   output (buffered stdout lost on abort).
-    "test_array_index_types.sushi",
-    "test_string_array_get_heap.sushi",
-    "test_dynamic_arrays_clone.sushi",
-    "test_dynamic_arrays_params.sushi",
-    "test_array_param_methods.sushi",
-    # SIGSEGV joining a dynamic string array (string[]); likely the same string[]
-    # heap-corruption family as #24. Issue #29.
-    "test_string_join.sushi",
     # contains/starts_with/ends_with render as 0 instead of "true" inside string
     # interpolation. Issue #30.
     "test_interpolation_methods.sushi",

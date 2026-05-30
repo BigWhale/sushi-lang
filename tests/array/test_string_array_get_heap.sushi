@@ -1,9 +1,8 @@
-# Minimal reproducer: .get() on a dynamic array of strings (string[]).
-# The heap-allocated element is wrapped in Maybe<string> and unwrapped.
-# Quarantined from runtime validation: corrupts the heap on glibc
-# (SIGABRT, "sysmalloc: corrupted top size") while passing on macOS.
-# Independent of index type and of the ?? operator; i32[] is unaffected.
-# See GitHub issue (linked in tests/enhanced_test_runner.py quarantine note).
+# Regression test for issue #24: .get() on a dynamic array of strings (string[]).
+# The heap-allocated element is wrapped in Maybe<string> and unwrapped. This used
+# to corrupt the heap on glibc (SIGABRT, "sysmalloc: corrupted top size") because
+# string[] was allocated using the 12-byte string data size while GEP strides by
+# the 16-byte alloc size; i32[] was unaffected.
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_CONTAINS: hello
