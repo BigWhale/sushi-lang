@@ -1,0 +1,43 @@
+# Test RAII cleanup: enum variant holding a string is freed when leaving scope
+# Uses repeated allocation to detect heap corruption (would crash if not freed)
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Received: Alice
+# EXPECT_STDOUT_CONTAINS: Received: Bob
+
+enum Message:
+    Greeting(string)
+    Farewell(string)
+    Silent
+
+fn process(Message m) string:
+    match m:
+        Message.Greeting(text) ->
+            return Result.Ok("Received: {text}")
+        Message.Farewell(text) ->
+            return Result.Ok("Bye: {text}")
+        Message.Silent ->
+            return Result.Ok("Silence")
+
+fn make_greeting(string name) string:
+    let Message m = Message.Greeting(name)
+    let string result = process(m).realise("error")
+    # m leaves scope here; string payload freed
+    return Result.Ok(result)
+
+fn main() i32:
+    let string s1 = make_greeting("Alice").realise("error")
+    let string s2 = make_greeting("Bob").realise("error")
+    let string s3 = make_greeting("Carol").realise("error")
+
+    println("{s1}")
+    println("{s2}")
+    println("{s3}")
+
+    if (s1 != "Received: Alice"):
+        return Result.Ok(1)
+    if (s2 != "Received: Bob"):
+        return Result.Ok(1)
+    if (s3 != "Received: Carol"):
+        return Result.Ok(1)
+
+    return Result.Ok(0)

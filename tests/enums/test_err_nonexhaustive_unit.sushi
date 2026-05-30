@@ -1,0 +1,17 @@
+# Test that a non-exhaustive match on a unit-variant enum produces CE2040
+# CE2040: non-exhaustive match pattern (missing variants: Triangle)
+
+enum Shape:
+    Circle
+    Square
+    Triangle
+
+fn area(Shape s) i32:
+    match s:
+        Shape.Circle ->
+            return Result.Ok(1)
+        Shape.Square ->
+            return Result.Ok(2)
+
+fn main() i32:
+    return Result.Ok(0)

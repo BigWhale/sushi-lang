@@ -1,0 +1,45 @@
+# Test wildcard (_) arms in match expressions: named and unnamed patterns
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Wildcard match: all passed
+
+enum Event:
+    Click(i32, i32)
+    KeyPress(i32)
+    Resize(i32, i32)
+    Close
+
+fn handle(Event e) i32:
+    match e:
+        Event.Click(x, y) ->
+            return Result.Ok(x + y)
+        _ ->
+            return Result.Ok(-1)
+
+fn main() i32:
+    let Event e1 = Event.Click(3, 7)
+    let i32 v1 = handle(e1).realise(0)
+
+    let Event e2 = Event.KeyPress(65)
+    let i32 v2 = handle(e2).realise(0)
+
+    let Event e3 = Event.Close()
+    let i32 v3 = handle(e3).realise(0)
+
+    let Event e4 = Event.Resize(800, 600)
+    let i32 v4 = handle(e4).realise(0)
+
+    if (v1 != 10):
+        println("FAIL: Click should be 10 got {v1}")
+        return Result.Ok(1)
+    if (v2 != -1):
+        println("FAIL: KeyPress should be -1 got {v2}")
+        return Result.Ok(1)
+    if (v3 != -1):
+        println("FAIL: Close should be -1 got {v3}")
+        return Result.Ok(1)
+    if (v4 != -1):
+        println("FAIL: Resize should be -1 got {v4}")
+        return Result.Ok(1)
+
+    println("Wildcard match: all passed")
+    return Result.Ok(0)

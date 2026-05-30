@@ -1,0 +1,49 @@
+# Test enum with unit, struct, string, and multi-i32 variant types in one enum
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: quit
+# EXPECT_STDOUT_CONTAINS: move 3,7
+# EXPECT_STDOUT_CONTAINS: write: hello
+# EXPECT_STDOUT_CONTAINS: color 255,128,0
+
+struct Vec2:
+    i32 x
+    i32 y
+
+enum Command:
+    Quit
+    Move(Vec2)
+    Write(string)
+    ChangeColor(i32, i32, i32)
+
+fn describe_command(Command cmd) string:
+    match cmd:
+        Command.Quit ->
+            return Result.Ok("quit")
+        Command.Move(v) ->
+            return Result.Ok("move {v.x},{v.y}")
+        Command.Write(text) ->
+            return Result.Ok("write: {text}")
+        Command.ChangeColor(r, g, b) ->
+            return Result.Ok("color {r},{g},{b}")
+
+fn main() i32:
+    let string s1 = describe_command(Command.Quit()).realise("?")
+    let string s2 = describe_command(Command.Move(Vec2(3, 7))).realise("?")
+    let string s3 = describe_command(Command.Write("hello")).realise("?")
+    let string s4 = describe_command(Command.ChangeColor(255, 128, 0)).realise("?")
+
+    println("{s1}")
+    println("{s2}")
+    println("{s3}")
+    println("{s4}")
+
+    if (s1 != "quit"):
+        return Result.Ok(1)
+    if (s2 != "move 3,7"):
+        return Result.Ok(1)
+    if (s3 != "write: hello"):
+        return Result.Ok(1)
+    if (s4 != "color 255,128,0"):
+        return Result.Ok(1)
+
+    return Result.Ok(0)

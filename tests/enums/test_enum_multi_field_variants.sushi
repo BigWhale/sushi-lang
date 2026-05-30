@@ -1,0 +1,49 @@
+# Test enum variants with 1, 2, and 3 i32 associated data fields
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Multi-field variants: all passed
+
+enum Coord:
+    D1(i32)
+    D2(i32, i32)
+    D3(i32, i32, i32)
+    Origin
+
+fn magnitude_approx(Coord c) i32:
+    match c:
+        Coord.D1(x) ->
+            if (x < 0):
+                return Result.Ok(0 - x)
+            return Result.Ok(x)
+        Coord.D2(x, y) ->
+            return Result.Ok(x + y)
+        Coord.D3(x, y, z) ->
+            return Result.Ok(x + y + z)
+        Coord.Origin ->
+            return Result.Ok(0)
+
+fn main() i32:
+    let Coord c1 = Coord.D1(5)
+    let Coord c2 = Coord.D2(3, 4)
+    let Coord c3 = Coord.D3(1, 2, 3)
+    let Coord c0 = Coord.Origin()
+
+    let i32 m1 = magnitude_approx(c1).realise(0)
+    let i32 m2 = magnitude_approx(c2).realise(0)
+    let i32 m3 = magnitude_approx(c3).realise(0)
+    let i32 m0 = magnitude_approx(c0).realise(0)
+
+    if (m1 != 5):
+        println("FAIL: D1 expected 5 got {m1}")
+        return Result.Ok(1)
+    if (m2 != 7):
+        println("FAIL: D2 expected 7 got {m2}")
+        return Result.Ok(1)
+    if (m3 != 6):
+        println("FAIL: D3 expected 6 got {m3}")
+        return Result.Ok(1)
+    if (m0 != 0):
+        println("FAIL: Origin expected 0 got {m0}")
+        return Result.Ok(1)
+
+    println("Multi-field variants: all passed")
+    return Result.Ok(0)

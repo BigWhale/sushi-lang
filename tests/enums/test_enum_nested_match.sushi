@@ -1,0 +1,47 @@
+# Test nested enum pattern matching: matching enum-in-enum structures
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Nested match: 42
+
+enum Inner:
+    Ok(i32)
+    Err
+
+enum Outer:
+    Success(Inner)
+    Failure
+
+fn extract(Outer o) i32:
+    match o:
+        Outer.Success(inner) ->
+            match inner:
+                Inner.Ok(v) ->
+                    return Result.Ok(v)
+                Inner.Err ->
+                    return Result.Ok(-1)
+        Outer.Failure ->
+            return Result.Ok(-2)
+
+fn main() i32:
+    let Inner ok = Inner.Ok(42)
+    let Outer s = Outer.Success(ok)
+    let i32 v = extract(s).realise(-99)
+
+    if (v != 42):
+        println("FAIL: expected 42 got {v}")
+        return Result.Ok(1)
+
+    let Outer f = Outer.Failure()
+    let i32 fv = extract(f).realise(-99)
+    if (fv != -2):
+        println("FAIL: Failure expected -2 got {fv}")
+        return Result.Ok(1)
+
+    let Inner err = Inner.Err()
+    let Outer se = Outer.Success(err)
+    let i32 ev = extract(se).realise(-99)
+    if (ev != -1):
+        println("FAIL: Err inner expected -1 got {ev}")
+        return Result.Ok(1)
+
+    println("Nested match: {v}")
+    return Result.Ok(0)

@@ -1,0 +1,36 @@
+# Test HashMap with data-variant enum keys: insertion and lookup by data variant
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Found: first item
+
+use <collections/hashmap>
+
+enum Category:
+    Item(i32)
+    Named(string)
+
+fn main() i32:
+    let HashMap<Category, string> labels = HashMap.new()
+    labels.insert(Category.Item(1), "first item")
+    labels.insert(Category.Item(2), "second item")
+
+    let Maybe<string> v = labels.get(Category.Item(1))
+    match v:
+        Maybe.Some(s) ->
+            println("Found: {s}")
+            if (s != "first item"):
+                println("FAIL: wrong value")
+                return Result.Ok(1)
+        Maybe.None() ->
+            println("FAIL: not found")
+            return Result.Ok(1)
+
+    let Maybe<string> v2 = labels.get(Category.Item(99))
+    match v2:
+        Maybe.Some(_) ->
+            println("FAIL: 99 should not exist")
+            return Result.Ok(1)
+        Maybe.None() ->
+            println("Item(99): absent")
+
+    labels.free()
+    return Result.Ok(0)

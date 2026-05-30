@@ -1,0 +1,43 @@
+# Test enum used as HashMap key: unit-only enum keys with insert/get/remove
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Monday: standup
+# EXPECT_STDOUT_CONTAINS: Weekday HashMap: all passed
+
+use <collections/hashmap>
+
+enum Weekday:
+    Mon
+    Tue
+    Wed
+    Thu
+    Fri
+
+fn main() i32:
+    let HashMap<Weekday, string> schedule = HashMap.new()
+    schedule.insert(Weekday.Mon(), "standup")
+    schedule.insert(Weekday.Wed(), "review")
+    schedule.insert(Weekday.Fri(), "retrospective")
+
+    let Maybe<string> mon = schedule.get(Weekday.Mon())
+    match mon:
+        Maybe.Some(s) ->
+            println("Monday: {s}")
+        Maybe.None() ->
+            println("FAIL: Monday not found")
+            return Result.Ok(1)
+
+    let Maybe<string> tue = schedule.get(Weekday.Tue())
+    match tue:
+        Maybe.Some(_) ->
+            println("FAIL: Tuesday should not exist")
+            return Result.Ok(1)
+        Maybe.None() ->
+            println("Tuesday: none")
+
+    if (schedule.len() != 3):
+        println("FAIL: expected 3")
+        return Result.Ok(1)
+
+    schedule.free()
+    println("Weekday HashMap: all passed")
+    return Result.Ok(0)

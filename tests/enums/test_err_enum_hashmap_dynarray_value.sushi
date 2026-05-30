@@ -1,0 +1,14 @@
+# Test that storing an enum with a dynamic-array field produces CE2059
+# CE2059: enum variant 'Status.Items' cannot have dynamic array field 'i32[]'
+# This is a limitation: enum variants with dynamic-array fields are not hashable
+# and cannot be used in HashMap (or at all).
+
+use <collections/hashmap>
+
+enum Status:
+    Active
+    Items(i32[])
+
+fn main() i32:
+    let HashMap<i32, Status> map = HashMap.new()
+    return Result.Ok(0)

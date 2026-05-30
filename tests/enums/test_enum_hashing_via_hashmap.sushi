@@ -1,0 +1,40 @@
+# Test enum hashing indirectly: unit-variant enum as HashMap key (exercises
+# internal .hash() path without calling it directly, which hits CE0019)
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Suit hash via HashMap: 3
+# EXPECT_STDOUT_CONTAINS: Enum hashing (via HashMap): passed
+
+use <collections/hashmap>
+
+enum Suit:
+    Hearts
+    Diamonds
+    Clubs
+    Spades
+
+fn main() i32:
+    let HashMap<Suit, i32> values = HashMap.new()
+    values.insert(Suit.Hearts(), 1)
+    values.insert(Suit.Diamonds(), 2)
+    values.insert(Suit.Clubs(), 3)
+    values.insert(Suit.Spades(), 4)
+
+    let Maybe<i32> v = values.get(Suit.Clubs())
+    match v:
+        Maybe.Some(n) ->
+            if (n != 3):
+                println("FAIL: expected 3 got {n}")
+                return Result.Ok(1)
+            println("Suit hash via HashMap: {n}")
+        Maybe.None() ->
+            println("FAIL: not found")
+            return Result.Ok(1)
+
+    # Verify all four suits hash distinctly (all insertions survived)
+    if (values.len() != 4):
+        println("FAIL: expected 4 entries got {values.len()}")
+        return Result.Ok(1)
+
+    values.free()
+    println("Enum hashing (via HashMap): passed")
+    return Result.Ok(0)

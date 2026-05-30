@@ -1,0 +1,24 @@
+# Test calling .hash() directly on an enum value.
+# QUARANTINED: This test is in RUNTIME_QUARANTINE because calling .hash() on an
+# enum variable crashes the compiler with CE0019 ("cannot determine language
+# type for LLVM type: {i32, [1 x i8]}"). The HashMap internal hash path works
+# fine (see test_enum_hashing_via_hashmap.sushi); only the direct call fails.
+# See RUNTIME_QUARANTINE in tests/enhanced_test_runner.py.
+#
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Unit enum hash: passed
+
+enum Suit:
+    Hearts
+    Diamonds
+    Clubs
+    Spades
+
+fn main() i32:
+    let u64 h1 = Suit.Hearts().hash()
+    let u64 h2 = Suit.Spades().hash()
+    if (h1 == h2):
+        println("FAIL: different variants have same hash")
+        return Result.Ok(1)
+    println("Unit enum hash: passed")
+    return Result.Ok(0)

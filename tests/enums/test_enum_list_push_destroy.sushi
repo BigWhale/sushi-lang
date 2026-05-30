@@ -1,0 +1,28 @@
+# Test storing enum values in a List<EnumType>.
+# QUARANTINED: This test is in RUNTIME_QUARANTINE because List.destroy() on a
+# List<EnumType> crashes the compiler with "'IntType' object has no attribute
+# 'gep'" inside emit_enum_destructor() in backend/destructors.py (triggered
+# through the List destroy-elements loop).
+# See RUNTIME_QUARANTINE in tests/enhanced_test_runner.py.
+#
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: List enum: passed
+
+enum Color:
+    Red
+    Green
+    Blue
+
+fn main() i32:
+    let List<Color> colors = List.new()
+    colors.push(Color.Red())
+    colors.push(Color.Green())
+
+    let i32 len = colors.len()
+    if (len != 2):
+        println("FAIL: expected 2 got {len}")
+        return Result.Ok(1)
+
+    colors.destroy()
+    println("List enum: passed")
+    return Result.Ok(0)

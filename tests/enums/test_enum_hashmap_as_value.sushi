@@ -1,0 +1,45 @@
+# Test enum used as HashMap value: insert enum variants, retrieve and match
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Deploy priority score: 100
+# EXPECT_STDOUT_CONTAINS: HashMap enum values: all passed
+
+use <collections/hashmap>
+
+enum Priority:
+    Low
+    Medium
+    High(i32)
+
+fn priority_score(Priority p) i32:
+    match p:
+        Priority.Low ->
+            return Result.Ok(1)
+        Priority.Medium ->
+            return Result.Ok(5)
+        Priority.High(n) ->
+            return Result.Ok(n)
+
+fn main() i32:
+    let HashMap<string, Priority> tasks = HashMap.new()
+    tasks.insert("email", Priority.Low())
+    tasks.insert("meeting", Priority.Medium())
+    tasks.insert("deploy", Priority.High(100))
+
+    let Maybe<Priority> p = tasks.get("deploy")
+    match p:
+        Maybe.Some(prio) ->
+            let i32 score = priority_score(prio).realise(0)
+            println("Deploy priority score: {score}")
+            if (score != 100):
+                return Result.Ok(1)
+        Maybe.None() ->
+            println("FAIL: deploy not found")
+            return Result.Ok(1)
+
+    if (tasks.len() != 3):
+        println("FAIL: expected 3 tasks")
+        return Result.Ok(1)
+
+    tasks.free()
+    println("HashMap enum values: all passed")
+    return Result.Ok(0)
