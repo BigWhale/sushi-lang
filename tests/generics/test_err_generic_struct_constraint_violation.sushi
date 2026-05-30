@@ -1,0 +1,20 @@
+# Test perk constraint violation for generic structs
+# NoHash struct does NOT implement Hashable, so instantiating
+# Container<NoHash> should fail with CE4006
+
+perk Hashable:
+    fn hash() u64
+
+struct NoHash:
+    i32 value
+
+struct Container<T: Hashable>:
+    T item
+
+fn main() i32:
+    let NoHash nh = NoHash(42)
+
+    # This should fail with CE4006 - NoHash does not implement Hashable
+    let Container<NoHash> c = Container(nh)
+
+    return Result.Ok(0)
