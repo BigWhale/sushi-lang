@@ -28,20 +28,18 @@ from run_tests import build_stdlib, build_test_helpers
 
 
 # Tests whose runtime validation is temporarily quarantined. Compilation is still
-# checked; only execution of the compiled binary is skipped. Re-enable once fixed.
-# Both reproduce the same bug: .get() on a dynamic array of strings (string[])
-# corrupts the heap and aborts (SIGABRT) on glibc, while passing on macOS.
-# See GitHub issue #24.
+# checked; only execution of the compiled binary is skipped. Each entry notes the
+# tracking issue; re-enable once the bug is fixed.
 RUNTIME_QUARANTINE = {
+    # .get() on a dynamic array of strings (string[]) corrupts the heap and aborts
+    # (SIGABRT) on glibc, while passing on macOS. Issue #24.
     "test_array_index_types.sushi",
     "test_string_array_get_heap.sushi",
-    # Crashes with SIGSEGV when joining a dynamic string array (string[]).
-    # The join stdlib function corrupts the heap on the second element.
-    # Candidate for a new GitHub issue (discovered during p0-3 backfill).
+    # SIGSEGV joining a dynamic string array (string[]); likely the same string[]
+    # heap-corruption family as #24. Issue #29.
     "test_string_join.sushi",
-    # Prints FAIL for contains/starts_with/ends_with inside string interpolation.
-    # The interpolation context does not correctly call the boolean string methods;
-    # they return 0 instead of "true". Candidate for a new GitHub issue.
+    # contains/starts_with/ends_with render as 0 instead of "true" inside string
+    # interpolation. Issue #30.
     "test_interpolation_methods.sushi",
 }
 
