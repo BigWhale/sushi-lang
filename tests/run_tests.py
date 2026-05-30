@@ -110,9 +110,11 @@ def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:
 # "expect exit 0" rule until the underlying bug is fixed.
 # Each entry links to the tracking note in tests/enhanced_test_runner.py.
 COMPILATION_QUARANTINE = {
-    # .hash() on an enum value crashes with CE0019; see RUNTIME_QUARANTINE note.
+    # .hash() on an enum value crashes the compiler with CE0019 (unknown LLVM
+    # type for the enum layout). Issue #32.
     "test_enum_hash_direct.sushi",
-    # List.destroy() on List<EnumType> crashes with 'IntType' has no attr 'gep'.
+    # List.destroy() on List<EnumType> crashes with "'IntType' has no attribute
+    # 'gep'" in the enum destructor. Issue #33.
     "test_enum_list_push_destroy.sushi",
 }
 

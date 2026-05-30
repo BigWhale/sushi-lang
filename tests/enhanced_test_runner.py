@@ -46,16 +46,10 @@ RUNTIME_QUARANTINE = {
     # contains/starts_with/ends_with render as 0 instead of "true" inside string
     # interpolation. Issue #30.
     "test_interpolation_methods.sushi",
-    # Calling .hash() directly on an enum variable crashes the compiler with
-    # CE0019 ("cannot determine language type for LLVM type: {i32, [1 x i8]}").
-    # map_llvm_to_language_type() does not recognise the enum struct layout.
-    # The HashMap-internal hash path works fine. Candidate for a new issue.
-    "test_enum_hash_direct.sushi",
-    # List.destroy() on a List<EnumType> crashes the compiler with
-    # "'IntType' object has no attribute 'gep'" inside emit_enum_destructor()
-    # in backend/destructors.py (triggered through the List destroy-elements
-    # loop). HashMap<EnumType> is unaffected. Candidate for a new issue.
-    "test_enum_list_push_destroy.sushi",
+    # NOTE: test_enum_hash_direct and test_enum_list_push_destroy crash the
+    # compiler itself, so they live in COMPILATION_QUARANTINE (run_tests.py) where
+    # compilation is skipped entirely -- they never reach the runtime phase.
+    # Issues #32 and #33.
 }
 
 
