@@ -30,11 +30,7 @@ from run_tests import build_stdlib, build_test_helpers, COMPILATION_QUARANTINE
 # Tests whose runtime validation is temporarily quarantined. Compilation is still
 # checked; only execution of the compiled binary is skipped. Each entry notes the
 # tracking issue; re-enable once the bug is fixed.
-RUNTIME_QUARANTINE = {
-    # NOTE: test_enum_hash_direct crashes the compiler itself, so it lives in
-    # COMPILATION_QUARANTINE (run_tests.py) where compilation is skipped entirely
-    # -- it never reaches the runtime phase. Issue #32.
-}
+RUNTIME_QUARANTINE: set[str] = set()
 
 
 @dataclass

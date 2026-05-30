@@ -109,11 +109,7 @@ def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:
 # with exit 2 despite being named test_*.sushi, so they cannot satisfy the
 # "expect exit 0" rule until the underlying bug is fixed.
 # Each entry links to the tracking note in tests/enhanced_test_runner.py.
-COMPILATION_QUARANTINE = {
-    # .hash() on an enum value crashes the compiler with CE0019 (unknown LLVM
-    # type for the enum layout). Issue #32.
-    "test_enum_hash_direct.sushi",
-}
+COMPILATION_QUARANTINE: set[str] = set()
 
 
 def get_expected_exit_code(test_file: Path) -> int:

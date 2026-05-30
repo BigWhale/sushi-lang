@@ -130,8 +130,38 @@ def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Valu
     else:
         receiver_value = codegen.expressions.emit_expr(receiver)
         receiver_type = codegen.types.infer_llvm_type_from_value(receiver_value)
+        # Recover the enum type for an inline variant construction receiver
+        # (e.g. Suit.Hearts().hash()). Without this, semantic_type stays None and
+        # downstream handlers fall back to mapping the enum's LLVM layout
+        # ({i32, [N x i8]}) back to a language type, which fails with CE0019.
+        semantic_type = _infer_enum_construction_type(codegen, receiver)
 
     return receiver_value, receiver_type, semantic_type
+
+
+def _infer_enum_construction_type(codegen: 'LLVMCodegen', receiver: Expr) -> Optional['Type']:
+    """Recover the EnumType for a receiver that constructs an enum variant.
+
+    Handles inline constructions like ``Suit.Hearts()`` (a DotCall whose receiver
+    is the enum name) and EnumConstructor nodes. Returns None when the receiver is
+    not a recognised enum construction.
+    """
+    from sushi_lang.semantics.ast import EnumConstructor
+
+    # A resolved annotation (set for generic enums) takes precedence.
+    resolved = getattr(receiver, 'resolved_enum_type', None)
+    if resolved is not None:
+        return resolved
+
+    enum_name = None
+    if isinstance(receiver, EnumConstructor):
+        enum_name = receiver.enum_name
+    elif isinstance(receiver, DotCall) and isinstance(receiver.receiver, Name):
+        enum_name = receiver.receiver.id
+
+    if enum_name is not None:
+        return codegen.enum_table.by_name.get(enum_name)
+    return None
 
 
 def get_resolved_type(expr: Union[MethodCall, DotCall], type_attr: str) -> Optional['Type']:
