@@ -113,9 +113,6 @@ COMPILATION_QUARANTINE = {
     # .hash() on an enum value crashes the compiler with CE0019 (unknown LLVM
     # type for the enum layout). Issue #32.
     "test_enum_hash_direct.sushi",
-    # List.destroy() on List<EnumType> crashes with "'IntType' has no attribute
-    # 'gep'" in the enum destructor. Issue #33.
-    "test_enum_list_push_destroy.sushi",
 }
 
 
