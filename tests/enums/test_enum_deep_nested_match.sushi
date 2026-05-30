@@ -1,0 +1,47 @@
+# Test three-level nested enum pattern matching inline within match arms
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Deep nested match: 5
+
+enum Leaf:
+    Good(i32)
+    Bad
+
+enum Middle:
+    Left(Leaf)
+    Right(Leaf)
+
+enum Root:
+    Alpha(Middle)
+    Beta(Middle)
+
+fn extract(Root r) i32:
+    match r:
+        Root.Alpha(Middle.Left(Leaf.Good(n))) ->
+            return Result.Ok(n)
+        Root.Alpha(Middle.Left(Leaf.Bad)) ->
+            return Result.Ok(-1)
+        Root.Alpha(Middle.Right(Leaf.Good(n))) ->
+            return Result.Ok(n * 10)
+        Root.Alpha(Middle.Right(Leaf.Bad)) ->
+            return Result.Ok(-2)
+        Root.Beta(_) ->
+            return Result.Ok(-99)
+
+fn main() i32:
+    let Leaf leaf = Leaf.Good(5)
+    let Middle mid = Middle.Left(leaf)
+    let Root root = Root.Alpha(mid)
+
+    let i32 v = extract(root).realise(0)
+    if (v != 5):
+        println("FAIL: expected 5 got {v}")
+        return Result.Ok(1)
+
+    let Root beta = Root.Beta(Middle.Right(Leaf.Good(7)))
+    let i32 bv = extract(beta).realise(0)
+    if (bv != -99):
+        println("FAIL: Beta expected -99 got {bv}")
+        return Result.Ok(1)
+
+    println("Deep nested match: {v}")
+    return Result.Ok(0)

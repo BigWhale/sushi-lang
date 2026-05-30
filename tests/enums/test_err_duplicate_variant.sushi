@@ -1,0 +1,10 @@
+# Test that a duplicate variant in an enum definition produces CE2047
+# CE2047: duplicate variant 'Active' in enum 'Status'
+
+enum Status:
+    Active
+    Active
+    Closed
+
+fn main() i32:
+    return Result.Ok(0)

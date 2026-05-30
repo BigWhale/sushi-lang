@@ -1,0 +1,15 @@
+# Test that a non-exhaustive match on a data-variant enum produces CE2040
+# CE2040: non-exhaustive match pattern (missing variants: KeyPress, Resize)
+
+enum Event:
+    Click(i32, i32)
+    KeyPress(i32)
+    Resize(i32, i32)
+
+fn handle(Event e) i32:
+    match e:
+        Event.Click(x, y) ->
+            return Result.Ok(x + y)
+
+fn main() i32:
+    return Result.Ok(0)

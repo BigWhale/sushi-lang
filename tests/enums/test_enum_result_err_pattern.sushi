@@ -1,0 +1,51 @@
+# Test matching Result.Err(CustomEnum.Variant) - nested result error patterns
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Division by zero
+# EXPECT_STDOUT_CONTAINS: TooLong: 7
+# EXPECT_STDOUT_CONTAINS: Custom error enum: all passed
+
+enum CalcError:
+    DivByZero
+    Overflow
+
+enum ParseError:
+    Empty
+    TooLong(i32)
+
+fn divide(i32 a, i32 b) i32 | CalcError:
+    if (b == 0):
+        return Result.Err(CalcError.DivByZero())
+    return Result.Ok(a / b)
+
+fn parse_code(string s) i32 | ParseError:
+    if (s == ""):
+        return Result.Err(ParseError.Empty())
+    if (s == "toolong"):
+        return Result.Err(ParseError.TooLong(7))
+    return Result.Ok(42)
+
+fn main() i32:
+    let Result<i32, CalcError> r1 = divide(10, 0)
+    match r1:
+        Result.Ok(v) ->
+            println("FAIL: empty should error not {v}")
+            return Result.Ok(1)
+        Result.Err(CalcError.DivByZero) ->
+            println("Division by zero")
+        Result.Err(CalcError.Overflow) ->
+            println("FAIL: wrong error")
+            return Result.Ok(1)
+
+    let Result<i32, ParseError> r2 = parse_code("toolong")
+    match r2:
+        Result.Ok(_) ->
+            println("FAIL: should error")
+            return Result.Ok(1)
+        Result.Err(ParseError.TooLong(n)) ->
+            println("TooLong: {n}")
+        Result.Err(ParseError.Empty) ->
+            println("FAIL: wrong variant")
+            return Result.Ok(1)
+
+    println("Custom error enum: all passed")
+    return Result.Ok(0)

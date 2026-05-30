@@ -1,0 +1,44 @@
+# Test RAII cleanup: enum variant holding a struct is freed when leaving scope
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Box area=15
+# EXPECT_STDOUT_CONTAINS: Point (2,7)
+
+struct Rect:
+    i32 w
+    i32 h
+
+enum Shape:
+    Box(Rect)
+    Point(i32, i32)
+    Empty
+
+fn describe(Shape s) string:
+    match s:
+        Shape.Box(r) ->
+            let i32 area = r.w * r.h
+            return Result.Ok("Box area={area}")
+        Shape.Point(x, y) ->
+            return Result.Ok("Point ({x},{y})")
+        Shape.Empty ->
+            return Result.Ok("Empty")
+
+fn make_shape() string:
+    let Rect r = Rect(5, 3)
+    let Shape s = Shape.Box(r)
+    let string desc = describe(s).realise("error")
+    # s (and the Rect inside) leaves scope here
+    return Result.Ok(desc)
+
+fn main() i32:
+    let string d1 = make_shape().realise("error")
+    let string d2 = describe(Shape.Point(2, 7)).realise("error")
+
+    println("{d1}")
+    println("{d2}")
+
+    if (d1 != "Box area=15"):
+        return Result.Ok(1)
+    if (d2 != "Point (2,7)"):
+        return Result.Ok(1)
+
+    return Result.Ok(0)

@@ -1,0 +1,42 @@
+# Test enum as state machine: transition functions returning new enum values
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Done: 110
+# EXPECT_STDOUT_CONTAINS: State machine: all passed
+
+enum State:
+    Idle
+    Running(i32)
+    Done(i32)
+
+fn step(State s, i32 progress) State:
+    match s:
+        State.Idle ->
+            return Result.Ok(State.Running(progress))
+        State.Running(p) ->
+            if (p + progress >= 100):
+                return Result.Ok(State.Done(p + progress))
+            return Result.Ok(State.Running(p + progress))
+        State.Done(total) ->
+            return Result.Ok(State.Done(total))
+
+fn main() i32:
+    let State s1 = State.Idle()
+    let State s2 = step(s1, 40).realise(State.Idle())
+    let State s3 = step(s2, 40).realise(State.Idle())
+    let State s4 = step(s3, 30).realise(State.Idle())
+
+    match s4:
+        State.Done(total) ->
+            println("Done: {total}")
+            if (total != 110):
+                println("FAIL: expected 110 got {total}")
+                return Result.Ok(1)
+        State.Running(p) ->
+            println("FAIL: still running at {p}")
+            return Result.Ok(1)
+        State.Idle ->
+            println("FAIL: still idle")
+            return Result.Ok(1)
+
+    println("State machine: all passed")
+    return Result.Ok(0)

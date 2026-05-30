@@ -1,0 +1,50 @@
+# Test recursive binary tree with string leaves; validates leaf count and depth
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Tree leaves: 4, depth: 2
+
+enum Tree:
+    Leaf(string)
+    Node(Own<Tree>, Own<Tree>)
+
+fn count_leaves(Tree t) i32:
+    match t:
+        Tree.Leaf(_) ->
+            return Result.Ok(1)
+        Tree.Node(Own(l), Own(r)) ->
+            let i32 lc = count_leaves(l)??
+            let i32 rc = count_leaves(r)??
+            return Result.Ok(lc + rc)
+
+fn depth(Tree t) i32:
+    match t:
+        Tree.Leaf(_) ->
+            return Result.Ok(0)
+        Tree.Node(Own(l), Own(r)) ->
+            let i32 ld = depth(l)??
+            let i32 rd = depth(r)??
+            if (ld > rd):
+                return Result.Ok(1 + ld)
+            return Result.Ok(1 + rd)
+
+fn main() i32:
+    # Build a balanced tree with 4 leaves
+    let Own<Tree> la = Own.alloc(Tree.Leaf("a"))
+    let Own<Tree> lb = Own.alloc(Tree.Leaf("b"))
+    let Own<Tree> lc = Own.alloc(Tree.Leaf("c"))
+    let Own<Tree> ld = Own.alloc(Tree.Leaf("d"))
+    let Own<Tree> left = Own.alloc(Tree.Node(la, lb))
+    let Own<Tree> right = Own.alloc(Tree.Node(lc, ld))
+    let Tree root = Tree.Node(left, right)
+
+    let i32 leaves = count_leaves(root).realise(0)
+    let i32 d = depth(root).realise(0)
+
+    if (leaves != 4):
+        println("FAIL: expected 4 leaves got {leaves}")
+        return Result.Ok(1)
+    if (d != 2):
+        println("FAIL: expected depth 2 got {d}")
+        return Result.Ok(1)
+
+    println("Tree leaves: {leaves}, depth: {d}")
+    return Result.Ok(0)

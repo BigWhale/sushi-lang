@@ -1,0 +1,40 @@
+# Test generic enum Either<T, U>: left/right variants with generic type inference
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Right: 42
+
+enum Either<T, U>:
+    Left(T)
+    Right(U)
+
+fn swap<T, U>(Either<T, U> e) Either<U, T>:
+    match e:
+        Either.Left(v) ->
+            return Result.Ok(Either.Right(v))
+        Either.Right(v) ->
+            return Result.Ok(Either.Left(v))
+
+fn main() i32:
+    let Either<i32, string> e1 = Either.Left(42)
+    let Either<string, i32> swapped = swap(e1).realise(Either.Left("err"))
+
+    match swapped:
+        Either.Left(s) ->
+            println("FAIL: expected Right not Left({s})")
+            return Result.Ok(1)
+        Either.Right(n) ->
+            println("Right: {n}")
+            if (n != 42):
+                return Result.Ok(1)
+
+    let Either<string, i32> e2 = Either.Right(99)
+    let Either<i32, string> s2 = swap(e2).realise(Either.Right("err"))
+    match s2:
+        Either.Left(n) ->
+            if (n != 99):
+                println("FAIL: expected 99 got {n}")
+                return Result.Ok(1)
+        Either.Right(_) ->
+            println("FAIL: expected Left")
+            return Result.Ok(1)
+
+    return Result.Ok(0)

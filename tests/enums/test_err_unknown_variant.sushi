@@ -1,0 +1,10 @@
+# Test that using a non-existent enum variant produces CE2045
+# CE2045: enum variant 'Purple' not found in enum 'Color'
+
+enum Color:
+    Red
+    Green
+
+fn main() i32:
+    let Color c = Color.Purple()
+    return Result.Ok(0)

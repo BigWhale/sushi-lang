@@ -1,0 +1,41 @@
+# Test Maybe<CustomEnum>: functions returning Maybe<EnumType>, match on Some/None
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Found red
+# EXPECT_STDOUT_CONTAINS: Maybe<Color>: all passed
+
+enum Color:
+    Red
+    Green
+    Blue
+
+fn find_color(string name) Maybe<Color>:
+    if (name == "red"):
+        return Result.Ok(Maybe.Some(Color.Red()))
+    if (name == "green"):
+        return Result.Ok(Maybe.Some(Color.Green()))
+    if (name == "blue"):
+        return Result.Ok(Maybe.Some(Color.Blue()))
+    return Result.Ok(Maybe.None())
+
+fn main() i32:
+    let Maybe<Color> c1 = find_color("red").realise(Maybe.None())
+    match c1:
+        Maybe.Some(Color.Red) ->
+            println("Found red")
+        Maybe.Some(_) ->
+            println("FAIL: wrong color")
+            return Result.Ok(1)
+        Maybe.None ->
+            println("FAIL: red not found")
+            return Result.Ok(1)
+
+    let Maybe<Color> c2 = find_color("purple").realise(Maybe.None())
+    match c2:
+        Maybe.None ->
+            println("Purple not found")
+        Maybe.Some(_) ->
+            println("FAIL: purple should not exist")
+            return Result.Ok(1)
+
+    println("Maybe<Color>: all passed")
+    return Result.Ok(0)

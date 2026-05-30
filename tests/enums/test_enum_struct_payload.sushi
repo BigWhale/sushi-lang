@@ -1,0 +1,40 @@
+# Test enum variant with struct associated data: construct and read via match
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: Circle area: 25
+# EXPECT_STDOUT_CONTAINS: Rect area: 12
+
+struct Point:
+    i32 x
+    i32 y
+
+enum Shape:
+    Circle(i32)
+    Rect(Point, Point)
+
+fn area(Shape s) i32:
+    match s:
+        Shape.Circle(r) ->
+            return Result.Ok(r * r)
+        Shape.Rect(p1, p2) ->
+            let i32 w = p2.x - p1.x
+            let i32 h = p2.y - p1.y
+            return Result.Ok(w * h)
+
+fn main() i32:
+    let Shape c = Shape.Circle(5)
+    let i32 a1 = area(c).realise(0)
+
+    let Point tl = Point(0, 0)
+    let Point br = Point(4, 3)
+    let Shape r = Shape.Rect(tl, br)
+    let i32 a2 = area(r).realise(0)
+
+    println("Circle area: {a1}")
+    println("Rect area: {a2}")
+
+    if (a1 != 25):
+        return Result.Ok(1)
+    if (a2 != 12):
+        return Result.Ok(1)
+
+    return Result.Ok(0)
