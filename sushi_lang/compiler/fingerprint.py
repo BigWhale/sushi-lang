@@ -140,7 +140,7 @@ def _hash_ast_structure(hasher: hashlib._Hash, ast: Program) -> None:
     hasher.update(b"ENUMS:")
     for enum in sorted(ast.enums, key=lambda e: e.name):
         variants = ",".join(
-            f"{v.name}({v.data_type})" if v.has_data else v.name
+            f"{v.name}({','.join(str(t) for t in v.associated_types)})" if v.associated_types else v.name
             for v in enum.variants
         )
         generic = ""
