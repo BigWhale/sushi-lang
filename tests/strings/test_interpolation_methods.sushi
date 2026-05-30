@@ -1,4 +1,13 @@
 # Test interpolation with various string methods using single-quote args
+# Regression test for issue #30: bool-returning string methods
+# (contains/starts_with/ends_with) rendered as 0/1 instead of true/false inside
+# "{...}" interpolation. The PASS lines below only print when they render as
+# "true", so asserting them guards the fix.
+#
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: PASS: contains method
+# EXPECT_STDOUT_CONTAINS: PASS: starts_with method
+# EXPECT_STDOUT_CONTAINS: PASS: ends_with method
 
 use <collections/strings>
 

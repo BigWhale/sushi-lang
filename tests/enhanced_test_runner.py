@@ -31,9 +31,6 @@ from run_tests import build_stdlib, build_test_helpers, COMPILATION_QUARANTINE
 # checked; only execution of the compiled binary is skipped. Each entry notes the
 # tracking issue; re-enable once the bug is fixed.
 RUNTIME_QUARANTINE = {
-    # contains/starts_with/ends_with render as 0 instead of "true" inside string
-    # interpolation. Issue #30.
-    "test_interpolation_methods.sushi",
     # NOTE: test_enum_hash_direct crashes the compiler itself, so it lives in
     # COMPILATION_QUARANTINE (run_tests.py) where compilation is skipped entirely
     # -- it never reaches the runtime phase. Issue #32.
