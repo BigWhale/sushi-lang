@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 
 from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
 from sushi_lang.semantics.typesys import Type, EnumType, StructType
+from sushi_lang.semantics.ast import BoundedTypeParam
 from sushi_lang.internals.report import Reporter
 
 # Import constraint validator for perk constraint checking
@@ -138,7 +139,6 @@ class Monomorphizer:
         if self.constraint_validator is None:
             return
 
-        from sushi_lang.semantics.ast import BoundedTypeParam
         for param, arg in zip(type_params, type_args):
             # All params are now BoundedTypeParam (may have empty constraints list)
             if isinstance(param, BoundedTypeParam) and param.constraints:
