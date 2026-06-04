@@ -1,3 +1,4 @@
+# EXPECT_ERROR_CODE: CE2032
 const ~ MY_BLANK = ~
 
 fn main() i32:

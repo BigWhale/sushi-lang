@@ -1,4 +1,5 @@
 # Test type inference failure for generic functions
+# EXPECT_ERROR_CODE: CE2060
 # This should fail with CE2060 when type cannot be inferred
 
 fn identity<T>(T value) T:

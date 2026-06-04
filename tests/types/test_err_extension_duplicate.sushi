@@ -1,4 +1,5 @@
 # Duplicate extension method error test
+# EXPECT_ERROR_CODE: CE0101
 # Should fail compilation with duplicate extension method error
 
 extend i32 add(i32 value) i32:

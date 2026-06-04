@@ -1,4 +1,5 @@
 # Test: Generic function can't have same name as concrete function
+# EXPECT_ERROR_CODE: CE0101
 
 fn process(i32 x) i32:
     return Result.Ok(x)

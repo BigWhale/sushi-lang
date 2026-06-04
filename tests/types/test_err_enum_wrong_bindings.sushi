@@ -1,16 +1,17 @@
 # Error test: wrong number of pattern bindings
-enum Result:
+# EXPECT_ERROR_CODE: CE2044
+enum Status:
     Success(i32)
     Failure(i32)
 
-fn process(Result r) i32:
+fn process(Status r) i32:
     match r:
         # Error: Success has 1 field but we try to bind 2 variables
-        Result.Success(a, b) ->
+        Status.Success(a, b) ->
             return Result.Ok(a + b)
-        Result.Failure(code) ->
+        Status.Failure(code) ->
             return Result.Ok(code)
 
 fn main() i32:
-    let Result r = Result.Success(42)
+    let Status r = Status.Success(42)
     return Result.Ok(process(r))

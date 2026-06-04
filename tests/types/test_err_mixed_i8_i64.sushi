@@ -1,4 +1,5 @@
 # CE2510: Mixed small/large signed int should fail
+# EXPECT_ERROR_CODE: CE2510
 fn main() i32:
   let i8 small = 5 as i8
   let i64 large = 1000 as i64

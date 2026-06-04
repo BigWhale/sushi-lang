@@ -1,4 +1,5 @@
 # EXPECTED_ERROR: CE0006
+# EXPECT_ERROR_CODE: CE0006
 # Test that struct/enum name conflicts are detected
 # Error should be: type name 'Box' is already defined as a struct
 

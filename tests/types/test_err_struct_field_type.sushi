@@ -1,4 +1,5 @@
 # Error: Wrong field type in struct constructor
+# EXPECT_ERROR_CODE: CE2028
 
 struct Point:
     i32 x

@@ -1,4 +1,5 @@
 # CE2083: Type mismatch in named struct constructor
+# EXPECT_ERROR_CODE: CE2083
 
 struct Point:
     i32 x

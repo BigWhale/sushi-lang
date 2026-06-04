@@ -1,4 +1,5 @@
 # Error test: non-exhaustive match
+# EXPECT_ERROR_CODE: CE2040
 enum Color:
     Red
     Green

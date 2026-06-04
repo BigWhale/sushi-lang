@@ -1,9 +1,10 @@
 # Error test: wrong number of arguments to enum constructor
-enum Result:
+# EXPECT_ERROR_CODE: CE2050
+enum Status:
     Success(i32)
     Failure(i32)
 
 fn main() i32:
     # Error: Success expects 1 argument, got 0
-    let Result r = Result.Success()
+    let Status r = Status.Success()
     return Result.Ok(0)

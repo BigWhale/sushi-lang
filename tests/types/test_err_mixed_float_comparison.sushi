@@ -1,4 +1,5 @@
 # CE2510: Mixed float type comparisons should fail
+# EXPECT_ERROR_CODE: CE2510
 fn main() i32:
   let f32 x = 3.14 as f32
   let f64 y = 3.14

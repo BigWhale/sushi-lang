@@ -1,4 +1,5 @@
 # CE2080: Unknown field name in named struct constructor
+# EXPECT_ERROR_CODE: CE2080
 
 struct Point:
     i32 x

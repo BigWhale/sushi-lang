@@ -1,4 +1,5 @@
 # CE2510: Mixed integer type equality should fail
+# EXPECT_ERROR_CODE: CE2510
 fn main() i32:
   let i16 x = 10 as i16
   let i32 y = 10

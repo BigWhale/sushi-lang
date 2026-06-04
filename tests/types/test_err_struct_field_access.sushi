@@ -1,4 +1,5 @@
 # Error: Accessing non-existent field
+# EXPECT_ERROR_CODE: CE0029
 
 struct Point:
     i32 x

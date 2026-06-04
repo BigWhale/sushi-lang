@@ -1,4 +1,5 @@
 # Test: Generic function with array type parameters
+# EXPECT_ERROR_CODE: CE2060
 # CURRENT LIMITATION: Type inference doesn't support extracting element type
 # from array types (e.g., T[] -> T). This should fail with CE2060.
 
