@@ -1,4 +1,5 @@
 # Test error: wrong number of type parameters in nested generic
+# EXPECT_ERROR_CODE: CE2001
 # Should fail with arity error
 
 struct Pair<T, U>:

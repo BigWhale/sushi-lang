@@ -1,4 +1,5 @@
 # Tests error for incompatible error type conversion
+# EXPECT_ERROR_CODE: CE2002
 
 enum ErrorA:
     Variant1

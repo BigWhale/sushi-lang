@@ -1,4 +1,5 @@
 # Tests error for returning bare value instead of Result.Ok()
+# EXPECT_ERROR_CODE: CE2030
 
 fn test_func() i32:
     return 42

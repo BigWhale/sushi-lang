@@ -1,4 +1,5 @@
 # Tests error for Err() without error argument
+# EXPECT_ERROR_CODE: CE2039
 
 enum MyError:
     Error

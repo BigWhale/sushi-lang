@@ -1,4 +1,5 @@
 # Test error: type mismatch in nested generic
+# EXPECT_ERROR_CODE: CE2049
 # Should fail with type compatibility error
 
 fn main() i32:

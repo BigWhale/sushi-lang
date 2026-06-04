@@ -1,4 +1,5 @@
 # Test invalid type casts in constants (CE0111)
+# EXPECT_ERROR_CODE: CE0111
 
 const i32 INVALID = "hello" as i32
 

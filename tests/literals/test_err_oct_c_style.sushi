@@ -1,4 +1,5 @@
 # Test that C-style octal literals are rejected (should fail compilation)
+# EXPECT_ERROR_CODE: CE2071
 
 fn main() i32:
     # This should error - C-style octal not allowed

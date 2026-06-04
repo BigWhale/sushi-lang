@@ -1,4 +1,5 @@
 # Test variable reference in constant (CE0108)
+# EXPECT_ERROR_CODE: CE1001
 
 fn main() i32:
     let i32 x = 42

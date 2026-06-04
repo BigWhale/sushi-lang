@@ -1,4 +1,5 @@
 # Tests error for Result in const declaration
+# EXPECT_ERROR_CODE: CE0108
 
 enum MyError:
     Error

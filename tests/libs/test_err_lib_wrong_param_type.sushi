@@ -1,4 +1,5 @@
 # Test type mismatch when passing wrong type to library function expecting Point
+# EXPECT_ERROR_CODE: CE2006
 # Should produce a type error (CE2006)
 
 use <lib/types_lib>
