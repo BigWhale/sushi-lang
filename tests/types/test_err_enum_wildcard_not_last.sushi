@@ -1,4 +1,5 @@
 # Error test: wildcard must be last
+# EXPECT_ERROR_CODE: CE2041
 enum Color:
     Red
     Green

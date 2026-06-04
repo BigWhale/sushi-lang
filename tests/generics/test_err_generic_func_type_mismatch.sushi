@@ -1,4 +1,5 @@
 # Test: Type mismatch after inference should fail
+# EXPECT_ERROR_CODE: CE0017
 
 fn identity<T>(T x) T:
     return Result.Ok(x)

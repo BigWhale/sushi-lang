@@ -1,4 +1,5 @@
 # Test generic functions with complex control flow and logic
+# EXPECT_ERROR_CODE: CW1001
 # This tests body substitution with if/while statements
 
 fn find_max<T>(T a, T b) T:

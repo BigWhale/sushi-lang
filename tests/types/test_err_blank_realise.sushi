@@ -1,4 +1,5 @@
 # Test that calling .realise() on Result<~> is an error
+# EXPECT_ERROR_CODE: CE2506
 
 
 fn do_nothing() ~:

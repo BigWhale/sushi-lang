@@ -1,4 +1,5 @@
 # Test: Duplicate generic function names detected
+# EXPECT_ERROR_CODE: CE0101
 
 fn process<T>(T x) T:
     return Result.Ok(x)

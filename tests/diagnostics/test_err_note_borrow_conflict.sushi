@@ -1,4 +1,5 @@
 # Diagnostic test: CE2407 with note pointing to first borrow
+# EXPECT_ERROR_CODE: CE2407
 # Exercises: note with secondary span (peek/poke conflict)
 
 fn read_val(&peek i32 a) i32:

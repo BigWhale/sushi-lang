@@ -97,6 +97,9 @@ Validates that stderr contains specific content.
 
 - Supports escape sequences
 - Can be specified multiple times
+- Enforced on both the runtime path and the compilation path. For `test_err_*`
+  / `test_warn_*` tests (whose binaries are never executed) it asserts against
+  the compiler's stderr, so you can pin a diagnostic's message text.
 
 #### EXPECT_STDERR_EMPTY
 
@@ -108,6 +111,31 @@ Validates that stderr produces no output.
 
 - Common for happy path tests
 - Values: `true`, `yes`, `1` (case-insensitive)
+
+### Compilation Diagnostics Directives
+
+#### EXPECT_ERROR_CODE
+
+Asserts that the compiler emits a specific diagnostic code (e.g. `CE2007`) for an
+`test_err_*` / `test_warn_*` test. Enforced on the compilation path, alongside the
+exit-code check (2 for errors, 1 for warnings) -- so the test proves not just *that*
+compilation failed but *which* diagnostic fired.
+
+```sushi
+# EXPECT_ERROR_CODE: CE2007
+```
+
+- Accepts a single code, a comma/space separated list, or the directive repeated
+  for multi-error compiles. Every listed code must appear in stderr.
+
+  ```sushi
+  # EXPECT_ERROR_CODE: CE2044, CE2049
+  ```
+
+- Matches the bare code token (`CE2007`), which is ANSI-independent; the runner
+  forces `NO_COLOR` so the token is never split by color escapes.
+- Prefer this over `EXPECT_STDERR_CONTAINS` for error/warning tests: the code is
+  stable, whereas message text is brittle.
 
 ### Advanced Metadata Directives
 

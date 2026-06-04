@@ -1,4 +1,5 @@
 # Invalid self usage in extension methods error test
+# EXPECT_ERROR_CODE: CE1002
 # Should fail compilation with invalid self usage errors
 
 extend i32 bad_method(i32 value) i32:

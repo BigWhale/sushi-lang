@@ -1,4 +1,5 @@
 # Error: Wrong number of fields in struct constructor
+# EXPECT_ERROR_CODE: CE2027
 
 struct Point:
     i32 x

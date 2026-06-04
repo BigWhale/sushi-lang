@@ -1,4 +1,5 @@
 # Diagnostic test: CE2002 with note pointing to declaration
+# EXPECT_ERROR_CODE: CE2002
 # Exercises: note with secondary span
 
 fn main() i32:

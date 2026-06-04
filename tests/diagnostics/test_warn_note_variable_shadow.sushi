@@ -1,4 +1,5 @@
 # Diagnostic test: CW1002 with note pointing to first declaration
+# EXPECT_ERROR_CODE: CW1002
 # Exercises: note with secondary span on warning
 
 fn main() i32:

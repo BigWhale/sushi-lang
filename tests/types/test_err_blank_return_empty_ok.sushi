@@ -1,4 +1,5 @@
 # Error test: Ok() requires a value. For blank return type use Ok(~)
+# EXPECT_ERROR_CODE: CE2036
 # Should fail with parsing error message
 
 fn test(i32[] arr) ~:

@@ -1,4 +1,5 @@
 # CE2510: Mixed unsigned type operations should fail
+# EXPECT_ERROR_CODE: CE2510
 fn main() i32:
   let u8 a = 10 as u8
   let u16 b = 20 as u16

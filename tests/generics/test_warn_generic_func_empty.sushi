@@ -1,4 +1,5 @@
 # Test: Generic function with minimal body (noop)
+# EXPECT_ERROR_CODE: CW1001
 # Tests that generic functions with unused parameters compile
 
 fn noop<T>(T x) ~:

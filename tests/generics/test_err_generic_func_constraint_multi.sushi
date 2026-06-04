@@ -1,4 +1,5 @@
 # Test: Multiple constraint violations
+# EXPECT_ERROR_CODE: CE4006
 
 perk Hashable:
     fn hash() u64

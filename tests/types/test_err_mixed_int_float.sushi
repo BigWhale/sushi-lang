@@ -1,4 +1,5 @@
 # CE2510: Mixed int/float operations should fail
+# EXPECT_ERROR_CODE: CE2510
 fn main() i32:
   let i32 x = 42
   let f64 y = 3.14

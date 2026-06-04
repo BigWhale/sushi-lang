@@ -1,4 +1,5 @@
 # Test: Wrong number of arguments should fail
+# EXPECT_ERROR_CODE: CE2060
 
 fn identity<T>(T x) T:
     return Result.Ok(x)

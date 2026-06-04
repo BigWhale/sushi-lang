@@ -1,3 +1,4 @@
+# EXPECT_ERROR_CODE: CE2032
 fn main() i32:
   let ~ x = ~
   return Result.Ok(0)

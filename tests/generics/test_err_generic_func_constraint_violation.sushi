@@ -1,4 +1,5 @@
 # Test perk constraint violation for generic functions
+# EXPECT_ERROR_CODE: CE4006
 # NoHash struct does NOT implement Hashable, so it should fail
 
 perk Hashable:

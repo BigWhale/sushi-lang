@@ -1,4 +1,5 @@
 # Error: Duplicate struct definition
+# EXPECT_ERROR_CODE: CE0004
 
 struct Point:
     i32 x

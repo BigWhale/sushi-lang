@@ -1,4 +1,5 @@
 # Test perk constraint violation for generic enums
+# EXPECT_ERROR_CODE: CE4006
 # NoHash struct does NOT implement Hashable, so instantiating
 # Box<NoHash> should fail with CE4006
 

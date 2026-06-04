@@ -1,4 +1,5 @@
 # Diagnostic test: CE2046 with text-only note
+# EXPECT_ERROR_CODE: CE2046
 # Exercises: note without span (predefined generic conflict)
 
 enum Maybe:

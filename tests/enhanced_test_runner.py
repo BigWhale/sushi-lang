@@ -187,7 +187,7 @@ class TestRunner:
                 total_success=True,
             )
 
-        compilation_success, compilation_message = self._run_compilation_test(test_file, category)
+        compilation_success, compilation_message = self._run_compilation_test(test_file, category, metadata)
 
         result = TestResult(
             name=test_name,
@@ -213,13 +213,15 @@ class TestRunner:
 
         return result
 
-    def _run_compilation_test(self, test_file: Path, category: str) -> Tuple[bool, str]:
+    def _run_compilation_test(self, test_file: Path, category: str, metadata: TestMetadata) -> Tuple[bool, str]:
         """
         Run compilation phase for a test.
 
         Args:
             test_file: Path to the test file
             category: Test category (error/warning/success/runtime)
+            metadata: Parsed test metadata (drives diagnostic assertions on the
+                      compilation path: EXPECT_ERROR_CODE / EXPECT_STDERR_CONTAINS)
 
         Returns:
             (success, message) tuple
@@ -242,7 +244,10 @@ class TestRunner:
             binary_name = f"test_{test_file.stem}_{os.getpid()}"
             binary_path = Path(self.temp_dir) / binary_name
 
-            # Run the compiler (from project root)
+            # Run the compiler (from project root). Force NO_COLOR so diagnostic
+            # codes/messages land in stderr without ANSI escapes, keeping
+            # substring assertions (EXPECT_ERROR_CODE / EXPECT_STDERR_CONTAINS)
+            # robust.
             project_root = self.tests_dir.parent
             cmd = ["./sushic", str(test_file), "-o", str(binary_path)]
             result = subprocess.run(
@@ -250,6 +255,7 @@ class TestRunner:
                 capture_output=True,
                 text=True,
                 cwd=project_root,
+                env={**os.environ, "NO_COLOR": "1"},
                 timeout=30  # 30 second timeout for compilation
             )
 
@@ -263,12 +269,49 @@ class TestRunner:
                 if result.stdout:
                     message += f"\nSTDOUT: {result.stdout.strip()}"
 
+            # Diagnostic assertions on the compilation path. Only meaningful for
+            # error/warning tests, whose binaries are never executed (so stderr
+            # is the only signal). A missing/garbled diagnostic now fails the
+            # test instead of passing silently.
+            if success and category in ('error', 'warning'):
+                diag_ok, diag_msg = self._check_compilation_diagnostics(result.stderr, metadata)
+                if not diag_ok:
+                    success = False
+                    message = diag_msg
+
             return success, message
 
         except subprocess.TimeoutExpired:
             return False, "✗ Compilation: Timeout (30s)"
         except Exception as e:
             return False, f"✗ Compilation: Exception: {e}"
+
+    def _check_compilation_diagnostics(self, stderr: str, metadata: TestMetadata) -> Tuple[bool, str]:
+        """
+        Assert expected diagnostics appear in the compiler's stderr.
+
+        Checks EXPECT_ERROR_CODE tokens (e.g. "CE2007") and EXPECT_STDERR_CONTAINS
+        substrings. Both use plain substring matching against stderr.
+
+        Returns:
+            (ok, message) tuple. ok is True when every expectation is met (or none
+            were declared). message describes the first failure.
+        """
+        missing = []
+        for code in metadata.expect_error_code:
+            if code not in stderr:
+                missing.append(code)
+        for content in metadata.expect_stderr_contains:
+            if content not in stderr:
+                missing.append(repr(content))
+
+        if missing:
+            return False, (
+                "✗ Compilation: missing expected diagnostic(s): "
+                + ", ".join(missing)
+                + f"\nSTDERR: {stderr.strip()}"
+            )
+        return True, "✓ Compilation: diagnostics matched"
 
     def _run_runtime_test(self, test_file: Path, metadata: TestMetadata) -> Tuple[bool, str]:
         """

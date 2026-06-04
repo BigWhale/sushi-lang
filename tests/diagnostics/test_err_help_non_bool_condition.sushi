@@ -1,4 +1,5 @@
 # Diagnostic test: CE2005 with help message
+# EXPECT_ERROR_CODE: CE2005
 # Exercises: help message (no span)
 
 fn main() i32:
