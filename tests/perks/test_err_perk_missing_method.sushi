@@ -1,4 +1,5 @@
 # Test CE4005: Missing required method in perk implementation
+# EXPECT_ERROR_CODE: CE4005
 
 perk Displayable:
     fn display() string

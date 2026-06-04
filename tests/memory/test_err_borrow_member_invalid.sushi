@@ -1,4 +1,5 @@
 # Test: Cannot borrow temporary values
+# EXPECT_ERROR_CODE: CE2404
 # Expected: CE2404 error
 
 struct Config:

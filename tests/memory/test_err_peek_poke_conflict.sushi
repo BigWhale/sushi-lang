@@ -1,4 +1,5 @@
 # Test error: peek and poke conflict
+# EXPECT_ERROR_CODE: CE2407
 # Cannot have &peek and &poke borrows simultaneously
 
 fn read_and_write(&peek i32 a, &poke i32 b) ~:

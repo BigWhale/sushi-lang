@@ -1,4 +1,5 @@
 # TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2406
 # Test that compiler prevents use of List after .destroy()
 fn main() i32:
     let List<i32> data = List.new()

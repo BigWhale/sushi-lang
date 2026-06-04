@@ -1,4 +1,5 @@
 # Test CW2511: ?? operator in main function generates warning
+# EXPECT_ERROR_CODE: CW2511
 # Expected: CW2511 warning
 
 fn get_value() i32:

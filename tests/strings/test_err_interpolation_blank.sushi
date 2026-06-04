@@ -1,4 +1,5 @@
 # Test invalid string interpolation with blank type
+# EXPECT_ERROR_CODE: CE2032
 # This test should FAIL compilation with CE2035
 
 fn get_blank() ~:

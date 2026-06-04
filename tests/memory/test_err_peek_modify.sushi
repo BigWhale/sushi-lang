@@ -1,4 +1,5 @@
 # Test error: cannot modify through &peek reference
+# EXPECT_ERROR_CODE: CE2408
 # &peek is read-only, modification should fail
 
 fn try_modify(&peek i32 x) ~:

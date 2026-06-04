@@ -1,4 +1,5 @@
 # Test CE4007: Perk method conflicts with regular extension method
+# EXPECT_ERROR_CODE: CE4007
 
 perk Displayable:
     fn display() string

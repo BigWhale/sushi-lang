@@ -1,4 +1,5 @@
 # Test CE4004: Wrong parameter count
+# EXPECT_ERROR_CODE: CE4004
 
 perk Comparable:
     fn compare(i32 other) i32

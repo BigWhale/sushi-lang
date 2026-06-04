@@ -1,4 +1,5 @@
 # Test that using a non-existent enum variant produces CE2045
+# EXPECT_ERROR_CODE: CE2045
 # CE2045: enum variant 'Purple' not found in enum 'Color'
 
 enum Color:

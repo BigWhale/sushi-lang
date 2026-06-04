@@ -1,4 +1,5 @@
 # TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2053
 # Test error: push() with too many arguments
 fn main() i32:
     let List<i32> data = List.new()

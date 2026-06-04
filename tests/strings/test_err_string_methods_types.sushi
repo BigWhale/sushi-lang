@@ -1,4 +1,5 @@
 # This file tests type mismatch errors for string methods
+# EXPECT_ERROR_CODE: CE2006
 # This should fail compilation with CE2006 errors (wrong argument types)
 
 fn main() i32:

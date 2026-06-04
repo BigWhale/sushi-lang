@@ -1,4 +1,5 @@
 # Test CE4002: Duplicate perk implementation
+# EXPECT_ERROR_CODE: CE4002
 
 perk Hashable:
     fn hash() u64

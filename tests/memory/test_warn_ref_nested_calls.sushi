@@ -1,4 +1,5 @@
 # Test: Nested function calls with mutable references
+# EXPECT_ERROR_CODE: CW2409
 # Should compile and run successfully
 
 fn add_five(&poke i32 x) ~:

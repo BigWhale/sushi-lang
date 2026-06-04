@@ -1,4 +1,5 @@
 # Test error: peek to poke coercion not allowed
+# EXPECT_ERROR_CODE: CE2006
 # &peek T cannot be passed where &poke T is expected
 
 fn modify_value(&poke i32 x) ~:

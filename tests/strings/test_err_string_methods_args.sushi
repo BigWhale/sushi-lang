@@ -1,4 +1,5 @@
 # This file tests argument count errors for string methods
+# EXPECT_ERROR_CODE: CE2009
 # This should fail compilation with CE2009 errors (wrong argument count)
 use <collections/strings>
 
