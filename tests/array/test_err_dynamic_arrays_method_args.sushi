@@ -1,4 +1,5 @@
 # Test dynamic array method argument mismatch
+# EXPECT_ERROR_CODE: CE2006
 fn main() i32:
   let i32[] numbers = new()
 

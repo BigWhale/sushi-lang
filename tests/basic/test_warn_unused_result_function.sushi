@@ -1,4 +1,5 @@
 # TEST_TYPE: compilation
+# EXPECT_ERROR_CODE: CW2001
 # Test for Phase 4.1 - Unused Result Detection
 # This test should emit a warning when a function returning Result<T> is called
 # but the return value is not used

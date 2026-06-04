@@ -1,4 +1,5 @@
 # Test dynamic array type mismatch errors
+# EXPECT_ERROR_CODE: CE2002
 fn main() i32:
   # This should fail - type mismatch in from() constructor
   let i32[] numbers = from(["not", "integers"])

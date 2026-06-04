@@ -1,4 +1,5 @@
 # Test error: write() requires string argument
+# EXPECT_ERROR_CODE: CE2006
 
 use <io/stdio>
 

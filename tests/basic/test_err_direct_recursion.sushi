@@ -1,4 +1,5 @@
 # Test error: direct recursion without Own<T>
+# EXPECT_ERROR_CODE: CE2052
 enum BadList:
     Cons(i32, BadList)  # ERROR: direct recursion not allowed
     Nil()

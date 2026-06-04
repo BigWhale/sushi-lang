@@ -1,4 +1,5 @@
 # CW1001: unused variable
+# EXPECT_ERROR_CODE: CW1001
 fn main() i32:
   let i32 x = 42  # x is never used
   let string msg = "hello"  # msg is never used

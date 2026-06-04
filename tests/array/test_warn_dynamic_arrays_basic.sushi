@@ -1,4 +1,5 @@
 # Test basic dynamic array functionality
+# EXPECT_ERROR_CODE: CW1001
 fn run_test() i32:
   # Test new() constructor with different types
   let i32[] numbers = new()

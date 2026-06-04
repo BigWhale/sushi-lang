@@ -1,4 +1,5 @@
 # Test valid array access patterns (should compile successfully)
+# EXPECT_ERROR_CODE: CW1001
 
 fn run_test() i32:
   let i32[5] numbers = [10, 20, 30, 40, 50]

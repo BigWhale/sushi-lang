@@ -1,4 +1,5 @@
 # TEST_TYPE: compilation
+# EXPECT_ERROR_CODE: CW1001
 # Test using the variable in a method call
 
 
