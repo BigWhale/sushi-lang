@@ -1,4 +1,5 @@
 # Test error: Own pattern on non-Own field
+# EXPECT_ERROR_CODE: CE2048
 enum Container:
     Box(i32)
     Empty()

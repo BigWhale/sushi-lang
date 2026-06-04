@@ -12,14 +12,19 @@ only allows it to shrink, mirroring test_stdout_coverage.py.
 BASELINE should be LOWERED as more directories are backfilled. Backfilled so far:
 - tests/diagnostics/, tests/types/, tests/generics/ (100%);
 - tests/constants/, tests/control_flow/, tests/operators/, tests/literals/,
-  tests/io/, tests/libs/ (Batch A).
-  Exception: tests/control_flow/test_err_break_continue_outside_loop has no
-  EXPECT_ERROR_CODE because break/continue outside a loop is not caught in
-  semantic analysis (it hits a backend assert instead of emitting CE1003); it
-  stays in the gap until that bug is fixed.
+  tests/io/, tests/libs/ (Batch A);
+- tests/strings/, tests/enums/, tests/list/, tests/error_handling/, tests/memory/,
+  tests/perks/ (Batch B).
+Known-bug / limitation exceptions left in the gap (no honest code to assert):
+- tests/control_flow/test_err_break_continue_outside_loop -- break/continue outside
+  a loop hits a backend assert instead of emitting CE1003 (issue: CE1003).
+- tests/list/test_err_list_type_mismatch -- List.push() wrong-type escapes the type
+  checker into LLVM codegen (no code).
+- tests/error_handling/test_err_let_result_constructor -- emits internal-bug CE0113
+  instead of CE2505.
+- tests/perks/test_err_perk_no_methods -- parse error (Lark), not a CE#### diagnostic.
 Not yet backfilled (deliberate follow-up passes):
-- tests/array/, tests/basic/, tests/enums/, tests/error_handling/, tests/list/,
-  tests/memory/, tests/perks/, tests/stdlib/, tests/strings/
+- tests/array/, tests/basic/, tests/stdlib/
 
 To lower BASELINE after a backfill pass:
 1. Run this file (it prints the current gap on failure), or recompute manually:
@@ -47,7 +52,7 @@ from pathlib import Path
 # in their header (the "gap"). After each backfill pass this MUST be lowered to
 # the new gap count -- it may never increase (that would mean a new error/warning
 # test landed without a code assertion).
-BASELINE = 143
+BASELINE = 86
 
 TESTS_ROOT = Path(__file__).parent.parent  # tests/
 EXCLUDED_DIRS = {"helpers", "bin"}

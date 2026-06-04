@@ -1,4 +1,5 @@
 # Test CE4006: Generic function constraint violation
+# EXPECT_ERROR_CODE: CE4006
 # Type doesn't implement required perk
 
 perk Hashable:

@@ -1,4 +1,5 @@
 # TEST_TYPE: compilation
+# EXPECT_ERROR_CODE: CE2002
 # Phase 4.2 - Error test for unhandled Result<T> assignment
 # Should fail with CE2505: cannot assign Result<T> to non-Result variable
 

@@ -1,4 +1,5 @@
 # Test CE2508: ?? operator requires Result-returning function
+# EXPECT_ERROR_CODE: CE2508
 # Expected: CE2508 error
 # Extension methods return bare types, so we can test this error there
 

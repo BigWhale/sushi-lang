@@ -1,3 +1,4 @@
+# EXPECT_ERROR_CODE: CE2502
 
 fn get_value() i32:
     return Result.Ok(42)

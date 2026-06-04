@@ -1,4 +1,5 @@
 # Test perk methods with parameters (including &self references)
+# EXPECT_ERROR_CODE: CW1003
 
 perk Comparable:
     fn compare(&poke Point other) i32

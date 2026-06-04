@@ -1,4 +1,5 @@
 # Test CE4003: Unknown perk reference
+# EXPECT_ERROR_CODE: CE4003
 
 struct Point:
     i32 x

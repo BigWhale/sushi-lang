@@ -1,4 +1,5 @@
 # Test CE4007: Perk method conflicts with regular extension on builtin type
+# EXPECT_ERROR_CODE: CE4007
 
 perk Describable:
     fn describe() string

@@ -1,4 +1,5 @@
 # TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2053
 # Test error: List.new() with arguments (expects 0)
 fn main() i32:
     # ERROR: new() expects no arguments

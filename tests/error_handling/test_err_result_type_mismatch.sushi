@@ -1,4 +1,5 @@
 # Error test: Ok() value must match function return type
+# EXPECT_ERROR_CODE: CE2031
 # Should fail with CE2031
 
 fn wrong_type() i32:

@@ -1,4 +1,5 @@
 # Test that enums cannot have dynamic array fields (CE2059)
+# EXPECT_ERROR_CODE: CE2059
 enum MyEnum:
     SimpleVariant
     ArrayVariant(i32[])

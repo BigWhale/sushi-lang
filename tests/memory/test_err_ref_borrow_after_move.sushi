@@ -1,4 +1,5 @@
 # Test: Error when trying to pass a moved variable as reference
+# EXPECT_ERROR_CODE: CE2405
 # Should fail with CE2405: cannot borrow moved variable
 
 fn modify_array(&poke i32[] arr) ~:

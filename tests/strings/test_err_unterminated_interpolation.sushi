@@ -1,3 +1,4 @@
+# EXPECT_ERROR_CODE: CE2026
 fn main() i32:
     let string s = "test {42"
     println(s)

@@ -1,4 +1,5 @@
 # Test error: with_capacity() with wrong number of arguments (expects 1)
+# EXPECT_ERROR_CODE: CE2053
 fn main() i32:
     # ERROR: with_capacity() expects exactly 1 argument (capacity)
     let List<i32> data = List.with_capacity()

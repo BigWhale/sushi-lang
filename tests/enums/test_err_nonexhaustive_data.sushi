@@ -1,4 +1,5 @@
 # Test that a non-exhaustive match on a data-variant enum produces CE2040
+# EXPECT_ERROR_CODE: CE2040
 # CE2040: non-exhaustive match pattern (missing variants: KeyPress, Resize)
 
 enum Event:
