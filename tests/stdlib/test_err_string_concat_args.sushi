@@ -1,4 +1,5 @@
 # Test error: string.concat() with wrong argument type
+# EXPECT_ERROR_CODE: CE2006
 use <io/stdio>
 use <collections/strings>
 

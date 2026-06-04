@@ -1,3 +1,4 @@
+# EXPECT_ERROR_CODE: CE2009
 use <time>
 
 fn main() i32:

@@ -1,4 +1,5 @@
 # CE1002: rebind to undeclared variable
+# EXPECT_ERROR_CODE: CE1002
 fn main() i32:
   x := 42  # x was never declared with let
   return Result.Ok(x)

@@ -1,3 +1,4 @@
+# EXPECT_ERROR_CODE: CE2006
 fn add(i32 a, i32 b) i32:
   return Result.Ok(a + b)
 

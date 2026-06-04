@@ -1,4 +1,5 @@
 # Test invalid string interpolation with array type
+# EXPECT_ERROR_CODE: CE2035
 # This test should FAIL compilation with CE2035
 
 fn main() i32:

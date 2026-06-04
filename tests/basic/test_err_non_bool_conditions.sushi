@@ -1,4 +1,5 @@
 # CE2005: non-bool conditions
+# EXPECT_ERROR_CODE: CE2005
 fn main() i32:
   let i32 x = 10
   if (x):  # i32 cannot be used as condition

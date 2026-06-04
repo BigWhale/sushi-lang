@@ -1,4 +1,5 @@
 # Test that type inference requires explicit type declaration
+# EXPECT_ERROR_CODE: CE2007
 fn main() i32:
   # This should fail - cannot infer type without explicit declaration
   let numbers = new()

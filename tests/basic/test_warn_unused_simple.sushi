@@ -1,3 +1,4 @@
+# EXPECT_ERROR_CODE: CW1001
 fn main() i32:
     let i32 unused_var = 42  # Should trigger unused variable warning
     return Result.Ok(0)

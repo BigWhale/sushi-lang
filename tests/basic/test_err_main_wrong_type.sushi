@@ -1,2 +1,3 @@
+# EXPECT_ERROR_CODE: CE0106
 fn main() string:
     return Result.Ok("hello")

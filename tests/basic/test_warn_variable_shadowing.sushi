@@ -1,4 +1,5 @@
 # CW1002: variable shadowing
+# EXPECT_ERROR_CODE: CW1002
 fn main() i32:
   let i32 x = 10
   if (x > 5):

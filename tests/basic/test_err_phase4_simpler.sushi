@@ -1,4 +1,5 @@
 # TEST_TYPE: compilation
+# EXPECT_ERROR_CODE: CE0017
 # Simpler test to isolate the issue
 
 fn main() i32:

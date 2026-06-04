@@ -1,4 +1,5 @@
 # Test that HashMap requires use statement (variable declaration)
+# EXPECT_ERROR_CODE: CE2001
 # Expected: CE2001 error for unknown type 'HashMap' (not registered without use statement)
 
 fn main() i32:

@@ -1,4 +1,5 @@
 # Error test: cannot print Result<T> directly
+# EXPECT_ERROR_CODE: CE0017
 # Expected: CE2037 error
 
 fn get_number() i32:

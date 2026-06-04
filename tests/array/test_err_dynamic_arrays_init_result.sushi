@@ -1,4 +1,5 @@
 # ERROR TEST: CE2505
+# EXPECT_ERROR_CODE: CE2002
 # Test that directly assigning Result<T[]> to T[] without unwrapping is an error
 
 fn create_array() i32[]:

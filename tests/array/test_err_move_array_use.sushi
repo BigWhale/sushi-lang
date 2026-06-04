@@ -1,4 +1,5 @@
 # This test should FAIL because we try to use a moved dynamic array
+# EXPECT_ERROR_CODE: CE2405
 # Error should be CE2405: cannot borrow moved variable
 
 fn main() i32:

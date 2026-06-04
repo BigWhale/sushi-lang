@@ -1,3 +1,4 @@
+# EXPECT_ERROR_CODE: CE2008
 fn main() i32:
   # Call to undefined function should generate CE2008
   let i32 result = undefined_func(42)

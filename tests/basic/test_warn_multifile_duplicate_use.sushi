@@ -1,4 +1,5 @@
 # Test duplicate use statement warning
+# EXPECT_ERROR_CODE: CW3001
 use "helpers/math_utils"
 use "helpers/foo_module"
 use "helpers/math_utils"

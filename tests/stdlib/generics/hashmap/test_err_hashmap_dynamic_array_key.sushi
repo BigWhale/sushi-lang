@@ -1,4 +1,5 @@
 # Test that dynamic arrays are rejected as HashMap keys (CE2058)
+# EXPECT_ERROR_CODE: CE2058
 
 use <collections/hashmap>
 fn main() i32:

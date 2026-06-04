@@ -1,4 +1,5 @@
 # Test compile-time array bounds checking (CE2012)
+# EXPECT_ERROR_CODE: CE2012
 # This test should fail compilation with CE2012 errors
 
 fn run_test() i32:
