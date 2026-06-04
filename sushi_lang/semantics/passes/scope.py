@@ -45,6 +45,9 @@ class ScopeAnalyzer:
         self.scopes: List[Dict[str, VariableInfo]] = []
         # Track destroyed dynamic arrays per scope
         self.destroyed_arrays: List[set[str]] = []
+        # Loop-nesting depth for the current function. break/continue are only
+        # legal when this is > 0 (CE1003); reset to 0 across nested functions.
+        self._loop_depth: int = 0
 
     def run(self, program: Program) -> None:
         """Entry point for scope analysis."""
@@ -169,6 +172,11 @@ class ScopeAnalyzer:
         """Check a function definition."""
         self._push_scope()
 
+        # A (possibly nested) function starts a fresh loop context: a
+        # break/continue in its body must not see a loop in an enclosing function.
+        saved_loop_depth = self._loop_depth
+        self._loop_depth = 0
+
         # Function parameters are implicitly declared and should be considered used
         # if they appear in the function signature (to avoid warnings for unused params)
         for param in func.params:
@@ -176,6 +184,7 @@ class ScopeAnalyzer:
             # Don't mark params as used automatically - let actual usage determine it
 
         self._check_block(func.body)
+        self._loop_depth = saved_loop_depth
         self._pop_scope()
 
     def _check_extension_method(self, ext: ExtendDef) -> None:
@@ -286,7 +295,9 @@ class ScopeAnalyzer:
     def _check_while(self, stmt: While) -> None:
         """Check a while statement."""
         self._check_expression(stmt.cond)
+        self._loop_depth += 1
         self._check_scoped_block(stmt.body)
+        self._loop_depth -= 1
 
     def _check_foreach(self, stmt: Foreach) -> None:
         """Check a foreach statement."""
@@ -297,7 +308,9 @@ class ScopeAnalyzer:
         self._push_scope()
         # Declare the loop variable in the inner scope
         self._declare_variable(stmt.item_name, stmt.item_name_span)
+        self._loop_depth += 1
         self._check_block(stmt.body)
+        self._loop_depth -= 1
         self._pop_scope()
 
     def _check_match(self, stmt: Match) -> None:
@@ -351,12 +364,14 @@ class ScopeAnalyzer:
                     self._declare_pattern_bindings(inner)
 
     def _check_break(self, stmt: Break) -> None:
-        """Check a break statement."""
-        pass  # No variables to check
+        """Check a break statement (only legal inside a loop)."""
+        if self._loop_depth == 0:
+            er.emit(self.reporter, er.ERR.CE1003, stmt.loc)
 
     def _check_continue(self, stmt: Continue) -> None:
-        """Check a continue statement."""
-        pass  # No variables to check
+        """Check a continue statement (only legal inside a loop)."""
+        if self._loop_depth == 0:
+            er.emit(self.reporter, er.ERR.CE1003, stmt.loc)
 
     def _check_funcdef(self, stmt: FuncDef) -> None:
         """Check a nested function definition."""

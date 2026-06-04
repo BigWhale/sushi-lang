@@ -83,5 +83,49 @@ def validate_list_method_with_validator(
     if num_args != expected:
         er.emit(reporter, er.ERR.CE2053, call.loc,
                 method=method, expected=expected, got=num_args)
+        return
+
+    # Element-type validation for methods that take a T argument:
+    #   push(T)        -> element is args[0]
+    #   insert(i32, T) -> element is args[1]
+    # Without this the wrong-type value escapes to LLVM codegen and fails with a
+    # raw "mismatching types" error and no diagnostic code (issue #47). Mirrors
+    # the dynamic-array and HashMap.insert element checks.
+    element_arg_index = {"push": 0, "insert": 1}.get(method)
+    if element_arg_index is not None:
+        _validate_list_element_type(call, list_type, element_arg_index, reporter, validator)
+
+
+def _validate_list_element_type(
+    call: MethodCall,
+    list_type: StructType,
+    arg_index: int,
+    reporter: Any,
+    validator: Any,
+) -> None:
+    """Check that args[arg_index] is compatible with the List's element type T."""
+    from sushi_lang.backend.generics.list import parse_list_types
+
+    arg = call.args[arg_index]
+    element_type = parse_list_types(list_type, validator)
+    if element_type is None:
+        # T could not be resolved; still validate the argument expression itself.
+        validator.validate_expression(arg)
+        return
+
+    from sushi_lang.semantics.passes.types.utils import (
+        propagate_enum_type_to_dotcall,
+        propagate_struct_type_to_dotcall,
+    )
+    from sushi_lang.semantics.passes.types.compatibility import types_compatible
+
+    propagate_enum_type_to_dotcall(validator, arg, element_type)
+    propagate_struct_type_to_dotcall(validator, arg, element_type)
+    validator.validate_expression(arg)
+
+    arg_type = validator.infer_expression_type(arg)
+    if arg_type is not None and not types_compatible(validator, arg_type, element_type):
+        er.emit(reporter, er.ERR.CE2006, arg.loc,
+                index=arg_index + 1, expected=str(element_type), got=str(arg_type))
 
 
