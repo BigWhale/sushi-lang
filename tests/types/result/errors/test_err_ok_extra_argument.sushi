@@ -1,4 +1,5 @@
 # Tests error for Ok with extra arguments
+# EXPECT_ERROR_CODE: CE2050
 
 enum MyError:
     Error

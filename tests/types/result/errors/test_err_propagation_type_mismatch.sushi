@@ -1,4 +1,5 @@
 # Tests error for propagating different error types
+# EXPECT_ERROR_CODE: CE2511
 
 enum ErrorA:
     Error

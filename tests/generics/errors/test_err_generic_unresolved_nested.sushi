@@ -1,4 +1,5 @@
 # Test error: undefined type in nested generic
+# EXPECT_ERROR_CODE: CE2001
 # Should fail with type error
 
 fn main() i32:

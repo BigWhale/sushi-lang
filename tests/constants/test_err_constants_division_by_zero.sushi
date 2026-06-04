@@ -1,4 +1,5 @@
 # Test division by zero error in constants
+# EXPECT_ERROR_CODE: CE0112
 
 const i32 INVALID = 100 / 0
 

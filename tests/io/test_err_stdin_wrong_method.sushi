@@ -1,4 +1,5 @@
 # Test error: calling invalid method on stdin
+# EXPECT_ERROR_CODE: CE2008
 
 use <io/stdio>
 

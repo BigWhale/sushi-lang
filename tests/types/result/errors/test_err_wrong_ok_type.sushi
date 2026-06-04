@@ -1,4 +1,5 @@
 # Tests error for wrong Ok type
+# EXPECT_ERROR_CODE: CE2031
 
 enum MyError:
     Error

@@ -1,4 +1,5 @@
 # Test circular dependency detection in constants (CE0109)
+# EXPECT_ERROR_CODE: CE0109
 
 const i32 A = B + 1
 const i32 B = A + 1

@@ -1,4 +1,5 @@
 # Test error for function calls in constants
+# EXPECT_ERROR_CODE: CE0108
 
 fn get_value() i32:
     return Result.Ok(42)

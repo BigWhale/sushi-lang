@@ -1,4 +1,5 @@
 # Test invalid operations in constants (CE0110)
+# EXPECT_ERROR_CODE: CE0110
 
 const f64 FLOAT_VAL = 3.14
 

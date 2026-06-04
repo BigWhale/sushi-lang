@@ -1,4 +1,5 @@
 # Tests warning for using ?? error propagation in main() function
+# EXPECT_ERROR_CODE: CW2511
 # Should emit CW2511 warning but compile successfully
 
 fn get_value() i32:

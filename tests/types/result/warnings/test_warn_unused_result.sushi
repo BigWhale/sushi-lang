@@ -1,4 +1,5 @@
 # Tests warning for unused Result value (CW2001)
+# EXPECT_ERROR_CODE: CW2001
 # Warning only triggers when referencing a Result variable directly
 
 fn main() i32:
