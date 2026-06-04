@@ -1,0 +1,44 @@
+# Perf benchmark: arithmetic, constant folding, bitwise ops, expression typing.
+# Compile-only stress for the type checker + codegen. Not executed at runtime.
+# Stdlib-free (builtin println only) so it compiles without a built stdlib.
+
+const i32 A = 2
+const i32 B = 3
+const i32 C = (A * B + 7) * 4 - 1
+const i32 FLAGS = 0x01 | 0x02 | 0x04 | 0x08 | 0x10
+const i32 SHIFTED = (1 << 10) + (256 >> 2)
+
+fn poly(i32 x) i32:
+    let i32 a = x * x * x
+    let i32 b = x * x
+    let i32 c = a + b * 3 - x * 7 + 11
+    let i32 d = (c << 2) | (c >> 1)
+    return Result.Ok(d % 1000)
+
+fn mix(i32 x, i32 y) i32:
+    let i32 s = x + y
+    let i32 p = x * y
+    let i32 q = (s * p) - (x % (y + 1))
+    return Result.Ok(q)
+
+fn bits(i32 x) i32:
+    let i32 lo = x & FLAGS
+    let i32 hi = (x << 3) | (x >> 2)
+    let i32 m = (lo ^ hi) + (x & 0xFF)
+    return Result.Ok(m)
+
+fn accumulate(i32 n) i32:
+    let i32 t = 0
+    foreach(i in 0..n):
+        let i32 step = poly(i).realise(0) + mix(i, i + 1).realise(0)
+        t := t + (step % 97)
+    return Result.Ok(t)
+
+fn main() i32:
+    let i32 r1 = poly(7).realise(0)
+    let i32 r2 = mix(13, 17).realise(0)
+    let i32 r3 = bits(0xDEAD).realise(0)
+    let i32 r4 = accumulate(64).realise(0)
+    let i32 total = r1 + r2 + r3 + r4 + C + SHIFTED
+    println(total)
+    return Result.Ok(0)

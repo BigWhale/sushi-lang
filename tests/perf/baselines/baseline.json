@@ -1,0 +1,34 @@
+{
+  "platforms": {
+    "darwin-arm64": {
+      "metrics": {
+        "cold_build:project": {
+          "median_ms": 469.013,
+          "samples": 5,
+          "tolerance_pct": 25.0
+        },
+        "cold_compile:arithmetic": {
+          "median_ms": 354.184,
+          "samples": 5,
+          "tolerance_pct": 25.0
+        },
+        "cold_compile:generics": {
+          "median_ms": 356.403,
+          "samples": 5,
+          "tolerance_pct": 25.0
+        },
+        "cold_compile:match": {
+          "median_ms": 354.379,
+          "samples": 5,
+          "tolerance_pct": 25.0
+        },
+        "warm_build:project": {
+          "median_ms": 449.04,
+          "samples": 5,
+          "tolerance_pct": 25.0
+        }
+      }
+    }
+  },
+  "version": 1
+}

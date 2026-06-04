@@ -1,0 +1,46 @@
+# Perf benchmark: generic instantiation + monomorphization.
+# Stresses the instantiate / monomorphize passes (the super-linear surface most
+# at risk of an accidental quadratic). Many distinct instantiations on purpose.
+# Stdlib-free; not executed at runtime.
+
+struct Pair<T, U>:
+    T first
+    U second
+
+struct Triple<A, B, C>:
+    A a
+    B b
+    C c
+
+fn identity<T>(T x) T:
+    return Result.Ok(x)
+
+fn first_of<T, U>(Pair<T, U> p) T:
+    return Result.Ok(p.first)
+
+fn second_of<T, U>(Pair<T, U> p) U:
+    return Result.Ok(p.second)
+
+fn main() i32:
+    # Distinct identity<T> instantiations.
+    let i32 i = identity(42).realise(0)
+    let i64 l = identity(7 as i64).realise(0 as i64)
+    let u32 u = identity(9 as u32).realise(0 as u32)
+    let u64 b = identity(11 as u64).realise(0 as u64)
+    let i16 sh = identity(3 as i16).realise(0 as i16)
+
+    # Distinct Pair<T, U> / Triple<A, B, C> instantiations.
+    let Pair<i32, i32> p1 = Pair(1, 2)
+    let Pair<i64, u32> p2 = Pair(3 as i64, 4 as u32)
+    let Pair<u64, i16> p3 = Pair(5 as u64, 6 as i16)
+    let Triple<i32, i64, u32> t = Triple(1, 2 as i64, 3 as u32)
+
+    let i32 f1 = first_of(p1).realise(0)
+    let i64 f2 = first_of(p2).realise(0 as i64)
+    let u64 f3 = first_of(p3).realise(0 as u64)
+    let i16 s2 = second_of(p3).realise(0 as i16)
+
+    let i32 sum = i + (l as i32) + (u as i32) + (b as i32) + (sh as i32)
+    sum := sum + f1 + (f2 as i32) + (f3 as i32) + (s2 as i32) + (t.a as i32)
+    println(sum)
+    return Result.Ok(0)
