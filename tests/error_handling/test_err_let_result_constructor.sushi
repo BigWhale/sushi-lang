@@ -1,4 +1,5 @@
 # TEST_TYPE: compilation
+# EXPECT_ERROR_CODE: CE2505
 # Phase 4.2 - Error test for unhandled Result.Ok() constructor
 # Should fail with CE2505: even direct Result.Ok() needs handling
 

@@ -1,4 +1,5 @@
 # CE1003: break/continue outside loop
+# EXPECT_ERROR_CODE: CE1003
 fn main() i32:
   let i32 x = 10
   if (x > 5):

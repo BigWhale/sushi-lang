@@ -114,6 +114,29 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
         if resolved_type != stmt.ty:
             stmt.ty = resolved_type
 
+    # A bare Result constructor (Result.Ok(...) / Result.Err(...)) assigned to a
+    # non-Result variable must be rejected here with CE2505. The inference-based
+    # check further down only fires when the RHS *infers* as Result<...> (e.g. a
+    # function call); a direct constructor infers as None, so without this it
+    # slips through to codegen and dies on CE0113 -- a self-described compiler
+    # bug -- instead of a clean diagnostic (issue #48).
+    if stmt.value is not None:
+        is_result_ctor = (
+            (isinstance(stmt.value, EnumConstructor) and stmt.value.enum_name == "Result")
+            or (isinstance(stmt.value, DotCall)
+                and isinstance(stmt.value.receiver, Name)
+                and stmt.value.receiver.id == "Result")
+        )
+        lhs_is_result = (
+            isinstance(resolved_type, ResultType)
+            or (isinstance(resolved_type, EnumType) and resolved_type.name.startswith("Result<"))
+            or (isinstance(stmt.ty, GenericTypeRef) and stmt.ty.base_name == "Result")
+            or (isinstance(stmt.ty, EnumType) and stmt.ty.name.startswith("Result<"))
+        )
+        if is_result_ctor and not lhs_is_result:
+            er.emit(validator.reporter, er.ERR.CE2505, stmt.value.loc)
+            return
+
     # Propagate expected type to constructors BEFORE validation
     # This is CRITICAL for generic type inference (Result<T>, Maybe<T>, Own<T>, etc.)
     if stmt.value:
