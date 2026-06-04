@@ -22,6 +22,10 @@ class TestMetadata:
     expect_stderr_contains: Optional[List[str]] = None
     expect_stderr_empty: bool = False
 
+    # Compilation diagnostics expectations (error/warning categories).
+    # Enforced on the compilation path, not the runtime path.
+    expect_error_code: Optional[List[str]] = None
+
     # Test behavior flags
     requires_runtime: bool = False
     timeout_seconds: int = 10
@@ -37,6 +41,8 @@ class TestMetadata:
             self.expect_stdout_contains = []
         if self.expect_stderr_contains is None:
             self.expect_stderr_contains = []
+        if self.expect_error_code is None:
+            self.expect_error_code = []
 
         # If any runtime expectations are set, this test requires runtime validation
         if (self.expect_runtime_exit is not None or
@@ -56,6 +62,7 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
     # EXPECT_STDOUT_CONTAINS: "Result: 17"
     # EXPECT_STDOUT_EXACT: "Hello World\\nDone\\n"
     # EXPECT_STDERR_EMPTY: true
+    # EXPECT_ERROR_CODE: CE2007
     # TIMEOUT_SECONDS: 10
     # TEST_TYPE: runtime
     # CMD_ARGS: arg1 arg2 arg3
@@ -120,6 +127,16 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
             elif directive.startswith('EXPECT_STDERR_EMPTY:'):
                 value = directive.split(':', 1)[1].strip().lower()
                 metadata.expect_stderr_empty = value in ('true', 'yes', '1')
+
+            elif directive.startswith('EXPECT_ERROR_CODE:'):
+                value = directive.split(':', 1)[1].strip()
+                # Strip optional quotes; accept a comma/space separated list and
+                # allow the directive to be repeated for multi-error compiles.
+                if value.startswith('"') and value.endswith('"'):
+                    value = value[1:-1]
+                for token in re.split(r'[,\s]+', value):
+                    if token:
+                        metadata.expect_error_code.append(token)
 
             elif directive.startswith('TIMEOUT_SECONDS:'):
                 value = directive.split(':', 1)[1].strip()
