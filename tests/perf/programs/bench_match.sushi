@@ -1,0 +1,58 @@
+# Perf benchmark: enums + pattern matching + exhaustiveness checking.
+# Stresses enum codegen and the match-validation paths. Stdlib-free; not run.
+
+enum Shape:
+    Circle(i32)
+    Square(i32)
+    Rect(i32)
+    Triangle(i32)
+    Point
+
+enum Op:
+    Add(i32)
+    Sub(i32)
+    Mul(i32)
+    Neg
+
+fn area_class(Shape s) i32:
+    match s:
+        Shape.Circle(r) ->
+            return Result.Ok(r * r * 3)
+        Shape.Square(a) ->
+            return Result.Ok(a * a)
+        Shape.Rect(w) ->
+            return Result.Ok(w * 2)
+        Shape.Triangle(b) ->
+            return Result.Ok(b)
+        Shape.Point ->
+            return Result.Ok(0)
+
+fn apply(Op o, i32 acc) i32:
+    match o:
+        Op.Add(n) ->
+            return Result.Ok(acc + n)
+        Op.Sub(n) ->
+            return Result.Ok(acc - n)
+        Op.Mul(n) ->
+            return Result.Ok(acc * n)
+        Op.Neg ->
+            return Result.Ok(0 - acc)
+
+fn main() i32:
+    let Shape s1 = Shape.Circle(5)
+    let Shape s2 = Shape.Square(4)
+    let Shape s3 = Shape.Rect(8)
+    let Shape s4 = Shape.Point()
+
+    let i32 a1 = area_class(s1).realise(0)
+    let i32 a2 = area_class(s2).realise(0)
+    let i32 a3 = area_class(s3).realise(0)
+    let i32 a4 = area_class(s4).realise(0)
+
+    let Op o1 = Op.Add(10)
+    let Op o2 = Op.Mul(3)
+    let Op o3 = Op.Neg()
+    let i32 acc = apply(o3, apply(o2, apply(o1, 0).realise(0)).realise(0)).realise(0)
+
+    println(a1 + a2 + a3 + a4 + acc)
+    return Result.Ok(0)
