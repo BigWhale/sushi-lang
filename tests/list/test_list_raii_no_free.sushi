@@ -1,0 +1,20 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: count: 3
+# Regression for #61: a local List<T> is freed automatically by RAII at scope exit,
+# without an explicit .free()/.destroy(). Before the fix the heap buffer leaked
+# (the issue reported 16 bytes via `leaks`). This exercises the RAII path end-to-end;
+# correctness against leaks is confirmed separately with the `leaks` tool.
+
+fn build() i32:
+    let List<i32> data = List.new()
+    data.push(10)
+    data.push(20)
+    data.push(30)
+    # No data.free() / data.destroy(): RAII must clean up at scope exit.
+    return Result.Ok(data.len())
+
+fn main() i32:
+    let i32 n = build().realise(-1)
+    println("count: {n}")
+    return Result.Ok(0)

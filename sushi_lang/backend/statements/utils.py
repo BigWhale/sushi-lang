@@ -74,6 +74,26 @@ def emit_dynamic_array_cleanup(codegen: 'LLVMCodegen') -> None:
                 codegen.dynamic_arrays._emit_array_destructor(array_name)
 
 
+def emit_list_cleanup(codegen: 'LLVMCodegen') -> None:
+    """Emit cleanup code for local List<T> variables (#61).
+
+    Iterates all List<T> scopes from innermost to outermost and emits destructors for
+    lists that have not been moved / explicitly destroyed. Runs on an early-exit path
+    (return / ?? / default return); the block terminates immediately after, so each
+    mutually-exclusive exit path frees on its own block WITHOUT marking the list
+    destroyed -- the structural pop_scope drains the tracking on the fall-through path.
+
+    Args:
+        codegen: The main LLVMCodegen instance.
+    """
+    if not hasattr(codegen, 'dynamic_arrays') or codegen.dynamic_arrays is None:
+        return
+
+    for scope_idx in range(len(codegen.dynamic_arrays.list_scope_stack) - 1, -1, -1):
+        for list_name in codegen.dynamic_arrays.list_scope_stack[scope_idx]:
+            codegen.dynamic_arrays._emit_list_destructor(list_name)
+
+
 def emit_own_cleanup(codegen: 'LLVMCodegen') -> None:
     """Emit cleanup code for Own<T> variables.
 
@@ -114,6 +134,7 @@ def emit_scope_cleanup(codegen: 'LLVMCodegen', cleanup_type: str = 'all') -> Non
 
     if cleanup_type in ('all', 'arrays'):
         emit_dynamic_array_cleanup(codegen)
+        emit_list_cleanup(codegen)
 
     if cleanup_type in ('all', 'owned'):
         emit_own_cleanup(codegen)

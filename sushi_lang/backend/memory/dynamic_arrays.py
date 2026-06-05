@@ -46,6 +46,20 @@ class OwnDescriptor:
     destroyed: bool = False      # Track if explicitly destroyed via .destroy()
 
 
+@dataclass
+class ListDescriptor:
+    """Runtime descriptor for a local List<T> instance.
+
+    A List<T> owns a heap buffer (its `data` pointer). Tracked parallel to dynamic
+    arrays so it is freed on every exit path via RAII (#61).
+    """
+    name: str                    # Variable name
+    list_type: StructType        # List<T> struct type
+    llvm_alloca: ir.Instruction  # LLVM alloca for the List<T> struct
+    destroyed: bool = False      # Explicitly .destroy()/.free()'d
+    moved: bool = False          # Ownership transferred (e.g. returned)
+
+
 class DynamicArrayManager:
     """RAII-style memory manager for dynamic arrays and Own<T>.
 
@@ -73,10 +87,14 @@ class DynamicArrayManager:
         self.arrays: Dict[str, DynamicArrayDescriptor] = {}
         # Track Own<T> variables for RAII cleanup
         self.owned_pointers: Dict[str, OwnDescriptor] = {}
+        # Track local List<T> variables for RAII cleanup (parallel to dynamic arrays).
+        self.lists: Dict[str, ListDescriptor] = {}
+        self.list_scope_stack: List[Set[str]] = []
 
     def push_scope(self) -> None:
-        """Enter a new scope for dynamic array tracking."""
+        """Enter a new scope for dynamic array and List<T> tracking."""
         self.scope_stack.append(set())
+        self.list_scope_stack.append(set())
 
     def pop_scope(self) -> None:
         """Exit current scope and automatically destroy all dynamic arrays
@@ -93,9 +111,10 @@ class DynamicArrayManager:
             raise_internal_error("CE0016")
 
         current_scope = self.scope_stack.pop()
+        current_lists = self.list_scope_stack.pop() if self.list_scope_stack else set()
 
-        # Popping the scope above is the drain: these arrays are now out of scope and
-        # will not be seen by any later cleanup. If the current block already
+        # Popping the scopes above is the drain: these arrays / lists are now out of
+        # scope and will not be seen by any later cleanup. If the current block already
         # terminated, an early `return`/`??` inside this scope already emitted the
         # destructors on this path -- emitting again would append a stray free after
         # the terminator. Skip emission but still drain. (Mirrors the cstr cleanup
@@ -104,13 +123,15 @@ class DynamicArrayManager:
         if block is not None and block.is_terminated:
             return
 
-        # Generate destructor calls for all arrays in this scope on the fall-through
-        # path. _emit_array_destructor is a no-op for moved / explicitly-destroyed
-        # arrays. Do NOT set `destroyed` here: it denotes an explicit .destroy(), a
+        # Generate destructor calls for all arrays / lists in this scope on the
+        # fall-through path. The destructors are no-ops for moved / explicitly-destroyed
+        # values. Do NOT set `destroyed` here: it denotes an explicit .destroy(), a
         # cross-path state, and each runtime exit path frees on its own block.
         for array_name in current_scope:
             if array_name in self.arrays:
                 self._emit_array_destructor(array_name)
+        for list_name in current_lists:
+            self._emit_list_destructor(list_name)
 
     def declare_dynamic_array(self, name: str, array_type: DynamicArrayType) -> ir.Instruction:
         """Declare a new dynamic array variable and allocate its struct on stack.
@@ -277,6 +298,52 @@ class DynamicArrayManager:
         """
         if name in self.arrays:
             self.arrays[name].moved = True
+
+    def is_list_type(self, ty: Type) -> bool:
+        """Check if a type is List<T>.
+
+        Args:
+            ty: The type to check.
+
+        Returns:
+            True if the type is a List<T> instantiation, False otherwise.
+        """
+        return isinstance(ty, StructType) and ty.name.startswith("List<")
+
+    def register_list(self, var_name: str, list_type: StructType, slot: ir.Instruction) -> None:
+        """Register a local List<T> variable for automatic RAII cleanup (#61).
+
+        The list owns a heap buffer; it is destroyed at scope exit on every path, like a
+        dynamic array, unless it is moved (returned) or explicitly .free()/.destroy()'d.
+
+        Args:
+            var_name: The name of the variable holding a List<T> value.
+            list_type: The List<T> struct type.
+            slot: The alloca holding the List<T> struct.
+        """
+        self.lists[var_name] = ListDescriptor(name=var_name, list_type=list_type, llvm_alloca=slot)
+        if self.list_scope_stack:
+            self.list_scope_stack[-1].add(var_name)
+
+    def mark_list_moved(self, var_name: str) -> None:
+        """Mark a List<T> as moved (ownership transferred to the caller); skip cleanup."""
+        if var_name in self.lists:
+            self.lists[var_name].moved = True
+
+    def mark_list_destroyed(self, var_name: str) -> None:
+        """Mark a List<T> as explicitly destroyed/freed; skip redundant RAII cleanup."""
+        if var_name in self.lists:
+            self.lists[var_name].destroyed = True
+
+    def _emit_list_destructor(self, name: str) -> None:
+        """Emit destructor code for a local List<T> (no-op if moved / already destroyed)."""
+        if name not in self.lists:
+            return
+        descriptor = self.lists[name]
+        if descriptor.destroyed or descriptor.moved:
+            return
+        from sushi_lang.backend.generics.list.methods_destroy import emit_list_destroy
+        emit_list_destroy(self.codegen, descriptor.llvm_alloca, descriptor.list_type)
 
     def is_own_type(self, ty: Type) -> bool:
         """Check if a type is Own<T>.

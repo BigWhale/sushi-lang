@@ -64,10 +64,12 @@ def emit_let(codegen: 'CodegenProtocol', stmt: 'Let') -> None:
 
         slot = codegen.memory.create_local_nostore(stmt.name, ll_type, semantic_type)
 
-        # Register Own<T> variables for RAII cleanup
+        # Register Own<T> and List<T> variables for RAII cleanup
         if isinstance(semantic_type, StructType) and hasattr(codegen, 'dynamic_arrays'):
             if codegen.dynamic_arrays.is_own_type(semantic_type):
                 codegen.dynamic_arrays.register_own(stmt.name, semantic_type)
+            elif codegen.dynamic_arrays.is_list_type(semantic_type):
+                codegen.dynamic_arrays.register_list(stmt.name, semantic_type, slot)
 
         # Special handling for array literals
         if isinstance(stmt.ty, ArrayType) and isinstance(stmt.value, ArrayLiteral):

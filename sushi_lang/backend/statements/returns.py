@@ -80,7 +80,11 @@ def emit_return(codegen: 'LLVMCodegen', stmt: 'Return') -> None:
         # Check if variable is a struct with dynamic arrays or a dynamic array itself
         semantic_type = codegen.memory.find_semantic_type(var_name)
         if semantic_type:
-            if isinstance(semantic_type, StructType):
+            if codegen.dynamic_arrays.is_list_type(semantic_type):
+                # List<T> is a StructType; mark moved so RAII does not free the buffer
+                # the caller now owns (#61).
+                codegen.dynamic_arrays.mark_list_moved(var_name)
+            elif isinstance(semantic_type, StructType):
                 if codegen.dynamic_arrays.struct_needs_cleanup(semantic_type):
                     # Mark as moved so RAII cleanup skips it
                     codegen.memory.mark_struct_as_moved(var_name)
