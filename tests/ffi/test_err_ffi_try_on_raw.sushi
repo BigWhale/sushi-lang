@@ -1,0 +1,10 @@
+# FFI: `??` on a raw foreign value is a clean type error (raw i64 is not a Result).
+# EXPECT_ERROR_CODE: CE2507
+unsafe external "C" as libc because "intentional misuse":
+    fn strlen(string s) i64 = "strlen"
+
+fn main() i32:
+    let string s = "hello"
+    let i64 n = libc.strlen(s)??
+    println("{n}")
+    return Result.Ok(0)
