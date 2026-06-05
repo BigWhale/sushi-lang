@@ -83,13 +83,15 @@ class TypeValidator:
     This is the main coordinator class that delegates validation logic to specialized modules.
     """
 
-    def __init__(self, reporter: Reporter, const_table: ConstantTable, struct_table: StructTable, enum_table: EnumTable, func_table: FunctionTable, extension_table: Optional[ExtensionTable] = None, generic_enum_table: Optional['GenericEnumTable'] = None, generic_struct_table: Optional['GenericStructTable'] = None, perk_table: Optional[PerkTable] = None, perk_impl_table: Optional[PerkImplementationTable] = None, generic_extension_table: Optional['GenericExtensionTable'] = None, generic_func_table: Optional['GenericFunctionTable'] = None, current_unit_name: Optional[str] = None, monomorphized_functions: Optional[Dict[str, tuple]] = None) -> None:
+    def __init__(self, reporter: Reporter, const_table: ConstantTable, struct_table: StructTable, enum_table: EnumTable, func_table: FunctionTable, extension_table: Optional[ExtensionTable] = None, generic_enum_table: Optional['GenericEnumTable'] = None, generic_struct_table: Optional['GenericStructTable'] = None, perk_table: Optional[PerkTable] = None, perk_impl_table: Optional[PerkImplementationTable] = None, generic_extension_table: Optional['GenericExtensionTable'] = None, generic_func_table: Optional['GenericFunctionTable'] = None, current_unit_name: Optional[str] = None, monomorphized_functions: Optional[Dict[str, tuple]] = None, external_table: Optional['ExternalTable'] = None) -> None:
         self.reporter = reporter
         self.err = PassErrorReporter(reporter)
         self.const_table = const_table
         self.struct_table = struct_table
         self.enum_table = enum_table
         self.func_table = func_table
+        from sushi_lang.semantics.passes.collect import ExternalTable
+        self.external_table = external_table or ExternalTable()
         self.extension_table = extension_table or ExtensionTable()
         # Store generic enum table for checking generic enum names (e.g., Result)
         from sushi_lang.semantics.passes.collect import GenericEnumTable, GenericStructTable, GenericExtensionTable, GenericFunctionTable
@@ -160,6 +162,50 @@ class TypeValidator:
     def infer_expression_type(self, expr: Expr) -> Optional[Type]:
         """Infer the type of an expression using the Visitor Pattern."""
         return self.type_inference_visitor.visit(expr)
+
+    def _resolve_external_call(self, node) -> Optional['ExternalSig']:
+        """Resolve a DotCall to a foreign function signature, if applicable.
+
+        Returns the ExternalSig when `node` is `<ns>.<name>(args)` where <ns> is a
+        registered external namespace AND not a bound local (shadowing guard).
+        Annotates the node with `external_ref = (ns, name)` for the backend.
+        Returns None otherwise (the call falls through to normal handling).
+        """
+        from sushi_lang.semantics.ast import Name
+        receiver = node.receiver
+        if not isinstance(receiver, Name):
+            return None
+        ns = receiver.id
+        # Locals shadow namespaces.
+        if ns in self.variable_types:
+            return None
+        if not self.external_table.is_namespace(ns):
+            return None
+        sig = self.external_table.lookup(ns, node.method)
+        if sig is None:
+            return None
+        node.external_ref = (ns, node.method)
+        return sig
+
+    def _validate_external_call_args(self, node) -> None:
+        """Validate argument count and types for a resolved foreign call."""
+        from sushi_lang.internals import errors as er
+        sig = self.external_table.lookup(node.external_ref[0], node.external_ref[1])
+        if sig is None:
+            return
+        expected = sig.param_types
+        fq_name = f"{node.external_ref[0]}.{node.external_ref[1]}"
+        if len(node.args) != len(expected):
+            er.emit(self.reporter, er.ERR.CE2009, node.loc,
+                    name=fq_name, expected=len(expected), got=len(node.args))
+            return
+        for index, (arg, exp_ty) in enumerate(zip(node.args, expected)):
+            got_ty = self.infer_expression_type(arg)
+            if got_ty is None or exp_ty is None:
+                continue
+            if not types_compatible(self, got_ty, exp_ty):
+                er.emit(self.reporter, er.ERR.CE2006, arg.loc,
+                        index=index, expected=str(exp_ty), got=str(got_ty))
 
     def _validate_constant(self, const: ConstDef) -> None:
         """Delegate to constants module."""

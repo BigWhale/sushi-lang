@@ -67,6 +67,11 @@ class SemanticAnalyzer:
         # Pass 0: collect constants, structs, enums, perks, function headers and extension methods
         collector = CollectorPass(self.reporter)
         self.constants, self.structs, self.enums, self.generic_enums, self.generic_structs, self.perks, self.perk_impls, self.funcs, self.extensions, self.generic_extensions, self.generic_funcs = collector.run(program)
+        self.externals = collector.externals
+
+        # FFI: validate external signatures (CE5003) and emit CW5001
+        from sushi_lang.semantics.passes.types.externals import validate_external_signatures
+        validate_external_signatures(self.reporter, program)
 
         # Check if main function expects command line arguments
         self._check_main_function_args(program)
@@ -184,11 +189,11 @@ class SemanticAnalyzer:
             self.extensions.add_method(extension_method)
 
         # Pass 1: scope and variable usage analysis
-        scope_analyzer = ScopeAnalyzer(self.reporter, self.constants, self.structs, self.enums, self.generic_enums, self.generic_structs)
+        scope_analyzer = ScopeAnalyzer(self.reporter, self.constants, self.structs, self.enums, self.generic_enums, self.generic_structs, external_table=self.externals)
         scope_analyzer.run(program)
 
         # Pass 2: type validation
-        type_validator = TypeValidator(self.reporter, self.constants, self.structs, self.enums, self.funcs, self.extensions, self.generic_enums, self.generic_structs, self.perks, self.perk_impls, self.generic_extensions, self.generic_funcs, monomorphized_functions=monomorphizer.monomorphized_functions)
+        type_validator = TypeValidator(self.reporter, self.constants, self.structs, self.enums, self.funcs, self.extensions, self.generic_enums, self.generic_structs, self.perks, self.perk_impls, self.generic_extensions, self.generic_funcs, monomorphized_functions=monomorphizer.monomorphized_functions, external_table=self.externals)
         type_validator.run(program)
 
         # Validate monomorphized generic extension methods
@@ -254,6 +259,14 @@ class SemanticAnalyzer:
         self.extensions = global_extensions
         self.generic_extensions = global_generic_extensions
         self.generic_funcs = global_generic_funcs
+        # FFI externals accumulate across all units in the shared collector table.
+        self.externals = collector.externals
+
+        # FFI: validate external signatures (CE5003) and emit CW5001 per unit
+        from sushi_lang.semantics.passes.types.externals import validate_external_signatures
+        for unit in compilation_order:
+            if unit.ast is not None:
+                validate_external_signatures(self.reporter, unit.ast)
 
         # Register library types if any libraries are loaded
         # Order: structs first, then enums (may reference structs), then functions (may reference both)
@@ -396,11 +409,11 @@ class SemanticAnalyzer:
             unit_reporter = Reporter(source=unit_source, filename=str(unit.file_path))
 
             # Pass 1: scope analysis with global constants, structs, and enums (unit-specific reporter)
-            scope_analyzer = ScopeAnalyzer(unit_reporter, self.constants, self.structs, self.enums, self.generic_enums, self.generic_structs)
+            scope_analyzer = ScopeAnalyzer(unit_reporter, self.constants, self.structs, self.enums, self.generic_enums, self.generic_structs, external_table=self.externals)
             scope_analyzer.run(unit.ast)
 
             # Pass 2: type validation with global symbols (unit-specific reporter)
-            type_validator = TypeValidator(unit_reporter, self.constants, self.structs, self.enums, self.funcs, self.extensions, self.generic_enums, self.generic_structs, self.perks, self.perk_impls, self.generic_extensions, self.generic_funcs, current_unit_name=unit.name, monomorphized_functions=monomorphizer.monomorphized_functions)
+            type_validator = TypeValidator(unit_reporter, self.constants, self.structs, self.enums, self.funcs, self.extensions, self.generic_enums, self.generic_structs, self.perks, self.perk_impls, self.generic_extensions, self.generic_funcs, current_unit_name=unit.name, monomorphized_functions=monomorphizer.monomorphized_functions, external_table=self.externals)
             type_validator.run(unit.ast)
 
             # Pass 3: borrow checking (unit-specific reporter)

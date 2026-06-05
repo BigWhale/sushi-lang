@@ -1088,6 +1088,23 @@ _add(ErrorMessage("CE3513", Severity.ERROR,
     "library file too large '{path}': {size} bytes exceeds maximum {max_size} bytes",
     Category.UNIT, "Library file exceeds reasonable size limit."))
 
+# FFI / Foreign Function Interface (CW5001, CE5001-CE5003)
+_add(ErrorMessage("CW5001", Severity.WARNING,
+    "unsafe external block suspends four Sushi guarantees (add `because \"...\"` to acknowledge)",
+    Category.TYPE, "An `unsafe external` block disables borrow checking, RAII, Result/Maybe error handling, and bounds/null safety for the foreign declarations it contains. Provide a `because \"<reason>\"` clause to acknowledge the contract and silence this warning."))
+
+_add(ErrorMessage("CE5001", Severity.ERROR,
+    "external link-name '{symbol}' clashes with a built-in extern of a different signature",
+    Category.TYPE, "A compiler built-in already declares this C symbol with a different signature. LLVM only deduplicates identical declarations. Choose a different link-name or match the reserved signature."))
+
+_add(ErrorMessage("CE5002", Severity.ERROR,
+    "public function '{name}' exposes a foreign `ptr` and cannot appear in a library (.slib) public API",
+    Category.TYPE, "FFI is a private implementation detail of a unit. Externals and any public function whose signature exposes a foreign `ptr` cannot propagate through Nori packages."))
+
+_add(ErrorMessage("CE5003", Severity.ERROR,
+    "external signature uses non-C-ABI type '{type}'",
+    Category.TYPE, "External (FFI) signatures are limited to C-representable types: i8..i64, u8..u64, f32, f64, bool, string (auto-marshalled), ptr, and ~ (void). Result/Maybe, structs, arrays, references, and user types cannot cross the C ABI boundary."))
+
 # Array bounds errors
 _add(ErrorMessage("RE2020", Severity.ERROR,
     "array index out of bounds",

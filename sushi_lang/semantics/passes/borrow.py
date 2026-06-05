@@ -129,6 +129,14 @@ class BorrowChecker:
         """Check borrow safety for a single statement."""
         if isinstance(stmt, Let):
             # Variable declaration - initialize as unborrowed, unmoved
+            from sushi_lang.semantics.typesys import ForeignPtrType
+            if isinstance(stmt.ty, ForeignPtrType):
+                # Foreign `ptr` is exempt from borrow checking: aliasing through a
+                # foreign pointer is not tracked. Record the binding but skip any
+                # borrow analysis of the initializer's reference semantics.
+                self.borrow_state[stmt.name] = BorrowState(name=stmt.name, var_type=stmt.ty)
+                self._clear_borrows()
+                return
             self.borrow_state[stmt.name] = BorrowState(name=stmt.name, var_type=stmt.ty)
             # Check the initialization expression
             self._check_expr(stmt.value)

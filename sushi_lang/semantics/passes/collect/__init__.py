@@ -39,6 +39,7 @@ from .functions import (
     GenericExtensionMethod,
 )
 from .perks import PerkCollector, PerkTable, PerkImplementationTable
+from .externals import ExternalCollector, ExternalTable, ExternalSig
 from .utils import extract_type_param_names
 
 # Re-export all public classes for backward compatibility
@@ -57,8 +58,10 @@ __all__ = [
     'GenericExtensionTable',
     'PerkTable',
     'PerkImplementationTable',
+    'ExternalTable',
     # Signatures
     'ConstSig',
+    'ExternalSig',
     'FuncSig',
     'GenericFuncDef',
     'Param',
@@ -104,6 +107,7 @@ class CollectorPass:
         self.generic_extensions = GenericExtensionTable()
         self.perks = PerkTable()
         self.perk_impls = PerkImplementationTable()
+        self.externals = ExternalTable()
 
         # Known types set (shared across collectors)
         self.known_types: Set[Type] = {
@@ -138,6 +142,11 @@ class CollectorPass:
             reporter=reporter,
             perks=self.perks,
             perk_impls=self.perk_impls
+        )
+
+        self.external_collector = ExternalCollector(
+            reporter=reporter,
+            externals=self.externals
         )
 
         self.function_collector = FunctionCollector(
@@ -188,6 +197,7 @@ class CollectorPass:
         self.function_collector.collect_functions(root, unit_name)
         self.function_collector.collect_extensions(root)
         self.function_collector.register_stdlib_functions(root)
+        self.external_collector.collect(root)
 
         return (
             self.constants,
