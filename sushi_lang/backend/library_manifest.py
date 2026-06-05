@@ -110,6 +110,16 @@ class LibraryManifestGenerator:
                 if not func.is_public:
                     continue
 
+                # CE0116: reject a native variadic '...T' function in a public
+                # library signature (the variadic flag is not serialized in v1).
+                if any(getattr(p, "is_variadic", False) for p in func.params):
+                    er.emit(self.analyzer.reporter, er.ERR.CE0116,
+                            getattr(func, "name_span", None) or func.loc, name=func.name)
+                    raise ValueError(
+                        f"CE0116: public function '{func.name}' is variadic and "
+                        f"cannot appear in a library public API"
+                    )
+
                 # CE5002: reject foreign `ptr` in a public library signature.
                 exposes_ptr = self._contains_foreign_ptr(func.ret) or any(
                     self._contains_foreign_ptr(p.ty) for p in func.params

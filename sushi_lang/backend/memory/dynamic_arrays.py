@@ -164,6 +164,36 @@ class DynamicArrayManager:
 
         return alloca
 
+    def register_param_array(self, name: str, element_type: Type, slot: ir.Instruction) -> None:
+        """Register an incoming dynamic-array parameter for RAII cleanup.
+
+        Unlike `declare_dynamic_array`, this does NOT allocate or zero-initialise a
+        new struct: it adopts the existing parameter slot (which already holds the
+        caller-synthesised array struct) into the destruction tracking so the array
+        is freed at scope exit. Used for native variadic '...T' parameters, where the
+        callee owns the collected T[] (the caller has moved it).
+
+        Args:
+            name: The parameter variable name.
+            element_type: The array element type T.
+            slot: The alloca holding the array struct (the parameter slot).
+        """
+        from sushi_lang.semantics.typesys import UnknownType
+        if isinstance(element_type, UnknownType):
+            if element_type.name in self.codegen.struct_table.by_name:
+                element_type = self.codegen.struct_table.by_name[element_type.name]
+            else:
+                raise_internal_error("CE0020", type=element_type.name)
+
+        descriptor = DynamicArrayDescriptor(
+            name=name,
+            element_type=element_type,
+            llvm_alloca=slot,
+        )
+        self.arrays[name] = descriptor
+        if self.scope_stack:
+            self.scope_stack[-1].add(name)
+
     def emit_array_constructor_new(self, name: str) -> None:
         """Emit code for new() constructor - array is already initialized to empty.
 

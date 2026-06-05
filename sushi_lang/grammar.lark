@@ -44,8 +44,10 @@ block: _NEWLINE _INDENT (_NEWLINE | statement)+ _DEDENT
 
 function_def: PUBLIC? FN NAME [type_params] "(" [parameters] ")" type? ["|" type] ":" block
 
-parameters: typed_param ("," typed_param)*
+parameters: param ("," param)*
+param: typed_param | variadic_param
 typed_param: type NAME
+variadic_param: ELLIPSIS type NAME
 
 ?statement: function_def
           | return_stmt

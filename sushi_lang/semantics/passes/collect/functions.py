@@ -23,6 +23,8 @@ from sushi_lang.semantics.typesys import (
     StructType,
     EnumType,
     ResultType,
+    DynamicArrayType,
+    ReferenceType,
 )
 from sushi_lang.semantics.generics.types import (
     TypeParameter,
@@ -52,6 +54,52 @@ def is_explicit_result_type(ty: Optional[Type]) -> bool:
     return False
 
 
+def validate_variadic_params(reporter: 'Reporter', params: List['Param']) -> None:
+    """Validate native variadic '...T' parameter placement and element type.
+
+    Enforces (CE0114):
+    - at most one variadic parameter
+    - the variadic parameter, if present, must be last
+    - the element type must not be a reference type
+
+    Operates on collect `Param`s (whose `ty` is the collected DynamicArrayType(T)
+    for a variadic parameter).
+    """
+    variadic_indices = [i for i, p in enumerate(params) if getattr(p, "is_variadic", False)]
+    if not variadic_indices:
+        return
+
+    if len(variadic_indices) > 1:
+        second = params[variadic_indices[1]]
+        er.emit(reporter, ERR.CE0114, second.name_span,
+                message="a function may declare at most one variadic '...T' parameter")
+        return
+
+    idx = variadic_indices[0]
+    vparam = params[idx]
+    if idx != len(params) - 1:
+        er.emit(reporter, ERR.CE0114, vparam.name_span,
+                message="a variadic '...T' parameter must be the last parameter")
+        return
+
+    # Reject a reference element type (T cannot be &peek/&poke).
+    element_ty = vparam.ty.base_type if isinstance(vparam.ty, DynamicArrayType) else vparam.ty
+    if isinstance(element_ty, ReferenceType):
+        er.emit(reporter, ERR.CE0114, vparam.type_span or vparam.name_span,
+                message="a variadic '...T' element type cannot be a reference")
+        return
+
+    # Reject an element type with move semantics (a dynamic array `T[]`). The call
+    # site copies each trailing arg into the synthesized array by value without
+    # moving the source, while the callee recursively destroys the array's elements
+    # at scope exit -- so a moved-only element type would be freed twice. Sushi has
+    # move semantics for dynamic arrays only, so that is the one element type to bar
+    # in v1 (deferred to a future spread/forwarding design).
+    if isinstance(element_ty, DynamicArrayType):
+        er.emit(reporter, ERR.CE0114, vparam.type_span or vparam.name_span,
+                message="a variadic '...T' element type cannot be a dynamic array")
+
+
 @dataclass
 class Param:
     """Function parameter with type information."""
@@ -60,6 +108,8 @@ class Param:
     name_span: Optional[Span]
     type_span: Optional[Span]
     index: int
+    is_variadic: bool = False         # True for a trailing native variadic ...T param;
+                                      # `ty` holds the collected DynamicArrayType(T)
 
 
 @dataclass
@@ -431,6 +481,9 @@ class FunctionCollector:
 
             params.append(param)
 
+        # Validate native variadic parameter placement / element type (CE0114).
+        validate_variadic_params(self.r, params)
+
         # Check for duplicates in ALL function tables
         if name in self.funcs.by_name:
             prev = self.funcs.by_name[name]
@@ -520,6 +573,13 @@ class FunctionCollector:
 
             params.append(param)
 
+        # Generic variadics are out of scope for v1: reject a variadic parameter
+        # in a generic function (also covers misplacement) with CE0114.
+        if any(getattr(p, "is_variadic", False) for p in params):
+            vparam = next(p for p in params if getattr(p, "is_variadic", False))
+            er.emit(self.r, ERR.CE0114, vparam.name_span,
+                    message="variadic '...T' parameters are not supported in generic functions")
+
         # Get return type
         ret_ty = getattr(fn, "ret", None)
         ret_span = getattr(fn, "ret_span", None) or name_span
@@ -596,6 +656,12 @@ class FunctionCollector:
 
             params.append(param)
 
+        # Variadic parameters are not allowed in extension methods (CE0115).
+        for p in params:
+            if getattr(p, "is_variadic", False):
+                er.emit(self.r, ERR.CE0115, p.name_span, context="an extension method")
+                break
+
         # Branch: Is this a generic extension method?
         if target_type is not None and isinstance(target_type, GenericTypeRef):
             # Generic extension method (e.g., extend Box<T> unwrap() T)
@@ -629,7 +695,8 @@ class FunctionCollector:
                     ty=concrete_param_ty,
                     name_span=param.name_span,
                     type_span=param.type_span,
-                    index=param.index
+                    index=param.index,
+                    is_variadic=getattr(param, "is_variadic", False)
                 ))
 
             generic_method = GenericExtensionMethod(

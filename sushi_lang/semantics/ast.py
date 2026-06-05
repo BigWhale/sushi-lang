@@ -49,6 +49,8 @@ class Param:
     name_span: Optional[Span] = None
     type_span: Optional[Span] = None
     loc: Optional[Span] = None
+    is_variadic: bool = False         # True for a trailing ...T native variadic param;
+                                      # `ty` then holds the collected DynamicArrayType(T)
 
 @dataclass
 class BoundedTypeParam:

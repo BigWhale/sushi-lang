@@ -91,7 +91,8 @@ class FunctionMonomorphizer:
                 ty=concrete_type,
                 name_span=param.name_span,
                 type_span=param.type_span,
-                loc=getattr(param, 'loc', None)
+                loc=getattr(param, 'loc', None),
+                is_variadic=getattr(param, 'is_variadic', False)
             ))
 
         # Substitute in return type

@@ -1,0 +1,12 @@
+# Native variadic: trailing ...i32 collects into an owned i32[] iterated via foreach.
+# EXPECT_STDOUT_CONTAINS: sum = 6
+fn sum(...i32 nums) i32:
+    let i32 total = 0
+    foreach(n in nums.iter()):
+        total := total + n
+    return Result.Ok(total)
+
+fn main() i32:
+    let i32 s = sum(1, 2, 3).realise(0)
+    println("sum = {s}")
+    return Result.Ok(0)

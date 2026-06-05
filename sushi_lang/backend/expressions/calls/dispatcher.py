@@ -61,7 +61,22 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     if llvm_fn is None:
         raise KeyError(f"unknown function: {callee}")
 
-    args = [codegen.expressions.emit_expr(a) for a in expr.args]
+    # Native variadic call: collapse the trailing arguments into one synthesized,
+    # owned T[] which is moved into the callee. Must happen BEFORE the arity guard
+    # so the produced argument count matches the (non-variadic) LLVM signature.
+    func_sig = codegen.func_table.by_name.get(callee)
+    variadic_param = (
+        func_sig.params[-1]
+        if func_sig is not None and func_sig.params
+        and getattr(func_sig.params[-1], "is_variadic", False)
+        else None
+    )
+
+    if variadic_param is not None:
+        fixed_count = len(func_sig.params) - 1
+        args = _emit_variadic_call_args(codegen, expr, variadic_param, callee, fixed_count)
+    else:
+        args = [codegen.expressions.emit_expr(a) for a in expr.args]
 
     params = list(llvm_fn.args)
     if len(args) != len(params):
@@ -74,6 +89,50 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     # Return the full Result<T> struct - downstream code will handle extraction
     # (e.g., .realise() method, if (result) conditionals, etc.)
     return codegen.utils.as_i1(result_struct) if to_i1 else result_struct
+
+
+_variadic_temp_counter = [0]
+
+
+def _emit_variadic_call_args(codegen: 'LLVMCodegen', expr: Call, variadic_param,
+                             callee_name: str, fixed_count: int) -> list:
+    """Collapse trailing call arguments into one owned T[] for a variadic callee.
+
+    Builds the fixed-prefix argument values, then synthesizes a dynamic array from
+    the trailing arguments. The synthesized array is declared as a caller temp (so
+    it gets a name + scope entry), populated via the array `from` constructor, loaded
+    as a struct value, and marked moved so the caller does NOT free it -- the callee
+    now owns it (and frees it via RAII). Zero trailing args yields an empty array.
+
+    Returns the full positional argument list (fixed prefix + 1 array struct).
+    """
+    from sushi_lang.semantics.typesys import DynamicArrayType
+
+    array_type = variadic_param.ty
+    if not isinstance(array_type, DynamicArrayType):
+        # Defensive: collect should always have wrapped the element type.
+        array_type = DynamicArrayType(base_type=array_type)
+
+    # The LLVM function has (fixed_count + 1) parameters; the fixed prefix is all
+    # arguments except those collapsed into the array.
+    fixed_args = [codegen.expressions.emit_expr(a) for a in expr.args[:fixed_count]]
+    trailing_exprs = expr.args[fixed_count:]
+    trailing_values = [codegen.expressions.emit_expr(a) for a in trailing_exprs]
+
+    # Synthesize an owned T[] from the trailing values.
+    _variadic_temp_counter[0] += 1
+    temp_name = f"__variadic_{callee_name}_{_variadic_temp_counter[0]}"
+
+    codegen.dynamic_arrays.declare_dynamic_array(temp_name, array_type)
+    codegen.dynamic_arrays.emit_array_constructor_from(temp_name, trailing_values)
+
+    descriptor = codegen.dynamic_arrays.arrays[temp_name]
+    array_struct = codegen.builder.load(descriptor.llvm_alloca, name=f"{temp_name}_val")
+
+    # Ownership moves into the callee: the caller must not free this temp.
+    codegen.dynamic_arrays.mark_as_moved(temp_name)
+
+    return fixed_args + [array_struct]
 
 
 def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool = False, is_dotcall: bool = False) -> ir.Value:

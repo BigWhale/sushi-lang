@@ -1,0 +1,9 @@
+# Zero trailing arguments is valid: the callee receives an empty i32[] (len 0).
+# EXPECT_STDOUT_CONTAINS: count = 0
+fn count(...i32 nums) i32:
+    return Result.Ok(nums.len() as i32)
+
+fn main() i32:
+    let i32 c = count().realise(-1)
+    println("count = {c}")
+    return Result.Ok(0)

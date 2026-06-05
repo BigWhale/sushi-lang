@@ -1,0 +1,8 @@
+# A trailing argument whose type does not match the variadic element type -> CE2006.
+# EXPECT_ERROR_CODE: CE2006
+fn sum(...i32 nums) i32:
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = sum(1, "two", 3).realise(-1)
+    return Result.Ok(0)

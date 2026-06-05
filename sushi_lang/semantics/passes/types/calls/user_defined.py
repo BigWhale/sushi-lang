@@ -77,6 +77,51 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
     expected_params = func_sig.params
     actual_args = call.args
 
+    # Native variadic call: a trailing '...T' parameter collects all remaining
+    # trailing arguments into a T[]. Validate the fixed prefix as usual, then
+    # validate each trailing argument against the element type T.
+    variadic_param = (
+        expected_params[-1]
+        if expected_params and getattr(expected_params[-1], "is_variadic", False)
+        else None
+    )
+    if variadic_param is not None:
+        from sushi_lang.semantics.typesys import DynamicArrayType
+        fixed_count = len(expected_params) - 1
+
+        if len(actual_args) < fixed_count:
+            er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
+                   name=function_name, expected=fixed_count, got=len(actual_args))
+
+        # Validate fixed (non-variadic) arguments.
+        for i, (arg, param) in enumerate(zip(actual_args[:fixed_count], expected_params[:fixed_count])):
+            propagate_enum_type_to_dotcall(validator, arg, param.ty)
+            propagate_struct_type_to_dotcall(validator, arg, param.ty)
+            validator.validate_expression(arg)
+            if param.ty is not None:
+                arg_type = validator.infer_expression_type(arg)
+                if arg_type is not None and not types_compatible(validator, arg_type, param.ty):
+                    er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
+                           index=i + 1, expected=str(param.ty), got=str(arg_type))
+
+        # Validate trailing variadic arguments against element type T.
+        element_ty = (
+            variadic_param.ty.base_type
+            if isinstance(variadic_param.ty, DynamicArrayType)
+            else variadic_param.ty
+        )
+        for j in range(fixed_count, len(actual_args)):
+            arg = actual_args[j]
+            propagate_enum_type_to_dotcall(validator, arg, element_ty)
+            propagate_struct_type_to_dotcall(validator, arg, element_ty)
+            validator.validate_expression(arg)
+            if element_ty is not None:
+                arg_type = validator.infer_expression_type(arg)
+                if arg_type is not None and not types_compatible(validator, arg_type, element_ty):
+                    er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
+                           index=j + 1, expected=str(element_ty), got=str(arg_type))
+        return
+
     # Check argument count
     if len(actual_args) != len(expected_params):
         er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
