@@ -1,0 +1,7 @@
+# A variadic '...T' parameter is not allowed in an extension method -> CE0115.
+# EXPECT_ERROR_CODE: CE0115
+extend i32 add_all(...i32 values) i32:
+    return Result.Ok(self)
+
+fn main() i32:
+    return Result.Ok(0)

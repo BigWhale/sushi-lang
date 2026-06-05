@@ -1,0 +1,11 @@
+# Native variadic over strings: ...string collects into an owned string[].
+# EXPECT_STDOUT_CONTAINS: Mostly
+# EXPECT_STDOUT_CONTAINS: Harmless
+fn print_all(...string parts) ~:
+    foreach(p in parts.iter()):
+        println(p)
+    return Result.Ok(~)
+
+fn main() i32:
+    print_all("Mostly", "Harmless")
+    return Result.Ok(0)

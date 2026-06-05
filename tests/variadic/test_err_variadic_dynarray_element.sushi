@@ -1,0 +1,8 @@
+# A variadic '...T' element type cannot be a dynamic array (move semantics would
+# double-free the synthesized array). -> CE0114.
+# EXPECT_ERROR_CODE: CE0114
+fn f(...i32[] rows) i32:
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(0)

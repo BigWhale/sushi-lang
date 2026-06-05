@@ -65,7 +65,12 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
 
 
 def parse_params(t: Tree, ast_builder: 'ASTBuilder') -> List[Param]:
-    """Parse parameters: typed_param ("," typed_param)*
+    """Parse parameters: param ("," param)* where param is typed_param | variadic_param.
+
+    A `variadic_param` (`...T NAME`) collects trailing call arguments into an owned
+    `T[]`; the resulting `Param.ty` holds the collected `DynamicArrayType(T)` and
+    `is_variadic` is set. Last-position / at-most-one / context restrictions are
+    enforced semantically in the collect pass for clearer diagnostics.
 
     Also accepts `extern_params` (which adds an optional trailing ELLIPSIS for
     untyped C varargs); the ELLIPSIS token is ignored here and handled by the
@@ -73,26 +78,46 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder') -> List[Param]:
     """
     assert t.data in ("parameters", "extern_params")
 
+    from sushi_lang.semantics.typesys import DynamicArrayType
+
     out: List[Param] = []
     for ch in t.children:
-        if isinstance(ch, Tree) and ch.data == "typed_param":
+        # The shared `parameters` rule wraps each entry in a `param` node.
+        node = ch
+        if isinstance(node, Tree) and node.data == "param":
+            inner = next((c for c in node.children if isinstance(c, Tree)), None)
+            if inner is None:
+                continue
+            node = inner
+
+        if not isinstance(node, Tree):
+            continue
+
+        if node.data in ("typed_param", "variadic_param"):
             ty_node = next(
                 (
                     sub
-                    for sub in ch.children
+                    for sub in node.children
                     if isinstance(sub, Tree)
                     and (sub.data in TYPE_NODE_NAMES or sub.data == "name_t")
                 ),
                 None,
             )
             if ty_node is None:
-                raise NotImplementedError("typed_param: missing type")
+                raise NotImplementedError(f"{node.data}: missing type")
 
             ty = ast_builder._parse_type(ty_node)
 
-            nm_tok = first_name(ch.children)
+            nm_tok = first_name(node.children)
             if nm_tok is None:
-                raise NotImplementedError("typed_param: missing NAME")
+                raise NotImplementedError(f"{node.data}: missing NAME")
+
+            is_variadic = node.data == "variadic_param"
+            if is_variadic:
+                # The body sees a homogeneous T[]; `ty` (the element type) is the
+                # collected dynamic-array type. The element type stays recoverable
+                # as `ty.base_type`.
+                ty = DynamicArrayType(base_type=ty)
 
             out.append(
                 Param(
@@ -100,7 +125,8 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder') -> List[Param]:
                     ty=ty,
                     name_span=span_of(nm_tok),
                     type_span=span_of(ty_node),
-                    loc=span_of(ch),
+                    loc=span_of(node),
+                    is_variadic=is_variadic,
                 )
             )
 

@@ -1,0 +1,8 @@
+# Fewer arguments than the fixed-parameter count -> CE2009.
+# EXPECT_ERROR_CODE: CE2009
+fn log_all(string prefix, ...i32 values) i32:
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = log_all().realise(-1)
+    return Result.Ok(0)

@@ -271,6 +271,15 @@ class PerkCollector:
 
         name_span: Optional[Span] = getattr(perk, "name_span", None) or getattr(perk, "loc", None)
 
+        # Variadic parameters are not allowed in perk methods (CE0115).
+        for method in getattr(perk, "methods", []) or []:
+            for p in getattr(method, "params", []) or []:
+                if getattr(p, "is_variadic", False):
+                    er.emit(self.r, ERR.CE0115,
+                            getattr(p, "name_span", None) or name_span,
+                            context="a perk method")
+                    break
+
         # Check for duplicate perk names
         if not self.perks.register(perk):
             prev = self.perks.get(name)

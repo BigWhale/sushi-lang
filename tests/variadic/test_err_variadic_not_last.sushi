@@ -1,0 +1,7 @@
+# A variadic '...T' parameter must be the last parameter -> CE0114.
+# EXPECT_ERROR_CODE: CE0114
+fn f(...i32 a, i32 b) i32:
+    return Result.Ok(b)
+
+fn main() i32:
+    return Result.Ok(0)

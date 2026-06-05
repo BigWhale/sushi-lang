@@ -1,0 +1,7 @@
+# A variadic '...T' parameter is not allowed in a perk method -> CE0115.
+# EXPECT_ERROR_CODE: CE0115
+perk Loggable:
+    fn log(...i32 values) i32
+
+fn main() i32:
+    return Result.Ok(0)

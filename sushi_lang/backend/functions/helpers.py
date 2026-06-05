@@ -276,6 +276,21 @@ class FunctionHelpers:
         for arg, slot in param_slots:
             self.codegen.builder.store(arg, slot)
 
+        # Register native variadic '...T' array parameters for RAII cleanup.
+        # The callee owns the collected T[] (the caller moved it), so it must be
+        # freed at scope exit. General array parameters are intentionally NOT
+        # registered here -- only the variadic one.
+        if fn_def is not None:
+            slot_by_name = {arg.name or f"arg{i}": slot
+                            for i, (arg, slot) in enumerate(param_slots)}
+            for param in fn_def.params:
+                if getattr(param, "is_variadic", False) and isinstance(param.ty, DynamicArrayType):
+                    slot = slot_by_name.get(param.name)
+                    if slot is not None:
+                        self.codegen.dynamic_arrays.register_param_array(
+                            param.name, param.ty.base_type, slot
+                        )
+
     def end_function(self) -> None:
         """Clean up function emission context.
 

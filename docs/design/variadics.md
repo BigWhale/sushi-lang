@@ -39,7 +39,10 @@ unsafe external "C" as libc because "formatted output via libc":
 ## Semantics
 
 - **Element type** is a single concrete `T` (homogeneous). Reference element types (`&peek`/`&poke`)
-  are not allowed in v1.
+  are not allowed in v1, and neither is a dynamic-array element (`...T[]`): the call site copies
+  each trailing argument into the synthesized array without moving the source, so a move-only
+  element type would be freed twice (Sushi has move semantics for dynamic arrays only). Both are
+  `CE0114`; a moved-element form is deferred to the spread/forwarding design.
 - **Zero trailing arguments** is valid; the native callee receives an empty `T[]`.
 - **Native ownership.** The call site synthesizes a `T[]`, which is moved into the callee; the
   callee owns and destroys it via the normal dynamic-array RAII path. The LLVM function itself stays
@@ -54,8 +57,12 @@ unsafe external "C" as libc because "formatted output via libc":
 
 - `CE5004` — variadic external requires at least one fixed parameter.
 - `CE5005` — non-C-ABI type passed as a variadic argument to an external call.
-- `CE0114` — variadic parameter must be the last parameter; a function may declare at most one.
+- `CE0114` — variadic parameter must be the last parameter; a function may declare at most one;
+  its element type must not be a reference or a dynamic array (`...T[]`). Also rejected in generic
+  functions (generic variadics are out of scope for v1).
 - `CE0115` — variadic parameter not allowed in a perk method or extension method.
+- `CE0116` — a public variadic function cannot appear in a `.slib` public API (the variadic flag
+  is not serialized into the library format in v1; analogous to the CE5002 FFI boundary block).
 - Native call arity/type errors reuse existing `CE2009` / `CE2006`.
 
 ## Deferred (additive, not in v1)
@@ -63,5 +70,6 @@ unsafe external "C" as libc because "formatted output via libc":
 - **Spread / forwarding** an existing array into a variadic slot (Go's `f(arr...)`).
 - **Generic variadics** (`...T` in a generic function).
 - **Variadics in perk / extension methods** (rejected with `CE0115` for now).
-- **Public `.slib` export** of a native variadic function — blocked for v1 (the `is_variadic`
-  flag is not serialized into the library format yet), analogous to the CE5002 FFI boundary block.
+- **Public `.slib` export** of a native variadic function — blocked for v1 with `CE0116` (the
+  `is_variadic` flag is not serialized into the library format yet), analogous to the CE5002 FFI
+  boundary block.

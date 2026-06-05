@@ -85,6 +85,7 @@ def param_from_node(p: Any, idx: int) -> 'Param':
         name_span=pname_span,
         type_span=ptype_span,
         index=idx,
+        is_variadic=bool(getattr(p, "is_variadic", False)),
     )
 
 

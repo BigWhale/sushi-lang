@@ -560,6 +560,18 @@ _add(ErrorMessage("CE0113", Severity.ERROR,
     "{message}",
     Category.INTERNAL, "Generic enum constructor requires type annotation from semantic analysis."))
 
+_add(ErrorMessage("CE0114", Severity.ERROR,
+    "{message}",
+    Category.FUNC, "A variadic '...T' parameter must be the last parameter, a function may declare at most one, and its element type must not be a reference."))
+
+_add(ErrorMessage("CE0115", Severity.ERROR,
+    "variadic '...T' parameter not allowed in {context}",
+    Category.FUNC, "Variadic parameters are only permitted in plain function definitions, not in perk methods or extension methods."))
+
+_add(ErrorMessage("CE0116", Severity.ERROR,
+    "public function '{name}' is variadic and cannot appear in a library public API",
+    Category.FUNC, "Native variadic functions cannot be exported through a .slib public API in v1 (the variadic flag is not serialized into the library format)."))
+
 # Struct errors
 _add(ErrorMessage("CE0004", Severity.ERROR,
     "duplicate struct '{name}'",
