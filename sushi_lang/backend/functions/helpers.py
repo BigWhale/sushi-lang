@@ -290,6 +290,20 @@ class FunctionHelpers:
                         self.codegen.dynamic_arrays.register_param_array(
                             param.name, param.ty.base_type, slot
                         )
+                    continue
+                # Register by-value struct parameters that own heap memory for RAII
+                # cleanup (#60): the callee owns its independent (deep-copied) copy and
+                # must free it at scope exit, like a `let` local. Reference parameters
+                # are borrows and are skipped.
+                if isinstance(param.ty, ReferenceType):
+                    continue
+                resolved = param.ty
+                if isinstance(resolved, UnknownType):
+                    resolved = self.codegen.struct_table.by_name.get(resolved.name, resolved)
+                if isinstance(resolved, StructType) and self.codegen.dynamic_arrays.struct_needs_cleanup(resolved):
+                    slot = slot_by_name.get(param.name)
+                    if slot is not None:
+                        self.codegen.memory.register_struct_cleanup(param.name, resolved, slot)
 
     def end_function(self) -> None:
         """Clean up function emission context.

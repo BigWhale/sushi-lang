@@ -1,0 +1,21 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# Regression for #60: a struct copied out of an array via .get() must deep-copy its
+# dynamic-array field, not shallow-share the buffer. Before the fix, both `first_buf`
+# and the array element `buffers[0]` owned the same heap allocation, so RAII freed it
+# twice and the process aborted (double-free).
+
+struct DataBuffer:
+    u8[] data
+    string name
+    i32 size
+
+fn run() i32:
+    let DataBuffer[] buffers = from([DataBuffer(from([1 as u8, 2 as u8]), "f", 2), DataBuffer(from([3 as u8]), "s", 1)])
+    let DataBuffer first_buf = buffers.get(0)??
+    return Result.Ok(first_buf.data.len())
+
+fn main() i32:
+    let i32 r = run().realise(99)
+    println("len: {r}")
+    return Result.Ok(0)

@@ -55,9 +55,6 @@ class ScopeManager:
         # Only stores structs that need RAII cleanup (not duplicated per scope)
         self._struct_cleanup: Dict[str, tuple['StructType', ir.AllocaInstr]] = {}
 
-        # Track which structs have already been cleaned up (to avoid double cleanup)
-        self.cleaned_up_structs: Set[str] = set()
-
         # Track which struct variables have been moved (ownership transferred)
         self.moved_structs: Set[str] = set()
 
@@ -109,15 +106,20 @@ class ScopeManager:
         # Get variables in current scope
         current_vars = self._scope_vars[self._scope_depth]
 
-        # Clean up struct variables with dynamic array fields before popping scope
+        # Clean up struct variables with dynamic array fields before popping scope.
+        # This is the fall-through (normal) exit. If the block already terminated, an
+        # early return/`??` inside this scope emitted the struct destructors on that path
+        # already (emit_struct_cleanup); emitting again would append a stray free after
+        # the terminator. Skip emission but still drain the tracking. Each runtime exit
+        # path frees on its own mutually-exclusive block, so no double free (#59/#60).
         if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
+            block = self.codegen.builder.block if self.codegen.builder is not None else None
+            block_live = block is not None and not block.is_terminated
             for var_name in current_vars:
                 if var_name in self._struct_cleanup:
-                    # Skip cleanup if already cleaned or moved
-                    if var_name not in self.cleaned_up_structs and not self.is_struct_moved(var_name):
+                    if block_live and not self.is_struct_moved(var_name):
                         struct_type, alloca = self._struct_cleanup[var_name]
                         self.codegen.dynamic_arrays.emit_struct_field_cleanup(var_name, struct_type, alloca)
-                        self.cleaned_up_structs.add(var_name)
                     # Remove from cleanup tracking when leaving scope
                     del self._struct_cleanup[var_name]
 
@@ -340,6 +342,20 @@ class ScopeManager:
             self.codegen.alloca_builder.position_at_start(self.codegen.entry_block)
         return self.codegen.alloca_builder.alloca(ty, name=name)
 
+    def register_struct_cleanup(self, name: str, struct_type: 'StructType', slot: ir.AllocaInstr) -> None:
+        """Register a struct variable for RAII cleanup of its dynamic-array fields.
+
+        Used for by-value struct parameters that own heap memory: the callee owns its
+        (deep-copied) copy and must free it at scope exit, exactly like a `let` local.
+        The caller passes a resolved StructType so scope-exit cleanup can reach the fields.
+
+        Args:
+            name: The variable name (already entered into the current scope).
+            struct_type: The resolved struct type whose array fields need freeing.
+            slot: The alloca holding the struct value.
+        """
+        self._struct_cleanup[name] = (struct_type, slot)
+
     def mark_struct_as_moved(self, var_name: str) -> None:
         """Mark a struct variable as moved (ownership transferred).
 
@@ -379,9 +395,6 @@ class ScopeManager:
         self._types.clear()
         self._struct_cleanup.clear()
         self._cstr_cleanup = []
-
-        # Clear cleanup tracking (function boundary)
-        self.cleaned_up_structs.clear()
 
         # Clear moved tracking (function boundary)
         self.moved_structs.clear()
