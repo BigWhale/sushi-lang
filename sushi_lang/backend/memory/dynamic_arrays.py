@@ -94,14 +94,23 @@ class DynamicArrayManager:
 
         current_scope = self.scope_stack.pop()
 
-        # Generate destructor calls for all arrays in this scope
-        # Skip arrays that have been moved (ownership transferred)
+        # Popping the scope above is the drain: these arrays are now out of scope and
+        # will not be seen by any later cleanup. If the current block already
+        # terminated, an early `return`/`??` inside this scope already emitted the
+        # destructors on this path -- emitting again would append a stray free after
+        # the terminator. Skip emission but still drain. (Mirrors the cstr cleanup
+        # discipline; see #59.)
+        block = self.builder.block
+        if block is not None and block.is_terminated:
+            return
+
+        # Generate destructor calls for all arrays in this scope on the fall-through
+        # path. _emit_array_destructor is a no-op for moved / explicitly-destroyed
+        # arrays. Do NOT set `destroyed` here: it denotes an explicit .destroy(), a
+        # cross-path state, and each runtime exit path frees on its own block.
         for array_name in current_scope:
             if array_name in self.arrays:
-                descriptor = self.arrays[array_name]
-                if not descriptor.destroyed and not descriptor.moved:
-                    self._emit_array_destructor(array_name)
-                    descriptor.destroyed = True
+                self._emit_array_destructor(array_name)
 
     def declare_dynamic_array(self, name: str, array_type: DynamicArrayType) -> ir.Instruction:
         """Declare a new dynamic array variable and allocate its struct on stack.
