@@ -343,6 +343,34 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     return result_phi
 
 
+def deep_copy_if_owning_struct(codegen: 'LLVMCodegen', value: ir.Value, semantic_type: Type) -> ir.Value:
+    """Return an independent deep copy of `value` if it is a heap-owning struct.
+
+    A struct that owns heap memory (a dynamic-array `T[]` field, directly or nested)
+    must get its own buffers whenever it is copied -- taken out of an array via
+    `.get()`/indexing, or passed by value to a function -- so exactly one owner frees
+    each allocation (#60). For any other type (primitives, strings, references, structs
+    without owned buffers) the value is returned unchanged.
+
+    Args:
+        codegen: The LLVM codegen instance.
+        value: The emitted value being copied.
+        semantic_type: The value's semantic type (may be an UnknownType struct name).
+
+    Returns:
+        A deep copy with independent buffers, or `value` unchanged.
+    """
+    from sushi_lang.semantics.typesys import UnknownType
+
+    resolved = semantic_type
+    if isinstance(resolved, UnknownType):
+        resolved = codegen.struct_table.by_name.get(resolved.name, resolved)
+
+    if isinstance(resolved, StructType) and codegen.dynamic_arrays.struct_needs_cleanup(resolved):
+        return deep_copy_struct(codegen, value, resolved)
+    return value
+
+
 def deep_copy_struct(codegen: 'LLVMCodegen', struct_value: ir.Value, struct_type: StructType) -> ir.Value:
     """Deep copy a struct value, cloning all dynamic array fields recursively.
 

@@ -129,20 +129,29 @@ def emit_fixed_array_get_maybe(
     element_ptr = codegen.builder.gep(array_temp, [zero, index_value], name="element_ptr")
     element_value = codegen.builder.load(element_ptr, name="element")
 
+    # Value semantics (#60): a struct element that owns heap memory must be deep-copied
+    # so the extracted copy does not shallow-share the array element's buffer.
+    from sushi_lang.backend.expressions import memory
+    element_value = memory.deep_copy_if_owning_struct(codegen, element_value, element_semantic_type)
+
     # Wrap in Maybe.Some
     some_result = emit_maybe_some(codegen, element_semantic_type, element_value)
+    # Capture the actual predecessor for the phi: the deep copy / Maybe.Some emission may
+    # have inserted basic blocks, so the live block is no longer bounds_ok_block.
+    some_pred_block = codegen.builder.block
     codegen.builder.branch(merge_block)
 
     # Bounds fail block: return Maybe.None()
     codegen.builder.position_at_end(bounds_fail_block)
     none_result = emit_maybe_none(codegen, element_semantic_type)
+    none_pred_block = codegen.builder.block
     codegen.builder.branch(merge_block)
 
     # Merge block: phi node to select result
     codegen.builder.position_at_end(merge_block)
     result_phi = codegen.builder.phi(some_result.type, name="get_result")
-    result_phi.add_incoming(some_result, bounds_ok_block)
-    result_phi.add_incoming(none_result, bounds_fail_block)
+    result_phi.add_incoming(some_result, some_pred_block)
+    result_phi.add_incoming(none_result, none_pred_block)
 
     return result_phi
 
@@ -227,19 +236,28 @@ def emit_dynamic_array_get_maybe(
     # Load element value
     element_value = codegen.builder.load(element_ptr, name="element")
 
+    # Value semantics (#60): a struct element that owns heap memory must be deep-copied
+    # so the extracted copy does not shallow-share the array element's buffer.
+    from sushi_lang.backend.expressions import memory
+    element_value = memory.deep_copy_if_owning_struct(codegen, element_value, element_semantic_type)
+
     # Wrap in Maybe.Some
     some_result = emit_maybe_some(codegen, element_semantic_type, element_value)
+    # Capture the actual predecessor for the phi: the deep copy / Maybe.Some emission may
+    # have inserted basic blocks, so the live block is no longer bounds_ok_block.
+    some_pred_block = codegen.builder.block
     codegen.builder.branch(merge_block)
 
     # Bounds fail block: return Maybe.None()
     codegen.builder.position_at_end(bounds_fail_block)
     none_result = emit_maybe_none(codegen, element_semantic_type)
+    none_pred_block = codegen.builder.block
     codegen.builder.branch(merge_block)
 
     # Merge block: phi node to select result
     codegen.builder.position_at_end(merge_block)
     result_phi = codegen.builder.phi(some_result.type, name="get_result")
-    result_phi.add_incoming(some_result, bounds_ok_block)
-    result_phi.add_incoming(none_result, bounds_fail_block)
+    result_phi.add_incoming(some_result, some_pred_block)
+    result_phi.add_incoming(none_result, none_pred_block)
 
     return result_phi

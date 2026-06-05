@@ -77,6 +77,10 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
         args = _emit_variadic_call_args(codegen, expr, variadic_param, callee, fixed_count)
     else:
         args = [codegen.expressions.emit_expr(a) for a in expr.args]
+        # Value semantics (#60): a heap-owning struct passed by value must be deep-copied
+        # so the callee owns an independent buffer (the callee frees its copy at scope
+        # exit). Reference params (&peek/&poke) are borrows and must NOT be copied.
+        _deep_copy_struct_value_args(codegen, args, func_sig)
 
     params = list(llvm_fn.args)
     if len(args) != len(params):
@@ -89,6 +93,26 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     # Return the full Result<T> struct - downstream code will handle extraction
     # (e.g., .realise() method, if (result) conditionals, etc.)
     return codegen.utils.as_i1(result_struct) if to_i1 else result_struct
+
+
+def _deep_copy_struct_value_args(codegen: 'LLVMCodegen', args: list, func_sig) -> None:
+    """Deep-copy heap-owning struct arguments passed by value, in place (#60).
+
+    For each by-value parameter whose type is a struct that owns heap memory, replace the
+    emitted argument with an independent deep copy so the callee (which frees its copy at
+    scope exit) does not share the caller's buffer. Reference parameters are borrows and
+    are skipped. No-op when there is no signature (e.g. builtins resolved elsewhere).
+    """
+    if func_sig is None or not func_sig.params:
+        return
+    from sushi_lang.semantics.typesys import ReferenceType
+    from sushi_lang.backend.expressions import memory
+    for i, param in enumerate(func_sig.params):
+        if i >= len(args):
+            break
+        if isinstance(param.ty, ReferenceType):
+            continue
+        args[i] = memory.deep_copy_if_owning_struct(codegen, args[i], param.ty)
 
 
 _variadic_temp_counter = [0]

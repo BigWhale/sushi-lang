@@ -33,17 +33,17 @@ def emit_struct_cleanup(codegen: 'LLVMCodegen') -> None:
     if not hasattr(codegen, 'dynamic_arrays') or codegen.dynamic_arrays is None:
         return
 
-    # Iterate through all scopes from innermost to outermost
+    # Iterate through all scopes from innermost to outermost. This runs on an early-exit
+    # path (return / ?? / default return); the block terminates immediately after. Emit
+    # the destructor for every live, non-moved struct WITHOUT marking it cleaned: each
+    # exit path is a separate, mutually-exclusive basic block, so every path must emit its
+    # own free (#59/#60). The structural pop_scope drains the tracking on the fall-through
+    # path. Moved structs (ownership transferred to the caller) are skipped.
     for scope_idx in range(len(codegen.memory.struct_variables) - 1, -1, -1):
         struct_scope = codegen.memory.struct_variables[scope_idx]
         for var_name, (struct_type, alloca) in struct_scope.items():
-            # Skip cleanup if:
-            # 1. Already cleaned
-            # 2. Marked as moved (ownership transferred)
-            if (var_name not in codegen.memory.cleaned_up_structs and
-                not codegen.memory.is_struct_moved(var_name)):
+            if not codegen.memory.is_struct_moved(var_name):
                 codegen.dynamic_arrays.emit_struct_field_cleanup(var_name, struct_type, alloca)
-                codegen.memory.cleaned_up_structs.add(var_name)
 
 
 def emit_dynamic_array_cleanup(codegen: 'LLVMCodegen') -> None:

@@ -132,4 +132,16 @@ def emit_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, to_i1: bool = F
     # Load the value from the pointer
     result = codegen.builder.load(element_ptr)
 
+    # Value semantics (#60): a struct element that owns heap memory must be deep-copied so
+    # the indexed copy does not shallow-share the array element's buffer. Only the
+    # Name-array case carries a resolvable element type; other forms are left unchanged.
+    if not to_i1 and isinstance(expr.array, Name):
+        from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, ReferenceType
+        array_sem = codegen.variable_types.get(expr.array.id) or codegen.memory.find_semantic_type(expr.array.id)
+        if isinstance(array_sem, ReferenceType):
+            array_sem = array_sem.referenced_type
+        if isinstance(array_sem, (ArrayType, DynamicArrayType)):
+            from sushi_lang.backend.expressions import memory
+            result = memory.deep_copy_if_owning_struct(codegen, result, array_sem.base_type)
+
     return codegen.utils.as_i1(result) if to_i1 else result
