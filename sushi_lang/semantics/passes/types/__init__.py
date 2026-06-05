@@ -190,12 +190,21 @@ class TypeValidator:
     def _validate_external_call_args(self, node) -> None:
         """Validate argument count and types for a resolved foreign call."""
         from sushi_lang.internals import errors as er
+        from sushi_lang.semantics.passes.types.externals import _is_c_abi_type
         sig = self.external_table.lookup(node.external_ref[0], node.external_ref[1])
         if sig is None:
             return
         expected = sig.param_types
+        is_variadic = getattr(sig, "is_variadic", False)
         fq_name = f"{node.external_ref[0]}.{node.external_ref[1]}"
-        if len(node.args) != len(expected):
+        # Variadic externs relax the arity check: only too FEW fixed args is an
+        # error; extra trailing args are the varargs and are checked below.
+        if is_variadic:
+            if len(node.args) < len(expected):
+                er.emit(self.reporter, er.ERR.CE2009, node.loc,
+                        name=fq_name, expected=len(expected), got=len(node.args))
+                return
+        elif len(node.args) != len(expected):
             er.emit(self.reporter, er.ERR.CE2009, node.loc,
                     name=fq_name, expected=len(expected), got=len(node.args))
             return
@@ -206,6 +215,17 @@ class TypeValidator:
             if not types_compatible(self, got_ty, exp_ty):
                 er.emit(self.reporter, er.ERR.CE2006, arg.loc,
                         index=index, expected=str(exp_ty), got=str(got_ty))
+        # Trailing variadic args: each must be C-ABI representable (CE5005).
+        # Record the inferred types so the backend can apply C promotion.
+        if is_variadic:
+            variadic_types = []
+            for arg in node.args[len(expected):]:
+                got_ty = self.infer_expression_type(arg)
+                variadic_types.append(got_ty)
+                if got_ty is not None and not _is_c_abi_type(got_ty):
+                    er.emit(self.reporter, er.ERR.CE5005, arg.loc,
+                            type=str(got_ty), name=fq_name)
+            node.variadic_arg_types = variadic_types
 
     def _validate_constant(self, const: ConstDef) -> None:
         """Delegate to constants module."""

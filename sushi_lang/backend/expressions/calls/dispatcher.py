@@ -276,8 +276,10 @@ def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     if llvm_fn is None or sig is None:
         return None
 
-    # Marshal arguments. `string` args become char* (i8*) and are registered for
-    # freeing at scope exit; everything else is passed through with param casting.
+    # Marshal the FIXED arguments. `string` args become char* (i8*) and are
+    # registered for freeing at scope exit; everything else is passed through
+    # with param casting against the declared parameter type.
+    num_fixed = len(sig.param_types)
     emitted_args = []
     for arg, param_ty in zip(expr.args, sig.param_types):
         value = codegen.expressions.emit_expr(arg)
@@ -289,8 +291,23 @@ def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
             emitted_args.append(value)
 
     params = list(llvm_fn.args)
-    casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(emitted_args, params)]
-    call_result = codegen.builder.call(llvm_fn, casted)
+    fixed_args = [codegen.utils.cast_for_param(v, p.type)
+                  for v, p in zip(emitted_args, params)]
+
+    # Marshal the TRAILING variadic arguments. There is no declared target type,
+    # so apply C default-argument promotion by hand against the emitted value's
+    # LLVM type (and the inferred Sushi type for signedness): i8/i16 -> i32,
+    # bool -> i32, f32 -> f64, string -> char*, ptr/i32/i64/f64 pass as-is.
+    variadic_sushi_types = getattr(expr, 'variadic_arg_types', None) or []
+    trailing_args = []
+    for offset, arg in enumerate(expr.args[num_fixed:]):
+        value = codegen.expressions.emit_expr(arg)
+        sushi_ty = variadic_sushi_types[offset] if offset < len(variadic_sushi_types) else None
+        trailing_args.append(
+            _promote_variadic_arg(codegen, value, sushi_ty)
+        )
+
+    call_result = codegen.builder.call(llvm_fn, fixed_args + trailing_args)
 
     ret_ty = sig.ret_type
     # `~` (void) return: nothing to use - hand back an i32 blank value.
@@ -300,6 +317,48 @@ def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     if isinstance(ret_ty, BuiltinType) and ret_ty == BuiltinType.STRING:
         return codegen.runtime.strings.emit_cstr_to_fat_pointer(call_result)
     return call_result
+
+
+def _promote_variadic_arg(codegen: 'LLVMCodegen', value: ir.Value, sushi_ty) -> ir.Value:
+    """Apply C default-argument promotion to one untyped variadic argument.
+
+    The C calling convention promotes integers narrower than `int` to `int`
+    (signedness-preserving) and `float` to `double`. Sushi `string` is marshalled
+    to a C `char*` (freed at scope exit like fixed string args). `ptr`, i32, i64
+    and f64 pass through unchanged. There is no declared target type for a
+    variadic slot, so promotion is decided from the value's LLVM type and the
+    inferred Sushi type (for signedness).
+    """
+    from sushi_lang.semantics.typesys import BuiltinType
+
+    # string -> char* (registered for the per-scope free, no leak).
+    if isinstance(sushi_ty, BuiltinType) and sushi_ty == BuiltinType.STRING:
+        c_str = codegen.runtime.strings.emit_to_cstr(value)
+        codegen.memory.register_cstr(c_str)
+        return c_str
+
+    builder = codegen.builder
+    vty = value.type
+
+    # float -> double.
+    if isinstance(vty, ir.FloatType):
+        return builder.fpext(value, codegen.types.f64)
+
+    # Narrow integers (i1/i8/i16) -> i32. bool is i1 in value position / i8 in
+    # storage; either way normalize and widen. Signed Sushi types sign-extend,
+    # unsigned (and bool) zero-extend.
+    if isinstance(vty, ir.IntType) and vty.width < 32:
+        unsigned = {
+            BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
+            BuiltinType.BOOL,
+        }
+        is_unsigned = isinstance(sushi_ty, BuiltinType) and sushi_ty in unsigned
+        if is_unsigned:
+            return builder.zext(value, codegen.i32)
+        return builder.sext(value, codegen.i32)
+
+    # ptr, i32, i64, f64: pass as-is.
+    return value
 
 
 def _check_stdlib_function_codegen(codegen: 'LLVMCodegen', function_name: str) -> tuple | None:

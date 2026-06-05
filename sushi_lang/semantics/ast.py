@@ -178,6 +178,7 @@ class ExternalDecl(Node):
     params: List[Param]          # Parameters (C-ABI representable types)
     ret: Optional[Type]          # Raw C return type (NOT wrapped in Result)
     link_name: str               # C link symbol (e.g., "strlen")
+    is_variadic: bool = False     # Trailing `...` for untyped C varargs (e.g. printf)
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
 

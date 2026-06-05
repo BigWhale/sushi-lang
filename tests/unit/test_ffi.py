@@ -230,6 +230,69 @@ def test_string_marshalling_no_leak_try_success_path(tmp_path):
     )
 
 
+def test_variadic_extern_declared_var_arg(tmp_path):
+    """A variadic external lowers to an LLVM `var_arg` declaration."""
+    src = (
+        'unsafe external "C" as libc because "printf":\n'
+        '    fn printf(string fmt, ...) i32 = "printf"\n'
+        '\n'
+        'fn shout(string s) i32:\n'
+        '    return Result.Ok(libc.printf("%s\\n", s))\n'
+        '\n'
+        'fn main() i32:\n'
+        '    let i32 r = shout("hi").realise(0)\n'
+        '    return Result.Ok(0)\n'
+    )
+    ir_text = _emit_ir(tmp_path, src)
+    # llvmlite spells a var_arg declaration with a trailing `, ...)`.
+    assert 'declare i32 @"printf"(i8* %".1", ...)' in ir_text
+
+
+def test_variadic_string_arg_freed_no_leak(tmp_path):
+    """A `string` passed as a VARIADIC argument is marshalled to char* and freed
+    on every exit path (no leak), exactly like a fixed string argument.
+    """
+    src = (
+        'unsafe external "C" as libc because "printf":\n'
+        '    fn printf(string fmt, ...) i32 = "printf"\n'
+        '\n'
+        'fn emit(string s, bool flag) i32:\n'
+        '    let i32 n = libc.printf("%s\\n", s)\n'
+        '    if (flag):\n'
+        '        return Result.Ok(n)\n'
+        '    return Result.Ok(0)\n'
+        '\n'
+        'fn main() i32:\n'
+        '    let i32 r = emit("hi", true).realise(0)\n'
+        '    return Result.Ok(0)\n'
+    )
+    ir_text = _emit_ir(tmp_path, src)
+
+    # Two strings are marshalled in `emit`: the fixed format string and the
+    # VARIADIC string `s`. Both must be freed on EVERY mutually-exclusive exit
+    # block (the early `if (flag)` return and the fall-through return), so the
+    # free count is exactly 2 marshalled strings x 2 exit paths == 4. Without the
+    # variadic char* registration the count would drop to 2.
+    mallocs = _count_in_function(ir_text, "emit", 'call i8* @"malloc"')
+    frees = _count_in_function(ir_text, "emit", 'call void @"free"')
+    assert mallocs == 2, f"expected two marshalling mallocs (fmt + variadic), got {mallocs}"
+    assert frees == 2 * mallocs, (
+        f"expected every marshalled char* freed on every exit path "
+        f"({2 * mallocs}), got {frees}; a variadic-marshalled char* is leaking"
+    )
+
+    # The early-return block must itself carry frees for BOTH marshalled strings,
+    # not only the fall-through (proves the variadic char* is registered).
+    emit_body = _function_body(ir_text, "emit")
+    body_idx = emit_body.index("if.0.body")
+    next_block = emit_body.index("ret ", body_idx)
+    early_block = emit_body[body_idx:next_block]
+    assert early_block.count('call void @"free"') == mallocs, (
+        "the early `if (flag)` return block does not free every marshalled "
+        "char* (including the variadic one)"
+    )
+
+
 def test_reserved_externs_are_declared():
     """Every RESERVED_EXTERNS name must actually be declared by the backend."""
     from llvmlite import ir

@@ -1,0 +1,8 @@
+# FFI: a variadic external with NO fixed parameter is rejected. The C ABI's
+# va_start needs a named argument to anchor the variadic list.
+# EXPECT_ERROR_CODE: CE5004
+unsafe external "C" as libc because "needs a fixed anchor parameter":
+    fn bad(...) i32 = "bad"
+
+fn main() i32:
+    return Result.Ok(0)

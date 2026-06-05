@@ -60,6 +60,11 @@ def _validate_block_abi(reporter: Reporter, block: 'ExternalBlock') -> None:
 def _validate_block_signatures(reporter: Reporter, block: 'ExternalBlock') -> None:
     """Validate every param and return type against the C-ABI allowlist."""
     for decl in block.decls:
+        # A variadic external needs at least one fixed parameter: the C ABI's
+        # va_start requires a named argument to anchor the variadic list.
+        if getattr(decl, "is_variadic", False) and len(decl.params) == 0:
+            er.emit(reporter, er.ERR.CE5004, decl.name_span or decl.loc,
+                    name=decl.name)
         for param in decl.params:
             if param.ty is not None and not _is_c_abi_type(param.ty):
                 er.emit(reporter, er.ERR.CE5003, param.type_span or decl.loc,
