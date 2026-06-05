@@ -61,9 +61,19 @@ class ScopeManager:
         # Track which struct variables have been moved (ownership transferred)
         self.moved_structs: Set[str] = set()
 
-        # FFI no-leak registry: per-scope list of marshalled C strings (i8*) that
-        # must be freed at scope exit. Parallel to the scope stack. Drained by
-        # emit_scope_cleanup (return / ?? paths) and on normal pop_scope.
+        # FFI no-leak registry: per-scope stack of marshalled C strings (i8*) that
+        # must be freed at scope exit. Parallel to the dynamic-array scope stack.
+        #
+        # Discipline (mirrors basic-block mutual-exclusivity):
+        # - register_cstr appends to the innermost scope's list.
+        # - An early-exit path (return / ?? propagation) calls
+        #   emit_cstr_cleanup_all(), which emits a free for every live cstr into
+        #   the CURRENT (terminating) block WITHOUT mutating the registry. That
+        #   block is mutually exclusive with all other exit blocks at runtime.
+        # - The structural pop_scope() pops the innermost list and frees it into
+        #   the fall-through block (also mutually exclusive with the early-exit
+        #   blocks). Popping is the ONLY thing that removes entries.
+        # Net effect: exactly one free executes per runtime path, no double free.
         self._cstr_cleanup: List[List[ir.Value]] = []
 
     def push_scope(self) -> None:
@@ -127,9 +137,13 @@ class ScopeManager:
                     if not self._types[var_name]:
                         del self._types[var_name]
 
-        # Free any marshalled C strings registered in this scope (no leak on
-        # normal block exit). If the block already terminated (e.g. an early
-        # return drained them via emit_scope_cleanup), the list is empty.
+        # Free the marshalled C strings registered in this scope on the normal
+        # (fall-through) block exit. This is the ONLY place the per-scope list is
+        # removed. Early-exit paths (return / ??) emit their own frees into their
+        # own terminating blocks via emit_cstr_cleanup_all() without popping, so
+        # exactly one free runs per runtime path. _free_cstr_list is a no-op when
+        # the current block is already terminated (e.g. the scope body ended in a
+        # bare return), avoiding a stray free after the ret.
         if self._cstr_cleanup:
             self._free_cstr_list(self._cstr_cleanup.pop())
 
@@ -156,16 +170,22 @@ class ScopeManager:
         for ptr in ptrs:
             builder.call(free_fn, [ptr])
 
-    def drain_cstr_cleanup(self) -> None:
-        """Free every registered C string across all live scopes and clear them.
+    def emit_cstr_cleanup_all(self) -> None:
+        """Emit a free for every live C string across all open scopes.
 
-        Used on early-exit paths (return, ?? propagation) where every still-open
-        scope is about to be abandoned. Clearing the lists makes the subsequent
-        pop_scope() calls no-ops, so each pointer is freed exactly once.
+        Used on early-exit paths (return, ?? propagation): every still-open scope
+        is abandoned on this path, so every live marshalled pointer must be freed
+        here. The frees are emitted into the CURRENT block, which terminates
+        immediately after (with a `ret`) and is therefore mutually exclusive with
+        every other exit block at runtime.
+
+        Crucially this does NOT mutate the registry: the lists stay intact so the
+        structural pop_scope() calls on the fall-through path still emit their own
+        frees into their own (mutually exclusive) blocks. Because at runtime
+        exactly one of these blocks executes, each pointer is freed exactly once.
         """
         for scope_list in self._cstr_cleanup:
             self._free_cstr_list(scope_list)
-            scope_list.clear()
 
     def find_local_slot(self, name: str) -> ir.AllocaInstr:
         """Find local variable slot by name in scope stack (O(1) lookup).

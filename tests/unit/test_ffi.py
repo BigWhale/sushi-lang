@@ -103,6 +103,133 @@ def test_string_marshalling_frees_cstr_in_ir(tmp_path):
     assert ir_text.index('call void @"free"') > ir_text.index('call i64 @"strlen"')
 
 
+def _function_body(ir_text: str, fn_name: str) -> str:
+    """Return the IR text of the body of `define ... @fn_name(...)`.
+
+    The body brace is the `{` that opens the block (spelled `{\\n` by llvmlite),
+    NOT an earlier `{` belonging to a struct return/parameter type.
+    """
+    start = ir_text.index(f'define ')
+    while True:
+        # Find a `define` whose name matches `@"fn_name"(`.
+        marker = f'@"{fn_name}"('
+        def_at = ir_text.index('define', start)
+        line_end = ir_text.index("\n", def_at)
+        if marker in ir_text[def_at:line_end]:
+            break
+        start = line_end
+    brace = ir_text.index("{\n", def_at)
+    depth = 0
+    end = brace
+    for i in range(brace, len(ir_text)):
+        if ir_text[i] == "{":
+            depth += 1
+        elif ir_text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+    return ir_text[brace:end]
+
+
+def _count_in_function(ir_text: str, fn_name: str, needle: str) -> int:
+    """Count occurrences of `needle` inside the body of `@fn_name` only."""
+    return _function_body(ir_text, fn_name).count(needle)
+
+
+def test_string_marshalling_no_leak_multi_return(tmp_path):
+    """Multi-exit function: every return path frees the marshalled char* exactly once.
+
+    Regression for the bug where the first emitted exit block drained-and-cleared
+    the shared cstr registry, so every later mutually-exclusive exit path emitted
+    NO free and leaked. The fix emits a free in EVERY exit block (basic blocks are
+    mutually exclusive at runtime), so malloc-count == free-count in the function
+    and BOTH the early-return block and the fall-through block carry a free.
+    """
+    src = (
+        'unsafe external "C" as libc because "len":\n'
+        '    fn strlen(string s) i64 = "strlen"\n'
+        '\n'
+        'fn work(string s, bool flag) i64:\n'
+        '    let i64 n = libc.strlen(s)\n'
+        '    if (flag):\n'
+        '        return Result.Ok(n)\n'
+        '    return Result.Ok(0 as i64)\n'
+        '\n'
+        'fn main() i32:\n'
+        '    let i64 r = work("hi", true).realise(0 as i64)\n'
+        '    return Result.Ok(0)\n'
+    )
+    ir_text = _emit_ir(tmp_path, src)
+
+    mallocs = _count_in_function(ir_text, "work", 'call i8* @"malloc"')
+    frees = _count_in_function(ir_text, "work", 'call void @"free"')
+    assert mallocs == 1, f"expected exactly one marshalling malloc, got {mallocs}"
+    # One free per mutually-exclusive exit block: the early `if (flag)` return AND
+    # the fall-through return. Exactly one runs at runtime, so this is no double free.
+    assert frees == 2, (
+        f"expected a free in EACH of the two exit blocks, got {frees}; "
+        "the early-return path is leaking the marshalled char*"
+    )
+
+    # The early-return block (if.0.body) must itself contain a free, not only the
+    # fall-through. Locate that block and assert a free precedes its ret.
+    work_body = _function_body(ir_text, "work")
+    body_idx = work_body.index("if.0.body")
+    next_block = work_body.index("ret ", body_idx)
+    early_block = work_body[body_idx:next_block]
+    assert 'call void @"free"' in early_block, (
+        "the early `if (flag)` return block has no free of the marshalled char*"
+    )
+
+
+def test_string_marshalling_no_leak_try_success_path(tmp_path):
+    """A `??` after a marshalled call: BOTH the propagate block and the success
+    continuation free the marshalled char* (the common success path must not leak).
+    """
+    src = (
+        'enum MyErr:\n'
+        '    Bad\n'
+        '\n'
+        'unsafe external "C" as libc because "len":\n'
+        '    fn strlen(string s) i64 = "strlen"\n'
+        '\n'
+        'fn helper(i64 n) i64 | MyErr:\n'
+        '    if (n > (100 as i64)):\n'
+        '        return Result.Err(MyErr.Bad())\n'
+        '    return Result.Ok(n)\n'
+        '\n'
+        'fn work(string s) i64 | MyErr:\n'
+        '    let i64 n = libc.strlen(s)\n'
+        '    let i64 m = helper(n)??\n'
+        '    return Result.Ok(m)\n'
+        '\n'
+        'fn main() i32:\n'
+        '    let i64 r = work("hi").realise(0 as i64)\n'
+        '    return Result.Ok(0)\n'
+    )
+    ir_text = _emit_ir(tmp_path, src)
+
+    mallocs = _count_in_function(ir_text, "work", 'call i8* @"malloc"')
+    frees = _count_in_function(ir_text, "work", 'call void @"free"')
+    assert mallocs == 1, f"expected one marshalling malloc, got {mallocs}"
+    # One free on the `??` error-propagation path and one on the success
+    # continuation (the common path) -> two mutually-exclusive frees.
+    assert frees == 2, (
+        f"expected a free on both the ?? propagate and success paths, got {frees}; "
+        "the success continuation is leaking the marshalled char*"
+    )
+
+    # The success continuation block must carry a free.
+    work_body = _function_body(ir_text, "work")
+    cont_idx = work_body.index("try_continue")
+    cont_ret = work_body.index("ret ", cont_idx)
+    cont_block = work_body[cont_idx:cont_ret]
+    assert 'call void @"free"' in cont_block, (
+        "the ?? success continuation has no free of the marshalled char*"
+    )
+
+
 def test_reserved_externs_are_declared():
     """Every RESERVED_EXTERNS name must actually be declared by the backend."""
     from llvmlite import ir

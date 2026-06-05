@@ -191,6 +191,10 @@ fn close_handle(ptr h) ~:
   suffix reserves room for an optional future error-convention annotation.
 - No reverse FFI (exporting Sushi functions to C) and no callbacks into C.
 - Externals and foreign `ptr` cannot appear in a library public API (`CE5002`).
+- Externals are currently visible across compilation units rather than strictly
+  per-unit; treat the namespace as program-global for now.
+- A user type named `ptr` is shadowed by the reserved `ptr` type in type
+  position; avoid `ptr` as a user type name.
 
 ## Worked example
 
