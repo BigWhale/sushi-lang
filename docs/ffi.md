@@ -181,9 +181,46 @@ fn close_handle(ptr h) ~:
 | `CE5002` | error | An external - or any public function whose signature exposes a foreign `ptr` - appears in a `.slib` public API. FFI is a private unit detail and cannot propagate through Nori packages. |
 | `CE5003` | error | An external signature uses a non-C-ABI type, or the ABI string is not `"C"`. |
 
+## Linking: what can actually be resolved
+
+The `= "symbol"` string is the **link name**. It becomes an undefined external
+symbol reference in the generated object file; the linker must satisfy it. What
+satisfies it is the important part.
+
+Sushi links binaries by invoking the C compiler driver as `clang prog.o -o prog`
+(plus `-lm` on Linux). There is **no explicit `-lc`** and **no way to pass
+`-l<lib>` or `-L<path>`**. libc is linked anyway, for two compounding reasons:
+
+1. **The clang driver links the C runtime into every executable** by default
+   (libc/libSystem plus the startup objects). This happens for any program,
+   FFI or not.
+2. **Every Sushi binary already depends on libc.** The core runtime and stdlib
+   emit direct calls to `malloc`, `free`, `realloc`, `printf`, `fopen`, `fread`,
+   `fwrite`, `fclose`, `exit`, and friends. libc is a structural dependency of
+   the output, not an optional add-on.
+
+So an FFI declaration resolves at link time **if and only if its symbol already
+lives in an always-linked library** - libc/libSystem, plus libm on Linux. That
+is exactly why the bootstrapping leaf targets (`strlen`, `fopen`, `malloc`) were
+chosen: they cost nothing to link because the binary already pulls libc in.
+
+The namespace in `as libc` is a **pure Sushi-side label** and drives nothing at
+link time. It emits no `-l` directive and names no library file - `as banana`
+would link identically. It only controls how call sites read.
+
+**Consequence.** A symbol that is *not* in an always-linked library (a
+third-party `libfoo`, or anything needing `-l`/`-L`) will **compile but fail to
+link** with an `undefined symbol` error. There is currently no mechanism to tell
+the linker about additional libraries. v1 FFI is therefore limited to the
+default-linked C runtime surface.
+
 ## v1 scope and limitations
 
 - Only the `"C"` ABI is accepted.
+- **Only symbols in always-linked libraries** (libc/libSystem, plus libm on
+  Linux) can be resolved. There is no way to link an external library - no
+  `-l`/`-L` mechanism - so a non-libc symbol compiles but fails at link time.
+  See [Linking](#linking-what-can-actually-be-resolved) above.
 - Sushi stays **null-free**: no `null` literal; ptr-null-check is a future
   `is_null` intrinsic.
 - String marshalling is a per-call copy, freed at scope exit.
