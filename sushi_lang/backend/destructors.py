@@ -269,6 +269,9 @@ def needs_cleanup(value_type: Type) -> bool:
     Returns:
         True if the type needs cleanup, False otherwise
     """
+    from sushi_lang.semantics.typesys import ForeignPtrType
+    if isinstance(value_type, ForeignPtrType):
+        return False  # Foreign `ptr` is unmanaged: RAII never frees it
     if isinstance(value_type, BuiltinType):
         return False  # Primitives don't need cleanup
     elif isinstance(value_type, DynamicArrayType):

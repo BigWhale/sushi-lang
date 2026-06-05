@@ -118,6 +118,12 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     # Each handler returns a value if it matches, or None to continue dispatch
     # ========================================================================
 
+    # 0. FFI: foreign namespace call (libc.strlen(...)) - resolved by the type
+    #    checker via the external_ref annotation. Direct, raw C call.
+    result = _try_emit_external_call(codegen, expr)
+    if result is not None:
+        return result
+
     # 1. Enum constructors (e.g., Color.Red(), Result.Ok())
     result = intrinsics.try_emit_enum_constructor(codegen, expr)
     if result is not None:
@@ -249,6 +255,51 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     # Extension methods return bare types (not Result<T>)
     # This matches built-in extension methods and provides zero-cost abstraction
     return codegen.utils.as_i1(result_value) if to_i1 else result_value
+
+
+def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]) -> ir.Value | None:
+    """Emit a foreign (FFI) function call if `expr` is annotated with external_ref.
+
+    The call is direct and returns the RAW C value (never Result-wrapped). String
+    arguments are marshalled to char* and registered for scope-exit freeing
+    (no leak). A `string` return is converted back to a fat pointer. A `~` (void)
+    return yields an i32 blank value so the expression layer can discard it.
+    """
+    from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
+
+    external_ref = getattr(expr, 'external_ref', None)
+    if external_ref is None:
+        return None
+
+    llvm_fn = codegen.external_funcs.get(external_ref)
+    sig = codegen.external_sigs.get(external_ref)
+    if llvm_fn is None or sig is None:
+        return None
+
+    # Marshal arguments. `string` args become char* (i8*) and are registered for
+    # freeing at scope exit; everything else is passed through with param casting.
+    emitted_args = []
+    for arg, param_ty in zip(expr.args, sig.param_types):
+        value = codegen.expressions.emit_expr(arg)
+        if isinstance(param_ty, BuiltinType) and param_ty == BuiltinType.STRING:
+            c_str = codegen.runtime.strings.emit_to_cstr(value)
+            codegen.memory.register_cstr(c_str)
+            emitted_args.append(c_str)
+        else:
+            emitted_args.append(value)
+
+    params = list(llvm_fn.args)
+    casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(emitted_args, params)]
+    call_result = codegen.builder.call(llvm_fn, casted)
+
+    ret_ty = sig.ret_type
+    # `~` (void) return: nothing to use - hand back an i32 blank value.
+    if ret_ty is None or (isinstance(ret_ty, BuiltinType) and ret_ty == BuiltinType.BLANK):
+        return ir.Constant(codegen.i32, 0)
+    # `string` return: convert C char* back to a Sushi fat pointer.
+    if isinstance(ret_ty, BuiltinType) and ret_ty == BuiltinType.STRING:
+        return codegen.runtime.strings.emit_cstr_to_fat_pointer(call_result)
+    return call_result
 
 
 def _check_stdlib_function_codegen(codegen: 'LLVMCodegen', function_name: str) -> tuple | None:

@@ -61,6 +61,11 @@ class ScopeManager:
         # Track which struct variables have been moved (ownership transferred)
         self.moved_structs: Set[str] = set()
 
+        # FFI no-leak registry: per-scope list of marshalled C strings (i8*) that
+        # must be freed at scope exit. Parallel to the scope stack. Drained by
+        # emit_scope_cleanup (return / ?? paths) and on normal pop_scope.
+        self._cstr_cleanup: List[List[ir.Value]] = []
+
     def push_scope(self) -> None:
         """Push a new lexical scope onto the scope stack.
 
@@ -70,6 +75,7 @@ class ScopeManager:
         """
         self._scope_depth += 1
         self._scope_vars.append(set())
+        self._cstr_cleanup.append([])
 
         # Also push dynamic array scope if the manager is initialized
         if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
@@ -121,12 +127,45 @@ class ScopeManager:
                     if not self._types[var_name]:
                         del self._types[var_name]
 
+        # Free any marshalled C strings registered in this scope (no leak on
+        # normal block exit). If the block already terminated (e.g. an early
+        # return drained them via emit_scope_cleanup), the list is empty.
+        if self._cstr_cleanup:
+            self._free_cstr_list(self._cstr_cleanup.pop())
+
         self._scope_vars.pop()
         self._scope_depth -= 1
 
         # Also pop dynamic array scope if the manager is initialized
         if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
             self.codegen.dynamic_arrays.pop_scope()
+
+    def register_cstr(self, c_str: 'ir.Value') -> None:
+        """Register a marshalled C string (i8*) for freeing at scope exit."""
+        if self._cstr_cleanup:
+            self._cstr_cleanup[-1].append(c_str)
+
+    def _free_cstr_list(self, ptrs: List['ir.Value']) -> None:
+        """Emit free() calls for a list of C strings, if the block is live."""
+        if not ptrs:
+            return
+        builder = self.codegen.builder
+        if builder is None or builder.block is None or builder.block.is_terminated:
+            return
+        free_fn = self.codegen.get_free_func()
+        for ptr in ptrs:
+            builder.call(free_fn, [ptr])
+
+    def drain_cstr_cleanup(self) -> None:
+        """Free every registered C string across all live scopes and clear them.
+
+        Used on early-exit paths (return, ?? propagation) where every still-open
+        scope is about to be abandoned. Clearing the lists makes the subsequent
+        pop_scope() calls no-ops, so each pointer is freed exactly once.
+        """
+        for scope_list in self._cstr_cleanup:
+            self._free_cstr_list(scope_list)
+            scope_list.clear()
 
     def find_local_slot(self, name: str) -> ir.AllocaInstr:
         """Find local variable slot by name in scope stack (O(1) lookup).
@@ -319,6 +358,7 @@ class ScopeManager:
         self._locals.clear()
         self._types.clear()
         self._struct_cleanup.clear()
+        self._cstr_cleanup = []
 
         # Clear cleanup tracking (function boundary)
         self.cleaned_up_structs.clear()

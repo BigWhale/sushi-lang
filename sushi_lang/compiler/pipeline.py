@@ -195,6 +195,10 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
     cg = LLVMCodegen(struct_table=struct_table, enum_table=enum_table,
                      func_table=func_table, perk_impl_table=perk_impl_table,
                      const_table=const_table)
+    # FFI: provide the external table so foreign functions are declared.
+    external_table = getattr(analyzer, 'externals', None)
+    if external_table is not None:
+        cg.external_table = external_table
 
     effective_cwd = get_effective_cwd()
     if args.out:
@@ -293,6 +297,9 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
     cg = LLVMCodegen(struct_table=struct_table, enum_table=enum_table,
                      func_table=func_table, perk_impl_table=perk_impl_table,
                      const_table=const_table)
+    external_table = getattr(analyzer, 'externals', None)
+    if external_table is not None:
+        cg.external_table = external_table
     cg.main_expects_args = analyzer.main_expects_args
     cg.monomorphized_extensions = monomorphized_extensions
     cg.library_linker = library_linker
