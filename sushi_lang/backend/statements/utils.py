@@ -58,15 +58,20 @@ def emit_dynamic_array_cleanup(codegen: 'LLVMCodegen') -> None:
     if not hasattr(codegen, 'dynamic_arrays') or codegen.dynamic_arrays is None:
         return
 
-    # Iterate through all dynamic array scopes from innermost to outermost
+    # Iterate through all dynamic array scopes from innermost to outermost.
+    # This runs on an early-exit path (return / ?? / default return); the block
+    # terminates immediately after. Emit the destructor for every live array
+    # WITHOUT marking it globally destroyed: each exit path is a separate, mutually
+    # exclusive basic block, so every path must emit its own free. The `destroyed`
+    # flag means "explicitly .destroy()'d" (a permanent, cross-path state) and must
+    # not be set here, or later exit paths would skip the free and leak (#59). The
+    # structural pop_scope drains the tracking on the fall-through path.
     for scope_idx in range(len(codegen.dynamic_arrays.scope_stack) - 1, -1, -1):
         array_scope = codegen.dynamic_arrays.scope_stack[scope_idx]
         for array_name in array_scope:
             if array_name in codegen.dynamic_arrays.arrays:
-                descriptor = codegen.dynamic_arrays.arrays[array_name]
-                if not descriptor.destroyed:
-                    codegen.dynamic_arrays._emit_array_destructor(array_name)
-                    descriptor.destroyed = True
+                # _emit_array_destructor is a no-op for moved / explicitly-destroyed arrays.
+                codegen.dynamic_arrays._emit_array_destructor(array_name)
 
 
 def emit_own_cleanup(codegen: 'LLVMCodegen') -> None:
