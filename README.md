@@ -73,6 +73,7 @@ and LLVM-powered code generation.
 - Error propagation operator (`??`) for ergonomic error handling
 - Mutable references with compile-time borrow checking
 - Extension methods for zero-cost method chaining
+- Variadic functions (memory-safe native `...T` array sugar; C `...` for FFI bindings)
 - Rust-style enums with exhaustive pattern matching
 - Automatic memory management (RAII) for structs and arrays
 - Full UTF-8 Unicode support
