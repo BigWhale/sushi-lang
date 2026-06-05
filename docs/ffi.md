@@ -233,6 +233,29 @@ default-linked C runtime surface.
 - A user type named `ptr` is shadowed by the reserved `ptr` type in type
   position; avoid `ptr` as a user type name.
 
+## Future work: external (non-libc) libraries
+
+Support for linking arbitrary external libraries (a `-l`/`-L` mechanism) is
+**deliberately deferred**, not forgotten. The reasoning:
+
+- The near-term goal is **self-hosting**, and the chosen route is to emit LLVM IR
+  as text and shell out to the C toolchain (`clang`/`llc`). That needs only
+  process-spawning and file I/O - both libc - so it links today. For example,
+  `fn system(string cmd) i32 = "system"` is already callable and is enough to
+  invoke the toolchain. The self-host route does **not** require external-library
+  linking.
+- A real external-library feature is not just a flag. It pulls in library
+  resolution and portability (install paths, pkg-config, versioning, rpath),
+  **ABI struct-by-value marshalling** (real libraries pass structs, which `CE5003`
+  currently forbids), and distribution (a binary needing `libfoo` is no longer
+  self-contained). It also reopens the package-boundary that `CE5002` and the
+  Nori/Omakase model intentionally close.
+
+When Sushi turns toward general-purpose use, this will be planned as a
+first-class concern (linking + struct marshalling + resolution together), not
+bolted on as a `-l` passthrough. Until a concrete non-libc need appears, FFI
+stays scoped to the always-linked C runtime.
+
 ## Worked example
 
 See [examples/28-ffi.sushi](examples/28-ffi.sushi) for the runnable `strlen`
