@@ -19,6 +19,7 @@ advanced features and compiler internals.
 - [Memory Management](memory-management.md) - RAII, references, borrowing, and `Own<T>`
 - [Generics](generics.md) - Generic types, functions, and monomorphization
 - [Perks](perks.md) - Traits/interfaces for polymorphic behavior with static dispatch
+- [Foreign Function Interface](ffi.md) - Calling external C functions via `unsafe external` (the `ptr` type, the Result-exemption, the safe-wrapper pattern)
 
 ## Tooling
 

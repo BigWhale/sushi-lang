@@ -112,6 +112,13 @@ Using precompiled libraries - demonstrates library linking.
 ### mathlib.sushi
 Sample library source - compile with `--lib` to create reusable bitcode.
 
+## Foreign Function Interface
+
+### 28-ffi.sushi
+Calling an external C function (`strlen`) through an `unsafe external "C"` block
+and a safe wrapper. Shows the Result-exemption and no-leak string marshalling.
+See [../ffi.md](../ffi.md).
+
 ---
 
 **Tip**: Examples are numbered for suggested reading order, but feel free to explore based on your interests!

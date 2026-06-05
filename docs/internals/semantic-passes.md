@@ -61,6 +61,19 @@ fn add(i32 a, i32 b) i32:  # Register signature
 
 Constants can only be literal values (no expressions).
 
+### FFI External Collection
+
+`semantics/passes/collect/externals.py` builds an `ExternalTable` from each
+`unsafe external "C"` block: a namespace-keyed map of `ExternalSig` (Sushi name,
+link name, param/return types). It rejects duplicate names within a namespace and
+emits `CE5001` when a link-name clashes with a `RESERVED_EXTERNS` built-in of a
+different signature. The table is exposed as `collector.externals` and threaded
+into the scope pass, the type validator, and the backend.
+
+The C-ABI allowlist check (`CE5003`) and the `CW5001` four-guarantee warning live
+in `semantics/passes/types/externals.py::validate_external_signatures`, run right
+after collection.
+
 ## Phase 1: Scope and Variable Analysis
 
 **File:** `semantics/passes/scope.py`
@@ -297,6 +310,15 @@ Ensure all expressions and statements are type-correct.
 **types/inference.py** - Type inference
 - Infer types from literals
 - Propagate types through expressions
+
+**FFI call-site resolution** - `type_visitor.py::visit_dotcall` (both the
+`ExpressionValidator` and `TypeInferenceVisitor`) has a new first branch: when the
+receiver is a `Name` that is a registered external namespace **and not a bound
+local** (locals shadow namespaces), it resolves the `ExternalSig`, validates
+argument count/types, sets the inferred return type to the raw C type (no Result
+wrapping), and annotates the node with `external_ref = (ns, name)` for the
+backend. `??` on a raw foreign value therefore falls out as the existing
+`CE2507`.
 
 **types/compatibility.py** - Type compatibility
 - Check if type A can be assigned to type B

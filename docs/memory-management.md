@@ -26,6 +26,14 @@ Sushi provides memory safety without garbage collection:
 
 Resources are automatically freed when they go out of scope.
 
+> **Foreign pointers are unmanaged.** The FFI `ptr` type (from an
+> `unsafe external "C"` block) is opaque and exempt from both RAII and borrow
+> checking - a `ptr` has no destructor and you must call the matching C free
+> yourself. The one thing the compiler *does* free automatically across the
+> boundary is the temporary C `char*` copy created when marshalling a `string`
+> argument: it is registered per-scope and freed on every exit path (no leak).
+> See [Foreign Function Interface](ffi.md).
+
 ### Dynamic Arrays
 
 ```sushi

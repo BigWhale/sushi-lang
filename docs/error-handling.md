@@ -33,6 +33,13 @@ All functions implicitly return `Result<T, E>` where:
 - `T` is the declared return type (success value)
 - `E` is the error type (defaults to `StdError` if not specified)
 
+> **The one exception: foreign functions.** Functions declared in an
+> `unsafe external "C"` block (the FFI) are **not** wrapped in `Result`. A C
+> function returns a raw value with no error channel, so `libc.strlen(s)` yields
+> a plain `i64` and cannot be used with `??` or `.realise()` (that is a clean
+> `CE2507` type error). The safe-wrapper pattern restores Result-clean Sushi
+> around the raw call. See [Foreign Function Interface](ffi.md).
+
 ### Error Type Syntax
 
 #### Implicit with Default Error (StdError)

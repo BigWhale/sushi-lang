@@ -1,0 +1,35 @@
+# Example 28: Foreign Function Interface (FFI)
+#
+# Demonstrates:
+# - Declaring an external C function in an `unsafe external "C" as <ns>` block
+# - The `because "<reason>"` clause that silences the CW5001 warning
+# - Calling the foreign function via the namespace prefix (libc.strlen)
+# - The Result-exemption: externals return a RAW C value, never Result<T>
+# - The safe-wrapper pattern that folds the raw value back into Sushi's Result
+# - Automatic, no-leak `string` -> C `char*` marshalling at the boundary
+#
+# FFI is the escape hatch for bootstrapping toward self-hosting (calling libc).
+# The guiding rule is "FFI is not Sushi": prefer Sushi, and wall foreign calls
+# off behind a hand-audited safe wrapper. See docs/ffi.md for the full guide.
+
+# The danger zone. `because "..."` acknowledges the four suspended guarantees
+# (borrow checking, RAII, Result/Maybe, bounds/null safety) and keeps the build
+# clean. The Sushi-visible name and the C link symbol are separated by `= "...".
+unsafe external "C" as libc because "string length via libc strlen":
+    fn strlen(string s) i64 = "strlen"
+
+# Safe wrapper - this is ORDINARY Sushi. It follows the implicit-Result rule, so
+# it returns Result<i64>. Inside, libc.strlen(s) yields a raw i64 (the boundary
+# exception); we fold it back into the Sushi world with Result.Ok(...).
+#
+# The `string` argument is marshalled to a C char* for the call and the copy is
+# freed automatically at scope exit - no leak.
+fn length(string s) i64:
+    return Result.Ok(libc.strlen(s))
+
+fn main() i32:
+    # Call the safe wrapper like any normal Sushi function. .realise(default)
+    # unwraps the Result; the foreign-ness is fully contained behind length().
+    let i64 n = length("Mostly Harmless").realise(0 as i64)
+    println("len = {n}")
+    return Result.Ok(0)
