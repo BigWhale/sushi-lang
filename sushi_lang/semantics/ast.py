@@ -36,6 +36,11 @@ class Program(Node):
     extensions: List["ExtendDef"]           # Non-generic extensions only
     generic_extensions: List["ExtendDef"]   # Generic extensions only (e.g., extend Box<T>)
     perk_impls: List["ExtendWithDef"]
+    externals: List["ExternalBlock"] = None  # FFI unsafe external blocks
+
+    def __post_init__(self):
+        if self.externals is None:
+            self.externals = []
 
 @dataclass
 class Param:
@@ -157,6 +162,42 @@ class TypeConstraint:
     """Perk constraint on a type parameter (T: Hashable)."""
     perk_name: str
     loc: Optional[Span] = None
+
+@dataclass
+class ExternalDecl(Node):
+    """A single foreign function declaration inside an unsafe external block.
+
+    Example: fn strlen(string s) i64 = "strlen"
+
+    The Sushi-visible name and the C link symbol are decoupled: 'name' is what
+    Sushi callers use (via the namespace, e.g. libc.strlen), 'link_name' is the
+    symbol the linker resolves. Externals have no body and bypass implicit-Result
+    wrapping - 'ret' is the literal, raw C return type.
+    """
+    name: str                    # Sushi-visible name (e.g., "strlen")
+    params: List[Param]          # Parameters (C-ABI representable types)
+    ret: Optional[Type]          # Raw C return type (NOT wrapped in Result)
+    link_name: str               # C link symbol (e.g., "strlen")
+    name_span: Optional[Span] = None
+    ret_span: Optional[Span] = None
+
+@dataclass
+class ExternalBlock(Node):
+    """An unsafe external block declaring foreign functions under a namespace.
+
+    Example:
+        unsafe external "C" as libc because "bootstrap":
+            fn strlen(string s) i64 = "strlen"
+
+    The optional 'reason' (from `because "..."`) silences the CW5001
+    four-guarantee warning when present.
+    """
+    abi: str                          # ABI string (only "C" accepted in v1)
+    namespace: str                    # Namespace binding (e.g., "libc")
+    reason: Optional[str]             # because "..." reason (None silences nothing)
+    decls: List[ExternalDecl]         # Foreign function declarations
+    abi_span: Optional[Span] = None
+    namespace_span: Optional[Span] = None
 
 @dataclass
 class Block(Node):
@@ -362,6 +403,7 @@ class DotCall(Node):
     args: List["Expr"]  # Arguments
     inferred_return_type: Optional["Type"] = None  # Return type inferred by type checker
     resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type (populated by type checker)
+    external_ref: Optional[Tuple[str, str]] = None  # (namespace, name) for FFI calls (set by type checker)
 
 @dataclass
 class MemberAccess(Node):
@@ -516,7 +558,7 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
 
 
 __all__ = [
-    "Node", "Program", "UseStatement", "FuncDef", "ConstDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "Block", "Param",
+    "Node", "Program", "UseStatement", "FuncDef", "ConstDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "Block", "Param",
     "Let", "ExprStmt", "Return", "Print", "PrintLn", "If", "While", "Foreach", "Match", "MatchArm", "Pattern", "WildcardPattern", "Break", "Continue",
     "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "StructConstructor", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",

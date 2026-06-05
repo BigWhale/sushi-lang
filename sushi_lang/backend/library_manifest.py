@@ -63,8 +63,44 @@ class LibraryManifestGenerator:
         # Write .slib binary format
         LibraryFormat.write(output_path, manifest, bitcode)
 
+    def _contains_foreign_ptr(self, ty) -> bool:
+        """Recursively check whether a type exposes a foreign `ptr` (ForeignPtrType)."""
+        from sushi_lang.semantics.typesys import (
+            ForeignPtrType, ArrayType, DynamicArrayType, ReferenceType,
+            PointerType, ResultType, IteratorType, StructType, EnumType,
+        )
+        if ty is None:
+            return False
+        if isinstance(ty, ForeignPtrType):
+            return True
+        if isinstance(ty, (ArrayType, DynamicArrayType)):
+            return self._contains_foreign_ptr(ty.base_type)
+        if isinstance(ty, ReferenceType):
+            return self._contains_foreign_ptr(ty.referenced_type)
+        if isinstance(ty, PointerType):
+            return self._contains_foreign_ptr(ty.pointee_type)
+        if isinstance(ty, ResultType):
+            return self._contains_foreign_ptr(ty.ok_type) or self._contains_foreign_ptr(ty.err_type)
+        if isinstance(ty, IteratorType):
+            return self._contains_foreign_ptr(ty.element_type)
+        if isinstance(ty, StructType):
+            return any(self._contains_foreign_ptr(ft) for _, ft in ty.fields)
+        if isinstance(ty, EnumType):
+            return any(
+                self._contains_foreign_ptr(at)
+                for v in ty.variants for at in v.associated_types
+            )
+        return False
+
     def _extract_public_functions(self, units: list['Unit']) -> list[dict]:
-        """Extract public function signatures from units."""
+        """Extract public function signatures from units.
+
+        CE5002: a public function whose signature exposes a foreign `ptr` cannot
+        appear in a library public API - FFI is a private unit detail. Detecting
+        one aborts the .slib write (no partial artifact).
+        """
+        import sushi_lang.internals.errors as er
+
         public_funcs = []
 
         for unit in units:
@@ -73,6 +109,18 @@ class LibraryManifestGenerator:
             for func in unit.ast.functions:
                 if not func.is_public:
                     continue
+
+                # CE5002: reject foreign `ptr` in a public library signature.
+                exposes_ptr = self._contains_foreign_ptr(func.ret) or any(
+                    self._contains_foreign_ptr(p.ty) for p in func.params
+                )
+                if exposes_ptr:
+                    er.emit(self.analyzer.reporter, er.ERR.CE5002,
+                            getattr(func, "name_span", None) or func.loc, name=func.name)
+                    raise ValueError(
+                        f"CE5002: public function '{func.name}' exposes a foreign `ptr` "
+                        f"and cannot appear in a library public API"
+                    )
 
                 public_funcs.append({
                     "name": func.name,

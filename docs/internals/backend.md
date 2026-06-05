@@ -587,6 +587,33 @@ def emit_bounds_check(builder, index, length):
     builder.position_at_end(continue_block)
 ```
 
+### Foreign Function Interface (FFI)
+
+**Files:** `backend/runtime/externs/user_externs.py`,
+`backend/expressions/calls/dispatcher.py`, `backend/memory/scopes.py`.
+
+User-declared externals (`unsafe external "C"` blocks) are lowered after the
+built-in externs and before function bodies:
+
+- `declare_user_externs(codegen, external_table)` emits one `ir.Function` per
+  foreign declaration (dedup via `module.globals.get`), lowering `string` params
+  to `i8*`, a `~` return to `void`, and `ptr` (`ForeignPtrType`) to `i8*`. The
+  results are stored on `codegen.external_funcs` / `codegen.external_sigs` keyed
+  by `(namespace, name)`.
+- `dispatcher._try_emit_external_call` is the first branch of `emit_method_call`.
+  It keys off the `external_ref` annotation set by the type checker and emits a
+  direct `builder.call`, returning the **raw** C value. A `string` argument is
+  marshalled via `runtime.strings.emit_to_cstr` and a `string` return via
+  `emit_cstr_to_fat_pointer`.
+- **No-leak registry:** each marshalled `char*` is appended to a per-scope list
+  in `ScopeManager` (`register_cstr`). `emit_scope_cleanup` drains every open
+  scope on early-exit paths (return, `??`); a normal `pop_scope` frees its own
+  scope's list. Each pointer is freed exactly once via `get_free_func()`.
+
+The reserved built-in symbols and their canonical signatures live in
+`RESERVED_EXTERNS` (colocated with `runtime/core.py`), used by the collector for
+the `CE5001` clash check.
+
 ## Optimization Pipeline
 
 ### Pass Management

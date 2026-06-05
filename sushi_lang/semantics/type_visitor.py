@@ -210,6 +210,14 @@ class ExpressionValidator(RecursiveVisitor):
 
     def visit_dotcall(self, node: DotCall) -> None:
         """Validate dot-call expression - resolve to enum constructor or method call."""
+        # FFI: foreign namespace call (e.g., libc.strlen) - NEW FIRST branch.
+        # Locals shadow namespaces, so skip if the name is a bound local.
+        if self.type_validator._resolve_external_call(node):
+            for arg in node.args:
+                self.type_validator.validate_expression(arg)
+            self.type_validator._validate_external_call_args(node)
+            return
+
         # Validate receiver first
         self.type_validator.validate_expression(node.receiver)
 
@@ -735,6 +743,12 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_dotcall(self, node: DotCall) -> Optional[Type]:
         """Infer dot-call type and annotate node with inferred return type."""
+        # FFI: foreign namespace call - the raw C return type stands verbatim.
+        sig = self.type_validator._resolve_external_call(node)
+        if sig is not None:
+            node.inferred_return_type = sig.ret_type
+            return sig.ret_type
+
         # Check if receiver is an enum type name
         if isinstance(node.receiver, Name):
             receiver_name = node.receiver.id

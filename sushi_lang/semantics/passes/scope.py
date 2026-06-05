@@ -32,15 +32,16 @@ class ScopeAnalyzer:
     - Emits warnings for unused variables
     """
 
-    def __init__(self, reporter: Reporter, constants: Optional[ConstantTable] = None, structs: Optional[StructTable] = None, enums: Optional[EnumTable] = None, generic_enums: Optional[GenericEnumTable] = None, generic_structs: Optional['GenericStructTable'] = None) -> None:
+    def __init__(self, reporter: Reporter, constants: Optional[ConstantTable] = None, structs: Optional[StructTable] = None, enums: Optional[EnumTable] = None, generic_enums: Optional[GenericEnumTable] = None, generic_structs: Optional['GenericStructTable'] = None, external_table: Optional['ExternalTable'] = None) -> None:
         self.reporter = reporter
         self.err = PassErrorReporter(reporter)
         self.constants = constants or ConstantTable()
         self.structs = structs or StructTable()
         self.enums = enums or EnumTable()
         self.generic_enums = generic_enums or GenericEnumTable()
-        from sushi_lang.semantics.passes.collect import GenericStructTable
+        from sushi_lang.semantics.passes.collect import GenericStructTable, ExternalTable
         self.generic_structs = generic_structs or GenericStructTable()
+        self.external_table = external_table or ExternalTable()
         # Stack of scopes, each scope maps variable name to VariableInfo
         self.scopes: List[Dict[str, VariableInfo]] = []
         # Track destroyed dynamic arrays per scope
@@ -124,6 +125,14 @@ class ScopeAnalyzer:
         """Check if name is a built-in math module constant."""
         from sushi_lang.sushi_stdlib.src import math as math_module
         return math_module.is_builtin_math_constant(name)
+
+    def _is_bound_local(self, name: str) -> bool:
+        """True if `name` is currently a variable in any active scope."""
+        return any(name in scope for scope in self.scopes)
+
+    def _is_external_namespace(self, name: str) -> bool:
+        """True if `name` is a registered FFI namespace and not shadowed by a local."""
+        return self.external_table.is_namespace(name) and not self._is_bound_local(name)
 
     def _use_variable(self, name: str, usage_span: Optional[Span] = None, is_rebind: bool = False) -> None:
         """Mark a variable as used, searching through scope stack."""
@@ -465,8 +474,13 @@ class ScopeAnalyzer:
                 # Otherwise, it's a method call
                 if isinstance(expr.receiver, Name):
                     receiver_name = expr.receiver.id
+                    # FFI: foreign namespace call (e.g., libc.strlen) - locals shadow
+                    # namespaces, so only treat as a namespace if not a bound local.
+                    if self._is_external_namespace(receiver_name):
+                        # Don't check the namespace name as a variable.
+                        pass
                     # Check if it's an enum type (concrete or generic)
-                    if receiver_name in self.enums.by_name or receiver_name in self.generic_enums.by_name:
+                    elif receiver_name in self.enums.by_name or receiver_name in self.generic_enums.by_name:
                         # Enum constructor (concrete or generic) - don't check receiver as variable
                         pass
                     # Check if it's a generic struct type (e.g., Own)

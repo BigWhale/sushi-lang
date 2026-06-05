@@ -1,0 +1,6 @@
+# FFI: a `because` clause silences CW5001; the block compiles clean (exit 0).
+unsafe external "C" as libc because "bootstrap: call libc for the self-hosted backend":
+    fn strlen(string s) i64 = "strlen"
+
+fn main() i32:
+    return Result.Ok(0)

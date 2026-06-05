@@ -230,6 +230,28 @@ class PointerType:
         return isinstance(other, PointerType) and self.pointee_type == other.pointee_type
 
 @dataclass(frozen=True)
+class ForeignPtrType:
+    """Opaque, unmanaged foreign pointer type (`ptr`) for the FFI boundary.
+
+    Maps to LLVM `i8*`. Unlike PointerType (which carries Own<T> RAII semantics)
+    or ReferenceType (zero-cost borrowing), a ForeignPtrType is:
+    - Exempt from borrow checking (aliasing is not tracked).
+    - Exempt from RAII (no destructor; the matching C free must be called by hand).
+    - Without null/bounds guarantees (may be null; dereferencing is unchecked).
+
+    It is the single C-traffic handle type introduced by `unsafe external` blocks.
+    """
+
+    def __str__(self) -> str:
+        return "ptr"
+
+    def __hash__(self) -> int:
+        return hash("foreign_ptr")
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, ForeignPtrType)
+
+@dataclass(frozen=True)
 class EnumVariantInfo:
     """Information about a single enum variant."""
     name: str                           # Variant name (e.g., "Some", "None")
@@ -283,7 +305,7 @@ class EnumType:
 # Note: GenericEnumType is NOT in the Type union - it's a template that produces EnumTypes
 Type = Union[
     BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType,
-    ResultType, IteratorType, ReferenceType, PointerType,
+    ResultType, IteratorType, ReferenceType, PointerType, ForeignPtrType,
     TypeParameter, GenericTypeRef
 ]
 

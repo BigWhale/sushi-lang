@@ -2,18 +2,22 @@
 from __future__ import annotations
 from typing import Optional
 from lark import Tree
-from sushi_lang.semantics.typesys import UnknownType
+from sushi_lang.semantics.typesys import UnknownType, ForeignPtrType
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name
 
 
-def parse_unknown_type(node: Tree) -> Optional[UnknownType]:
-    """Parse user-defined type name (name_t).
+def parse_unknown_type(node: Tree):
+    """Parse a bare type name (name_t).
 
     Syntax: NAME
 
-    Returns UnknownType that will be resolved later to StructType or EnumType.
+    `ptr` in type position is the opaque foreign pointer type (FFI). Every other
+    name yields an UnknownType, resolved later to a StructType or EnumType.
     """
     name_token = first_name(node.children)
     if name_token:
-        return UnknownType(name=str(name_token))
+        name = str(name_token)
+        if name == "ptr":
+            return ForeignPtrType()
+        return UnknownType(name=name)
     return None

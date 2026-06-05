@@ -25,7 +25,7 @@ from sushi_lang.semantics.generics.types import GenericTypeRef
 
 from sushi_lang.semantics.ast import (
     Program, UseStatement, FuncDef, ConstDef, ExtendDef, Block,
-    StructDef, EnumDef, PerkDef, ExtendWithDef, Expr,
+    StructDef, EnumDef, PerkDef, ExtendWithDef, Expr, ExternalBlock,
 )
 from sushi_lang.internals.report import span_of
 
@@ -107,7 +107,7 @@ class ASTBuilder:
 
         Orchestrates parsing of all top-level declarations using specialized parsers.
         """
-        from sushi_lang.semantics.ast_builder.declarations import imports, functions, constants, structs, enums, perks, extensions
+        from sushi_lang.semantics.ast_builder.declarations import imports, functions, constants, structs, enums, perks, extensions, externals
 
         assert isinstance(tree, Tree) and tree.data == "program"
         uses: List[UseStatement] = []
@@ -119,6 +119,7 @@ class ASTBuilder:
         extensions_list: List[ExtendDef] = []
         generic_extensions: List[ExtendDef] = []
         perk_impls: List[ExtendWithDef] = []
+        externals_list: List[ExternalBlock] = []
 
         for ch in tree.children:
             if not isinstance(ch, Tree):
@@ -153,6 +154,12 @@ class ASTBuilder:
                 perk = _first_tree(node.children, "perk_def") or _find_tree_recursive(node, "perk_def")
                 if perk is not None:
                     perks_list.append(perks.parse_perkdef(perk, self))
+                    continue
+
+                # Look for external block (FFI)
+                external = _first_tree(node.children, "external_block") or _find_tree_recursive(node, "external_block")
+                if external is not None:
+                    externals_list.append(externals.parse_external_block(external, self))
                     continue
 
                 # Look for extend_stmt BEFORE function_def (to avoid matching nested functions)
@@ -208,6 +215,8 @@ class ASTBuilder:
                 enums_list.append(enums.parse_enumdef(node, self))
             elif node.data == "perk_def":
                 perks_list.append(perks.parse_perkdef(node, self))
+            elif node.data == "external_block":
+                externals_list.append(externals.parse_external_block(node, self))
             elif node.data == "function_def":
                 funcs.append(functions.parse_funcdef(node, self))
             elif node.data == "extend_stmt":
@@ -237,7 +246,7 @@ class ASTBuilder:
             elif node.data == "extend_with_def":
                 perk_impls.append(perks.parse_extendwithdef(node, self))
 
-        return Program(uses=uses, constants=constants_list, structs=structs_list, enums=enums_list, perks=perks_list, functions=funcs, extensions=extensions_list, generic_extensions=generic_extensions, perk_impls=perk_impls, loc=span_of(tree))
+        return Program(uses=uses, constants=constants_list, structs=structs_list, enums=enums_list, perks=perks_list, functions=funcs, extensions=extensions_list, generic_extensions=generic_extensions, perk_impls=perk_impls, externals=externals_list, loc=span_of(tree))
 
     # --- type parsing ---
 

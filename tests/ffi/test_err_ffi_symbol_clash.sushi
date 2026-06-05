@@ -1,0 +1,7 @@
+# FFI: a link-name reserved by a built-in extern with a DIFFERENT signature -> CE5001.
+# EXPECT_ERROR_CODE: CE5001
+unsafe external "C" as libc because "intentional clash":
+    fn my_strlen(i32 x) i32 = "strlen"
+
+fn main() i32:
+    return Result.Ok(0)

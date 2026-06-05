@@ -1,7 +1,7 @@
 ?start: program
 
 program: (_NEWLINE | toplevel)+
-toplevel: use_stmt | const_def | struct_def | enum_def | perk_def | function_def | extend_stmt
+toplevel: use_stmt | const_def | struct_def | enum_def | perk_def | function_def | extend_stmt | external_block
 
 const_def: CONST type NAME "=" expr _NEWLINE
 use_stmt: USE (stdlib_import | lib_import | user_import) _NEWLINE
@@ -23,6 +23,10 @@ enum_variant_fields: type ("," type)*
 
 perk_def: PERK NAME [type_params] ":" _NEWLINE _INDENT perk_method+ _DEDENT
 perk_method: FN NAME "(" [parameters] ")" type _NEWLINE
+
+// Foreign Function Interface (FFI) - unsafe external blocks
+external_block: UNSAFE EXTERNAL STRING AS NAME [BECAUSE STRING] ":" _NEWLINE _INDENT extern_decl+ _DEDENT
+extern_decl: FN NAME "(" [parameters] ")" type "=" STRING _NEWLINE
 
 // Extension statements - unified to avoid LALR ambiguity
 extend_stmt: EXTEND type extend_suffix
@@ -185,6 +189,9 @@ CONST: "const"
 STRUCT: "struct"
 ENUM: "enum"
 PERK.2: /perk\b/
+UNSAFE.2: /unsafe\b/
+EXTERNAL.2: /external\b/
+BECAUSE.2: /because\b/
 FN: "fn"
 EXTEND.2: /extend\b/
 WITH.2: /with\b/

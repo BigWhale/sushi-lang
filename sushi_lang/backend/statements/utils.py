@@ -113,6 +113,14 @@ def emit_scope_cleanup(codegen: 'LLVMCodegen', cleanup_type: str = 'all') -> Non
     if cleanup_type in ('all', 'owned'):
         emit_own_cleanup(codegen)
 
+    # FFI no-leak: free marshalled C strings across all open scopes on early-exit
+    # paths (return, ?? propagation). Emits frees into the current (terminating)
+    # block WITHOUT mutating the registry, so each mutually-exclusive exit block
+    # (including the fall-through pop_scope) frees exactly once on its own path.
+    if cleanup_type == 'all' and hasattr(codegen, 'memory') and codegen.memory is not None:
+        if hasattr(codegen.memory, 'emit_cstr_cleanup_all'):
+            codegen.memory.emit_cstr_cleanup_all()
+
 
 # ============================================================================
 # GEP (GetElementPtr) Helpers

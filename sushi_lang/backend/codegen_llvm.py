@@ -58,6 +58,12 @@ class LLVMCodegen:
         self.func_table = func_table or FunctionTable()
         self.perk_impl_table = perk_impl_table or PerkImplementationTable()
         self.const_table = const_table or ConstantTable()
+        # FFI: external function table (set by the compiler pipeline). Maps
+        # foreign declarations to declared ir.Functions in declare_user_externs.
+        from sushi_lang.semantics.passes.collect import ExternalTable
+        self.external_table = ExternalTable()
+        self.external_funcs = {}
+        self.external_sigs = {}
 
         # Initialize specialized subsystems following SOLID principles
         self.types = LLVMTypeSystem(struct_table=self.struct_table, enum_table=self.enum_table)
@@ -172,6 +178,12 @@ class LLVMCodegen:
     def get_malloc_func(self) -> ir.Function:
         """Get or declare malloc function."""
         if self._malloc_func is None:
+            # Reuse an existing declaration (e.g. a matching FFI extern) to avoid
+            # duplicate-symbol declaration errors.
+            existing = self.module.globals.get("malloc")
+            if isinstance(existing, ir.Function):
+                self._malloc_func = existing
+                return self._malloc_func
             # void* malloc(size_t size)
             malloc_type = ir.FunctionType(
                 ir.PointerType(ir.IntType(INT8_BIT_WIDTH)),  # void*
@@ -180,9 +192,18 @@ class LLVMCodegen:
             self._malloc_func = ir.Function(self.module, malloc_type, name="malloc")
         return self._malloc_func
 
+    def declare_user_externs(self) -> None:
+        """Declare user-declared foreign functions (FFI) into this module."""
+        from sushi_lang.backend.runtime.externs.user_externs import declare_user_externs
+        declare_user_externs(self, self.external_table)
+
     def get_free_func(self) -> ir.Function:
         """Get or declare free function."""
         if self._free_func is None:
+            existing = self.module.globals.get("free")
+            if isinstance(existing, ir.Function):
+                self._free_func = existing
+                return self._free_func
             # void free(void* ptr)
             free_type = ir.FunctionType(
                 ir.VoidType(),                   # void
@@ -194,6 +215,10 @@ class LLVMCodegen:
     def get_realloc_func(self) -> ir.Function:
         """Get or declare realloc function."""
         if self._realloc_func is None:
+            existing = self.module.globals.get("realloc")
+            if isinstance(existing, ir.Function):
+                self._realloc_func = existing
+                return self._realloc_func
             # void* realloc(void* ptr, size_t size)
             realloc_type = ir.FunctionType(
                 ir.PointerType(ir.IntType(INT8_BIT_WIDTH)),  # void*
@@ -247,6 +272,7 @@ class LLVMCodegen:
                 self.stdlib.extract_stdlib_units(unit.ast)
 
         self.runtime.declare_externs()
+        self.declare_user_externs()
         self._emit_multi_unit_program(units)
         return self.module
 
@@ -538,6 +564,7 @@ class LLVMCodegen:
                 self.stdlib.extract_stdlib_units(unit.ast)
 
         self.runtime.declare_externs()
+        self.declare_user_externs()
 
         # Pass 0: Build AST constant map from ALL units (needed for const evaluation)
         for unit in all_units:

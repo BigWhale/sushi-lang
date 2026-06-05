@@ -1,0 +1,14 @@
+# FFI: the FFI.md section 9 worked example. A safe wrapper calls libc.strlen and
+# folds the raw i64 back into Sushi's Result world.
+# EXPECT_STDOUT_CONTAINS: len = 15
+unsafe external "C" as libc because "string length via libc strlen":
+    fn strlen(string s) i64 = "strlen"
+
+# Safe wrapper - normal Sushi, upholds all four guarantees again.
+fn length(string s) i64:
+    return Result.Ok(libc.strlen(s))
+
+fn main() i32:
+    let i64 n = length("Mostly Harmless").realise(0 as i64)
+    println("len = {n}")
+    return Result.Ok(0)

@@ -25,6 +25,7 @@ from sushi_lang.semantics.typesys import (
     IteratorType,
     ReferenceType,
     PointerType,
+    ForeignPtrType,
 )
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.types.core.resolution import resolve_unknown_type, resolve_generic_type_ref, calculate_max_variant_size
@@ -164,6 +165,9 @@ class TypeMapper:
                 # Pointers are heap-allocated memory used by Own<T>
                 pointee_llvm_type = self.ll_type(t.pointee_type)
                 return ir.PointerType(pointee_llvm_type)
+            case ForeignPtrType():
+                # Map ForeignPtrType (`ptr`) to opaque LLVM i8* for the C ABI.
+                return ir.PointerType(self.i8)
             case UnknownType():
                 # UnknownType might be a struct or enum type that needs resolution
                 resolved = resolve_unknown_type(

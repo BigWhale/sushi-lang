@@ -1,0 +1,7 @@
+# FFI: an unsafe external block WITHOUT `because` emits the CW5001 warning.
+# EXPECT_ERROR_CODE: CW5001
+unsafe external "C" as libc:
+    fn strlen(string s) i64 = "strlen"
+
+fn main() i32:
+    return Result.Ok(0)
