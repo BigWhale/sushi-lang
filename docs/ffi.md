@@ -49,9 +49,9 @@ that local instead.
 ### Link-name separation
 
 The Sushi-visible name and the C symbol are decoupled
-(`fn c_printf(...) i32 = "printf"`). You may name the Sushi side anything; the
-linker resolves the symbol after `=`. This is what lets you bind `printf` without
-shadowing any Sushi name.
+(`fn c_printf(string fmt, ...) i32 = "printf"`). You may name the Sushi side
+anything; the linker resolves the symbol after `=`. This is what lets you bind
+`printf` without shadowing any Sushi name.
 
 ## Types at the boundary
 
@@ -113,6 +113,38 @@ A Sushi `string` is a `{ptr, len}` UTF-8 struct; C expects a null-terminated
 The copy is per-call. The marshalling is invisible in your source, but the
 freeing is real: inspect the IR with `./sushic --dump-ll` and you will see a
 `free` of the marshalled `char*` in the function's cleanup path.
+
+## Variadic externs
+
+C variadic functions (`printf`-family) are bound with a bare trailing `...` after
+at least one fixed parameter:
+
+```sushi
+unsafe external "C" as libc because "formatted output via libc":
+    fn printf(string fmt, ...) i32 = "printf"
+```
+
+The `...` lowers to an LLVM `var_arg` declaration. Untyped C varargs are confined
+to `unsafe external` blocks on purpose - they carry no type or count information,
+so they are exactly as unsafe as in C, and that danger belongs only at the foreign
+boundary. Native Sushi variadics use the safe, typed `...T` array form instead (see
+the variadics guide); they are a different mechanism and never produce a C
+`var_arg` call.
+
+Two boundary rules apply to the trailing arguments at each call:
+
+- **Default-argument promotion**, exactly as C performs it: `i8`/`i16`/`bool`
+  widen to `i32`, and `f32` widens to `f64`. A format string must match the
+  *promoted* type - `%d` for any narrow integer, `%f` for an `f32` (it arrives as a
+  `double`). This is the classic C varargs footgun; the compiler performs the
+  promotion but cannot check it against your format string.
+- **C-ABI-only**: each trailing argument must be a C-representable value
+  (a primitive, `ptr`, or `string`). A `string` trailing argument is marshalled to
+  `char*` and freed at scope exit on every path, identical to a fixed `string`
+  argument. Passing a non-C-ABI value (a struct, `Maybe`, array, ...) is `CE5005`.
+
+A variadic extern must declare at least one fixed parameter (`CE5004`): the C ABI's
+`va_start` needs a named argument to anchor on.
 
 ## The safety contract: four suspended guarantees
 
@@ -180,6 +212,8 @@ fn close_handle(ptr h) ~:
 | `CE5001` | error | A link-name clashes with a compiler built-in extern of a **different** signature. An identical signature is allowed (LLVM deduplicates). |
 | `CE5002` | error | An external - or any public function whose signature exposes a foreign `ptr` - appears in a `.slib` public API. FFI is a private unit detail and cannot propagate through Nori packages. |
 | `CE5003` | error | An external signature uses a non-C-ABI type, or the ABI string is not `"C"`. |
+| `CE5004` | error | A variadic external (`...`) declares no fixed parameter. The C ABI needs at least one named argument for `va_start`. |
+| `CE5005` | error | A non-C-ABI value is passed as a variadic (`...`) argument at a call site. |
 
 ## Linking: what can actually be resolved
 

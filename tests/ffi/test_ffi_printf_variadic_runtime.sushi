@@ -1,0 +1,29 @@
+# FFI: a variadic libc function (printf) bound through an unsafe external block.
+# Safe Sushi wrappers fold the raw i32 return back into Sushi's Result world and
+# exercise several argument counts and types (int, string, multiple values).
+# EXPECT_STDOUT_CONTAINS: answer = 42
+# EXPECT_STDOUT_CONTAINS: pair: 1, 2
+# EXPECT_STDOUT_CONTAINS: just text
+# EXPECT_STDOUT_CONTAINS: wrappers ok
+unsafe external "C" as libc because "formatted output via libc printf":
+    fn printf(string fmt, ...) i32 = "printf"
+
+# Safe wrapper: one string + one int variadic argument.
+fn say(string label, i32 value) i32:
+    return Result.Ok(libc.printf("%s = %d\n", label, value))
+
+# Safe wrapper: two int variadic arguments.
+fn pair(i32 a, i32 b) i32:
+    return Result.Ok(libc.printf("pair: %d, %d\n", a, b))
+
+# Safe wrapper: zero variadic arguments (only the fixed format string).
+fn plain(string text) i32:
+    return Result.Ok(libc.printf("%s\n", text))
+
+fn main() i32:
+    let i32 r1 = say("answer", 42).realise(0)
+    let i32 r2 = pair(1, 2).realise(0)
+    let i32 r3 = plain("just text").realise(0)
+    if (r1 > 0 and r2 > 0 and r3 > 0):
+        println("wrappers ok")
+    return Result.Ok(0)

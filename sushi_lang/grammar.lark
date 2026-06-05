@@ -26,7 +26,9 @@ perk_method: FN NAME "(" [parameters] ")" type _NEWLINE
 
 // Foreign Function Interface (FFI) - unsafe external blocks
 external_block: UNSAFE EXTERNAL STRING AS NAME [BECAUSE STRING] ":" _NEWLINE _INDENT extern_decl+ _DEDENT
-extern_decl: FN NAME "(" [parameters] ")" type "=" STRING _NEWLINE
+extern_decl: FN NAME "(" [ extern_params ] ")" type "=" STRING _NEWLINE
+extern_params: typed_param ("," typed_param)* ["," ELLIPSIS]
+             | ELLIPSIS
 
 // Extension statements - unified to avoid LALR ambiguity
 extend_stmt: EXTEND type extend_suffix
@@ -228,6 +230,7 @@ BIT_OR: "|"
 BIT_XOR: "^"
 LSHIFT: "<<"
 RSHIFT: ">>"
+ELLIPSIS.4: "..."
 RANGE_INCLUSIVE.3: "..="
 RANGE.3: ".."
 

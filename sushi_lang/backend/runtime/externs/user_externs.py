@@ -71,5 +71,5 @@ def _declare_one(codegen: 'LLVMCodegen', sig: 'ExternalSig') -> ir.Function:
 
     ret_ll = _abi_return_type(codegen, sig.ret_type)
     param_lls = [_abi_param_type(codegen, ty) for ty in sig.param_types]
-    fn_ty = ir.FunctionType(ret_ll, param_lls, var_arg=False)
+    fn_ty = ir.FunctionType(ret_ll, param_lls, var_arg=getattr(sig, "is_variadic", False))
     return ir.Function(codegen.module, fn_ty, name=sig.link_name)

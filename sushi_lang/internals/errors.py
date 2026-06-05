@@ -1105,6 +1105,14 @@ _add(ErrorMessage("CE5003", Severity.ERROR,
     "external signature uses non-C-ABI type '{type}'",
     Category.TYPE, "External (FFI) signatures are limited to C-representable types: i8..i64, u8..u64, f32, f64, bool, string (auto-marshalled), ptr, and ~ (void). Result/Maybe, structs, arrays, references, and user types cannot cross the C ABI boundary."))
 
+_add(ErrorMessage("CE5004", Severity.ERROR,
+    "variadic external '{name}' requires at least one fixed parameter",
+    Category.TYPE, "A variadic `unsafe external` declaration (trailing `...`) must declare at least one fixed parameter. The C ABI's va_start needs a named argument to anchor the variadic argument list."))
+
+_add(ErrorMessage("CE5005", Severity.ERROR,
+    "non-C-ABI type '{type}' passed as variadic argument to external '{name}'",
+    Category.TYPE, "Each trailing variadic argument to an external call must be C-representable: i8..i64, u8..u64, f32, f64, bool, string (auto-marshalled), or ptr. Result/Maybe, structs, arrays, references, and user types cannot cross the C ABI boundary."))
+
 # Array bounds errors
 _add(ErrorMessage("RE2020", Severity.ERROR,
     "array index out of bounds",

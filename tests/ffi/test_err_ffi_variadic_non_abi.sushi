@@ -1,0 +1,14 @@
+# FFI: passing a non-C-ABI value (a user struct) as a trailing variadic argument
+# is rejected. Only C-representable types can cross the variadic boundary.
+# EXPECT_ERROR_CODE: CE5005
+unsafe external "C" as libc because "formatted output via libc printf":
+    fn printf(string fmt, ...) i32 = "printf"
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point p = Point(1, 2)
+    let i32 r = libc.printf("%d\n", p)
+    return Result.Ok(0)

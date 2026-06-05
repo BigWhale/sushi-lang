@@ -65,8 +65,13 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
 
 
 def parse_params(t: Tree, ast_builder: 'ASTBuilder') -> List[Param]:
-    """Parse parameters: typed_param ("," typed_param)*"""
-    assert t.data == "parameters"
+    """Parse parameters: typed_param ("," typed_param)*
+
+    Also accepts `extern_params` (which adds an optional trailing ELLIPSIS for
+    untyped C varargs); the ELLIPSIS token is ignored here and handled by the
+    extern declaration parser.
+    """
+    assert t.data in ("parameters", "extern_params")
 
     out: List[Param] = []
     for ch in t.children:

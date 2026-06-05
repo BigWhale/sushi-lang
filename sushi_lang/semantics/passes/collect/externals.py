@@ -27,6 +27,7 @@ class ExternalSig:
     param_types: Tuple[Type, ...]  # Parameter types (C-ABI representable)
     ret_type: Optional[Type]       # Raw C return type
     namespace: str                 # Owning namespace
+    is_variadic: bool = False      # Trailing untyped C varargs (`...`)
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
     loc: Optional[Span] = None
@@ -78,6 +79,7 @@ class ExternalCollector:
             param_types=tuple(p.ty for p in decl.params),
             ret_type=decl.ret,
             namespace=block.namespace,
+            is_variadic=decl.is_variadic,
             name_span=decl.name_span,
             ret_span=decl.ret_span,
             loc=decl.loc,
@@ -102,5 +104,33 @@ class ExternalCollector:
         if reserved is None:
             return
         reserved_params, reserved_ret = reserved
-        if tuple(sig.param_types) != tuple(reserved_params) or sig.ret_type != reserved_ret:
+        if not self._abi_compatible(sig, reserved_params, reserved_ret):
             er.emit(self.r, er.ERR.CE5001, decl.name_span or decl.loc, symbol=decl.link_name)
+
+    def _abi_compatible(self, sig: ExternalSig, reserved_params, reserved_ret) -> bool:
+        """True if `sig` and the reserved signature lower to the same C declaration.
+
+        LLVM only deduplicates identical declarations, so two Sushi signatures are
+        compatible iff they lower identically: `string` and `ptr` both become i8*.
+        A variadic user binding (e.g. `printf(string fmt, ...)`) is compatible with
+        a reserved variadic family declaration as long as its FIXED params match the
+        reserved fixed params; the trailing `...` matches the built-in's var_arg.
+        """
+        from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
+
+        def abi_key(ty):
+            # string and ptr are both i8* at the C boundary.
+            if isinstance(ty, ForeignPtrType):
+                return "i8*"
+            if isinstance(ty, BuiltinType) and ty == BuiltinType.STRING:
+                return "i8*"
+            return ty
+
+        if abi_key(sig.ret_type) != abi_key(reserved_ret):
+            return False
+        # `sig.param_types` holds only the fixed params (a trailing `...` is not a
+        # param), so a variadic binding's fixed params must match the reserved fixed
+        # params; the `...` then covers the built-in's var_arg.
+        sig_params = tuple(abi_key(p) for p in sig.param_types)
+        reserved_keys = tuple(abi_key(p) for p in reserved_params)
+        return sig_params == reserved_keys

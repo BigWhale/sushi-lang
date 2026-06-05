@@ -85,8 +85,14 @@ def parse_extern_decl(t: Tree, ast_builder: 'ASTBuilder') -> ExternalDecl:
     if link_tok is None:
         raise NotImplementedError("extern_decl: missing link-name STRING")
 
-    params_node = first_tree(t.children, "parameters")
+    # The trailing `...` (untyped C varargs) lives inside the extern_params node.
+    params_node = first_tree(t.children, "extern_params")
     params = parse_params(params_node, ast_builder) if params_node else []
+    is_variadic = bool(
+        params_node is not None
+        and any(isinstance(c, Token) and c.type == "ELLIPSIS"
+                for c in params_node.children)
+    )
 
     # The return type is the single type node child.
     ret_node = None
@@ -101,6 +107,7 @@ def parse_extern_decl(t: Tree, ast_builder: 'ASTBuilder') -> ExternalDecl:
         params=params,
         ret=ret_ty,
         link_name=_strip_string_token(link_tok),
+        is_variadic=is_variadic,
         name_span=span_of(name_tok),
         ret_span=span_of(ret_node),
         loc=span_of(t),
