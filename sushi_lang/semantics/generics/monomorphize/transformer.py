@@ -176,6 +176,23 @@ class TypeSubstitutor:
         # For all other types (BuiltinType, etc.), return as-is
         return ty
 
+    def _pack_binding_for(
+        self, param: 'Param', substitution: Dict[str, "Type | TypePack"]
+    ) -> 'TypePack | None':
+        """The TypePack a value-parameter fans out to, or None if it is not pack-typed.
+
+        A value-parameter is pack-typed iff its declared type is a bare type-parameter
+        reference (TypeParameter/UnknownType) whose name is bound to a TypePack in the
+        substitution map. Shared by expand_pack_param (signature fan-out) and the
+        monomorphizer's nested-instantiation scan (which must skip pack-typed params so
+        they never reach the scalar-position guard in substitute_type).
+        """
+        if isinstance(param.ty, (TypeParameter, UnknownType)):
+            binding = substitution.get(param.ty.name)
+            if isinstance(binding, TypePack):
+                return binding
+        return None
+
     def expand_pack_param(
         self, param: 'Param', substitution: Dict[str, "Type | TypePack"]
     ) -> List['Param']:
@@ -217,20 +234,19 @@ class TypeSubstitutor:
         # Detect a pack-typed parameter: a bare type-param reference bound to a
         # TypePack. The expansion happens HERE, before substitute_type is ever
         # called on the pack name (which would hit the scalar-position guard).
-        if isinstance(param.ty, (TypeParameter, UnknownType)):
-            binding = substitution.get(param.ty.name)
-            if isinstance(binding, TypePack):
-                return [
-                    Param(
-                        name=f"{param.name}_{i}",
-                        ty=element_type,
-                        name_span=param.name_span,
-                        type_span=param.type_span,
-                        loc=getattr(param, 'loc', None),
-                        is_variadic=False,
-                    )
-                    for i, element_type in enumerate(binding.types)
-                ]
+        pack = self._pack_binding_for(param, substitution)
+        if pack is not None:
+            return [
+                Param(
+                    name=f"{param.name}_{i}",
+                    ty=element_type,
+                    name_span=param.name_span,
+                    type_span=param.type_span,
+                    loc=getattr(param, 'loc', None),
+                    is_variadic=False,
+                )
+                for i, element_type in enumerate(pack.types)
+            ]
 
         # Normal (non-pack) parameter: reproduce the legacy single-param result.
         concrete_type = self.substitute_type(param.ty, substitution) if param.ty else None

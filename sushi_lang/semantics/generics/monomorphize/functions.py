@@ -359,9 +359,6 @@ class FunctionMonomorphizer:
         """
         from sushi_lang.semantics.ast import Let, ExprStmt, Return, If, While, Match, Foreach, Block
 
-        from sushi_lang.semantics.generics.types import TypeParameter, TypePack
-        from sushi_lang.semantics.typesys import UnknownType
-
         # Build variable type map from function parameters
         var_types = {}
         for param in generic_func.params:
@@ -371,9 +368,7 @@ class FunctionMonomorphizer:
                 # body usage (expand(...)) is a later phase, so it contributes
                 # no entry to the scalar var-type map here (and routing it
                 # through substitute_type would hit the scalar-position guard).
-                if isinstance(param.ty, (TypeParameter, UnknownType)) and isinstance(
-                    substitution.get(param.ty.name), TypePack
-                ):
+                if self.monomorphizer.substitutor._pack_binding_for(param, substitution) is not None:
                     continue
                 # Substitute type parameters in parameter type
                 concrete_ty = self.monomorphizer.substitutor.substitute_type(param.ty, substitution)
