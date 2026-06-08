@@ -1,0 +1,14 @@
+public fn area(i32 width, i32 height) i32:
+    return Result.Ok(width * height)
+
+fn perimeter(i32 width, i32 height) i32:
+    return Result.Ok(2 * (width + height))
+
+fn main() i32:
+    let i32 a = area(6, 7).realise(0)
+    let i32 p = perimeter(6, 7).realise(0)
+
+    println("area: {a}")
+    println("perimeter: {p}")
+
+    return Result.Ok(0)

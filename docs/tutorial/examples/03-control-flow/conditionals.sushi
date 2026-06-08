@@ -1,0 +1,17 @@
+fn main() i32:
+    let i32 improbability = 42
+
+    if (improbability > 100):
+        println("Reality is optional.")
+    elif (improbability == 42):
+        println("That is the answer.")
+    else:
+        println("Carry on.")
+
+    let bool has_towel = true
+    if (has_towel):
+        println("You are a hoopy frood.")
+    else:
+        println("Don't forget your towel.")
+
+    return Result.Ok(0)

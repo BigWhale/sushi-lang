@@ -1,0 +1,21 @@
+extend i32 squared() i32:
+    return self * self
+
+extend i32 is_answer() bool:
+    return self == 42
+
+extend string banner() string:
+    return "*** {self} ***"
+
+fn main() i32:
+    let i32 six = 6
+    println("{six} squared is {six.squared()}")
+
+    let i32 answer = 42
+    if (answer.is_answer()):
+        println("{answer} is the answer")
+
+    let string panic = "Don't panic"
+    println(panic.banner())
+
+    return Result.Ok(0)

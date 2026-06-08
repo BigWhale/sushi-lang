@@ -1,0 +1,45 @@
+# Iterating over a HashMap.
+#
+# Three iterators are available:
+#   .keys()    -> each key
+#   .values()  -> each value
+#   .entries() -> each Entry, with .key and .value fields
+#
+# A hash map has no defined order, so we accumulate totals rather
+# than relying on iteration order for our output.
+
+use <collections/hashmap>
+use <collections/strings>
+
+fn main() i32:
+    let HashMap<string, i32> scores = HashMap.new()
+    scores.insert("Arthur", 42)
+    scores.insert("Ford", 200)
+    scores.insert("Trillian", 35)
+
+    # Count the keys (and total their lengths, so the key is used).
+    let i32 key_count = 0
+    let i32 name_chars = 0
+    foreach(name in scores.keys()):
+        key_count := key_count + 1
+        name_chars := name_chars + name.len()
+    println("Number of names: {key_count}")
+    println("Total name length: {name_chars}")
+
+    # Sum the values.
+    let i32 total = 0
+    foreach(score in scores.values()):
+        total := total + score
+    println("Sum of scores: {total}")
+
+    # Entries give you key and value together.
+    let i32 entry_count = 0
+    let i32 entry_total = 0
+    foreach(entry in scores.entries()):
+        entry_count := entry_count + 1
+        entry_total := entry_total + entry.value
+    println("Entries seen: {entry_count}")
+    println("Total via entries: {entry_total}")
+
+    scores.free()
+    return Result.Ok(0)

@@ -1,0 +1,18 @@
+fn main() i32:
+    let i32 decimal = 42
+    let i32 hex = 0x2A
+    let i32 binary = 0b101010
+    let i32 octal = 0o52
+
+    println("decimal: {decimal}")
+    println("hex 0x2A: {hex}")
+    println("binary 0b101010: {binary}")
+    println("octal 0o52: {octal}")
+
+    let u32 flags = 0xDEAD_BEEF as u32
+    let i32 nibbles = 0b1010_1010
+
+    println("grouped hex 0xDEAD_BEEF: {flags}")
+    println("grouped binary 0b1010_1010: {nibbles}")
+
+    return Result.Ok(0)

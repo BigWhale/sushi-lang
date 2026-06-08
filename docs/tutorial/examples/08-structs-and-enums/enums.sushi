@@ -1,0 +1,37 @@
+enum Shape:
+    Point()
+    Circle(f64)
+    Rectangle(f64, f64)
+
+fn main() i32:
+    # Each value is exactly one variant, carrying its own data.
+    let Shape dot = Shape.Point()
+    let Shape disc = Shape.Circle(2.0)
+    let Shape box = Shape.Rectangle(3.0, 4.0)
+
+    # match is how we read the data back out (Chapter 9 covers this in depth).
+    match dot:
+        Shape.Point() ->
+            println("A point has no size.")
+        Shape.Circle(r) ->
+            println("A circle of radius {r}.")
+        Shape.Rectangle(w, h) ->
+            println("A rectangle {w} by {h}.")
+
+    match disc:
+        Shape.Point() ->
+            println("A point has no size.")
+        Shape.Circle(r) ->
+            println("A circle of radius {r}.")
+        Shape.Rectangle(w, h) ->
+            println("A rectangle {w} by {h}.")
+
+    match box:
+        Shape.Point() ->
+            println("A point has no size.")
+        Shape.Circle(r) ->
+            println("A circle of radius {r}.")
+        Shape.Rectangle(w, h) ->
+            println("A rectangle {w} by {h}.")
+
+    return Result.Ok(0)

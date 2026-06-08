@@ -1,0 +1,12 @@
+use <random>
+
+fn main() i32:
+    # Seed the generator so the sequence is reproducible across runs.
+    srand(42 as u64)
+
+    println("Rolling three dice for the Total Perspective Vortex...")
+    foreach(n in 1..=3):
+        let i32 roll = rand_range(1, 7)
+        println("roll {n}: d6 -> {roll}")
+
+    return Result.Ok(0)

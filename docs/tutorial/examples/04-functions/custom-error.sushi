@@ -1,0 +1,25 @@
+enum NavError:
+    NoFuel
+    UnknownDestination
+
+fn jump(string destination, i32 fuel) string | NavError:
+    if (fuel <= 0):
+        return Result.Err(NavError.NoFuel)
+    if (destination == ""):
+        return Result.Err(NavError.UnknownDestination)
+    return Result.Ok("Jumping to {destination}")
+
+fn main() i32:
+    let Result<string, NavError> trip = jump("Magrathea", 100)
+    if (trip):
+        println(trip.realise("nowhere"))
+    else:
+        println("The jump failed.")
+
+    let Result<string, NavError> stranded = jump("Magrathea", 0)
+    if (stranded):
+        println(stranded.realise("nowhere"))
+    else:
+        println("The jump failed: out of fuel.")
+
+    return Result.Ok(0)

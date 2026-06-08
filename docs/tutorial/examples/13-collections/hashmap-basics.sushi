@@ -1,0 +1,42 @@
+# HashMap<K, V>: key-value lookups in O(1) average time.
+#
+# Unlike List<T>, HashMap needs an explicit import.
+
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap<string, i32> ages = HashMap.new()
+
+    # Insert key-value pairs.
+    ages.insert("Arthur", 42)
+    ages.insert("Ford", 200)
+    ages.insert("Trillian", 35)
+
+    println("Entries: {ages.len()}")
+
+    # .get() returns Maybe<V>, so a missing key is handled, not fatal.
+    match ages.get("Arthur"):
+        Maybe.Some(age) ->
+            println("Arthur is {age}")
+        Maybe.None() ->
+            println("Arthur not found")
+
+    # .contains_key() checks existence without pulling out the value.
+    if (ages.contains_key("Marvin")):
+        println("Marvin is aboard")
+    else:
+        println("No Marvin here")
+
+    # Inserting an existing key replaces its value.
+    ages.insert("Arthur", 43)
+    match ages.get("Arthur"):
+        Maybe.Some(age) ->
+            println("Arthur is now {age}")
+        Maybe.None() ->
+            println("gone")
+
+    # Reclaim memory; the map stays usable afterwards.
+    ages.free()
+    println("Entries after free: {ages.len()}")
+
+    return Result.Ok(0)

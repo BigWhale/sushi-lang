@@ -1,0 +1,29 @@
+# Move semantics vs copy semantics.
+#
+# Primitives and strings are COPIED on assignment: the original
+# stays valid. Dynamic arrays are MOVED: the source is consumed and
+# can no longer be used (this is how Sushi avoids double-frees).
+
+fn main() i32:
+    # Primitives are copied
+    let i32 x = 42
+    let i32 y = 0
+    y := x
+    println("x is still usable: {x}")
+    println("y is a copy: {y}")
+
+    # Strings are copied too
+    let string s1 = "Mostly Harmless"
+    let string s2 = ""
+    s2 := s1
+    println("s1: {s1}")
+    println("s2: {s2}")
+
+    # Dynamic arrays are moved
+    let i32[] source = from([1, 2, 3])
+    let i32[] dest = new()
+    dest := source
+    # `source` is now moved-out and must not be touched again.
+    println("dest length after move: {dest.len()}")
+
+    return Result.Ok(0)

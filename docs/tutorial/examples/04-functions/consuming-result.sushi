@@ -1,0 +1,22 @@
+fn safe_divide(i32 a, i32 b) i32:
+    if (b == 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(a / b)
+
+fn main() i32:
+    let Result<i32, StdError> good = safe_divide(42, 6)
+    if (good):
+        println("42 / 6 = {good.realise(0)}")
+    else:
+        println("Could not divide.")
+
+    let Result<i32, StdError> bad = safe_divide(42, 0)
+    if (bad):
+        println("This will not print.")
+    else:
+        println("Division by zero refused, as it should be.")
+
+    let i32 fallback = safe_divide(10, 0).realise(-1)
+    println("With a default: {fallback}")
+
+    return Result.Ok(0)

@@ -1,0 +1,27 @@
+perk Describable:
+    fn describe() string
+
+struct Robot:
+    string name
+    i32 battery
+
+struct Ship:
+    string name
+    i32 crew
+
+extend Robot with Describable:
+    fn describe() string:
+        return "{self.name} (battery: {self.battery}%)"
+
+extend Ship with Describable:
+    fn describe() string:
+        return "{self.name} (crew: {self.crew})"
+
+fn main() i32:
+    let Robot marvin = Robot("Marvin", 42)
+    let Ship hog = Ship("Heart of Gold", 5)
+
+    println(marvin.describe())
+    println(hog.describe())
+
+    return Result.Ok(0)

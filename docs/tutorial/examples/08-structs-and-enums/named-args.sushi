@@ -1,0 +1,18 @@
+struct Config:
+    string host
+    i32 port
+    bool use_ssl
+
+fn main() i32:
+    # Positional: clear, but you have to remember the order.
+    let Config a = Config("localhost", 8080, false)
+
+    # Named: order-independent, and each value labels itself.
+    let Config b = Config(use_ssl: true, host: "magrathea.net", port: 443)
+
+    println("A connects to {a.host} on port {a.port}.")
+    println("B connects to {b.host} on port {b.port}.")
+    if (b.use_ssl):
+        println("B uses SSL.")
+
+    return Result.Ok(0)

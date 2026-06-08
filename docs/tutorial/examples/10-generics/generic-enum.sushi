@@ -1,0 +1,17 @@
+enum Tree<T>:
+    Leaf(T)
+    Empty()
+
+fn main() i32:
+    let Tree<i32> number = Tree.Leaf(42)
+    let Tree<string> nothing = Tree.Empty()
+
+    match number:
+        Tree.Leaf(v) -> println("A leaf holding {v}")
+        Tree.Empty() -> println("An empty tree")
+
+    match nothing:
+        Tree.Leaf(v) -> println("A leaf holding {v}")
+        Tree.Empty() -> println("An empty tree")
+
+    return Result.Ok(0)

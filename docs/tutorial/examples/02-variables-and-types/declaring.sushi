@@ -1,0 +1,16 @@
+fn main() i32:
+    let i32 answer = 42
+    let string name = "Arthur Dent"
+    let bool has_towel = true
+
+    println("Name: {name}")
+    println("The answer: {answer}")
+    println("Has a towel: {has_towel}")
+
+    answer := 54
+    println("Recalculated (wrongly): {answer}")
+
+    answer := 42
+    println("That is better: {answer}")
+
+    return Result.Ok(0)

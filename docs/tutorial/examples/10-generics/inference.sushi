@@ -1,0 +1,20 @@
+struct Pair<T, U>:
+    T first
+    U second
+
+fn identity<T>(T x) T:
+    return Result.Ok(x)
+
+fn make_pair<T, U>(T a, U b) Pair<T, U>:
+    return Result.Ok(Pair(first: a, second: b))
+
+fn main() i32:
+    let i32 n = identity(7).realise(0)
+    let string s = identity("towel").realise("")
+
+    println("identity gives {n} and {s}")
+
+    let Pair<string, i32> p = make_pair("answer", 42).realise(Pair(first: "", second: 0))
+    println("make_pair built ({p.first}, {p.second})")
+
+    return Result.Ok(0)

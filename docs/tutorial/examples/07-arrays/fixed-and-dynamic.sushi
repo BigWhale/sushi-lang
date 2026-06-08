@@ -1,0 +1,17 @@
+fn main() i32:
+    # A fixed-size array: the length is part of its type (i32[5]).
+    let i32[5] primes = [2, 3, 5, 7, 11]
+    println("There are {primes.len()} primes here.")
+
+    # A dynamic array: built from a literal with from(...), can grow later.
+    let i32[] fibonacci = from([1, 1, 2, 3, 5])
+    println("Fibonacci so far: {fibonacci.len()} numbers.")
+
+    # An empty dynamic array, built up element by element.
+    let string[] crew = new()
+    crew.push("Arthur")
+    crew.push("Ford")
+    crew.push("Zaphod")
+    println("The Heart of Gold has {crew.len()} crew aboard.")
+
+    return Result.Ok(0)

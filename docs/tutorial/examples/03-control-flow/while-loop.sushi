@@ -1,0 +1,11 @@
+fn main() i32:
+    let i32 countdown = 5
+
+    println("Hyperspace countdown:")
+    while (countdown > 0):
+        println("T-minus {countdown}")
+        countdown := countdown - 1
+
+    println("Jump!")
+
+    return Result.Ok(0)

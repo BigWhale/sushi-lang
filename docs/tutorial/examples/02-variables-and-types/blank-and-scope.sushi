@@ -1,0 +1,16 @@
+fn announce(string who) ~:
+    println("Now boarding: {who}")
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32 outer = 1
+    println("outer is {outer}")
+
+    if (outer == 1):
+        let i32 inner = 2
+        println("inner is {inner}")
+        println("outer is still visible: {outer}")
+
+    announce("Ford Prefect")
+
+    return Result.Ok(0)

@@ -1,0 +1,19 @@
+# RAII: cleanup happens automatically at the end of a scope.
+# The List below allocates memory on the heap, but we never free it
+# by hand. When `crew` goes out of scope at the end of main, the
+# compiler has already inserted the cleanup for us.
+
+fn main() i32:
+    let List<string> crew = List.new()
+    crew.push("Arthur Dent")
+    crew.push("Ford Prefect")
+    crew.push("Trillian")
+
+    println("Crew size: {crew.len()}")
+
+    foreach(member in crew.iter()):
+        println("  - {member}")
+
+    # No free(), no delete, no close(). The list's heap buffer is
+    # released automatically when this function returns.
+    return Result.Ok(0)

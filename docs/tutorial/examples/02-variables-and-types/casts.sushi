@@ -1,0 +1,17 @@
+fn main() i32:
+    let i32 distance = 42
+    let i32 days = 5
+
+    let i32 int_div = distance / days
+    println("integer division 42 / 5: {int_div}")
+
+    let f64 exact = (distance as f64) / (days as f64)
+    println("float division 42.0 / 5.0: {exact}")
+
+    let i64 wide = distance as i64
+    let u8 byte = 255 as u8
+
+    println("widened to i64: {wide}")
+    println("u8 max: {byte}")
+
+    return Result.Ok(0)

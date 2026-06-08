@@ -1,0 +1,25 @@
+use <collections/strings>
+
+fn main() i32:
+    let string entry = "Don't Panic"
+
+    # Length in characters vs. size in bytes.
+    println("len:  {entry.len()}")
+    println("size: {entry.size()}")
+
+    # Membership and edge checks return plain bools.
+    println("contains Panic: {entry.contains('Panic')}")
+    println("starts with Don: {entry.starts_with('Don')}")
+    println("ends with ic:   {entry.ends_with('ic')}")
+
+    # count returns how many non-overlapping times a needle appears.
+    println("count of n: {entry.count('n')}")
+
+    # find returns Maybe<i32>: Some(index) or None.
+    match entry.find('Panic'):
+        Maybe.Some(pos) ->
+            println("Found 'Panic' at {pos}")
+        Maybe.None() ->
+            println("'Panic' not found")
+
+    return Result.Ok(0)

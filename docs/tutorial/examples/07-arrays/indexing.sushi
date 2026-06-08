@@ -1,0 +1,21 @@
+fn main() i32:
+    let string[] crew = from(["Arthur", "Ford", "Zaphod", "Trillian"])
+
+    # Direct indexing: fast, but throws RE2020 at runtime if out of bounds.
+    println("Captain (sort of): {crew[2]}")
+
+    # Safe access: .get(i) returns Maybe<string> instead of crashing.
+    match crew.get(1):
+        Maybe.Some(name) ->
+            println("Index 1 is {name}.")
+        Maybe.None() ->
+            println("Index 1 is out of bounds.")
+
+    # Asking for an index that does not exist gives Maybe.None(), not a crash.
+    match crew.get(42):
+        Maybe.Some(name) ->
+            println("Index 42 is {name}.")
+        Maybe.None() ->
+            println("There is nobody at index 42.")
+
+    return Result.Ok(0)

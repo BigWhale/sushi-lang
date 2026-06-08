@@ -1,0 +1,17 @@
+use <math>
+
+fn main() i32:
+    # Polymorphic helpers work across numeric types.
+    let i32 biggest = max(7, 42)
+    let i32 magnitude = abs(-42)
+
+    # Floating-point intrinsics.
+    let f64 root = sqrt(1764.0)
+    let f64 hyp = hypot(3.0, 4.0)
+
+    println("max(7, 42) = {biggest}")
+    println("abs(-42) = {magnitude}")
+    println("sqrt(1764) = {root}")
+    println("hypot(3, 4) = {hyp}")
+
+    return Result.Ok(0)

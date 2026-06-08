@@ -1,0 +1,24 @@
+perk Hashable:
+    fn hash() u64
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Hashable:
+    fn hash() u64:
+        return (self.x as u64) + (self.y as u64)
+
+fn fingerprint<T: Hashable>(T value) u64:
+    return Result.Ok(value.hash())
+
+fn main() i32:
+    let Point p = Point(10, 20)
+    let u64 hp = fingerprint(p).realise(0 as u64)
+    println("Point fingerprint: {hp}")
+
+    let u64 hi = fingerprint(42).realise(0 as u64)
+    let u64 hb = fingerprint(true).realise(0 as u64)
+    println("i32 and bool hashed via synthetic Hashable: {hi}, {hb}")
+
+    return Result.Ok(0)

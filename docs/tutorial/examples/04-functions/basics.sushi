@@ -1,0 +1,15 @@
+fn add(i32 a, i32 b) i32:
+    return Result.Ok(a + b)
+
+fn greet(string name) ~:
+    println("Hello, {name}! Welcome aboard the Heart of Gold.")
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32 sum = add(40, 2).realise(0)
+    println("40 + 2 = {sum}")
+
+    greet("Arthur")
+    greet("Ford")
+
+    return Result.Ok(0)

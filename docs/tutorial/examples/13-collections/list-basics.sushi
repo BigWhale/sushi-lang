@@ -1,0 +1,36 @@
+# List<T>: a growable, ordered collection.
+#
+# List<T> is built in - no import needed. It grows automatically as
+# you push onto it, and frees itself via RAII at scope exit.
+
+fn main() i32:
+    let List<string> crew = List.new()
+
+    # Append elements; the list resizes itself as needed.
+    crew.push("Arthur Dent")
+    crew.push("Ford Prefect")
+    crew.push("Zaphod Beeblebrox")
+
+    println("Crew size: {crew.len()}")
+
+    # Safe access: .get() returns Maybe<T>, never crashes.
+    match crew.get(0):
+        Maybe.Some(name) ->
+            println("Captain: {name}")
+        Maybe.None() ->
+            println("Empty crew")
+
+    # Iterate with .iter().
+    foreach(member in crew.iter()):
+        println("  - {member}")
+
+    # .pop() removes and returns the last element as Maybe<T>.
+    match crew.pop():
+        Maybe.Some(name) ->
+            println("Beamed out: {name}")
+        Maybe.None() ->
+            println("Nobody left")
+
+    println("Remaining: {crew.len()}")
+
+    return Result.Ok(0)

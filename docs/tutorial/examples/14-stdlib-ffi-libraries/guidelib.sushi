@@ -1,0 +1,9 @@
+# guidelib.sushi - a tiny reusable library.
+# Compile as a .slib with: ./sushic --lib guidelib.sushi -o /tmp/guidelib.slib
+
+# Public functions form the library's API.
+public fn add(i32 a, i32 b) i32:
+    return Result.Ok(a + b)
+
+public fn answer() i32:
+    return Result.Ok(42)

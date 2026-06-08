@@ -1,0 +1,29 @@
+use <io/files>
+
+fn main() i32:
+    # Write a line to a file in /tmp, then read it back.
+    match open("/tmp/guide_entry.txt", FileMode.Write()):
+        FileResult.Ok(f) ->
+            f.write("Earth: Mostly Harmless")
+            f.close()
+            println("Entry filed.")
+        FileResult.Err(FileError.PermissionDenied()) ->
+            println("Permission denied")
+            return Result.Err(StdError.Error)
+        FileResult.Err(_) ->
+            println("Failed to write entry")
+            return Result.Err(StdError.Error)
+
+    match open("/tmp/guide_entry.txt", FileMode.Read()):
+        FileResult.Ok(f) ->
+            let string content = f.read()
+            f.close()
+            println("Entry reads: {content}")
+        FileResult.Err(FileError.NotFound()) ->
+            println("Entry not found")
+            return Result.Err(StdError.Error)
+        FileResult.Err(_) ->
+            println("Failed to read entry")
+            return Result.Err(StdError.Error)
+
+    return Result.Ok(0)
