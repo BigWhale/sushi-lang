@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Dict, TYPE_CHECKING
 import copy
 
-from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter
+from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter, TypePack
 from sushi_lang.semantics.typesys import (
     Type, EnumType, EnumVariantInfo, StructType, UnknownType,
     PointerType, ArrayType, DynamicArrayType
@@ -45,13 +45,14 @@ class TypeSubstitutor:
         """
         self.monomorphizer = monomorphizer
 
-    def substitute_type(self, ty: Type, substitution: Dict[str, Type]) -> Type:
+    def substitute_type(self, ty: Type, substitution: Dict[str, "Type | TypePack"]) -> Type:
         """Recursively substitute type parameters in a type.
 
         Args:
             ty: The type to substitute in (may contain TypeParameter or UnknownType
                 instances representing type parameters)
-            substitution: Map from type parameter names to concrete types
+            substitution: Map from type parameter names to concrete types (or a
+                ``TypePack`` for pack bindings; see the scalar-position guard below)
 
         Returns:
             Type with all TypeParameters replaced by concrete types
@@ -60,6 +61,14 @@ class TypeSubstitutor:
         if isinstance(ty, TypeParameter):
             if ty.name in substitution:
                 result = substitution[ty.name]
+                # A pack binding cannot fill a single scalar type position; the
+                # position-level fan-out is handled at the parameter-list level
+                # (later phase), not here.
+                if isinstance(result, TypePack):
+                    raise ValueError(
+                        f"type-pack '{ty.name}' used in a scalar type position; "
+                        f"pack expansion happens at the parameter-list level"
+                    )
                 # If the result is a GenericTypeRef, recursively resolve it to an EnumType
                 if isinstance(result, GenericTypeRef):
                     return self.substitute_type(result, {})
@@ -72,8 +81,15 @@ class TypeSubstitutor:
         # This happens when the AST builder creates UnknownType for type parameter references
         if isinstance(ty, UnknownType):
             if ty.name in substitution:
+                result = substitution[ty.name]
+                # A pack binding cannot fill a single scalar type position (see above).
+                if isinstance(result, TypePack):
+                    raise ValueError(
+                        f"type-pack '{ty.name}' used in a scalar type position; "
+                        f"pack expansion happens at the parameter-list level"
+                    )
                 # This UnknownType is actually a type parameter reference
-                return substitution[ty.name]
+                return result
             # Otherwise, it's a real unknown type (struct/enum) - pass through
             return ty
 
@@ -160,7 +176,7 @@ class TypeSubstitutor:
         # For all other types (BuiltinType, etc.), return as-is
         return ty
 
-    def substitute_body(self, body: 'Block', substitution: Dict[str, Type]) -> 'Block':
+    def substitute_body(self, body: 'Block', substitution: Dict[str, "Type | TypePack"]) -> 'Block':
         """Substitute type parameters in a function body.
 
         Always creates a new Block for each monomorphized function.
@@ -185,7 +201,7 @@ class TypeSubstitutor:
         result.statements = new_statements
         return result
 
-    def substitute_statement(self, stmt, substitution: Dict[str, Type]):
+    def substitute_statement(self, stmt, substitution: Dict[str, "Type | TypePack"]):
         """Recursively substitute types in a statement.
 
         Always creates a new statement for each monomorphized function.
@@ -288,7 +304,7 @@ class TypeSubstitutor:
         # Unknown statement type - fallback to deep copy (conservative)
         return copy.deepcopy(stmt)
 
-    def substitute_expr(self, expr, substitution: Dict[str, Type]):
+    def substitute_expr(self, expr, substitution: Dict[str, "Type | TypePack"]):
         """Recursively substitute types in an expression.
 
         Always creates new expression nodes because expressions may be annotated

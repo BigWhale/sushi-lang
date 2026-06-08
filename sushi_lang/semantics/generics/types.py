@@ -9,7 +9,7 @@ This module contains the infrastructure for generic types, including:
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Tuple, Union
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type, EnumType, EnumVariantInfo
@@ -38,6 +38,30 @@ class TypeParameter:
 
     def __eq__(self, other) -> bool:
         return isinstance(other, TypeParameter) and self.name == other.name
+
+
+@dataclass(frozen=True)
+class TypePack:
+    """A type-parameter bound to an ordered, variable-length pack of types.
+
+    Phase 0 infrastructure for variadic generics (`...Ts`). During
+    monomorphization, a single type-parameter may bind to a *pack* of zero or
+    more concrete types rather than exactly one. Such a binding is represented
+    by this dataclass in the substitution map (`Dict[str, Type | TypePack]`).
+
+    There is no surface syntax for packs yet; instances are produced by the
+    monomorphizer's arity logic and consumed by later phases that perform
+    parameter-list fan-out. A `TypePack` is NOT a `Type` and must never be used
+    in a scalar type position.
+
+    Example:
+        TypePack((BuiltinType.I32, BuiltinType.STRING))  # str -> "pack(i32, string)"
+    """
+    types: Tuple[Type, ...]  # Ordered concrete types absorbed by the pack (zero or more)
+
+    def __str__(self) -> str:
+        inner = ", ".join(str(t) for t in self.types)
+        return f"pack({inner})"
 
 
 @dataclass(frozen=True)
@@ -291,4 +315,4 @@ def _substitute_type_params(ty: Type, substitution: dict[str, Type]) -> Type:
 
 # Update the Type union to include generic types
 # This will be imported in typesys.py
-__all__ = ["TypeParameter", "GenericEnumType", "GenericStructType", "GenericTypeRef"]
+__all__ = ["TypeParameter", "TypePack", "GenericEnumType", "GenericStructType", "GenericTypeRef"]

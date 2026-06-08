@@ -13,6 +13,7 @@ from typing import Dict, Tuple, Set, Optional, TYPE_CHECKING
 import copy
 
 from sushi_lang.semantics.generics.name_mangling import mangle_function_name
+from sushi_lang.semantics.generics.types import TypePack
 from sushi_lang.semantics.typesys import Type
 
 if TYPE_CHECKING:
@@ -37,6 +38,93 @@ class FunctionMonomorphizer:
                            caches, generic tables, and substitutor)
         """
         self.monomorphizer = monomorphizer
+
+    def build_substitution(
+        self,
+        generic: 'GenericFuncDef',
+        type_args: Tuple[Type, ...]
+    ) -> Dict[str, "Type | TypePack"]:
+        """Build the type-parameter -> binding substitution map for a generic.
+
+        Handles two cases:
+
+        - **No pack param** (the common, pre-existing case): requires an exact
+          1:1 arity match between ``generic.type_params`` and ``type_args``;
+          otherwise raises ``ValueError`` (same message as before). Each param
+          binds to a single ``Type``. Perk constraints are validated as before.
+        - **Trailing pack param** (``getattr(tp, 'is_pack', False)`` truthy):
+          the pack param must be the *last* type-param and there may be at most
+          one. The leading ``k = len(tps) - 1`` non-pack params bind 1:1 to
+          ``type_args[:k]``; the pack param binds to a ``TypePack`` absorbing
+          all trailing args ``type_args[k:]`` (zero or more). Requires
+          ``len(type_args) >= k``.
+
+        Args:
+            generic: Generic function definition (its ``type_params`` list).
+            type_args: Flat, ordered tuple of concrete type arguments.
+
+        Returns:
+            Mapping from type-parameter name to ``Type`` (regular binding) or
+            ``TypePack`` (pack binding).
+        """
+        tps = list(generic.type_params)
+
+        # Locate pack params (at most one, must be last).
+        pack_indices = [i for i, tp in enumerate(tps) if getattr(tp, 'is_pack', False)]
+
+        if not pack_indices:
+            # --- No pack param: byte-for-byte unchanged behavior ---
+            if len(type_args) != len(generic.type_params):
+                # Should not happen if instantiation detection is correct
+                raise ValueError(
+                    f"Type argument count mismatch: {generic.name} expects "
+                    f"{len(generic.type_params)} args, got {len(type_args)}"
+                )
+
+            # Validate perk constraints on type arguments
+            self.monomorphizer._validate_type_constraints(generic.type_params, type_args)
+
+            substitution: Dict[str, "Type | TypePack"] = {}
+            for param, arg in zip(generic.type_params, type_args):
+                param_name = param.name if hasattr(param, 'name') else str(param)
+                substitution[param_name] = arg
+            return substitution
+
+        # --- Pack param present ---
+        if len(pack_indices) > 1:
+            raise ValueError(
+                f"{generic.name} declares {len(pack_indices)} pack type-parameters; "
+                f"at most one is allowed"
+            )
+
+        k = pack_indices[0]
+        if k != len(tps) - 1:
+            raise ValueError(
+                f"{generic.name} declares a pack type-parameter that is not the "
+                f"last type-parameter (at index {k} of {len(tps)})"
+            )
+
+        if len(type_args) < k:
+            raise ValueError(
+                f"Type argument count mismatch: {generic.name} expects at least "
+                f"{k} args, got {len(type_args)}"
+            )
+
+        leading_params = tps[:k]
+        leading_args = type_args[:k]
+
+        # Validate perk constraints only on the leading 1:1 params.
+        self.monomorphizer._validate_type_constraints(leading_params, leading_args)
+
+        substitution = {}
+        for param, arg in zip(leading_params, leading_args):
+            param_name = param.name if hasattr(param, 'name') else str(param)
+            substitution[param_name] = arg
+
+        pack_param = tps[k]
+        pack_name = pack_param.name if hasattr(pack_param, 'name') else str(pack_param)
+        substitution[pack_name] = TypePack(tuple(type_args[k:]))
+        return substitution
 
     def monomorphize_function(
         self,
@@ -63,22 +151,9 @@ class FunctionMonomorphizer:
             # Cache stores FuncDef now
             return self.monomorphizer.func_cache[cache_key]
 
-        # Validate type arguments count
-        if len(type_args) != len(generic.type_params):
-            # Should not happen if instantiation detection is correct
-            raise ValueError(
-                f"Type argument count mismatch: {generic.name} expects "
-                f"{len(generic.type_params)} args, got {len(type_args)}"
-            )
-
-        # Validate perk constraints on type arguments
-        self.monomorphizer._validate_type_constraints(generic.type_params, type_args)
-
-        # Build substitution map
-        substitution: Dict[str, Type] = {}
-        for param, arg in zip(generic.type_params, type_args):
-            param_name = param.name if hasattr(param, 'name') else str(param)
-            substitution[param_name] = arg
+        # Build substitution map (arity-checked; supports an optional trailing
+        # pack type-parameter that absorbs all trailing type args).
+        substitution = self.build_substitution(generic, type_args)
 
         # Substitute in parameter types
         concrete_params = []
@@ -266,7 +341,7 @@ class FunctionMonomorphizer:
     def _collect_nested_instantiations(
         self,
         body: 'Block',
-        substitution: Dict[str, Type],
+        substitution: Dict[str, "Type | TypePack"],
         generic_func: 'GenericFuncDef'
     ) -> None:
         """Scan function body for calls to other generic functions and recursively monomorphize them.
@@ -317,7 +392,7 @@ class FunctionMonomorphizer:
                     if isinstance(arm.body, Block):
                         self._collect_nested_instantiations(arm.body, substitution, generic_func)
 
-    def _collect_from_expr(self, expr, substitution: Dict[str, Type], var_types: Dict[str, Type]) -> None:
+    def _collect_from_expr(self, expr, substitution: Dict[str, "Type | TypePack"], var_types: Dict[str, Type]) -> None:
         """Recursively scan expression for generic function calls.
 
         Args:
