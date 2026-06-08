@@ -73,3 +73,21 @@ unsafe external "C" as libc because "formatted output via libc":
 - **Public `.slib` export** of a native variadic function — blocked for v1 with `CE0116` (the
   `is_variadic` flag is not serialized into the library format yet), analogous to the CE5002 FFI
   boundary block.
+
+## v2 groundwork (internal, no surface yet)
+
+The v2 roadmap extends the native mechanism to **variadic generics** — heterogeneous, fully-typed
+parameter packs (`...Ts` + `expand(...)`), monomorphized at the call site. The first step is purely
+internal monomorphizer infrastructure with **no surface syntax**:
+
+- A generic type-parameter may now bind to a variable-length **pack** of types, represented by
+  `TypePack` (`semantics/generics/types.py`).
+- `monomorphize_function` builds a pack-aware substitution map (one trailing pack param absorbs the
+  tail; arity is part of the instantiation), and a pack-typed value parameter **fans out** into one
+  concrete parameter per pack element (`expand_pack_param`).
+- Name mangling encodes pack arity with a structurally collision-free `.pack{N}` marker, distinct
+  from regular-generic symbols, so distinct arities produce distinct `linkonce_odr`-stable symbols.
+
+This is exercised only by unit tests (`tests/unit/test_monomorphize_pack.py` and the `test_p0t*`
+suites); regular generics and the v1 `...T` / extern `...` paths are unaffected. The `...Ts` surface
+syntax, `expand(...)` lowering, and cross-library pack templates build on this in later phases.
