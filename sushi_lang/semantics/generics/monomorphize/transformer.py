@@ -8,7 +8,7 @@ This module handles the core substitution logic for monomorphization:
 - Type-aware substitution with copy-on-write for immutable types
 """
 from __future__ import annotations
-from typing import Dict, TYPE_CHECKING
+from typing import Dict, List, TYPE_CHECKING
 import copy
 
 from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter, TypePack
@@ -18,7 +18,7 @@ from sushi_lang.semantics.typesys import (
 )
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import Block
+    from sushi_lang.semantics.ast import Block, Param
 
 
 class TypeSubstitutor:
@@ -175,6 +175,75 @@ class TypeSubstitutor:
 
         # For all other types (BuiltinType, etc.), return as-is
         return ty
+
+    def expand_pack_param(
+        self, param: 'Param', substitution: Dict[str, "Type | TypePack"]
+    ) -> List['Param']:
+        """Fan a single value-parameter out into its concrete instantiation(s).
+
+        A value-parameter is *pack-typed* iff its declared type is a bare
+        type-parameter reference (``TypeParameter`` or ``UnknownType``) whose
+        name is bound to a ``TypePack`` in ``substitution``. Such a parameter
+        conceptually stands for ``Ts... args`` and expands, position-wise, into
+        one concrete parameter per pack element.
+
+        Naming convention (STABLE CONTRACT for later phases): the i-th expanded
+        parameter (0-based) is named ``f"{param.name}_{i}"``. An arity-0 pack
+        therefore produces NO parameters at all (the position vanishes), and an
+        arity-N pack produces ``args_0 .. args_{N-1}``. Phase 1's ``expand(...)``
+        body lowering relies on this deterministic per-index naming to bind the
+        expanded parameters back to elements of the pack.
+
+        Each expanded parameter carries the original's ``name_span``,
+        ``type_span`` and ``loc``, uses the already-concrete element type
+        directly (it is NOT routed back through ``substitute_type``), and is an
+        ordinary param (``is_variadic=False``).
+
+        Non-pack parameters (the overwhelmingly common case) are returned as a
+        single-element list whose one ``Param`` is byte-identical to what the
+        legacy param loop produced: ``ty`` substituted via ``substitute_type``,
+        every span/loc copied, and ``is_variadic`` preserved.
+
+        Args:
+            param: The original generic value-parameter.
+            substitution: Type-parameter binding map (may contain ``TypePack``).
+
+        Returns:
+            A list of concrete ``Param`` nodes (length 0..N for a pack-typed
+            param; exactly 1 otherwise).
+        """
+        from sushi_lang.semantics.ast import Param
+
+        # Detect a pack-typed parameter: a bare type-param reference bound to a
+        # TypePack. The expansion happens HERE, before substitute_type is ever
+        # called on the pack name (which would hit the scalar-position guard).
+        if isinstance(param.ty, (TypeParameter, UnknownType)):
+            binding = substitution.get(param.ty.name)
+            if isinstance(binding, TypePack):
+                return [
+                    Param(
+                        name=f"{param.name}_{i}",
+                        ty=element_type,
+                        name_span=param.name_span,
+                        type_span=param.type_span,
+                        loc=getattr(param, 'loc', None),
+                        is_variadic=False,
+                    )
+                    for i, element_type in enumerate(binding.types)
+                ]
+
+        # Normal (non-pack) parameter: reproduce the legacy single-param result.
+        concrete_type = self.substitute_type(param.ty, substitution) if param.ty else None
+        return [
+            Param(
+                name=param.name,
+                ty=concrete_type,
+                name_span=param.name_span,
+                type_span=param.type_span,
+                loc=getattr(param, 'loc', None),
+                is_variadic=getattr(param, 'is_variadic', False),
+            )
+        ]
 
     def substitute_body(self, body: 'Block', substitution: Dict[str, "Type | TypePack"]) -> 'Block':
         """Substitute type parameters in a function body.

@@ -143,8 +143,6 @@ class FunctionMonomorphizer:
         Returns:
             Concrete function definition (FuncDef) with substituted body
         """
-        from sushi_lang.semantics.ast import FuncDef, Param as AstParam
-
         # Check cache
         cache_key = (generic.name, type_args)
         if cache_key in self.monomorphizer.func_cache:
@@ -155,20 +153,14 @@ class FunctionMonomorphizer:
         # pack type-parameter that absorbs all trailing type args).
         substitution = self.build_substitution(generic, type_args)
 
-        # Substitute in parameter types
+        # Substitute in parameter types. A pack-typed value-parameter fans out
+        # into N concrete params (one per pack element, possibly zero); a normal
+        # param yields exactly one concrete param identical to the legacy result.
         concrete_params = []
         for param in generic.params:
-            concrete_type = self.monomorphizer.substitutor.substitute_type(
-                param.ty, substitution
-            ) if param.ty else None
-            concrete_params.append(AstParam(
-                name=param.name,
-                ty=concrete_type,
-                name_span=param.name_span,
-                type_span=param.type_span,
-                loc=getattr(param, 'loc', None),
-                is_variadic=getattr(param, 'is_variadic', False)
-            ))
+            concrete_params.extend(
+                self.monomorphizer.substitutor.expand_pack_param(param, substitution)
+            )
 
         # Substitute in return type
         concrete_ret = self.monomorphizer.substitutor.substitute_type(
@@ -367,10 +359,22 @@ class FunctionMonomorphizer:
         """
         from sushi_lang.semantics.ast import Let, ExprStmt, Return, If, While, Match, Foreach, Block
 
+        from sushi_lang.semantics.generics.types import TypeParameter, TypePack
+        from sushi_lang.semantics.typesys import UnknownType
+
         # Build variable type map from function parameters
         var_types = {}
         for param in generic_func.params:
             if param.ty:
+                # A pack-typed value-parameter has no single scalar type: it
+                # fans out into N concrete params at the signature level. Its
+                # body usage (expand(...)) is a later phase, so it contributes
+                # no entry to the scalar var-type map here (and routing it
+                # through substitute_type would hit the scalar-position guard).
+                if isinstance(param.ty, (TypeParameter, UnknownType)) and isinstance(
+                    substitution.get(param.ty.name), TypePack
+                ):
+                    continue
                 # Substitute type parameters in parameter type
                 concrete_ty = self.monomorphizer.substitutor.substitute_type(param.ty, substitution)
                 var_types[param.name] = concrete_ty
