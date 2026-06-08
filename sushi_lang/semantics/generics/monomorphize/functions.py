@@ -175,8 +175,19 @@ class FunctionMonomorphizer:
             generic.ret, substitution
         ) if generic.ret else None
 
-        # Generate mangled name
-        mangled_name = mangle_function_name(generic.name, type_args)
+        # Generate mangled name. If the generic has a trailing pack type-param
+        # (T1 convention: at most one, always last), pass its arity so the
+        # symbol is distinct per pack size and never collides with a regular
+        # generic of the same base. Non-pack generics call exactly as before.
+        type_params = generic.type_params or []
+        has_pack = bool(type_params) and getattr(type_params[-1], 'is_pack', False)
+        if has_pack:
+            pack_arity = len(type_args) - (len(type_params) - 1)
+            mangled_name = mangle_function_name(
+                generic.name, type_args, pack_arity=pack_arity
+            )
+        else:
+            mangled_name = mangle_function_name(generic.name, type_args)
 
         # Track monomorphization for type validation
         self.monomorphizer.monomorphized_functions[mangled_name] = (generic.name, type_args)
