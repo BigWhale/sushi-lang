@@ -61,8 +61,11 @@ unsafe external "C" as libc because "formatted output via libc":
   its element type must not be a reference or a dynamic array (`...T[]`). Also rejected in generic
   functions (generic variadics are out of scope for v1).
 - `CE0115` — variadic parameter not allowed in a perk method or extension method.
-- `CE0116` — a public variadic function cannot appear in a `.slib` public API (the variadic flag
-  is not serialized into the library format in v1; analogous to the CE5002 FFI boundary block).
+- `CE0116` — a public *native* variadic (`...T`) function cannot appear in a `.slib` public API. A
+  native variadic collects its trailing args into a runtime `T[]` inside one concrete function, so
+  there is no template to monomorphize at the consumer; analogous to the CE5002 FFI boundary block.
+  This blocks only v1 `...T` (`is_variadic`); v2 type packs (`...Ts`) ship as templates and are
+  exportable (see "Cross-library packs" under the Phase-1 section below).
 - Native call arity/type errors reuse existing `CE2009` / `CE2006`.
 
 ## Deferred (additive, not in v1)
@@ -142,8 +145,10 @@ fn main() i32:
 - **Perk-constrained packs only**: an unconstrained `...Ts` (no `: PerkName`) can be declared and
   called, but the `expand` body cannot usefully operate on the elements without a perk (no
   methods are available). Unconstrained forwarding and pack indexing are deferred.
-- **Not exportable via `.slib`**: CE0116 blocks public variadic export at library boundaries;
-  cross-library pack templates are Phase 3.
+- **Cross-library packs (Phase 3, landed)**: a public `...Ts` pack ships in a `.slib` as an
+  instantiable template (`templates.generic_functions`) and is monomorphized at the consumer's call
+  sites, exactly like a regular cross-library generic. CE0116 still blocks v1 native `...T` export
+  (a runtime array, not a template).
 - **Plain function definitions only**: perk methods and extension methods may not declare a value
   pack (CE0115 applies to both v1 `...T` and Phase-1 `...Ts`).
 - **No spread / forwarding**: `f(arr...)` and pack forwarding to another variadic are deferred.
