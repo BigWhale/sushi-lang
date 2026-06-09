@@ -13,6 +13,67 @@ This guide will help you set up Sushi and write your first program.
 
 ## Installation
 
+Sushi can be installed two ways. The quickest is to install a **prebuilt wheel** published with
+each GitHub release — this needs no LLVM build. Alternatively you can **build from source** from a
+clone of the repository, which is what you want for development or to track the latest `main`.
+
+### Install from a released wheel
+
+Every [GitHub release](https://github.com/BigWhale/sushi-lang/releases) ships a
+`sushi_lang-<version>-py3-none-any.whl`. The wheel bundles the standard library for macOS and
+Linux and pulls in a prebuilt LLVM backend (`llvmlite`), so you do **not** need to install or
+build LLVM 20 yourself.
+
+**Prerequisites:**
+
+- **Python 3.13+**
+- A **C toolchain** for the final link step that produces the native binary: Xcode Command Line
+  Tools on macOS (`xcode-select --install`), or `build-essential` / `clang` on Linux.
+
+**1. Create and activate a virtual environment:**
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+**2. Install the wheel.** Download it from the
+[latest release](https://github.com/BigWhale/sushi-lang/releases/latest) and install it:
+
+```bash
+pip install sushi_lang-0.7.1-py3-none-any.whl
+```
+
+Or install straight from the release URL without downloading first:
+
+```bash
+pip install https://github.com/BigWhale/sushi-lang/releases/download/v0.7.1/sushi_lang-0.7.1-py3-none-any.whl
+```
+
+Or, using the GitHub CLI together with `uv`:
+
+```bash
+gh release download --repo BigWhale/sushi-lang --pattern '*.whl'
+uv pip install sushi_lang-*.whl
+```
+
+This installs the `sushic` compiler and the `nori` package manager onto your `PATH`.
+
+**3. Verify:**
+
+```bash
+sushic --help
+```
+
+**Note**: Installed from the wheel, the compiler is the `sushic` command on your `PATH`. The rest
+of this guide writes `./sushic`, which is the wrapper used from a source checkout — substitute
+`sushic` if you installed the wheel.
+
+### Install from source
+
+Build Sushi from a clone of the repository. This path compiles the `llvmlite` dependency against a
+local LLVM 20, so the system dependencies below are required.
+
 ### 1. Clone the Repository
 
 ```bash
