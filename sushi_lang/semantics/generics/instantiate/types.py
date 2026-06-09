@@ -166,7 +166,7 @@ class TypeInferrer:
         Returns:
             Inferred type or None if can't infer
         """
-        from sushi_lang.semantics.ast import IntLit, FloatLit, StringLit, BoolLit, Name, EnumConstructor, CastExpr
+        from sushi_lang.semantics.ast import IntLit, FloatLit, StringLit, BoolLit, Name, EnumConstructor, CastExpr, DotCall
 
         # Integer literal
         if isinstance(expr, IntLit):
@@ -203,6 +203,23 @@ class TypeInferrer:
             enum_name = expr.enum_name
             if self.enum_table and enum_name in self.enum_table:
                 return self.enum_table[enum_name]
+            return None
+
+        # Dot-call (e.g., Color.Red(), Point.new()): the pre-lowering form of an
+        # enum/struct constructor. `X.Y(args)` parses to a DotCall and is only
+        # rewritten to EnumConstructor later in analysis, so at Pass 1.5 the
+        # constructor still looks like this. Resolving the receiver to its
+        # enum/struct type here keeps Pass 1.5 in agreement with Pass 2's full
+        # inferrer (which already resolves the DotCall); otherwise the pack/generic
+        # instantiation is never registered and Pass 2 raises CE2061. The variant/
+        # method name is intentionally NOT validated here -- Pass 2 does that.
+        if isinstance(expr, DotCall):
+            receiver = expr.receiver
+            if isinstance(receiver, Name):
+                if self.enum_table and receiver.id in self.enum_table:
+                    return self.enum_table[receiver.id]
+                if self.struct_table and receiver.id in self.struct_table:
+                    return self.struct_table[receiver.id]
             return None
 
         # For complex expressions, we can't infer without full type checking
