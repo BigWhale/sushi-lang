@@ -246,6 +246,13 @@ class ExpressionScanner:
 
         Uses simple unification to match argument types to parameter types.
 
+        For a function ending in a type pack (``fn f<...Ts>(...Ts args)``) the
+        flat instantiation key is ``(<leading inferred type-args>, *<trailing
+        arg types>)`` -- the pack-tail handling is shared with Pass 2 via
+        ``pack_inference.infer_flat_type_args`` while the leading (non-pack)
+        unification below is reused unchanged. For a non-pack function the result
+        is byte-for-byte the legacy behavior.
+
         Args:
             call: Call AST node
             generic_func: Generic function definition
@@ -253,27 +260,52 @@ class ExpressionScanner:
         Returns:
             Tuple of concrete types for type parameters, or None if inference fails
         """
+        from sushi_lang.semantics.generics.pack_inference import infer_flat_type_args
+
+        # Infer argument types up front (the shared helper operates on types, so
+        # both this site and Pass 2 feed it already-resolved concrete types).
+        call_args = getattr(call, "args", []) or []
+        arg_types: list["Type"] = []
+        for arg_expr in call_args:
+            arg_type = self.type_inferrer.infer_simple_expr_type(arg_expr)
+            if arg_type is None:
+                # Can't infer argument type
+                return None
+            arg_types.append(arg_type)
+
+        return infer_flat_type_args(
+            generic_func,
+            arg_types,
+            infer_leading=self._infer_leading_type_args,
+        )
+
+    def _infer_leading_type_args(
+        self, generic_func, leading_arg_types
+    ) -> tuple["Type", ...] | None:
+        """Infer the leading (non-pack) type-args from already-inferred arg types.
+
+        This is the EXISTING unification logic, unchanged in substance: it matches
+        leading argument types to leading value-parameter types and extracts the
+        non-pack type-params in declaration order. The shared pack helper calls
+        this for the fixed prefix; for a non-pack function it is called with all
+        arg types and produces the full, legacy result.
+        """
         from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
         # Build type parameter -> concrete type mapping
         type_param_map: dict[str, "Type"] = {}
 
-        # Check argument count matches parameter count
-        call_args = getattr(call, "args", []) or []
-        func_params = generic_func.params
+        # Leading value-params are those that are NOT the pack value-param.
+        func_params = [
+            p for p in generic_func.params if not getattr(p, "is_pack", False)
+        ]
 
-        if len(call_args) != len(func_params):
+        if len(leading_arg_types) != len(func_params):
             # Argument count mismatch - can't infer
             return None
 
-        # Match each argument to corresponding parameter
-        for i, (arg_expr, param) in enumerate(zip(call_args, func_params)):
-            # Infer argument type
-            arg_type = self.type_inferrer.infer_simple_expr_type(arg_expr)
-            if arg_type is None:
-                # Can't infer argument type
-                return None
-
+        # Match each argument type to corresponding parameter
+        for arg_type, param in zip(leading_arg_types, func_params):
             # Unify argument type with parameter type
             if param.ty is None:
                 # Parameter has no type annotation - shouldn't happen
@@ -284,8 +316,14 @@ class ExpressionScanner:
                 # Unification failed
                 return None
 
-        # Check that all type parameters were inferred
-        for tp in generic_func.type_params:
+        # Leading type-params are the non-pack ones, in declaration order.
+        leading_type_params = [
+            tp for tp in generic_func.type_params
+            if not getattr(tp, "is_pack", False)
+        ]
+
+        # Check that all leading type parameters were inferred
+        for tp in leading_type_params:
             tp_name = tp.name if hasattr(tp, 'name') else str(tp)
             if tp_name not in type_param_map:
                 # Type parameter not inferred (not used in parameters)
@@ -293,7 +331,7 @@ class ExpressionScanner:
 
         # Extract type arguments in parameter order and resolve UnknownType
         type_args = []
-        for tp in generic_func.type_params:
+        for tp in leading_type_params:
             tp_name = tp.name if hasattr(tp, 'name') else str(tp)
             inferred_type = type_param_map[tp_name]
             # Resolve UnknownType to concrete StructType/EnumType if possible

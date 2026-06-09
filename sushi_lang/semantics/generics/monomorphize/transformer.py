@@ -244,6 +244,12 @@ class TypeSubstitutor:
                     type_span=param.type_span,
                     loc=getattr(param, 'loc', None),
                     is_variadic=False,
+                    # Mark each fan-out element as pack-derived so later passes can
+                    # treat it specially (e.g. the scope pass must not emit a spurious
+                    # CW1001 unused-variable warning: until expand(...) lands (T7b) the
+                    # only way to consume these synthesized params is unavailable, and
+                    # they carry user-invisible names like args_0/args_1).
+                    is_pack=True,
                 )
                 for i, element_type in enumerate(pack.types)
             ]
@@ -301,7 +307,7 @@ class TypeSubstitutor:
             New statement with substituted types
         """
         from sushi_lang.semantics.ast import (
-            Let, Rebind, If, While, Foreach, Return, Match,
+            Let, Rebind, If, While, Foreach, Expand, Return, Match,
             ExprStmt, Block, Break, Continue, Print, PrintLn
         )
 
@@ -341,6 +347,17 @@ class TypeSubstitutor:
 
         # Foreach statement
         if isinstance(stmt, Foreach):
+            result = copy.copy(stmt)
+            result.iterable = self.substitute_expr(stmt.iterable, substitution)
+            result.body = self.substitute_body(stmt.body, substitution)
+            return result
+
+        # Expand statement (compile-time pack expansion). Type-substitute the
+        # iterable and body here so the surviving Expand node is fully concrete;
+        # the actual unrolling into ordinary statements is a dedicated post-pass
+        # (unroll_expands) run after substitute_body, once the per-pack fan-out
+        # parameter names are known.
+        if isinstance(stmt, Expand):
             result = copy.copy(stmt)
             result.iterable = self.substitute_expr(stmt.iterable, substitution)
             result.body = self.substitute_body(stmt.body, substitution)

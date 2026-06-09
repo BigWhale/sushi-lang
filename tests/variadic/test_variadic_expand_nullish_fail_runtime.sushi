@@ -1,0 +1,34 @@
+# P1-TA: `??` short-circuit FIRING mid-unroll inside the expand region.
+# One element ("boom") makes check() return Err, so the `??` propagates the
+# error OUT of process() part-way through the unrolled body. This stresses RAII
+# on the propagation path: the owned display() string `shown` of the FAILING
+# copy is live when `??` short-circuits and must be dropped exactly once, and
+# earlier copies that already completed must not be double-dropped. main handles
+# the propagated error WITHOUT `??` (pattern match), so the program exits 0.
+# Expected: first element prints, second element triggers propagation, main
+# reports the failure. No crash / double-free.
+# EXPECT_STDOUT_EXACT: "ok:good\nfailed\n"
+# EXPECT_RUNTIME_EXIT: 0
+perk Display:
+    fn display() string
+
+extend string with Display:
+    fn display() string:
+        return self
+
+fn check(string s) string:
+    if (s == "boom"):
+        return Result.Err(StdError.Error)
+    return Result.Ok("ok:{s}")
+
+fn process<...Ts: Display>(...Ts args) string:
+    expand(a in args):
+        let string shown = a.display()
+        let string checked = check(shown)??
+        println(checked)
+    return Result.Ok("all-done")
+
+fn main() i32:
+    let string outcome = process("good", "boom", "never").realise("failed")
+    println(outcome)
+    return Result.Ok(0)

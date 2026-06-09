@@ -1,0 +1,20 @@
+# A perk-constrained type-pack call lowered end-to-end WITHOUT expand (T7b).
+# The callee cannot iterate the pack yet (no expand), but it takes a fixed
+# prefix it prints, plus a constrained pack tail. This proves pack-call argument
+# lowering (each trailing arg becomes a separate positional argument to the
+# monomorphized fan-out signature) + monomorphization + run.
+# EXPECT_STDOUT_CONTAINS: hi
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "int"
+
+fn tagged<...Ts: Display>(string tag, ...Ts args) ~:
+    println(tag)
+    return Result.Ok(~)
+
+fn main() i32:
+    tagged("hi", 1, 2)
+    return Result.Ok(0)

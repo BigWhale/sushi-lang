@@ -74,20 +74,91 @@ unsafe external "C" as libc because "formatted output via libc":
   `is_variadic` flag is not serialized into the library format yet), analogous to the CE5002 FFI
   boundary block.
 
-## v2 groundwork (internal, no surface yet)
+## Variadic generics / parameter packs (Phase 1, landed)
 
-The v2 roadmap extends the native mechanism to **variadic generics** — heterogeneous, fully-typed
-parameter packs (`...Ts` + `expand(...)`), monomorphized at the call site. The first step is purely
-internal monomorphizer infrastructure with **no surface syntax**:
+Status: implemented. Distinct from and coexisting with the v1 `...T` (homogeneous array sugar) and
+extern `...` (libc varargs) mechanisms.
 
-- A generic type-parameter may now bind to a variable-length **pack** of types, represented by
-  `TypePack` (`semantics/generics/types.py`).
-- `monomorphize_function` builds a pack-aware substitution map (one trailing pack param absorbs the
-  tail; arity is part of the instantiation), and a pack-typed value parameter **fans out** into one
-  concrete parameter per pack element (`expand_pack_param`).
-- Name mangling encodes pack arity with a structurally collision-free `.pack{N}` marker, distinct
-  from regular-generic symbols, so distinct arities produce distinct `linkonce_odr`-stable symbols.
+### Syntax
 
-This is exercised only by unit tests (`tests/unit/test_monomorphize_pack.py` and the `test_p0t*`
-suites); regular generics and the v1 `...T` / extern `...` paths are unaffected. The `...Ts` surface
-syntax, `expand(...)` lowering, and cross-library pack templates build on this in later phases.
+```sushi
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "int:42"
+
+extend string with Display:
+    fn display() string:
+        return self
+
+extend bool with Display:
+    fn display() string:
+        return "yes"
+
+fn print_all<...Ts: Display>(...Ts args) ~:
+    expand(a in args):
+        println(a.display())
+    return Result.Ok(~)
+
+fn main() i32:
+    print_all(42, "hi", true)   # monomorphizes print_all__i32_string_bool.pack3
+    print_all()                 # arity-0 allowed; expand body runs 0 times
+    return Result.Ok(0)
+```
+
+### Semantics
+
+- **`...Ts`** in the type-parameter list declares a **type pack**. An optional perk constraint
+  (`...Ts: Display`) requires every bound element type to implement the named perk.
+- **`...Ts args`** in the parameter list declares the corresponding **value pack**. The type-pack
+  must appear last in the type-parameter list and the value pack must appear last in the parameter
+  list.
+- **`expand(x in pack): BODY`** is a compile-time-unrolled construct (the static analog of
+  `foreach`): one copy of BODY is emitted per pack element, each `x` bound to that element's
+  concrete type. It is not a runtime loop — no iterator or array is created.
+  - `??` and early `return` are allowed inside `expand` bodies with correct RAII.
+  - Local variables declared inside `expand` are scoped to each unrolled copy (straight-line +
+    nested-block-scope model).
+- **Monomorphization**: each distinct (arity, type-tuple) call site produces a separate specialized
+  function. The mangled symbol uses a `.pack{N}` suffix to distinguish pack specializations from
+  regular-generic symbols and to remain collision-free across arities. All specializations use
+  `linkonce_odr` linkage for linker deduplication in multi-unit builds.
+- **Pack elements are passed as separate positional arguments** — they are not boxed or collected
+  into an array.
+- **Arity zero** is valid: `print_all()` monomorphizes an arity-0 specialization; the `expand` body
+  executes zero times.
+
+### Diagnostics
+
+- **CE0117** — type-pack `...Ts` must be the last type parameter; at most one pack per function.
+- **CE0118** — cannot mix a type-pack `...Ts` with a v1 homogeneous `...T` in the same function.
+- **CE0119** — malformed `expand` statement (wrong syntax, iterator variable, or target).
+- **CE2090** — a pack element type at the call site does not satisfy the pack's perk constraint.
+
+### Phase-1 limitations
+
+- **Perk-constrained packs only**: an unconstrained `...Ts` (no `: PerkName`) can be declared and
+  called, but the `expand` body cannot usefully operate on the elements without a perk (no
+  methods are available). Unconstrained forwarding and pack indexing are deferred.
+- **Not exportable via `.slib`**: CE0116 blocks public variadic export at library boundaries;
+  cross-library pack templates are Phase 3.
+- **Plain function definitions only**: perk methods and extension methods may not declare a value
+  pack (CE0115 applies to both v1 `...T` and Phase-1 `...Ts`).
+- **No spread / forwarding**: `f(arr...)` and pack forwarding to another variadic are deferred.
+- **No pack indexing**: individual pack elements cannot be addressed by index.
+- **Same-enum-type element gap**: if all pack elements resolve to the same enum type, the
+  instantiation-collection pass may raise CE2061 (a narrow limitation, separate from the
+  perk-constraint mechanism).
+
+### Internal representation
+
+- `TypePack` in `semantics/generics/types.py` represents the variable-length type sequence.
+- `monomorphize_function` builds a pack-aware substitution map; `expand_pack_param` fans a
+  pack-typed value parameter into one concrete parameter per element.
+- Name mangling: `.pack{N}` marker (e.g. `.pack3` for a three-element pack) encodes arity in a
+  collision-free way distinct from regular-generic symbols.
+
+Phase-0 unit tests (`test_p0t*`) cover the monomorphizer infrastructure; Phase-1 integration tests
+(`tests/variadic/test_variadic_pack_*.sushi`) exercise the full compiler pipeline.

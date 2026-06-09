@@ -191,6 +191,25 @@ class FunctionMonomorphizer:
         # Deep copy the function body and substitute type parameters
         concrete_body = self.monomorphizer.substitutor.substitute_body(generic.body, substitution)
 
+        # Build the pack value-parameter fan-out map and unroll any expand(...)
+        # statements in the now-concrete body into ordinary statements. After
+        # this, no later pass (scope/types/borrow/backend) ever sees an Expand:
+        # each pack element's body copy is straight-line, per-element-typed, and
+        # references the owned fan-out parameter args_i directly.
+        substitutor = self.monomorphizer.substitutor
+        pack_param_fanout: Dict[str, list] = {}
+        for param in generic.params:
+            pack = substitutor._pack_binding_for(param, substitution)
+            if pack is not None:
+                # STABLE Phase-0 convention: the i-th fan-out param is
+                # f"{param.name}_{i}" (0-based, contiguous); arity 0 -> [].
+                pack_param_fanout[param.name] = [
+                    f"{param.name}_{i}" for i in range(len(pack.types))
+                ]
+        if pack_param_fanout:
+            from sushi_lang.semantics.generics.monomorphize.unroll import unroll_expands
+            concrete_body = unroll_expands(concrete_body, pack_param_fanout)
+
         # Create concrete function definition - copy from generic and update fields
         # This preserves loc and other fields we might not know about
         concrete_func = copy.copy(generic)

@@ -63,7 +63,15 @@ def parse_bounded_type_params(type_params_node: Optional[Tree]) -> Optional[List
 
     for child in param_list_node.children:
         if isinstance(child, Tree) and child.data == "type_param":
-            # Extract the parameter name
+            # A type pack (`...Ts`) is prefixed with an ELLIPSIS token; the NAME is
+            # then `children[1]`. A regular param has no prefix (NAME is first).
+            is_pack = any(
+                isinstance(c, Token) and c.type == "ELLIPSIS"
+                for c in child.children
+            )
+
+            # Extract the parameter name (first_name finds the NAME regardless of
+            # whether an ELLIPSIS prefix is present).
             param_name = first_name(child.children)
             if param_name is None:
                 continue
@@ -82,7 +90,8 @@ def parse_bounded_type_params(type_params_node: Optional[Tree]) -> Optional[List
             bounded_params.append(BoundedTypeParam(
                 name=str(param_name),
                 constraints=constraints if constraints else [],
-                loc=span_of(child)
+                loc=span_of(child),
+                is_pack=is_pack,
             ))
         elif isinstance(child, Token) and child.type == "NAME":
             # Backwards compatibility: direct NAME tokens without constraints

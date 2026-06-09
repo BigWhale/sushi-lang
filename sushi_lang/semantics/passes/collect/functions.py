@@ -100,6 +100,75 @@ def validate_variadic_params(reporter: 'Reporter', params: List['Param']) -> Non
                 message="a variadic '...T' element type cannot be a dynamic array")
 
 
+def validate_type_pack_params(
+    reporter: 'Reporter',
+    type_params_raw: Optional[List],
+    params: List['Param'],
+    fallback_span: Optional[Span],
+) -> None:
+    """Validate v2 type-pack parameter placement, count, and consistency.
+
+    Enforces:
+    - CE0117: at most one pack TYPE-param, and it must be last among type_params
+    - CE0117: at most one pack VALUE-param (is_pack), and it must be last among params
+    - CE0118: a pack value-param (is_pack) cannot be combined with a v1 native
+      variadic (is_variadic)
+    - CE0117: a pack value-param must name a declared pack type-param
+
+    This is disjoint from `validate_variadic_params` (which keys on `is_variadic`);
+    pack params key on `is_pack`.
+    """
+    # --- Type-pack TYPE-params (BoundedTypeParam.is_pack) ---
+    type_params = type_params_raw if isinstance(type_params_raw, list) else []
+    pack_type_param_indices = [
+        i for i, tp in enumerate(type_params)
+        if isinstance(tp, BoundedTypeParam) and getattr(tp, "is_pack", False)
+    ]
+    pack_type_param_names = {
+        type_params[i].name for i in pack_type_param_indices
+    }
+
+    if len(pack_type_param_indices) > 1:
+        offending = type_params[pack_type_param_indices[1]]
+        er.emit(reporter, ERR.CE0117, getattr(offending, "loc", None) or fallback_span,
+                message=f"a function may declare at most one type-pack parameter '...{offending.name}'")
+    elif len(pack_type_param_indices) == 1:
+        idx = pack_type_param_indices[0]
+        if idx != len(type_params) - 1:
+            offending = type_params[idx]
+            er.emit(reporter, ERR.CE0117, getattr(offending, "loc", None) or fallback_span,
+                    message=f"a type-pack parameter '...{offending.name}' must be the last type parameter")
+
+    # --- Type-pack VALUE-params (Param.is_pack) ---
+    pack_value_indices = [
+        i for i, p in enumerate(params) if getattr(p, "is_pack", False)
+    ]
+
+    if len(pack_value_indices) > 1:
+        offending = params[pack_value_indices[1]]
+        er.emit(reporter, ERR.CE0117, offending.name_span or fallback_span,
+                message=f"a function may declare at most one type-pack value parameter '...{offending.name}'")
+    elif len(pack_value_indices) == 1:
+        idx = pack_value_indices[0]
+        pack_param = params[idx]
+
+        # Must be the last value parameter.
+        if idx != len(params) - 1:
+            er.emit(reporter, ERR.CE0117, pack_param.name_span or fallback_span,
+                    message=f"a type-pack value parameter '...{pack_param.name}' must be the last parameter")
+
+        # No mixing with a v1 native variadic (CE0118).
+        if any(getattr(p, "is_variadic", False) for p in params):
+            er.emit(reporter, ERR.CE0118, pack_param.name_span or fallback_span,
+                    message="a type-pack parameter '...Ts' cannot be combined with a native variadic '...T'")
+
+        # The pack value-param must name a declared pack type-param.
+        pack_elem_name = getattr(pack_param.ty, "name", None)
+        if pack_elem_name not in pack_type_param_names:
+            er.emit(reporter, ERR.CE0117, pack_param.type_span or pack_param.name_span or fallback_span,
+                    message=f"type-pack value parameter '...{pack_param.name}' has no matching type-pack type parameter '...{pack_elem_name}'")
+
+
 @dataclass
 class Param:
     """Function parameter with type information."""
@@ -110,6 +179,8 @@ class Param:
     index: int
     is_variadic: bool = False         # True for a trailing native variadic ...T param;
                                       # `ty` holds the collected DynamicArrayType(T)
+    is_pack: bool = False             # True for a v2 type-pack value-param (...Ts args);
+                                      # `ty` is the bare pack type-param reference (UnknownType)
 
 
 @dataclass
@@ -484,6 +555,12 @@ class FunctionCollector:
         # Validate native variadic parameter placement / element type (CE0114).
         validate_variadic_params(self.r, params)
 
+        # Validate v2 type-pack parameter placement / count / consistency
+        # (CE0117/CE0118). A concrete (non-generic) function has no type-pack
+        # type-params, so this fires only if a pack value-param leaked in here
+        # without a matching type-pack type-param (malformed -> CE0117).
+        validate_type_pack_params(self.r, getattr(fn, "type_params", None), params, name_span)
+
         # Check for duplicates in ALL function tables
         if name in self.funcs.by_name:
             prev = self.funcs.by_name[name]
@@ -579,6 +656,12 @@ class FunctionCollector:
             vparam = next(p for p in params if getattr(p, "is_variadic", False))
             er.emit(self.r, ERR.CE0114, vparam.name_span,
                     message="variadic '...T' parameters are not supported in generic functions")
+
+        # Validate v2 type-pack parameter placement / count / consistency
+        # (CE0117/CE0118). Well-formed pack functions reach this path (they carry
+        # a type-pack type-param). Keys on `is_pack`, disjoint from the CE0114
+        # blanket above (which keys on `is_variadic`).
+        validate_type_pack_params(self.r, type_params_raw, params, name_span)
 
         # Get return type
         ret_ty = getattr(fn, "ret", None)

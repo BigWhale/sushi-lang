@@ -1,0 +1,39 @@
+# P1-TA: `??` (error propagation) used INSIDE the unrolled expand region.
+# Each unrolled copy owns a display() string and then runs a `??` on a helper.
+# On the SUCCESS path every element's check passes, the function returns Ok,
+# main prints each element. This proves the `??` early-exit machinery is wired
+# through the unrolled body without dropping a good path; the owned per-element
+# string is RAII-dropped once per copy. Heterogeneous pack (i32 + string + bool).
+# EXPECT_STDOUT_EXACT: "ok:int:42\nok:hi\nok:yes\ndone\n"
+# EXPECT_RUNTIME_EXIT: 0
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "int:42"
+
+extend string with Display:
+    fn display() string:
+        return self
+
+extend bool with Display:
+    fn display() string:
+        return "yes"
+
+fn check(string s) string:
+    if (s == "BOOM"):
+        return Result.Err(StdError.Error)
+    return Result.Ok("ok:{s}")
+
+fn process<...Ts: Display>(...Ts args) ~:
+    expand(a in args):
+        let string shown = a.display()
+        let string checked = check(shown)??
+        println(checked)
+    return Result.Ok(~)
+
+fn main() i32:
+    process(42, "hi", true)
+    println("done")
+    return Result.Ok(0)
