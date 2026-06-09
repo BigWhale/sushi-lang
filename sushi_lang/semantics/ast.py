@@ -51,6 +51,8 @@ class Param:
     loc: Optional[Span] = None
     is_variadic: bool = False         # True for a trailing ...T native variadic param;
                                       # `ty` then holds the collected DynamicArrayType(T)
+    is_pack: bool = False             # True for a v2 type-pack value parameter (...Ts args);
+                                      # ty is the bare pack type-param reference, NOT a DynamicArrayType.
 
 @dataclass
 class BoundedTypeParam:

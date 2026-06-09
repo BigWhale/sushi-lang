@@ -23,8 +23,8 @@ def parse_block(t: Tree, ast_builder: 'ASTBuilder') -> Block:
 
         # Parse statement using statement parser
         if node.data in ("return_stmt", "print_stmt", "println_stmt", "let_stmt", "rebind_stmt",
-                         "call_stmt", "if_stmt", "while_stmt", "foreach_stmt", "match_stmt",
-                         "break_stmt", "continue_stmt", "function_def"):
+                         "call_stmt", "if_stmt", "while_stmt", "foreach_stmt", "expand_stmt",
+                         "match_stmt", "break_stmt", "continue_stmt", "function_def"):
             statements.append(ast_builder.stmt_parser.parse_stmt(node))
 
     return Block(statements=statements, loc=span_of(t))

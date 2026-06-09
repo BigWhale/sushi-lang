@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 from lark import Tree, Token
-from sushi_lang.semantics.ast import Foreach
+from sushi_lang.semantics.ast import Foreach, Expand
 from sushi_lang.semantics.typesys import Type, TYPE_NODE_NAMES
 from sushi_lang.internals.report import span_of, Span
 
@@ -56,4 +56,47 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
         item_name_span=item_name_span,
         item_type_span=item_type_span,
         loc=span_of(node)
+    )
+
+
+def parse_expand_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Expand:
+    """Parse expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block
+
+    Compile-time analog of `foreach`: the body is unrolled once per element of a
+    value pack. Mirrors `parse_foreach_stmt`'s extraction of loop var, iterable,
+    and block.
+    """
+    children = node.children
+    idx = 0
+
+    # Skip the EXPAND token (first child)
+    if idx < len(children) and isinstance(children[idx], Token) and children[idx].type == "EXPAND":
+        idx += 1
+
+    # Next is the binding NAME
+    if idx >= len(children) or not isinstance(children[idx], Token) or children[idx].type != "NAME":
+        raise ValueError(f"expand_stmt expects NAME at index {idx}, got {children[idx] if idx < len(children) else 'nothing'}")
+    name_tok = children[idx]
+    var = name_tok.value
+    var_span = span_of(name_tok)
+    idx += 1
+
+    # Next is the iterable expression (skip any "in" tokens if present)
+    while idx < len(children) and isinstance(children[idx], Token) and children[idx].value == "in":
+        idx += 1
+
+    iterable_tree = children[idx]
+    iterable = ast_builder._expr(iterable_tree)
+    idx += 1
+
+    # Last is the block
+    block_tree = children[idx]
+    body = ast_builder._block(block_tree)
+
+    return Expand(
+        var=var,
+        iterable=iterable,
+        body=body,
+        var_span=var_span,
+        loc=span_of(node),
     )
