@@ -1,0 +1,31 @@
+# P1-T7b: expand(...) body containing a `match` over a local enum, plus a match
+# arm whose pattern binding collides with the loop var name `a`.
+#
+# Per element the expand renames free `a` -> the fan-out param (the element is
+# printed via `a.display()`), but the match arm `Box.Val(a)` re-binds `a` as a
+# DISTINCT variable; its body must print the pattern binding (always 7 here),
+# NOT the fan-out element. The match scrutinee carries a resolved (frozen) Box
+# enum type, exercising the frozen-Type robustness; the colliding arm binding
+# exercises the match-arm shadowing. The scrutinee is a fresh constructor each
+# copy (no intermediate `let`, which would clash as a duplicate local).
+# EXPECT_STDOUT_EXACT: "i:1\ninner:7\ni:2\ninner:7\n"
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "i:{self}"
+
+enum Box:
+    Val(i32)
+
+fn show<...Ts: Display>(...Ts vs) ~:
+    expand(a in vs):
+        println(a.display())
+        match Box.Val(7):
+            Box.Val(a) -> println("inner:{a}")
+    return Result.Ok(~)
+
+fn main() i32:
+    show(1, 2)
+    return Result.Ok(0)

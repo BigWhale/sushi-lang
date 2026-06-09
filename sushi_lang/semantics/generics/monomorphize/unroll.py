@@ -27,9 +27,11 @@ Unroll semantics for ``expand(a in args): BODY``:
   unrolled (the renamed copies are re-walked).
 
 Shadowing: the rename is shadow-aware. If the body re-binds ``var`` via an inner
-``let`` / ``foreach`` (or a nested ``expand`` using the same name), occurrences in
-the shadowed scope are left untouched -- only free occurrences of ``var`` are
-renamed.
+``let`` / ``foreach`` (or a nested ``expand`` using the same name), or via a
+``match`` arm pattern binding, occurrences in the shadowed scope are left
+untouched -- only free occurrences of ``var`` are renamed. For ``match``, the
+scrutinee and any arms whose pattern does NOT bind ``var`` are renamed normally;
+only the body of an arm whose pattern binds ``var`` is treated as a shadow scope.
 """
 from __future__ import annotations
 
@@ -39,7 +41,43 @@ from typing import Dict, List
 
 from sushi_lang.semantics.ast import (
     Block, Expand, Name, Let, Foreach, Stmt, Node,
+    Match, MatchArm, Pattern, OwnPattern,
 )
+
+
+def _is_frozen_dataclass(obj) -> bool:
+    """True if ``obj`` is a frozen ``@dataclass`` instance.
+
+    Frozen dataclasses (the ``typesys`` Type nodes: ``EnumType``, ``StructType``,
+    etc.) cannot be mutated via ``setattr`` and never contain renameable
+    expression ``Name`` nodes, so the rename walk skips them entirely.
+    """
+    params = getattr(type(obj), "__dataclass_params__", None)
+    return bool(params is not None and getattr(params, "frozen", False))
+
+
+def _pattern_binding_names(pattern) -> set:
+    """Collect the variable names bound by a match-arm ``Pattern``.
+
+    Recurses through nested ``Pattern`` / ``OwnPattern`` bindings. ``str``
+    entries that are ``'_'`` (wildcards) are not real bindings and are skipped.
+    """
+    names: set = set()
+    if isinstance(pattern, Pattern):
+        for b in pattern.bindings:
+            if isinstance(b, str):
+                if b != "_":
+                    names.add(b)
+            elif isinstance(b, (Pattern, OwnPattern)):
+                names |= _pattern_binding_names(b)
+    elif isinstance(pattern, OwnPattern):
+        inner = pattern.inner_pattern
+        if isinstance(inner, str):
+            if inner != "_":
+                names.add(inner)
+        elif isinstance(inner, (Pattern, OwnPattern)):
+            names |= _pattern_binding_names(inner)
+    return names
 
 
 def unroll_expands(
@@ -149,12 +187,17 @@ def _rename_walk(obj, var: str, new_name: str, _seen) -> None:
     calls, member access, string interpolations, binary ops, etc.
 
     Shadowing: a scope that re-binds ``var`` (an inner ``let var = ...``, a
-    ``foreach (var in ...)``, or a nested ``expand(var in ...)``) suppresses
-    renaming within that shadowed scope.
+    ``foreach (var in ...)``, a nested ``expand(var in ...)``, or a ``match`` arm
+    whose pattern binds ``var``) suppresses renaming within that shadowed scope.
     """
     # Replace happens at the parent level (so we can swap the field); here we only
     # descend. A bare Name at the top is handled by callers via _rename_value.
     if not dataclasses.is_dataclass(obj):
+        return
+    # Frozen typesys Type nodes (EnumType, StructType, ...) are immutable and
+    # never contain renameable expression Name nodes -- skip them entirely (both
+    # a correctness guard against FrozenInstanceError and a perf win).
+    if _is_frozen_dataclass(obj):
         return
     obj_id = id(obj)
     if obj_id in _seen:
@@ -165,16 +208,41 @@ def _rename_walk(obj, var: str, new_name: str, _seen) -> None:
     if isinstance(obj, Foreach) and obj.item_name == var:
         # Still rename in the iterable (evaluated in the outer scope), but not
         # in the body.
-        obj.iterable = _rename_value(obj.iterable, var, new_name, _seen)
+        _set_if_changed(obj, "iterable", _rename_value(obj.iterable, var, new_name, _seen))
         return
 
     # An Expand binding the same name shadows it inside its body.
     if isinstance(obj, Expand) and obj.var == var:
-        obj.iterable = _rename_value(obj.iterable, var, new_name, _seen)
+        _set_if_changed(obj, "iterable", _rename_value(obj.iterable, var, new_name, _seen))
+        return
+
+    # A Match: the scrutinee is in the outer scope and is renamed normally, but a
+    # match arm whose pattern binds ``var`` introduces a shadow scope for THAT
+    # arm's body -- the pattern binding is a distinct variable and must not be
+    # renamed inside its arm. Other arms are renamed as usual.
+    if isinstance(obj, Match):
+        _set_if_changed(obj, "scrutinee", _rename_value(obj.scrutinee, var, new_name, _seen))
+        for arm in obj.arms:
+            if isinstance(arm, MatchArm) and var in _pattern_binding_names(arm.pattern):
+                # Shadowed in this arm's body: leave the body untouched.
+                continue
+            _rename_walk(arm, var, new_name, _seen)
         return
 
     for f in dataclasses.fields(obj):
-        setattr(obj, f.name, _rename_value(getattr(obj, f.name), var, new_name, _seen))
+        _set_if_changed(obj, f.name, _rename_value(getattr(obj, f.name), var, new_name, _seen))
+
+
+def _set_if_changed(obj, field_name: str, new_value) -> None:
+    """``setattr`` only when the value actually changed (by identity).
+
+    The rename only ever replaces ``Name`` nodes; subtrees with no renameable
+    occurrence return the same object. Writing only on change keeps frozen
+    dataclasses (whose fields are never replaced) untouched and avoids
+    ``FrozenInstanceError``.
+    """
+    if getattr(obj, field_name) is not new_value:
+        setattr(obj, field_name, new_value)
 
 
 def _rename_value(value, var: str, new_name: str, _seen):
