@@ -20,7 +20,8 @@ if TYPE_CHECKING:
 
 
 def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None,
-                             monomorphized_extensions: list | None = None) -> str:
+                             monomorphized_extensions: list | None = None,
+                             library_fingerprints: dict[str, str] | None = None) -> str:
     """Compute a semantic fingerprint for a compilation unit.
 
     The fingerprint is a hex SHA-256 digest that changes whenever anything
@@ -30,6 +31,16 @@ def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None
         unit: The compilation unit to fingerprint.
         unit_manager: The unit manager (for cross-unit symbol visibility).
         monomorphized_extensions: Monomorphized extension methods from semantic analysis.
+        library_fingerprints: Digests of every imported `.slib` library
+            (path -> hash). A library may ship instantiable generic templates
+            (Phase 2 cross-library generics) that this program monomorphizes at
+            consumer call sites; the resulting concrete instances are emitted
+            into a consumer unit, so a template-body change must invalidate the
+            consumer's cached `.o`. The instance is centralized in one unit
+            (compilation_order[0]) which is not necessarily the importing unit,
+            so all imported-library digests are folded into every unit's
+            fingerprint -- a library edit rebuilds all consumer units, which is
+            both correct and the expected granularity for a shared dependency.
 
     Returns:
         Hex string of the fingerprint hash.
@@ -76,6 +87,15 @@ def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None
         )
         for sig in ext_sigs:
             hasher.update(sig.encode())
+
+    # 6. Imported library fingerprints (cross-library generic templates).
+    # Folding the whole-`.slib` digest in covers any library template a
+    # consumer unit may monomorphize; since the digest hashes the entire file,
+    # any template-body change flips it and forces a consumer rebuild.
+    if library_fingerprints:
+        hasher.update(b"LIB_TEMPLATES:")
+        for lib_path in sorted(library_fingerprints):
+            hasher.update(f"{lib_path}:{library_fingerprints[lib_path]}".encode())
 
     return hasher.hexdigest()
 

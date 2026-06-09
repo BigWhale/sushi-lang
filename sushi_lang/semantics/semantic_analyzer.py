@@ -231,6 +231,14 @@ class SemanticAnalyzer:
 
         symbol_merger = SymbolTableMerger()
 
+        # Seed shipped library perk DEFINITIONS into the shared collector's perk
+        # table BEFORE collecting the consumer's units. Perk-impl collection
+        # (`extend T with Perk`) validates each impl against the visible perk
+        # definitions at collection time (CE4003), so a consumer that supplies
+        # an impl for a library-shipped perk must see that perk's contract here.
+        if self.library_linker is not None:
+            self._seed_library_perks(collector.perks)
+
         for unit in compilation_order:
             if unit.ast is None:
                 continue
@@ -276,6 +284,10 @@ class SemanticAnalyzer:
             self._register_library_structs()
             self._register_library_enums()
             self._register_library_functions()
+            # NOTE: shipped library perk DEFINITIONS are seeded earlier, before
+            # the consumer's perk-impl collection (see _seed_library_perks call
+            # in the Phase 0 loop above); they are already in self.perks here.
+            self._register_library_generic_functions()
 
         # Check if main function expects command line arguments (across all units)
         self._check_main_function_args_multi_file(compilation_order)
@@ -478,6 +490,11 @@ class SemanticAnalyzer:
 
         for lib_name, manifest in self.library_linker.loaded_libraries.items():
             for func_info in manifest.get("public_functions", []):
+                # Generic functions ship as instantiable templates, not concrete
+                # signatures; they are registered by
+                # _register_library_generic_functions instead.
+                if func_info.get("is_generic"):
+                    continue
                 func_name = func_info["name"]
                 if func_name in self.funcs.by_name:
                     continue
@@ -516,6 +533,120 @@ class SemanticAnalyzer:
 
                 self.funcs.by_name[func_name] = func_sig
                 self.funcs.order.append(func_name)
+
+    def _seed_library_perks(self, perk_table) -> None:
+        """Seed perk DEFINITIONS shipped by loaded libraries into ``perk_table``.
+
+        Each consumed library may ship the perk contracts (method signatures)
+        that its exported generics constrain on, under ``templates.perks``. We
+        rebuild a ``PerkDef`` for each via the canonical collection path
+        (re-parse the source snippet, run a throwaway ``CollectorPass``, pull
+        the ``PerkDef`` out of the resulting ``PerkTable``) so that a consumer
+        no longer has to redeclare a perk it does not author.
+
+        This must run BEFORE the consumer's own units are collected: perk-impl
+        collection (``extend T with Perk``) validates each impl against the
+        visible perk definitions (CE4003), so a consumer that implements a
+        library-shipped perk needs the contract present at collection time.
+
+        Only DEFINITIONS are shipped; the consumer still supplies its own
+        ``extend T with Perk`` implementations. Local definitions win: a perk is
+        only seeded if its name is not already present (mirrors the other
+        library-registration helpers).
+        """
+        if perk_table is None or self.library_linker is None:
+            return
+
+        from sushi_lang.internals.parser import parse_to_ast
+        from sushi_lang.semantics.passes.collect import CollectorPass
+
+        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+            templates = manifest.get("templates") or {}
+            for record in templates.get("perks", []) or []:
+                perk_name = record.get("name")
+                if not perk_name or perk_name in perk_table.by_name:
+                    continue
+
+                source = record.get("source")
+                if not source:
+                    continue
+
+                # Re-parse the self-contained perk source and run a throwaway
+                # collector so any diagnostics never pollute the consumer's
+                # reporter.
+                program, _tree = parse_to_ast(source)
+                throwaway = Reporter(source=source, filename=f"<perk:{lib_name}:{perk_name}>")
+                collected = CollectorPass(throwaway).run(program, unit_name=lib_name)
+                template_perks = collected[5]  # PerkTable
+
+                perk_def = template_perks.by_name.get(perk_name)
+                if perk_def is None:
+                    # The snippet failed to collect as a perk; skip rather than
+                    # crash the consumer build.
+                    continue
+
+                perk_table.by_name[perk_name] = perk_def
+                perk_table.order.append(perk_name)
+
+    def _register_library_generic_functions(self) -> None:
+        """Register generic function templates from loaded libraries.
+
+        Each consumed library may ship instantiable generic function bodies in
+        its ``.slib`` manifest under ``templates.generic_functions``. We rebuild
+        a ``GenericFuncDef`` for each via the canonical collection path
+        (re-parse the source snippet, run a throwaway ``CollectorPass``, pull the
+        ``GenericFuncDef`` out of the resulting table) so that the existing
+        instantiation + monomorphization machinery (Pass 1.5/1.6) emits a
+        concrete instance at the consumer's call site.
+
+        Local definitions win: a template is only registered if its name is not
+        already present in the generic function table (mirrors the other
+        library-registration helpers).
+        """
+        if self.generic_funcs is None or self.library_linker is None:
+            return
+
+        from sushi_lang.internals.parser import parse_to_ast
+        from sushi_lang.semantics.passes.collect import CollectorPass
+
+        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+            templates = manifest.get("templates") or {}
+            for record in templates.get("generic_functions", []):
+                func_name = record["name"]
+                if func_name in self.generic_funcs.by_name:
+                    continue
+
+                source = record.get("source")
+                if not source:
+                    continue
+
+                # Re-parse the self-contained template source and run a
+                # throwaway collector so any diagnostics from the library snippet
+                # never pollute the consumer's reporter.
+                program, _tree = parse_to_ast(source)
+                throwaway = Reporter(source=source, filename=f"<template:{lib_name}:{func_name}>")
+                collected = CollectorPass(throwaway).run(program, unit_name=lib_name)
+                template_generic_funcs = collected[-1]  # GenericFunctionTable
+
+                gfd = template_generic_funcs.by_name.get(func_name)
+                if gfd is None:
+                    # The snippet failed to collect as a generic function;
+                    # skip rather than crash the consumer build.
+                    continue
+
+                gfd.is_library_template = True
+
+                # Reconcile type-param constraints against the authoritative
+                # record (the snippet already carries them, but the record is
+                # the source of truth and guards against any future divergence).
+                rec_tps = record.get("type_params") or []
+                if len(rec_tps) == len(gfd.type_params):
+                    for tp, rec_tp in zip(gfd.type_params, rec_tps):
+                        if hasattr(tp, "constraints"):
+                            tp.constraints = list(rec_tp.get("constraints") or [])
+
+                self.generic_funcs.by_name[func_name] = gfd
+                self.generic_funcs.order.append(func_name)
 
     def _register_library_structs(self) -> None:
         """Register struct definitions from loaded libraries.
