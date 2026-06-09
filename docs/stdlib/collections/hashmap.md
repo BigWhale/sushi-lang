@@ -66,12 +66,12 @@ match ages.remove("Arthur"):
         println("Key not found")
 ```
 
-### `.contains(K key) -> bool`
+### `.contains_key(K key) -> bool`
 
 Check if key exists.
 
 ```sushi
-if (ages.contains("Arthur")):
+if (ages.contains_key("Arthur")):
     println("Arthur exists")
 ```
 
@@ -82,6 +82,42 @@ Get number of entries.
 ```sushi
 println("Entries: {ages.len()}")
 ```
+
+## Iteration
+
+A `HashMap` can be iterated three ways. Each returns an iterator suitable for a `foreach`
+loop. Iteration order is unspecified.
+
+### `.keys() -> Iterator<K>`
+
+Iterate over the keys.
+
+```sushi
+foreach(name in ages.keys()):
+    println(name)
+```
+
+### `.values() -> Iterator<V>`
+
+Iterate over the values.
+
+```sushi
+foreach(age in ages.values()):
+    println(age)
+```
+
+### `.entries() -> Iterator<Entry<K, V>>`
+
+Iterate over key-value pairs. Each `Entry<K, V>` exposes `.key` and `.value` fields.
+
+```sushi
+foreach(entry in ages.entries()):
+    println("{entry.key} is {entry.value}")
+```
+
+!!! note
+    `.keys()`, `.values()`, and `.entries()` require the receiver to be a plain variable
+    name — chained calls such as `get_map().keys()` are not currently supported.
 
 ### `.free() -> ~`
 
@@ -132,7 +168,7 @@ The hash function is auto-derived for all types:
 - `insert()`: Amortized O(1)
 - `get()`: O(1) average case
 - `remove()`: O(1) average case
-- `contains()`: O(1) average case
+- `contains_key()`: O(1) average case
 
 ## Implementation Details
 
@@ -145,13 +181,13 @@ The hash function is auto-derived for all types:
 ## Known Limitations
 
 - Enum variants with dynamic array fields cause type system errors
-- No iterator support yet (cannot use in foreach loops)
 - Keys must be hashable (implement `.hash() -> u64`)
 - Manual rehash requires power-of-two capacity
+- `.keys()`/`.values()`/`.entries()` require the receiver to be a plain variable (no chaining)
 
 ## Best Practices
 
-- Use `.contains()` before `.get()` if you only need existence check
+- Use `.contains_key()` before `.get()` if you only need an existence check
 - Call `.free()` to reclaim memory when clearing large maps
 - Use `.rehash()` to pre-allocate capacity if final size is known
 - Prefer string keys over complex types for best performance
@@ -178,7 +214,7 @@ fn main() i32:
             println("Alice not found")
 
     # Check existence
-    if (scores.contains("Bob")):
+    if (scores.contains_key("Bob")):
         println("Bob exists in map")
 
     # Remove entry

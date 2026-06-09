@@ -184,13 +184,14 @@ match open("output.txt", FileMode.Write()):
 
 ### Math (`use <math>`)
 
-Functions for all numeric types:
-- Absolute value: `abs_i32()`, `abs_f64()`, etc.
-- Min/Max: `min_i32()`, `max_f64()`, etc.
-- Floating-point: `sqrt()`, `pow()`, `floor()`, `ceil()`, `round()`
-- Trigonometry: `sin()`, `cos()`, `tan()`, `asin()`, `acos()`, `atan()`
-- Exponential: `exp()`, `ln()`, `log10()`, `log2()`
-- Constants: `PI`, `E`, `SQRT_2`, `LN_2`, `LN_10`
+All functions use a single polymorphic name (no type-suffixed variants):
+- Absolute value / min / max: `abs()`, `min()`, `max()` (return the argument's type)
+- Floating-point (f64): `sqrt()`, `pow()`, `floor()`, `ceil()`, `round()`, `trunc()`
+- Trigonometry: `sin()`, `cos()`, `tan()`, `asin()`, `acos()`, `atan()`, `atan2()`
+- Hyperbolic: `sinh()`, `cosh()`, `tanh()`
+- Exponential / logarithm: `exp()`, `exp2()`, `log()`, `log2()`, `log10()`
+- Utility: `hypot()`
+- Constants: `PI`, `E`, `TAU`
 
 ### Time (`use <time>`)
 
