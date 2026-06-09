@@ -20,7 +20,7 @@ jobs:
           apt-get install -y git ca-certificates
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install system dependencies
         run: |
@@ -45,7 +45,7 @@ jobs:
           uv run python sushi_lang/sushi_stdlib/build.py
 
       - name: Upload Linux stdlib
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: stdlib-linux
           path: sushi_lang/sushi_stdlib/dist/linux/
@@ -55,13 +55,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install LLVM
         run: brew install llvm@20
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           python-version: "3.13"
 
@@ -72,7 +72,7 @@ jobs:
           uv run python sushi_lang/sushi_stdlib/build.py
 
       - name: Upload Darwin stdlib
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: stdlib-darwin
           path: sushi_lang/sushi_stdlib/dist/darwin/
@@ -83,22 +83,22 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download Linux stdlib
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: stdlib-linux
           path: sushi_lang/sushi_stdlib/dist/linux/
 
       - name: Download Darwin stdlib
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: stdlib-darwin
           path: sushi_lang/sushi_stdlib/dist/darwin/
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           python-version: "3.13"
 
@@ -106,7 +106,7 @@ jobs:
         run: uv build --wheel --python 3.13
 
       - name: Upload wheel artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheel
           path: dist/*.whl
@@ -129,10 +129,10 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download wheel artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: wheel
           path: dist/
@@ -155,15 +155,15 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install uv and Python
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           python-version: "3.13"
 
       - name: Download wheel artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: wheel
           path: dist/
@@ -180,10 +180,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download wheel artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: wheel
           path: dist/
@@ -203,7 +203,7 @@ jobs:
           cat release_notes.md
 
       - name: Upload wheel to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/*.whl
           body_path: release_notes.md
