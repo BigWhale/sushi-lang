@@ -1,6 +1,6 @@
 # Sushi Examples
 
-[← Back to Documentation](../README.md)
+[← Back to Documentation](../index.md)
 
 Learn Sushi by example! Each example demonstrates a specific feature with detailed comments.
 

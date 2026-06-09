@@ -67,7 +67,7 @@ fn main() i32:
     let Maybe<string> display = getenv("DISPLAY")
 
     if (home.is_some()):
-        println("Home: {home.realise("")}")
+        println("Home: {home.realise('')}")
 
     return Result.Ok(0)
 ```
@@ -77,13 +77,14 @@ fn main() i32:
 Set an environment variable value.
 
 ```sushi
-fn setenv(string key, string value, i32 overwrite) -> Result<i32>
+fn setenv(string key, string value) -> Result<i32>
 ```
 
 **Parameters:**
 - `key` - Environment variable name
 - `value` - New value to set
-- `overwrite` - If non-zero, replace existing value; if zero, only set if not already defined
+
+An existing variable with the same name is always overwritten.
 
 **Returns:**
 - `Result.Ok(0)` on success
@@ -96,7 +97,7 @@ use <sys/env>
 
 fn main() i32:
     # Set a custom environment variable
-    setenv("MY_APP_CONFIG", "/etc/myapp.conf", 1)??
+    setenv("MY_APP_CONFIG", "/etc/myapp.conf")??
 
     # Verify it was set
     match getenv("MY_APP_CONFIG"):
@@ -108,20 +109,17 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-**Using the overwrite parameter:**
+**Overwriting an existing value:**
 
 ```sushi
 use <sys/env>
 
 fn main() i32:
-    # Set only if not already defined
-    setenv("MY_VAR", "initial", 0)??
+    # Set an initial value
+    setenv("MY_VAR", "initial")??
 
-    # This won't overwrite since MY_VAR already exists
-    setenv("MY_VAR", "updated", 0)??
-
-    # This WILL overwrite the existing value
-    setenv("MY_VAR", "overwritten", 1)??
+    # A second call always overwrites the existing value
+    setenv("MY_VAR", "overwritten")??
 
     let string value = getenv("MY_VAR").realise("")
     println("MY_VAR: {value}")  # MY_VAR: overwritten
@@ -167,13 +165,14 @@ use <sys/env>
 
 fn main() i32:
     # With error propagation (??)
-    setenv("MY_VAR", "value", 1)??
+    setenv("MY_VAR", "value")??
 
     # With explicit error handling
-    match setenv("MY_VAR", "value", 1):
+    let Result<i32, StdError> set_result = setenv("MY_VAR", "value")
+    match set_result:
         Result.Ok(_) ->
             println("Variable set successfully")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Failed to set variable")
 
     return Result.Ok(0)
@@ -255,6 +254,7 @@ Invalid names will cause `setenv` to return `Result.Err()`.
 
 ```sushi
 use <sys/env>
+use <collections/strings>
 
 struct Config:
     string host
@@ -265,7 +265,7 @@ fn load_config() Config:
     let string host = getenv("APP_HOST").realise("localhost")
 
     let string port_str = getenv("APP_PORT").realise("8080")
-    let i32 port = port_str.parse_i32().realise(8080)
+    let i32 port = port_str.to_i32().realise(8080)
 
     let string debug_str = getenv("APP_DEBUG").realise("false")
     let bool debug = debug_str == "true" or debug_str == "1"
@@ -294,7 +294,7 @@ use <sys/env>
 
 fn test_env_vars() i32:
     # Setup test environment
-    setenv("TEST_VAR", "test_value", 1)??
+    setenv("TEST_VAR", "test_value")??
 
     # Run tests
     let string value = getenv("TEST_VAR").realise("")
@@ -307,11 +307,11 @@ fn test_env_vars() i32:
     return Result.Ok(0)
 
 fn main() i32:
-    return test_env_vars()
+    return Result.Ok(test_env_vars().realise(1))
 ```
 
 ## See Also
 
 - [Standard Library Reference](../standard-library.md) - Complete stdlib reference
 - [Error Handling](../error-handling.md) - Result and Maybe types
-- [String Methods](../standard-library.md#string-methods) - String operations for parsing env values
+- [String Methods](../standard-library.md) - String operations for parsing env values

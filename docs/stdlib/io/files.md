@@ -59,7 +59,7 @@ fn main() i32:
 ```sushi
 use <io/files>
 
-fn read_config() string:
+fn read_config() string | FileError:
     let file f = open("config.txt", FileMode.Read())??
     let string content = f.read()
     f.close()
@@ -69,7 +69,7 @@ fn main() i32:
     match read_config():
         Result.Ok(config) ->
             println("Config: {config}")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Failed to read config")
 
     return Result.Ok(0)
@@ -109,8 +109,9 @@ fn main() i32:
 
 ```sushi
 use <io/files>
+use <collections/strings>
 
-fn main() i32:
+fn main() i32 | FileError:
     let file f = open("numbers.txt", FileMode.Read())??
     let string content = f.read()
     f.close()
@@ -124,12 +125,12 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### read_line
+### readln
 
 Read a single line from the file.
 
 ```sushi
-fn file.read_line() -> string
+fn file.readln() -> string
 ```
 
 **Returns:**
@@ -140,13 +141,13 @@ fn file.read_line() -> string
 ```sushi
 use <io/files>
 
-fn main() i32:
+fn main() i32 | FileError:
     let file f = open("data.txt", FileMode.Read())??
 
-    let string first_line = f.read_line()
+    let string first_line = f.readln()
     println("First: {first_line}")
 
-    let string second_line = f.read_line()
+    let string second_line = f.readln()
     println("Second: {second_line}")
 
     f.close()
@@ -159,14 +160,14 @@ fn main() i32:
 ```sushi
 use <io/files>
 
-fn main() i32:
+fn main() i32 | FileError:
     let file f = open("log.txt", FileMode.Read())??
     let i32 line_count = 0
 
     # Read until empty line (EOF)
     let bool done = false
     while (not done):
-        let string line = f.read_line()
+        let string line = f.readln()
 
         if (line.is_empty()):
             done := true
@@ -196,7 +197,7 @@ fn file.write(string data) -> ~
 ```sushi
 use <io/files>
 
-fn main() i32:
+fn main() i32 | FileError:
     let file f = open("output.txt", FileMode.Write())??
 
     f.write("Hello, World!")
@@ -213,7 +214,7 @@ fn main() i32:
 ```sushi
 use <io/files>
 
-fn main() i32:
+fn main() i32 | FileError:
     let file f = open("report.txt", FileMode.Write())??
 
     f.write("Report\n")
@@ -233,7 +234,7 @@ fn main() i32:
 ```sushi
 use <io/files>
 
-fn main() i32:
+fn main() i32 | FileError:
     let file f = open("log.txt", FileMode.Append())??
 
     f.write("New log entry\n")
@@ -256,7 +257,7 @@ fn file.close() -> ~
 ```sushi
 use <io/files>
 
-fn main() i32:
+fn main() i32 | FileError:
     let file f = open("data.txt", FileMode.Read())??
     let string content = f.read()
     f.close()  # Always close files
@@ -346,7 +347,7 @@ fn main() i32:
 ```sushi
 use <io/files>
 
-fn copy_file(string src, string dst) ~:
+fn copy_file(string src, string dst) ~ | FileError:
     let file input = open(src, FileMode.Read())??
     let string content = input.read()
     input.close()
@@ -361,7 +362,7 @@ fn main() i32:
     match copy_file("input.txt", "output.txt"):
         Result.Ok(_) ->
             println("Copy successful")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Copy failed")
 
     return Result.Ok(0)
@@ -393,7 +394,7 @@ fn main() i32:
     match remove("/tmp/old_file.txt"):
         Result.Ok(_) ->
             println("File deleted")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Failed to delete file")
 
     return Result.Ok(0)
@@ -426,7 +427,7 @@ fn main() i32:
     match rename("/tmp/old.txt", "/tmp/new.txt"):
         Result.Ok(_) ->
             println("File renamed")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Failed to rename")
 
     return Result.Ok(0)
@@ -459,7 +460,7 @@ fn main() i32:
     match mkdir("/tmp/mydir", 0o755):
         Result.Ok(_) ->
             println("Directory created")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Failed to create directory")
 
     return Result.Ok(0)
@@ -496,7 +497,7 @@ fn main() i32:
     match rmdir("/tmp/mydir"):
         Result.Ok(_) ->
             println("Directory removed")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Failed to remove directory")
 
     return Result.Ok(0)
@@ -529,7 +530,7 @@ fn main() i32:
     match copy("/tmp/source.txt", "/tmp/backup.txt"):
         Result.Ok(_) ->
             println("File copied")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Failed to copy file")
 
     return Result.Ok(0)
@@ -548,15 +549,15 @@ fn backup_and_cleanup(string path) ~:
     match copy(path, backup):
         Result.Ok(_) ->
             println("Backup created")
-        Result.Err() ->
-            return Result.Err()
+        Result.Err(_) ->
+            return Result.Err(StdError.Error)
 
     match remove(path):
         Result.Ok(_) ->
             println("Original removed")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Cleanup failed")
-            return Result.Err()
+            return Result.Err(StdError.Error)
 
     return Result.Ok(~)
 
@@ -564,7 +565,7 @@ fn main() i32:
     match backup_and_cleanup("/tmp/data.txt"):
         Result.Ok(_) ->
             println("Operation complete")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Operation failed")
 
     return Result.Ok(0)
@@ -577,7 +578,7 @@ fn main() i32:
 ```sushi
 use <io/files>
 
-fn read_file(string path) string:
+fn read_file(string path) string | FileError:
     let file f = open(path, FileMode.Read())??
     let string content = f.read()
     f.close()
@@ -595,13 +596,13 @@ fn main() i32:
 ```sushi
 use <io/files>
 
-fn write_file(string path, string data) ~:
+fn write_file(string path, string data) ~ | FileError:
     let file f = open(path, FileMode.Write())??
     f.write(data)
     f.close()
     return Result.Ok(~)
 
-fn main() i32:
+fn main() i32 | FileError:
     write_file("output.txt", "Hello, World!")??
     println("File written")
 
@@ -612,8 +613,9 @@ fn main() i32:
 
 ```sushi
 use <io/files>
+use <collections/strings>
 
-fn main() i32:
+fn main() i32 | FileError:
     let file f = open("data.csv", FileMode.Read())??
     let string content = f.read()
     f.close()
@@ -637,13 +639,13 @@ fn main() i32:
 ```sushi
 use <io/files>
 
-fn log_message(string message) ~:
+fn log_message(string message) ~ | FileError:
     let file f = open("app.log", FileMode.Append())??
     f.write("{message}\n")
     f.close()
     return Result.Ok(~)
 
-fn main() i32:
+fn main() i32 | FileError:
     log_message("Application started")??
     log_message("Processing data")??
     log_message("Application finished")??
@@ -683,7 +685,7 @@ fn main() i32:
 ```sushi
 use <io/files>
 
-fn main() i32:
+fn main() i32 | FileError:
     # Unix-style paths work on all platforms
     let file f = open("data/input.txt", FileMode.Read())??
     f.close()
@@ -716,13 +718,13 @@ File operations are buffered by the operating system. For large files:
 ```sushi
 use <io/files>
 
-fn main() i32:
+fn main() i32 | FileError:
     let file f = open("large.txt", FileMode.Read())??
 
     # Reading line-by-line is more memory-efficient than .read()
     let bool done = false
     while (not done):
-        let string line = f.read_line()
+        let string line = f.readln()
 
         if (line.is_empty()):
             done := true
@@ -738,7 +740,7 @@ fn main() i32:
 ### Memory Usage
 
 - `.read()` loads entire file into memory
-- `.read_line()` reads one line at a time (more memory-efficient)
+- `.readln()` reads one line at a time (more memory-efficient)
 
 Choose based on file size and use case.
 
@@ -750,6 +752,7 @@ Always validate file paths from user input:
 
 ```sushi
 use <io/files>
+use <collections/strings>
 
 fn is_safe_path(string path) bool:
     # Reject paths with ..
@@ -762,7 +765,7 @@ fn is_safe_path(string path) bool:
 
     return Result.Ok(true)
 
-fn main() i32:
+fn main() i32 | FileError:
     let string user_path = "data.txt"
 
     if (not is_safe_path(user_path).realise(false)):
@@ -803,6 +806,6 @@ Use `FileMode.Append()` to preserve existing content.
 ## See Also
 
 - [Console I/O](console.md) - Standard input/output/error operations
-- [String Methods](../../standard-library.md#string-methods) - String operations for file content
+- [String Methods](../../standard-library.md) - String operations for file content
 - [Standard Library Reference](../../standard-library.md) - Complete stdlib reference
 - [Error Handling](../../error-handling.md) - Result and Maybe types

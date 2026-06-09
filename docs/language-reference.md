@@ -1,6 +1,6 @@
 # Language Reference
 
-[← Back to Documentation](README.md)
+[← Back to Documentation](index.md)
 
 Complete syntax and semantics reference for Sushi Lang. For a gentler introduction, see the [Language Guide](language-guide.md).
 
@@ -269,7 +269,14 @@ forms for all logical operators.
 
 ### String
 
-- `+` - String concatenation
+There is no `+` concatenation operator for strings. Build strings with
+interpolation instead:
+
+```sushi
+let string a = "foo"
+let string b = "bar"
+let string combined = "{a}{b}"   # "foobar"
+```
 
 ### Other
 
@@ -326,7 +333,7 @@ Stack-allocated, compile-time size:
 
 ```sushi
 let i32[5] arr = [1, 2, 3, 4, 5]
-let i32 first = arr.get(0)  # Bounds checked
+let i32 first = arr.get(0)??  # .get returns Maybe<i32>; ?? unwraps it
 ```
 
 ### Dynamic Arrays
@@ -414,8 +421,8 @@ println(rect.top_left.x)
 ```sushi
 enum Name:
     Variant1()
-    Variant2(type1 field1)
-    Variant3(type1 field1, type2 field2)
+    Variant2(type1)
+    Variant3(type1, type2)
 ```
 
 **Example:**
@@ -423,16 +430,19 @@ enum Name:
 ```sushi
 enum Status:
     Idle()
-    Running(i32 task_id)
-    Error(string message)
+    Running(i32)
+    Error(string)
 ```
+
+Enum variant fields are positional (type-only); they are bound by position in
+pattern matching, not by field name.
 
 ### Construction
 
 ```sushi
 let Status s1 = Status.Idle()
-let Status s2 = Status.Running(task_id: 42)
-let Status s3 = Status.Error(message: "Failed")
+let Status s2 = Status.Running(42)
+let Status s3 = Status.Error("Failed")
 ```
 
 ### Pattern Matching

@@ -19,7 +19,7 @@ gradually; for now, just know that the compiler is on your side.
 ## Setting up the compiler
 
 This tutorial assumes you have a working `sushic`. If you don't yet, follow the
-[Getting Started installation guide](https://github.com/yourusername/sushi/blob/main/docs/getting-started.md)
+[Getting Started installation guide](../getting-started.md)
 in the main documentation — it covers installing LLVM, `uv`, and building the standard
 library. Once `./sushic --help` prints a version banner, you're ready.
 

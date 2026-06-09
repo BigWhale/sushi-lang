@@ -1,6 +1,6 @@
 # Compiler Reference
 
-[← Back to Documentation](README.md)
+[← Back to Documentation](index.md)
 
 Complete reference for the Sushi compiler: CLI options, optimization levels, and error codes.
 
@@ -385,72 +385,54 @@ Sushi uses structured error codes for diagnosing issues.
 
 ### Common Errors
 
-#### CE1003: Undefined Variable
+#### CE1001: Undeclared Identifier
 
 ```sushi
 fn main() i32:
-    # ERROR CE1003: Undefined variable 'x'
+    # ERROR CE1001: use of undeclared identifier 'x'
     println(x)
     return Result.Ok(0)
 ```
 
 **Fix:** Declare variable with `let` before use.
 
-#### CE1004: Use of Moved Variable
+#### CE1002: Rebind to Undeclared Variable
 
 ```sushi
 fn main() i32:
-    let i32[] arr = from([1, 2, 3])
-    let i32[] moved = arr
-
-    # ERROR CE1004: Use of moved variable 'arr'
-    println(arr.len())
+    # ERROR CE1002: rebind to undeclared variable 'count'
+    count := 5
 
     return Result.Ok(0)
 ```
 
-**Fix:** Use references (`&arr`) or clone (`arr.clone()`).
+**Fix:** Declare with `let` first (`let i32 count = 0`) before rebinding with `:=`.
 
-#### CE1007: Cannot Rebind While Borrowed
-
-```sushi
-fn borrow(&i32 x) i32:
-    return Result.Ok(x)
-
-fn main() i32:
-    let i32 num = 42
-    let i32 borrowed = borrow(&num)
-
-    # ERROR CE1007: Cannot rebind 'num' while borrowed
-    num := 50
-
-    return Result.Ok(0)
-```
-
-**Fix:** Wait until borrow ends (function returns).
-
-#### CE2406: Use of Destroyed Variable
+#### CE2024: Use of Destroyed Dynamic Array
 
 ```sushi
 fn main() i32:
     let i32[] arr = from([1, 2, 3])
     arr.destroy()
 
-    # ERROR CE2406: use of destroyed variable 'arr'
+    # ERROR CE2024: use of destroyed dynamic array 'arr'
     println(arr.len())
 
     return Result.Ok(0)
 ```
 
-**Fix:** Don't use variable after `.destroy()`, or use `.free()` instead.
+**Fix:** Don't use a variable after `.destroy()`, or use `.free()` instead.
 
 #### CE2502: .realise() Wrong Argument Count
 
 ```sushi
-fn main() i32:
-    let Result<i32> r = get_value()
+fn get_value() i32:
+    return Result.Ok(42)
 
-    # ERROR CE2502: .realise() requires exactly 1 argument
+fn main() i32:
+    let Result<i32, StdError> r = get_value()
+
+    # ERROR CE2502: realise() requires exactly 1 argument, got 0
     let i32 x = r.realise()
 
     return Result.Ok(0)
@@ -461,10 +443,13 @@ fn main() i32:
 #### CE2503: .realise() Type Mismatch
 
 ```sushi
-fn main() i32:
-    let Result<i32> r = get_value()
+fn get_value() i32:
+    return Result.Ok(42)
 
-    # ERROR CE2503: Default type 'string' doesn't match Result<i32>
+fn main() i32:
+    let Result<i32, StdError> r = get_value()
+
+    # ERROR CE2503: realise() default type mismatch: expected 'i32', got 'string'
     let i32 x = r.realise("wrong")
 
     return Result.Ok(0)
@@ -472,14 +457,17 @@ fn main() i32:
 
 **Fix:** Use correct type: `r.realise(0)`.
 
-#### CE2505: Assigning Result Without Handling
+#### CE2002: Assigning Result Without Handling
+
+Assigning a `Result`-returning call directly to a non-`Result` variable is a type
+mismatch:
 
 ```sushi
 fn get_value() i32:
     return Result.Ok(42)
 
 fn main() i32:
-    # ERROR CE2505: Cannot assign Result<i32> to i32
+    # ERROR CE2002: type mismatch: cannot assign Result<i32, StdError> to i32
     let i32 x = get_value()
 
     return Result.Ok(0)
@@ -508,10 +496,11 @@ extend i32 squared() i32:
     # ERROR CE2508: ?? only works in Result-returning functions
     let i32 x = might_fail()??
 
-    return Result.Ok(self * self)
+    return self * self
 ```
 
-**Fix:** Don't use `??` in extension methods (limitation).
+**Fix:** Don't use `??` in extension methods (limitation). Extension methods return
+their value directly (bare `return`, no `Result.Ok(...)` wrapper).
 
 ### Constant Expression Errors
 
@@ -592,16 +581,20 @@ let i32 x = get_value().realise(0)  # Use immediately
 ```sushi
 fn main() i32:
     let i32[3] arr = [1, 2, 3]
+    let i32 i = 10
 
-    # Runtime error: index out of bounds
-    let i32 x = arr.get(10)
+    # Runtime error: direct indexing out of bounds
+    let i32 x = arr[i]
 
     return Result.Ok(0)
 ```
 
+Direct indexing (`arr[i]`) is checked at runtime and aborts on an out-of-bounds
+access. (Use `arr.get(i)`, which returns `Maybe<i32>`, for safe access instead.)
+
 **Runtime output:**
 ```
-Runtime error RE2020: Array bounds check failed (index 10, length 3)
+Runtime Error RE2020: array index 10 out of bounds for array of size 3
 ```
 
 #### RE2021: Memory Allocation Failed

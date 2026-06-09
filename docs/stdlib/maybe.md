@@ -60,8 +60,8 @@ Use `??` to unwrap or propagate None:
 
 ```sushi
 fn get_first(i32[] arr) Maybe<i32>:
-    let Maybe<i32> first = arr.get(0)??
-    return Maybe.Some(first * 2)
+    let i32 first = arr.get(0)??
+    return Result.Ok(Maybe.Some(first * 2))
 ```
 
 ## Pattern Matching

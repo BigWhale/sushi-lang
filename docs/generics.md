@@ -1,6 +1,6 @@
 # Generics
 
-[← Back to Documentation](README.md)
+[← Back to Documentation](index.md)
 
 Complete guide to generic programming in Sushi: generic types, functions, and compile-time monomorphization.
 

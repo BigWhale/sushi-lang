@@ -1,6 +1,6 @@
 # Backend: LLVM Code Generation
 
-[← Back to Documentation](../README.md) | [Architecture](architecture.md)
+[← Back to Documentation](../index.md) | [Architecture](architecture.md)
 
 Detailed documentation of Sushi's LLVM backend and code generation.
 

@@ -44,8 +44,12 @@ perk Displayable:
     fn debug() string
 
 perk Comparable:
-    fn compare(&Self other) i32
+    fn compare(&peek Point other) i32
 ```
+
+A perk method that takes the implementing type by reference names that type
+explicitly (there is no `Self` keyword) and must use an explicit `&peek` / `&poke`
+borrow. The implementation and call site must use the same borrow kind.
 
 **Rules:**
 - Perk methods do not return `Result<T>` (unlike regular functions)
@@ -102,7 +106,7 @@ struct Point:
 
 extend Point with Hashable:
     fn hash() u64:
-        return self.x as u64 + self.y as u64
+        return (self.x as u64) + (self.y as u64)
 
 fn main() i32:
     # Valid: Point implements Hashable
@@ -150,7 +154,7 @@ struct Point:
 
 extend Point with Hashable:
     fn hash() u64:
-        return self.x as u64 + self.y as u64
+        return (self.x as u64) + (self.y as u64)
 
 fn main() i32:
     let Point p = Point(10, 20)
@@ -224,7 +228,7 @@ struct Point:
 
 extend Point with Hashable:
     fn hash() u64:
-        return self.x as u64 + self.y as u64
+        return (self.x as u64) + (self.y as u64)
 
 extend Point with Displayable:
     fn display() string:
@@ -284,13 +288,13 @@ Used for types that can be compared:
 
 ```sushi
 perk Comparable:
-    fn compare(&Self other) i32
+    fn compare(&peek Score other) i32
 
 struct Score:
     i32 value
 
 extend Score with Comparable:
-    fn compare(&Score other) i32:
+    fn compare(&peek Score other) i32:
         if (self.value < other.value):
             return -1
         if (self.value > other.value):
@@ -298,7 +302,7 @@ extend Score with Comparable:
         return 0
 
 fn find_max<T: Comparable>(T a, T b) T:
-    let i32 cmp = a.compare(&b)
+    let i32 cmp = a.compare(&peek b)
     if (cmp >= 0):
         return Result.Ok(a)
     return Result.Ok(b)
@@ -316,7 +320,7 @@ perk Displayable:
     fn display() string
 
 perk Comparable:
-    fn compare(&Self other) i32
+    fn compare(&peek Point other) i32
 
 struct Point:
     i32 x
@@ -324,14 +328,14 @@ struct Point:
 
 extend Point with Hashable:
     fn hash() u64:
-        return self.x as u64 + self.y as u64
+        return (self.x as u64) + (self.y as u64)
 
 extend Point with Displayable:
     fn display() string:
         return "({self.x}, {self.y})"
 
 extend Point with Comparable:
-    fn compare(&Point other) i32:
+    fn compare(&peek Point other) i32:
         let i32 self_sum = self.x + self.y
         let i32 other_sum = other.x + other.y
         if (self_sum < other_sum):
@@ -346,7 +350,7 @@ fn main() i32:
 
     println(p1.display())
     let u64 h = p1.hash()
-    let i32 cmp = p1.compare(&p2)
+    let i32 cmp = p1.compare(&peek p2)
 
     return Result.Ok(0)
 ```
@@ -451,4 +455,4 @@ perk Eq:
 
 - [Generics](generics.md) - Generic types and monomorphization
 - [Language Reference](language-reference.md) - Complete syntax reference
-- [Examples](examples/) - Working code examples
+- [Examples](examples/README.md) - Working code examples

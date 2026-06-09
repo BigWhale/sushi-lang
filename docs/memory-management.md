@@ -1,6 +1,6 @@
 # Memory Management
 
-[← Back to Documentation](README.md)
+[← Back to Documentation](index.md)
 
 Comprehensive guide to Sushi's memory management: RAII, references, borrowing, and ownership.
 
@@ -10,7 +10,7 @@ Comprehensive guide to Sushi's memory management: RAII, references, borrowing, a
 - [RAII (Automatic Cleanup)](#raii-automatic-cleanup)
 - [Move Semantics](#move-semantics)
 - [References and Borrowing](#references-and-borrowing)
-- [Own<T> for Heap Allocation](#ownt-for-heap-allocation)
+- [Own<T> for Heap Allocation](#own-for-heap-allocation)
 - [Manual Memory Management](#manual-memory-management)
 
 ## Philosophy
@@ -211,8 +211,8 @@ fn increment(&poke i32 counter) ~:
 fn main() i32:
     let i32 count = 0
 
-    increment(&poke count).realise(~)
-    increment(&poke count).realise(~)
+    increment(&poke count)
+    increment(&poke count)
 
     println("Count: {count}")  # 2
 
@@ -234,7 +234,7 @@ fn main() i32:
     let Config cfg = Config(port: 8080, host: "localhost")
 
     # Borrow struct field directly (mutable)
-    update_port(&poke cfg.port).realise(~)
+    update_port(&poke cfg.port)
 
     println("Port: {cfg.port}")  # 8180
 
@@ -263,7 +263,7 @@ fn main() i32:
     )
 
     # Borrow nested field (mutable)
-    move_x(&poke rect.top_left.x).realise(~)
+    move_x(&poke rect.top_left.x)
 
     println("X: {rect.top_left.x}")  # 10
 
@@ -344,6 +344,10 @@ fn main() i32:
 5. **Cannot move/rebind while borrowed**
 
 ```sushi
+fn use_ref(&poke i32 x) ~:
+    x := x + 1
+    return Result.Ok(~)
+
 fn main() i32:
     let i32 num = 42
     use_ref(&poke num)
@@ -370,23 +374,21 @@ let i32 x = add_one(&peek temp).realise(0)
 ### Creating Owned Values
 
 ```sushi
-struct Node:
-    i32 value
-    Own<Node> next
+enum IntList:
+    Nil
+    Cons(i32, Own<IntList>)
 
 fn main() i32:
-    # Create owned node on heap
-    let Own<Node> tail = Own.alloc(Node(
-        value: 2,
-        next: Own.null()
-    ))
+    # Create owned nodes on the heap
+    let Own<IntList> tail = Own.alloc(IntList.Nil())
+    let Own<IntList> node = Own.alloc(IntList.Cons(2, tail))
+    let IntList head = IntList.Cons(1, node)
 
-    let Node head = Node(
-        value: 1,
-        next: tail
-    )
-
-    println("Head: {head.value}")
+    match head:
+        IntList.Cons(value, _) ->
+            println("Head: {value}")
+        IntList.Nil ->
+            println("Empty")
 
     return Result.Ok(0)
 ```
@@ -394,13 +396,15 @@ fn main() i32:
 ### Accessing Owned Values
 
 ```sushi
-fn main() i32:
-    let Own<Node> owned = Own.alloc(Node(value: 42, next: Own.null()))
+struct Node:
+    i32 value
 
-    # Check if non-null
-    if (owned.is_some()):
-        let Node node = owned.get()
-        println("Value: {node.value}")
+fn main() i32:
+    let Own<Node> owned = Own.alloc(Node(value: 42))
+
+    # Dereference the owned pointer
+    let Node node = owned.get()
+    println("Value: {node.value}")
 
     return Result.Ok(0)
 ```
@@ -408,8 +412,11 @@ fn main() i32:
 ### Destroying Owned Values
 
 ```sushi
+struct Node:
+    i32 value
+
 fn main() i32:
-    let Own<Node> owned = Own.alloc(Node(value: 42, next: Own.null()))
+    let Own<Node> owned = Own.alloc(Node(value: 42))
 
     # Manually destroy
     owned.destroy()
@@ -475,6 +482,8 @@ fn main() i32:
 ### HashMap Memory Management
 
 ```sushi
+use <collections/hashmap>
+
 fn main() i32:
     let HashMap<string, i32> map = HashMap.new()
 
@@ -558,4 +567,4 @@ Sushi prevents common memory errors at compile time:
 **See also:**
 - [Language Reference](language-reference.md) - Complete syntax
 - [Error Handling](error-handling.md) - RAII with error propagation
-- [Examples](examples/) - Memory management patterns
+- [Examples](examples/README.md) - Memory management patterns

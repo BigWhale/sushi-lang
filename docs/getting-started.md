@@ -1,6 +1,6 @@
 # Getting Started with Sushi Lang
 
-[← Back to Documentation](README.md)
+[← Back to Documentation](index.md)
 
 This guide will help you set up Sushi and write your first program.
 
@@ -16,8 +16,8 @@ This guide will help you set up Sushi and write your first program.
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/sushi.git
-cd sushi
+git clone https://github.com/BigWhale/sushi-lang.git
+cd sushi-lang
 ```
 
 ### 2. Install System Dependencies
@@ -222,12 +222,12 @@ Create `calculator.sushi`:
 fn divide(i32 numerator, i32 denominator) i32:
     if (denominator == 0):
         println("Error: Cannot divide by zero!")
-        return Result.Err()
+        return Result.Err(StdError.Error)
     return Result.Ok(numerator / denominator)
 
 fn main() i32:
-    let Result<i32> result1 = divide(42, 6)
-    let Result<i32> result2 = divide(42, 0)
+    let Result<i32, StdError> result1 = divide(42, 6)
+    let Result<i32, StdError> result2 = divide(42, 0)
 
     # Check result1
     if (result1):
@@ -335,7 +335,7 @@ The system needs clang for linking the final binary:
 Now that you have Sushi set up:
 
 1. **Learn the language**: Read the [Language Guide](language-guide.md) for a friendly tour
-2. **Explore examples**: Check out [examples/](examples/) for hands-on code
+2. **Explore examples**: Check out [examples/](examples/README.md) for hands-on code
 3. **Deep dive**: See the [Language Reference](language-reference.md) for complete details
 4. **Write code**: Start building something!
 
@@ -357,4 +357,4 @@ Now that you have Sushi set up:
 
 ---
 
-**Next**: [Language Guide](language-guide.md) | [Examples](examples/)
+**Next**: [Language Guide](language-guide.md) | [Examples](examples/README.md)

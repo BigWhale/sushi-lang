@@ -1,8 +1,8 @@
-name: Deploy Tutorial Site
+name: Deploy Docs Site
 
 # Manual-only by design. This workflow NEVER runs automatically: there is no
 # push/pull_request trigger, so merging to main does not publish anything.
-# Trigger it by hand from the Actions tab once you explicitly want the tutorial
+# Trigger it by hand from the Actions tab once you explicitly want the docs
 # live on GitHub Pages.
 on:
   workflow_dispatch:
