@@ -89,6 +89,7 @@ class FuncDef(Node):
     err_type: Optional[Type] = None  # Error type for Result<T, E> (None = StdError default)
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
+    is_library_template: bool = False  # True if reconstructed from a consumed library's .slib templates
 
 @dataclass
 class ConstDef(Node):

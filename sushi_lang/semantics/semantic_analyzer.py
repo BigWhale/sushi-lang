@@ -276,6 +276,7 @@ class SemanticAnalyzer:
             self._register_library_structs()
             self._register_library_enums()
             self._register_library_functions()
+            self._register_library_generic_functions()
 
         # Check if main function expects command line arguments (across all units)
         self._check_main_function_args_multi_file(compilation_order)
@@ -478,6 +479,11 @@ class SemanticAnalyzer:
 
         for lib_name, manifest in self.library_linker.loaded_libraries.items():
             for func_info in manifest.get("public_functions", []):
+                # Generic functions ship as instantiable templates, not concrete
+                # signatures; they are registered by
+                # _register_library_generic_functions instead.
+                if func_info.get("is_generic"):
+                    continue
                 func_name = func_info["name"]
                 if func_name in self.funcs.by_name:
                     continue
@@ -516,6 +522,66 @@ class SemanticAnalyzer:
 
                 self.funcs.by_name[func_name] = func_sig
                 self.funcs.order.append(func_name)
+
+    def _register_library_generic_functions(self) -> None:
+        """Register generic function templates from loaded libraries.
+
+        Each consumed library may ship instantiable generic function bodies in
+        its ``.slib`` manifest under ``templates.generic_functions``. We rebuild
+        a ``GenericFuncDef`` for each via the canonical collection path
+        (re-parse the source snippet, run a throwaway ``CollectorPass``, pull the
+        ``GenericFuncDef`` out of the resulting table) so that the existing
+        instantiation + monomorphization machinery (Pass 1.5/1.6) emits a
+        concrete instance at the consumer's call site.
+
+        Local definitions win: a template is only registered if its name is not
+        already present in the generic function table (mirrors the other
+        library-registration helpers).
+        """
+        if self.generic_funcs is None or self.library_linker is None:
+            return
+
+        from sushi_lang.internals.parser import parse_to_ast
+        from sushi_lang.semantics.passes.collect import CollectorPass
+
+        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+            templates = manifest.get("templates") or {}
+            for record in templates.get("generic_functions", []):
+                func_name = record["name"]
+                if func_name in self.generic_funcs.by_name:
+                    continue
+
+                source = record.get("source")
+                if not source:
+                    continue
+
+                # Re-parse the self-contained template source and run a
+                # throwaway collector so any diagnostics from the library snippet
+                # never pollute the consumer's reporter.
+                program, _tree = parse_to_ast(source)
+                throwaway = Reporter(source=source, filename=f"<template:{lib_name}:{func_name}>")
+                collected = CollectorPass(throwaway).run(program, unit_name=lib_name)
+                template_generic_funcs = collected[-1]  # GenericFunctionTable
+
+                gfd = template_generic_funcs.by_name.get(func_name)
+                if gfd is None:
+                    # The snippet failed to collect as a generic function;
+                    # skip rather than crash the consumer build.
+                    continue
+
+                gfd.is_library_template = True
+
+                # Reconcile type-param constraints against the authoritative
+                # record (the snippet already carries them, but the record is
+                # the source of truth and guards against any future divergence).
+                rec_tps = record.get("type_params") or []
+                if len(rec_tps) == len(gfd.type_params):
+                    for tp, rec_tp in zip(gfd.type_params, rec_tps):
+                        if hasattr(tp, "constraints"):
+                            tp.constraints = list(rec_tp.get("constraints") or [])
+
+                self.generic_funcs.by_name[func_name] = gfd
+                self.generic_funcs.order.append(func_name)
 
     def _register_library_structs(self) -> None:
         """Register struct definitions from loaded libraries.

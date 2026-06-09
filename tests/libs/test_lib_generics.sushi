@@ -1,0 +1,16 @@
+# Consumer monomorphizes a library's generic function template at its own call
+# site (Phase 2 cross-library generics). The library ships first_of<T> as a
+# template; the consumer instantiates it at T = i32 with no explicit type args.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "3"
+
+use <lib/generics_lib>
+
+fn run_test() i32:
+    let i32 m = first_of(3, 5)??
+    return Result.Ok(m)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    println(result)
+    return Result.Ok(0)

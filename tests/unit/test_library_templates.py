@@ -189,3 +189,91 @@ def test_closure_check_rejects_private_helper_reference(tmp_path):
         gen._extract_templates([unit])
 
     assert any(item.code == "CE5006" for item in reporter.items)
+
+
+# ---------------------------------------------------------------------------
+# P2-T4: consumer-side registration of library generic templates.
+# ---------------------------------------------------------------------------
+
+from types import SimpleNamespace
+
+from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
+from sushi_lang.semantics.passes.collect import GenericFunctionTable
+
+
+def _analyzer_with_loaded_libraries(loaded: dict) -> SemanticAnalyzer:
+    """Build a bare analyzer wired with a fake library_linker + empty tables.
+
+    Exercises _register_library_generic_functions in isolation: the analyzer
+    only needs a generic_funcs table and a library_linker exposing
+    loaded_libraries.
+    """
+    reporter = Reporter(source="", filename="consumer")
+    fake_linker = SimpleNamespace(loaded_libraries=loaded)
+    analyzer = SemanticAnalyzer(reporter, filename="consumer", library_linker=fake_linker)
+    analyzer.generic_funcs = GenericFunctionTable()
+    return analyzer
+
+
+def _templates_manifest(*records) -> dict:
+    return {
+        "library_name": "mathlib",
+        "templates": {
+            "version": 2,
+            "generic_functions": list(records),
+            "perks": [],
+            "perk_impls": [],
+        },
+    }
+
+
+def test_register_library_generic_function_lands_in_table():
+    """A templates record is rebuilt into generic_funcs with the flag set."""
+    record = serialize_generic_function(parse_to_ast(MAX_SRC)[0].functions[0], MAX_SRC)
+    analyzer = _analyzer_with_loaded_libraries(
+        {"mathlib": _templates_manifest(record)}
+    )
+
+    analyzer._register_library_generic_functions()
+
+    assert "max" in analyzer.generic_funcs.by_name
+    assert "max" in analyzer.generic_funcs.order
+    gfd = analyzer.generic_funcs.by_name["max"]
+    assert gfd.is_library_template is True
+    # Constraints reconciled from the authoritative record.
+    assert len(gfd.type_params) == 1
+    assert list(gfd.type_params[0].constraints or []) == ["Ord"]
+    # Body and signature survived the re-parse.
+    assert [p.name for p in gfd.params] == ["a", "b"]
+    assert len(gfd.body.statements) == 2
+
+
+def test_register_library_generic_function_respects_local_definition():
+    """A locally-defined generic of the same name wins; the template is ignored."""
+    record = serialize_generic_function(parse_to_ast(MAX_SRC)[0].functions[0], MAX_SRC)
+    analyzer = _analyzer_with_loaded_libraries(
+        {"mathlib": _templates_manifest(record)}
+    )
+    # Pre-seed a local definition (a different sentinel object).
+    local = _collect_generic(parse_to_ast(MAX_SRC)[0], "max")
+    local.is_library_template = False
+    analyzer.generic_funcs.by_name["max"] = local
+    analyzer.generic_funcs.order.append("max")
+
+    analyzer._register_library_generic_functions()
+
+    # Still the local object, untouched (local definitions win).
+    assert analyzer.generic_funcs.by_name["max"] is local
+    assert analyzer.generic_funcs.by_name["max"].is_library_template is False
+    assert analyzer.generic_funcs.order.count("max") == 1
+
+
+def test_register_library_generic_function_guards_missing_templates():
+    """A manifest without a templates section registers nothing and does not crash."""
+    analyzer = _analyzer_with_loaded_libraries(
+        {"mathlib": {"library_name": "mathlib"}}
+    )
+
+    analyzer._register_library_generic_functions()
+
+    assert analyzer.generic_funcs.by_name == {}

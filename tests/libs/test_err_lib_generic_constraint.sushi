@@ -1,0 +1,22 @@
+# Consumer instantiates the library's constrained generic max_of<T: Ord> at a
+# type that does not implement Ord. The constraint is re-checked relative to the
+# consumer's perk impls (it declares none for Widget), so monomorphization must
+# reject this with CE4006. Proves consumer-relative constraint re-checking of a
+# registered library template.
+# EXPECT_ERROR_CODE: CE4006
+
+use <lib/generics_lib>
+
+struct Widget:
+    i32 id
+
+fn run_test() Widget:
+    let Widget a = Widget(1)
+    let Widget b = Widget(2)
+    let Widget m = max_of(a, b)??
+    return Result.Ok(m)
+
+fn main() i32:
+    let Widget w = run_test().realise(Widget(0))
+    println(w.id)
+    return Result.Ok(0)

@@ -217,6 +217,7 @@ class GenericFuncDef:
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
     err_type: Optional[Type] = None              # Error type for Result<T, E> (None = StdError default)
+    is_library_template: bool = False            # True if registered from a consumed library's .slib templates
 
 
 @dataclass
