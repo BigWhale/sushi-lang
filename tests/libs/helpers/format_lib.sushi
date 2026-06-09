@@ -1,0 +1,11 @@
+# Phase 3 producer: a printf-like variadic-generic (parameter-pack) public
+# function. The library ships the `Display` perk definition plus the
+# `show_all<...Ts: Display>` pack template; the consumer supplies the per-type
+# `Display` implementations for the types it instantiates the pack with.
+perk Display:
+    fn display() string
+
+public fn show_all<...Ts: Display>(...Ts args) ~:
+    expand(a in args):
+        println(a.display())
+    return Result.Ok(~)
