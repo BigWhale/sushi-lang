@@ -1,0 +1,31 @@
+# A parameter pack `...Ts` collects trailing arguments of DIFFERENT types.
+# The `Describe` constraint guarantees every element has a `.describe()`,
+# so the `expand` body can call it whatever the concrete element type is.
+perk Describe:
+    fn describe() string
+
+extend i32 with Describe:
+    fn describe() string:
+        return "int {self}"
+
+extend string with Describe:
+    fn describe() string:
+        return "text '{self}'"
+
+extend bool with Describe:
+    fn describe() string:
+        if (self):
+            return "bool true"
+        return "bool false"
+
+# `...Ts: Describe` is a TYPE pack; `args` is the matching value pack.
+fn show_all<...Ts: Describe>(...Ts args) ~:
+    expand(a in args):              # compile-time unrolled, not a runtime loop
+        println(a.describe())       # `a` has the concrete per-element type
+    return Result.Ok(~)
+
+fn main() i32:
+    show_all(42, "Mostly Harmless", true)
+    show_all(7)                     # a single argument
+    show_all()                      # zero arguments: the expand body runs zero times
+    return Result.Ok(0)
