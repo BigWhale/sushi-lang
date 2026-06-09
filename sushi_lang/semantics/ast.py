@@ -54,20 +54,27 @@ class Param:
 
 @dataclass
 class BoundedTypeParam:
-    """Type parameter with optional perk constraints (e.g., T: Hashable)."""
+    """Type parameter with optional perk constraints (e.g., T: Hashable).
+
+    When ``is_pack`` is True the parameter is a variadic type pack (``...Ts``)
+    that abstracts over zero or more concrete types; otherwise it is a regular
+    single type parameter.
+    """
     name: str
     constraints: List[str] = None  # Perk names (e.g., ["Hashable", "Eq"])
     loc: Optional[Span] = None
+    is_pack: bool = False          # True for a variadic type pack (...Ts)
 
     def __post_init__(self):
         if self.constraints is None:
             self.constraints = []
 
     def __str__(self) -> str:
+        prefix = "..." if self.is_pack else ""
         if self.constraints:
             constraints_str = " + ".join(self.constraints)
-            return f"{self.name}: {constraints_str}"
-        return self.name
+            return f"{prefix}{self.name}: {constraints_str}"
+        return f"{prefix}{self.name}"
 
 @dataclass
 class FuncDef(Node):
@@ -256,6 +263,21 @@ class Foreach(Stmt):
     body: Block                 # Loop body
     item_name_span: Optional[Span] = None
     item_type_span: Optional[Span] = None
+
+@dataclass
+class Expand(Stmt):
+    """Compile-time pack-expansion statement: expand(a in args):
+
+    The compile-time analog of ``Foreach``. Unlike a runtime loop, the body is
+    UNROLLED once per element of a value pack at compile time, with the binding
+    variable rebound to each concrete element (lowered per-pack-element in the
+    backend, T7b). It is distinct from ``Foreach``, which iterates a runtime
+    iterable.
+    """
+    var: str                    # Loop/binding variable name (e.g., 'a')
+    iterable: "Expr"            # Value-pack reference being expanded (typically a Name)
+    body: Block                 # Body unrolled per pack element
+    var_span: Optional[Span] = None
 
 @dataclass
 class Break(Stmt):
@@ -562,7 +584,7 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
 
 __all__ = [
     "Node", "Program", "UseStatement", "FuncDef", "ConstDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "Block", "Param",
-    "Let", "ExprStmt", "Return", "Print", "PrintLn", "If", "While", "Foreach", "Match", "MatchArm", "Pattern", "WildcardPattern", "Break", "Continue",
+    "Let", "ExprStmt", "Return", "Print", "PrintLn", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "WildcardPattern", "Break", "Continue",
     "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "StructConstructor", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",
 ]
