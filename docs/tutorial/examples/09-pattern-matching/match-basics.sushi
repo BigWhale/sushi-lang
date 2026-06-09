@@ -1,0 +1,16 @@
+enum Shape:
+    Circle(f64)
+    Rectangle(f64, f64)
+
+fn describe(Shape s) ~:
+    match s:
+        Shape.Circle(r) ->
+            println("Circle with radius {r}")
+        Shape.Rectangle(w, h) ->
+            println("Rectangle {w} by {h}")
+    return Result.Ok(~)
+
+fn main() i32:
+    describe(Shape.Circle(2.0))
+    describe(Shape.Rectangle(3.0, 4.0))
+    return Result.Ok(0)

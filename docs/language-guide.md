@@ -504,7 +504,7 @@ fn main() i32:
 - **Power-of-two capacity**: Allows fast modulo using bitwise AND operations
 - **Auto-derived hashing**: Any type with a `.hash()` method can be used as a key
 
-**HashMap methods**: `.new()`, `.insert(key, value)`, `.get(key)`, `.remove(key)`, `.contains(key)`, `.len()`, `.debug()`, `.free()`
+**HashMap methods**: `.new()`, `.insert(key, value)`, `.get(key)`, `.remove(key)`, `.contains_key(key)`, `.len()`, `.keys()`, `.values()`, `.entries()`, `.debug()`, `.free()`
 
 **Memory Management**: HashMaps use recursive destruction - when you call `.free()` or when the HashMap goes out of scope, it destroys all entries and their contents. This works correctly even for complex value types like structs containing arrays or nested enums.
 

@@ -37,6 +37,11 @@ dev = [
   "mypy>=1.18",
   "tqdm>=4.67,<5"
 ]
+docs = [
+  "mkdocs>=1.6",
+  "mkdocs-material>=9.5",
+  "pymdown-extensions>=10.0"
+]
 
 [project.scripts]
 sushic = "sushi_lang.compiler:main"

@@ -1,0 +1,15 @@
+fn main() i32:
+    # Double quotes support interpolation; single quotes are plain literals.
+    let string greeting = "Mostly Harmless"
+    let string literal = 'no {interpolation} happens here'
+
+    println(greeting)
+    println(literal)
+
+    # Escape sequences work in both quote styles.
+    println("tab\there\nand a new line")
+    println("a backslash: \\")
+    println('a quote inside singles: can\'t')
+    println("a quote inside doubles: \"quoted\"")
+
+    return Result.Ok(0)

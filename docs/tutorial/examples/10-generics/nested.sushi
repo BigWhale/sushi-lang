@@ -1,0 +1,19 @@
+fn parse_count(i32 raw) Result<Maybe<i32>, StdError>:
+    if (raw < 0):
+        return Result.Ok(Maybe.None())
+    return Result.Ok(Maybe.Some(raw))
+
+fn report(i32 raw) ~:
+    let Result<Maybe<i32>, StdError> outcome = parse_count(raw)
+    match outcome:
+        Result.Ok(maybe) ->
+            match maybe:
+                Maybe.Some(value) -> println("Counted {value}")
+                Maybe.None() -> println("No count available")
+        Result.Err(_) -> println("Parsing failed")
+    return Result.Ok(~)
+
+fn main() i32:
+    report(42)
+    report(0 - 1)
+    return Result.Ok(0)

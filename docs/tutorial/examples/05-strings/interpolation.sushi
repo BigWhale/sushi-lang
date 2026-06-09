@@ -1,0 +1,25 @@
+use <collections/strings>
+
+fn main() i32:
+    let string name = "Arthur"
+    let i32 answer = 42
+
+    # Embed variables directly.
+    println("Hello, {name}!")
+
+    # Any expression works inside the braces.
+    println("The answer is {answer}, and twice that is {answer * 2}")
+
+    # Method calls are expressions too, so they fit inside interpolation.
+    # Single-quote literals make handy arguments here.
+    let string text = "hello world"
+    println("Shouted: {text.upper()}")
+    println("Padded: {'42'.pad_left(5, '0')}")
+
+    # Interpolation is the way to concatenate strings; there is no + operator.
+    let string first = "Ford"
+    let string last = "Prefect"
+    let string full = "{first} {last}"
+    println(full)
+
+    return Result.Ok(0)

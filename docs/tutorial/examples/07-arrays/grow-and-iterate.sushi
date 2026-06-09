@@ -1,0 +1,22 @@
+fn main() i32:
+    let i32[] scores = new()
+    scores.push(10)
+    scores.push(20)
+    scores.push(30)
+
+    # pop() removes and returns the last element.
+    let i32 last = scores.pop()
+    println("Popped {last}; {scores.len()} left.")
+
+    # Iterate with foreach over .iter().
+    println("Remaining scores:")
+    foreach(s in scores.iter()):
+        println("  {s}")
+
+    # clone() makes a deep copy; pushing to the copy leaves the original alone.
+    let i32[] backup = scores.clone()
+    backup.push(99)
+    println("Original length: {scores.len()}")
+    println("Backup length:   {backup.len()}")
+
+    return Result.Ok(0)

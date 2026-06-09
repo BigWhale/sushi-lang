@@ -1,0 +1,14 @@
+# A variadic libc function. The bare trailing `...` is allowed ONLY inside an
+# unsafe external "C" block; it lowers to a real C-ABI variadic call.
+unsafe external "C" as libc because "formatted output via libc printf":
+    fn printf(string fmt, ...) i32 = "printf"
+
+# Safe wrappers fold the raw i32 return back into Sushi's Result world.
+fn say(string label, i32 value) i32:
+    return Result.Ok(libc.printf("%s = %d\n", label, value))
+
+fn main() i32:
+    let i32 r = say("answer", 42).realise(0)
+    if (r > 0):
+        println("printf reported {r} bytes written")
+    return Result.Ok(0)

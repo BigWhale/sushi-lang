@@ -1,0 +1,25 @@
+use <collections/strings>
+
+fn main() i32:
+    # Trim whitespace, change case.
+    let string padded = "   vogon poetry   "
+    println("trimmed: '{padded.trim()}'")
+    println("upper:   {padded.trim().upper()}")
+    println("lower:   {'LOUD NOISES'.lower()}")
+
+    # Pad a number on the left with zeros.
+    println("ticket:  {'7'.pad_left(4, '0')}")
+    println("label:   {'name'.pad_right(8, '.')}")
+
+    # split breaks a string into a string[]; join glues one back together.
+    let string csv = "Earth,Betelgeuse,Magrathea"
+    let string[] planets = csv.split(',')
+
+    println("planets:")
+    foreach(planet in planets.iter()):
+        println("  - {planet}")
+
+    let string rejoined = ' | '.join(planets)
+    println("rejoined: {rejoined}")
+
+    return Result.Ok(0)

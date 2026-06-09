@@ -1,0 +1,19 @@
+# A trailing ...i32 collects the trailing call arguments into an owned i32[].
+fn sum(...i32 nums) i32:
+    let i32 total = 0
+    foreach(n in nums.iter()):
+        total := total + n
+    return Result.Ok(total)
+
+fn main() i32:
+    let i32 a = sum(1, 2, 3, 4).realise(0)
+    let i32 b = sum(40, 2).realise(0)
+
+    # Zero trailing arguments is valid: the callee receives an empty array.
+    let i32 c = sum().realise(0)
+
+    println("sum(1, 2, 3, 4) = {a}")
+    println("sum(40, 2) = {b}")
+    println("sum() = {c}")
+
+    return Result.Ok(0)

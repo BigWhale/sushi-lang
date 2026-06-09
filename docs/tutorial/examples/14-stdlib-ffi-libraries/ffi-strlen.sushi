@@ -1,0 +1,15 @@
+# The danger zone. `because "..."` acknowledges the four suspended guarantees
+# and keeps the build clean. The Sushi name and the C symbol are joined by `= "..."`.
+unsafe external "C" as libc because "string length via libc strlen":
+    fn strlen(string s) i64 = "strlen"
+
+# Safe wrapper - ordinary Sushi. The raw i64 from the boundary is folded back
+# into a Result. The `string` argument is marshalled to a C char* and freed at
+# scope exit, so there is no leak.
+fn length(string s) i64:
+    return Result.Ok(libc.strlen(s))
+
+fn main() i32:
+    let i64 n = length("Mostly Harmless").realise(0 as i64)
+    println("len = {n}")
+    return Result.Ok(0)

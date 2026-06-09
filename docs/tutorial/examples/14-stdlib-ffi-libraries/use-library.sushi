@@ -1,0 +1,11 @@
+# Import another source file directly. The path is relative to this file.
+use "guidelib"
+
+fn main() i32:
+    let i32 sum = add(40, 2).realise(0)
+    let i32 ans = answer().realise(0)
+
+    println("add(40, 2) = {sum}")
+    println("answer() = {ans}")
+
+    return Result.Ok(0)

@@ -1,0 +1,21 @@
+enum Status:
+    Idle()
+    Traveling(string)
+    Panicking(i32)
+    Lost()
+
+fn report(Status s) ~:
+    match s:
+        Status.Traveling(dest) ->
+            println("On the way to {dest}")
+        # The bare _ is a catch-all: it handles every remaining variant.
+        _ ->
+            println("Not currently traveling")
+    return Result.Ok(~)
+
+fn main() i32:
+    report(Status.Traveling("Magrathea"))
+    report(Status.Idle())
+    report(Status.Panicking(11))
+    report(Status.Lost())
+    return Result.Ok(0)

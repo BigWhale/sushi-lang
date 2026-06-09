@@ -1,0 +1,34 @@
+# Maybe<T> models "a value, or nothing" without sentinels like -1 or null.
+fn find_index(string[] crew, string name) Maybe<i32>:
+    let i32 i = 0
+    while (i < crew.len()):
+        let Maybe<string> member = crew.get(i)
+        if (member.realise("") == name):
+            return Result.Ok(Maybe.Some(i))
+        i := i + 1
+    return Result.Ok(Maybe.None())
+
+fn main() i32:
+    let string[] crew = from(["Arthur", "Ford", "Zaphod"])
+
+    # find_index returns Result<Maybe<i32>>, so unwrap the Result with match,
+    # then inspect the Maybe.
+    match find_index(crew, "Ford"):
+        Result.Ok(spot) ->
+            # .is_some() / .is_none() return bools.
+            if (spot.is_some()):
+                println("Ford is aboard")
+            # .realise(default) gives the value or a fallback.
+            println("Ford index (or -1): {spot.realise(-1)}")
+        Result.Err(_) ->
+            println("search failed")
+
+    match find_index(crew, "Vogon"):
+        Result.Ok(spot) ->
+            if (spot.is_none()):
+                println("No Vogons aboard, thankfully")
+            println("Vogon index (or -1): {spot.realise(-1)}")
+        Result.Err(_) ->
+            println("search failed")
+
+    return Result.Ok(0)

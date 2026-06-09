@@ -1,0 +1,36 @@
+# Inserting and removing in the middle of a List<T>.
+#
+# .insert(index, value) shifts later elements right.
+# .remove(index) shifts later elements left and returns Maybe<T>.
+
+fn main() i32:
+    let List<i32> nums = List.new()
+    nums.push(10)
+    nums.push(20)
+    nums.push(30)
+
+    # Insert 15 at index 1: [10, 15, 20, 30]
+    nums.insert(1, 15)
+
+    print("After insert:")
+    foreach(n in nums.iter()):
+        print(" {n}")
+    println("")
+
+    # Remove the element at index 2 (the 20).
+    match nums.remove(2):
+        Maybe.Some(value) ->
+            println("Removed: {value}")
+        Maybe.None() ->
+            println("Index out of bounds")
+
+    print("After remove:")
+    foreach(n in nums.iter()):
+        print(" {n}")
+    println("")
+
+    # Free the buffer early. The list is still usable afterwards.
+    nums.free()
+    println("Length after free: {nums.len()}")
+
+    return Result.Ok(0)

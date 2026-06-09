@@ -1,0 +1,25 @@
+fn risky(bool ok) i32:
+    if (ok):
+        return Result.Ok(7)
+    return Result.Err(StdError.Error)
+
+fn main() i32:
+    # Pattern A: match on the Result.
+    match risky(true):
+        Result.Ok(v) ->
+            println("matched ok: {v}")
+        Result.Err(_) ->
+            println("matched err")
+
+    # Pattern B: .realise(default) for a fallback value.
+    let i32 value = risky(false).realise(0)
+    println("realise fallback: {value}")
+
+    # Pattern C: if (result): for a simple ok/err split.
+    let Result<i32, StdError> r = risky(true)
+    if (r):
+        println("if ok: {r.realise(0)}")
+    else:
+        println("if err")
+
+    return Result.Ok(0)

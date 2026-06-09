@@ -1,0 +1,15 @@
+struct Person:
+    string name
+    i32 age
+    bool has_towel
+
+fn main() i32:
+    # Positional construction: arguments follow field-declaration order.
+    let Person arthur = Person("Arthur Dent", 30, true)
+
+    # Access fields with dot notation.
+    println("{arthur.name} is {arthur.age} years old.")
+    if (arthur.has_towel):
+        println("{arthur.name} knows where his towel is.")
+
+    return Result.Ok(0)

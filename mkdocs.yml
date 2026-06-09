@@ -1,0 +1,63 @@
+site_name: Sushi Tutorial
+site_description: A hands-on, progressive tutorial for the Sushi programming language.
+docs_dir: docs/tutorial
+site_dir: site
+use_directory_urls: true
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: pink
+      accent: pink
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: pink
+      accent: pink
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.top
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets:
+      base_path:
+        - "."
+      check_paths: true
+
+plugins:
+  - search
+
+nav:
+  - Welcome: index.md
+  - "1. Getting Started": 01-getting-started.md
+  - "2. Variables & Types": 02-variables-and-types.md
+  - "3. Control Flow": 03-control-flow.md
+  - "4. Functions": 04-functions.md
+  - "5. Strings": 05-strings.md
+  - "6. Error Handling": 06-error-handling.md
+  - "7. Arrays": 07-arrays.md
+  - "8. Structs & Enums": 08-structs-and-enums.md
+  - "9. Pattern Matching": 09-pattern-matching.md
+  - "10. Generics": 10-generics.md
+  - "11. Perks & Extensions": 11-perks-and-extensions.md
+  - "12. Memory Management": 12-memory-management.md
+  - "13. Collections": 13-collections.md
+  - "14. Stdlib, FFI & Libraries": 14-stdlib-ffi-libraries.md

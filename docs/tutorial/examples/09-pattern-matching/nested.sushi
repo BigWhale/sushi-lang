@@ -1,0 +1,27 @@
+enum DriveError:
+    NotConfigured()
+    ImprobabilityTooLow()
+
+fn engage_drive(i32 improbability) string | DriveError:
+    if (improbability == 0):
+        return Result.Err(DriveError.NotConfigured())
+    if (improbability < 100):
+        return Result.Err(DriveError.ImprobabilityTooLow())
+    return Result.Ok("We have arrived... somewhere.")
+
+fn try_drive(i32 improbability) ~:
+    # The pattern reaches inside Result.Err to the specific DriveError variant.
+    match engage_drive(improbability):
+        Result.Ok(message) ->
+            println("Success: {message}")
+        Result.Err(DriveError.NotConfigured()) ->
+            println("Failed: the drive is not configured.")
+        Result.Err(DriveError.ImprobabilityTooLow()) ->
+            println("Failed: improbability is too low.")
+    return Result.Ok(~)
+
+fn main() i32:
+    try_drive(0)
+    try_drive(42)
+    try_drive(9999)
+    return Result.Ok(0)

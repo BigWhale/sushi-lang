@@ -38,3 +38,6 @@ __sushi_cache__/
 
 # Omakase API (separate repo)
 omakase-api/
+
+# MkDocs build output
+/site/

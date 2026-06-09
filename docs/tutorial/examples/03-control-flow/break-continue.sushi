@@ -1,0 +1,12 @@
+fn main() i32:
+    println("Numbers 1..10, skipping 5, stopping at 8:")
+    foreach(i in 1..=10):
+        if (i == 5):
+            continue
+
+        if (i == 8):
+            break
+
+        println("  {i}")
+
+    return Result.Ok(0)

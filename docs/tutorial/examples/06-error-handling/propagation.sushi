@@ -1,0 +1,24 @@
+fn fetch_fuel(bool tank_present) i32:
+    if (tank_present):
+        return Result.Ok(50)
+    return Result.Err(StdError.Error)
+
+fn fetch_distance() i32:
+    return Result.Ok(1000)
+
+# `??` unwraps an Ok value, or returns the Err from THIS function immediately.
+# It is RAII-safe (cleanup still runs) and zero-cost. Use it freely in helpers.
+fn plan_jump(bool tank_present) i32:
+    let i32 fuel = fetch_fuel(tank_present)??
+    let i32 distance = fetch_distance()??
+    return Result.Ok(distance / fuel)
+
+fn main() i32:
+    # In main we do NOT use ??. We unwrap with .realise(default) instead.
+    let i32 ok = plan_jump(true).realise(-1)
+    println("with tank: {ok}")
+
+    let i32 failed = plan_jump(false).realise(-1)
+    println("no tank:   {failed}")
+
+    return Result.Ok(0)

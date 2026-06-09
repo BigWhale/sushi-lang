@@ -1,0 +1,32 @@
+# Define your own error type as an enum.
+enum JumpError:
+    DivisionByZero
+    NegativeInput
+
+# `fn name(...) T | JumpError` means Result<T, JumpError>.
+fn safe_divide(i32 a, i32 b) i32 | JumpError:
+    if (b == 0):
+        return Result.Err(JumpError.DivisionByZero)
+    if (a < 0):
+        return Result.Err(JumpError.NegativeInput)
+    return Result.Ok(a / b)
+
+fn main() i32:
+    # match lets us inspect exactly which error occurred.
+    match safe_divide(42, 6):
+        Result.Ok(value) ->
+            println("42 / 6 = {value}")
+        Result.Err(JumpError.DivisionByZero) ->
+            println("cannot divide by zero")
+        Result.Err(JumpError.NegativeInput) ->
+            println("negative input rejected")
+
+    match safe_divide(10, 0):
+        Result.Ok(value) ->
+            println("10 / 0 = {value}")
+        Result.Err(JumpError.DivisionByZero) ->
+            println("cannot divide by zero")
+        Result.Err(JumpError.NegativeInput) ->
+            println("negative input rejected")
+
+    return Result.Ok(0)
