@@ -189,7 +189,12 @@ class ScopeAnalyzer:
         # Function parameters are implicitly declared and should be considered used
         # if they appear in the function signature (to avoid warnings for unused params)
         for param in func.params:
-            self._declare_variable(param.name, param.name_span)
+            # Synthesized pack fan-out params (args_0, args_1, ... produced when a
+            # ...Ts pack is monomorphized) carry user-invisible names and cannot be
+            # consumed until expand(...) lands (T7b). Declare them with no span so the
+            # implicit-variable exemption suppresses a spurious CW1001 unused warning.
+            span = None if getattr(param, 'is_pack', False) else param.name_span
+            self._declare_variable(param.name, span)
             # Don't mark params as used automatically - let actual usage determine it
 
         self._check_block(func.body)

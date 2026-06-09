@@ -244,6 +244,12 @@ class TypeSubstitutor:
                     type_span=param.type_span,
                     loc=getattr(param, 'loc', None),
                     is_variadic=False,
+                    # Mark each fan-out element as pack-derived so later passes can
+                    # treat it specially (e.g. the scope pass must not emit a spurious
+                    # CW1001 unused-variable warning: until expand(...) lands (T7b) the
+                    # only way to consume these synthesized params is unavailable, and
+                    # they carry user-invisible names like args_0/args_1).
+                    is_pack=True,
                 )
                 for i, element_type in enumerate(pack.types)
             ]
