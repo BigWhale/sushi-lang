@@ -36,7 +36,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import FuncDef
+    from sushi_lang.semantics.ast import FuncDef, PerkDef
 
 
 def _free_perks_of(func: "FuncDef") -> List[str]:
@@ -49,31 +49,35 @@ def _free_perks_of(func: "FuncDef") -> List[str]:
     return sorted(perks)
 
 
-def slice_function_source(func: "FuncDef", source_text: str) -> str:
-    """Slice the full, self-contained source text of one function declaration.
+def slice_decl_source(node, source_text: str) -> str:
+    """Slice the full, self-contained source text of one top-level declaration.
+
+    Works for any node carrying a line-based ``loc`` ``Span`` (functions AND
+    perks - both are top-level decls whose body is the last thing they contain).
 
     Strategy (verified empirically against the Lark frontend with
     ``propagate_positions=True``):
 
-    - ``FuncDef.loc`` is a line/column ``Span`` (NOT a character offset). Its
-      ``line`` is the line of the ``fn`` / ``public fn`` keyword (always at
-      column 1 for a top-level declaration) and its ``end_line`` is the line on
-      which the *next* token begins. Because the body is the last thing in the
-      decl, ``end_line`` overshoots into the blank-line gap before the next
-      declaration (or one line past EOF for the final declaration).
+    - ``node.loc`` is a line/column ``Span`` (NOT a character offset). Its
+      ``line`` is the line of the ``fn`` / ``public fn`` / ``perk`` keyword
+      (always at column 1 for a top-level declaration) and its ``end_line`` is
+      the line on which the *next* token begins. Because the body is the last
+      thing in the decl, ``end_line`` overshoots into the blank-line gap before
+      the next declaration (or one line past EOF for the final declaration).
 
     - We therefore take the 1-based inclusive line range
       ``[loc.line, loc.end_line)`` (i.e. up to but excluding ``end_line``),
       then strip trailing blank lines and guarantee a single trailing newline.
 
-    This yields exactly the ``fn ... :`` header plus its indented body, with no
+    This yields exactly the declaration header plus its indented body, with no
     leading indentation (top-level decls start at column 1), so the slice
     re-parses as a standalone program.
     """
-    loc = func.loc
+    loc = getattr(node, "loc", None)
+    name = getattr(node, "name", "<decl>")
     if loc is None:
         raise ValueError(
-            f"cannot slice source for '{func.name}': missing location span"
+            f"cannot slice source for '{name}': missing location span"
         )
 
     lines = source_text.splitlines(keepends=True)
@@ -97,7 +101,7 @@ def slice_function_source(func: "FuncDef", source_text: str) -> str:
 
     if not decl_lines:
         raise ValueError(
-            f"cannot slice source for '{func.name}': empty declaration range"
+            f"cannot slice source for '{name}': empty declaration range"
         )
 
     slice_text = "".join(decl_lines)
@@ -123,7 +127,7 @@ def serialize_generic_function(func: "FuncDef", source_text: str) -> dict:
     return {
         "name": func.name,
         "type_params": type_params,
-        "source": slice_function_source(func, source_text),
+        "source": slice_decl_source(func, source_text),
         "free_perks": _free_perks_of(func),
     }
 
@@ -163,3 +167,50 @@ def deserialize_generic_function(record: dict) -> "FuncDef":
             parsed_tp.constraints = list(rec_tp.get("constraints") or [])
 
     return func
+
+
+def serialize_perk(perk: "PerkDef", source_text: str) -> dict:
+    """Produce the manifest record for a single perk DEFINITION (the contract).
+
+    Only the perk's definition (its method signatures) is shipped - never its
+    implementations (``extend T with Perk``). The consumer still provides impls
+    for its own instantiation types; shipping the definition merely frees the
+    consumer from having to redeclare a perk a library's exported generic
+    constrains on.
+
+    Args:
+        perk: The ``PerkDef`` to export.
+        source_text: Full source text of the unit the perk lives in.
+
+    Returns:
+        A msgpack-safe dict: ``{"name": str, "source": str}``.
+    """
+    return {
+        "name": perk.name,
+        "source": slice_decl_source(perk, source_text),
+    }
+
+
+def deserialize_perk(record: dict) -> "PerkDef":
+    """Reconstruct a ``PerkDef`` from a manifest record by re-parsing its source.
+
+    Mirrors ``deserialize_generic_function``.
+
+    Args:
+        record: A record produced by ``serialize_perk``.
+
+    Returns:
+        The single ``PerkDef`` parsed from ``record["source"]``.
+    """
+    # Lazy import to avoid frontend import cycles.
+    from sushi_lang.internals.parser import parse_to_ast
+
+    program, _tree = parse_to_ast(record["source"])
+
+    perks = program.perks or []
+    if len(perks) != 1:
+        raise ValueError(
+            f"template source for perk '{record.get('name')}' parsed to "
+            f"{len(perks)} perks, expected exactly 1"
+        )
+    return perks[0]

@@ -314,14 +314,25 @@ class LibraryManifestGenerator:
     def _extract_templates(self, units: list['Unit']) -> dict:
         """Extract instantiable public generic templates (re-parsable source).
 
-        Returns the manifest `templates` section. `perks` and `perk_impls` are
-        intentionally left empty in this phase (a later task ships them); only
-        public generic FUNCTIONS are serialized here.
+        Returns the manifest `templates` section. We ship:
+
+        - `generic_functions`: instantiable public generic function bodies.
+        - `perks`: the DEFINITIONS (method-signature contracts) of every perk
+          named by an exported generic's type-parameter constraints. Shipping
+          the contract frees the consumer from redeclaring a perk it does not
+          author. Only the referenced (minimal, correct) set is shipped.
+
+        `perk_impls` is intentionally left empty: shipping perk implementations
+        (`extend T with Perk`) is out of scope (transitive-symbol linkage); the
+        consumer provides impls for its own instantiation types.
         """
-        from sushi_lang.backend.library_templates import serialize_generic_function
+        from sushi_lang.backend.library_templates import (
+            serialize_generic_function, serialize_perk,
+        )
 
         private_symbols = self._collect_private_symbols(units)
         generic_functions: list[dict] = []
+        referenced_perks: set[str] = set()
 
         for unit in units:
             if unit.ast is None:
@@ -331,14 +342,28 @@ class LibraryManifestGenerator:
                 if not (func.is_public and func.type_params):
                     continue
                 self._check_generic_export_closure(func, private_symbols)
-                generic_functions.append(
-                    serialize_generic_function(func, source)
-                )
+                record = serialize_generic_function(func, source)
+                generic_functions.append(record)
+                referenced_perks.update(record.get("free_perks", []))
+
+        # Ship only the perk DEFINITIONS referenced by an exported generic's
+        # constraints, de-duplicated by name (a perk is defined once).
+        perks: list[dict] = []
+        seen_perks: set[str] = set()
+        for unit in units:
+            if unit.ast is None:
+                continue
+            source = unit.file_path.read_text()
+            for perk in unit.ast.perks:
+                if perk.name not in referenced_perks or perk.name in seen_perks:
+                    continue
+                seen_perks.add(perk.name)
+                perks.append(serialize_perk(perk, source))
 
         return {
             "version": 2,
             "generic_functions": generic_functions,
-            "perks": [],
+            "perks": perks,
             "perk_impls": [],
         }
 

@@ -231,6 +231,14 @@ class SemanticAnalyzer:
 
         symbol_merger = SymbolTableMerger()
 
+        # Seed shipped library perk DEFINITIONS into the shared collector's perk
+        # table BEFORE collecting the consumer's units. Perk-impl collection
+        # (`extend T with Perk`) validates each impl against the visible perk
+        # definitions at collection time (CE4003), so a consumer that supplies
+        # an impl for a library-shipped perk must see that perk's contract here.
+        if self.library_linker is not None:
+            self._seed_library_perks(collector.perks)
+
         for unit in compilation_order:
             if unit.ast is None:
                 continue
@@ -276,6 +284,9 @@ class SemanticAnalyzer:
             self._register_library_structs()
             self._register_library_enums()
             self._register_library_functions()
+            # NOTE: shipped library perk DEFINITIONS are seeded earlier, before
+            # the consumer's perk-impl collection (see _seed_library_perks call
+            # in the Phase 0 loop above); they are already in self.perks here.
             self._register_library_generic_functions()
 
         # Check if main function expects command line arguments (across all units)
@@ -522,6 +533,60 @@ class SemanticAnalyzer:
 
                 self.funcs.by_name[func_name] = func_sig
                 self.funcs.order.append(func_name)
+
+    def _seed_library_perks(self, perk_table) -> None:
+        """Seed perk DEFINITIONS shipped by loaded libraries into ``perk_table``.
+
+        Each consumed library may ship the perk contracts (method signatures)
+        that its exported generics constrain on, under ``templates.perks``. We
+        rebuild a ``PerkDef`` for each via the canonical collection path
+        (re-parse the source snippet, run a throwaway ``CollectorPass``, pull
+        the ``PerkDef`` out of the resulting ``PerkTable``) so that a consumer
+        no longer has to redeclare a perk it does not author.
+
+        This must run BEFORE the consumer's own units are collected: perk-impl
+        collection (``extend T with Perk``) validates each impl against the
+        visible perk definitions (CE4003), so a consumer that implements a
+        library-shipped perk needs the contract present at collection time.
+
+        Only DEFINITIONS are shipped; the consumer still supplies its own
+        ``extend T with Perk`` implementations. Local definitions win: a perk is
+        only seeded if its name is not already present (mirrors the other
+        library-registration helpers).
+        """
+        if perk_table is None or self.library_linker is None:
+            return
+
+        from sushi_lang.internals.parser import parse_to_ast
+        from sushi_lang.semantics.passes.collect import CollectorPass
+
+        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+            templates = manifest.get("templates") or {}
+            for record in templates.get("perks", []) or []:
+                perk_name = record.get("name")
+                if not perk_name or perk_name in perk_table.by_name:
+                    continue
+
+                source = record.get("source")
+                if not source:
+                    continue
+
+                # Re-parse the self-contained perk source and run a throwaway
+                # collector so any diagnostics never pollute the consumer's
+                # reporter.
+                program, _tree = parse_to_ast(source)
+                throwaway = Reporter(source=source, filename=f"<perk:{lib_name}:{perk_name}>")
+                collected = CollectorPass(throwaway).run(program, unit_name=lib_name)
+                template_perks = collected[5]  # PerkTable
+
+                perk_def = template_perks.by_name.get(perk_name)
+                if perk_def is None:
+                    # The snippet failed to collect as a perk; skip rather than
+                    # crash the consumer build.
+                    continue
+
+                perk_table.by_name[perk_name] = perk_def
+                perk_table.order.append(perk_name)
 
     def _register_library_generic_functions(self) -> None:
         """Register generic function templates from loaded libraries.

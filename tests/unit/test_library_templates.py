@@ -17,6 +17,8 @@ from sushi_lang.semantics.passes.collect import CollectorPass, StructTable, Enum
 from sushi_lang.backend.library_templates import (
     serialize_generic_function,
     deserialize_generic_function,
+    serialize_perk,
+    deserialize_perk,
 )
 
 
@@ -277,3 +279,152 @@ def test_register_library_generic_function_guards_missing_templates():
     analyzer._register_library_generic_functions()
 
     assert analyzer.generic_funcs.by_name == {}
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 Step A: perk DEFINITION shipping (definitions only, no impls).
+# ---------------------------------------------------------------------------
+
+PERK_SRC = (
+    "perk Ord:\n"
+    "    fn gt(i32 other) bool\n"
+)
+
+LIB_WITH_PERK_SRC = (
+    "perk Ord:\n"
+    "    fn gt(i32 other) bool\n"
+    "\n"
+    "perk Unused:\n"
+    "    fn nope() bool\n"
+    "\n"
+    "public fn max_of<T: Ord>(T a, T b) T:\n"
+    "    if (a > b):\n"
+    "        return Result.Ok(a)\n"
+    "    return Result.Ok(b)\n"
+)
+
+
+def test_serialize_perk_record_shape():
+    """The serialized perk record carries name and a re-parsable source slice."""
+    program, _ = parse_to_ast(PERK_SRC)
+    perk = program.perks[0]
+
+    record = serialize_perk(perk, PERK_SRC)
+
+    assert record["name"] == "Ord"
+    assert record["source"].startswith("perk Ord:")
+    assert "fn gt(i32 other) bool" in record["source"]
+    assert record["source"].endswith("\n")
+    # Definitions only: no implementation is ever serialized.
+    assert "extend" not in record["source"]
+
+
+def test_perk_round_trip_reparses_to_single_perk():
+    """serialize_perk -> deserialize_perk yields the same PerkDef contract."""
+    program, _ = parse_to_ast(PERK_SRC)
+    record = serialize_perk(program.perks[0], PERK_SRC)
+
+    rebuilt = deserialize_perk(record)
+
+    assert rebuilt.name == "Ord"
+    assert [m.name for m in rebuilt.methods] == ["gt"]
+
+
+def test_extract_templates_ships_only_referenced_perks(tmp_path):
+    """Only perks named by an exported generic's constraints are shipped."""
+    from sushi_lang.backend.library_manifest import LibraryManifestGenerator
+
+    unit = _make_unit(tmp_path, LIB_WITH_PERK_SRC)
+    reporter = Reporter(source="", filename="lib")
+    gen = LibraryManifestGenerator(_StubAnalyzer(reporter))
+
+    templates = gen._extract_templates([unit])
+
+    # max_of<T: Ord> references Ord, so Ord ships; Unused is never referenced.
+    perk_names = [p["name"] for p in templates["perks"]]
+    assert perk_names == ["Ord"]
+    # Perk implementations remain out of scope.
+    assert templates["perk_impls"] == []
+    # The shipped perk round-trips back to its contract.
+    rebuilt = deserialize_perk(templates["perks"][0])
+    assert rebuilt.name == "Ord"
+    assert [m.name for m in rebuilt.methods] == ["gt"]
+
+
+def test_extract_templates_perks_empty_without_constrained_generics(tmp_path):
+    """A library whose exported generic has no constraints ships no perks."""
+    from sushi_lang.backend.library_manifest import LibraryManifestGenerator
+
+    src = (
+        "perk Ord:\n"
+        "    fn gt(i32 other) bool\n"
+        "\n"
+        "public fn id<T>(T a) T:\n"
+        "    return Result.Ok(a)\n"
+    )
+    unit = _make_unit(tmp_path, src)
+    reporter = Reporter(source="", filename="lib")
+    gen = LibraryManifestGenerator(_StubAnalyzer(reporter))
+
+    templates = gen._extract_templates([unit])
+
+    assert templates["perks"] == []
+
+
+def _manifest_with_perks(*perk_records) -> dict:
+    return {
+        "library_name": "mathlib",
+        "templates": {
+            "version": 2,
+            "generic_functions": [],
+            "perks": list(perk_records),
+            "perk_impls": [],
+        },
+    }
+
+
+def test_seed_library_perks_lands_in_table():
+    """A shipped perk record is rebuilt into a perk table."""
+    record = serialize_perk(parse_to_ast(PERK_SRC)[0].perks[0], PERK_SRC)
+    analyzer = _analyzer_with_loaded_libraries(
+        {"mathlib": _manifest_with_perks(record)}
+    )
+    from sushi_lang.semantics.passes.collect import PerkTable
+    table = PerkTable()
+
+    analyzer._seed_library_perks(table)
+
+    assert "Ord" in table.by_name
+    assert "Ord" in table.order
+    assert [m.name for m in table.by_name["Ord"].methods] == ["gt"]
+
+
+def test_seed_library_perks_respects_local_definition():
+    """A locally-defined perk of the same name wins; the shipped one is ignored."""
+    record = serialize_perk(parse_to_ast(PERK_SRC)[0].perks[0], PERK_SRC)
+    analyzer = _analyzer_with_loaded_libraries(
+        {"mathlib": _manifest_with_perks(record)}
+    )
+    from sushi_lang.semantics.passes.collect import PerkTable
+    table = PerkTable()
+    local = parse_to_ast(PERK_SRC)[0].perks[0]
+    table.by_name["Ord"] = local
+    table.order.append("Ord")
+
+    analyzer._seed_library_perks(table)
+
+    assert table.by_name["Ord"] is local
+    assert table.order.count("Ord") == 1
+
+
+def test_seed_library_perks_guards_missing_templates():
+    """A manifest without a templates section seeds nothing and does not crash."""
+    analyzer = _analyzer_with_loaded_libraries(
+        {"mathlib": {"library_name": "mathlib"}}
+    )
+    from sushi_lang.semantics.passes.collect import PerkTable
+    table = PerkTable()
+
+    analyzer._seed_library_perks(table)
+
+    assert table.by_name == {}
