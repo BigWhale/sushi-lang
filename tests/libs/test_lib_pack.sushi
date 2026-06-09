@@ -1,0 +1,21 @@
+# Phase 3 consumer: monomorphizes the library's variadic-generic (pack)
+# function at its own call sites. The library ships `perk Display` plus the
+# `show_all<...Ts: Display>` template; the consumer supplies Display impls for
+# i32 and string and calls the pack with zero args and with mixed types.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "i:42\ns:hi\n"
+
+use <lib/format_lib>
+
+extend i32 with Display:
+    fn display() string:
+        return "i:42"
+
+extend string with Display:
+    fn display() string:
+        return "s:hi"
+
+fn main() i32:
+    show_all()
+    show_all(42, "hi")
+    return Result.Ok(0)

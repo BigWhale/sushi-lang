@@ -631,14 +631,17 @@ class SemanticAnalyzer:
 
                 gfd.is_library_template = True
 
-                # Reconcile type-param constraints against the authoritative
-                # record (the snippet already carries them, but the record is
-                # the source of truth and guards against any future divergence).
+                # Reconcile type-param constraints and the type-pack marker
+                # against the authoritative record (the snippet already carries
+                # them, but the record is the source of truth and guards against
+                # any future divergence).
                 rec_tps = record.get("type_params") or []
                 if len(rec_tps) == len(gfd.type_params):
                     for tp, rec_tp in zip(gfd.type_params, rec_tps):
                         if hasattr(tp, "constraints"):
                             tp.constraints = list(rec_tp.get("constraints") or [])
+                        if hasattr(tp, "is_pack") and "is_pack" in rec_tp:
+                            tp.is_pack = bool(rec_tp["is_pack"])
 
                 self.generic_funcs.by_name[func_name] = gfd
                 self.generic_funcs.order.append(func_name)
