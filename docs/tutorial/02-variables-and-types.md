@@ -10,19 +10,25 @@ you say so when you declare it. The compiler then holds you to it.
 You introduce a new variable with `let`, followed by its **type**, its **name**, and an
 initial value:
 
-```
+```sushi
 let i32 answer = 42
 ```
 
 Read it as "let the `i32` named `answer` be `42`". The type comes *before* the name, which
 trips up people coming from C or Java for about five minutes and then feels natural.
 
-Variables are **mutable** by default — there's no `mut` keyword to opt in. But assigning a
-new value uses a different operator: `:=` (not `=`). The single `=` is reserved for the
-initial `let` declaration; `:=` *rebinds* an already-declared variable. Keeping them
-separate means a typo can't accidentally create a new variable.
+Local variables are **mutable** — you can change a variable's value after declaring it.
+There's no `mut` keyword to write, because a `let` has no immutable variety to distinguish
+it from. (Compile-time immutability is a separate construct, `const`, not a flavour of
+`let`.)
 
-```
+Changing a variable uses a different operator from declaring one: you **reassign** with
+`:=`, not `=`. The single `=` belongs only to the initial `let`; `:=` updates an
+already-declared variable *in place*. Keeping the two separate means you can always tell at
+a glance whether a line introduces a new variable or updates an existing one — and a typo
+can't silently create one.
+
+```sushi
 --8<-- "docs/tutorial/examples/02-variables-and-types/declaring.sushi"
 ```
 
@@ -41,10 +47,19 @@ into the text — that's **string interpolation**, and it only works in double-q
 strings. And `has_towel`, a `bool`, printed as `1` rather than `true`: booleans display as
 `1` (true) and `0` (false).
 
-!!! note "`:=` only rebinds existing variables"
+!!! note "`:=` only reassigns existing variables"
     If you write `score := 10` without ever having declared `score` with `let`, the
-    compiler stops you. And a rebind must keep the same type — you can't `:=` a `string`
-    into an `i32`.
+    compiler stops you (its error message calls this a "rebind to undeclared variable"). And
+    reassignment must keep the same type — you can't `:=` a `string` into an `i32`, because
+    `:=` writes into the existing variable rather than making a new one.
+
+!!! note "Reassigning vs. shadowing"
+    `:=` is **reassignment**: the same variable, a new value, the same type. Declaring the
+    name again with `let` is something different — **shadowing** — which introduces a
+    *separate* variable that reuses the name and leaves the original untouched. The compiler
+    warns when a `let` shadows a name from an outer scope (`CW1002`), so when you mean
+    "update this variable," reach for `:=`. This is the mirror image of languages like Rust,
+    which make variables immutable by default and lean on shadowing instead.
 
 ## The primitive types
 
@@ -67,7 +82,7 @@ octal `0o` (the C-style bare leading zero, like `0755`, is deliberately rejected
 confusion). The prefixes are case-insensitive. In the prefixed forms you may group digits
 with underscores for readability:
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/02-variables-and-types/literals.sushi"
 ```
 
@@ -97,7 +112,7 @@ Sushi will not silently mix numeric types for you. If you have an `i32` and you 
 fractional division, or you need to widen a value to a larger type, you convert explicitly
 with the `as` operator:
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/02-variables-and-types/casts.sushi"
 ```
 
@@ -128,7 +143,7 @@ A variable declared inside a block — the indented body of an `if`, a loop, or 
 function — lives only until that block ends. Variables from an enclosing block are still
 visible inside the nested one.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/02-variables-and-types/blank-and-scope.sushi"
 ```
 
@@ -147,7 +162,8 @@ nothing.
 
 ## What you learned
 
-- Declare variables with `let Type name = value`; rebind them with `:=`.
+- Declare variables with `let Type name = value`; reassign them in place with `:=` (a
+  second `let` with the same name *shadows* rather than updates).
 - Primitive types are explicit about size and signedness: `i8`..`i64`, `u8`..`u64`, `f32`,
   `f64`, `bool`, `string`. A bare integer literal defaults to `i32`.
 - Integer literals come in decimal, `0x` hex, `0b` binary, and `0o` octal; the prefixed

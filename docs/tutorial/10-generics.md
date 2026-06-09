@@ -15,7 +15,7 @@ runtime cost**. We'll get to why at the end.
 A generic struct names one or more **type parameters** in angle brackets after its name,
 then uses those names where a concrete type would normally go.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/10-generics/box-and-pair.sushi"
 ```
 
@@ -46,7 +46,7 @@ Arthur is still 42
 Enums can be generic too. The variants carry values whose types refer to the enum's
 parameters. Here is a tiny tree node that is either a `Leaf` holding some `T`, or `Empty`.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/10-generics/generic-enum.sushi"
 ```
 
@@ -72,7 +72,7 @@ Functions can be generic as well, and here Sushi's inference really earns its ke
 generic function names its type parameters after the function name, then uses them in the
 parameter list and return type.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/10-generics/inference.sushi"
 ```
 
@@ -108,7 +108,7 @@ Generic types compose. The payload of one generic can itself be a generic, to an
 The most common case in real programs is a function that can fail *and* might legitimately
 produce "nothing": `Result<Maybe<T>, E>`.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/10-generics/nested.sushi"
 ```
 

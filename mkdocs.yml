@@ -8,14 +8,10 @@ theme:
   name: material
   palette:
     - scheme: default
-      primary: pink
-      accent: pink
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - scheme: slate
-      primary: pink
-      accent: pink
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
@@ -34,6 +30,9 @@ markdown_extensions:
   - attr_list
   - toc:
       permalink: true
+  - pymdownx.highlight:
+      use_pygments: true
+      anchor_linenums: false
   - pymdownx.superfences
   - pymdownx.tabbed:
       alternate_style: true
@@ -41,6 +40,9 @@ markdown_extensions:
       base_path:
         - "."
       check_paths: true
+
+extra_css:
+  - stylesheets/sushi.css
 
 plugins:
   - search

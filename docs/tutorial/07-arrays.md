@@ -20,7 +20,7 @@ Sushi has **fixed-size arrays** and **dynamic arrays**.
 If you know the size at the time you write the code, prefer a fixed array. If the size
 depends on what happens while the program runs, you want a dynamic one.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/07-arrays/fixed-and-dynamic.sushi"
 ```
 
@@ -61,7 +61,7 @@ The second is **safe access** with `.get(i)`. Instead of risking a crash, it ret
 met `Maybe` in [Chapter 6](06-error-handling.md); here it's how the array tells you
 "there's nothing at that index" without blowing up.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/07-arrays/indexing.sushi"
 ```
 
@@ -86,7 +86,7 @@ Dynamic arrays earn their keep with a small set of methods:
 - `.iter()` produces something you can walk over with a `foreach` loop.
 - `.clone()` makes a deep, independent copy.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/07-arrays/grow-and-iterate.sushi"
 ```
 

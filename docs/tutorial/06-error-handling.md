@@ -23,7 +23,7 @@ Here's a function that can fail, and two ways to handle the outcome at the call 
 `if (result):` (Ok runs the `if`, Err runs the `else`) and `.realise(default)` (covered
 later).
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/06-error-handling/result-basics.sushi"
 ```
 
@@ -55,7 +55,7 @@ Two details to absorb:
 Define an `enum` and name it as the error type with the `T | ErrorEnum` syntax. Now callers
 can `match` on the specific variant.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/06-error-handling/custom-errors.sushi"
 ```
 
@@ -83,7 +83,7 @@ say "if this failed, fail too, with the same error," that's what `??` is for. Ap
 `Result`, `??` either **unwraps the `Ok` value** or **immediately returns the `Err`** from
 the enclosing function.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/06-error-handling/propagation.sushi"
 ```
 
@@ -96,7 +96,7 @@ no tank:   -1
 
 Look at `plan_jump`. Each `??` collapses a whole match into one character:
 
-```
+```sushi
 let i32 fuel = fetch_fuel(tank_present)??
 ```
 
@@ -117,7 +117,7 @@ Sometimes you don't want to propagate an error — you just want a sensible fall
 `.realise(default)` unwraps the `Ok` value, or hands back `default` if it's an `Err`. We've
 been using it already; here it is spelled out:
 
-```
+```sushi
 let i32 ok = plan_jump(true).realise(-1)      # Ok(20)  -> 20
 let i32 failed = plan_jump(false).realise(-1)  # Err     -> -1
 ```
@@ -139,7 +139,7 @@ Chapter 5: `string.find()` returns `Maybe<i32>`. Its handy methods are `.is_some
 `.is_none()`, `.realise(default)` (same idea as on `Result`), and `.expect(msg)` (unwrap or
 crash with a message — use only when absence would be a genuine bug).
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/06-error-handling/maybe.sushi"
 ```
 
@@ -175,7 +175,7 @@ The fix is to consume results explicitly. There are three main-safe patterns:
 - **`.realise(default)`** — when a fallback value is enough.
 - **`if (result):`** — for a quick Ok/else split.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/06-error-handling/main-safe.sushi"
 ```
 

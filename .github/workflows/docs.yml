@@ -30,6 +30,7 @@ jobs:
       - name: Build the MkDocs site
         run: >-
           uvx --with pymdown-extensions --with mkdocs-material
+          --with ./docs/sushi-pygments
           --from mkdocs mkdocs build --strict -f mkdocs.yml
 
       - name: Upload Pages artifact

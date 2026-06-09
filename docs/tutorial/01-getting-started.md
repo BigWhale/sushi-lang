@@ -28,7 +28,7 @@ library. Once `./sushic --help` prints a version banner, you're ready.
 Here is the traditional first program. By tradition in the Sushi world it prints
 **"Mostly Harmless"** rather than "Hello, World":
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/01-getting-started/mostly-harmless.sushi"
 ```
 
@@ -36,14 +36,14 @@ Here is the traditional first program. By tradition in the Sushi world it prints
 
 Save that as `mostly-harmless.sushi`, then compile it:
 
-```
+```bash
 ./sushic mostly-harmless.sushi
 ```
 
 The compiler produces a native executable named after the source file — here,
 `mostly-harmless`. Run it:
 
-```
+```bash
 ./mostly-harmless
 ```
 
@@ -60,7 +60,7 @@ it runs.
 
 Three lines, and every one of them matters.
 
-```
+```sushi
 fn main() i32:
 ```
 
@@ -73,7 +73,7 @@ fn main() i32:
 - The line ends in a colon, and the body is **indented** beneath it. Sushi uses
   indentation for blocks, just like Python.
 
-```
+```sushi
     println("Mostly Harmless")
 ```
 
@@ -82,7 +82,7 @@ fn main() i32:
 - Text in double quotes is a **string**. Sushi strings are fully UTF-8, so
   `println("Hello, galaxy! 42")` works fine.
 
-```
+```sushi
     return Result.Ok(0)
 ```
 
@@ -108,7 +108,7 @@ returns `Result.Ok(v)`.**
 The integer `main` returns becomes the process exit code. Try changing the program to
 `return Result.Ok(42)`, recompile, run it, and then check the code your shell saw:
 
-```
+```bash
 ./mostly-harmless
 echo $?
 ```

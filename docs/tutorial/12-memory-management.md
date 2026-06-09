@@ -17,7 +17,7 @@ idea: **when a value goes out of scope, its resources are released automatically
 heap-allocated list, a string buffer, a file handle — when the variable holding it reaches
 the end of its block, the compiler has already arranged for the cleanup.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/12-memory-management/raii.sushi"
 ```
 
@@ -48,7 +48,7 @@ differently depending on the type, and the rule is short:
 - **Primitives and strings are copied.** The original stays valid.
 - **Dynamic arrays are moved.** The original is consumed and may not be used again.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/12-memory-management/move-vs-copy.sushi"
 ```
 
@@ -78,7 +78,7 @@ giving it away. That's a **borrow**, and Sushi has two flavours:
 - `&peek T` — a **read-only** borrow. You may look, not touch. Many peeks can coexist.
 - `&poke T` — a **read-write** borrow. You may modify in place. Exclusive: only one at a time.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/12-memory-management/references.sushi"
 ```
 
@@ -115,7 +115,7 @@ read-only access is fine, but anyone who can *write* must have exclusive access.
 Here's a program that breaks the second rule. It does **not compile** — it asks for two
 exclusive `&poke` borrows of `num` at the same call site:
 
-```
+```sushi
 fn swap(&poke i32 a, &poke i32 b) ~:
     let i32 t = a
     a := b
@@ -141,7 +141,7 @@ where a struct must contain itself (a linked-list node pointing at the next node
 can't physically embed an infinitely-nested copy of itself, so the recursive field has to be
 a pointer. `Own<T>` is that owned heap pointer.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/12-memory-management/own.sushi"
 ```
 

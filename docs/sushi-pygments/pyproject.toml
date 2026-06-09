@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sushi-pygments"
+version = "0.1.0"
+description = "Pygments lexer for the Sushi programming language."
+requires-python = ">=3.9"
+dependencies = ["pygments>=2.14"]
+
+[project.entry-points."pygments.lexers"]
+sushi = "sushi_pygments:SushiLexer"
+
+[tool.hatch.build.targets.wheel]
+packages = ["sushi_pygments"]

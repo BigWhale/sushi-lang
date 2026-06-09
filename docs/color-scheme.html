@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sushi Lang — Color Scheme</title>
+<style>
+  :root{
+    /* Sashimi Salmon — the official Sushi Lang palette */
+    --salmon-light: #FFB3A7;   /* lighter tint  — highlight backgrounds */
+    --salmon:       #FA8072;   /* primary       — brand color, buttons, accents */
+    --salmon-dark:  #D9554A;   /* darker shade  — header, links (white text reads here) */
+    /* supporting washes derived from the primary */
+    --salmon-wash:  #FFF1EE;   /* very light    — note/admonition backgrounds */
+    --ink:          #1b1b1b;
+    --muted:        #6c6c6c;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  body{ margin:0; background:#fafafa; color:var(--ink); }
+  header{ background:var(--salmon-dark); color:#fff; padding:30px 34px; }
+  header h1{ margin:0 0 4px; font-size:24px; }
+  header p{ margin:0; opacity:.92; font-size:14px; }
+  section{ max-width:1040px; margin:0 auto; padding:30px 34px; }
+  h2{ font-size:16px; text-transform:uppercase; letter-spacing:.07em; color:var(--muted);
+      border-bottom:1px solid #ececec; padding-bottom:8px; }
+  code,.mono{ font-family:ui-monospace,"SF Mono",Menlo,monospace; }
+
+  /* Core swatches */
+  .swatches{ display:grid; grid-template-columns:1fr 1.4fr 1fr; gap:0; border-radius:14px;
+             overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .sw{ height:150px; padding:16px 18px; box-sizing:border-box; display:flex;
+       flex-direction:column; justify-content:space-between; }
+  .sw .role{ font-size:11px; text-transform:uppercase; letter-spacing:.06em; opacity:.85; }
+  .sw .hex{ font-size:18px; font-weight:600; }
+  .sw .use{ font-size:12px; opacity:.9; }
+
+  /* Supporting tints row */
+  .tints{ display:flex; gap:14px; margin-top:18px; flex-wrap:wrap; }
+  .tint{ display:flex; align-items:center; gap:10px; font-size:13px; }
+  .chipbox{ width:34px; height:34px; border-radius:8px; border:1px solid rgba(0,0,0,.08); }
+
+  /* Roles table */
+  table{ border-collapse:collapse; width:100%; font-size:14px; }
+  th,td{ text-align:left; padding:9px 12px; border-bottom:1px solid #eee; }
+  th{ color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
+  .dot{ display:inline-block; width:14px; height:14px; border-radius:4px; vertical-align:-2px; margin-right:8px; }
+
+  /* Usage mock — a mini doc page */
+  .mock{ border:1px solid #ececec; border-radius:14px; overflow:hidden; background:#fff;
+         box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  .mock .topbar{ background:var(--salmon-dark); color:#fff; padding:12px 18px; font-weight:600;
+                 display:flex; align-items:center; justify-content:space-between; }
+  .mock .topbar .pill{ background:rgba(255,255,255,.18); border-radius:20px; padding:3px 12px;
+                       font-weight:400; font-size:12px; }
+  .mock .body{ display:grid; grid-template-columns:200px 1fr; min-height:280px; }
+  .mock nav{ background:#fbfbfb; border-right:1px solid #eee; padding:14px 10px; font-size:13px; }
+  .mock nav a{ display:block; padding:7px 12px; border-radius:7px; color:#444; text-decoration:none; }
+  .mock nav a.active{ background:var(--salmon-wash); color:var(--salmon-dark); font-weight:600;
+                      border-left:3px solid var(--salmon); }
+  .mock main{ padding:20px 24px; }
+  .mock main h3{ margin:0 0 6px; }
+  .mock main p{ font-size:14px; line-height:1.55; color:#333; }
+  .mock a.link{ color:var(--salmon-dark); text-decoration:none; border-bottom:1px solid var(--salmon-light); }
+  .mock .inline{ background:var(--salmon-wash); color:var(--salmon-dark); padding:1px 6px;
+                 border-radius:5px; font-size:13px; }
+  .mock .btn{ border:none; background:var(--salmon); color:#fff; font-weight:600; font-size:13px;
+              padding:8px 16px; border-radius:7px; cursor:pointer; }
+  .mock .btn:hover{ background:var(--salmon-dark); }
+  .mock .admonition{ border:1px solid var(--salmon-light); border-left:4px solid var(--salmon);
+                     background:var(--salmon-wash); border-radius:8px; padding:12px 16px; margin:16px 0; }
+  .mock .admonition .title{ color:var(--salmon-dark); font-weight:700; font-size:13px; margin-bottom:4px; }
+  .mock pre{ background:#2b2b2b; color:#eee; border-radius:8px; padding:14px 16px; font-size:13px;
+             overflow:auto; margin:14px 0; }
+  .mock pre .kw{ color:var(--salmon); }      /* keyword */
+  .mock pre .ty{ color:#FFB3A7; }            /* type */
+  .mock pre .st{ color:#9ccb6b; }            /* string */
+  .mock pre .cm{ color:#888; }               /* comment */
+  .badge{ display:inline-block; background:var(--salmon); color:#fff; font-size:11px; font-weight:700;
+          padding:2px 9px; border-radius:20px; letter-spacing:.03em; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🍣 Sushi Lang — Color Scheme</h1>
+  <p>Sashimi Salmon · the official palette. One primary, with a lighter tint and a darker shade.</p>
+</header>
+
+<section>
+  <h2>Core palette</h2>
+  <div class="swatches">
+    <div class="sw" style="background:#FFB3A7;color:#1b1b1b">
+      <div class="role">Lighter tint</div>
+      <div><div class="hex">#FFB3A7</div><div class="use">highlight &amp; note backgrounds</div></div>
+    </div>
+    <div class="sw" style="background:#FA8072;color:#1b1b1b">
+      <div class="role">Primary</div>
+      <div><div class="hex">#FA8072</div><div class="use">brand color · buttons · accents</div></div>
+    </div>
+    <div class="sw" style="background:#D9554A;color:#ffffff">
+      <div class="role">Darker shade</div>
+      <div><div class="hex">#D9554A</div><div class="use">header · links (white text reads here)</div></div>
+    </div>
+  </div>
+
+  <div class="tints">
+    <div class="tint"><span class="chipbox" style="background:#FFF1EE"></span><span><code>#FFF1EE</code> — wash (admonition / hover backgrounds)</span></div>
+    <div class="tint"><span class="chipbox" style="background:#FFFFFF"></span><span><code>#FFFFFF</code> — text on primary &amp; darker</span></div>
+    <div class="tint"><span class="chipbox" style="background:#1b1b1b"></span><span><code>#1B1B1B</code> — body ink</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>Role mapping</h2>
+  <table>
+    <tr><th>Surface</th><th>Color</th><th>Why</th></tr>
+    <tr><td>Header / nav bar, body links</td><td><span class="dot" style="background:#D9554A"></span><code>#D9554A</code> darker</td><td>white text meets contrast on it</td></tr>
+    <tr><td>Buttons, active accents, code keywords</td><td><span class="dot" style="background:#FA8072"></span><code>#FA8072</code> primary</td><td>the salmon brand identity</td></tr>
+    <tr><td>Highlight / note backgrounds, borders</td><td><span class="dot" style="background:#FFB3A7"></span><code>#FFB3A7</code> lighter</td><td>soft fills that don't fight text</td></tr>
+    <tr><td>Hover / link underlines, washes</td><td><span class="dot" style="background:#FFF1EE"></span><code>#FFF1EE</code> wash</td><td>barely-there tint over white</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>In context</h2>
+  <div class="mock">
+    <div class="topbar"><span>Sushi Tutorial</span><span class="pill">▸ Error Handling</span></div>
+    <div class="body">
+      <nav>
+        <a>Variables &amp; Types</a>
+        <a>Control Flow</a>
+        <a class="active">Error Handling</a>
+        <a>Arrays</a>
+        <a>Generics</a>
+      </nav>
+      <main>
+        <h3>Error Handling <span class="badge">CHAPTER 6</span></h3>
+        <p>Every function returns a <span class="inline">Result&lt;T, E&gt;</span>. Read more in the
+           <a class="link" href="#">Maybe section</a>, then try the example below.</p>
+        <pre><span class="cm"># a function that can fail</span>
+<span class="kw">fn</span> halve(<span class="ty">i32</span> n) <span class="ty">i32</span>:
+    <span class="kw">if</span> (n % 2 != 0):
+        <span class="kw">return</span> Result.Err(MathError.Odd())
+    <span class="kw">return</span> Result.Ok(n / 2)</pre>
+        <div class="admonition">
+          <div class="title">Note · don't use ?? in main()</div>
+          Inside <span class="inline">main()</span> handle the Result explicitly with a match or
+          <span class="inline">.realise(default)</span>.
+        </div>
+        <button class="btn">Copy example</button>
+      </main>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

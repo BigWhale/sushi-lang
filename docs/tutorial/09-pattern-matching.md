@@ -15,7 +15,7 @@ Sushi tries each pattern in turn and runs the body of the first that fits. When 
 carries data, the pattern can **destructure** it: name the data, and it becomes a variable
 inside that branch.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/09-pattern-matching/match-basics.sushi"
 ```
 
@@ -42,7 +42,7 @@ of working with enums: match to find the variant, destructure to get the data.
 Sometimes you only care about one or two variants and want a single catch-all for the
 rest. The wildcard pattern `_` matches anything.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/09-pattern-matching/wildcard.sushi"
 ```
 
@@ -66,7 +66,7 @@ Patterns can reach more than one level deep. Because `Result` and the enums it w
 themselves enums, you can match a `Result.Err(...)` *and* the specific error variant inside
 it in a single pattern.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/09-pattern-matching/nested.sushi"
 ```
 
