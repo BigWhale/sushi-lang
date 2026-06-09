@@ -15,7 +15,7 @@ struct_field: type NAME _NEWLINE
 enum_def: ENUM NAME [type_params] ":" _NEWLINE _INDENT enum_variant+ _DEDENT
 type_params: "<" type_param_list ">"
 type_param_list: type_param ("," type_param)*
-type_param: NAME [perk_constraints]
+type_param: ELLIPSIS? NAME [perk_constraints]
 perk_constraints: ":" perk_constraint_list
 perk_constraint_list: NAME ("+" NAME)*
 enum_variant: NAME ["(" [enum_variant_fields] ")"] _NEWLINE
@@ -59,6 +59,7 @@ variadic_param: ELLIPSIS type NAME
           | if_stmt
           | while_stmt
           | foreach_stmt
+          | expand_stmt
           | match_stmt
           | break_stmt
           | continue_stmt
@@ -79,6 +80,7 @@ else_part: ELSE ":" block
 
 while_stmt: WHILE "(" expr ")" ":" block
 foreach_stmt: FOREACH "(" [type] NAME "in" expr ")" ":" block
+expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block
 
 match_stmt: MATCH expr ":" _NEWLINE _INDENT match_arm+ _DEDENT
 match_arm: (pattern | wildcard_pattern) "->" (match_arm_inline | block)
@@ -246,6 +248,7 @@ ELIF.2: /elif\b/
 ELSE.2: /else\b/
 WHILE.2: /while\b/
 FOREACH.2: /foreach\b/
+EXPAND.2: /expand\b/
 BREAK.2: /break\b/
 CONTINUE.2: /continue\b/
 AS.2: /as\b/
