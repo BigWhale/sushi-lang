@@ -314,8 +314,21 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
 
     print("Code generation:")
 
+    # Digest every imported `.slib` once. These feed both the consumer unit
+    # fingerprints (so a library template change invalidates consumers that
+    # monomorphize it -- Phase 2 cross-library generics) and the library `.o`
+    # cache below.
+    library_fingerprints: dict[str, str] = {}
+    if library_linker is not None:
+        for lib_path in sorted(library_imports):
+            slib_path = library_linker.resolve_library(lib_path)
+            library_fingerprints[lib_path] = compute_lib_fingerprint(slib_path)
+
     for unit in compilation_order:
-        fp = compute_unit_fingerprint(unit, unit_manager, monomorphized_extensions)
+        fp = compute_unit_fingerprint(
+            unit, unit_manager, monomorphized_extensions,
+            library_fingerprints=library_fingerprints,
+        )
 
         if cache.has_cached_unit(unit.name, fp):
             obj_path = cache.unit_object_path(unit.name)
@@ -347,7 +360,7 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
     if library_linker is not None:
         for lib_path in sorted(library_imports):
             slib_path = library_linker.resolve_library(lib_path)
-            fp = compute_lib_fingerprint(slib_path)
+            fp = library_fingerprints.get(lib_path) or compute_lib_fingerprint(slib_path)
             lib_name = lib_path.replace("/", "_")
             if cache.has_cached_lib(lib_name, fp):
                 obj_paths.append(cache.lib_object_path(lib_name))

@@ -128,3 +128,38 @@ def test_lib_fingerprint_changes_with_content(tmp_path):
     fp1 = compute_lib_fingerprint(slib)
     slib.write_bytes(b"LIB2")
     assert compute_lib_fingerprint(slib) != fp1
+
+
+# --------------------------------------------------------------------------
+# Imported-library template sensitivity (Phase 2 cross-library generics)
+# --------------------------------------------------------------------------
+
+def test_unit_fingerprint_changes_with_imported_library_digest(make_unit):
+    """A consumer unit's fingerprint must change when an imported library's
+    digest changes, so a library generic-template edit invalidates the
+    consumer's cached .o (otherwise a monomorphized instance would be stale)."""
+    unit = make_unit(CLEAN)
+    fp_a = compute_unit_fingerprint(unit, library_fingerprints={"lib/math": "DIGEST_A"})
+    fp_b = compute_unit_fingerprint(unit, library_fingerprints={"lib/math": "DIGEST_B"})
+    assert fp_a != fp_b
+
+
+def test_unit_fingerprint_stable_for_same_library_digest(make_unit):
+    """Identical library digests must produce identical fingerprints (no
+    spurious cache misses)."""
+    unit = make_unit(CLEAN)
+    digests = {"lib/math": "DIGEST_A", "lib/strings": "DIGEST_X"}
+    assert (
+        compute_unit_fingerprint(unit, library_fingerprints=dict(digests))
+        == compute_unit_fingerprint(unit, library_fingerprints=dict(digests))
+    )
+
+
+def test_unit_fingerprint_no_library_matches_empty_mapping(make_unit):
+    """Passing no library digests and an empty mapping are equivalent (the
+    section is skipped when there is nothing to fold in)."""
+    unit = make_unit(CLEAN)
+    assert (
+        compute_unit_fingerprint(unit)
+        == compute_unit_fingerprint(unit, library_fingerprints={})
+    )
