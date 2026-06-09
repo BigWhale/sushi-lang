@@ -32,6 +32,26 @@ Shadowing: the rename is shadow-aware. If the body re-binds ``var`` via an inner
 untouched -- only free occurrences of ``var`` are renamed. For ``match``, the
 scrutinee and any arms whose pattern does NOT bind ``var`` are renamed normally;
 only the body of an arm whose pattern binds ``var`` is treated as a shadow scope.
+
+Local hygiene: a ``let`` declared at the TOP LEVEL of the expand body declares a
+local in the *callee's* (single, shared) function scope. Splicing N copies of the
+body into that one scope would re-declare the same local N times and collide
+(backend "duplicate local in same scope"). So in copy ``i`` every top-level local
+``name`` is alpha-renamed to a copy-unique ``{name}__x{i}`` -- both the ``let``
+declaration and all subsequent references to it within the copy. The ``__x{i}``
+suffix cannot clash with user identifiers (CNAME) at the same prefix because the
+original user prefix is preserved and the doubled-underscore + index is unique per
+copy. Locals declared inside a NESTED block (if/while/foreach/match/expand) are in
+that block's own backend scope -- each duplicated block is a distinct scope
+instance -- so they do NOT collide and are left alone.
+
+Local-rename limitation: top-level local renaming honors sequential ``let``
+shadowing (a re-``let`` of the same name starts a new binding). It does not track
+a top-level local being shadowed by an inner-block re-declaration of the same name
+and then referenced again after the inner block; such re-use of a name across a
+nested shadow is renamed uniformly within the copy. This is the same straight-line
++ nested-block-scope model used for the loop-var rename and is correct for all
+non-pathological bodies.
 """
 from __future__ import annotations
 
@@ -121,7 +141,7 @@ def _unroll_expand(
     fanout = pack_param_fanout.get(pack_name, []) if pack_name is not None else []
 
     out: List[Stmt] = []
-    for elem_name in fanout:
+    for i, elem_name in enumerate(fanout):
         # Independent deep copy so later passes annotate each copy separately.
         body_copy = copy.deepcopy(node.body)
         # Rename free occurrences of the binding var to this fan-out param,
@@ -129,10 +149,45 @@ def _unroll_expand(
         renamed = _rename_block_statements(
             body_copy.statements, node.var, elem_name, _seen=set()
         )
+        # Hygiene: alpha-rename each top-level local declared in THIS copy to a
+        # copy-unique name, so the N copies don't re-declare the same local in
+        # the shared callee scope. Done AFTER the loop-var rename so a `let`
+        # named like the loop var (which the loop-var rename already shadow-stops
+        # at) still gets its own fresh local name here.
+        renamed = _rename_copy_locals(renamed, i)
         # A nested expand inside this copy must itself be unrolled.
         renamed = _unroll_stmt_list(renamed, pack_param_fanout)
         out.extend(renamed)
     return out
+
+
+def _rename_copy_locals(statements: List[Stmt], copy_index: int) -> List[Stmt]:
+    """Alpha-rename top-level ``let`` locals in one unrolled copy to fresh names.
+
+    For every ``Let`` at the top level of this copy's statement list, rename the
+    declared local ``name`` -> ``{name}__x{copy_index}`` and rewrite all
+    subsequent references to it within the copy. Re-using ``_rename_block_statements``
+    gives sequential-``let`` shadow awareness for free: if the same name is
+    re-``let`` later, that later binding is a distinct local and gets renamed on
+    its own iteration.
+
+    Locals inside nested blocks are left untouched -- each duplicated nested block
+    is its own backend scope, so those locals never collide across copies.
+    """
+    for idx, stmt in enumerate(statements):
+        if isinstance(stmt, Let):
+            old = stmt.name
+            new = f"{old}__x{copy_index}"
+            # Rename the declaration itself.
+            stmt.name = new
+            # Rewrite references in the statements that follow (the local's
+            # scope is from its declaration to the end of the block), honoring
+            # any later re-`let` of the same name as a fresh binding.
+            tail = _rename_block_statements(
+                statements[idx + 1:], old, new, _seen=set()
+            )
+            statements[idx + 1:] = tail
+    return statements
 
 
 def _unroll_in_nested_blocks(

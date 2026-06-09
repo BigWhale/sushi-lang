@@ -208,10 +208,101 @@ def test_shadowing_let_suppresses_rename_in_tail():
         ),
     ])
     unroll_expands(body, {"args": ["args_0"]})
-    # One copy: a Let and a PrintLn. The PrintLn's Name stays 'a' (shadowed).
+    # One copy: a Let and a PrintLn. The loop-var rename stops at `let a`
+    # (shadowed), so the println does NOT become args_0. The top-level local
+    # `a` is then alpha-renamed to its copy-unique name, and the println follows.
     let_stmt, print_stmt = body.statements
-    assert isinstance(let_stmt, Let) and let_stmt.name == "a"
-    assert print_stmt.value.id == "a"
+    assert isinstance(let_stmt, Let) and let_stmt.name == "a__x0"
+    assert print_stmt.value.id == "a__x0"
+    # crucially, it is NOT the fan-out param.
+    assert print_stmt.value.id != "args_0"
+
+
+# ---------------------------------------------------------------------------
+# hygienic per-copy local renaming (the P1-T7b local-collision fix)
+# ---------------------------------------------------------------------------
+
+def _expand_body_with_local(var="a", pack="args"):
+    """expand(a in args): let string s = a.display(); println(s)"""
+    return Block(loc=None, statements=[
+        Expand(
+            loc=None,
+            var=var,
+            iterable=Name(loc=None, id=pack),
+            body=Block(loc=None, statements=[
+                Let(loc=None, name="s", ty=STR, value=DotCall(
+                    loc=None,
+                    receiver=Name(loc=None, id=var),
+                    method="display",
+                    args=[],
+                )),
+                PrintLn(loc=None, value=Name(loc=None, id="s")),
+            ]),
+        ),
+    ])
+
+
+def test_unroll_renames_toplevel_locals_per_copy():
+    body = _expand_body_with_local()
+    unroll_expands(body, {"args": ["args_0", "args_1"]})
+
+    # Two copies, each a (Let, PrintLn) pair -> 4 top-level statements, no Expand.
+    assert _expands_in(body) == []
+    assert len(body.statements) == 4
+    lets = [s for s in body.statements if isinstance(s, Let)]
+    prints = [s for s in body.statements if isinstance(s, PrintLn)]
+    assert len(lets) == 2 and len(prints) == 2
+
+    # Each copy's declared local has a DISTINCT name (so they don't collide in
+    # the shared callee scope).
+    let_names = [l.name for l in lets]
+    assert len(set(let_names)) == 2, let_names
+    assert let_names == ["s__x0", "s__x1"]
+
+    # References are consistent within each copy: copy i's println uses copy i's
+    # renamed local, and the let value uses the matching fan-out receiver.
+    let0, print0, let1, print1 = body.statements
+    assert let0.name == "s__x0"
+    assert print0.value.id == "s__x0"
+    assert let0.value.receiver.id == "args_0"
+    assert let1.name == "s__x1"
+    assert print1.value.id == "s__x1"
+    assert let1.value.receiver.id == "args_1"
+    # The original local name 's' no longer appears anywhere.
+    assert "s" not in _names_in(body)
+
+
+def test_unroll_nested_block_locals_left_alone():
+    # A `let` inside a nested `if` is in that block's own scope; each duplicated
+    # if-block is a distinct backend scope, so the local need NOT be renamed.
+    body = Block(loc=None, statements=[
+        Expand(
+            loc=None, var="a", iterable=Name(loc=None, id="args"),
+            body=Block(loc=None, statements=[
+                If(
+                    loc=None,
+                    arms=[(BoolLit(loc=None, value=True),
+                           Block(loc=None, statements=[
+                               Let(loc=None, name="s", ty=STR,
+                                   value=Name(loc=None, id="a")),
+                               PrintLn(loc=None, value=Name(loc=None, id="s")),
+                           ]))],
+                    else_block=None,
+                ),
+            ]),
+        ),
+    ])
+    unroll_expands(body, {"args": ["args_0", "args_1"]})
+    assert _expands_in(body) == []
+    assert len(body.statements) == 2  # two If copies
+    for idx, fanout in enumerate(["args_0", "args_1"]):
+        if_block = body.statements[idx].arms[0][1]
+        let_stmt, print_stmt = if_block.statements
+        # Nested-block local keeps its original name (separate scope per copy).
+        assert let_stmt.name == "s"
+        assert print_stmt.value.id == "s"
+        # Its initializer still references the fan-out receiver.
+        assert let_stmt.value.id == fanout
 
 
 # ---------------------------------------------------------------------------

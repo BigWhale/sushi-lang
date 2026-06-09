@@ -1,0 +1,29 @@
+# P1-T7b: an expand body that declares ordinary locals must alpha-rename them
+# per unrolled copy, so the N copies do not re-declare the same local in the
+# shared callee scope (would otherwise crash: "duplicate local in same scope").
+# Covers a top-level `let` plus a second cross-referencing `let`, and a `let`
+# inside a nested `if` (own scope, no rename needed). Arity 2.
+# EXPECT_STDOUT_EXACT: "[i:1]\nodd\n[i:2]\neven\n"
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "i:{self}"
+
+fn show_all<...Ts: Display>(...Ts args) ~:
+    expand(a in args):
+        let string base = a.display()
+        let string line = "[{base}]"
+        println(line)
+        if (a % 2 == 0):
+            let string tag = "even"
+            println(tag)
+        else:
+            let string tag = "odd"
+            println(tag)
+    return Result.Ok(~)
+
+fn main() i32:
+    show_all(1, 2)
+    return Result.Ok(0)
