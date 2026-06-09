@@ -121,7 +121,15 @@ def serialize_generic_function(func: "FuncDef", source_text: str) -> dict:
         A msgpack-safe dict matching the record schema documented above.
     """
     type_params = [
-        {"name": tp.name, "constraints": list(getattr(tp, "constraints", None) or [])}
+        {
+            "name": tp.name,
+            "constraints": list(getattr(tp, "constraints", None) or []),
+            # Carry the type-pack marker (`...Ts`) explicitly. The decl source we
+            # ship re-parses the marker on its own, but recording it keeps the
+            # manifest self-describing and guards against a future codec that
+            # stops shipping full source (mirrors the constraints handling).
+            "is_pack": bool(getattr(tp, "is_pack", False)),
+        }
         for tp in (func.type_params or [])
     ]
     return {
@@ -135,10 +143,11 @@ def serialize_generic_function(func: "FuncDef", source_text: str) -> dict:
 def deserialize_generic_function(record: dict) -> "FuncDef":
     """Reconstruct a ``FuncDef`` from a manifest record by re-parsing its source.
 
-    The record's ``type_params`` are authoritative for constraints: after
-    parsing, each rebuilt ``BoundedTypeParam``'s constraints are reconciled
-    against the record (the parsed source already carries them, but the record
-    is the source of truth and guards against any future divergence).
+    The record's ``type_params`` are authoritative for constraints and the
+    type-pack marker: after parsing, each rebuilt ``BoundedTypeParam``'s
+    constraints and ``is_pack`` flag are reconciled against the record (the
+    parsed source already carries them, but the record is the source of truth
+    and guards against any future divergence).
 
     Args:
         record: A record produced by ``serialize_generic_function``.
@@ -165,6 +174,8 @@ def deserialize_generic_function(record: dict) -> "FuncDef":
     if len(rec_tps) == len(parsed_tps):
         for parsed_tp, rec_tp in zip(parsed_tps, rec_tps):
             parsed_tp.constraints = list(rec_tp.get("constraints") or [])
+            if "is_pack" in rec_tp:
+                parsed_tp.is_pack = bool(rec_tp["is_pack"])
 
     return func
 

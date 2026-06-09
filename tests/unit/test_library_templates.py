@@ -67,7 +67,7 @@ def test_serialize_record_shape():
     record = serialize_generic_function(func, MAX_SRC)
 
     assert record["name"] == "max"
-    assert record["type_params"] == [{"name": "T", "constraints": ["Ord"]}]
+    assert record["type_params"] == [{"name": "T", "constraints": ["Ord"], "is_pack": False}]
     assert record["free_perks"] == ["Ord"]
     assert record["source"].endswith("\n")
     # The slice must cover the whole declaration, header through body.
@@ -203,6 +203,59 @@ def test_generics_route_to_templates_only(tmp_path):
     # No concrete function record carries the legacy is_generic flag anymore.
     assert all("is_generic" not in f for f in public_funcs)
     assert all("type_params" not in f for f in public_funcs)
+
+
+PACK_SRC = (
+    "perk Display:\n"
+    "    fn display() string\n"
+    "\n"
+    "public fn show_all<...Ts: Display>(...Ts args) ~:\n"
+    "    expand(a in args):\n"
+    "        println(a.display())\n"
+    "    return Result.Ok(~)\n"
+)
+
+
+def test_pack_type_param_carries_is_pack_across_round_trip():
+    """Phase 3 (G2): a '...Ts' type-pack survives serialize -> deserialize.
+
+    The decl source re-parses the '...' marker on its own, but the record also
+    records `is_pack` explicitly. Both the type-param and the value parameter
+    must come back as packs.
+    """
+    program, _ = parse_to_ast(PACK_SRC)
+    func = next(f for f in program.functions if f.name == "show_all")
+
+    record = serialize_generic_function(func, PACK_SRC)
+    assert record["type_params"] == [
+        {"name": "Ts", "constraints": ["Display"], "is_pack": True}
+    ]
+
+    rebuilt = deserialize_generic_function(record)
+    assert rebuilt.type_params[-1].is_pack is True
+    # The value pack parameter ('...Ts args') is reconstructed as a pack too.
+    assert rebuilt.params[-1].is_pack is True
+
+
+def test_v2_pack_public_function_allowed_as_template(tmp_path):
+    """Phase 3 (G1): a public '...Ts' pack exports as a template, not CE0116.
+
+    CE0116 blocks only v1 native '...T' (is_variadic). A v2 type pack carries
+    type_params, so it is routed to templates.generic_functions and never hits
+    the CE0116 check -- the producer must NOT raise.
+    """
+    from sushi_lang.backend.library_manifest import LibraryManifestGenerator
+
+    unit = _make_unit(tmp_path, PACK_SRC)
+    reporter = Reporter(source="", filename="lib")
+    gen = LibraryManifestGenerator(_StubAnalyzer(reporter))
+
+    public_funcs = gen._extract_public_functions([unit])
+    templates = gen._extract_templates([unit])
+
+    assert "show_all" not in [f["name"] for f in public_funcs]
+    assert any(t["name"] == "show_all" for t in templates["generic_functions"])
+    assert not any(item.code == "CE0116" for item in reporter.items)
 
 
 def test_closure_check_rejects_private_helper_reference(tmp_path):

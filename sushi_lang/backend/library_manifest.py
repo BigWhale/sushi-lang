@@ -118,8 +118,16 @@ class LibraryManifestGenerator:
                 if func.type_params:
                     continue
 
-                # CE0116: reject a native variadic '...T' function in a public
-                # library signature (the variadic flag is not serialized in v1).
+                # CE0116: reject a v1 NATIVE variadic '...T' function in a public
+                # library signature. A native variadic collects its trailing args
+                # into a runtime T[] inside a single concrete function -- there is
+                # no template to monomorphize at the consumer, so it genuinely
+                # cannot cross the .slib boundary. This is distinct from a v2 type
+                # pack '...Ts': a pack function carries type_params and was already
+                # routed to templates.generic_functions above (the consumer
+                # monomorphizes it per call site), so it never reaches here. The
+                # discriminator is is_variadic (v1, blocked) vs is_pack (v2,
+                # allowed-as-template), NOT the '...' spelling they share.
                 if any(getattr(p, "is_variadic", False) for p in func.params):
                     er.emit(self.analyzer.reporter, er.ERR.CE0116,
                             getattr(func, "name_span", None) or func.loc, name=func.name)
