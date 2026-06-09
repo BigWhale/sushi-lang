@@ -1,0 +1,19 @@
+# Regression: an extension method whose bare return value is a DotCall that is
+# NOT Result.Ok/Result.Err (here a method-call on self) must still compile and
+# run. CE2091 must only fire for Result.Ok(...)/Result.Err(...) wrappers, never
+# for a legitimate method-call DotCall return.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: 42
+extend i32 next() i32:
+    return self + 1
+
+extend i32 twice_next() i32:
+    # Bare return whose value is a method-call DotCall (receiver is 'self', not
+    # 'Result'); this must NOT be flagged by CE2091.
+    return self.next()
+
+fn main() i32:
+    let i32 n = 41
+    println(n.twice_next())
+    return Result.Ok(0)

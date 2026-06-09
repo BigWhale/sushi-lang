@@ -1,0 +1,9 @@
+# An extension method body must use a bare 'return <value>', not a
+# Result.Ok(...) wrapper. The extension ABI returns the value unwrapped,
+# so wrapping it must fail Pass 2 with CE2091.
+# EXPECT_ERROR_CODE: CE2091
+extend i32 squared() i32:
+    return Result.Ok(self * self)
+
+fn main() i32:
+    return Result.Ok(0)

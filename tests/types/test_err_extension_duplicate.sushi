@@ -3,11 +3,11 @@
 # Should fail compilation with duplicate extension method error
 
 extend i32 add(i32 value) i32:
-  return Result.Ok(self + value)
+  return self + value
 
 # Duplicate extension method - should error
 extend i32 add(i32 value) i32:
-  return Result.Ok(self + value + 1)
+  return self + value + 1
 
 fn main() i32:
   let i32 x = 5
