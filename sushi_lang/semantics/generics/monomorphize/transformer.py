@@ -307,7 +307,7 @@ class TypeSubstitutor:
             New statement with substituted types
         """
         from sushi_lang.semantics.ast import (
-            Let, Rebind, If, While, Foreach, Return, Match,
+            Let, Rebind, If, While, Foreach, Expand, Return, Match,
             ExprStmt, Block, Break, Continue, Print, PrintLn
         )
 
@@ -347,6 +347,17 @@ class TypeSubstitutor:
 
         # Foreach statement
         if isinstance(stmt, Foreach):
+            result = copy.copy(stmt)
+            result.iterable = self.substitute_expr(stmt.iterable, substitution)
+            result.body = self.substitute_body(stmt.body, substitution)
+            return result
+
+        # Expand statement (compile-time pack expansion). Type-substitute the
+        # iterable and body here so the surviving Expand node is fully concrete;
+        # the actual unrolling into ordinary statements is a dedicated post-pass
+        # (unroll_expands) run after substitute_body, once the per-pack fan-out
+        # parameter names are known.
+        if isinstance(stmt, Expand):
             result = copy.copy(stmt)
             result.iterable = self.substitute_expr(stmt.iterable, substitution)
             result.body = self.substitute_body(stmt.body, substitution)

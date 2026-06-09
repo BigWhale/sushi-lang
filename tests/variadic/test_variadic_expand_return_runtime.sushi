@@ -1,0 +1,25 @@
+# P1-T7b: early return inside the expanded body. The unrolled body is ordinary
+# statements, so the normal RAII path drops the owned display() string exactly
+# once on the early-return path. Output proves the body ran before returning.
+# EXPECT_STDOUT_EXACT: "int:1\n"
+# EXPECT_RUNTIME_EXIT: 0
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "int:1"
+
+extend string with Display:
+    fn display() string:
+        return self
+
+fn print_first<...Ts: Display>(...Ts args) ~:
+    expand(a in args):
+        println(a.display())
+        return Result.Ok(~)
+    return Result.Ok(~)
+
+fn main() i32:
+    print_first(1, "two", "three")
+    return Result.Ok(0)
