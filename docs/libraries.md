@@ -341,7 +341,24 @@ Current limitations of the library system:
 
 1. **No transitive dependencies**: If library A depends on library B, you must import both explicitly
 2. **Platform-specific**: Libraries compiled on macOS cannot be used on Linux (and vice versa)
-3. **No generic instantiation across libraries**: Generic types must be instantiated in the same compilation unit
+3. **Generic instantiation across libraries (functions only)**: Regular generic *functions* can now
+   be instantiated across `.slib` boundaries. The library producer ships a re-parsable source
+   template in the `.slib` `templates` section (format VERSION 2); the consumer re-parses it,
+   registers it alongside its own definitions, and monomorphizes it at consumer call sites using
+   the standard Pass 1.5/1.6 machinery. Perk *definitions* are also shipped so consumers do not
+   need to redeclare a perk contract that originates in the library (they still supply their own
+   `extend <type> with <Perk>` implementation for each instantiation type). Constraint re-checking
+   uses `CE4006` against the consumer's perk-impl table.
+
+   Remaining restrictions:
+   - **Self-contained generics only**: a public generic whose body references a library-private
+     symbol is rejected at library-build time with **CE5006**. This bounds the feature to generics
+     that carry all their dependencies with them.
+   - **Perk-impl shipping deferred**: perk *implementations* (extension bodies) are not yet shipped
+     across library boundaries (transitive-symbol linkage problem). Consumers supply their own impls.
+   - **Variadic packs (`...Ts`) across libraries**: not yet supported; CE0116 still blocks public
+     variadic export. Cross-library pack templates are planned for a future phase.
+   - Generic *structs* and *enums* across library boundaries are also not yet supported.
 
 These limitations may be addressed in future versions.
 
