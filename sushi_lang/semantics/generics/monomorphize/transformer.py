@@ -8,17 +8,17 @@ This module handles the core substitution logic for monomorphization:
 - Type-aware substitution with copy-on-write for immutable types
 """
 from __future__ import annotations
-from typing import Dict, TYPE_CHECKING
+from typing import Dict, List, TYPE_CHECKING
 import copy
 
-from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter
+from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter, TypePack
 from sushi_lang.semantics.typesys import (
     Type, EnumType, EnumVariantInfo, StructType, UnknownType,
     PointerType, ArrayType, DynamicArrayType
 )
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import Block
+    from sushi_lang.semantics.ast import Block, Param
 
 
 class TypeSubstitutor:
@@ -45,13 +45,14 @@ class TypeSubstitutor:
         """
         self.monomorphizer = monomorphizer
 
-    def substitute_type(self, ty: Type, substitution: Dict[str, Type]) -> Type:
+    def substitute_type(self, ty: Type, substitution: Dict[str, "Type | TypePack"]) -> Type:
         """Recursively substitute type parameters in a type.
 
         Args:
             ty: The type to substitute in (may contain TypeParameter or UnknownType
                 instances representing type parameters)
-            substitution: Map from type parameter names to concrete types
+            substitution: Map from type parameter names to concrete types (or a
+                ``TypePack`` for pack bindings; see the scalar-position guard below)
 
         Returns:
             Type with all TypeParameters replaced by concrete types
@@ -60,6 +61,14 @@ class TypeSubstitutor:
         if isinstance(ty, TypeParameter):
             if ty.name in substitution:
                 result = substitution[ty.name]
+                # A pack binding cannot fill a single scalar type position; the
+                # position-level fan-out is handled at the parameter-list level
+                # (later phase), not here.
+                if isinstance(result, TypePack):
+                    raise ValueError(
+                        f"type-pack '{ty.name}' used in a scalar type position; "
+                        f"pack expansion happens at the parameter-list level"
+                    )
                 # If the result is a GenericTypeRef, recursively resolve it to an EnumType
                 if isinstance(result, GenericTypeRef):
                     return self.substitute_type(result, {})
@@ -72,8 +81,15 @@ class TypeSubstitutor:
         # This happens when the AST builder creates UnknownType for type parameter references
         if isinstance(ty, UnknownType):
             if ty.name in substitution:
+                result = substitution[ty.name]
+                # A pack binding cannot fill a single scalar type position (see above).
+                if isinstance(result, TypePack):
+                    raise ValueError(
+                        f"type-pack '{ty.name}' used in a scalar type position; "
+                        f"pack expansion happens at the parameter-list level"
+                    )
                 # This UnknownType is actually a type parameter reference
-                return substitution[ty.name]
+                return result
             # Otherwise, it's a real unknown type (struct/enum) - pass through
             return ty
 
@@ -160,7 +176,92 @@ class TypeSubstitutor:
         # For all other types (BuiltinType, etc.), return as-is
         return ty
 
-    def substitute_body(self, body: 'Block', substitution: Dict[str, Type]) -> 'Block':
+    def _pack_binding_for(
+        self, param: 'Param', substitution: Dict[str, "Type | TypePack"]
+    ) -> 'TypePack | None':
+        """The TypePack a value-parameter fans out to, or None if it is not pack-typed.
+
+        A value-parameter is pack-typed iff its declared type is a bare type-parameter
+        reference (TypeParameter/UnknownType) whose name is bound to a TypePack in the
+        substitution map. Shared by expand_pack_param (signature fan-out) and the
+        monomorphizer's nested-instantiation scan (which must skip pack-typed params so
+        they never reach the scalar-position guard in substitute_type).
+        """
+        if isinstance(param.ty, (TypeParameter, UnknownType)):
+            binding = substitution.get(param.ty.name)
+            if isinstance(binding, TypePack):
+                return binding
+        return None
+
+    def expand_pack_param(
+        self, param: 'Param', substitution: Dict[str, "Type | TypePack"]
+    ) -> List['Param']:
+        """Fan a single value-parameter out into its concrete instantiation(s).
+
+        A value-parameter is *pack-typed* iff its declared type is a bare
+        type-parameter reference (``TypeParameter`` or ``UnknownType``) whose
+        name is bound to a ``TypePack`` in ``substitution``. Such a parameter
+        conceptually stands for ``Ts... args`` and expands, position-wise, into
+        one concrete parameter per pack element.
+
+        Naming convention (STABLE CONTRACT for later phases): the i-th expanded
+        parameter (0-based) is named ``f"{param.name}_{i}"``. An arity-0 pack
+        therefore produces NO parameters at all (the position vanishes), and an
+        arity-N pack produces ``args_0 .. args_{N-1}``. Phase 1's ``expand(...)``
+        body lowering relies on this deterministic per-index naming to bind the
+        expanded parameters back to elements of the pack.
+
+        Each expanded parameter carries the original's ``name_span``,
+        ``type_span`` and ``loc``, uses the already-concrete element type
+        directly (it is NOT routed back through ``substitute_type``), and is an
+        ordinary param (``is_variadic=False``).
+
+        Non-pack parameters (the overwhelmingly common case) are returned as a
+        single-element list whose one ``Param`` is byte-identical to what the
+        legacy param loop produced: ``ty`` substituted via ``substitute_type``,
+        every span/loc copied, and ``is_variadic`` preserved.
+
+        Args:
+            param: The original generic value-parameter.
+            substitution: Type-parameter binding map (may contain ``TypePack``).
+
+        Returns:
+            A list of concrete ``Param`` nodes (length 0..N for a pack-typed
+            param; exactly 1 otherwise).
+        """
+        from sushi_lang.semantics.ast import Param
+
+        # Detect a pack-typed parameter: a bare type-param reference bound to a
+        # TypePack. The expansion happens HERE, before substitute_type is ever
+        # called on the pack name (which would hit the scalar-position guard).
+        pack = self._pack_binding_for(param, substitution)
+        if pack is not None:
+            return [
+                Param(
+                    name=f"{param.name}_{i}",
+                    ty=element_type,
+                    name_span=param.name_span,
+                    type_span=param.type_span,
+                    loc=getattr(param, 'loc', None),
+                    is_variadic=False,
+                )
+                for i, element_type in enumerate(pack.types)
+            ]
+
+        # Normal (non-pack) parameter: reproduce the legacy single-param result.
+        concrete_type = self.substitute_type(param.ty, substitution) if param.ty else None
+        return [
+            Param(
+                name=param.name,
+                ty=concrete_type,
+                name_span=param.name_span,
+                type_span=param.type_span,
+                loc=getattr(param, 'loc', None),
+                is_variadic=getattr(param, 'is_variadic', False),
+            )
+        ]
+
+    def substitute_body(self, body: 'Block', substitution: Dict[str, "Type | TypePack"]) -> 'Block':
         """Substitute type parameters in a function body.
 
         Always creates a new Block for each monomorphized function.
@@ -185,7 +286,7 @@ class TypeSubstitutor:
         result.statements = new_statements
         return result
 
-    def substitute_statement(self, stmt, substitution: Dict[str, Type]):
+    def substitute_statement(self, stmt, substitution: Dict[str, "Type | TypePack"]):
         """Recursively substitute types in a statement.
 
         Always creates a new statement for each monomorphized function.
@@ -288,7 +389,7 @@ class TypeSubstitutor:
         # Unknown statement type - fallback to deep copy (conservative)
         return copy.deepcopy(stmt)
 
-    def substitute_expr(self, expr, substitution: Dict[str, Type]):
+    def substitute_expr(self, expr, substitution: Dict[str, "Type | TypePack"]):
         """Recursively substitute types in an expression.
 
         Always creates new expression nodes because expressions may be annotated
