@@ -490,11 +490,6 @@ class SemanticAnalyzer:
 
         for lib_name, manifest in self.library_linker.loaded_libraries.items():
             for func_info in manifest.get("public_functions", []):
-                # Generic functions ship as instantiable templates, not concrete
-                # signatures; they are registered by
-                # _register_library_generic_functions instead.
-                if func_info.get("is_generic"):
-                    continue
                 func_name = func_info["name"]
                 if func_name in self.funcs.by_name:
                     continue

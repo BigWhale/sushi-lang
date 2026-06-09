@@ -110,6 +110,14 @@ class LibraryManifestGenerator:
                 if not func.is_public:
                     continue
 
+                # Generic functions are NOT concrete callables. They ship only as
+                # instantiable templates (templates.generic_functions) and are
+                # monomorphized at the consumer's call site. Emitting them here too
+                # produced a bogus concrete FuncSig with unresolved type params and
+                # forced defensive consumer-side skips. Route them to templates only.
+                if func.type_params:
+                    continue
+
                 # CE0116: reject a native variadic '...T' function in a public
                 # library signature (the variadic flag is not serialized in v1).
                 if any(getattr(p, "is_variadic", False) for p in func.params):
@@ -139,8 +147,6 @@ class LibraryManifestGenerator:
                         for p in func.params
                     ],
                     "return_type": self._type_to_string(func.ret),
-                    "is_generic": func.type_params is not None and len(func.type_params) > 0,
-                    "type_params": [str(tp) for tp in func.type_params] if func.type_params else [],
                 })
 
         return public_funcs
