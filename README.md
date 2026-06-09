@@ -74,6 +74,7 @@ and LLVM-powered code generation.
 - Mutable references with compile-time borrow checking
 - Extension methods for zero-cost method chaining
 - Variadic functions (memory-safe native `...T` array sugar; C `...` for FFI bindings)
+- Variadic generics / parameter packs (`...Ts: Perk` + `expand(x in args)`, compile-time unrolled)
 - Rust-style enums with exhaustive pattern matching
 - Automatic memory management (RAII) for structs and arrays
 - Full UTF-8 Unicode support
@@ -247,6 +248,35 @@ fn main() i32:
     println("Hash: {h}")
     return Result.Ok(0)
 ```
+
+### Variadic Generics (Parameter Packs)
+
+Heterogeneous, perk-constrained parameter packs, fully monomorphized at compile time:
+
+```sushi
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "int:42"
+
+extend string with Display:
+    fn display() string:
+        return self
+
+fn print_all<...Ts: Display>(...Ts args) ~:
+    expand(a in args):          # compile-time unrolled, not a runtime loop
+        println(a.display())
+    return Result.Ok(~)
+
+fn main() i32:
+    print_all(42, "hi")         # monomorphizes per (arity, type-tuple)
+    print_all()                 # arity-0: expand body runs 0 times
+    return Result.Ok(0)
+```
+
+See [docs/design/variadics.md](docs/design/variadics.md) for the full design and Phase-1 limitations.
 
 ## Optimization Levels
 
