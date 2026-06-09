@@ -38,7 +38,7 @@ def validate_generic_function_call(
     # Get generic function definition
     generic_func = validator.generic_func_table.by_name[function_name]
 
-    # Infer type arguments from call site
+    # Infer type arguments from call site (pack-aware via the shared helper)
     type_args = _infer_type_args_from_call_site(validator, call, generic_func)
 
     if type_args is None:
@@ -52,8 +52,21 @@ def validate_generic_function_call(
         )
         return
 
-    # Generate mangled name
-    mangled_name = mangle_function_name(function_name, type_args)
+    # Per-element perk-constraint check for a constrained type-pack (CE2090).
+    _validate_pack_element_constraints(validator, call, generic_func, type_args)
+
+    # Generate mangled name. When the function's LAST type-param is a pack, the
+    # symbol carries the pack arity so it matches the monomorphizer's ".pack{N}"
+    # name (mirrors monomorphize/functions.py).
+    type_params = generic_func.type_params or []
+    has_pack = bool(type_params) and getattr(type_params[-1], "is_pack", False)
+    if has_pack:
+        pack_arity = len(type_args) - (len(type_params) - 1)
+        mangled_name = mangle_function_name(
+            function_name, type_args, pack_arity=pack_arity
+        )
+    else:
+        mangled_name = mangle_function_name(function_name, type_args)
 
     # Check if monomorphized version exists
     if mangled_name not in validator.func_table.by_name:
@@ -93,54 +106,122 @@ def _infer_type_args_from_call_site(
         generic_func: Generic function definition
 
     Returns:
-        Tuple of concrete types or None if inference fails
+        Tuple of concrete types or None if inference fails. For a function ending
+        in a type pack the flat tuple is ``(<leading inferred type-args>,
+        *<trailing pack element types>)`` -- the pack-tail handling is shared with
+        Pass 1.5 via ``pack_inference.infer_flat_type_args`` so both sites agree
+        on the symbol. A valid arity-0 pack returns ``()`` (SUCCESS, not failure).
     """
-    import sys
+    from sushi_lang.semantics.generics.pack_inference import infer_flat_type_args
+    from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
-    # Build type parameter -> concrete type mapping
-    type_param_map: Dict[str, Type] = {}
-
-    # Get call arguments
+    # Infer all positional argument types up front (the shared helper operates on
+    # concrete types). Bail exactly as before on un-inferable args.
     call_args = getattr(call, "args", []) or []
-    func_params = generic_func.params
-
-    # Check argument count
-    if len(call_args) != len(func_params):
-        return None
-
-    # Match each argument to corresponding parameter
-    for i, (arg_expr, param) in enumerate(zip(call_args, func_params)):
-        # Infer argument type using full type checker
+    arg_types = []
+    for arg_expr in call_args:
         arg_type = validator.infer_expression_type(arg_expr)
-
         if arg_type is None or isinstance(arg_type, UnknownType):
             return None
+        # Resolve UnknownType to concrete StructType/EnumType where possible so
+        # both leading-unification and the pack tail see resolved types.
+        resolved = resolve_unknown_type(
+            arg_type, validator.struct_table, validator.enum_table
+        )
+        arg_types.append(resolved)
 
-        # Unify argument type with parameter type
-        if param.ty is None:
+    def _infer_leading(gfunc, leading_arg_types):
+        """Existing Pass-2 leading unification, restricted to the fixed prefix.
+
+        For a NON-pack function the helper passes ALL args here, reproducing the
+        legacy behavior byte-for-byte.
+        """
+        type_param_map: Dict[str, Type] = {}
+
+        # Leading value-params are those that are NOT the pack value-param.
+        leading_params = [
+            p for p in gfunc.params if not getattr(p, "is_pack", False)
+        ]
+        if len(leading_arg_types) != len(leading_params):
             return None
 
-        success = _unify_types_for_inference(param.ty, arg_type, type_param_map)
-        if not success:
-            return None
+        for arg_type, param in zip(leading_arg_types, leading_params):
+            if param.ty is None:
+                return None
+            if not _unify_types_for_inference(param.ty, arg_type, type_param_map):
+                return None
 
-    # Check that all type parameters were inferred
-    for tp in generic_func.type_params:
-        tp_name = tp.name if hasattr(tp, 'name') else str(tp)
-        if tp_name not in type_param_map:
-            return None
+        # Leading type-params are the non-pack ones, in declaration order.
+        leading_tps = [
+            tp for tp in gfunc.type_params if not getattr(tp, "is_pack", False)
+        ]
+        leading_args = []
+        for tp in leading_tps:
+            tp_name = tp.name if hasattr(tp, "name") else str(tp)
+            if tp_name not in type_param_map:
+                return None
+            resolved = resolve_unknown_type(
+                type_param_map[tp_name], validator.struct_table, validator.enum_table
+            )
+            leading_args.append(resolved)
+        return tuple(leading_args)
 
-    # Extract type arguments in parameter order and resolve UnknownType
-    from sushi_lang.semantics.type_resolution import resolve_unknown_type
-    type_args = []
-    for tp in generic_func.type_params:
-        tp_name = tp.name if hasattr(tp, 'name') else str(tp)
-        inferred_type = type_param_map[tp_name]
-        # Resolve UnknownType to concrete StructType/EnumType if possible
-        resolved_type = resolve_unknown_type(inferred_type, validator.struct_table, validator.enum_table)
-        type_args.append(resolved_type)
+    return infer_flat_type_args(
+        generic_func, arg_types, infer_leading=_infer_leading
+    )
 
-    return tuple(type_args)
+
+def _validate_pack_element_constraints(
+    validator: 'TypeValidator',
+    call: Call,
+    generic_func,
+    flat_type_args: tuple
+) -> None:
+    """Per-element perk-constraint check for a constrained type-pack (CE2090).
+
+    When the function's trailing type-param is a perk-constrained pack
+    (``...Ts: Perk``), each concrete element type bound to the pack must satisfy
+    every constraint perk. Emits CE2090 for each violating element, with the
+    0-based position WITHIN THE PACK as ``index``.
+
+    Non-pack and unconstrained-pack functions are no-ops.
+    """
+    type_params = generic_func.type_params or []
+    if not type_params:
+        return
+
+    pack_tp = type_params[-1]
+    if not getattr(pack_tp, "is_pack", False):
+        return
+
+    constraints = getattr(pack_tp, "constraints", None) or []
+    if not constraints:
+        return
+
+    # Trailing (pack) element types are the flat args after the leading 1:1
+    # type-params; pack arity == that tail length (matches the monomorphizer).
+    leading_count = len(type_params) - 1
+    pack_element_types = list(flat_type_args[leading_count:])
+
+    for elem_index, elem_ty in enumerate(pack_element_types):
+        type_name = _type_name_for_constraint(elem_ty)
+        for perk_name in constraints:
+            if not validator.perk_impl_table.implements(type_name, perk_name):
+                er.emit(
+                    validator.reporter,
+                    er.ERR.CE2090,
+                    call.callee.loc,
+                    index=elem_index,
+                    ty=str(elem_ty),
+                    perk=perk_name,
+                )
+
+
+def _type_name_for_constraint(ty: Type) -> str:
+    """Extract the lookup name used by the perk implementation table."""
+    if isinstance(ty, (StructType, EnumType)):
+        return ty.name
+    return str(ty)
 
 
 def _unify_types_for_inference(
