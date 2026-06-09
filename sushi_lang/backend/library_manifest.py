@@ -56,7 +56,7 @@ class LibraryManifestGenerator:
             "public_constants": self._extract_public_constants(units),
             "structs": self._extract_structs(units),
             "enums": self._extract_enums(units),
-            "generic_types": [],  # Future: Phase 5
+            "templates": self._extract_templates(units),
             "dependencies": self._extract_dependencies(units),
         }
 
@@ -216,6 +216,131 @@ class LibraryManifestGenerator:
                 })
 
         return enums
+
+    def _collect_private_symbols(self, units: list['Unit']) -> set[str]:
+        """Collect names of library-PRIVATE top-level symbols across all units.
+
+        A symbol is library-private when it is a function declared without
+        `public`, or any struct / enum / constant (these have no public marker
+        and therefore never cross the .slib boundary in this phase). A public
+        generic body may freely reference its own parameters, language builtins,
+        and other PUBLIC symbols; referencing any of these private names would
+        be unresolvable at the consumer and aborts the export (CE5006).
+        """
+        private: set[str] = set()
+        for unit in units:
+            if unit.ast is None:
+                continue
+            for fn in unit.ast.functions:
+                if not getattr(fn, "is_public", False):
+                    private.add(fn.name)
+            for s in unit.ast.structs:
+                private.add(s.name)
+            for e in unit.ast.enums:
+                private.add(e.name)
+            for c in unit.ast.constants:
+                private.add(c.name)
+        return private
+
+    def _scan_referenced_symbols(self, node, acc: set[str]) -> None:
+        """Walk a body AST collecting referenced free symbol names.
+
+        Collects `Name.id`, `Call`/`DotCall`/`MethodCall`/`MemberAccess`
+        targets, and struct/enum constructor type names. This is a pragmatic,
+        conservative scan: it over-collects (it does not subtract local `let`
+        bindings or parameters), which is safe because the caller only rejects a
+        reference that matches a known library-private symbol. It does not need
+        to classify every reference - only to surface private-symbol uses.
+        """
+        from sushi_lang.semantics import ast as A
+
+        if node is None:
+            return
+        if isinstance(node, (list, tuple)):
+            for item in node:
+                self._scan_referenced_symbols(item, acc)
+            return
+
+        if isinstance(node, A.Name):
+            acc.add(node.id)
+        elif isinstance(node, A.Call):
+            callee = node.callee
+            if isinstance(callee, A.Name):
+                acc.add(callee.id)
+        elif isinstance(node, A.StructConstructor):
+            acc.add(node.struct_name)
+        elif isinstance(node, A.EnumConstructor):
+            acc.add(node.enum_name)
+
+        # Recurse into dataclass fields (AST nodes are dataclasses).
+        import dataclasses
+        if dataclasses.is_dataclass(node) and not isinstance(node, type):
+            for f in dataclasses.fields(node):
+                self._scan_referenced_symbols(getattr(node, f.name, None), acc)
+
+    def _check_generic_export_closure(
+        self, func, private_symbols: set[str]
+    ) -> None:
+        """Reject (CE5006) a public generic whose body references a private symbol.
+
+        Bounds this milestone to self-contained generics: the re-parsed template
+        is monomorphized at the consumer, which has no visibility into the
+        library's private functions/types/constants.
+        """
+        import sushi_lang.internals.errors as er
+
+        referenced: set[str] = set()
+        if func.body is not None:
+            self._scan_referenced_symbols(func.body, referenced)
+
+        # A generic may reference its own type-param names as type annotations;
+        # those are never private symbols, but exclude them defensively.
+        type_param_names = {tp.name for tp in (func.type_params or [])}
+        param_names = {p.name for p in func.params}
+
+        offending = sorted(
+            referenced & private_symbols - type_param_names - param_names
+        )
+        if offending:
+            symbol = offending[0]
+            er.emit(self.analyzer.reporter, er.ERR.CE5006,
+                    getattr(func, "name_span", None) or func.loc,
+                    name=func.name, symbol=symbol)
+            raise ValueError(
+                f"CE5006: public generic '{func.name}' references "
+                f"library-private symbol '{symbol}' and cannot be exported"
+            )
+
+    def _extract_templates(self, units: list['Unit']) -> dict:
+        """Extract instantiable public generic templates (re-parsable source).
+
+        Returns the manifest `templates` section. `perks` and `perk_impls` are
+        intentionally left empty in this phase (a later task ships them); only
+        public generic FUNCTIONS are serialized here.
+        """
+        from sushi_lang.backend.library_templates import serialize_generic_function
+
+        private_symbols = self._collect_private_symbols(units)
+        generic_functions: list[dict] = []
+
+        for unit in units:
+            if unit.ast is None:
+                continue
+            source = unit.file_path.read_text()
+            for func in unit.ast.functions:
+                if not (func.is_public and func.type_params):
+                    continue
+                self._check_generic_export_closure(func, private_symbols)
+                generic_functions.append(
+                    serialize_generic_function(func, source)
+                )
+
+        return {
+            "version": 2,
+            "generic_functions": generic_functions,
+            "perks": [],
+            "perk_impls": [],
+        }
 
     def _extract_dependencies(self, units: list['Unit']) -> list[str]:
         """Extract stdlib dependencies from all units."""

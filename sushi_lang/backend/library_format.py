@@ -3,7 +3,13 @@
 This module handles reading and writing the unified .slib format that combines
 LLVM bitcode with MessagePack-encoded metadata in a single file.
 
-File format specification (version 1):
+File format specification (version 2):
+
+The on-disk byte layout is unchanged from version 1; only the MessagePack
+metadata dict gained a `templates` section carrying instantiable public generic
+templates (re-parsable source text) for cross-library monomorphization. The
+version bump signals the new manifest schema.
+
 
     ┌─────────────────────────────────────────────────────────────┐
     │ MAGIC (16 bytes): 🍣SUSHILIB🍣 (UTF-8)                      │
@@ -107,7 +113,7 @@ class LibraryFormat:
 
     # Magic bytes: 🍣SUSHILIB🍣 (each emoji is 4 UTF-8 bytes)
     MAGIC = b'\xf0\x9f\x8d\xa3SUSHILIB\xf0\x9f\x8d\xa3'
-    VERSION = 1
+    VERSION = 2
     FIXED_HEADER_SIZE = 52  # 16 (magic) + 4 (version) + 24 (spares) + 8 (meta_len)
     MAX_FILE_SIZE = 1024 * 1024 * 1024  # 1GB sanity limit
 

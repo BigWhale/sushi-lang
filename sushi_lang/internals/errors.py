@@ -1141,6 +1141,10 @@ _add(ErrorMessage("CE5005", Severity.ERROR,
     "non-C-ABI type '{type}' passed as variadic argument to external '{name}'",
     Category.TYPE, "Each trailing variadic argument to an external call must be C-representable: i8..i64, u8..u64, f32, f64, bool, string (auto-marshalled), or ptr. Result/Maybe, structs, arrays, references, and user types cannot cross the C ABI boundary."))
 
+_add(ErrorMessage("CE5006", Severity.ERROR,
+    "public generic '{name}' cannot be exported: its body references library-private symbol '{symbol}'",
+    Category.TYPE, "A public generic is shipped in a library (.slib) as re-parsable source text and monomorphized at the consumer. Its body must therefore be self-contained: it may reference only its own parameters, language builtins/operators, and other public symbols. Referencing a library-private function, struct, enum, or constant would not be resolvable at the consumer. Make the referenced symbol public, or inline it into the generic."))
+
 # Array bounds errors
 _add(ErrorMessage("RE2020", Severity.ERROR,
     "array index out of bounds",
