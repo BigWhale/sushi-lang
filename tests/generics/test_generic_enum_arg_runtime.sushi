@@ -1,0 +1,21 @@
+# E2 (#71): the SHARED-inferrer claim. A NON-pack generic `id_of<T>` called with
+# an enum-constructor DotCall arg (`Color.Red()`) must infer T=Color in Pass 1.5,
+# the same inferrer the pack path uses. Without the DotCall case this raised CE2061.
+# EXPECT_STDOUT_EXACT: "red\n"
+enum Color:
+    Red()
+    Green()
+
+fn id_of<T>(T a) T:
+    return Result.Ok(a)
+
+fn run() i32:
+    let Color c = id_of(Color.Red())??
+    match c:
+        Color.Red() -> println("red")
+        Color.Green() -> println("green")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 rc = run().realise(1)
+    return Result.Ok(rc)

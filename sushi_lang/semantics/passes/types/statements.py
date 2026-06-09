@@ -172,6 +172,18 @@ def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:
     All return statements must now use Ok(value) or Err().
     """
     if not validator.current_function:
+        # Extension and perk-implementation method bodies have no current_function
+        # (they return a BARE value at the IR level). A Result.Ok(...)/Result.Err(...)
+        # wrapper here is the anti-pattern that later crashes codegen (CE0113); reject
+        # it cleanly at type-check time.
+        if getattr(validator, "in_extension_context", False) and stmt.value is not None:
+            value = stmt.value
+            if (isinstance(value, DotCall)
+                    and isinstance(value.receiver, Name)
+                    and value.receiver.id == "Result"
+                    and value.method in ("Ok", "Err")):
+                method_name = getattr(validator, "extension_method_name", None) or "<method>"
+                er.emit(validator.reporter, er.ERR.CE2091, value.loc, name=method_name)
         return  # Should not happen, but defensive programming
 
     expected_type = validator.current_function.ret

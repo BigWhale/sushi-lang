@@ -7,7 +7,7 @@ perk Display:
 
 extend i32 with Display:
     fn display() string:
-        return Result.Ok("int")
+        return "int"
 
 fn print_all<...Ts: Display>(...Ts args) ~:
     return Result.Ok(~)

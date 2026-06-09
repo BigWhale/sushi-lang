@@ -137,13 +137,6 @@ class LibraryRegistry:
 
         result = {}
         for func_info in func_list:
-            # Generic functions are not concrete callables. They are shipped as
-            # instantiable templates (manifest["templates"]) and monomorphized at
-            # the consumer's call site, so skip them here to avoid declaring a
-            # bogus concrete signature with unresolved type-parameter types.
-            if func_info.get("is_generic"):
-                continue
-
             func_name = func_info["name"]
 
             params = []

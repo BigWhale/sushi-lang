@@ -28,6 +28,8 @@ from .perks import validate_perk_implementation, check_no_conflicts_with_regular
 def validate_function(self, func: FuncDef) -> None:
     """Validate types within a function."""
     self.current_function = func
+    self.in_extension_context = False  # Normal functions are never extension/perk bodies
+    self.extension_method_name = None
     self.variable_types = {}  # Reset for each function
     self.destroyed_arrays = [set()]  # Reset for each function with initial scope
 
@@ -74,6 +76,8 @@ def validate_function(self, func: FuncDef) -> None:
 def validate_extension_method(self, ext: ExtendDef) -> None:
     """Validate types within an extension method."""
     self.current_function = None  # Extension methods are not functions, but we can reuse some logic
+    self.in_extension_context = True  # Dedicated flag: this body returns a bare value
+    self.extension_method_name = ext.name
     self.variable_types = {}  # Reset for each extension method
     self.destroyed_arrays = [set()]  # Reset for each extension method with initial scope
 
@@ -108,6 +112,9 @@ def validate_extension_method(self, ext: ExtendDef) -> None:
         if not self._block_always_returns(ext.body):
             self.err.emit(er.ERR.CE0107, ext.name_span, name=ext.name)
 
+    self.in_extension_context = False
+    self.extension_method_name = None
+
 
 def validate_perk_implementation_method(self, impl: ExtendWithDef) -> None:
     """Validate a perk implementation."""
@@ -132,6 +139,8 @@ def validate_perk_implementation_method(self, impl: ExtendWithDef) -> None:
     for method in impl.methods:
         # Treat perk implementation methods like extension methods
         self.current_function = None
+        self.in_extension_context = True  # Dedicated flag: this body returns a bare value
+        self.extension_method_name = method.name
         self.variable_types = {}
         self.destroyed_arrays = [set()]
 
@@ -159,3 +168,6 @@ def validate_perk_implementation_method(self, impl: ExtendWithDef) -> None:
         if method.ret != BuiltinType.BLANK:
             if not self._block_always_returns(method.body):
                 self.err.emit(er.ERR.CE0107, method.name_span, name=method.name)
+
+        self.in_extension_context = False
+        self.extension_method_name = None

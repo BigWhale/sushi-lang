@@ -45,11 +45,27 @@ def print_library_info(library_path: Path) -> int:
         print(f"Public Functions ({len(funcs)}):")
         for func in funcs:
             params = ', '.join(f"{p['type']} {p['name']}" for p in func['params'])
-            generic = ""
-            if func.get('is_generic') and func.get('type_params'):
-                type_params = ', '.join(func['type_params'])
-                generic = f"<{type_params}>"
-            print(f"  fn {func['name']}{generic}({params}) {func['return_type']}")
+            print(f"  fn {func['name']}({params}) {func['return_type']}")
+        print()
+
+    # Generic Functions (shipped as instantiable templates, not concrete callables)
+    generic_funcs = metadata.get('templates', {}).get('generic_functions', [])
+    if generic_funcs:
+        print(f"Generic Functions ({len(generic_funcs)}):")
+        for gf in generic_funcs:
+            tps = gf.get('type_params', [])
+            if tps:
+                rendered = []
+                for tp in tps:
+                    constraints = tp.get('constraints') or []
+                    if constraints:
+                        rendered.append(f"{tp['name']}: {', '.join(constraints)}")
+                    else:
+                        rendered.append(tp['name'])
+                generic = f"<{', '.join(rendered)}>"
+            else:
+                generic = ""
+            print(f"  fn {gf['name']}{generic} (template)")
         print()
 
     # Public constants

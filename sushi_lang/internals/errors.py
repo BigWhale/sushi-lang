@@ -969,6 +969,10 @@ _add(ErrorMessage("CE2090", Severity.ERROR,
     "type-pack element {index} of type '{ty}' does not satisfy constraint '{perk}'",
     Category.TYPE, "Each element type bound to a perk-constrained type-pack '...Ts: Perk' must implement the required perk."))
 
+_add(ErrorMessage("CE2091", Severity.ERROR,
+    "extension/perk method '{name}' must use a bare 'return <value>', not 'return Result.Ok(...)' / 'Result.Err(...)'",
+    Category.TYPE, "Extension and perk-implementation methods return the bare value directly (their ABI is unwrapped). Write 'return value' instead of 'return Result.Ok(value)'."))
+
 # Unit Management Errors (CE3xxx)
 _add(ErrorMessage("CE3001", Severity.ERROR,
     "circular dependency detected: {cycle}",

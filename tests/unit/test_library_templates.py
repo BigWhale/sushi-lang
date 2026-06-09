@@ -172,6 +172,39 @@ def test_closure_check_accepts_self_contained_generic(tmp_path):
     assert not any(item.code == "CE5006" for item in reporter.items)
 
 
+def test_generics_route_to_templates_only(tmp_path):
+    """E3: a public generic ships ONLY as a template, never in public_functions.
+
+    The producer must keep concrete publics (area) in public_functions while a
+    generic (first_of) lands solely in templates.generic_functions. No leaked
+    public_functions entry, and no residual `is_generic` flag on any concrete
+    function record.
+    """
+    from sushi_lang.backend.library_manifest import LibraryManifestGenerator
+
+    src = (
+        "public fn first_of<T>(T a, T b) T:\n"
+        "    return Result.Ok(a)\n"
+        "\n"
+        "public fn area(i32 w) i32:\n"
+        "    return Result.Ok(w * w)\n"
+    )
+    unit = _make_unit(tmp_path, src)
+    reporter = Reporter(source="", filename="lib")
+    gen = LibraryManifestGenerator(_StubAnalyzer(reporter))
+
+    public_funcs = gen._extract_public_functions([unit])
+    templates = gen._extract_templates([unit])
+
+    public_names = [f["name"] for f in public_funcs]
+    assert "first_of" not in public_names
+    assert "area" in public_names
+    assert any(t["name"] == "first_of" for t in templates["generic_functions"])
+    # No concrete function record carries the legacy is_generic flag anymore.
+    assert all("is_generic" not in f for f in public_funcs)
+    assert all("type_params" not in f for f in public_funcs)
+
+
 def test_closure_check_rejects_private_helper_reference(tmp_path):
     """A public generic calling a private helper aborts the export with CE5006."""
     from sushi_lang.backend.library_manifest import LibraryManifestGenerator
