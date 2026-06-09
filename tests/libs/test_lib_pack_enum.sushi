@@ -1,0 +1,22 @@
+# Phase 3 x E2: cross-library pack instantiated with ENUM-constructor args. The
+# library ships `perk Display` + `show_all<...Ts: Display>`; the consumer defines
+# an enum, supplies its Display impl, and calls the library pack with two
+# same-enum-type args (the E2/#71 case) across the .slib boundary.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "red\ngreen\n"
+
+use <lib/format_lib>
+
+enum Color:
+    Red()
+    Green()
+
+extend Color with Display:
+    fn display() string:
+        match self:
+            Color.Red() -> return "red"
+            Color.Green() -> return "green"
+
+fn main() i32:
+    show_all(Color.Red(), Color.Green())
+    return Result.Ok(0)
