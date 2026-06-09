@@ -572,6 +572,18 @@ _add(ErrorMessage("CE0116", Severity.ERROR,
     "public function '{name}' is variadic and cannot appear in a library public API",
     Category.FUNC, "Native variadic functions cannot be exported through a .slib public API in v1 (the variadic flag is not serialized into the library format)."))
 
+_add(ErrorMessage("CE0117", Severity.ERROR,
+    "{message}",
+    Category.FUNC, "A type-pack parameter '...Ts' must be the last parameter, and a function may declare at most one type-pack."))
+
+_add(ErrorMessage("CE0118", Severity.ERROR,
+    "{message}",
+    Category.FUNC, "A function cannot mix a v2 type-pack parameter '...Ts' with a v1 native variadic '...T'."))
+
+_add(ErrorMessage("CE0119", Severity.ERROR,
+    "malformed expand(...): {message}",
+    Category.FUNC, "An expand(...) construct is malformed or used outside a type-pack context."))
+
 # Struct errors
 _add(ErrorMessage("CE0004", Severity.ERROR,
     "duplicate struct '{name}'",
@@ -952,6 +964,10 @@ _add(ErrorMessage("CE2085", Severity.ERROR,
     Category.TYPE, "When using explicit Result<T, E> syntax, the error type is already specified. Remove the '| ErrorType' syntax or use implicit return type."))
 
 # CE2086-CE2089 reserved for future extensions
+
+_add(ErrorMessage("CE2090", Severity.ERROR,
+    "type-pack element {index} of type '{ty}' does not satisfy constraint '{perk}'",
+    Category.TYPE, "Each element type bound to a perk-constrained type-pack '...Ts: Perk' must implement the required perk."))
 
 # Unit Management Errors (CE3xxx)
 _add(ErrorMessage("CE3001", Severity.ERROR,
