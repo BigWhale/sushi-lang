@@ -12,7 +12,7 @@ A function starts with `fn`, a name, a parenthesised parameter list, and a retur
 Each parameter is written type-first, exactly like a variable declaration: `i32 a`. The
 body is indented under a colon:
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/04-functions/basics.sushi"
 ```
 
@@ -37,7 +37,7 @@ either a success (`Result.Ok(value)`) or a failure (`Result.Err(error)`).
 
 When you write a function whose return type looks like a plain `i32`:
 
-```
+```sushi
 fn add(i32 a, i32 b) i32:
 ```
 
@@ -70,7 +70,7 @@ Two everyday techniques work well in `main`:
 - `.realise(default)` unwraps a success directly, substituting `default` if it was an
   error.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/04-functions/consuming-result.sushi"
 ```
 
@@ -94,7 +94,7 @@ case.
 `T | ErrorType` syntax: the part before the `|` is the success type, the part after is the
 error type. That makes failures self-documenting.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/04-functions/custom-error.sushi"
 ```
 
@@ -117,7 +117,7 @@ By default a function is private to its file. Marking it `public` makes it part 
 file's exported surface, so other units in a multi-file project can call it. The syntax is
 just the keyword `public` in front of `fn`:
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/04-functions/public-fn.sushi"
 ```
 

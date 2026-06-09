@@ -12,7 +12,7 @@ and sealed types.
 
 A `struct` defines a new type made of named, typed fields.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/08-structs-and-enums/struct-basics.sushi"
 ```
 
@@ -39,7 +39,7 @@ Positional construction is concise, but when a struct has several fields — esp
 several `bool` fields — it's easy to get the order wrong and hard to read. Sushi lets you
 pass arguments **by name** instead:
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/08-structs-and-enums/named-args.sushi"
 ```
 
@@ -66,7 +66,7 @@ other arguments.
 An `enum` defines a type whose value is exactly one of a fixed set of **variants**. Each
 variant can optionally carry data of its own.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/08-structs-and-enums/enums.sushi"
 ```
 

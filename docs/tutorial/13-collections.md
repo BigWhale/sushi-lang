@@ -14,7 +14,7 @@ This chapter covers both, end to end.
 `List<T>` is an ordered, dynamically-sized sequence. It starts empty, grows as you push onto
 it, and is built into the language — **no import required**.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/13-collections/list-basics.sushi"
 ```
 
@@ -50,7 +50,7 @@ Appending isn't the only option. `.insert(index, value)` places an element at a 
 shifting the rest right, and `.remove(index)` takes one out, shifting the rest left and
 returning it as `Maybe<T>`.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/13-collections/list-insert-remove.sushi"
 ```
 
@@ -83,7 +83,7 @@ library, so it needs an import:
 use <collections/hashmap>
 ```
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/13-collections/hashmap-basics.sushi"
 ```
 
@@ -117,7 +117,7 @@ A `HashMap` gives you three iterators:
 - `.values()` — each value.
 - `.entries()` — each `Entry`, a small struct exposing both `.key` and `.value`.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/13-collections/hashmap-iter.sushi"
 ```
 

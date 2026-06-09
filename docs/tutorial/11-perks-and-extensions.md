@@ -14,7 +14,7 @@ An **extension method** adds a method to an existing type without touching that 
 definition. You could already write `squared(6)` as a free function; an extension lets you
 write `6.squared()` instead. Inside the method, the receiver is called `self`.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/11-perks-and-extensions/extensions.sushi"
 ```
 
@@ -51,7 +51,7 @@ same idea.
 You implement a perk for a type with `extend TypeName with PerkName:` and then supply the
 method bodies.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/11-perks-and-extensions/perk-basics.sushi"
 ```
 
@@ -77,7 +77,7 @@ A generic function can **constrain** its type parameter with `<T: PerkName>`, me
 be any type, as long as it implements `Describable`". Inside the function you may then call
 the perk's methods on the value.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/11-perks-and-extensions/perk-constraint.sushi"
 ```
 
@@ -102,7 +102,7 @@ example is hashing: every type in Sushi gets an auto-derived `.hash() -> u64`. T
 primitives **automatically satisfy** a `Hashable` perk without you writing any
 `extend ... with Hashable` — they pick up a *synthetic* implementation.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/11-perks-and-extensions/synthetic-hash.sushi"
 ```
 

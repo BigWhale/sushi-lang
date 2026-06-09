@@ -25,7 +25,7 @@ The `<time>` module gives you POSIX-precision sleep functions. They all return
 sleep), so you unwrap them like any other `Result`. We keep the duration tiny here so the
 program returns almost instantly.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/14-stdlib-ffi-libraries/timing.sushi"
 ```
 
@@ -48,7 +48,7 @@ The `<math>` module wraps LLVM's numeric intrinsics. Alongside the type-suffixed
 (`abs_i32`, `min_f64`, …) there are **polymorphic** helpers — `abs`, `min`, `max`, `sqrt`,
 `hypot` — that pick the right instruction for whatever numeric type you hand them.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/14-stdlib-ffi-libraries/math-tour.sushi"
 ```
 
@@ -67,7 +67,7 @@ The `<random>` module offers a non-cryptographic pseudo-random generator. Seedin
 `srand` makes a run reproducible, which is exactly what you want in a tutorial whose output
 must match every time.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/14-stdlib-ffi-libraries/dice.sushi"
 ```
 
@@ -93,7 +93,7 @@ The `<io/files>` module opens files with `open(path, mode)`, which returns a
 `FileError.NotFound()` or `FileError.PermissionDenied()`. Here we write a file under `/tmp`
 and read it straight back.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/14-stdlib-ffi-libraries/files.sushi"
 ```
 
@@ -117,7 +117,7 @@ the trailing call arguments into an owned dynamic array `T[]`, which the callee 
 with `.iter()`, `foreach`, and `.len()` — and which is RAII-destroyed at scope exit. The
 marker `...` is a **prefix on the element type**, and the variadic parameter must be last.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/14-stdlib-ffi-libraries/variadic-sum.sushi"
 ```
 
@@ -132,7 +132,7 @@ sum() = 0
 Notice the last call, `sum()`: **zero trailing arguments is valid**, and the callee simply
 receives an empty array. A variadic parameter can also follow fixed parameters:
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/14-stdlib-ffi-libraries/variadic-log.sushi"
 ```
 
@@ -164,7 +164,7 @@ You declare externals inside an `unsafe external "C" as <namespace>` block. The
 CW5001 four-guarantees warning so the build stays clean. Each declaration is bodyless, and
 `= "symbol"` names the actual C link symbol.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/14-stdlib-ffi-libraries/ffi-strlen.sushi"
 ```
 
@@ -190,7 +190,7 @@ external would be a CE2507 error.
 The unsafe block is also the *only* place a bare `...` variadic is allowed, which is how
 you bind C's variadic functions like `printf`:
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/14-stdlib-ffi-libraries/ffi-printf.sushi"
 ```
 
@@ -214,20 +214,20 @@ file in directly and compiles it together with yours. The path is relative to th
 file. Here is a small `guidelib.sushi` whose API functions are marked `public` so other files
 can see them:
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/14-stdlib-ffi-libraries/guidelib.sushi"
 ```
 
 A program imports it by path and calls those functions as if they were local:
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/14-stdlib-ffi-libraries/use-library.sushi"
 ```
 
 Compile and run it with the usual one-liner — the compiler finds `guidelib.sushi` next to
 it automatically:
 
-```
+```bash
 ./sushic use-library.sushi -o use-library
 ./use-library
 ```
@@ -244,7 +244,7 @@ bitcode plus the metadata the compiler needs for type information — and link i
 Build the library with `--lib`, then point `SUSHI_LIB_PATH` at it and import it with
 `use <lib/...>`:
 
-```
+```bash
 ./sushic --lib guidelib.sushi -o /tmp/guidelib.slib
 export SUSHI_LIB_PATH=/tmp
 ./sushic use-slib.sushi -o use-slib
@@ -253,7 +253,7 @@ export SUSHI_LIB_PATH=/tmp
 
 where the program imports the precompiled library rather than the source:
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/14-stdlib-ffi-libraries/use-slib.sushi"
 ```
 

@@ -11,7 +11,7 @@ An `if` tests a boolean condition. The condition goes in parentheses, the line e
 colon, and the body is indented. You can chain alternatives with `elif` (one word, like
 Python) and finish with an `else`:
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/03-control-flow/conditionals.sushi"
 ```
 
@@ -35,7 +35,7 @@ you don't need to write `if (has_towel == true)`. Comparisons (`==`, `!=`, `<`, 
 A `while` loop runs its body over and over as long as its condition stays true. Remember
 that rebinding a variable uses `:=`, which is how we make the loop eventually stop:
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/03-control-flow/while-loop.sushi"
 ```
 
@@ -62,7 +62,7 @@ of values is a **range**. Ranges come in two flavours:
 If `start` is greater than `end`, the range counts **down** automatically. You can also
 `foreach` over an array by calling `.iter()` on it:
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/03-control-flow/ranges.sushi"
 ```
 
@@ -99,7 +99,7 @@ Inside any loop, `break` exits the loop immediately, and `continue` skips to the
 iteration without running the rest of the body. They work the same as in Python, Java, and
 C:
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/03-control-flow/break-continue.sushi"
 ```
 

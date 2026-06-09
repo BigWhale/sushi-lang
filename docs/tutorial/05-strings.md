@@ -17,7 +17,7 @@ Sushi has two string literal syntaxes, and the difference is meaningful:
 Both support the same escape sequences: `\n` (newline), `\t` (tab), `\\` (backslash),
 `\'` (single quote), `\"` (double quote), and the numeric forms `\xNN` / `\uNNNN`.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/05-strings/literals.sushi"
 ```
 
@@ -47,7 +47,7 @@ braces, or simply to signal "this is a plain constant, nothing clever happening.
 Inside a double-quoted string, anything in `{...}` is evaluated and spliced in. The
 expression can be a variable, arithmetic, or even a method call.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/05-strings/interpolation.sushi"
 ```
 
@@ -71,7 +71,7 @@ The methods that ask questions *about* a string — its length, whether it conta
 something, where a substring lives — live in the `<collections/strings>` standard library
 unit. Import it once at the top of your file with `use <collections/strings>`.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/05-strings/inspect.sushi"
 ```
 
@@ -105,7 +105,7 @@ The other big family of methods returns a *reshaped* string: trimming whitespace
 case, padding, and splitting/joining. Because strings are immutable, the original is never
 touched — you always get a fresh value back.
 
-```
+```sushi
 --8<-- "docs/tutorial/examples/05-strings/transform.sushi"
 ```
 

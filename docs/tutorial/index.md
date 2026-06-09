@@ -34,7 +34,7 @@ see. You can copy any example, save it as a `.sushi` file, and run it yourself.
 
 Every example is a standalone program. To compile and run one:
 
-```
+```bash
 ./sushic mostly-harmless.sushi
 ./mostly-harmless
 ```

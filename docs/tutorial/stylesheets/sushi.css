@@ -1,0 +1,35 @@
+/*
+ * Sushi Lang — Sashimi Salmon palette.
+ * Brand reference: docs/color-scheme.html
+ *   lighter #FFB3A7  ·  primary #FA8072  ·  darker #D9554A
+ * Mapped onto Material's color variables for both the light and dark schemes.
+ */
+
+/* Light scheme */
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color:          #D9554A;  /* header / nav bar (white text reads here) */
+  --md-primary-fg-color--light:   #FA8072;
+  --md-primary-fg-color--dark:    #B8463C;
+  --md-primary-bg-color:          #ffffff;
+  --md-primary-bg-color--light:   #ffffffb3;
+
+  --md-accent-fg-color:           #FA8072;  /* hover / active accents */
+  --md-accent-fg-color--transparent: rgba(250, 128, 114, 0.1);
+
+  /* Body links: a hair darker than the header tone for comfortable contrast. */
+  --md-typeset-a-color:           #C24A40;
+}
+
+/* Dark scheme — brighter salmon reads better on the dark surface */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color:          #FA8072;
+  --md-primary-fg-color--light:   #FFB3A7;
+  --md-primary-fg-color--dark:    #D9554A;
+  --md-primary-bg-color:          #1b1b1b;
+  --md-primary-bg-color--light:   #1b1b1bb3;
+
+  --md-accent-fg-color:           #FFB3A7;
+  --md-accent-fg-color--transparent: rgba(255, 179, 167, 0.1);
+
+  --md-typeset-a-color:           #FF9D8F;
+}
