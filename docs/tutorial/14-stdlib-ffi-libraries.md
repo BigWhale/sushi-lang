@@ -106,7 +106,7 @@ Entry reads: Earth: Mostly Harmless
 
 Other modules you will reach for include `<env>` for environment variables, `<io/stdio>`
 for stream access, and `<collections/strings>` for UTF-8-aware string utilities. The
-[Standard Library reference](https://github.com/yourusername/sushi/blob/main/docs/standard-library.md)
+[Standard Library reference](../standard-library.md)
 lists them all.
 
 ## Variadic functions
@@ -203,7 +203,7 @@ printf reported 12 bytes written
 
 The full FFI guide — including the `ptr` type, the diagnostic codes CE5001–CE5005, and the
 C argument-promotion rules — lives in
-[the FFI documentation](https://github.com/yourusername/sushi/blob/main/docs/ffi.md).
+[the FFI documentation](../ffi.md).
 
 ## Building a library
 
@@ -269,7 +269,7 @@ answer() = 42
     the central **Omakase** repository at `omakase.lubica.net`. Be aware of the current
     limits: libraries have no transitive dependencies, are not portable across platforms,
     and do not share generic instantiations across the boundary. See the
-    [libraries guide](https://github.com/yourusername/sushi/blob/main/docs/libraries.md)
+    [libraries guide](../libraries.md)
     for the details.
 
 ## What you learned
@@ -294,14 +294,14 @@ That is the end of the tutorial — you have travelled from "Mostly Harmless" al
 linking C and shipping libraries. So long, and thanks for all the fish. From here, the
 reference documentation goes deeper than any tutorial can:
 
-- [Language Reference](https://github.com/yourusername/sushi/blob/main/docs/language-reference.md)
+- [Language Reference](../language-reference.md)
   — the complete grammar, types, and operators.
-- [Standard Library Reference](https://github.com/yourusername/sushi/blob/main/docs/standard-library.md)
+- [Standard Library Reference](../standard-library.md)
   — every module and function.
-- [FFI Guide](https://github.com/yourusername/sushi/blob/main/docs/ffi.md) and the
-  [Variadics Design Note](https://github.com/yourusername/sushi/blob/main/docs/design/variadics.md)
+- [FFI Guide](../ffi.md) and the
+  [Variadics Design Note](../design/variadics.md)
   — the full story behind this chapter.
-- [Libraries Guide](https://github.com/yourusername/sushi/blob/main/docs/libraries.md)
+- [Libraries Guide](../libraries.md)
   — building, distributing, and the `nori` packager.
 
 The compiler is still on your side. Go build something improbable.

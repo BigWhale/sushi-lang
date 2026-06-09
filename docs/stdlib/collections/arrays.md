@@ -97,16 +97,13 @@ arr.push(42)
 # arr is now [1, 2, 3, 42]
 ```
 
-### `.pop() -> Maybe<T>`
+### `.pop() -> T`
 
-Remove and return last element.
+Remove and return last element (returns the element's zero value if the array is empty).
 
 ```sushi
-match arr.pop():
-    Maybe.Some(last) ->
-        println("Popped: {last}")
-    Maybe.None() ->
-        println("Array is empty")
+let i32 last = arr.pop()
+println("Popped: {last}")
 ```
 
 ### `.capacity() -> i32`

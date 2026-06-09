@@ -1,6 +1,6 @@
 # Library Format Specification
 
-[← Back to Documentation](README.md) | [Libraries](libraries.md)
+[← Back to Documentation](index.md) | [Libraries](libraries.md)
 
 Technical specification for the `.slib` binary library format.
 

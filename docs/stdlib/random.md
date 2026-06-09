@@ -188,7 +188,7 @@ fn rand_f64_range(f64 min, f64 max) f64:
     return Result.Ok(min + (rand_f64() * (max - min)))
 
 fn main() i32:
-    let f64 temp = rand_f64_range(-10.0, 35.0)
+    let f64 temp = rand_f64_range(-10.0, 35.0)??
     println("Temperature: {temp}°C")
     return Result.Ok(0)
 ```

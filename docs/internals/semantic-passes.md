@@ -1,6 +1,6 @@
 # Semantic Analysis Passes
 
-[← Back to Documentation](../README.md) | [Architecture](architecture.md)
+[← Back to Documentation](../index.md) | [Architecture](architecture.md)
 
 Detailed documentation of Sushi's multi-pass semantic analysis pipeline.
 
@@ -387,19 +387,19 @@ Enforce memory safety rules for references.
 
 ```sushi
 let i32 x = 42
-let &i32 r1 = &x
-# let &i32 r2 = &x  # ERROR: x already borrowed
+let &peek i32 r1 = &peek x
+# let &peek i32 r2 = &peek x  # ERROR: x already borrowed
 ```
 
 2. **Cannot move/rebind while borrowed**
 
 ```sushi
-fn borrow(&i32 x) i32:
+fn borrow(&peek i32 x) i32:
     return Result.Ok(x)
 
 fn main() i32:
     let i32 num = 42
-    let i32 borrowed = borrow(&num)
+    let i32 borrowed = borrow(&peek num).realise(0)
     # num := 50  # ERROR CE1007: Cannot rebind while borrowed
     return Result.Ok(0)
 ```
@@ -408,11 +408,11 @@ fn main() i32:
 
 ```sushi
 # ERROR: Cannot borrow temporary expression
-# let i32 x = func(&(5 + 3))
+# let i32 x = func(&peek (5 + 3))
 
 # OK: Use variable
 let i32 temp = 5 + 3
-let i32 x = func(&temp)
+let i32 x = func(&peek temp)
 ```
 
 4. **Use-after-destroy detection**

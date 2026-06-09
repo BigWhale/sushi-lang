@@ -237,7 +237,7 @@ fn main() i32:
 ```sushi
 use <sys/process>
 
-fn require_root() Result<i32>:
+fn require_root() Result<i32, StdError>:
     let i32 uid = getuid()
 
     if (uid != 0):
@@ -457,7 +457,7 @@ Always check privileges before performing sensitive operations:
 ```sushi
 use <sys/process>
 
-fn require_non_root() Result<i32>:
+fn require_non_root() Result<i32, StdError>:
     let i32 uid = getuid()
 
     if (uid == 0):

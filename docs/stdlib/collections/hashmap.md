@@ -128,12 +128,12 @@ ages.free()
 ages.insert("Zaphod", 150)  # OK
 ```
 
-### `.rehash(i32 new_capacity) -> ~`
+### `.rehash() -> ~`
 
-Manually rehash with new capacity (must be power of 2).
+Rebuild the map at its current capacity, clearing out tombstones left by removals.
 
 ```sushi
-ages.rehash(64)  # Resize to capacity 64
+ages.rehash()  # Rebuild, removing tombstones
 ```
 
 ### `.debug() -> ~`
@@ -182,14 +182,14 @@ The hash function is auto-derived for all types:
 
 - Enum variants with dynamic array fields cause type system errors
 - Keys must be hashable (implement `.hash() -> u64`)
-- Manual rehash requires power-of-two capacity
+- `.rehash()` takes no arguments; it rebuilds at the current capacity (cannot resize to a chosen capacity)
 - `.keys()`/`.values()`/`.entries()` require the receiver to be a plain variable (no chaining)
 
 ## Best Practices
 
 - Use `.contains_key()` before `.get()` if you only need an existence check
 - Call `.free()` to reclaim memory when clearing large maps
-- Use `.rehash()` to pre-allocate capacity if final size is known
+- Use `.rehash()` to clear tombstones after many removals
 - Prefer string keys over complex types for best performance
 - Pattern match on `.get()` results to handle missing keys gracefully
 

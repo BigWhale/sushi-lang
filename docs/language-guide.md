@@ -1,6 +1,6 @@
 # Language Guide: A Tour of Sushi
 
-[← Back to Documentation](README.md)
+[← Back to Documentation](index.md)
 
 This guide provides a friendly tour of Sushi's features. If you're new to Sushi, start here before diving into the detailed [Language Reference](language-reference.md).
 
@@ -98,6 +98,8 @@ fn main() i32:
 Strings have full UTF-8 support:
 
 ```sushi
+use <collections/strings>
+
 fn main() i32:
     let string text = "Don't Panic"
     let string emoji = "🐬 🌍"
@@ -119,7 +121,7 @@ fn main() i32:
 - `.to_upper() -> string` - Convert to uppercase (ASCII only)
 - `.to_lower() -> string` - Convert to lowercase (ASCII only)
 
-See [Standard Library: String Methods](standard-library.md#string-methods) for detailed documentation.
+See [Standard Library: String Methods](standard-library.md) for detailed documentation.
 
 ### String Interpolation
 
@@ -264,11 +266,11 @@ Sushi uses `Result<T>` as its fundamental approach to error handling. Every func
 ```sushi
 fn divide(i32 a, i32 b) i32:
     if (b == 0):
-        return Result.Err()  # Error case
+        return Result.Err(StdError.Error)  # Error case
     return Result.Ok(a / b)  # Success case
 
 fn main() i32:
-    let Result<i32> result = divide(42, 6)
+    let Result<i32, StdError> result = divide(42, 6)
 
     # Check if successful
     if (result):
@@ -283,7 +285,7 @@ fn main() i32:
 **Key Concepts**:
 - When you declare a function returning `i32`, it actually returns `Result<i32>`
 - Success values must be wrapped: `return Result.Ok(value)`
-- Failures are signaled with: `return Result.Err()`
+- Failures are signaled with: `return Result.Err(StdError.Error)`
 - You can use `Result` values directly in conditionals: `if (result)` checks for success
 - The `.realise(default)` method extracts the value, using the default if the result is an error
 
@@ -318,7 +320,9 @@ The name "realise" reflects the operation of "making the value real" by extracti
 The `??` operator provides elegant error propagation - it unwraps successful results and automatically returns errors to the caller. This is one of Sushi's most powerful features for writing clean error-handling code:
 
 ```sushi
-fn read_config() string:
+use <io/files>
+
+fn read_config() string | FileError:
     # If open fails, ?? returns Err immediately
     let file f = open("config.txt", FileMode.Read())??
 
@@ -328,7 +332,7 @@ fn read_config() string:
     return Result.Ok(content)
 
 fn main() i32:
-    let Result<string> config = read_config()
+    let Result<string, FileError> config = read_config()
     # Handle config...
     return Result.Ok(0)
 ```
@@ -381,13 +385,18 @@ fn find_first_even(i32[] numbers) Maybe<i32>:
 
 fn main() i32:
     let i32[] data = from([1, 3, 5, 8])
-    let Maybe<i32> result = find_first_even(data)
+    # Functions return Result<T>, so find_first_even returns Result<Maybe<i32>>
+    let Result<Maybe<i32>, StdError> result = find_first_even(data)
 
     match result:
-        Maybe.Some(value) ->
-            println("Found: {value}")
-        Maybe.None() ->
-            println("No even numbers")
+        Result.Ok(found) ->
+            match found:
+                Maybe.Some(value) ->
+                    println("Found: {value}")
+                Maybe.None() ->
+                    println("No even numbers")
+        Result.Err(_) ->
+            println("Search failed")
 
     return Result.Ok(0)
 ```
@@ -483,6 +492,8 @@ fn main() i32:
 `HashMap<K, V>` provides O(1) average-case key-value lookups using open addressing with linear probing:
 
 ```sushi
+use <collections/hashmap>
+
 fn main() i32:
     let HashMap<string, i32> ages = HashMap.new()
 
@@ -556,11 +567,11 @@ Enums are sum types - a value can be exactly one variant at a time:
 ```sushi
 enum Status:
     Ready()
-    Working(i32 progress)
+    Working(i32)
     Done()
 
 fn main() i32:
-    let Status current = Status.Working(progress: 75)
+    let Status current = Status.Working(75)
 
     match current:
         Status.Ready() ->
@@ -600,8 +611,8 @@ Pattern matching is Sushi's way of deconstructing enums and handling different c
 
 ```sushi
 enum Response:
-    Success(i32 code)
-    Error(string message)
+    Success(i32)
+    Error(string)
 
 fn handle(Response resp) ~:
     match resp:
@@ -613,8 +624,8 @@ fn handle(Response resp) ~:
     return Result.Ok(~)
 
 fn main() i32:
-    handle(Response.Success(code: 200))
-    handle(Response.Error(message: "Not found"))
+    handle(Response.Success(200))
+    handle(Response.Error("Not found"))
     return Result.Ok(0)
 ```
 
@@ -682,17 +693,17 @@ Extension methods let you add functionality to existing types without modifying 
 
 ```sushi
 extend i32 squared() i32:
-    return Result.Ok(self * self)
+    return self * self
 
 extend string shout() string:
-    return Result.Ok(self + "!!!")
+    return "{self}!!!"
 
 fn main() i32:
     let i32 x = 7
-    println("Squared: {x.squared().realise(0)}")
+    println("Squared: {x.squared()}")
 
     let string msg = "Don't Panic"
-    println(msg.shout().realise(""))
+    println(msg.shout())
 
     return Result.Ok(0)
 ```
@@ -705,20 +716,20 @@ fn main() i32:
 
 **Generic Extension Methods**:
 ```sushi
-extend<T> List<T> first() Maybe<T>:
-    if (self.is_empty()):
-        return Result.Ok(Maybe.None())
-    return Result.Ok(self.get(0))
+struct Box<T>:
+    T value
+
+extend Box<T> unwrap() T:
+    return self.value
 
 fn main() i32:
-    let List<i32> numbers = List.new()
-    numbers.push(42)
-
-    let Maybe<i32> first = numbers.first()  # Uses generic extension
+    let Box<i32> b = Box(42)
+    let i32 value = b.unwrap()  # Uses generic extension
+    println("Unwrapped: {value}")
     return Result.Ok(0)
 ```
 
-Extension methods can be generic and work across all instantiations of a generic type. The compiler automatically instantiates the method for each type combination used in your program.
+Extension methods can be generic over user-defined generic structs: the type parameter (`T`) is declared on the receiver type (`Box<T>`), and the compiler automatically instantiates the method for each concrete type used in your program. (Generic extensions on built-in generic types such as `List<T>` are not currently supported.)
 
 **Benefits**:
 - **Namespace organization**: Group related functionality with the types they operate on
@@ -837,19 +848,29 @@ fn main() i32:
 `Own<T>` is Sushi's type for heap-allocated, owned values. It's essential for building recursive data structures like linked lists and trees, where a struct needs to contain an optional instance of itself:
 
 ```sushi
+struct Point:
+    i32 x
+    i32 y
+
+# Recursive struct: the optional next pointer is Maybe<Own<Node>>
 struct Node:
     i32 value
-    Own<Node> next
+    Maybe<Own<Node>> next
 
 fn main() i32:
-    let Node head = Node(value: 1, next: Own.alloc(Node(value: 2, next: Own.null())))
+    # Allocate a Point on the heap, then dereference it
+    let Own<Point> ptr = Own.alloc(Point(10, 20))
+    let Point loaded = ptr.get()
+    println("Point: ({loaded.x}, {loaded.y})")
 
+    # A linked-list node; next is an optional owned pointer
+    let Node head = Node(1, Maybe.None())
     println("Head: {head.value}")
 
-    # Access owned value
     if (head.next.is_some()):
-        let Node next = head.next.get()
-        println("Next: {next.value}")
+        println("List has more nodes")
+    else:
+        println("End of list")
 
     return Result.Ok(0)
 ```
@@ -858,11 +879,10 @@ fn main() i32:
 
 **Own<T> methods**:
 - `Own.alloc(value)` - Allocates `value` on the heap and returns an `Own<T>`
-- `Own.null()` - Creates an empty `Own<T>` (like `nullptr` in C++)
-- `.is_some()` - Returns `true` if the Own contains a value
-- `.is_null()` - Returns `true` if the Own is empty
-- `.get()` - Returns the contained value (unsafe if null)
-- `.destroy()` - Explicitly frees the heap memory
+- `.get()` - Returns the contained value
+- `.destroy()` - Explicitly frees the heap memory (RAII calls this automatically)
+
+`Own<T>` itself is always populated. To model an *optional* owned pointer (such as the `next` field of a list node), wrap it in `Maybe<Own<T>>` and use `Maybe.Some(...)` / `Maybe.None()` together with `.is_some()` / `.is_none()`.
 
 **Memory management with Own<T>**: `Own<T>` integrates with RAII - when an `Own<T>` goes out of scope, it automatically calls `.destroy()` on the contained value, freeing the heap memory. This means recursive structures are properly cleaned up when they go out of scope, even if they're deeply nested.
 
@@ -879,7 +899,7 @@ This guide covered the basics. For more details:
 - [Standard Library](standard-library.md) - All built-in types and methods
 - [Error Handling](error-handling.md) - Deep dive into Result and Maybe
 - [Memory Management](memory-management.md) - RAII, borrowing, and ownership
-- [Examples](examples/) - Hands-on code examples
+- [Examples](examples/README.md) - Hands-on code examples
 
 ---
 

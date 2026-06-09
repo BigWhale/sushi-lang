@@ -1,6 +1,6 @@
 # Standard Library Build Process
 
-[← Back to Documentation](../README.md) | [Architecture](architecture.md)
+[← Back to Documentation](../index.md) | [Architecture](architecture.md)
 
 Documentation for building and maintaining the Sushi standard library.
 

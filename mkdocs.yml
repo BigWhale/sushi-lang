@@ -1,6 +1,7 @@
-site_name: Sushi Tutorial
-site_description: A hands-on, progressive tutorial for the Sushi programming language.
-docs_dir: docs/tutorial
+site_name: Sushi Lang
+site_description: Documentation for the Sushi programming language — tutorial, language and standard-library reference, and compiler internals.
+site_url: https://bigwhale.github.io/sushi-lang/
+docs_dir: docs
 site_dir: site
 use_directory_urls: true
 
@@ -47,19 +48,69 @@ extra_css:
 plugins:
   - search
 
+# Kept in the repo but not built as site pages.
+exclude_docs: |
+  /README.md
+  sushi-pygments/
+  **/__pycache__/
+
+# Present in the build but intentionally not nav pages (no --strict warning).
+not_in_nav: |
+  examples/*.sushi
+  color-scheme.html
+
 nav:
-  - Welcome: index.md
-  - "1. Getting Started": 01-getting-started.md
-  - "2. Variables & Types": 02-variables-and-types.md
-  - "3. Control Flow": 03-control-flow.md
-  - "4. Functions": 04-functions.md
-  - "5. Strings": 05-strings.md
-  - "6. Error Handling": 06-error-handling.md
-  - "7. Arrays": 07-arrays.md
-  - "8. Structs & Enums": 08-structs-and-enums.md
-  - "9. Pattern Matching": 09-pattern-matching.md
-  - "10. Generics": 10-generics.md
-  - "11. Perks & Extensions": 11-perks-and-extensions.md
-  - "12. Memory Management": 12-memory-management.md
-  - "13. Collections": 13-collections.md
-  - "14. Stdlib, FFI & Libraries": 14-stdlib-ffi-libraries.md
+  - Home: index.md
+  - Tutorial:
+      - Overview: tutorial/index.md
+      - "1. Getting Started": tutorial/01-getting-started.md
+      - "2. Variables & Types": tutorial/02-variables-and-types.md
+      - "3. Control Flow": tutorial/03-control-flow.md
+      - "4. Functions": tutorial/04-functions.md
+      - "5. Strings": tutorial/05-strings.md
+      - "6. Error Handling": tutorial/06-error-handling.md
+      - "7. Arrays": tutorial/07-arrays.md
+      - "8. Structs & Enums": tutorial/08-structs-and-enums.md
+      - "9. Pattern Matching": tutorial/09-pattern-matching.md
+      - "10. Generics": tutorial/10-generics.md
+      - "11. Perks & Extensions": tutorial/11-perks-and-extensions.md
+      - "12. Memory Management": tutorial/12-memory-management.md
+      - "13. Collections": tutorial/13-collections.md
+      - "14. Stdlib, FFI & Libraries": tutorial/14-stdlib-ffi-libraries.md
+  - Guides:
+      - Getting Started: getting-started.md
+      - Language Guide: language-guide.md
+      - Error Handling: error-handling.md
+      - Memory Management: memory-management.md
+      - Generics: generics.md
+      - Perks: perks.md
+      - Foreign Function Interface: ffi.md
+  - Reference:
+      - Language Reference: language-reference.md
+      - Standard Library: standard-library.md
+      - Compiler Reference: compiler-reference.md
+      - Libraries: libraries.md
+      - Library Format: library-format.md
+      - Package Manager (Nori): package-manager.md
+  - Standard library:
+      - Result: stdlib/result.md
+      - Maybe: stdlib/maybe.md
+      - Arrays: stdlib/collections/arrays.md
+      - List: stdlib/collections/list.md
+      - HashMap: stdlib/collections/hashmap.md
+      - Strings: stdlib/collections/strings.md
+      - Console: stdlib/io/console.md
+      - Files: stdlib/io/files.md
+      - Math: stdlib/math.md
+      - Time: stdlib/time.md
+      - Random: stdlib/random.md
+      - Environment: stdlib/env.md
+      - Process: stdlib/process.md
+      - Platform: stdlib/platform.md
+  - Internals:
+      - Architecture: internals/architecture.md
+      - Semantic Passes: internals/semantic-passes.md
+      - Backend: internals/backend.md
+      - Stdlib Build: internals/stdlib-build.md
+      - "Variadics (design)": design/variadics.md
+  - Examples: examples/README.md

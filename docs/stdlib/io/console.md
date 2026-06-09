@@ -101,12 +101,12 @@ fn main() i32:
 
 Read input from standard input.
 
-#### stdin.read_line
+#### stdin.readln
 
 Read a line from stdin (blocks until newline).
 
 ```sushi
-fn stdin.read_line() -> string
+fn stdin.readln() -> string
 ```
 
 **Returns:**
@@ -119,7 +119,7 @@ use <io/stdio>
 
 fn main() i32:
     println("Enter your name:")
-    let string name = stdin.read_line()
+    let string name = stdin.readln()
 
     println("Hello, {name}!")
 
@@ -130,10 +130,11 @@ fn main() i32:
 
 ```sushi
 use <io/stdio>
+use <collections/strings>
 
 fn main() i32:
     println("Enter your age:")
-    let string age_str = stdin.read_line()
+    let string age_str = stdin.readln()
 
     match age_str.to_i32():
         Maybe.Some(age) ->
@@ -228,6 +229,7 @@ fn main() i32:
 
 ```sushi
 use <io/stdio>
+use <collections/strings>
 
 fn main() i32:
     # Write UTF-8 encoded text
@@ -257,6 +259,7 @@ fn stderr.write_bytes(u8[] data) -> ~
 
 ```sushi
 use <io/stdio>
+use <collections/strings>
 
 fn main() i32:
     let string error = "ERROR: Something went wrong\n"
@@ -270,6 +273,7 @@ fn main() i32:
 
 ```sushi
 use <io/stdio>
+use <collections/strings>
 
 fn log_error(string message) ~:
     let string formatted = "[ERROR] {message}\n"
@@ -311,6 +315,7 @@ Shell redirection works as expected:
 
 ```sushi
 use <io/stdio>
+use <collections/strings>
 
 fn log_info(string message) ~:
     println("[INFO] {message}")
@@ -318,7 +323,8 @@ fn log_info(string message) ~:
 
 fn log_error(string message) ~:
     let string formatted = "[ERROR] {message}\n"
-    stderr.write_bytes(formatted.to_bytes())
+    let u8[] bytes = formatted.to_bytes()
+    stderr.write_bytes(bytes)
     return Result.Ok(~)
 
 fn main() i32:
@@ -363,10 +369,12 @@ Standard error is unbuffered for immediate error visibility:
 
 ```sushi
 use <io/stdio>
+use <collections/strings>
 
 fn main() i32:
     # Appears immediately, even without newline
-    stderr.write_bytes("Error".to_bytes())
+    let u8[] bytes = "Error".to_bytes()
+    stderr.write_bytes(bytes)
 
     return Result.Ok(1)
 ```
@@ -388,6 +396,6 @@ fn main() i32:
 ## See Also
 
 - [File Operations](files.md) - File I/O operations
-- [String Methods](../../standard-library.md#string-methods) - String manipulation for input parsing
+- [String Methods](../../standard-library.md) - String manipulation for input parsing
 - [Standard Library Reference](../../standard-library.md) - Complete stdlib reference
 - [Error Handling](../../error-handling.md) - Result and Maybe types

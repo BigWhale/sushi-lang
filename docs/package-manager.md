@@ -1,6 +1,6 @@
 # Nori Package Manager
 
-[← Back to Documentation](README.md)
+[← Back to Documentation](index.md)
 
 Nori is the package manager for Sushi Lang. It handles packaging, installing, and managing precompiled Sushi libraries and executables. Nori ships alongside the compiler in the same distribution.
 

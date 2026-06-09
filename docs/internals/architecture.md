@@ -1,6 +1,6 @@
 # Compiler Architecture
 
-[← Back to Documentation](../README.md)
+[← Back to Documentation](../index.md)
 
 Internal documentation for Sushi compiler architecture and design.
 

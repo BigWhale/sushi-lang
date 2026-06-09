@@ -1,20 +1,20 @@
 # Error Handling
 
-[← Back to Documentation](README.md)
+[← Back to Documentation](index.md)
 
 Comprehensive guide to error handling in Sushi using `Result<T, E>`, `Maybe<T>`, and the `??` operator.
 
 ## Table of Contents
 
 - [Philosophy](#philosophy)
-- [Result<T, E>](#resultt-e)
+- [Result<T, E>](#result)
   - [Error Type Syntax](#error-type-syntax)
   - [Standard Error Enums](#standard-error-enums)
   - [Creating Results](#creating-results)
   - [Handling Results](#handling-results)
   - [Result Methods](#result-methods)
-- [Maybe<T>](#maybet)
-- [Error Propagation (??)](#error-propagation-)
+- [Maybe<T>](#maybe)
+- [Error Propagation (??)](#error-propagation)
 - [Patterns and Best Practices](#patterns-and-best-practices)
 
 ## Philosophy
@@ -147,7 +147,7 @@ fn main() i32 | MathError:
         Result.Err(MathError.DivisionByZero) ->
             println("Cannot divide by zero")
         Result.Err(e) ->
-            println("Other error: {e}")
+            println("Other error")
 
     return Result.Ok(0)
 ```
@@ -294,7 +294,7 @@ fn find_first_even(i32[] numbers) Maybe<i32>:
 
 fn main() i32:
     let i32[] data = from([1, 3, 5, 8, 9])
-    let Maybe<i32> result = find_first_even(data)
+    let Maybe<i32> result = find_first_even(data).realise(Maybe.None())
 
     match result:
         Maybe.Some(value) ->
@@ -326,6 +326,8 @@ Functions can return `Result<Maybe<T>, E>` for three states:
 3. **Failure**: `Result.Err(error)`
 
 ```sushi
+use <io/files>
+
 fn load_optional_config() Maybe<string>:
     match open("config.txt", FileMode.Read()):
         FileResult.Ok(f) ->
@@ -335,7 +337,7 @@ fn load_optional_config() Maybe<string>:
         FileResult.Err(FileError.NotFound()) ->
             return Result.Ok(Maybe.None())  # No config (OK!)
         FileResult.Err(_) ->
-            return Result.Err()  # Real error (permission, I/O)
+            return Result.Err(StdError.Error())  # Real error (permission, I/O)
 
 fn main() i32:
     let Maybe<string> config = load_optional_config().realise(Maybe.None())
@@ -368,7 +370,7 @@ fn read_config() string:
             f.close()
             return Result.Ok(content)
         FileResult.Err(_) ->
-            return Result.Err()
+            return Result.Err(StdError.Error())
 ```
 
 **With `??`:**
@@ -427,6 +429,8 @@ fn process_with_cleanup(bool succeed) i32:
 ### Using ?? with Maybe<T>
 
 ```sushi
+use <collections/strings>
+
 fn find_and_parse(string text) i32:
     # If find() returns None, ?? propagates as Err
     let i32 pos = text.find("x")??
@@ -508,9 +512,9 @@ match find_position():
 ```sushi
 fn validate_input(i32 x) i32:
     if (x < 0):
-        return Result.Err()
+        return Result.Err(StdError.Error())
     if (x > 100):
-        return Result.Err()
+        return Result.Err(StdError.Error())
 
     return Result.Ok(x * 2)
 ```
@@ -545,13 +549,14 @@ fn mid_level() i32:
 
 fn main() i32:
     # Handle at top level
-    let Result<i32> result = mid_level()
+    let Result<i32, StdError> result = mid_level()
 
     if (result):
-        println("Success: {result.realise(0)}")
+        let i32 value = result.realise(0)
+        println("Success: {value}")
     else:
         println("Pipeline failed")
-        return Result.Err()
+        return Result.Err(StdError.Error())
 
     return Result.Ok(0)
 ```
@@ -566,7 +571,7 @@ fn lookup(HashMap<string, i32> map, string key) Maybe<i32>:
     # 3. Internal error: Err()     - map corrupted, etc.
 
     if (map_is_corrupted()):
-        return Result.Err()
+        return Result.Err(StdError.Error())
 
     return Result.Ok(map.get(key))
 ```
@@ -580,12 +585,14 @@ fn get_config() string:
 
 # Good: Caller decides how to handle
 fn load_config() string:
-    return load()  # Returns Result<string>
+    let string data = load()??  # Forward the loaded value
+    return Result.Ok(data)
 
 fn main() i32:
-    let Result<string> config = load_config()
+    let Result<string, StdError> config = load_config()
     if (config):
-        println("Loaded: {config.realise("")}")
+        let string value = config.realise("")
+        println("Loaded: {value}")
     else:
         println("Using default config")
 
@@ -608,4 +615,4 @@ Common error codes related to error handling:
 **See also:**
 - [Standard Library](standard-library.md) - Complete Result<T> and Maybe<T> API
 - [Language Reference](language-reference.md) - Syntax details
-- [Examples](examples/) - Error handling patterns in practice
+- [Examples](examples/README.md) - Error handling patterns in practice

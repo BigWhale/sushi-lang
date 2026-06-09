@@ -136,7 +136,7 @@ match msleep(1000 as i64):
             println("Completed full sleep")
         else:
             println("Interrupted with {remaining}μs remaining")
-    Result.Err() ->
+    Result.Err(_) ->
         println("Sleep failed")
 ```
 
@@ -169,15 +169,15 @@ foreach(i in 0..100):
 
 **Retry with backoff:**
 ```sushi
-fn retry_operation() Result<i32>:
+fn retry_operation() Result<i32, StdError>:
     foreach(attempt in 0..5):
         match try_operation():
             Result.Ok(value) ->
                 return Result.Ok(value)
-            Result.Err() ->
+            Result.Err(_) ->
                 println("Attempt {attempt} failed, retrying...")
                 msleep(1000 as i64)??  # 1 second backoff
-    return Result.Err()
+    return Result.Err(StdError.Error)
 ```
 
 **Animation timing:**

@@ -1,6 +1,6 @@
 # Libraries
 
-[← Back to Documentation](README.md)
+[← Back to Documentation](index.md)
 
 Sushi supports compiling code to reusable libraries and linking them into programs. This enables code sharing, modular architecture, and faster incremental builds.
 
