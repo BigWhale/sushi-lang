@@ -77,6 +77,7 @@ nav:
       - "12. Memory Management": tutorial/12-memory-management.md
       - "13. Collections": tutorial/13-collections.md
       - "14. Stdlib, FFI & Libraries": tutorial/14-stdlib-ffi-libraries.md
+      - "15. Variadic Functions": tutorial/15-variadic-functions.md
   - Guides:
       - Getting Started: getting-started.md
       - Language Guide: language-guide.md
@@ -84,6 +85,7 @@ nav:
       - Memory Management: memory-management.md
       - Generics: generics.md
       - Perks: perks.md
+      - Variadics: variadics.md
       - Foreign Function Interface: ffi.md
   - Reference:
       - Language Reference: language-reference.md

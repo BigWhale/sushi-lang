@@ -1,0 +1,23 @@
+# A pack can follow ordinary fixed parameters. Here `label` is fixed and
+# `...Ts items` is the trailing pack.
+perk Render:
+    fn render() string
+
+extend i32 with Render:
+    fn render() string:
+        return "{self}"
+
+extend string with Render:
+    fn render() string:
+        return self
+
+fn log<...Ts: Render>(string label, ...Ts items) ~:
+    println("{label}:")
+    expand(it in items):
+        println("  - {it.render()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    log("mixed", 42, "towel", 7)
+    log("empty")                    # the pack is empty; only the label prints
+    return Result.Ok(0)

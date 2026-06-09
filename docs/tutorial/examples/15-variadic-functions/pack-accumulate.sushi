@@ -1,0 +1,31 @@
+# `expand` is not limited to printing: each unrolled copy is ordinary
+# straight-line code, so it can build up a value across the elements.
+perk Show:
+    fn show() string
+
+extend i32 with Show:
+    fn show() string:
+        return "{self}"
+
+extend string with Show:
+    fn show() string:
+        return self
+
+extend bool with Show:
+    fn show() string:
+        if (self):
+            return "true"
+        return "false"
+
+fn print_row<...Ts: Show>(...Ts cells) ~:
+    let string line = ""
+    expand(c in cells):
+        line := "{line}[{c.show()}]"
+    println(line)
+    return Result.Ok(~)
+
+fn main() i32:
+    print_row(1, "two", true)
+    print_row(42)
+    print_row()                     # nothing accumulated; prints an empty line
+    return Result.Ok(0)
