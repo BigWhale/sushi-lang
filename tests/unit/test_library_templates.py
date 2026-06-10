@@ -164,7 +164,7 @@ def test_closure_check_accepts_self_contained_generic(tmp_path):
 
     templates = gen._extract_templates([unit])
 
-    assert templates["version"] == 2
+    assert templates["version"] == 3
     assert templates["perks"] == []
     assert templates["perk_impls"] == []
     names = [g["name"] for g in templates["generic_functions"]]
@@ -429,7 +429,7 @@ def test_extract_templates_ships_only_referenced_perks(tmp_path):
     # max_of<T: Ord> references Ord, so Ord ships; Unused is never referenced.
     perk_names = [p["name"] for p in templates["perks"]]
     assert perk_names == ["Ord"]
-    # Perk implementations remain out of scope.
+    # This library defines no `extend ... with` blocks, so nothing ships.
     assert templates["perk_impls"] == []
     # The shipped perk round-trips back to its contract.
     rebuilt = deserialize_perk(templates["perks"][0])
@@ -717,3 +717,172 @@ def test_register_library_generic_struct_respects_local_definition():
 
     assert analyzer.generic_structs.by_name["Box"] is sentinel
     assert analyzer.generic_structs.order.count("Box") == 1
+
+
+# ---------------------------------------------------------------------------
+# C4a: concrete perk-impl shipping (templates.perk_impls)
+# ---------------------------------------------------------------------------
+
+from sushi_lang.backend.library_templates import (
+    serialize_perk_impl,
+    deserialize_perk_impl,
+    impl_method_symbol,
+)
+from sushi_lang.semantics.passes.collect import (
+    PerkTable,
+    PerkImplementationTable,
+    ExtensionTable,
+)
+
+
+IMPL_LIB_SRC = (
+    "perk Doubler:\n"
+    "    fn doubled() i32\n"
+    "\n"
+    "extend i32 with Doubler:\n"
+    "    fn doubled() i32:\n"
+    "        return self * 2\n"
+    "\n"
+    "public fn pick_bigger<T: Doubler>(T a, T b) T:\n"
+    "    if (a.doubled() > b.doubled()):\n"
+    "        return Result.Ok(a)\n"
+    "    return Result.Ok(b)\n"
+)
+
+
+def test_serialize_perk_impl_record_shape():
+    """The impl record carries type, perk, source, and per-method symbols."""
+    program, _ = parse_to_ast(IMPL_LIB_SRC)
+    impl = program.perk_impls[0]
+
+    record = serialize_perk_impl(impl, IMPL_LIB_SRC)
+
+    assert record["type"] == "i32"
+    assert record["perk"] == "Doubler"
+    assert record["source"].startswith("extend i32 with Doubler:")
+    assert record["source"].endswith("\n")
+    assert record["methods"] == [{"name": "doubled", "symbol": "i32_doubled"}]
+
+
+def test_perk_impl_round_trip():
+    """serialize -> deserialize yields the same impl signatures."""
+    program, _ = parse_to_ast(IMPL_LIB_SRC)
+    record = serialize_perk_impl(program.perk_impls[0], IMPL_LIB_SRC)
+
+    rebuilt = deserialize_perk_impl(record)
+
+    assert rebuilt.perk_name == "Doubler"
+    assert [m.name for m in rebuilt.methods] == ["doubled"]
+
+
+def test_impl_method_symbol_matches_extension_naming():
+    """The manifest symbol matches the backend's extension-method mangling
+    (get_extension_method_name): sanitized type name + "_" + method name."""
+    assert impl_method_symbol("i32", "doubled") == "i32_doubled"
+    assert impl_method_symbol("Box<i32>", "unwrap") == "Box__i32_unwrap"
+    assert impl_method_symbol("HashMap<string, i32>", "get") == "HashMap__string_i32_get"
+
+
+def test_extract_templates_ships_impl_of_referenced_perk(tmp_path):
+    """An impl of a constraint-referenced perk ships with symbol metadata."""
+    from sushi_lang.backend.library_manifest import LibraryManifestGenerator
+
+    unit = _make_unit(tmp_path, IMPL_LIB_SRC)
+    reporter = Reporter(source="", filename="lib")
+    gen = LibraryManifestGenerator(_StubAnalyzer(reporter))
+
+    templates = gen._extract_templates([unit])
+
+    assert templates["version"] == 3
+    assert [p["name"] for p in templates["perks"]] == ["Doubler"]
+    impls = templates["perk_impls"]
+    assert len(impls) == 1
+    assert impls[0]["type"] == "i32"
+    assert impls[0]["perk"] == "Doubler"
+    assert impls[0]["methods"][0]["symbol"] == "i32_doubled"
+
+
+def test_extract_templates_skips_impl_of_unreferenced_perk(tmp_path):
+    """An impl whose perk no exported generic constrains on stays internal."""
+    from sushi_lang.backend.library_manifest import LibraryManifestGenerator
+
+    src = (
+        "perk Internal:\n"
+        "    fn hidden() i32\n"
+        "\n"
+        "extend i32 with Internal:\n"
+        "    fn hidden() i32:\n"
+        "        return self\n"
+        "\n"
+        "public fn id<T>(T a) T:\n"
+        "    return Result.Ok(a)\n"
+    )
+    unit = _make_unit(tmp_path, src)
+    reporter = Reporter(source="", filename="lib")
+    gen = LibraryManifestGenerator(_StubAnalyzer(reporter))
+
+    templates = gen._extract_templates([unit])
+
+    assert templates["perks"] == []
+    assert templates["perk_impls"] == []
+
+
+def _impl_consumer_analyzer(record, perk_record) -> SemanticAnalyzer:
+    """Analyzer wired for _register_library_perk_impls in isolation."""
+    analyzer = _analyzer_with_loaded_libraries(
+        {"impllib": {"templates": {
+            "version": 3, "generic_functions": [], "generic_structs": [],
+            "generic_enums": [], "perks": [perk_record],
+            "perk_impls": [record],
+        }}}
+    )
+    analyzer.perks = PerkTable()
+    analyzer.perk_impls = PerkImplementationTable()
+    analyzer.extensions = ExtensionTable()
+    analyzer._seed_library_perks(analyzer.perks)
+    return analyzer
+
+
+def _impl_records():
+    program, _ = parse_to_ast(IMPL_LIB_SRC)
+    impl_record = serialize_perk_impl(program.perk_impls[0], IMPL_LIB_SRC)
+    perk_record = serialize_perk(program.perks[0], IMPL_LIB_SRC)
+    return impl_record, perk_record
+
+
+def test_register_library_perk_impl_lands_in_table():
+    """A shipped impl registers for constraint checks and dispatch."""
+    impl_record, perk_record = _impl_records()
+    analyzer = _impl_consumer_analyzer(impl_record, perk_record)
+
+    analyzer._register_library_perk_impls()
+
+    assert analyzer.perk_impls.implements("i32", "Doubler")
+    assert len(analyzer.library_perk_impls) == 1
+
+
+def test_register_library_perk_impl_respects_local_impl():
+    """A consumer's own impl of the same (type, perk) wins silently."""
+    impl_record, perk_record = _impl_records()
+    analyzer = _impl_consumer_analyzer(impl_record, perk_record)
+    local_program, _ = parse_to_ast(IMPL_LIB_SRC)
+    analyzer.perk_impls.register(local_program.perk_impls[0], "i32")
+
+    analyzer._register_library_perk_impls()
+
+    # Registered (the local one), but nothing queued for declare-only codegen.
+    assert analyzer.perk_impls.implements("i32", "Doubler")
+    assert analyzer.library_perk_impls == []
+
+
+def test_register_library_perk_impl_skips_on_extension_clash():
+    """A local extension method named like an impl method skips the library
+    impl entirely (the CE4007 ambiguity is never created)."""
+    impl_record, perk_record = _impl_records()
+    analyzer = _impl_consumer_analyzer(impl_record, perk_record)
+    analyzer.extensions.by_type.setdefault("i32", {})["doubled"] = object()
+
+    analyzer._register_library_perk_impls()
+
+    assert not analyzer.perk_impls.implements("i32", "Doubler")
+    assert analyzer.library_perk_impls == []

@@ -1,0 +1,22 @@
+# C4a precedence: the consumer's own `extend i32 with Doubler` wins over the
+# library-shipped impl, both semantically (local registration wins) and at
+# link time (the library's weak symbol yields to the local strong one). The
+# local impl NEGATES, so pick_bigger(3, 5) picks 3 - with the library's
+# doubling impl the result would be 5.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "3"
+
+use <lib/perk_impl_lib>
+
+extend i32 with Doubler:
+    fn doubled() i32:
+        return 0 - self
+
+fn run_test() i32:
+    let i32 m = pick_bigger(3, 5)??
+    return Result.Ok(m)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    println(result)
+    return Result.Ok(0)

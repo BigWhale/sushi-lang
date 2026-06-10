@@ -138,7 +138,43 @@ Variable-length raw LLVM bitcode (identical to `.bc` files).
         }
     ],
 
-    "dependencies": [str]              # Stdlib/library dependencies
+    "dependencies": [str],             # Stdlib/library dependencies
+
+    "templates": {                     # Instantiable cross-library templates
+        "version": 3,                  # Templates schema version
+
+        # Public generic functions (incl. variadic packs), as re-parsable
+        # source slices; monomorphized at the consumer's call sites.
+        "generic_functions": [
+            {
+                "name": str,
+                "type_params": [{"name": str, "constraints": [str], "is_pack": bool}],
+                "source": str,         # Self-contained, re-parsable decl text
+                "free_perks": [str]    # Perk names from type-param bounds
+            }
+        ],
+
+        # Generic structs/enums, same record shape as generic_functions.
+        "generic_structs": [ ... ],
+        "generic_enums": [ ... ],
+
+        # Perk DEFINITIONS referenced by exported generics' constraints.
+        "perks": [
+            {"name": str, "source": str}
+        ],
+
+        # Concrete perk IMPLEMENTATIONS of those perks (v3). Bodies live in
+        # the bitcode (weak linkage); the record carries signatures (source)
+        # and symbol names for declare-and-link at the consumer.
+        "perk_impls": [
+            {
+                "type": str,           # Concrete target type name
+                "perk": str,
+                "source": str,         # The whole `extend T with P:` block
+                "methods": [{"name": str, "symbol": str}]
+            }
+        ]
+    }
 }
 ```
 

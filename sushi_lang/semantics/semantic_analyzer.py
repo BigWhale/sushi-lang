@@ -48,6 +48,7 @@ class SemanticAnalyzer:
         self.generic_extensions: Optional['GenericExtensionTable'] = None
         self.generic_funcs: Optional[GenericFunctionTable] = None
         self.monomorphized_extensions: list['ExtendDef'] = []  # Concrete ExtendDef nodes for codegen
+        self.library_perk_impls: list['ExtendWithDef'] = []  # Library-shipped impls registered here (declare-only at codegen)
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
 
     def check(self, program: Program) -> None:
@@ -287,6 +288,10 @@ class SemanticAnalyzer:
             # NOTE: shipped library perk DEFINITIONS are seeded earlier, before
             # the consumer's perk-impl collection (see _seed_library_perks call
             # in the Phase 0 loop above); they are already in self.perks here.
+            # Library perk IMPLEMENTATIONS register here, after the consumer's
+            # own impls (local wins) and before Pass 1.5/1.6 so the constraint
+            # validator sees them at monomorphization.
+            self._register_library_perk_impls()
             self._register_library_generic_functions()
             # Generic struct/enum templates: structs first (enum payloads may
             # reference structs), then enums. Registered before Pass 1.5 so the
@@ -588,6 +593,70 @@ class SemanticAnalyzer:
 
                 perk_table.by_name[perk_name] = perk_def
                 perk_table.order.append(perk_name)
+
+    def _register_library_perk_impls(self) -> None:
+        """Register concrete perk IMPLEMENTATIONS shipped by loaded libraries.
+
+        C4a: each library may ship its own concrete ``extend T with Perk``
+        blocks for the perks its exported generics constrain on, under
+        ``templates.perk_impls``. Registering them in the consumer's perk-impl
+        table makes the constraint validator (CE4006) and method dispatch see
+        the impl; the bodies are NOT re-emitted - codegen declares the method
+        symbols and the definitions resolve from the library bitcode at link
+        time (they carry weak linkage there, so a local impl wins).
+
+        Precedence (all silent, mirroring the other registration helpers):
+        - A consumer's own impl of the same (type, perk) wins outright.
+        - Across multiple libraries shipping the same impl, the first
+          registered wins.
+        - If a local extension method on the target type already uses one of
+          the impl's method names, the library impl is skipped entirely:
+          registering it would create exactly the dispatch ambiguity CE4007
+          exists to prevent, but erroring would make adding an impl to a
+          library a breaking change for consumers. (If the consumer then needs
+          the perk, writing its own ``extend`` triggers the normal in-program
+          CE4007 with a proper source span.)
+        """
+        if self.perk_impls is None or self.perks is None or self.library_linker is None:
+            return
+
+        from sushi_lang.backend.library_templates import deserialize_perk_impl
+
+        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+            templates = manifest.get("templates") or {}
+            for record in templates.get("perk_impls", []) or []:
+                type_name = record.get("type")
+                perk_name = record.get("perk")
+                if not type_name or not perk_name:
+                    continue
+                # Defensive: the shipping rule guarantees the perk definition
+                # ships alongside, but a hand-edited manifest may not honor it.
+                if perk_name not in self.perks.by_name:
+                    continue
+                # Local (or earlier-library) impl wins.
+                if self.perk_impls.implements(type_name, perk_name):
+                    continue
+                # CE4007 interplay: skip on a method-name clash with a local
+                # extension method on the same type.
+                existing_methods = (
+                    self.extensions.by_type.get(type_name, {})
+                    if self.extensions is not None else {}
+                )
+                method_names = [
+                    m.get("name") for m in record.get("methods", []) or []
+                ]
+                if any(name in existing_methods for name in method_names):
+                    continue
+
+                try:
+                    impl = deserialize_perk_impl(record)
+                except Exception:
+                    # The snippet failed to re-parse; skip rather than crash
+                    # the consumer build (the consumer can supply its own impl).
+                    continue
+
+                if self.perk_impls.register(impl, type_name):
+                    self.library_perk_impls.append(impl)
 
     def _register_library_generic_functions(self) -> None:
         """Register generic function templates from loaded libraries.

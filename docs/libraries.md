@@ -341,28 +341,39 @@ Current limitations of the library system:
 
 1. **No transitive dependencies**: If library A depends on library B, you must import both explicitly
 2. **Platform-specific**: Libraries compiled on macOS cannot be used on Linux (and vice versa)
-3. **Generic instantiation across libraries (functions and variadic packs)**: Regular generic
-   *functions* and *variadic-generic pack* functions (`...Ts`) can be instantiated across `.slib`
+3. **Generic instantiation across libraries**: Regular generic *functions*, *variadic-generic
+   pack* functions (`...Ts`), and generic *structs*/*enums* can be instantiated across `.slib`
    boundaries. The library producer ships a re-parsable source template in the `.slib` `templates`
-   section (format VERSION 2); the consumer re-parses it, registers it alongside its own
+   section (templates version 3); the consumer re-parses it, registers it alongside its own
    definitions, and monomorphizes it at consumer call sites using the standard Pass 1.5/1.6
    machinery. A pack function carries `type_params` (the `...Ts` is recorded with `is_pack`), so it
    ships as a template and is monomorphized per call site exactly like a regular generic. Perk
    *definitions* are also shipped so consumers do not need to redeclare a perk contract that
-   originates in the library (they still supply their own `extend <type> with <Perk>` implementation
-   for each instantiation type). Constraint re-checking uses `CE4006` against the consumer's
+   originates in the library. Constraint re-checking uses `CE4006` against the consumer's
    perk-impl table.
+
+   **Perk implementations also ship** (concrete impls only): a library's own
+   `extend <ConcreteType> with <Perk>:` block for a shipped perk crosses the boundary, so a
+   consumer can instantiate e.g. `pick_bigger<T: Doubler>` at `i32` without writing
+   `extend i32 with Doubler` itself. The impl's bodies are not re-compiled at the consumer - its
+   signatures register for constraint checking and dispatch, the method symbols are declared, and
+   the definitions link from the library bitcode (where they carry weak linkage). Precedence:
+   a consumer's own impl of the same `(type, perk)` always wins, both semantically and at link
+   time; across multiple libraries shipping the same impl, the first registered wins; if a local
+   extension method on the target type already uses one of the impl's method names, the library
+   impl is skipped entirely (write your own `extend` to opt in, which surfaces the normal
+   `CE4007` conflict diagnostics). Only impls of perks referenced by an exported generic's
+   constraints ship; impls of library-internal perks stay internal.
 
    Remaining restrictions:
    - **Self-contained generics only**: a public generic whose body references a library-private
      symbol is rejected at library-build time with **CE5006**. This bounds the feature to generics
      that carry all their dependencies with them.
-   - **Perk-impl shipping deferred**: perk *implementations* (extension bodies) are not yet shipped
-     across library boundaries (transitive-symbol linkage problem). Consumers supply their own impls.
+   - **Generic-target perk impls do not ship**: `extend <Generic<T>> with <Perk>` is not supported
+     in-program, so only concrete-target impls cross the boundary.
    - **Native variadics (`...T`) are not exportable**: a v1 native variadic collects into a runtime
      `T[]` inside one concrete function (no template to monomorphize), so public export is rejected
      with **CE0116**. This is distinct from a v2 type pack (`...Ts`), which exports as a template.
-   - Generic *structs* and *enums* across library boundaries are also not yet supported.
 
 These limitations may be addressed in future versions.
 
