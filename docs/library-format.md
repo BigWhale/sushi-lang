@@ -141,16 +141,19 @@ Variable-length raw LLVM bitcode (identical to `.bc` files).
     "dependencies": [str],             # Stdlib/library dependencies
 
     "templates": {                     # Instantiable cross-library templates
-        "version": 3,                  # Templates schema version
+        "version": 4,                  # Templates schema version
 
-        # Public generic functions (incl. variadic packs), as re-parsable
-        # source slices; monomorphized at the consumer's call sites.
+        # Generic functions (incl. variadic packs), as re-parsable source
+        # slices; monomorphized at the consumer's call sites. Public ones plus
+        # export-closure PRIVATE helpers (flagged "private": true - the
+        # consumer applies CE5007 clash, not local-wins, semantics to those).
         "generic_functions": [
             {
                 "name": str,
                 "type_params": [{"name": str, "constraints": [str], "is_pack": bool}],
                 "source": str,         # Self-contained, re-parsable decl text
-                "free_perks": [str]    # Perk names from type-param bounds
+                "free_perks": [str],   # Perk names from type-param bounds
+                "private": bool        # Present (true) for closure-shipped helpers
             }
         ],
 
@@ -173,7 +176,27 @@ Variable-length raw LLVM bitcode (identical to `.bc` files).
                 "source": str,         # The whole `extend T with P:` block
                 "methods": [{"name": str, "symbol": str}]
             }
-        ]
+        ],
+
+        # Export closure (v4): private symbols exported generics transitively
+        # reference. Concrete helpers ship as signature records (definitions
+        # carry external linkage in the bitcode); constants ship with source
+        # (the consumer needs the value for compile-time evaluation).
+        "private_functions": [
+            {
+                "name": str,
+                "params": [{"name": str, "type": str}],
+                "return_type": str
+            }
+        ],
+        "constants": [
+            {"name": str, "source": str}
+        ],
+        "closure_summary": {           # What shipped, by kind (sorted names)
+            "private_functions": [str],
+            "private_generic_functions": [str],
+            "constants": [str]
+        }
     }
 }
 ```

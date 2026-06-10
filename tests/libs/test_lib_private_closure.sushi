@@ -1,0 +1,25 @@
+# C5 acceptance: the library's compute<T> depends on library-PRIVATE symbols
+# (a constant, a struct, a recursive concrete helper, a concrete helper, and
+# a private generic helper). The export closure ships them all, so this
+# consumer instantiation works; before C5 the library itself failed to build
+# with CE5006.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "10"
+# EXPECT_STDOUT_CONTAINS: "first"
+
+use <lib/private_closure_lib>
+
+fn run_i32() i32:
+    let i32 m = compute(10, 20)??
+    return Result.Ok(m)
+
+fn run_string() string:
+    let string s = compute("first", "second")??
+    return Result.Ok(s)
+
+fn main() i32:
+    let i32 r = run_i32().realise(99)
+    println(r)
+    let string s = run_string().realise("fail")
+    println(s)
+    return Result.Ok(0)

@@ -418,6 +418,7 @@ class LLVMCodegen:
         opt: str = "mem2reg",
         verify: bool = True,
         monomorphized_extensions: list['ExtendDef'] = None,
+        exported_private_functions: set[str] = frozenset(),
     ) -> bytes:
         """Compile units to LLVM bitcode without linking to executable.
 
@@ -449,6 +450,16 @@ class LLVMCodegen:
         # link time instead of producing a duplicate-symbol error on the
         # incremental cc path.
         _set_weak_odr_on_perk_impls(mod_ir, units)
+
+        # Export-closure private functions (C4b/C5) are emitted with internal
+        # linkage like any private function, but their definitions must
+        # resolve consumer call sites at link time - promote them to external.
+        # (Consumer same-name definitions are rejected with CE5007, so no
+        # collision is possible.)
+        for name in exported_private_functions:
+            fn = mod_ir.globals.get(name)
+            if fn is not None and isinstance(fn, ir.Function) and not fn.is_declaration:
+                fn.linkage = "external"
 
         if debug:
             print(";; Library IR (pre-opt)")
@@ -1031,10 +1042,19 @@ class LLVMCodegen:
                 self.function_return_types[func_name] = result_type
 
     def _declare_library_functions_from_registry(self) -> None:
-        """Declare library functions using pre-parsed FuncSig from registry."""
+        """Declare library functions using pre-parsed FuncSig from registry.
+
+        Covers both public functions and export-closure private helpers
+        (C4b/C5) - either way the definition lives in the library bitcode and
+        the consumer module only needs an external declaration.
+        """
         from sushi_lang.semantics.typesys import ResultType
 
-        for func_name, func_sig in self.library_registry.get_all_functions().items():
+        all_sigs = dict(self.library_registry.get_all_functions())
+        for name, (_lib, sig) in self.library_registry.get_all_private_functions().items():
+            all_sigs.setdefault(name, sig)
+
+        for func_name, func_sig in all_sigs.items():
             if func_name in self.funcs:
                 continue
 

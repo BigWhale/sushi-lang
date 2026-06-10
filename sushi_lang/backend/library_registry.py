@@ -24,6 +24,11 @@ class LibraryMetadata:
     platform: str
     version: str
     functions: dict[str, 'FuncSig'] = field(default_factory=dict)
+    # Export-closure private helpers (C4b/C5): signature-only records whose
+    # definitions link from the library bitcode. Kept separate from
+    # `functions` because the consumer applies clash (CE5007), not
+    # local-wins, semantics to them.
+    private_functions: dict[str, 'FuncSig'] = field(default_factory=dict)
     structs: dict[str, StructType] = field(default_factory=dict)
     enums: dict[str, EnumType] = field(default_factory=dict)
     dependencies: list[str] = field(default_factory=list)
@@ -84,6 +89,11 @@ class LibraryRegistry:
         self._enum_table.update(metadata.enums)
 
         metadata.functions = self._parse_functions(manifest.get("public_functions", []))
+
+        templates = manifest.get("templates") or {}
+        metadata.private_functions = self._parse_functions(
+            templates.get("private_functions", []) or []
+        )
 
         self._libraries[lib_name] = metadata
         return metadata
@@ -186,6 +196,17 @@ class LibraryRegistry:
         result = {}
         for lib in self._libraries.values():
             result.update(lib.functions)
+        return result
+
+    def get_all_private_functions(self) -> dict[str, tuple[str, 'FuncSig']]:
+        """Get all export-closure private functions (name -> (lib_name, FuncSig)).
+
+        The library name rides along for the consumer's CE5007 diagnostic.
+        """
+        result = {}
+        for lib in self._libraries.values():
+            for name, sig in lib.private_functions.items():
+                result[name] = (lib.name, sig)
         return result
 
     def get_all_structs(self) -> dict[str, StructType]:

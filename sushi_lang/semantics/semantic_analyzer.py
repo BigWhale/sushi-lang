@@ -285,6 +285,11 @@ class SemanticAnalyzer:
             self._register_library_structs()
             self._register_library_enums()
             self._register_library_functions()
+            # Export-closure private helpers and constants (C4b/C5): clash
+            # with a local name is CE5007 (local-wins would silently change
+            # what the library's monomorphized bodies call).
+            self._register_library_private_functions()
+            self._register_library_constants(compilation_order)
             # NOTE: shipped library perk DEFINITIONS are seeded earlier, before
             # the consumer's perk-impl collection (see _seed_library_perks call
             # in the Phase 0 loop above); they are already in self.perks here.
@@ -540,6 +545,92 @@ class SemanticAnalyzer:
                 self.funcs.by_name[func_name] = func_sig
                 self.funcs.order.append(func_name)
 
+    def _register_library_private_functions(self) -> None:
+        """Register export-closure private helpers from loaded libraries (C4b/C5).
+
+        A library generic's body may call library-private concrete helpers;
+        these ship as signature-only records (``templates.private_functions``)
+        and their definitions link from the library bitcode. Registering the
+        signature here lets the consumer's type checker validate the
+        monomorphized body's call sites.
+
+        Unlike every other registration helper, a name clash is an ERROR
+        (CE5007), not local-wins: the library's monomorphized body calls the
+        symbol by name, so a local function shadowing it would silently change
+        the library's behavior.
+        """
+        if self.funcs is None or self.library_registry is None:
+            return
+
+        import sushi_lang.internals.errors as er
+
+        for name, (lib_name, sig) in self.library_registry.get_all_private_functions().items():
+            existing = self.funcs.by_name.get(name)
+            if existing is not None:
+                er.emit(self.reporter, er.ERR.CE5007,
+                        getattr(existing, "name_span", None),
+                        lib=lib_name, name=name)
+                continue
+            self.funcs.by_name[name] = sig
+            self.funcs.order.append(name)
+
+    def _register_library_constants(self, compilation_order) -> None:
+        """Register export-closure constants from loaded libraries (C4b/C5).
+
+        Shipped with their source (``templates.constants``) because the
+        consumer needs the VALUE for compile-time evaluation. Each record is
+        re-parsed; its signature merges into the constant table and its
+        ``ConstDef`` is appended to the first unit's AST so both codegen paths
+        emit the global (constants are emitted with internal linkage per
+        module, so re-emission alongside the library bitcode cannot collide).
+
+        Name clashes are CE5007, same rationale as private functions.
+        """
+        if self.constants is None or self.library_linker is None:
+            return
+
+        import sushi_lang.internals.errors as er
+        from sushi_lang.internals.parser import parse_to_ast
+        from sushi_lang.semantics.passes.collect import CollectorPass
+
+        host_unit = next(
+            (u for u in compilation_order if u.ast is not None), None
+        )
+        if host_unit is None:
+            return
+
+        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+            templates = manifest.get("templates") or {}
+            for record in templates.get("constants", []) or []:
+                const_name = record.get("name")
+                source = record.get("source")
+                if not const_name or not source:
+                    continue
+
+                existing = self.constants.by_name.get(const_name)
+                if existing is not None:
+                    er.emit(self.reporter, er.ERR.CE5007,
+                            getattr(existing, "name_span", None),
+                            lib=lib_name, name=const_name)
+                    continue
+
+                program, _tree = parse_to_ast(source)
+                throwaway = Reporter(
+                    source=source, filename=f"<const:{lib_name}:{const_name}>")
+                collected = CollectorPass(throwaway).run(program, unit_name=lib_name)
+                const_table = collected[0]  # ConstantTable
+
+                sig = const_table.by_name.get(const_name)
+                const_defs = program.constants or []
+                if sig is None or len(const_defs) != 1:
+                    # The snippet failed to collect as a constant; skip rather
+                    # than crash the consumer build.
+                    continue
+
+                self.constants.by_name[const_name] = sig
+                self.constants.order.append(const_name)
+                host_unit.ast.constants.append(const_defs[0])
+
     def _seed_library_perks(self, perk_table) -> None:
         """Seed perk DEFINITIONS shipped by loaded libraries into ``perk_table``.
 
@@ -679,11 +770,22 @@ class SemanticAnalyzer:
         from sushi_lang.internals.parser import parse_to_ast
         from sushi_lang.semantics.passes.collect import CollectorPass
 
+        import sushi_lang.internals.errors as er
+
         for lib_name, manifest in self.library_linker.loaded_libraries.items():
             templates = manifest.get("templates") or {}
             for record in templates.get("generic_functions", []):
                 func_name = record["name"]
                 if func_name in self.generic_funcs.by_name:
+                    # Public templates: local definitions win silently. An
+                    # export-closure PRIVATE template (C4b/C5) must keep its
+                    # name - shadowing it would change what the library's
+                    # other shipped bodies call (CE5007).
+                    if record.get("private"):
+                        existing = self.generic_funcs.by_name[func_name]
+                        er.emit(self.reporter, er.ERR.CE5007,
+                                getattr(existing, "name_span", None),
+                                lib=lib_name, name=func_name)
                     continue
 
                 source = record.get("source")

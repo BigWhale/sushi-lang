@@ -3,8 +3,9 @@
 The locked design reconstructs an imported generic at the consumer by
 **re-parsing its source text** through the existing frontend. These tests are
 the spike that proves the producer-side source slice is self-contained and
-re-parses into a structurally-identical generic, and that the producer closure
-check (CE5006) rejects a generic whose body references a library-private symbol.
+re-parses into a structurally-identical generic, and that the producer's
+export-closure walk ships the library-private symbols a generic references
+(rejecting only genuinely un-shippable ones with CE5006).
 """
 from __future__ import annotations
 
@@ -164,7 +165,7 @@ def test_closure_check_accepts_self_contained_generic(tmp_path):
 
     templates = gen._extract_templates([unit])
 
-    assert templates["version"] == 3
+    assert templates["version"] == 4
     assert templates["perks"] == []
     assert templates["perk_impls"] == []
     names = [g["name"] for g in templates["generic_functions"]]
@@ -258,8 +259,9 @@ def test_v2_pack_public_function_allowed_as_template(tmp_path):
     assert not any(item.code == "CE0116" for item in reporter.items)
 
 
-def test_closure_check_rejects_private_helper_reference(tmp_path):
-    """A public generic calling a private helper aborts the export with CE5006."""
+def test_closure_ships_private_helper_reference(tmp_path):
+    """C4b/C5: a public generic calling a private helper SHIPS the helper as
+    a signature record instead of rejecting the export (the old CE5006)."""
     from sushi_lang.backend.library_manifest import LibraryManifestGenerator
 
     src = (
@@ -273,10 +275,14 @@ def test_closure_check_rejects_private_helper_reference(tmp_path):
     reporter = Reporter(source="", filename="lib")
     gen = LibraryManifestGenerator(_StubAnalyzer(reporter))
 
-    with pytest.raises(ValueError):
-        gen._extract_templates([unit])
+    templates = gen._extract_templates([unit])
 
-    assert any(item.code == "CE5006" for item in reporter.items)
+    assert not any(item.code == "CE5006" for item in reporter.items)
+    assert [f["name"] for f in templates["private_functions"]] == ["secret"]
+    assert templates["private_functions"][0]["params"] == [
+        {"name": "x", "type": "i32"}
+    ]
+    assert templates["closure_summary"]["private_functions"] == ["secret"]
 
 
 # ---------------------------------------------------------------------------
@@ -646,8 +652,10 @@ def test_closure_check_allows_co_shipped_generic_type_field(tmp_path):
     assert not any(item.code == "CE5006" for item in reporter.items)
 
 
-def test_closure_check_rejects_private_type_field(tmp_path):
-    """A generic struct with a field of a (private) concrete type aborts CE5006."""
+def test_closure_allows_concrete_type_field(tmp_path):
+    """C4b/C5: a generic struct with a concrete-type field exports fine - the
+    concrete struct already ships in the manifest's type sections and is
+    registered at the consumer (the old behavior rejected this with CE5006)."""
     from sushi_lang.backend.library_manifest import LibraryManifestGenerator
 
     src = (
@@ -662,10 +670,12 @@ def test_closure_check_rejects_private_type_field(tmp_path):
     reporter = Reporter(source="", filename="lib")
     gen = LibraryManifestGenerator(_StubAnalyzer(reporter))
 
-    with pytest.raises(ValueError):
-        gen._extract_templates([unit])
+    templates = gen._extract_templates([unit])
 
-    assert any(item.code == "CE5006" for item in reporter.items)
+    assert not any(item.code == "CE5006" for item in reporter.items)
+    assert [t["name"] for t in templates["generic_structs"]] == ["Leaky"]
+    # Secret is not a closure record - it rides the concrete struct section.
+    assert templates["closure_summary"]["private_functions"] == []
 
 
 def test_register_library_generic_struct_lands_in_table():
@@ -793,7 +803,7 @@ def test_extract_templates_ships_impl_of_referenced_perk(tmp_path):
 
     templates = gen._extract_templates([unit])
 
-    assert templates["version"] == 3
+    assert templates["version"] == 4
     assert [p["name"] for p in templates["perks"]] == ["Doubler"]
     impls = templates["perk_impls"]
     assert len(impls) == 1

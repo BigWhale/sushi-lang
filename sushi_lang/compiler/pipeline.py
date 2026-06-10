@@ -215,14 +215,25 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
     monomorphized_extensions = getattr(analyzer, 'monomorphized_extensions', [])
 
     if is_library:
+        # Extract the templates section FIRST: the export closure decides
+        # which private functions must carry external (not internal) linkage
+        # in the bitcode (their definitions resolve consumer call sites at
+        # link time), and any CE5006 rejection aborts before the expensive
+        # bitcode compilation.
+        from sushi_lang.backend.library_manifest import LibraryManifestGenerator
+        manifest_gen = LibraryManifestGenerator(analyzer)
+        templates = manifest_gen._extract_templates(compilation_order)
+        closure_fn_names = set(
+            (templates.get("closure_summary") or {}).get("private_functions", [])
+        )
+
         bitcode = cg.compile_to_bitcode(compilation_order,
                                         debug=bool(args.dump_ll), opt=args.opt,
                                         verify=not args.no_verify,
-                                        monomorphized_extensions=monomorphized_extensions)
+                                        monomorphized_extensions=monomorphized_extensions,
+                                        exported_private_functions=closure_fn_names)
 
-        from sushi_lang.backend.library_manifest import LibraryManifestGenerator
-        manifest_gen = LibraryManifestGenerator(analyzer)
-        manifest_gen.generate(compilation_order, out_path, bitcode)
+        manifest_gen.generate(compilation_order, out_path, bitcode, templates=templates)
 
         if args.write_ll:
             try:

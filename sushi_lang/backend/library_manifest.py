@@ -27,13 +27,18 @@ class LibraryManifestGenerator:
         self.structs = analyzer.structs
         self.enums = analyzer.enums
 
-    def generate(self, units: list['Unit'], output_path: Path, bitcode: bytes) -> None:
+    def generate(self, units: list['Unit'], output_path: Path, bitcode: bytes,
+                 templates: dict | None = None) -> None:
         """Generate .slib library file.
 
         Args:
             units: Compilation units in library.
             output_path: Path to .slib file (e.g., mylib.slib).
             bitcode: LLVM bitcode bytes.
+            templates: Pre-computed ``_extract_templates`` result. The pipeline
+                computes it BEFORE bitcode compilation (the export closure
+                decides which private functions need external linkage in the
+                bitcode) and passes it here to avoid extracting twice.
         """
         from sushi_lang.backend.platform_detect import get_current_platform
         from sushi_lang.internals.version import _get_versions
@@ -56,7 +61,7 @@ class LibraryManifestGenerator:
             "public_constants": self._extract_public_constants(units),
             "structs": self._extract_structs(units),
             "enums": self._extract_enums(units),
-            "templates": self._extract_templates(units),
+            "templates": templates if templates is not None else self._extract_templates(units),
             "dependencies": self._extract_dependencies(units),
         }
 
@@ -239,31 +244,6 @@ class LibraryManifestGenerator:
 
         return enums
 
-    def _collect_private_symbols(self, units: list['Unit']) -> set[str]:
-        """Collect names of library-PRIVATE top-level symbols across all units.
-
-        A symbol is library-private when it is a function declared without
-        `public`, or any struct / enum / constant (these have no public marker
-        and therefore never cross the .slib boundary in this phase). A public
-        generic body may freely reference its own parameters, language builtins,
-        and other PUBLIC symbols; referencing any of these private names would
-        be unresolvable at the consumer and aborts the export (CE5006).
-        """
-        private: set[str] = set()
-        for unit in units:
-            if unit.ast is None:
-                continue
-            for fn in unit.ast.functions:
-                if not getattr(fn, "is_public", False):
-                    private.add(fn.name)
-            for s in unit.ast.structs:
-                private.add(s.name)
-            for e in unit.ast.enums:
-                private.add(e.name)
-            for c in unit.ast.constants:
-                private.add(c.name)
-        return private
-
     def _scan_referenced_symbols(self, node, acc: set[str]) -> None:
         """Walk a body AST collecting referenced free symbol names.
 
@@ -330,73 +310,138 @@ class LibraryManifestGenerator:
             for f in dataclasses.fields(node):
                 self._scan_referenced_type_names(getattr(node, f.name, None), acc)
 
-    def _check_generic_export_closure(
-        self, func, private_symbols: set[str], allowed: set[str] = frozenset()
-    ) -> None:
-        """Reject (CE5006) a public generic whose body references a private symbol.
+    def _compute_export_closure(self, units: list['Unit'], exported: list) -> dict:
+        """Walk every exported generic and collect the library-private symbols
+        its body (transitively) depends on - the EXPORT CLOSURE (C4b/C5).
 
-        Bounds this milestone to self-contained generics: the re-parsed template
-        is monomorphized at the consumer, which has no visibility into the
-        library's private functions/types/constants. ``allowed`` lists co-shipped
-        public templates (generic struct/enum names) that a body may freely
-        reference even though they also appear in ``private_symbols``.
+        Each private dependency ships so the consumer can monomorphize the
+        generic without visibility into the library source:
+
+        - **private generic function** -> ships as a source template (the
+          consumer monomorphizes it exactly like a public one);
+        - **private concrete function** -> ships as a signature record only
+          (its definition is already in the library bitcode; the consumer
+          declares and links);
+        - **constant** -> ships with its source (the consumer needs the VALUE
+          for compile-time evaluation; constant globals are emitted with
+          internal linkage per module, so re-emission cannot collide);
+        - **concrete struct/enum** -> already ships in the manifest type
+          sections; only walked for transitive references.
+
+        Only genuinely un-shippable references abort the export with CE5006,
+        attributed to the exported generic at the root of the dependency
+        chain: an ``unsafe external`` namespace (foreign bindings cannot be
+        re-declared at the consumer), a private function whose signature
+        exposes a foreign ``ptr`` (CE5002's rationale), and a private v1
+        native variadic ``...T`` function (no shippable template - CE0116's
+        rationale).
+
+        The walk is a visited-set worklist over a finite symbol table, so
+        recursive and mutually-recursive helpers terminate. The scans
+        over-collect (locals are not subtracted), which here means at worst
+        over-SHIPPING a same-named private symbol - safe, unlike the previous
+        scheme where over-collection caused spurious rejections.
+
+        Args:
+            units: All library units.
+            exported: The exported generic nodes seeding the walk.
+
+        Returns:
+            ``{"private_functions": [(FuncDef, source)],
+               "private_generic_functions": [(FuncDef, source)],
+               "constants": [(ConstDef, source)]}`` in first-seen order.
         """
         import sushi_lang.internals.errors as er
 
-        referenced: set[str] = set()
-        if func.body is not None:
-            self._scan_referenced_symbols(func.body, referenced)
+        priv_concrete_fns: dict[str, tuple] = {}
+        priv_generic_fns: dict[str, tuple] = {}
+        constants: dict[str, tuple] = {}
+        types_by_name: dict[str, tuple] = {}
+        external_namespaces: set[str] = set()
 
-        # A generic may reference its own type-param names as type annotations;
-        # those are never private symbols, but exclude them defensively.
-        type_param_names = {tp.name for tp in (func.type_params or [])}
-        param_names = {p.name for p in func.params}
+        for unit in units:
+            if unit.ast is None:
+                continue
+            source = unit.file_path.read_text()
+            for fn in unit.ast.functions:
+                if fn.type_params:
+                    if not getattr(fn, "is_public", False):
+                        priv_generic_fns[fn.name] = (fn, source)
+                elif not getattr(fn, "is_public", False):
+                    priv_concrete_fns[fn.name] = (fn, source)
+            for c in unit.ast.constants:
+                constants[c.name] = (c, source)
+            for s in unit.ast.structs:
+                types_by_name[s.name] = (s, source)
+            for e in unit.ast.enums:
+                types_by_name[e.name] = (e, source)
+            for ext in getattr(unit.ast, "externals", None) or []:
+                external_namespaces.add(ext.namespace)
 
-        offending = sorted(
-            referenced & private_symbols
-            - type_param_names - param_names - set(allowed)
-        )
-        if offending:
-            symbol = offending[0]
+        shipped_fns: dict[str, tuple] = {}
+        shipped_generic_fns: dict[str, tuple] = {}
+        shipped_consts: dict[str, tuple] = {}
+        visited: set[str] = set()
+
+        def _reject(root, symbol: str) -> None:
             er.emit(self.analyzer.reporter, er.ERR.CE5006,
-                    getattr(func, "name_span", None) or func.loc,
-                    name=func.name, symbol=symbol)
+                    getattr(root, "name_span", None) or root.loc,
+                    name=root.name, symbol=symbol)
             raise ValueError(
-                f"CE5006: public generic '{func.name}' references "
-                f"library-private symbol '{symbol}' and cannot be exported"
+                f"CE5006: public generic '{root.name}' references "
+                f"un-shippable library symbol '{symbol}' and cannot be exported"
             )
 
-    def _check_generic_type_export_closure(
-        self, node, private_symbols: set[str], allowed: set[str] = frozenset()
-    ) -> None:
-        """Reject (CE5006) a public generic struct/enum whose field or variant
-        payload types reference a library-private symbol.
+        def _walk(node, root) -> None:
+            refs: set[str] = set()
+            self._scan_referenced_symbols(node, refs)
+            self._scan_referenced_type_names(node, refs)
 
-        Mirrors ``_check_generic_export_closure`` for type definitions. A
-        field/payload may reference the generic's own name (recursion, e.g.
-        ``Own<Tree<T>>``) and any co-shipped public template in ``allowed``; a
-        reference to a concrete library-private type aborts the export.
-        """
-        import sushi_lang.internals.errors as er
+            own = {getattr(node, "name", None)}
+            own |= {tp.name for tp in (getattr(node, "type_params", None) or [])}
+            own |= {p.name for p in (getattr(node, "params", None) or [])}
 
-        referenced: set[str] = set()
-        self._scan_referenced_type_names(node, referenced)
+            for name in sorted(refs - own - visited):
+                if name in external_namespaces:
+                    _reject(root, name)
+                elif name in priv_concrete_fns:
+                    fn, src = priv_concrete_fns[name]
+                    if any(getattr(p, "is_variadic", False) for p in fn.params):
+                        _reject(root, name)
+                    if self._contains_foreign_ptr(fn.ret) or any(
+                        self._contains_foreign_ptr(p.ty) for p in fn.params
+                    ):
+                        _reject(root, name)
+                    visited.add(name)
+                    shipped_fns[name] = (fn, src)
+                    _walk(fn, root)
+                elif name in priv_generic_fns:
+                    fn, src = priv_generic_fns[name]
+                    visited.add(name)
+                    shipped_generic_fns[name] = (fn, src)
+                    _walk(fn, root)
+                elif name in constants:
+                    c, src = constants[name]
+                    visited.add(name)
+                    shipped_consts[name] = (c, src)
+                    _walk(c, root)
+                elif name in types_by_name:
+                    # Concrete types already ship; generic types ship as
+                    # templates. Walk them for transitive references only.
+                    tnode, _src = types_by_name[name]
+                    visited.add(name)
+                    _walk(tnode, root)
+                # Anything else: builtins, params, locals, public symbols -
+                # resolvable at the consumer without shipping.
 
-        type_param_names = {tp.name for tp in (node.type_params or [])}
+        for node, _source in exported:
+            _walk(node, node)
 
-        offending = sorted(
-            referenced & private_symbols
-            - type_param_names - set(allowed) - {node.name}
-        )
-        if offending:
-            symbol = offending[0]
-            er.emit(self.analyzer.reporter, er.ERR.CE5006,
-                    getattr(node, "name_span", None) or node.loc,
-                    name=node.name, symbol=symbol)
-            raise ValueError(
-                f"CE5006: public generic '{node.name}' references "
-                f"library-private symbol '{symbol}' and cannot be exported"
-            )
+        return {
+            "private_functions": list(shipped_fns.values()),
+            "private_generic_functions": list(shipped_generic_fns.values()),
+            "constants": list(shipped_consts.values()),
+        }
 
     def _extract_templates(self, units: list['Unit']) -> dict:
         """Extract instantiable public generic templates (re-parsable source).
@@ -421,32 +466,25 @@ class LibraryManifestGenerator:
           unshipped perks stay library-internal; generic-target impls and impls
           whose signatures expose a foreign `ptr` are skipped (the consumer
           falls back to writing its own impl).
+        - the EXPORT CLOSURE (C4b/C5): the library-private symbols exported
+          generic bodies transitively reference. `private_functions` ships
+          signature records (definitions link from the bitcode);
+          private generic functions ship into `generic_functions` flagged
+          `"private": True`; `constants` ship with their source (values are
+          needed for compile-time evaluation). `closure_summary` records what
+          shipped, by kind, for observability. See _compute_export_closure.
         """
         from sushi_lang.backend.library_templates import (
             serialize_generic_function, serialize_generic_struct,
             serialize_generic_enum, serialize_perk, serialize_perk_impl,
+            slice_decl_source,
         )
-
-        private_symbols = self._collect_private_symbols(units)
-
-        # Names of every generic struct/enum we ship as a template. A co-shipped
-        # template may be referenced by another generic's field/body even though
-        # it also appears in `private_symbols` (it resolves at the consumer).
-        exported_generic_types: set[str] = set()
-        for unit in units:
-            if unit.ast is None:
-                continue
-            for s in unit.ast.structs:
-                if s.type_params:
-                    exported_generic_types.add(s.name)
-            for e in unit.ast.enums:
-                if e.type_params:
-                    exported_generic_types.add(e.name)
 
         generic_functions: list[dict] = []
         generic_structs: list[dict] = []
         generic_enums: list[dict] = []
         referenced_perks: set[str] = set()
+        exported: list[tuple] = []
 
         for unit in units:
             if unit.ast is None:
@@ -455,27 +493,59 @@ class LibraryManifestGenerator:
             for func in unit.ast.functions:
                 if not (func.is_public and func.type_params):
                     continue
-                self._check_generic_export_closure(
-                    func, private_symbols, exported_generic_types)
+                exported.append((func, source))
                 record = serialize_generic_function(func, source)
                 generic_functions.append(record)
                 referenced_perks.update(record.get("free_perks", []))
             for struct in unit.ast.structs:
                 if not struct.type_params:
                     continue
-                self._check_generic_type_export_closure(
-                    struct, private_symbols, exported_generic_types)
+                exported.append((struct, source))
                 record = serialize_generic_struct(struct, source)
                 generic_structs.append(record)
                 referenced_perks.update(record.get("free_perks", []))
             for enum in unit.ast.enums:
                 if not enum.type_params:
                     continue
-                self._check_generic_type_export_closure(
-                    enum, private_symbols, exported_generic_types)
+                exported.append((enum, source))
                 record = serialize_generic_enum(enum, source)
                 generic_enums.append(record)
                 referenced_perks.update(record.get("free_perks", []))
+
+        # Walk the export closure: collect transitive private dependencies
+        # (shipping them below) and reject un-shippable references (CE5006).
+        closure = self._compute_export_closure(units, exported)
+
+        # Private generic functions ride the existing template path, flagged
+        # so the consumer can apply closure (not local-wins) clash semantics.
+        for fn, src in closure["private_generic_functions"]:
+            record = serialize_generic_function(fn, src)
+            record["private"] = True
+            generic_functions.append(record)
+            referenced_perks.update(record.get("free_perks", []))
+
+        private_functions = [
+            {
+                "name": fn.name,
+                "params": [
+                    {"name": p.name, "type": self._type_to_string(p.ty)}
+                    for p in fn.params
+                ],
+                "return_type": self._type_to_string(fn.ret),
+            }
+            for fn, _src in closure["private_functions"]
+        ]
+        shipped_constants = [
+            {"name": c.name, "source": slice_decl_source(c, src)}
+            for c, src in closure["constants"]
+        ]
+        closure_summary = {
+            "private_functions": sorted(r["name"] for r in private_functions),
+            "private_generic_functions": sorted(
+                fn.name for fn, _ in closure["private_generic_functions"]
+            ),
+            "constants": sorted(r["name"] for r in shipped_constants),
+        }
 
         # Ship only the perk DEFINITIONS referenced by an exported generic's
         # constraints, de-duplicated by name (a perk is defined once).
@@ -522,12 +592,15 @@ class LibraryManifestGenerator:
                 perk_impls.append(serialize_perk_impl(impl, source))
 
         return {
-            "version": 3,
+            "version": 4,
             "generic_functions": generic_functions,
             "generic_structs": generic_structs,
             "generic_enums": generic_enums,
             "perks": perks,
             "perk_impls": perk_impls,
+            "private_functions": private_functions,
+            "constants": shipped_constants,
+            "closure_summary": closure_summary,
         }
 
     def _extract_dependencies(self, units: list['Unit']) -> list[str]:

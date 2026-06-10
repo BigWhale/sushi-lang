@@ -365,10 +365,23 @@ Current limitations of the library system:
    `CE4007` conflict diagnostics). Only impls of perks referenced by an exported generic's
    constraints ship; impls of library-internal perks stay internal.
 
+   **Private helpers ship automatically (the export closure)**: a public generic whose body
+   references library-private symbols no longer fails to export - the producer walks the
+   transitive closure of everything the generic depends on and ships it: private *generic*
+   helpers as source templates (flagged `private`), private *concrete* helpers as signature
+   records (their definitions carry external linkage in the library bitcode and link at the
+   consumer), and *constants* with their source (the consumer needs the value for compile-time
+   evaluation). The manifest's `templates.closure_summary` lists what shipped, by kind. At the
+   consumer, a local symbol with the same name as a shipped private is an error (**CE5007**,
+   not local-wins): shadowing it would silently change what the library's monomorphized bodies
+   call. Note that shipped private helpers become callable by name from consumer code - they
+   are not advertised in the public API, but they are not hidden either.
+
    Remaining restrictions:
-   - **Self-contained generics only**: a public generic whose body references a library-private
-     symbol is rejected at library-build time with **CE5006**. This bounds the feature to generics
-     that carry all their dependencies with them.
+   - **CE5006 (narrowed)**: a generic that (transitively) references an `unsafe external`
+     namespace, or a private helper whose signature exposes a foreign `ptr`, still cannot be
+     exported - foreign bindings cannot be re-declared at the consumer (see CE5002). Wrap the
+     foreign detail behind a private helper with a C-ABI-free signature.
    - **Generic-target perk impls do not ship**: `extend <Generic<T>> with <Perk>` is not supported
      in-program, so only concrete-target impls cross the boundary.
    - **Native variadics (`...T`) are not exportable**: a v1 native variadic collects into a runtime
