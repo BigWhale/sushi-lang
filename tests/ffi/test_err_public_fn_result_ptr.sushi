@@ -1,0 +1,14 @@
+# FFI: a `public fn` may not expose `ptr` even inside an explicit Result<ptr, E>.
+# EXPECT_ERROR_CODE: CE5008
+unsafe external "C" as libc because "intentional public ptr exposure":
+    fn malloc(i64 n) ptr = "malloc"
+
+enum AllocError:
+    OutOfMemory
+
+public fn grab() Result<ptr, AllocError>:
+    let ptr p = libc.malloc(8 as i64)
+    return Result.Ok(p)
+
+fn main() i32:
+    return Result.Ok(0)

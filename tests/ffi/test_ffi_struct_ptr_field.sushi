@@ -1,0 +1,17 @@
+# FFI: `ptr` as a struct field (issue #85 collateral - struct layout sizing).
+# The wrapper-struct pattern: a foreign handle rides inside a named Sushi struct.
+# EXPECT_STDOUT_CONTAINS: handle ok 16
+unsafe external "C" as libc because "allocate and free a raw buffer":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+
+struct Handle:
+    ptr raw
+    i64 size
+
+fn main() i32:
+    let ptr p = libc.malloc(16 as i64)
+    let Handle h = Handle(p, 16 as i64)
+    libc.free(h.raw)
+    println("handle ok {h.size}")
+    return Result.Ok(0)

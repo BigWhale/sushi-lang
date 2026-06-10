@@ -204,6 +204,56 @@ fn close_handle(ptr h) ~:
     return Result.Ok(~)
 ```
 
+A wrapper may also *return* the handle it acquired - `ptr` flows through the
+implicit `Result` wrapping (and through `Maybe<ptr>`) like any other value:
+
+```sushi
+fn grab() ptr:
+    let ptr p = libc.malloc(8 as i64)
+    return Result.Ok(p)
+
+fn main() i32:
+    match grab():
+        Result.Ok(p) -> libc.free(p)
+        Result.Err(_) -> println("alloc failed")
+    return Result.Ok(0)
+```
+
+Holding a `ptr` is the safe half of the FFI contract (it cannot be dereferenced
+in Sushi); wrapping one in `Result`/`Maybe` adds the error channel, **not** RAII
+or null-checking - freeing the handle is still your job.
+
+## `ptr` is unit-confined
+
+A **`public fn` may not expose `ptr` anywhere in its signature** - not as a
+parameter, not as a return type, not inside `Result<ptr, E>` or `Maybe<ptr>`.
+Violations are rejected at compile time with **`CE5008`**.
+
+FFI is a private implementation detail of the unit that declares the
+`unsafe external` block. What a unit exports must be Sushi-shaped: either
+fully digested values (`string`, `i64`, ...) or a **wrapper struct**:
+
+```sushi
+struct Handle:
+    ptr raw                 # struct fields MAY carry ptr across units
+    i64 size
+
+public fn open_buffer(i64 n) Handle:
+    return Result.Ok(Handle(libc.malloc(n), n))
+
+public fn close_buffer(Handle h) ~:
+    libc.free(h.raw)
+    return Result.Ok(~)
+```
+
+The wrapper-struct escape hatch is deliberate (the Rust newtype idiom): a `ptr`
+riding inside a named struct is self-documenting, gives extension methods a
+receiver to attach to (`h.close()`), and is inert in other units anyway - the
+foreign namespace it came from is not visible there. Private functions are
+unrestricted: inside the FFI unit, `ptr` parameters and returns flow freely.
+The same rule already held at the library boundary (`CE5002`); `CE5008`
+enforces it one level down, between the units of a single program.
+
 ## Diagnostics
 
 | Code | Severity | Rule |
@@ -214,6 +264,7 @@ fn close_handle(ptr h) ~:
 | `CE5003` | error | An external signature uses a non-C-ABI type, or the ABI string is not `"C"`. |
 | `CE5004` | error | A variadic external (`...`) declares no fixed parameter. The C ABI needs at least one named argument for `va_start`. |
 | `CE5005` | error | A non-C-ABI value is passed as a variadic (`...`) argument at a call site. |
+| `CE5008` | error | A `public fn` exposes a foreign `ptr` in its signature (parameter, return, or inside `Result`/`Maybe`). Keep the function private or wrap the pointer in a struct. |
 
 ## Linking: what can actually be resolved
 

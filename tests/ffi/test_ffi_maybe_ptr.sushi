@@ -1,0 +1,26 @@
+# FFI: `ptr` inside Maybe<T> (issue #85 collateral - enum payload sizing).
+# EXPECT_STDOUT_CONTAINS: released
+unsafe external "C" as libc because "allocate and free a raw buffer":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+
+fn find(i64 n) Maybe<ptr>:
+    let ptr p = libc.malloc(n)
+    return Result.Ok(Maybe.Some(p))
+
+fn release(ptr p) ~:
+    libc.free(p)
+    println("released")
+    return Result.Ok(~)
+
+fn check(Maybe<ptr> m) ~:
+    match m:
+        Maybe.Some(p) -> release(p)
+        Maybe.None() -> println("none")
+    return Result.Ok(~)
+
+fn main() i32:
+    match find(8 as i64):
+        Result.Ok(m) -> check(m)
+        Result.Err(_) -> println("failed")
+    return Result.Ok(0)

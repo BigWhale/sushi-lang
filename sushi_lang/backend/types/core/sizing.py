@@ -11,7 +11,8 @@ if TYPE_CHECKING:
 
 from sushi_lang.semantics.typesys import (
     Type as Ty, BuiltinType, ArrayType, DynamicArrayType, StructType,
-    EnumType, UnknownType, ResultType, IteratorType, ReferenceType, PointerType
+    EnumType, UnknownType, ResultType, IteratorType, ReferenceType, PointerType,
+    ForeignPtrType
 )
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.constants import FAT_POINTER_SIZE_BYTES, DYNAMIC_ARRAY_SIZE_BYTES, ITERATOR_SIZE_BYTES, ENUM_TAG_SIZE_BYTES
@@ -97,6 +98,9 @@ class TypeSizing:
                 return 8  # 64-bit pointer
             case PointerType():
                 # Pointers are always 8 bytes (64-bit)
+                return 8
+            case ForeignPtrType():
+                # Opaque foreign pointer (LLVM i8*), 64-bit
                 return 8
             case ResultType():
                 # Result<T, E> - ensure the corresponding enum exists and calculate its size
@@ -221,7 +225,7 @@ class TypeSizing:
             case EnumType():
                 # Enum aligned to i32 tag (4 bytes)
                 return 4
-            case ReferenceType() | PointerType():
+            case ReferenceType() | PointerType() | ForeignPtrType():
                 # Pointers aligned to 8 bytes
                 return 8
             case _:

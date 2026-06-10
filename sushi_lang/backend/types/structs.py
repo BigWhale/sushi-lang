@@ -17,7 +17,7 @@ Known limitations:
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.semantics.typesys import StructType, Type, ArrayType, DynamicArrayType, BuiltinType, EnumType
+from sushi_lang.semantics.typesys import StructType, Type, ArrayType, DynamicArrayType, BuiltinType, EnumType, ForeignPtrType
 from sushi_lang.semantics.generics.types import GenericStructType
 import llvmlite.ir as ir
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
@@ -87,6 +87,10 @@ def can_struct_be_hashed(struct_type: StructType, visited: set = None, path: lis
         # Skip structs with unresolved types (will be registered later)
         if isinstance(field_type, UnknownType):
             return False, f"field '{field_name}' has unresolved type '{field_type.name}'"
+
+        # Foreign pointers are opaque handles with no stable identity to hash
+        if isinstance(field_type, ForeignPtrType):
+            return False, f"field '{field_name}' is a foreign ptr (unhashable)"
 
         # Arrays must have hashable element types (recursive check)
         if isinstance(field_type, (ArrayType, DynamicArrayType)):

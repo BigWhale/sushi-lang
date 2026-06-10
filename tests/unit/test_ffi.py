@@ -36,7 +36,11 @@ class _StubAnalyzer:
 
 
 def test_ce5002_public_foreign_ptr_aborts_manifest(tmp_path):
-    """A public function returning `ptr` must abort the .slib write with CE5002."""
+    """A public function returning `ptr` must abort the .slib write with CE5002.
+
+    Exercised at the manifest level to test the .slib backstop in isolation;
+    in a full compilation the CE5008 unit fence (Pass 2) fires first.
+    """
     from sushi_lang.backend.library_manifest import LibraryManifestGenerator
     from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 
@@ -358,3 +362,55 @@ def _emit_ir(tmp_path, src: str) -> str:
     cg.external_table = analyzer.externals
     module = cg.build_module_multi_unit(order)
     return str(module)
+
+
+def test_foreign_ptr_sizing():
+    """ForeignPtrType must size and align like the other pointer types (issue #85)."""
+    from sushi_lang.backend.types.core.sizing import TypeSizing
+    from sushi_lang.semantics.passes.collect import StructTable, EnumTable
+    from sushi_lang.semantics.typesys import ForeignPtrType
+
+    sizing = TypeSizing(StructTable(), EnumTable())
+    assert sizing.get_type_size_bytes(ForeignPtrType()) == 8
+    assert sizing.get_type_alignment(ForeignPtrType()) == 8
+
+
+def test_foreign_ptr_in_enum_payload_sizes():
+    """An enum variant carrying `ptr` (e.g. Result<ptr, E>'s Ok) sizes without CE0021."""
+    from sushi_lang.backend.types.core.sizing import TypeSizing
+    from sushi_lang.semantics.passes.collect import StructTable, EnumTable
+    from sushi_lang.semantics.typesys import (
+        ForeignPtrType, EnumType, EnumVariantInfo, BuiltinType,
+    )
+
+    result_like = EnumType(
+        name="Result<ptr, StdError>",
+        variants=(
+            EnumVariantInfo(name="Ok", associated_types=(ForeignPtrType(),)),
+            EnumVariantInfo(name="Err", associated_types=(BuiltinType.I32,)),
+        ),
+    )
+    sizing = TypeSizing(StructTable(), EnumTable())
+    # Tag (4) + max variant payload (8 for the ptr) = 12.
+    assert sizing.get_type_size_bytes(result_like) == 12
+
+
+def test_contains_foreign_ptr_walk():
+    """The shared CE5008/CE5002 walk sees ptr through Result/Maybe-style wrappers."""
+    from sushi_lang.semantics.type_predicates import contains_foreign_ptr
+    from sushi_lang.semantics.typesys import (
+        ForeignPtrType, BuiltinType, ResultType, StructType,
+    )
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+
+    assert contains_foreign_ptr(ForeignPtrType())
+    assert contains_foreign_ptr(ResultType(ForeignPtrType(), BuiltinType.I32))
+    # Pass 2-era representation: an unresolved Result<ptr, E> annotation.
+    assert contains_foreign_ptr(
+        GenericTypeRef(base_name="Result", type_args=(ForeignPtrType(), BuiltinType.I32))
+    )
+    assert not contains_foreign_ptr(BuiltinType.I64)
+    # Struct fields may carry ptr; the predicate still reports the exposure when
+    # the concrete StructType is handed to it (the FENCE only checks fn signatures).
+    handle = StructType(name="Handle", fields=(("raw", ForeignPtrType()),))
+    assert contains_foreign_ptr(handle)

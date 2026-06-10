@@ -1120,7 +1120,7 @@ _add(ErrorMessage("CE3513", Severity.ERROR,
     "library file too large '{path}': {size} bytes exceeds maximum {max_size} bytes",
     Category.UNIT, "Library file exceeds reasonable size limit."))
 
-# FFI / Foreign Function Interface (CW5001, CE5001-CE5003)
+# FFI / Foreign Function Interface (CW5001, CE5001-CE5008)
 _add(ErrorMessage("CW5001", Severity.WARNING,
     "unsafe external block suspends four Sushi guarantees (add `because \"...\"` to acknowledge)",
     Category.TYPE, "An `unsafe external` block disables borrow checking, RAII, Result/Maybe error handling, and bounds/null safety for the foreign declarations it contains. Provide a `because \"<reason>\"` clause to acknowledge the contract and silence this warning."))
@@ -1152,6 +1152,10 @@ _add(ErrorMessage("CE5006", Severity.ERROR,
 _add(ErrorMessage("CE5007", Severity.ERROR,
     "library '{lib}' ships private symbol '{name}' which conflicts with a local definition",
     Category.TYPE, "An imported library's exported generics depend on this private helper, which ships in the .slib export closure and must be registered at the consumer under its original name. A local symbol with the same name would silently change what the library's monomorphized bodies call. Rename the local symbol."))
+
+_add(ErrorMessage("CE5008", Severity.ERROR,
+    "public function '{name}' exposes a foreign `ptr` in its signature and cannot cross a unit boundary",
+    Category.TYPE, "FFI is a private implementation detail of a unit. A `public fn` whose parameters or return type contain `ptr` (including inside Result or Maybe) cannot be part of a unit's public API. Keep the function private, or wrap the pointer in a struct (struct fields may carry `ptr` across units)."))
 
 # Array bounds errors
 _add(ErrorMessage("RE2020", Severity.ERROR,

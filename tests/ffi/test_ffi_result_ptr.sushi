@@ -1,0 +1,21 @@
+# FFI: a safe wrapper returning `ptr` through the implicit Result<ptr, E> (issue #85).
+# The wrapper pattern from docs/ffi.md: acquire a foreign handle, hand it out as a Result.
+# EXPECT_STDOUT_CONTAINS: got pointer
+unsafe external "C" as libc because "allocate and free a raw buffer":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+
+fn grab() ptr:
+    let ptr p = libc.malloc(8 as i64)
+    return Result.Ok(p)
+
+fn consume(ptr p) ~:
+    libc.free(p)
+    println("got pointer")
+    return Result.Ok(~)
+
+fn main() i32:
+    match grab():
+        Result.Ok(p) -> consume(p)
+        Result.Err(_) -> println("alloc failed")
+    return Result.Ok(0)
