@@ -33,3 +33,27 @@
 
   --md-typeset-a-color:           #FF9D8F;
 }
+
+/*
+ * Header/drawer logo: use the sushi emoji as a placeholder brand mark until a
+ * real logo exists. Hide Material's default icon SVG and render the emoji via
+ * a pseudo-element (CSS content renders the color emoji; an icon name cannot).
+ * !important is needed because Material's own .md-logo svg/img rules are more
+ * specific (e.g. .md-nav__title .md-nav__button.md-logo svg).
+ */
+.md-logo svg,
+.md-logo img {
+  display: none !important;
+}
+
+.md-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.md-logo::after {
+  content: "🍣";
+  font-size: 1.4rem;
+  line-height: 1;
+}
