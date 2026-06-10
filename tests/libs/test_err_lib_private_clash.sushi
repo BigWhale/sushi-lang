@@ -1,0 +1,15 @@
+# CE5007: the library's export closure ships the private helper `scale_up`;
+# a consumer function with the same name would silently change what the
+# library's monomorphized bodies call, so the clash is an error (not
+# local-wins).
+# EXPECT_ERROR_CODE: CE5007
+
+use <lib/private_closure_lib>
+
+fn scale_up(i32 x) i32:
+    return Result.Ok(x * 100)
+
+fn main() i32:
+    let i32 m = compute(10, 20).realise(99)
+    println(m)
+    return Result.Ok(0)

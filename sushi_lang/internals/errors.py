@@ -1146,8 +1146,12 @@ _add(ErrorMessage("CE5005", Severity.ERROR,
     Category.TYPE, "Each trailing variadic argument to an external call must be C-representable: i8..i64, u8..u64, f32, f64, bool, string (auto-marshalled), or ptr. Result/Maybe, structs, arrays, references, and user types cannot cross the C ABI boundary."))
 
 _add(ErrorMessage("CE5006", Severity.ERROR,
-    "public generic '{name}' cannot be exported: its body references library-private symbol '{symbol}'",
-    Category.TYPE, "A public generic is shipped in a library (.slib) as re-parsable source text and monomorphized at the consumer. Its body must therefore be self-contained: it may reference only its own parameters, language builtins/operators, and other public symbols. Referencing a library-private function, struct, enum, or constant would not be resolvable at the consumer. Make the referenced symbol public, or inline it into the generic."))
+    "public generic '{name}' cannot be exported: it references un-shippable library symbol '{symbol}'",
+    Category.TYPE, "A public generic is shipped in a library (.slib) and monomorphized at the consumer. Library-private helpers it references ship automatically as part of the export closure (as templates if generic, as linkable signatures if concrete, with values for constants). Two classes of reference cannot cross the boundary: a symbol whose signature exposes a foreign 'ptr' (FFI is a private unit detail, see CE5002), and an 'unsafe external' namespace (foreign bindings cannot be re-declared at the consumer). Wrap the foreign detail behind a private helper with a C-ABI-free signature, or restructure the generic to avoid it."))
+
+_add(ErrorMessage("CE5007", Severity.ERROR,
+    "library '{lib}' ships private symbol '{name}' which conflicts with a local definition",
+    Category.TYPE, "An imported library's exported generics depend on this private helper, which ships in the .slib export closure and must be registered at the consumer under its original name. A local symbol with the same name would silently change what the library's monomorphized bodies call. Rename the local symbol."))
 
 # Array bounds errors
 _add(ErrorMessage("RE2020", Severity.ERROR,
