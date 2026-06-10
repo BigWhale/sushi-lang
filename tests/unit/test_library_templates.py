@@ -514,3 +514,206 @@ def test_seed_library_perks_guards_missing_templates():
     analyzer._seed_library_perks(table)
 
     assert table.by_name == {}
+
+
+# ---------------------------------------------------------------------------
+# P2-5 Phase 1 (C3): generic STRUCT / ENUM templates.
+# ---------------------------------------------------------------------------
+
+from sushi_lang.backend.library_templates import (
+    serialize_generic_struct,
+    deserialize_generic_struct,
+    serialize_generic_enum,
+    deserialize_generic_enum,
+)
+from sushi_lang.semantics.passes.collect import (
+    GenericStructTable,
+    GenericEnumTable,
+)
+
+BOX_SRC = (
+    "struct Box<T>:\n"
+    "    T value\n"
+)
+
+RANKED_SRC = (
+    "struct Ranked<T: Ord>:\n"
+    "    T value\n"
+)
+
+OPT_SRC = (
+    "enum Opt<T>:\n"
+    "    Nope\n"
+    "    Yep(T)\n"
+)
+
+
+def test_serialize_generic_struct_record_shape():
+    """A generic struct serializes to the uniform template record schema."""
+    program, _ = parse_to_ast(RANKED_SRC)
+    struct = program.structs[0]
+
+    record = serialize_generic_struct(struct, RANKED_SRC)
+
+    assert record["name"] == "Ranked"
+    assert record["type_params"] == [{"name": "T", "constraints": ["Ord"], "is_pack": False}]
+    assert record["free_perks"] == ["Ord"]
+    assert record["source"].startswith("struct Ranked<T: Ord>")
+    assert record["source"].endswith("\n")
+
+
+def test_generic_struct_round_trip_structural_equality():
+    """The struct source slice re-parses into a structurally identical struct."""
+    program, _ = parse_to_ast(BOX_SRC)
+    struct = program.structs[0]
+
+    rebuilt = deserialize_generic_struct(serialize_generic_struct(struct, BOX_SRC))
+
+    assert rebuilt.name == "Box"
+    assert [tp.name for tp in rebuilt.type_params] == ["T"]
+    assert [f.name for f in rebuilt.fields] == ["value"]
+
+
+def test_generic_enum_round_trip_structural_equality():
+    """The enum source slice re-parses into a structurally identical enum."""
+    program, _ = parse_to_ast(OPT_SRC)
+    enum = program.enums[0]
+
+    rebuilt = deserialize_generic_enum(serialize_generic_enum(enum, OPT_SRC))
+
+    assert rebuilt.name == "Opt"
+    assert [tp.name for tp in rebuilt.type_params] == ["T"]
+    assert [v.name for v in rebuilt.variants] == ["Nope", "Yep"]
+
+
+def test_generic_types_route_to_templates_only(tmp_path):
+    """A generic struct/enum ships ONLY as a template, never as a concrete entry.
+
+    Concrete structs/enums still populate the concrete section; the generic ones
+    land solely in templates.generic_structs / generic_enums.
+    """
+    from sushi_lang.backend.library_manifest import LibraryManifestGenerator
+
+    src = (
+        "struct Box<T>:\n"
+        "    T value\n"
+        "\n"
+        "struct Point:\n"
+        "    i32 x\n"
+        "\n"
+        "enum Opt<T>:\n"
+        "    Nope\n"
+        "    Yep(T)\n"
+        "\n"
+        "enum Color:\n"
+        "    Red\n"
+    )
+    unit = _make_unit(tmp_path, src)
+    reporter = Reporter(source="", filename="lib")
+    gen = LibraryManifestGenerator(_StubAnalyzer(reporter))
+
+    concrete_structs = gen._extract_structs([unit])
+    concrete_enums = gen._extract_enums([unit])
+    templates = gen._extract_templates([unit])
+
+    # Concrete section: only the non-generic Point / Color.
+    assert [s["name"] for s in concrete_structs] == ["Point"]
+    assert [e["name"] for e in concrete_enums] == ["Color"]
+    # Template section: only the generic Box / Opt.
+    assert [t["name"] for t in templates["generic_structs"]] == ["Box"]
+    assert [t["name"] for t in templates["generic_enums"]] == ["Opt"]
+
+
+def test_closure_check_allows_co_shipped_generic_type_field(tmp_path):
+    """Outer<T> with a field of another exported generic Inner<T> is allowed."""
+    from sushi_lang.backend.library_manifest import LibraryManifestGenerator
+
+    src = (
+        "struct Inner<T>:\n"
+        "    T val\n"
+        "\n"
+        "struct Outer<T>:\n"
+        "    Inner<T> inner\n"
+    )
+    unit = _make_unit(tmp_path, src)
+    reporter = Reporter(source="", filename="lib")
+    gen = LibraryManifestGenerator(_StubAnalyzer(reporter))
+
+    templates = gen._extract_templates([unit])
+
+    names = sorted(t["name"] for t in templates["generic_structs"])
+    assert names == ["Inner", "Outer"]
+    assert not any(item.code == "CE5006" for item in reporter.items)
+
+
+def test_closure_check_rejects_private_type_field(tmp_path):
+    """A generic struct with a field of a (private) concrete type aborts CE5006."""
+    from sushi_lang.backend.library_manifest import LibraryManifestGenerator
+
+    src = (
+        "struct Secret:\n"
+        "    i32 x\n"
+        "\n"
+        "struct Leaky<T>:\n"
+        "    Secret hidden\n"
+        "    T value\n"
+    )
+    unit = _make_unit(tmp_path, src)
+    reporter = Reporter(source="", filename="lib")
+    gen = LibraryManifestGenerator(_StubAnalyzer(reporter))
+
+    with pytest.raises(ValueError):
+        gen._extract_templates([unit])
+
+    assert any(item.code == "CE5006" for item in reporter.items)
+
+
+def test_register_library_generic_struct_lands_in_table():
+    """A generic-struct template is rebuilt into the consumer's struct table."""
+    record = serialize_generic_struct(parse_to_ast(BOX_SRC)[0].structs[0], BOX_SRC)
+    analyzer = _analyzer_with_loaded_libraries(
+        {"mathlib": {"templates": {"version": 2, "generic_structs": [record],
+                                   "generic_enums": [], "generic_functions": [],
+                                   "perks": [], "perk_impls": []}}}
+    )
+    analyzer.generic_structs = GenericStructTable()
+
+    analyzer._register_library_generic_structs()
+
+    assert "Box" in analyzer.generic_structs.by_name
+    assert "Box" in analyzer.generic_structs.order
+
+
+def test_register_library_generic_enum_lands_in_table():
+    """A generic-enum template is rebuilt into the consumer's enum table."""
+    record = serialize_generic_enum(parse_to_ast(OPT_SRC)[0].enums[0], OPT_SRC)
+    analyzer = _analyzer_with_loaded_libraries(
+        {"mathlib": {"templates": {"version": 2, "generic_structs": [],
+                                   "generic_enums": [record], "generic_functions": [],
+                                   "perks": [], "perk_impls": []}}}
+    )
+    analyzer.generic_enums = GenericEnumTable()
+
+    analyzer._register_library_generic_enums()
+
+    assert "Opt" in analyzer.generic_enums.by_name
+    assert "Opt" in analyzer.generic_enums.order
+
+
+def test_register_library_generic_struct_respects_local_definition():
+    """A locally-defined generic struct of the same name wins; template ignored."""
+    record = serialize_generic_struct(parse_to_ast(BOX_SRC)[0].structs[0], BOX_SRC)
+    analyzer = _analyzer_with_loaded_libraries(
+        {"mathlib": {"templates": {"version": 2, "generic_structs": [record],
+                                   "generic_enums": [], "generic_functions": [],
+                                   "perks": [], "perk_impls": []}}}
+    )
+    analyzer.generic_structs = GenericStructTable()
+    sentinel = object()
+    analyzer.generic_structs.by_name["Box"] = sentinel
+    analyzer.generic_structs.order.append("Box")
+
+    analyzer._register_library_generic_structs()
+
+    assert analyzer.generic_structs.by_name["Box"] is sentinel
+    assert analyzer.generic_structs.order.count("Box") == 1

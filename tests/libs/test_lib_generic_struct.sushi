@@ -1,0 +1,23 @@
+# Consumer instantiates library generic struct/enum templates at its own types:
+# Box<T> at i32 and string, and the Opt<T> enum at i32 - all monomorphized
+# locally from templates shipped in the .slib (P2-5 Phase 1 / C3).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "42"
+# EXPECT_STDOUT_CONTAINS: "hi"
+# EXPECT_STDOUT_CONTAINS: "7"
+
+use <lib/generic_types_lib>
+
+fn main() i32:
+    let Box<i32> bi = Box(42)
+    println(bi.value)
+
+    let Box<string> bs = Box("hi")
+    println(bs.value)
+
+    let Opt<i32> o = Opt.Yep(7)
+    match o:
+        Opt.Yep(v) -> println(v)
+        Opt.Nope -> println(0)
+
+    return Result.Ok(0)

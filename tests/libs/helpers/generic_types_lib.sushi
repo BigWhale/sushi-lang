@@ -1,0 +1,38 @@
+# generic_types_lib.sushi - exports generic STRUCT and ENUM templates.
+#
+# P2-5 Phase 1 (C3): generic structs/enums ship in the .slib as re-parsable
+# templates and are monomorphized at the consumer's own types - the same
+# mechanism already used for generic functions.
+
+# Perk referenced by the constrained generic struct below. A generic's
+# type-param constraint causes its perk DEFINITION to ship with the templates.
+perk Ord:
+    fn gt(i32 other) bool
+
+# Simple generic struct container.
+struct Box<T>:
+    T value
+
+# Generic optional enum (distinct name to avoid the builtin Maybe).
+enum Opt<T>:
+    Nope
+    Yep(T)
+
+# Co-shipped nested generics: Holder<T> has a field of another exported generic
+# Cell<T>. Both ship as templates and must instantiate transitively.
+struct Cell<T>:
+    T item
+
+struct Holder<T>:
+    Cell<T> cell
+
+# NOTE: a recursive generic enum (e.g. `enum Tree<T>: Leaf(T), Node(Own<Tree<T>>)`)
+# is intentionally NOT exported here: instantiating one infinite-loops the
+# monomorphizer's type substitutor (transformer.py substitute_type) even for a
+# purely in-program definition. That is a pre-existing local limitation, not a
+# cross-library one; revisit when the monomorphizer memoizes in-progress types.
+
+# Constrained generic struct: proves consumer-relative CE4006 re-checking for a
+# library-shipped generic TYPE template (not just a generic function).
+struct Ranked<T: Ord>:
+    T value
