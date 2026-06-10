@@ -1,0 +1,16 @@
+# Helper library shipping a perk DEFINITION and its concrete IMPLEMENTATION
+# (C4a). pick_bigger<T: Doubler> dispatches to T.doubled() inside the generic
+# body, so a consumer instantiation at i32 actually calls the shipped
+# i32_doubled symbol from this library's bitcode.
+
+perk Doubler:
+    fn doubled() i32
+
+extend i32 with Doubler:
+    fn doubled() i32:
+        return self * 2
+
+public fn pick_bigger<T: Doubler>(T a, T b) T:
+    if (a.doubled() > b.doubled()):
+        return Result.Ok(a)
+    return Result.Ok(b)

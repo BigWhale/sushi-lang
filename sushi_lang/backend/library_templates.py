@@ -36,7 +36,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import FuncDef, PerkDef, StructDef, EnumDef
+    from sushi_lang.semantics.ast import (
+        FuncDef, PerkDef, StructDef, EnumDef, ExtendWithDef,
+    )
 
 
 def _free_perks_of(node) -> List[str]:
@@ -271,6 +273,73 @@ def deserialize_generic_enum(record: dict) -> "EnumDef":
     enum = enums[0]
     _reconcile_type_params(enum, record)
     return enum
+
+
+def impl_method_symbol(type_name: str, method_name: str) -> str:
+    """Compute the LLVM symbol name of a perk-impl method.
+
+    Mirrors the sanitization in
+    ``backend/functions/helpers.py:get_extension_method_name`` (perk impls are
+    emitted as synthetic extension methods): ``<`` becomes ``__``, ``>`` is
+    dropped, ``", "`` becomes ``_``. Recording the symbol explicitly in the
+    manifest lets the producer's linkage pass and the consumer's tests key off
+    the manifest instead of re-deriving the scheme.
+    """
+    sanitized = type_name.replace("<", "__").replace(">", "").replace(", ", "_")
+    return f"{sanitized}_{method_name}"
+
+
+def serialize_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict:
+    """Produce the manifest record for one concrete perk IMPLEMENTATION.
+
+    C4a: a concrete ``extend <Type> with <Perk>:`` block compiles to concrete
+    symbols in the library bitcode, so the consumer never re-emits the bodies -
+    it only needs (i) the method signatures, to register the impl for
+    constraint checking and dispatch, and (ii) the symbol names, to declare and
+    link. The ``source`` slice (the established re-parse idiom) provides the
+    signatures; ``methods[].symbol`` provides the names.
+
+    Args:
+        impl: The concrete ``ExtendWithDef`` to export.
+        source_text: Full source text of the unit the impl lives in.
+
+    Returns:
+        A msgpack-safe dict:
+        ``{"type": str, "perk": str, "source": str,
+           "methods": [{"name": str, "symbol": str}, ...]}``.
+    """
+    from sushi_lang.semantics.passes.collect.perks import _get_type_name
+
+    type_name = _get_type_name(impl.target_type)
+    return {
+        "type": type_name,
+        "perk": impl.perk_name,
+        "source": slice_decl_source(impl, source_text),
+        "methods": [
+            {"name": m.name, "symbol": impl_method_symbol(type_name, m.name)}
+            for m in impl.methods
+        ],
+    }
+
+
+def deserialize_perk_impl(record: dict) -> "ExtendWithDef":
+    """Reconstruct an ``ExtendWithDef`` from a manifest record by re-parsing.
+
+    Mirrors ``deserialize_perk``. The consumer registers the result in its
+    perk-impl table (signatures drive type-check and dispatch) and declares the
+    method symbols; the bodies resolve from the library bitcode at link time.
+    """
+    from sushi_lang.internals.parser import parse_to_ast
+
+    program, _tree = parse_to_ast(record["source"])
+
+    impls = program.perk_impls or []
+    if len(impls) != 1:
+        raise ValueError(
+            f"template source for perk impl '{record.get('type')} with "
+            f"{record.get('perk')}' parsed to {len(impls)} impls, expected exactly 1"
+        )
+    return impls[0]
 
 
 def serialize_perk(perk: "PerkDef", source_text: str) -> dict:

@@ -412,14 +412,19 @@ class LibraryManifestGenerator:
           named by an exported generic's type-parameter constraints. Shipping
           the contract frees the consumer from redeclaring a perk it does not
           author. Only the referenced (minimal, correct) set is shipped.
-
-        `perk_impls` is intentionally left empty: shipping perk implementations
-        (`extend T with Perk`) is out of scope (transitive-symbol linkage); the
-        consumer provides impls for its own instantiation types.
+        - `perk_impls` (C4a): the library's own concrete
+          `extend <Type> with <Perk>:` implementations of those shipped perks.
+          Their bodies are already compiled into the library bitcode (with weak
+          linkage, so a consumer's local impl overrides at link time); the
+          record carries signatures (re-parsable source) and symbol names so
+          the consumer can register the impl and declare-and-link. Impls of
+          unshipped perks stay library-internal; generic-target impls and impls
+          whose signatures expose a foreign `ptr` are skipped (the consumer
+          falls back to writing its own impl).
         """
         from sushi_lang.backend.library_templates import (
             serialize_generic_function, serialize_generic_struct,
-            serialize_generic_enum, serialize_perk,
+            serialize_generic_enum, serialize_perk, serialize_perk_impl,
         )
 
         private_symbols = self._collect_private_symbols(units)
@@ -486,13 +491,43 @@ class LibraryManifestGenerator:
                 seen_perks.add(perk.name)
                 perks.append(serialize_perk(perk, source))
 
+        # Ship the library's own concrete impls of the shipped perks (C4a).
+        # Signatures + symbol names only - the bodies are in the bitcode.
+        from sushi_lang.semantics.passes.collect.perks import _get_type_name
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+
+        perk_impls: list[dict] = []
+        seen_impls: set[tuple[str, str]] = set()
+        for unit in units:
+            if unit.ast is None:
+                continue
+            source = unit.file_path.read_text()
+            for impl in unit.ast.perk_impls:
+                if impl.perk_name not in seen_perks:
+                    continue
+                # Generic-target impls (extend List<T> with ...) are not
+                # supported in-program; only concrete targets ship.
+                if isinstance(impl.target_type, GenericTypeRef):
+                    continue
+                type_name = _get_type_name(impl.target_type)
+                if type_name is None or (type_name, impl.perk_name) in seen_impls:
+                    continue
+                if any(
+                    self._contains_foreign_ptr(m.ret)
+                    or any(self._contains_foreign_ptr(p.ty) for p in m.params)
+                    for m in impl.methods
+                ):
+                    continue
+                seen_impls.add((type_name, impl.perk_name))
+                perk_impls.append(serialize_perk_impl(impl, source))
+
         return {
-            "version": 2,
+            "version": 3,
             "generic_functions": generic_functions,
             "generic_structs": generic_structs,
             "generic_enums": generic_enums,
             "perks": perks,
-            "perk_impls": [],
+            "perk_impls": perk_impls,
         }
 
     def _extract_dependencies(self, units: list['Unit']) -> list[str]:

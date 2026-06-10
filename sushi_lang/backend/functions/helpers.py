@@ -118,8 +118,11 @@ class FunctionHelpers:
 
         Examples:
             - extend i32 add() → "i32_add"
-            - extend Box<i32> unwrap() → "Box__i32__unwrap"
-            - extend HashMap<string, i32> get() → "HashMap__string_i32__get"
+            - extend Box<i32> unwrap() → "Box__i32_unwrap"
+            - extend HashMap<string, i32> get() → "HashMap__string_i32_get"
+
+        Mirrored by ``backend/library_templates.py:impl_method_symbol`` for
+        the symbols recorded in shipped perk-impl manifest records (C4a).
         """
         if ext.target_type and isinstance(ext.target_type, BuiltinType):
             target_type_name = ext.target_type.value

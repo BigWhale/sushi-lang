@@ -124,6 +124,10 @@ class LLVMCodegen:
         # Monomorphized generic extension methods (for codegen)
         self.monomorphized_extensions: list['ExtendDef'] = []
 
+        # Library-shipped concrete perk impls (C4a): declared only, never
+        # defined - the bodies link in from the library bitcode.
+        self.library_perk_impls: list['ExtendWithDef'] = []
+
         # Variable type tracking (Sushi language types, not LLVM types)
         # Maps variable name to its Sushi Type for struct member access resolution
         self.variable_types: Dict[str, 'Type'] = {}
@@ -438,6 +442,14 @@ class LLVMCodegen:
         # Build high-level IR for all units
         mod_ir: ir.Module = self.build_module_multi_unit(units)
 
+        # Perk-impl methods may also ship through the manifest (C4a) and be
+        # overridden by a consumer's local impl. weak_odr (not linkonce_odr:
+        # it must survive module-level optimization even when unreferenced
+        # inside the library) makes the consumer's strong definition win at
+        # link time instead of producing a duplicate-symbol error on the
+        # incremental cc path.
+        _set_weak_odr_on_perk_impls(mod_ir, units)
+
         if debug:
             print(";; Library IR (pre-opt)")
             ir_text = str(mod_ir)
@@ -621,6 +633,7 @@ class LLVMCodegen:
         # Declare library function prototypes
         if hasattr(self, 'library_linker') and self.library_linker is not None:
             self._declare_library_functions()
+            self._declare_library_perk_impl_methods()
 
         # Pass 2: Emit bodies ONLY for the target unit
         if target_unit.ast is not None:
@@ -870,6 +883,7 @@ class LLVMCodegen:
         # Declare library function prototypes if any libraries are loaded
         if hasattr(self, 'library_linker') and self.library_linker is not None:
             self._declare_library_functions()
+            self._declare_library_perk_impl_methods()
 
         # Pass 2: Emit function bodies from all units
         for unit in units:
@@ -910,6 +924,51 @@ class LLVMCodegen:
         # Emit monomorphized generic extension method bodies
         for ext in self.monomorphized_extensions:
             self.functions.emit_extension_method_def(ext)
+
+    def _declare_library_perk_impl_methods(self) -> None:
+        """Declare (never define) library-shipped perk-impl methods (C4a).
+
+        Each ``ExtendWithDef`` in ``self.library_perk_impls`` was registered by
+        the semantic analyzer from a library manifest. Its method bodies are
+        already compiled into the library bitcode (weak linkage); the consumer
+        module only needs declarations so perk-method dispatch
+        (``try_emit_perk_method``) finds the symbols in ``self.funcs``. The
+        definitions resolve at link time - from the library ``.o`` on the
+        incremental path, or via dependency-graph reachability under the
+        ``TwoPhaseLinker`` on the monolithic path.
+        """
+        from sushi_lang.semantics.ast import ExtendDef
+        from sushi_lang.semantics.typesys import UnknownType
+        from sushi_lang.backend.types.core.resolution import resolve_unknown_type
+
+        struct_table = self.struct_table.by_name if self.struct_table else {}
+        enum_table = self.enum_table.by_name if self.enum_table else {}
+
+        def _resolved(ty):
+            # Templates are re-parsed source, so user-type references arrive
+            # as UnknownType; resolve against the consumer's tables (which
+            # include library-registered concrete types).
+            if isinstance(ty, UnknownType):
+                return resolve_unknown_type(ty, struct_table, enum_table)
+            return ty
+
+        for perk_impl in self.library_perk_impls:
+            target_type = _resolved(perk_impl.target_type)
+            for method in perk_impl.methods:
+                for param in method.params:
+                    if param.ty is not None:
+                        param.ty = _resolved(param.ty)
+                synthetic_ext = ExtendDef(
+                    target_type=target_type,
+                    name=method.name,
+                    params=method.params,
+                    ret=_resolved(method.ret) if method.ret is not None else None,
+                    body=method.body,
+                    loc=method.loc,
+                    name_span=method.name_span,
+                    ret_span=method.ret_span,
+                )
+                self.functions.emit_extension_method_decl(synthetic_ext)
 
     def _declare_library_functions(self) -> None:
         """Declare library function prototypes for external library functions.
@@ -1115,6 +1174,35 @@ _INLINE_RUNTIME_FUNCTIONS = frozenset({
     "llvm_strcmp",
     "utf8_char_count",
 })
+
+
+def _set_weak_odr_on_perk_impls(module: ir.Module, units: list[Unit]) -> None:
+    """Set weak_odr linkage on every perk-impl method in a library module.
+
+    A library's concrete ``extend T with Perk:`` methods may also be shipped
+    via the manifest (C4a) and a consumer may define its own impl of the same
+    (type, perk). On the incremental link path the whole library bitcode
+    becomes one ``.o`` linked by ``cc``, where two strong definitions are a
+    hard duplicate-symbol error - weak linkage lets the consumer's (strong)
+    local impl win. ``weak_odr`` rather than ``linkonce_odr`` so the
+    definition survives library-module optimization even when nothing inside
+    the library references it.
+    """
+    from sushi_lang.backend.library_templates import impl_method_symbol
+    from sushi_lang.semantics.passes.collect.perks import _get_type_name
+
+    for unit in units:
+        if unit.ast is None:
+            continue
+        for perk_impl in unit.ast.perk_impls:
+            type_name = _get_type_name(perk_impl.target_type)
+            if type_name is None:
+                continue
+            for method in perk_impl.methods:
+                symbol = impl_method_symbol(type_name, method.name)
+                fn = module.globals.get(symbol)
+                if fn is not None and isinstance(fn, ir.Function) and not fn.is_declaration:
+                    fn.linkage = "weak_odr"
 
 
 def _set_linkonce_odr_on_inline_runtime(module: ir.Module) -> None:

@@ -234,6 +234,7 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
 
         print(f"Success! Wrote library: {out_path}")
     else:
+        cg.library_perk_impls = getattr(analyzer, 'library_perk_impls', [])
         cg.compile_multi_unit(compilation_order, out=out_path, cc="cc",
                               debug=bool(args.dump_ll), opt=args.opt,
                               verify=not args.no_verify, keep_object=args.keep_object,
@@ -304,6 +305,7 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
     cg.monomorphized_extensions = monomorphized_extensions
     cg.library_linker = library_linker
     cg.library_registry = getattr(analyzer, 'library_registry', None)
+    cg.library_perk_impls = getattr(analyzer, 'library_perk_impls', [])
 
     # Compute fingerprints and determine what needs rebuilding
     obj_paths: list[Path] = []

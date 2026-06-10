@@ -1,0 +1,18 @@
+# C4a acceptance: the consumer instantiates the library's constrained generic
+# pick_bigger<T: Doubler> at i32 WITHOUT writing any `extend i32 with Doubler`.
+# The library ships its own concrete impl (templates.perk_impls); the consumer
+# registers it for constraint checking and dispatch, declares the i32_doubled
+# symbol, and links the body from the library bitcode.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "5"
+
+use <lib/perk_impl_lib>
+
+fn run_test() i32:
+    let i32 m = pick_bigger(3, 5)??
+    return Result.Ok(m)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    println(result)
+    return Result.Ok(0)
