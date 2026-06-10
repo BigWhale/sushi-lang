@@ -288,6 +288,12 @@ class SemanticAnalyzer:
             # the consumer's perk-impl collection (see _seed_library_perks call
             # in the Phase 0 loop above); they are already in self.perks here.
             self._register_library_generic_functions()
+            # Generic struct/enum templates: structs first (enum payloads may
+            # reference structs), then enums. Registered before Pass 1.5 so the
+            # consumer's instantiations of LibBox<i32> etc. are collected and
+            # monomorphized locally.
+            self._register_library_generic_structs()
+            self._register_library_generic_enums()
 
         # Check if main function expects command line arguments (across all units)
         self._check_main_function_args_multi_file(compilation_order)
@@ -645,6 +651,72 @@ class SemanticAnalyzer:
 
                 self.generic_funcs.by_name[func_name] = gfd
                 self.generic_funcs.order.append(func_name)
+
+    def _register_library_generic_types(
+        self, manifest_key: str, table, collected_index: int
+    ) -> None:
+        """Register generic struct/enum templates from loaded libraries.
+
+        Shared by ``_register_library_generic_structs`` /
+        ``_register_library_generic_enums``. Mirrors
+        ``_register_library_generic_functions``: each consumed library may ship
+        instantiable generic struct/enum templates under
+        ``templates.generic_structs`` / ``templates.generic_enums``. We rebuild a
+        ``GenericStructType`` / ``GenericEnumType`` for each via the canonical
+        collection path (re-parse the source snippet, run a throwaway
+        ``CollectorPass``, pull the generic type out of the resulting table) so
+        the existing instantiation + monomorphization machinery (Pass 1.5/1.6)
+        emits a concrete instance at the consumer's call site.
+
+        Local definitions win: a template is only registered if its name is not
+        already present in the target table.
+
+        Args:
+            manifest_key: ``"generic_structs"`` or ``"generic_enums"``.
+            table: the consumer's ``GenericStructTable`` / ``GenericEnumTable``.
+            collected_index: index of the matching table in the ``CollectorPass``
+                result tuple (4 = generic structs, 3 = generic enums).
+        """
+        if table is None or self.library_linker is None:
+            return
+
+        from sushi_lang.internals.parser import parse_to_ast
+        from sushi_lang.semantics.passes.collect import CollectorPass
+
+        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+            templates = manifest.get("templates") or {}
+            for record in templates.get(manifest_key, []):
+                type_name = record["name"]
+                if type_name in table.by_name:
+                    continue
+
+                source = record.get("source")
+                if not source:
+                    continue
+
+                program, _tree = parse_to_ast(source)
+                throwaway = Reporter(source=source, filename=f"<template:{lib_name}:{type_name}>")
+                collected = CollectorPass(throwaway).run(program, unit_name=lib_name)
+                template_table = collected[collected_index]
+
+                generic_type = template_table.by_name.get(type_name)
+                if generic_type is None:
+                    # The snippet failed to collect as a generic type; skip
+                    # rather than crash the consumer build.
+                    continue
+
+                table.by_name[type_name] = generic_type
+                table.order.append(type_name)
+
+    def _register_library_generic_structs(self) -> None:
+        """Register generic struct templates from loaded libraries (index 4)."""
+        self._register_library_generic_types(
+            "generic_structs", self.generic_structs, 4)
+
+    def _register_library_generic_enums(self) -> None:
+        """Register generic enum templates from loaded libraries (index 3)."""
+        self._register_library_generic_types(
+            "generic_enums", self.generic_enums, 3)
 
     def _register_library_structs(self) -> None:
         """Register struct definitions from loaded libraries.

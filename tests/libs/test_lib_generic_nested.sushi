@@ -1,0 +1,12 @@
+# Nested co-shipped generics: Holder<T> wraps Cell<T>, both library templates,
+# instantiated transitively at the consumer's own type (P2-5 Phase 1 / C3).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "99"
+
+use <lib/generic_types_lib>
+
+fn main() i32:
+    let Cell<i32> c = Cell(99)
+    let Holder<i32> h = Holder(c)
+    println(h.cell.item)
+    return Result.Ok(0)

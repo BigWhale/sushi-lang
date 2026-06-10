@@ -36,17 +36,48 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import FuncDef, PerkDef
+    from sushi_lang.semantics.ast import FuncDef, PerkDef, StructDef, EnumDef
 
 
-def _free_perks_of(func: "FuncDef") -> List[str]:
+def _free_perks_of(node) -> List[str]:
     """Collect the sorted, de-duplicated set of perk names named in the
-    type-parameter constraints of ``func``."""
+    type-parameter constraints of ``node``.
+
+    Duck-typed on ``type_params``: works for any declaration carrying bounded
+    type parameters (functions, generic structs, generic enums)."""
     perks: set[str] = set()
-    for tp in (func.type_params or []):
+    for tp in (node.type_params or []):
         for c in (getattr(tp, "constraints", None) or []):
             perks.add(c)
     return sorted(perks)
+
+
+def _type_param_records(node) -> List[dict]:
+    """Serialize a declaration's bounded type parameters to msgpack-safe dicts.
+
+    Shared by the function/struct/enum codecs so the type-param schema stays
+    uniform. ``is_pack`` is carried for every kind even though packs only apply
+    to functions (it stays ``False`` for structs/enums)."""
+    return [
+        {
+            "name": tp.name,
+            "constraints": list(getattr(tp, "constraints", None) or []),
+            "is_pack": bool(getattr(tp, "is_pack", False)),
+        }
+        for tp in (node.type_params or [])
+    ]
+
+
+def _reconcile_type_params(parsed_node, record: dict) -> None:
+    """Reconcile a re-parsed declaration's type-param constraints / pack marker
+    against the authoritative manifest record (the source of truth)."""
+    rec_tps = record.get("type_params") or []
+    parsed_tps = parsed_node.type_params or []
+    if len(rec_tps) == len(parsed_tps):
+        for parsed_tp, rec_tp in zip(parsed_tps, rec_tps):
+            parsed_tp.constraints = list(rec_tp.get("constraints") or [])
+            if "is_pack" in rec_tp:
+                parsed_tp.is_pack = bool(rec_tp["is_pack"])
 
 
 def slice_decl_source(node, source_text: str) -> str:
@@ -120,21 +151,9 @@ def serialize_generic_function(func: "FuncDef", source_text: str) -> dict:
     Returns:
         A msgpack-safe dict matching the record schema documented above.
     """
-    type_params = [
-        {
-            "name": tp.name,
-            "constraints": list(getattr(tp, "constraints", None) or []),
-            # Carry the type-pack marker (`...Ts`) explicitly. The decl source we
-            # ship re-parses the marker on its own, but recording it keeps the
-            # manifest self-describing and guards against a future codec that
-            # stops shipping full source (mirrors the constraints handling).
-            "is_pack": bool(getattr(tp, "is_pack", False)),
-        }
-        for tp in (func.type_params or [])
-    ]
     return {
         "name": func.name,
-        "type_params": type_params,
+        "type_params": _type_param_records(func),
         "source": slice_decl_source(func, source_text),
         "free_perks": _free_perks_of(func),
     }
@@ -167,17 +186,91 @@ def deserialize_generic_function(record: dict) -> "FuncDef":
             f"{len(funcs)} functions, expected exactly 1"
         )
     func = funcs[0]
-
-    # Reconcile constraints against the authoritative record.
-    rec_tps = record.get("type_params") or []
-    parsed_tps = func.type_params or []
-    if len(rec_tps) == len(parsed_tps):
-        for parsed_tp, rec_tp in zip(parsed_tps, rec_tps):
-            parsed_tp.constraints = list(rec_tp.get("constraints") or [])
-            if "is_pack" in rec_tp:
-                parsed_tp.is_pack = bool(rec_tp["is_pack"])
-
+    _reconcile_type_params(func, record)
     return func
+
+
+def serialize_generic_struct(struct: "StructDef", source_text: str) -> dict:
+    """Produce the manifest record for a single public generic struct.
+
+    Mirrors ``serialize_generic_function``. The ``source`` slice covers the
+    whole ``struct Name<...>:`` declaration plus its indented fields, so it
+    re-parses on its own at the consumer.
+
+    Args:
+        struct: The generic ``StructDef`` to export (must have type_params).
+        source_text: Full source text of the unit the struct lives in.
+
+    Returns:
+        A msgpack-safe dict matching the generic-template record schema.
+    """
+    return {
+        "name": struct.name,
+        "type_params": _type_param_records(struct),
+        "source": slice_decl_source(struct, source_text),
+        "free_perks": _free_perks_of(struct),
+    }
+
+
+def deserialize_generic_struct(record: dict) -> "StructDef":
+    """Reconstruct a ``StructDef`` from a manifest record by re-parsing source.
+
+    Mirrors ``deserialize_generic_function``.
+    """
+    from sushi_lang.internals.parser import parse_to_ast
+
+    program, _tree = parse_to_ast(record["source"])
+
+    structs = program.structs or []
+    if len(structs) != 1:
+        raise ValueError(
+            f"template source for struct '{record.get('name')}' parsed to "
+            f"{len(structs)} structs, expected exactly 1"
+        )
+    struct = structs[0]
+    _reconcile_type_params(struct, record)
+    return struct
+
+
+def serialize_generic_enum(enum: "EnumDef", source_text: str) -> dict:
+    """Produce the manifest record for a single public generic enum.
+
+    Mirrors ``serialize_generic_function``. The ``source`` slice covers the
+    whole ``enum Name<...>:`` declaration plus its indented variants.
+
+    Args:
+        enum: The generic ``EnumDef`` to export (must have type_params).
+        source_text: Full source text of the unit the enum lives in.
+
+    Returns:
+        A msgpack-safe dict matching the generic-template record schema.
+    """
+    return {
+        "name": enum.name,
+        "type_params": _type_param_records(enum),
+        "source": slice_decl_source(enum, source_text),
+        "free_perks": _free_perks_of(enum),
+    }
+
+
+def deserialize_generic_enum(record: dict) -> "EnumDef":
+    """Reconstruct an ``EnumDef`` from a manifest record by re-parsing source.
+
+    Mirrors ``deserialize_generic_function``.
+    """
+    from sushi_lang.internals.parser import parse_to_ast
+
+    program, _tree = parse_to_ast(record["source"])
+
+    enums = program.enums or []
+    if len(enums) != 1:
+        raise ValueError(
+            f"template source for enum '{record.get('name')}' parsed to "
+            f"{len(enums)} enums, expected exactly 1"
+        )
+    enum = enums[0]
+    _reconcile_type_params(enum, record)
+    return enum
 
 
 def serialize_perk(perk: "PerkDef", source_text: str) -> dict:

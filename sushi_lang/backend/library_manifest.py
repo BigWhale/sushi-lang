@@ -183,6 +183,10 @@ class LibraryManifestGenerator:
             if unit.ast is None:
                 continue
             for struct_def in unit.ast.structs:
+                # Generic structs ship as re-parsable templates (see
+                # _extract_templates), never as concrete entries.
+                if struct_def.type_params:
+                    continue
                 if struct_def.name in seen_names:
                     continue
                 seen_names.add(struct_def.name)
@@ -208,6 +212,10 @@ class LibraryManifestGenerator:
             if unit.ast is None:
                 continue
             for enum_def in unit.ast.enums:
+                # Generic enums ship as re-parsable templates (see
+                # _extract_templates), never as concrete entries.
+                if enum_def.type_params:
+                    continue
                 if enum_def.name in seen_names:
                     continue
                 seen_names.add(enum_def.name)
@@ -292,14 +300,46 @@ class LibraryManifestGenerator:
             for f in dataclasses.fields(node):
                 self._scan_referenced_symbols(getattr(node, f.name, None), acc)
 
+    def _scan_referenced_type_names(self, node, acc: set[str]) -> None:
+        """Walk a declaration collecting referenced user-TYPE names.
+
+        Surfaces ``UnknownType.name`` and ``GenericTypeRef.base_name`` (the two
+        ways a struct field or enum variant payload names another type),
+        recursing through dataclass fields and sequences so nested generics
+        (``Own<Tree<T>>``, ``Inner<T>``) are reached. Like
+        ``_scan_referenced_symbols`` this over-collects; the caller only rejects
+        names matching a known library-private symbol.
+        """
+        from sushi_lang.semantics.typesys import UnknownType
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+
+        if node is None:
+            return
+        if isinstance(node, (list, tuple)):
+            for item in node:
+                self._scan_referenced_type_names(item, acc)
+            return
+
+        if isinstance(node, UnknownType):
+            acc.add(node.name)
+        elif isinstance(node, GenericTypeRef):
+            acc.add(node.base_name)
+
+        import dataclasses
+        if dataclasses.is_dataclass(node) and not isinstance(node, type):
+            for f in dataclasses.fields(node):
+                self._scan_referenced_type_names(getattr(node, f.name, None), acc)
+
     def _check_generic_export_closure(
-        self, func, private_symbols: set[str]
+        self, func, private_symbols: set[str], allowed: set[str] = frozenset()
     ) -> None:
         """Reject (CE5006) a public generic whose body references a private symbol.
 
         Bounds this milestone to self-contained generics: the re-parsed template
         is monomorphized at the consumer, which has no visibility into the
-        library's private functions/types/constants.
+        library's private functions/types/constants. ``allowed`` lists co-shipped
+        public templates (generic struct/enum names) that a body may freely
+        reference even though they also appear in ``private_symbols``.
         """
         import sushi_lang.internals.errors as er
 
@@ -313,7 +353,8 @@ class LibraryManifestGenerator:
         param_names = {p.name for p in func.params}
 
         offending = sorted(
-            referenced & private_symbols - type_param_names - param_names
+            referenced & private_symbols
+            - type_param_names - param_names - set(allowed)
         )
         if offending:
             symbol = offending[0]
@@ -325,12 +366,48 @@ class LibraryManifestGenerator:
                 f"library-private symbol '{symbol}' and cannot be exported"
             )
 
+    def _check_generic_type_export_closure(
+        self, node, private_symbols: set[str], allowed: set[str] = frozenset()
+    ) -> None:
+        """Reject (CE5006) a public generic struct/enum whose field or variant
+        payload types reference a library-private symbol.
+
+        Mirrors ``_check_generic_export_closure`` for type definitions. A
+        field/payload may reference the generic's own name (recursion, e.g.
+        ``Own<Tree<T>>``) and any co-shipped public template in ``allowed``; a
+        reference to a concrete library-private type aborts the export.
+        """
+        import sushi_lang.internals.errors as er
+
+        referenced: set[str] = set()
+        self._scan_referenced_type_names(node, referenced)
+
+        type_param_names = {tp.name for tp in (node.type_params or [])}
+
+        offending = sorted(
+            referenced & private_symbols
+            - type_param_names - set(allowed) - {node.name}
+        )
+        if offending:
+            symbol = offending[0]
+            er.emit(self.analyzer.reporter, er.ERR.CE5006,
+                    getattr(node, "name_span", None) or node.loc,
+                    name=node.name, symbol=symbol)
+            raise ValueError(
+                f"CE5006: public generic '{node.name}' references "
+                f"library-private symbol '{symbol}' and cannot be exported"
+            )
+
     def _extract_templates(self, units: list['Unit']) -> dict:
         """Extract instantiable public generic templates (re-parsable source).
 
         Returns the manifest `templates` section. We ship:
 
         - `generic_functions`: instantiable public generic function bodies.
+        - `generic_structs` / `generic_enums`: instantiable public generic
+          struct/enum templates. Unlike functions there is no `public` keyword
+          for types, so every generic struct/enum is exported (matching how
+          concrete structs/enums already all cross the boundary).
         - `perks`: the DEFINITIONS (method-signature contracts) of every perk
           named by an exported generic's type-parameter constraints. Shipping
           the contract frees the consumer from redeclaring a perk it does not
@@ -341,11 +418,29 @@ class LibraryManifestGenerator:
         consumer provides impls for its own instantiation types.
         """
         from sushi_lang.backend.library_templates import (
-            serialize_generic_function, serialize_perk,
+            serialize_generic_function, serialize_generic_struct,
+            serialize_generic_enum, serialize_perk,
         )
 
         private_symbols = self._collect_private_symbols(units)
+
+        # Names of every generic struct/enum we ship as a template. A co-shipped
+        # template may be referenced by another generic's field/body even though
+        # it also appears in `private_symbols` (it resolves at the consumer).
+        exported_generic_types: set[str] = set()
+        for unit in units:
+            if unit.ast is None:
+                continue
+            for s in unit.ast.structs:
+                if s.type_params:
+                    exported_generic_types.add(s.name)
+            for e in unit.ast.enums:
+                if e.type_params:
+                    exported_generic_types.add(e.name)
+
         generic_functions: list[dict] = []
+        generic_structs: list[dict] = []
+        generic_enums: list[dict] = []
         referenced_perks: set[str] = set()
 
         for unit in units:
@@ -355,9 +450,26 @@ class LibraryManifestGenerator:
             for func in unit.ast.functions:
                 if not (func.is_public and func.type_params):
                     continue
-                self._check_generic_export_closure(func, private_symbols)
+                self._check_generic_export_closure(
+                    func, private_symbols, exported_generic_types)
                 record = serialize_generic_function(func, source)
                 generic_functions.append(record)
+                referenced_perks.update(record.get("free_perks", []))
+            for struct in unit.ast.structs:
+                if not struct.type_params:
+                    continue
+                self._check_generic_type_export_closure(
+                    struct, private_symbols, exported_generic_types)
+                record = serialize_generic_struct(struct, source)
+                generic_structs.append(record)
+                referenced_perks.update(record.get("free_perks", []))
+            for enum in unit.ast.enums:
+                if not enum.type_params:
+                    continue
+                self._check_generic_type_export_closure(
+                    enum, private_symbols, exported_generic_types)
+                record = serialize_generic_enum(enum, source)
+                generic_enums.append(record)
                 referenced_perks.update(record.get("free_perks", []))
 
         # Ship only the perk DEFINITIONS referenced by an exported generic's
@@ -377,6 +489,8 @@ class LibraryManifestGenerator:
         return {
             "version": 2,
             "generic_functions": generic_functions,
+            "generic_structs": generic_structs,
+            "generic_enums": generic_enums,
             "perks": perks,
             "perk_impls": [],
         }
