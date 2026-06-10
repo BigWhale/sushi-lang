@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from llvmlite import ir
-from sushi_lang.semantics.ast import CastExpr
+from sushi_lang.semantics.ast import CastExpr, IntLit, UnaryOp
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
 
@@ -127,6 +127,22 @@ def emit_cast_expression(codegen: 'LLVMCodegen', expr: CastExpr) -> ir.Value:
         NotImplementedError: If the cast operation is not supported.
     """
     builder = require_builder(codegen)
+
+    # An integer literal cast directly to an integer type materializes at the
+    # TARGET width, so values above i32 range (e.g. 40000000000 as i64) are
+    # exact instead of pre-wrapped by the default 32-bit literal emission.
+    target_ll = codegen.types.ll_type(expr.target_type)
+    if isinstance(target_ll, ir.IntType):
+        literal = None
+        if isinstance(expr.expr, IntLit):
+            literal = int(expr.expr.value)
+        elif (isinstance(expr.expr, UnaryOp) and expr.expr.op == "neg"
+              and isinstance(expr.expr.expr, IntLit)):
+            literal = -int(expr.expr.expr.value)
+        if literal is not None:
+            mask = (1 << target_ll.width) - 1
+            return ir.Constant(target_ll, literal & mask)
+
     # Emit the source expression
     source_value = codegen.expressions.emit_expr(expr.expr)
 

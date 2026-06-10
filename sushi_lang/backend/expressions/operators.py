@@ -76,9 +76,8 @@ def emit_unary_op(codegen: 'CodegenProtocol', expr: UnaryOp, to_i1: bool) -> ir.
         if isinstance(val.type, (ir.FloatType, ir.DoubleType)):
             return emit_float_negation(codegen, val)
         else:
-            # Integer negation
-            v32 = codegen.utils.as_i32(val)
-            return codegen.builder.sub(ir.Constant(codegen.i32, 0), v32)
+            # Integer negation at the operand's own width (no i32 squeeze)
+            return codegen.builder.sub(ir.Constant(val.type, 0), val)
 
     if expr.op == "not":
         if to_i1:
@@ -88,9 +87,8 @@ def emit_unary_op(codegen: 'CodegenProtocol', expr: UnaryOp, to_i1: bool) -> ir.
         return codegen.builder.zext(codegen.builder.xor(i1v, ir.Constant(codegen.i1, 1)), codegen.i8)
 
     if expr.op == "~":
-        # Bitwise NOT (complement)
-        v32 = codegen.utils.as_i32(val)
-        return codegen.builder.not_(v32)
+        # Bitwise NOT (complement) at the operand's own width
+        return codegen.builder.not_(val)
 
     raise NotImplementedError(f"unknown UnaryOp: {expr.op!r}")
 
@@ -184,7 +182,21 @@ def emit_comparison(codegen: 'CodegenProtocol', expr: BinaryOp, to_i1: bool) -> 
         i1v = codegen.builder.fcmp_ordered(op, lhs, rhs)
         return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
 
-    # Integer comparisons
+    # Integer comparisons at operand width. Pass 2's strict same-type rule
+    # (CE2510) guarantees equal widths; the i32 squeeze is kept only as a
+    # defensive fallback for mismatched widths (it would truncate i64).
+    if (isinstance(lhs.type, ir.IntType) and isinstance(rhs.type, ir.IntType)
+            and lhs.type.width == rhs.type.width):
+        from .type_utils import infer_expr_semantic_type, is_unsigned_type
+        sem = infer_expr_semantic_type(codegen, expr.left)
+        if sem is None:
+            sem = infer_expr_semantic_type(codegen, expr.right)
+        if sem is not None and is_unsigned_type(sem):
+            i1v = codegen.builder.icmp_unsigned(op, lhs, rhs)
+        else:
+            i1v = codegen.builder.icmp_signed(op, lhs, rhs)
+        return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
+
     lhs_i32 = _ensure_i32(codegen, lhs)
     rhs_i32 = _ensure_i32(codegen, rhs)
     i1v = codegen.builder.icmp_signed(op, lhs_i32, rhs_i32)

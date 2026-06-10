@@ -1,0 +1,16 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: different
+
+# Two i64 values that are equal mod 2^32 must still compare unequal (issue #84):
+# comparisons may not truncate operands to 32 bits.
+fn main() i32:
+    let i64 big = 40000000000 as i64
+    let i64 small = 1345294336 as i64
+    if (big == small):
+        println("same")
+    else:
+        println("different")
+    if (big > small):
+        println("ordered")
+    return Result.Ok(0)

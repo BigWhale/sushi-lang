@@ -1,0 +1,7 @@
+# A bare out-of-range literal inside arithmetic is rejected; the outer cast does not
+# legalize the operand (issue #84).
+# EXPECT_ERROR_CODE: CE2070
+fn main() i32:
+    let i64 y = (40000000000 * 2) as i64
+    println(y)
+    return Result.Ok(0)

@@ -83,6 +83,22 @@ def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None
         validator: The TypeValidator instance.
         expr: The cast expression to validate.
     """
+    # An integer literal (or negated literal) cast directly to an integer type
+    # materializes at the TARGET width (Rust `as` semantics), so it is exempt
+    # from the bare-literal i32 range check (CE2070). Mark it before recursing.
+    from sushi_lang.semantics.ast import IntLit, UnaryOp
+    from sushi_lang.semantics.typesys import BuiltinType
+    integer_targets = (
+        BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
+        BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
+    )
+    if expr.target_type in integer_targets:
+        if isinstance(expr.expr, IntLit):
+            expr.expr.in_cast_context = True
+        elif (isinstance(expr.expr, UnaryOp) and expr.expr.op == "neg"
+              and isinstance(expr.expr.expr, IntLit)):
+            expr.expr.expr.in_cast_context = True
+
     # First validate the source expression
     validator.validate_expression(expr.expr)
 

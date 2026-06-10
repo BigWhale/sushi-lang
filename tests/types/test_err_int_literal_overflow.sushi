@@ -1,0 +1,6 @@
+# A bare decimal literal above i32 range is a compile error, not a silent wrap (issue #84).
+# EXPECT_ERROR_CODE: CE2070
+fn main() i32:
+    let i32 x = 40000000000
+    println(x)
+    return Result.Ok(0)

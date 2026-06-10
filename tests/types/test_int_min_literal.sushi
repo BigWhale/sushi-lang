@@ -1,0 +1,9 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: -2147483648
+
+# i32 minimum as a negated literal stays legal under the literal range check (issue #84).
+fn main() i32:
+    let i32 lowest = -2147483648
+    println(lowest)
+    return Result.Ok(0)

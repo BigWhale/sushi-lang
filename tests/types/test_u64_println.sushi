@@ -1,0 +1,9 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: 18446744073709551615
+
+# println of a u64 above i64 max prints the full unsigned value (issue #84).
+fn main() i32:
+    let u64 max = 18446744073709551615 as u64
+    println(max)
+    return Result.Ok(0)

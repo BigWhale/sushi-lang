@@ -21,8 +21,10 @@ def emit_print(codegen: 'LLVMCodegen', stmt: 'Print') -> None:
         codegen: The main LLVMCodegen instance.
         stmt: The print statement to emit.
     """
+    from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
     val = codegen.expressions.emit_expr(stmt.value)
-    codegen.runtime.formatting.emit_print_value(val)
+    sem = infer_expr_semantic_type(codegen, stmt.value)
+    codegen.runtime.formatting.emit_print_value(val, semantic_type=sem)
 
 
 def emit_println(codegen: 'LLVMCodegen', stmt: 'PrintLn') -> None:
@@ -34,5 +36,7 @@ def emit_println(codegen: 'LLVMCodegen', stmt: 'PrintLn') -> None:
         codegen: The main LLVMCodegen instance.
         stmt: The println statement to emit.
     """
+    from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
     val = codegen.expressions.emit_expr(stmt.value)
-    codegen.runtime.formatting.emit_print_value(val, is_line=True)
+    sem = infer_expr_semantic_type(codegen, stmt.value)
+    codegen.runtime.formatting.emit_print_value(val, is_line=True, semantic_type=sem)

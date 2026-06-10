@@ -154,6 +154,15 @@ class ExpressionValidator(RecursiveVisitor):
 
     def visit_unaryop(self, node: UnaryOp) -> None:
         """Validate unary operation."""
+        # A negated integer literal is range-checked as one signed value, so
+        # that i32 min (-2147483648) stays legal while the positive literal
+        # 2147483648 alone would not be.
+        if node.op == "neg" and isinstance(node.expr, IntLit):
+            if not getattr(node.expr, 'in_cast_context', False):
+                if -int(node.expr.value) < -(2 ** 31):
+                    self._emit_literal_overflow(node.expr)
+            node.expr.range_checked = True
+
         self.type_validator.validate_expression(node.expr)
 
         # Additional validation for bitwise NOT operator
@@ -311,8 +320,32 @@ class ExpressionValidator(RecursiveVisitor):
         pass
 
     def visit_intlit(self, node: IntLit) -> None:
-        """Integer literals are terminal."""
-        pass
+        """Range-check a bare integer literal (CE2070).
+
+        Literals default to i32, so outside a direct integer `as` cast a
+        decimal literal must fit the signed i32 range and a radix literal
+        (hex/binary/octal) must fit the 32-bit pattern. Inside a direct cast
+        the literal materializes at the target width instead (Rust `as`
+        semantics) and is exempt. Negated literals are pre-checked (and
+        marked) by visit_unaryop as a single signed value.
+        """
+        if getattr(node, 'in_cast_context', False) or getattr(node, 'range_checked', False):
+            return
+        value = int(node.value)
+        if node.radix == 10:
+            in_range = 0 <= value <= 2 ** 31 - 1
+        else:
+            # Bit-pattern semantics: 0xFFFFFFFF is a legal 32-bit pattern
+            in_range = 0 <= value <= 2 ** 32 - 1
+        if not in_range:
+            self._emit_literal_overflow(node)
+
+    def _emit_literal_overflow(self, node: IntLit) -> None:
+        """Emit CE2070 for an integer literal that cannot fit its default i32 type."""
+        radix_names = {2: "binary", 8: "octal", 10: "decimal", 16: "hexadecimal"}
+        er.emit(self.type_validator.reporter, er.ERR.CE2070, node.loc,
+                radix=radix_names.get(node.radix, "integer"),
+                literal=str(node.value), type="i32")
 
     def visit_floatlit(self, node: FloatLit) -> None:
         """Float literals are terminal."""
@@ -501,9 +534,9 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         # Logical NOT returns bool
         if node.op == "not":
             return BuiltinType.BOOL
-        # Bitwise NOT returns i32
+        # Bitwise NOT preserves the integer operand type
         if node.op == "~":
-            return BuiltinType.I32
+            return self.type_validator.infer_expression_type(node.expr)
         # Negation preserves numeric type
         if node.op == "neg":
             return self.type_validator.infer_expression_type(node.expr)
@@ -530,12 +563,21 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             if left_type == BuiltinType.STRING or right_type == BuiltinType.STRING:
                 return None
 
-            # If either operand is floating-point, return f64
-            if (left_type in [BuiltinType.F32, BuiltinType.F64] or
-                right_type in [BuiltinType.F32, BuiltinType.F64]):
-                return BuiltinType.F64
-            # If both are integers, return i32
-            return BuiltinType.I32
+            # Strict same-type rule: the result is the common operand type.
+            # Mixed numeric operands are a CE2510 error (emitted by the
+            # ExpressionValidator); return None there to avoid cascading
+            # mismatch errors on the enclosing expression.
+            numeric = (BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
+                       BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
+                       BuiltinType.F32, BuiltinType.F64)
+            if left_type == right_type and left_type in numeric:
+                return left_type
+            # One side unknown (e.g. an unresolved call): trust the known side
+            if left_type is None and right_type in numeric:
+                return right_type
+            if right_type is None and left_type in numeric:
+                return left_type
+            return None
 
         # Bitwise operators return the type of the left operand
         if node.op in ["&", "|", "^", "<<", ">>"]:
