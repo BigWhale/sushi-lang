@@ -2,6 +2,36 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [0.7.1] - 2026-03-21
+
+### Added
+- Glossary section in README
+
+### Fixed
+- Nori banner rendering
+
+## [0.7.0] - 2026-03-21
+
+### Added
+- Nori package manager (`nori` CLI), shipped alongside the compiler
+  - Commands: `init`, `build`, `install`, `list`, `info`, `remove`, `publish`, `search`, `status`, `login`, `help`
+  - Packages install to `~/.sushi/bento/` with executable symlinks in `~/.sushi/bin/`
+  - `.nori` archive format for distributable library packages
+  - Compiler auto-discovers installed libraries without `SUSHI_LIB_PATH`
+- Project-level dependency environments
+  - Global versioned store (`~/.sushi/store/`) with per-project `.sushi_bento/` symlinks
+  - Compiler resolves project-local dependencies before global packages
+- Omakase package repository integration (omakase.lubica.net)
+  - `nori login <api-key>` with credentials stored in `~/.sushi/credentials.toml`
+  - `nori publish` uploads packages; `nori search` browses the registry; `nori status` reports login and published packages
+  - Omakase API contract specification: authentication, users, groups, ownership, stats, and package storage layout
+
+### Changed
+- CI split into separate test and badges jobs
+
+### Documentation
+- New documentation: `docs/package-manager.md` for the Nori package manager
+
 ## [0.6.1] - 2026-02-22
 
 ### Added
