@@ -144,7 +144,12 @@ def emit_binary_op(codegen: 'CodegenProtocol', expr: BinaryOp, to_i1: bool) -> i
     # Arithmetic operations: preserve operand types (don't force i32)
     left = codegen.expressions.emit_expr(expr.left)
     right = codegen.expressions.emit_expr(expr.right)
-    return emit_arithmetic(codegen, op, left, right)
+    # Infer semantic type for signed/unsigned dispatch of / and %
+    from .type_utils import infer_expr_semantic_type
+    left_type = infer_expr_semantic_type(codegen, expr.left)
+    if left_type is None:
+        left_type = infer_expr_semantic_type(codegen, expr.right)
+    return emit_arithmetic(codegen, op, left, right, left_type)
 
 
 def emit_comparison(codegen: 'CodegenProtocol', expr: BinaryOp, to_i1: bool) -> ir.Value:
@@ -203,16 +208,24 @@ def emit_comparison(codegen: 'CodegenProtocol', expr: BinaryOp, to_i1: bool) -> 
     return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
 
 
-def emit_arithmetic(codegen: 'CodegenProtocol', op: str, left: ir.Value, right: ir.Value) -> ir.Value:
+def emit_arithmetic(codegen: 'CodegenProtocol', op: str, left: ir.Value, right: ir.Value, left_type: 'Optional[Type]' = None) -> ir.Value:
     """Emit arithmetic operations on integer or floating-point values.
 
     Performs compile-time constant folding when both operands are constants.
+
+    For integer division (/) and modulo (%), chooses between signed and unsigned
+    LLVM instructions based on operand type:
+    - Signed integers (i8, i16, i32, i64): sdiv / srem
+    - Unsigned integers (u8, u16, u32, u64): udiv / urem
+
+    The other operators (+, -, *) are sign-agnostic in two's-complement.
 
     Args:
         codegen: The LLVM codegen instance.
         op: The arithmetic operator (+, -, *, /, %).
         left: Left operand (any numeric type).
         right: Right operand (any numeric type, should match left's type).
+        left_type: The semantic type of the left operand (for / and % dispatch).
 
     Returns:
         The arithmetic result (same type as operands).
@@ -241,13 +254,17 @@ def emit_arithmetic(codegen: 'CodegenProtocol', op: str, left: ir.Value, right: 
         if op in float_ops:
             return float_ops[op](left, right)
     else:
-        # Integer arithmetic operations
+        # Integer arithmetic operations. Division and modulo dispatch on
+        # signedness (the same-type binop rule guarantees both operands share
+        # one signedness, so the left operand's type suffices).
+        from .type_utils import is_unsigned_type
+        unsigned = is_unsigned_type(left_type)
         int_ops = {
             "+": codegen.builder.add,
             "-": codegen.builder.sub,
             "*": codegen.builder.mul,
-            "/": codegen.builder.sdiv,
-            "%": codegen.builder.srem,
+            "/": codegen.builder.udiv if unsigned else codegen.builder.sdiv,
+            "%": codegen.builder.urem if unsigned else codegen.builder.srem,
         }
         if op in int_ops:
             return int_ops[op](left, right)
@@ -263,6 +280,11 @@ def _fold_arithmetic_constants(op: str, left: ir.Constant, right: ir.Constant) -
         left: Left constant operand.
         right: Right constant operand.
 
+    Note:
+        Only sign-agnostic operators (+, -, *) are folded here. Division (/) and
+        modulo (%) are sign-dependent and are deferred to instruction selection in
+        emit_arithmetic (sdiv/udiv, srem/urem); LLVM constant-folds the result.
+
     Returns:
         Folded constant result, or None if folding not possible.
     """
@@ -277,7 +299,7 @@ def _fold_arithmetic_constants(op: str, left: ir.Constant, right: ir.Constant) -
     except (AttributeError, TypeError):
         return None
 
-    # Perform the operation
+    # Perform the operation (sign-agnostic operators only)
     result = None
     if op == "+":
         result = lval + rval
@@ -285,11 +307,6 @@ def _fold_arithmetic_constants(op: str, left: ir.Constant, right: ir.Constant) -
         result = lval - rval
     elif op == "*":
         result = lval * rval
-    elif op == "/" and rval != 0:
-        # Integer division (signed)
-        result = int(lval / rval) if lval * rval >= 0 else -(-lval // rval)
-    elif op == "%" and rval != 0:
-        result = lval % rval
 
     if result is None:
         return None
@@ -332,7 +349,7 @@ def emit_bitwise(codegen: 'CodegenProtocol', op: str, left: ir.Value, right: ir.
     """
     # Constant folding: if both operands are constants, compute at compile time
     if isinstance(left, ir.Constant) and isinstance(right, ir.Constant):
-        folded = _fold_bitwise_constants(op, left, right, left_type)
+        folded = _fold_bitwise_constants(op, left, right)
         if folded is not None:
             return folded
 
@@ -382,14 +399,18 @@ def emit_bitwise(codegen: 'CodegenProtocol', op: str, left: ir.Value, right: ir.
     raise NotImplementedError(f"bitwise op not supported yet: {op!r}")
 
 
-def _fold_bitwise_constants(op: str, left: ir.Constant, right: ir.Constant, left_type: 'Optional[Type]' = None) -> 'Optional[ir.Constant]':
+def _fold_bitwise_constants(op: str, left: ir.Constant, right: ir.Constant) -> 'Optional[ir.Constant]':
     """Fold bitwise operations on constant values at compile time.
 
+    Note:
+        Only sign-agnostic operators (&, |, ^, <<) are folded here. Right shift (>>)
+        is sign-dependent (arithmetic vs logical) and is deferred to instruction
+        selection in emit_bitwise (ashr/lshr); LLVM constant-folds the result.
+
     Args:
-        op: The bitwise operator (&, |, ^, <<, >>).
+        op: The bitwise operator (&, |, ^, <<).
         left: Left constant operand.
         right: Right constant operand.
-        left_type: The semantic type of the left operand (for right shift dispatch).
 
     Returns:
         Folded constant result, or None if folding not possible.
@@ -415,17 +436,6 @@ def _fold_bitwise_constants(op: str, left: ir.Constant, right: ir.Constant, left
         result = lval ^ rval
     elif op == "<<":
         result = (lval << rval) & mask
-    elif op == ">>":
-        from sushi_lang.semantics.typesys import BuiltinType
-        is_unsigned = left_type in [BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64] if left_type else False
-        if is_unsigned:
-            # Logical right shift
-            result = (lval & mask) >> rval
-        else:
-            # Arithmetic right shift (sign-extend)
-            if lval >= (1 << (width - 1)):
-                lval -= (1 << width)
-            result = lval >> rval
 
     if result is None:
         return None
