@@ -130,6 +130,30 @@ let i32[] dynamic = from([1, 2, 3])
 let string[] empty = new()
 ```
 
+### Function Types
+
+A function type describes a first-class function value (a bare function pointer). The return
+type is mandatory; the optional `| E` names the error type (defaults to `StdError`).
+
+```sushi
+fn(i32) -> i32                 # takes i32, returns i32 (error type StdError)
+fn(i32, string) -> bool        # two parameters
+fn() -> ~                      # no parameters, blank return
+fn(i32) -> i32 | MathError     # explicit custom error type
+```
+
+Reference a plain top-level function by name to get a value of that type, then store, pass, or
+call through it:
+
+```sushi
+let fn(i32) -> i32 f = add_one     # `add_one` used as a value
+let i32 r = f(41)??                # call through it -> Result, like a direct call
+```
+
+Function types are invariant (arity, parameters, return, and error type must match exactly).
+v1 has no closures; only plain top-level functions are referenceable. See the
+[First-Class Functions guide](first-class-functions.md).
+
 ## Variables
 
 ### Declaration

@@ -79,6 +79,7 @@ nav:
       - "14. Stdlib, FFI & Libraries": tutorial/14-stdlib-ffi-libraries.md
       - "15. Variadic Functions": tutorial/15-variadic-functions.md
       - "16. Foreign Pointers": tutorial/16-foreign-pointers.md
+      - "17. First-Class Functions": tutorial/17-first-class-functions.md
   - Guides:
       - Getting Started: getting-started.md
       - Language Guide: language-guide.md
@@ -86,6 +87,7 @@ nav:
       - Memory Management: memory-management.md
       - Generics: generics.md
       - Perks: perks.md
+      - First-Class Functions: first-class-functions.md
       - Variadics: variadics.md
       - Foreign Function Interface: ffi.md
   - Reference:
@@ -116,4 +118,5 @@ nav:
       - Backend: internals/backend.md
       - Stdlib Build: internals/stdlib-build.md
       - "Variadics (design)": design/variadics.md
+      - "First-Class Functions (design)": design/first-class-functions.md
   - Examples: examples/README.md
