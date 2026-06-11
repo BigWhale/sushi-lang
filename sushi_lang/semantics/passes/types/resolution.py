@@ -114,6 +114,16 @@ def resolve_variable_type(validator: 'TypeValidator',
     if isinstance(declared_type, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
         return declared_type
 
+    # FunctionType → resolve params/ok/err (binds implicit UnknownType("StdError"))
+    from sushi_lang.semantics.typesys import FunctionType
+    from sushi_lang.semantics.type_resolution import resolve_type_recursively
+    if isinstance(declared_type, FunctionType):
+        return resolve_type_recursively(
+            declared_type,
+            validator.struct_table.by_name,
+            validator.enum_table.by_name,
+        )
+
     # UnknownType → resolve to StructType or EnumType
     if isinstance(declared_type, UnknownType):
         resolved = resolve_unknown_type(

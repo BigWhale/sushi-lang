@@ -1,0 +1,20 @@
+# First-class functions: store a function value in a struct field, load it to a
+# local, and call through it. (Calling obj.field() directly parses as a method
+# call, so bind to a local first -- a documented v1 limitation.)
+# EXPECT_STDOUT_EXACT: "11\n"
+fn add_one(i32 x) i32:
+    return Result.Ok(x + 1)
+
+struct Handler:
+    fn(i32) -> i32 op
+
+fn run(Handler h, i32 v) i32:
+    let fn(i32) -> i32 f = h.op
+    let i32 r = f(v)??
+    return Result.Ok(r)
+
+fn main() i32:
+    let Handler h = Handler(add_one)
+    let i32 out = run(h, 10).realise(0)
+    println(out)
+    return Result.Ok(0)

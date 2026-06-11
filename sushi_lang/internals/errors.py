@@ -973,6 +973,14 @@ _add(ErrorMessage("CE2091", Severity.ERROR,
     "extension/perk method '{name}' must use a bare 'return <value>', not 'return Result.Ok(...)' / 'Result.Err(...)'",
     Category.TYPE, "Extension and perk-implementation methods return the bare value directly (their ABI is unwrapped). Write 'return value' instead of 'return Result.Ok(value)'."))
 
+_add(ErrorMessage("CE2092", Severity.ERROR,
+    "function value type mismatch: expected '{expected}', got '{actual}'",
+    Category.TYPE, "A first-class function value must match the expected function type exactly: same arity, parameter types, return type, and error type (function types are invariant)."))
+
+_add(ErrorMessage("CE2093", Severity.ERROR,
+    "cannot take a function value of '{name}': {reason}",
+    Category.TYPE, "In v1 only plain top-level functions are first-class. Extension/perk methods, FFI externals, and generic functions cannot be referenced as function values."))
+
 # Unit Management Errors (CE3xxx)
 _add(ErrorMessage("CE3001", Severity.ERROR,
     "circular dependency detected: {cycle}",

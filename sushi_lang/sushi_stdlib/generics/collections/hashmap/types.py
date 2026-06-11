@@ -191,6 +191,60 @@ def split_type_arguments(type_args_str: str) -> list[str]:
     return parts
 
 
+def _split_top_level(s: str, sep: str) -> list[str]:
+    """Split `s` on `sep`, ignoring separators nested inside <>, (), or []."""
+    parts = []
+    current = []
+    depth = 0
+    for char in s:
+        if char in '<([':
+            depth += 1
+        elif char in '>)]':
+            depth -= 1
+        if char == sep and depth == 0:
+            parts.append(''.join(current).strip())
+            current = []
+        else:
+            current.append(char)
+    if current:
+        parts.append(''.join(current).strip())
+    return parts
+
+
+def _resolve_function_type_from_string(type_str: str, codegen: Any) -> Type:
+    """Resolve a first-class function type string: "fn(P0, P1, ...) -> T [| E]"."""
+    from sushi_lang.semantics.typesys import FunctionType
+
+    open_idx = type_str.index("(")
+    depth = 0
+    close_idx = -1
+    for i in range(open_idx, len(type_str)):
+        if type_str[i] == "(":
+            depth += 1
+        elif type_str[i] == ")":
+            depth -= 1
+            if depth == 0:
+                close_idx = i
+                break
+
+    params_str = type_str[open_idx + 1:close_idx].strip()
+    rest = type_str[close_idx + 1:].strip()
+    if rest.startswith("->"):
+        rest = rest[2:].strip()
+
+    pipe_parts = _split_top_level(rest, "|")
+    ret_str = pipe_parts[0].strip()
+    err_str = pipe_parts[1].strip() if len(pipe_parts) > 1 else "StdError"
+
+    param_types = tuple(
+        resolve_type_from_string(p, codegen)
+        for p in _split_top_level(params_str, ",") if p
+    )
+    ok_type = resolve_type_from_string(ret_str, codegen)
+    err_type = resolve_type_from_string(err_str, codegen)
+    return FunctionType(param_types=param_types, ok_type=ok_type, err_type=err_type)
+
+
 def resolve_type_from_string(type_str: str, codegen: Any) -> Type:
     """Resolve a type from its string representation.
 
@@ -199,6 +253,7 @@ def resolve_type_from_string(type_str: str, codegen: Any) -> Type:
     - Struct types (Point, Person, etc.)
     - Enum types (Color, FileError, etc.)
     - Generic types (Maybe<i32>, Box<string>, etc.)
+    - Function types (fn(i32) -> i32, fn(i32) -> i32 | MathError)
     - Fixed arrays (i32[10], string[3], etc.)
     - Dynamic arrays (i32[], string[], etc.)
 
@@ -212,6 +267,13 @@ def resolve_type_from_string(type_str: str, codegen: Any) -> Type:
     Raises:
         ValueError: If type cannot be resolved.
     """
+    type_str = type_str.strip()
+
+    # First-class function type: must be handled before the array branch (its return
+    # type may legitimately end with "[]", which the array regex would misparse).
+    if type_str.startswith("fn(") or type_str.startswith("fn ("):
+        return _resolve_function_type_from_string(type_str, codegen)
+
     # Check for array types first (fixed: "type[N]" or dynamic: "type[]")
     if '[' in type_str and type_str.endswith(']'):
         # Extract base type and size

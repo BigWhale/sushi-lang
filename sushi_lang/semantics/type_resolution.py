@@ -278,12 +278,27 @@ def resolve_type_recursively(
         >>> isinstance(resolved.base_type, StructType)  # True
     """
     from sushi_lang.semantics.typesys import (
-        UnknownType, ArrayType, DynamicArrayType, StructType, EnumType
+        UnknownType, ArrayType, DynamicArrayType, StructType, EnumType, FunctionType
     )
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
     # First, try to resolve the type itself if it's UnknownType
     resolved_ty = resolve_unknown_type(ty, struct_table, enum_table)
+
+    # Handle function types: resolve params, ok type, and err type (the implicit
+    # UnknownType("StdError") binds to the StdError enum here).
+    if isinstance(resolved_ty, FunctionType):
+        new_params = tuple(
+            resolve_type_recursively(p, struct_table, enum_table)
+            for p in resolved_ty.param_types
+        )
+        new_ok = resolve_type_recursively(resolved_ty.ok_type, struct_table, enum_table)
+        new_err = resolve_type_recursively(resolved_ty.err_type, struct_table, enum_table)
+        if (new_params != resolved_ty.param_types or
+                new_ok != resolved_ty.ok_type or
+                new_err != resolved_ty.err_type):
+            return FunctionType(param_types=new_params, ok_type=new_ok, err_type=new_err)
+        return resolved_ty
 
     # Handle array types with recursive base type resolution
     if isinstance(resolved_ty, ArrayType):
@@ -371,7 +386,7 @@ def contains_unresolvable_unknown_type(
         True
     """
     from sushi_lang.semantics.typesys import (
-        UnknownType, ArrayType, DynamicArrayType, StructType, EnumType
+        UnknownType, ArrayType, DynamicArrayType, StructType, EnumType, FunctionType
     )
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
@@ -424,6 +439,16 @@ def contains_unresolvable_unknown_type(
             contains_unresolvable_unknown_type(assoc_type, struct_table, enum_table, visited)
             for variant in resolved_ty.variants
             for assoc_type in variant.associated_types
+        )
+
+    elif isinstance(resolved_ty, FunctionType):
+        return (
+            any(
+                contains_unresolvable_unknown_type(p, struct_table, enum_table, visited)
+                for p in resolved_ty.param_types
+            )
+            or contains_unresolvable_unknown_type(resolved_ty.ok_type, struct_table, enum_table, visited)
+            or contains_unresolvable_unknown_type(resolved_ty.err_type, struct_table, enum_table, visited)
         )
 
     return False

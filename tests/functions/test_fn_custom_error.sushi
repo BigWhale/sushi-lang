@@ -1,0 +1,22 @@
+# First-class functions: the function type captures a custom error type, so an
+# indirect call threads it through Result. 10/2 = 5; 10/0 errors -> realise(-1).
+# EXPECT_STDOUT_EXACT: "5\n-1\n"
+enum DivError:
+    DivByZero
+
+fn safe_div(i32 a, i32 b) i32 | DivError:
+    if (b == 0):
+        return Result.Err(DivError.DivByZero)
+    return Result.Ok(a / b)
+
+fn run(fn(i32, i32) -> i32 | DivError op, i32 x, i32 y) i32 | DivError:
+    let i32 r = op(x, y)??
+    return Result.Ok(r)
+
+fn main() i32:
+    let fn(i32, i32) -> i32 | DivError f = safe_div
+    let i32 ok = run(f, 10, 2).realise(-1)
+    let i32 bad = run(f, 10, 0).realise(-1)
+    println(ok)
+    println(bad)
+    return Result.Ok(0)

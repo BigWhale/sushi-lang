@@ -1,0 +1,9 @@
+# First-class functions (v1): referencing a generic function as a value is
+# deferred and is a clean CE2093.
+# EXPECT_ERROR_CODE: CE2093
+fn identity<T>(T x) T:
+    return Result.Ok(x)
+
+fn main() i32:
+    let fn(i32) -> i32 f = identity
+    return Result.Ok(0)

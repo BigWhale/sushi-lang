@@ -95,6 +95,7 @@ break_stmt: BREAK _NEWLINE
 continue_stmt: CONTINUE _NEWLINE
 
 ?type: BIT_AND BORROW_MODE type -> reference_t
+     | FN "(" [type_list] ")" "->" type ["|" type] -> fn_type_t
      | atom_type "[" INT "]" -> array_t
      | atom_type "[" "]" -> dynamic_array_t
      | atom_type

@@ -49,9 +49,17 @@ class ScopeAnalyzer:
         # Loop-nesting depth for the current function. break/continue are only
         # legal when this is > 0 (CE1003); reset to 0 across nested functions.
         self._loop_depth: int = 0
+        # Names of top-level functions. A bare reference to one (not shadowed by a
+        # local) is a first-class function value, not an undeclared identifier.
+        self.function_names: set[str] = set()
 
     def run(self, program: Program) -> None:
         """Entry point for scope analysis."""
+        # Collect top-level function names so a bare reference resolves to a function
+        # value rather than CE1001. (The type pass decides whether the reference is
+        # legal — e.g. CE2093 for generic functions.)
+        self.function_names = {func.name for func in program.functions}
+
         # Check constants (validate expressions in constant definitions)
         for const in program.constants:
             self._check_constant(const)
@@ -426,6 +434,10 @@ class ScopeAnalyzer:
                 elif expr.id in self.enums.by_name or expr.id in self.generic_enums.by_name:
                     # Enum type names don't need to be tracked as variables
                     pass
+                # Check if it's a top-level function referenced as a value (first-class
+                # function). A local of the same name shadows it and is handled below.
+                elif expr.id in self.function_names and not self._is_bound_local(expr.id):
+                    pass
                 else:
                     # It's a variable, track its usage
                     self._use_variable(expr.id, expr.loc)
@@ -451,7 +463,10 @@ class ScopeAnalyzer:
                 self._check_expression(expr.left)
                 self._check_expression(expr.right)
             case Call():
-                # Function calls don't mark function names as variable usage
+                # A callee that is a bound local is an indirect call through a function
+                # value -> mark it used. A bare top-level function name is not a variable.
+                if isinstance(expr.callee, Name) and self._is_bound_local(expr.callee.id):
+                    self._use_variable(expr.callee.id, expr.callee.loc)
                 for arg in expr.args:
                     self._check_expression(arg)
             case MethodCall():

@@ -26,6 +26,7 @@ from sushi_lang.semantics.typesys import (
     ReferenceType,
     PointerType,
     ForeignPtrType,
+    FunctionType,
 )
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.types.core.resolution import resolve_unknown_type, resolve_generic_type_ref, calculate_max_variant_size
@@ -168,6 +169,13 @@ class TypeMapper:
             case ForeignPtrType():
                 # Map ForeignPtrType (`ptr`) to opaque LLVM i8* for the C ABI.
                 return ir.PointerType(self.i8)
+            case FunctionType():
+                # Map a first-class function value to a pointer to the underlying LLVM
+                # function. A Sushi fn lowers to Result<T,E>(params), so the pointee
+                # signature mirrors the existing direct-call ABI exactly.
+                ret_llvm = self.ll_type(ResultType(ok_type=t.ok_type, err_type=t.err_type))
+                param_llvm = [self.ll_type(p) for p in t.param_types]
+                return ir.PointerType(ir.FunctionType(ret_llvm, param_llvm))
             case UnknownType():
                 # UnknownType might be a struct or enum type that needs resolution
                 resolved = resolve_unknown_type(

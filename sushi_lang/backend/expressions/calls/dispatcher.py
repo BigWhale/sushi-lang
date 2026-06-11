@@ -38,6 +38,12 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
 
     callee = expr.callee.id
 
+    # Indirect call through a first-class function value held in a local variable.
+    # A local shadows any same-named top-level function, so this is checked first.
+    fn_ptr = _try_function_pointer_local(codegen, callee)
+    if fn_ptr is not None:
+        return _emit_indirect_call(codegen, expr, fn_ptr, to_i1)
+
     # Check if this is a struct constructor
     if callee in codegen.struct_table.by_name:
         from sushi_lang.backend.expressions import structs
@@ -92,6 +98,36 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     # Functions now return Result<T> as enum: {i32 tag, [N x i8] data}
     # Return the full Result<T> struct - downstream code will handle extraction
     # (e.g., .realise() method, if (result) conditionals, etc.)
+    return codegen.utils.as_i1(result_struct) if to_i1 else result_struct
+
+
+def _try_function_pointer_local(codegen: 'LLVMCodegen', name: str) -> 'ir.Value | None':
+    """Return the loaded function pointer if `name` is a function-valued local, else None.
+
+    Inspects the alloca's allocated type (ptr to a function type) so no stray load is
+    emitted for ordinary variables.
+    """
+    try:
+        slot = codegen.memory.find_local_slot(name)
+    except KeyError:
+        return None
+    allocated = slot.type.pointee
+    if isinstance(allocated, ir.PointerType) and isinstance(allocated.pointee, ir.FunctionType):
+        return codegen.builder.load(slot, name=f"{name}_fnptr")
+    return None
+
+
+def _emit_indirect_call(codegen: 'LLVMCodegen', expr: Call, fn_ptr: 'ir.Value', to_i1: bool) -> ir.Value:
+    """Emit an indirect call through a function pointer.
+
+    Mirrors the direct-call ABI: the pointee is FunctionType(Result<T,E>, params), so the
+    returned Result<T,E> struct flows downstream exactly like a direct call's.
+    """
+    fn_ty = fn_ptr.type.pointee  # ir.FunctionType
+    params = list(fn_ty.args)
+    args = [codegen.expressions.emit_expr(a) for a in expr.args]
+    casted = [codegen.utils.cast_for_param(v, pt) for v, pt in zip(args, params)]
+    result_struct = codegen.builder.call(fn_ptr, casted)
     return codegen.utils.as_i1(result_struct) if to_i1 else result_struct
 
 
