@@ -140,12 +140,16 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
         >>> infer_expr_semantic_type(codegen, BinaryOp("+", x, IntLit(1)))  # Complex expr
         BuiltinType.U32
     """
-    from sushi_lang.semantics.ast import Name, IntLit, FloatLit, BinaryOp, StringLit, BoolLit, UnaryOp
+    from sushi_lang.semantics.ast import Name, IntLit, FloatLit, BinaryOp, StringLit, BoolLit, UnaryOp, CastExpr
     from sushi_lang.semantics.typesys import BuiltinType
 
     # Variable: look up in scope manager (supports nested scopes)
     if isinstance(expr, Name):
         return codegen.memory.find_semantic_type(expr.id)
+
+    # Explicit cast: the target type IS the semantic type
+    elif isinstance(expr, CastExpr):
+        return expr.target_type
 
     # Integer literals default to i32
     elif isinstance(expr, IntLit):
@@ -173,20 +177,17 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
         if expr.op in ["&", "|", "^", "<<", ">>"]:
             return infer_expr_semantic_type(codegen, expr.left)
 
-        # Arithmetic operators: infer from both operands
+        # Arithmetic operators: strict same-type rule (mirrors Pass 2) -
+        # the result is the common operand type; trust the known side when
+        # only one can be reconstructed here.
         elif expr.op in ["+", "-", "*", "/", "%"]:
             left_type = infer_expr_semantic_type(codegen, expr.left)
             right_type = infer_expr_semantic_type(codegen, expr.right)
 
-            # Float promotion: if either operand is float, result is float
-            if left_type in [BuiltinType.F32, BuiltinType.F64]:
-                return BuiltinType.F64
-            elif right_type in [BuiltinType.F32, BuiltinType.F64]:
-                return BuiltinType.F64
-
-            # Integer arithmetic: preserve left operand type if both are integers
-            if left_type and right_type:
+            if left_type is not None:
                 return left_type
+            if right_type is not None:
+                return right_type
 
             # Default fallback for integers
             return BuiltinType.I32
@@ -201,3 +202,11 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
 
     # Cannot infer type for other expression types
     return None
+
+
+def is_unsigned_type(semantic_type: Optional[Type]) -> bool:
+    """Check whether a semantic type is an unsigned integer type."""
+    from sushi_lang.semantics.typesys import BuiltinType
+    return semantic_type in (
+        BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
+    )

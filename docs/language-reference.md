@@ -88,6 +88,18 @@ let i32 perm = 0o644         # 420
 - All default to `i32` type
 - Prefixes are case insensitive (`0xFF` == `0xff`, `0B1111` == `0b1111`)
 
+**Range rules** (`CE2070`): a bare literal must fit its default `i32` type - a
+decimal literal the signed range (up to `2147483647`; `-2147483648` is legal),
+a hex/binary/octal literal the 32-bit pattern (up to `0xFFFFFFFF`). A literal
+**cast directly to an integer type is exempt** and materializes at the target
+width, exact and unwrapped:
+
+```sushi
+let i64 big = 40000000000 as i64           # exact, needs the cast
+let u64 max = 18446744073709551615 as u64  # exact
+let i32 bad = 40000000000                  # CE2070: overflows i32
+```
+
 ### Type Conversion
 
 All type conversions must be explicit using the `as` keyword:

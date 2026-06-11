@@ -2,11 +2,10 @@
 # instantiated at TWO types (i32 and i64) in one consumer, each with its own
 # consumer-supplied Ord implementation. Removing either extend block makes the
 # corresponding instantiation fail CE4006, so both witnesses are exercised.
-# (Values stay within i32 range: i64 arithmetic on out-of-range values is a
-# pre-existing, unrelated compiler limitation.)
+# The i64 values exceed i32 range on purpose (issue #84 regression witness).
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_CONTAINS: "7"
-# EXPECT_STDOUT_CONTAINS: "1000000"
+# EXPECT_STDOUT_CONTAINS: "40000000000"
 
 use <lib/generics_lib>
 
@@ -26,7 +25,7 @@ fn max32() i32:
     return Result.Ok(m)
 
 fn max64() i64:
-    let i64 big = 1000000 as i64
+    let i64 big = 40000000000 as i64
     let i64 small = 2 as i64
     let i64 m = max_of(big, small)??
     return Result.Ok(m)

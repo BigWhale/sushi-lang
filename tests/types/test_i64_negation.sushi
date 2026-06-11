@@ -1,0 +1,12 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: -3000000000
+
+# Unary negation and bitwise NOT preserve the i64 operand width (issue #84).
+fn main() i32:
+    let i64 big = 3000000000 as i64
+    let i64 neg = -big
+    println(neg)
+    let i64 inverted = ~neg
+    println(inverted)
+    return Result.Ok(0)

@@ -54,7 +54,8 @@ class FormattingOperations:
                 global_str = self._create_format_string(name, FORMAT_STRINGS[name])
                 setattr(self, attr_name, global_str)
 
-    def emit_print_value(self, v: ir.Value, is_line: bool = False) -> None:
+    def emit_print_value(self, v: ir.Value, is_line: bool = False,
+                         semantic_type=None) -> None:
         """Generate printf call with appropriate format for value type.
 
         Determines the value type and calls printf with the corresponding
@@ -64,6 +65,9 @@ class FormattingOperations:
         Args:
             v: The LLVM value to print.
             is_line: Whether to append a newline after printing (println behavior).
+            semantic_type: Optional Sushi semantic type of the value, used to
+                pick signedness for integer formatting (defaults to signed when
+                unknown, matching string interpolation).
 
         Raises:
             AssertionError: If required runtime functions are not declared.
@@ -91,10 +95,7 @@ class FormattingOperations:
             fmt_ptr = self.codegen.utils.cstr_ptr(self.fmt_f64)
             self.codegen.builder.call(self.codegen.runtime.libc_stdio.printf, [fmt_ptr, v])
         else:
-            fmt_ptr = self.codegen.utils.cstr_ptr(self.fmt_i32)
-            self.codegen.builder.call(
-                self.codegen.runtime.libc_stdio.printf, [fmt_ptr, self.codegen.utils.as_i32(v)]
-            )
+            self._emit_print_integer(v, semantic_type)
 
         # Print newline if this is println
         if is_line:
@@ -102,6 +103,46 @@ class FormattingOperations:
             # Convert fat pointer to C string for printf
             newline_ptr = self.codegen.runtime.strings.emit_to_cstr(newline_struct)
             self.codegen.builder.call(self.codegen.runtime.libc_stdio.printf, [newline_ptr])
+
+    def _emit_print_integer(self, v: ir.Value, semantic_type=None) -> None:
+        """Print an integer at its own width with signedness-aware formatting.
+
+        Width comes from the LLVM type; signedness from the semantic type when
+        provided (signed by default, matching string interpolation). bool (i1,
+        or BOOL semantic type) keeps the historical numeric `%d` output.
+
+        Args:
+            v: The integer LLVM value to print.
+            semantic_type: Optional Sushi semantic type for signedness dispatch.
+        """
+        from sushi_lang.semantics.typesys import BuiltinType
+        from sushi_lang.backend.expressions.type_utils import is_unsigned_type
+
+        printf = self.codegen.runtime.libc_stdio.printf
+        builder = self.codegen.builder
+
+        width = v.type.width if isinstance(v.type, ir.IntType) else 32
+        is_bool = (width == 1 or semantic_type == BuiltinType.BOOL)
+        is_signed = not is_unsigned_type(semantic_type)
+
+        if is_bool or not isinstance(v.type, ir.IntType):
+            fmt_ptr = self._get_format_string("i32", FORMAT_STRINGS["i32"])
+            builder.call(printf, [fmt_ptr, self.codegen.utils.as_i32(v)])
+            return
+
+        if width < 32:
+            value = builder.sext(v, self.codegen.i32) if is_signed \
+                else builder.zext(v, self.codegen.i32)
+            name = "i32" if is_signed else "u32"
+        elif width == 32:
+            value = v
+            name = "i32" if is_signed else "u32"
+        else:
+            value = v
+            name = "i64" if is_signed else "u64"
+
+        fmt_ptr = self._get_format_string(name, FORMAT_STRINGS[name])
+        builder.call(printf, [fmt_ptr, value])
 
     def emit_integer_to_string(self, int_value: ir.Value, is_signed: bool, bit_width: int) -> ir.Value:
         """Generate integer to string conversion using sprintf.

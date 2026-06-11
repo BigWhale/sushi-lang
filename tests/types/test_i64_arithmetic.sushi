@@ -1,0 +1,11 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: 40000000000
+
+# i64 * i64 infers i64 (no cast on the assignment) and computes in 64 bits (issue #84).
+fn main() i32:
+    let i64 a = 20000 as i64
+    let i64 b = 2000000 as i64
+    let i64 big = a * b
+    println(big)
+    return Result.Ok(0)
