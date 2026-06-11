@@ -1,0 +1,9 @@
+# First-class functions: calling through a function value with a wrong argument
+# type is a clean CE2092.
+# EXPECT_ERROR_CODE: CE2092
+fn apply(fn(i32) -> i32 f) i32:
+    let i32 r = f("hello")??
+    return Result.Ok(r)
+
+fn main() i32:
+    return Result.Ok(0)

@@ -1,0 +1,15 @@
+# First-class functions: reference a named function, pass it as an argument,
+# and call through the parameter.
+# EXPECT_STDOUT_EXACT: "42\n"
+fn add_one(i32 x) i32:
+    return Result.Ok(x + 1)
+
+fn apply(fn(i32) -> i32 f, i32 v) i32:
+    let i32 r = f(v)??
+    return Result.Ok(r)
+
+fn main() i32:
+    let fn(i32) -> i32 g = add_one
+    let i32 out = apply(g, 41).realise(0)
+    println(out)
+    return Result.Ok(0)

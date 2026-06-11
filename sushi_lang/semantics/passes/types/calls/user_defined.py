@@ -21,10 +21,41 @@ if TYPE_CHECKING:
     from .. import TypeValidator
 
 
+def validate_indirect_call(validator: 'TypeValidator', call: Call, fn_ty) -> None:
+    """Validate a call through a first-class function value (CE2092).
+
+    The callee is a local variable of FunctionType. Check arity and each argument
+    against the function type's parameter types (invariant).
+    """
+    expected = fn_ty.param_types
+    actual = call.args
+    if len(actual) != len(expected):
+        er.emit(validator.reporter, er.ERR.CE2092, call.callee.loc,
+                expected=str(fn_ty),
+                actual=f"a call with {len(actual)} argument(s)")
+        return
+    for arg, param_ty in zip(actual, expected):
+        validator.validate_expression(arg)
+        arg_ty = validator.infer_expression_type(arg)
+        if arg_ty is None:
+            continue
+        if not types_compatible(validator, arg_ty, param_ty):
+            er.emit(validator.reporter, er.ERR.CE2092, getattr(arg, 'loc', call.callee.loc),
+                    expected=str(param_ty), actual=str(arg_ty))
+
+
 def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
     """Validate function call arguments and types (CE2006, CE2008)."""
     # Check if function exists
     function_name = call.callee.id
+
+    # Indirect call through a first-class function value held in a local variable.
+    # A local shadows any same-named top-level function, so this is checked first.
+    from sushi_lang.semantics.typesys import FunctionType
+    callee_var_ty = validator.variable_types.get(function_name)
+    if isinstance(callee_var_ty, FunctionType):
+        validate_indirect_call(validator, call, callee_var_ty)
+        return
 
     # Check if this is a generic function call (handled by generics module)
     if function_name in validator.generic_func_table.by_name:

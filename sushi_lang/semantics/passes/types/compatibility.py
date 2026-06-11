@@ -161,12 +161,23 @@ def types_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -
     - ReferenceType compatibility with coercion (&poke T -> &peek T allowed)
     - Recursive comparison for container types (arrays, etc.)
     """
-    from sushi_lang.semantics.typesys import ResultType
+    from sushi_lang.semantics.typesys import ResultType, FunctionType
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
     # Quick check for direct equality
     if actual == expected:
         return True
+
+    # Function-value compatibility: invariant on arity, every parameter, ok type, and
+    # err type (no variance in v1). Recurse so members still carrying UnknownType resolve.
+    if isinstance(actual, FunctionType) and isinstance(expected, FunctionType):
+        if len(actual.param_types) != len(expected.param_types):
+            return False
+        if not all(types_compatible(validator, ap, ep)
+                   for ap, ep in zip(actual.param_types, expected.param_types)):
+            return False
+        return (types_compatible(validator, actual.ok_type, expected.ok_type) and
+                types_compatible(validator, actual.err_type, expected.err_type))
 
     # Reference type compatibility with coercion
     # - &poke T can be passed where &peek T is expected (safe downgrade)

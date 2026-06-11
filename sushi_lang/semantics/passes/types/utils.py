@@ -141,6 +141,17 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
             validator.variable_types[param.name] = resolved_ref
             continue
 
+        from sushi_lang.semantics.typesys import FunctionType
+        if isinstance(param.ty, FunctionType):
+            # First-class function parameter: resolve members (binds the implicit
+            # UnknownType("StdError") error type) and register the function type.
+            from sushi_lang.semantics.type_resolution import resolve_type_recursively
+            resolved_fn = resolve_type_recursively(
+                param.ty, validator.struct_table.by_name, validator.enum_table.by_name
+            )
+            validator.variable_types[param.name] = resolved_fn
+            continue
+
         if isinstance(param.ty, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType, ResultType)):
             validator.variable_types[param.name] = param.ty
         elif isinstance(param.ty, UnknownType):

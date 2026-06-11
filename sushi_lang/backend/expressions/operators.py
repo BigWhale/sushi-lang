@@ -537,7 +537,13 @@ def emit_name(codegen: 'CodegenProtocol', expr: Name, to_i1: bool) -> ir.Value:
         slot = codegen.memory.find_local_slot(expr.id)
         v = type_utils.load_with_reference_handling(codegen, expr.id, slot)
         return codegen.utils.as_i1(v) if to_i1 else v
-    except:
+    except Exception:
+        # Not a local: a bare reference to a top-level function is a first-class
+        # function value -> its address (an ir.Function is already a pointer value,
+        # typed exactly like the FunctionType lowering: ptr to Result<T,E>(params)).
+        llvm_fn = codegen.funcs.get(expr.id)
+        if llvm_fn is not None:
+            return codegen.utils.as_i1(llvm_fn) if to_i1 else llvm_fn
         # Variable/constant not found (should be caught in semantic analysis)
         raise_internal_error("CE0055", name=expr.id)
 
@@ -971,22 +977,18 @@ def _infer_dotcall_return_type(codegen: 'CodegenProtocol', dotcall_expr: 'DotCal
             match = re.match(r'List<(.+)>', receiver_type.name)
             if match:
                 type_str = match.group(1)
-                builtin_map = {
-                    'i8': BuiltinType.I8, 'i16': BuiltinType.I16, 'i32': BuiltinType.I32, 'i64': BuiltinType.I64,
-                    'u8': BuiltinType.U8, 'u16': BuiltinType.U16, 'u32': BuiltinType.U32, 'u64': BuiltinType.U64,
-                    'f32': BuiltinType.F32, 'f64': BuiltinType.F64,
-                    'bool': BuiltinType.BOOL, 'string': BuiltinType.STRING,
-                }
-                element_type = builtin_map.get(type_str)
-                if element_type is None and type_str in codegen.struct_table.by_name:
-                    element_type = codegen.struct_table.by_name[type_str]
+                from sushi_lang.sushi_stdlib.generics.collections.hashmap.types import resolve_type_from_string
+                try:
+                    element_type = resolve_type_from_string(type_str, codegen)
+                except Exception:
+                    element_type = None
 
         if element_type is not None:
-            maybe_type_name = f"Maybe<{element_type}>"
-            if maybe_type_name in codegen.enum_table.by_name:
-                return codegen.enum_table.by_name[maybe_type_name]
-            else:
-                raise_internal_error("CE0047", type=str(element_type))
+            from sushi_lang.backend.generics.maybe import ensure_maybe_type_exists
+            maybe_enum = ensure_maybe_type_exists(codegen, element_type)
+            if maybe_enum is not None:
+                return maybe_enum
+            raise_internal_error("CE0047", type=str(element_type))
 
     raise_internal_error("CE0063", method=method_name)
 

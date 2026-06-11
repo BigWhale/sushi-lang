@@ -252,6 +252,45 @@ class ForeignPtrType:
         return isinstance(other, ForeignPtrType)
 
 @dataclass(frozen=True)
+class FunctionType:
+    """Represents a first-class function type (a bare function pointer).
+
+    Syntax: fn(P0, P1, ...) -> T [| E]
+    - param_types: the declared parameter types (no `self`, no variadics in v1).
+    - ok_type:     the declared return type T (the value wrapped in Result.Ok).
+    - err_type:    the error type E. When the surface syntax omits `| E` this is
+                   UnknownType("StdError") at parse time and is resolved to the StdError
+                   enum by the normal type-resolution pass.
+
+    A function value is the raw address of an already-monomorphized top-level function.
+    Calling through it yields the same Result<ok_type, err_type> a direct call would, so the
+    LLVM type is a pointer to FunctionType(Result<ok_type, err_type>, param_types).
+
+    v1 carries no captured environment (no closures); compatibility is invariant on every
+    component (arity + each param + ok + err must match exactly).
+    """
+    param_types: tuple["Type", ...]
+    ok_type: "Type"
+    err_type: "Type"
+
+    def __str__(self) -> str:
+        params = ", ".join(str(p) for p in self.param_types)
+        base = f"fn({params}) -> {self.ok_type}"
+        # Hide the implicit StdError to match the surface syntax in diagnostics.
+        if str(self.err_type) != "StdError":
+            base += f" | {self.err_type}"
+        return base
+
+    def __hash__(self) -> int:
+        return hash(("function", self.param_types, self.ok_type, self.err_type))
+
+    def __eq__(self, other) -> bool:
+        return (isinstance(other, FunctionType) and
+                self.param_types == other.param_types and
+                self.ok_type == other.ok_type and
+                self.err_type == other.err_type)
+
+@dataclass(frozen=True)
 class EnumVariantInfo:
     """Information about a single enum variant."""
     name: str                           # Variant name (e.g., "Some", "None")
@@ -306,7 +345,7 @@ class EnumType:
 Type = Union[
     BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType,
     ResultType, IteratorType, ReferenceType, PointerType, ForeignPtrType,
-    TypeParameter, GenericTypeRef
+    FunctionType, TypeParameter, GenericTypeRef
 ]
 
 
@@ -314,7 +353,8 @@ TYPE_NODE_NAMES = {
     "i8_t", "i16_t", "i32_t", "i64_t", "u8_t", "u16_t", "u32_t", "u64_t",
     "f32_t", "f64_t", "bool_t", "string_t", "blank_t",
     "array_t", "dynamic_array_t", "reference_t", "file_t",
-    "generic_type_t"  # Added for generic type instantiation (e.g., Result<i32>)
+    "generic_type_t",  # Generic type instantiation (e.g., Result<i32>)
+    "fn_type_t"        # First-class function type (e.g., fn(i32) -> i32)
 }
 
 NODE_TO_TYPE: Mapping[str, BuiltinType] = {

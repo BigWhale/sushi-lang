@@ -65,6 +65,11 @@ class FunctionHelpers:
         if isinstance(param_type, ForeignPtrType):
             return True
 
+        # First-class function value (bare function pointer)
+        from sushi_lang.semantics.typesys import FunctionType
+        if isinstance(param_type, FunctionType):
+            return True
+
         # Check for UnknownType that could be a struct or enum
         if isinstance(param_type, UnknownType):
             # Check if this unknown type is in the struct table

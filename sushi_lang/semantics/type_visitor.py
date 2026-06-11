@@ -22,6 +22,31 @@ from sushi_lang.semantics.ast import (
 )
 
 
+def function_value_type_of(type_validator, name: str) -> Optional[Type]:
+    """Build the FunctionType for a bare reference to a plain top-level function.
+
+    Returns None when `name` is not a referenceable plain function value:
+    - not a known top-level function, or
+    - a variadic / parameter-pack function (their call ABI differs; deferred).
+
+    The error type defaults to UnknownType("StdError") to mirror fn declarations; it is
+    resolved alongside the other members by the normal type-resolution pass.
+    """
+    from sushi_lang.semantics.typesys import FunctionType, UnknownType
+    sig = type_validator.func_table.by_name.get(name)
+    if sig is None:
+        return None
+    for p in sig.params:
+        if getattr(p, "is_variadic", False) or getattr(p, "is_pack", False):
+            return None
+    param_types = tuple(p.ty for p in sig.params)
+    if any(pt is None for pt in param_types):
+        return None
+    ok_type = sig.ret_type if sig.ret_type is not None else BuiltinType.BLANK
+    err_type = sig.err_type if sig.err_type is not None else UnknownType("StdError")
+    return FunctionType(param_types=param_types, ok_type=ok_type, err_type=err_type)
+
+
 class StatementValidator(RecursiveVisitor):
     """
     Visitor for validating statements using the Visitor Pattern.
@@ -328,8 +353,18 @@ class ExpressionValidator(RecursiveVisitor):
 
     # Terminal expressions don't need recursive validation
     def visit_name(self, node: Name) -> None:
-        """Name expressions are terminal."""
-        pass
+        """Name expressions are terminal.
+
+        The one check here is the first-class-function v1 boundary: referencing a
+        *generic* function as a value is not supported yet (CE2093). A local of the
+        same name shadows the function and is a plain variable read.
+        """
+        tv = self.type_validator
+        if node.id in tv.variable_types or node.id in tv.const_table.by_name:
+            return
+        if node.id in tv.generic_func_table.by_name:
+            er.emit(tv.reporter, er.ERR.CE2093, node.loc,
+                    name=node.id, reason="generic function references are deferred (v1)")
 
     def visit_intlit(self, node: IntLit) -> None:
         """Range-check a bare integer literal (CE2070).
@@ -539,6 +574,11 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             const_sig = self.type_validator.const_table.by_name[node.id]
             return const_sig.const_type
 
+        # A bare reference to a plain top-level function is a first-class function value.
+        fn_value_type = function_value_type_of(self.type_validator, node.id)
+        if fn_value_type is not None:
+            return fn_value_type
+
         return None
 
     def visit_unaryop(self, node: UnaryOp) -> Optional[Type]:
@@ -601,6 +641,13 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         """Infer function call type."""
         # Look up function return type
         function_name = node.callee.id
+
+        # Indirect call through a first-class function value: yields Result<ok, err>,
+        # exactly like a direct call (so `f(x)??` unwraps to ok_type).
+        from sushi_lang.semantics.typesys import FunctionType, ResultType
+        callee_var_ty = self.type_validator.variable_types.get(function_name)
+        if isinstance(callee_var_ty, FunctionType):
+            return ResultType(ok_type=callee_var_ty.ok_type, err_type=callee_var_ty.err_type)
 
         # Check if this is a struct constructor
         if function_name in self.type_validator.struct_table.by_name:
