@@ -2,6 +2,72 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [0.8.0] - 2026-06-11
+
+A milestone release centered on self-hosting enablers: a foreign function interface, three
+forms of variadic functions, generic instantiation across library boundaries, and first-class
+functions — alongside a hardened test suite, asserted diagnostics, and a large batch of
+correctness fixes.
+
+### Added
+- Foreign Function Interface (FFI) for calling C
+  - `unsafe external "C" as <ns> [because "..."]:` blocks with namespaced call sites
+    (`libc.strlen(s)`)
+  - Opaque, unmanaged foreign `ptr` type (LLVM `i8*`), exempt from borrow checking and RAII
+  - `string` arguments auto-marshalled to C `char*` and freed at scope exit (no leak)
+  - Variadic externs: a bare trailing `...` binds libc varargs (`printf` family)
+  - Full `ptr` quarantine — unit gate, and rejection of `ptr` in public APIs, operators, method
+    calls, and generic arguments; diagnostics CW5001 and CE5001–CE5012
+- Variadic functions in three deliberately separate forms
+  - Native homogeneous `...T` — trailing arguments collected into an owned `T[]`
+  - Parameter packs `...Ts` with a compile-time-unrolled `expand` block (heterogeneous, generic,
+    zero-cost) — including perk-constrained packs
+  - Parameter packs ship and monomorphize across `.slib` library boundaries
+  - Diagnostics CE0114–CE0119, CE2090, CE2091
+- Generic instantiation across `.slib` library boundaries
+  - Generic functions, generic structs/enums, and variadic-generic packs ship as source templates
+    and monomorphize at the consumer
+  - Concrete perk implementations ship and register at the consumer
+  - Export closure of library-private symbols an exported generic transitively references;
+    CE5006 narrowed and CE5007 added
+- First-class functions
+  - Function types `fn(P...) -> T [| E]` and function values: reference a top-level function,
+    store it in a variable/struct field/`List`, pass it, and call through it (no closures in v1)
+  - Diagnostics CE2092 (call-through mismatch) and CE2093 (illegal/generic function reference)
+- Testing and tooling
+  - `pytest` layer for compiler internals (fingerprints, cache, semantic errors)
+  - Dedicated enum suite and end-to-end incremental-compilation/cache tests
+  - Performance regression harness (report mode)
+  - Error codes asserted on the compilation path, with a broad diagnostics backfill
+
+### Changed
+- Runtime validation is the default for tests; CI runs the enhanced runner on a macOS + Linux
+  matrix
+- Internal refactors: `stdlib.py` split into a `stdlib/` package; `TypeValidator` decomposed into
+  focused collaborator modules
+- CI: GitHub Actions bumped to Node 24 runtimes; tests run on `merge_group`
+
+### Fixed
+- i64 width correctness across inference, printing, comparisons, and literals
+- Unsigned `/` and `%` no longer emit signed `sdiv`/`srem`
+- CE0021 crash on `Result<ptr>`; `ptr` is confined to its declaring unit (CE5008)
+- Heap-owning struct value semantics (independent buffer per by-value argument)
+- Local `List<T>` variables freed via RAII; dynamic-array RAII leak on the all-but-one return
+  path
+- `string[]` heap corruption from an element alloc-size mismatch
+- `List<EnumType>.destroy()` internal compiler error
+- `compute_unit_fingerprint` crash on enums
+- `bool` string methods rendering as `0`/`1` in interpolation
+- Direct `.hash()` on an enum value (CE0019 internal compiler error)
+
+### Documentation
+- Unified MkDocs site combining the guided tutorial and the reference, with Sushi syntax
+  highlighting
+- New guides and tutorial chapters for FFI / foreign pointers, variadic functions, and
+  first-class functions
+- Design notes for variadics and first-class functions
+- CHANGELOG backfilled for 0.7.0 and 0.7.1
+
 ## [0.7.1] - 2026-03-21
 
 ### Added
