@@ -69,33 +69,13 @@ class LibraryManifestGenerator:
         LibraryFormat.write(output_path, manifest, bitcode)
 
     def _contains_foreign_ptr(self, ty) -> bool:
-        """Recursively check whether a type exposes a foreign `ptr` (ForeignPtrType)."""
-        from sushi_lang.semantics.typesys import (
-            ForeignPtrType, ArrayType, DynamicArrayType, ReferenceType,
-            PointerType, ResultType, IteratorType, StructType, EnumType,
-        )
-        if ty is None:
-            return False
-        if isinstance(ty, ForeignPtrType):
-            return True
-        if isinstance(ty, (ArrayType, DynamicArrayType)):
-            return self._contains_foreign_ptr(ty.base_type)
-        if isinstance(ty, ReferenceType):
-            return self._contains_foreign_ptr(ty.referenced_type)
-        if isinstance(ty, PointerType):
-            return self._contains_foreign_ptr(ty.pointee_type)
-        if isinstance(ty, ResultType):
-            return self._contains_foreign_ptr(ty.ok_type) or self._contains_foreign_ptr(ty.err_type)
-        if isinstance(ty, IteratorType):
-            return self._contains_foreign_ptr(ty.element_type)
-        if isinstance(ty, StructType):
-            return any(self._contains_foreign_ptr(ft) for _, ft in ty.fields)
-        if isinstance(ty, EnumType):
-            return any(
-                self._contains_foreign_ptr(at)
-                for v in ty.variants for at in v.associated_types
-            )
-        return False
+        """Recursively check whether a type exposes a foreign `ptr` (ForeignPtrType).
+
+        Delegates to the shared semantic predicate (also used by the CE5008
+        unit fence in Pass 2); kept as a method for call-site brevity.
+        """
+        from sushi_lang.semantics.type_predicates import contains_foreign_ptr
+        return contains_foreign_ptr(ty)
 
     def _extract_public_functions(self, units: list['Unit']) -> list[dict]:
         """Extract public function signatures from units.

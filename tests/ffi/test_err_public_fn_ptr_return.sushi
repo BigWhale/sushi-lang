@@ -1,0 +1,11 @@
+# FFI: a `public fn` may not return a foreign `ptr` (implicit Result<ptr, E> wrapping).
+# EXPECT_ERROR_CODE: CE5008
+unsafe external "C" as libc because "intentional public ptr exposure":
+    fn malloc(i64 n) ptr = "malloc"
+
+public fn grab() ptr:
+    let ptr p = libc.malloc(8 as i64)
+    return Result.Ok(p)
+
+fn main() i32:
+    return Result.Ok(0)

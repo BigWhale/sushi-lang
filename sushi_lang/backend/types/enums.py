@@ -18,7 +18,7 @@ Known limitations:
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.semantics.typesys import EnumType, Type, ArrayType, DynamicArrayType, BuiltinType, StructType
+from sushi_lang.semantics.typesys import EnumType, Type, ArrayType, DynamicArrayType, BuiltinType, StructType, ForeignPtrType
 from sushi_lang.semantics.generics.types import GenericEnumType
 import llvmlite.ir as ir
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
@@ -90,6 +90,10 @@ def can_enum_be_hashed(enum_type: EnumType, visited: set = None, path: list = No
             # Skip enums with unresolved types (will be registered later)
             if isinstance(assoc_type, UnknownType):
                 return False, f"variant {variant.name} has unresolved type '{assoc_type.name}'"
+
+            # Foreign pointers are opaque handles with no stable identity to hash
+            if isinstance(assoc_type, ForeignPtrType):
+                return False, f"variant {variant.name} carries a foreign ptr (unhashable)"
 
             # Arrays must have hashable element types (recursive check)
             if isinstance(assoc_type, (ArrayType, DynamicArrayType)):

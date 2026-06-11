@@ -5,7 +5,7 @@ scattered across types.py and type_visitor.py. Extracted as part of the
 semantics directory refactoring (Phase 1, Task 1.4).
 """
 
-from typing import Set
+from typing import Optional, Set
 from sushi_lang.semantics.typesys import Type, BuiltinType
 
 
@@ -124,4 +124,79 @@ def is_string_convertible(ty: Type) -> bool:
     if isinstance(ty, BuiltinType):
         return ty in BUILTIN_STRING_CONVERTIBLE_TYPES
     # Arrays, structs, enums, iterators are not supported
+    return False
+
+
+def contains_foreign_ptr(ty: Type, struct_table: Optional[dict] = None,
+                         enum_table: Optional[dict] = None,
+                         _visited: Optional[Set[str]] = None) -> bool:
+    """Recursively check whether a type exposes a foreign `ptr` (ForeignPtrType).
+
+    Single source of truth for the ptr-exposure walk, shared by the CE5008 unit
+    fence (Pass 2) and the CE5002 .slib manifest check. Beyond the concrete type
+    shapes it also handles the Pass 2-era representations:
+    - GenericTypeRef: walks type arguments (a `Result<ptr, E>` return is still a
+      GenericTypeRef at validation time, before monomorphization rewrites it).
+    - UnknownType: resolved through the optional struct/enum tables (dicts keyed
+      by name); unresolvable names are treated as ptr-free, because struct fields
+      are deliberately allowed to carry `ptr` across units (the wrapper-struct
+      pattern) and the concrete shapes are checked where they are used.
+
+    Args:
+        ty: The type to inspect (None-safe).
+        struct_table: Optional name -> StructType mapping for UnknownType resolution.
+        enum_table: Optional name -> EnumType mapping for UnknownType resolution.
+        _visited: Internal cycle guard over struct/enum names.
+
+    Returns:
+        True if the type transitively contains a ForeignPtrType.
+    """
+    from sushi_lang.semantics.typesys import (
+        ForeignPtrType, ArrayType, DynamicArrayType, ReferenceType,
+        PointerType, ResultType, IteratorType, StructType, EnumType, UnknownType,
+    )
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+
+    if ty is None:
+        return False
+    if _visited is None:
+        _visited = set()
+
+    def recurse(inner: Type) -> bool:
+        return contains_foreign_ptr(inner, struct_table, enum_table, _visited)
+
+    if isinstance(ty, ForeignPtrType):
+        return True
+    if isinstance(ty, (ArrayType, DynamicArrayType)):
+        return recurse(ty.base_type)
+    if isinstance(ty, ReferenceType):
+        return recurse(ty.referenced_type)
+    if isinstance(ty, PointerType):
+        return recurse(ty.pointee_type)
+    if isinstance(ty, ResultType):
+        return recurse(ty.ok_type) or recurse(ty.err_type)
+    if isinstance(ty, IteratorType):
+        return recurse(ty.element_type)
+    if isinstance(ty, GenericTypeRef):
+        return any(recurse(arg) for arg in (ty.type_args or ()))
+    if isinstance(ty, UnknownType):
+        resolved = None
+        if struct_table and ty.name in struct_table:
+            resolved = struct_table[ty.name]
+        elif enum_table and ty.name in enum_table:
+            resolved = enum_table[ty.name]
+        return recurse(resolved) if resolved is not None else False
+    if isinstance(ty, StructType):
+        if ty.name in _visited:
+            return False
+        _visited.add(ty.name)
+        return any(recurse(ft) for _, ft in ty.fields)
+    if isinstance(ty, EnumType):
+        if ty.name in _visited:
+            return False
+        _visited.add(ty.name)
+        return any(
+            recurse(at)
+            for v in ty.variants for at in v.associated_types
+        )
     return False

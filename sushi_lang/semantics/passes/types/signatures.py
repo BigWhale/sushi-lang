@@ -25,9 +25,32 @@ from .utils import validate_type_name, validate_and_register_parameters
 from .perks import validate_perk_implementation, check_no_conflicts_with_regular_methods
 
 
+def _check_public_fn_ptr_fence(self, func: FuncDef) -> None:
+    """CE5008: a `public fn` may not expose a foreign `ptr` in its signature.
+
+    FFI handles are a private unit detail. The fence fires whenever the
+    `public` keyword is present, even in single-file programs (where `public`
+    is otherwise a no-op) - simpler, and keeps the rule learnable before a
+    program grows a second unit. Struct fields may still carry `ptr` across
+    units (the wrapper-struct pattern); only the function signature itself
+    is checked. Extensions and perk methods cannot be `public` (grammar).
+    """
+    from sushi_lang.semantics.type_predicates import contains_foreign_ptr
+
+    if not func.is_public:
+        return
+    structs = self.struct_table.by_name
+    enums = self.enum_table.by_name
+    if contains_foreign_ptr(func.ret, structs, enums) or any(
+        contains_foreign_ptr(p.ty, structs, enums) for p in func.params
+    ):
+        self.err.emit(er.ERR.CE5008, func.name_span, name=func.name)
+
+
 def validate_function(self, func: FuncDef) -> None:
     """Validate types within a function."""
     self.current_function = func
+    _check_public_fn_ptr_fence(self, func)
     self.in_extension_context = False  # Normal functions are never extension/perk bodies
     self.extension_method_name = None
     self.variable_types = {}  # Reset for each function

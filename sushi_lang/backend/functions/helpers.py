@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, List, Tuple
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef, Param, ExtendDef
-from sushi_lang.semantics.typesys import Type as Ty, BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType, UnknownType, ReferenceType, ResultType
+from sushi_lang.semantics.typesys import Type as Ty, BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType, UnknownType, ReferenceType, ResultType, ForeignPtrType
 from sushi_lang.backend import enum_utils
 from sushi_lang.internals.errors import raise_internal_error
 
@@ -59,6 +59,10 @@ class FunctionHelpers:
 
         # Check for reference types
         if isinstance(param_type, ReferenceType):
+            return True
+
+        # Opaque foreign pointer (FFI handle) - valid in non-public signatures
+        if isinstance(param_type, ForeignPtrType):
             return True
 
         # Check for UnknownType that could be a struct or enum
