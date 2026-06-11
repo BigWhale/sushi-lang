@@ -1,0 +1,32 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: ok
+
+# Issue #89: u8/u16 unsigned div/mod above their signed midpoints, plus a
+# signed-regression guard. The signed cases use runtime variables so they
+# exercise backend instruction selection (sdiv/srem truncate toward zero),
+# not the const_eval folder.
+fn main() i32:
+    # u8: 200 exceeds i8 max (127)
+    let u8 u8a = 200 as u8
+    let u8 u8q = u8a / (2 as u8)
+    let u8 u8r = u8a % (7 as u8)
+
+    # u16: 40000 exceeds i16 max (32767)
+    let u16 u16a = 40000 as u16
+    let u16 u16q = u16a / (2 as u16)
+    let u16 u16r = u16a % (7 as u16)
+
+    # signed regression: negative dividend, truncation toward zero
+    let i32 neg = -7
+    let i32 two = 2
+    let i32 sq = neg / two
+    let i32 sr = neg % two
+
+    let bool unsigned_ok = (u8q == (100 as u8)) and (u8r == (4 as u8)) and (u16q == (20000 as u16)) and (u16r == (2 as u16))
+    let bool signed_ok = (sq == -3) and (sr == -1)
+
+    if (unsigned_ok and signed_ok):
+        println("ok")
+        return Result.Ok(0)
+    return Result.Ok(1)

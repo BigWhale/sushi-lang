@@ -1,0 +1,22 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: 2000000000
+# EXPECT_STDOUT_CONTAINS: 9000000000000000000
+
+# Issue #89: unsigned / and % must lower to udiv/urem, not sdiv/srem.
+# u32 4000000000 exceeds i32 max (2147483647) and u64 1.8e19 exceeds i64 max,
+# so a signed interpretation of the bit pattern would yield wrong results.
+fn main() i32:
+    let u32 a = 4000000000 as u32
+    let u32 q32 = a / (2 as u32)
+    let u32 r32 = a % (3 as u32)
+    let u64 big = 18000000000000000000 as u64
+    let u64 q64 = big / (2 as u64)
+    let u64 r64 = big % (7 as u64)
+
+    println(q32)
+    println(q64)
+
+    if ((q32 == (2000000000 as u32)) and (r32 == (1 as u32)) and (q64 == (9000000000000000000 as u64)) and (r64 == (4 as u64))):
+        return Result.Ok(0)
+    return Result.Ok(1)
