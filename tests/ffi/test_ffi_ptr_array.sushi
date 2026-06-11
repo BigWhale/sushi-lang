@@ -1,0 +1,19 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: freed 2
+
+# FFI: holding foreign handles in a plain dynamic array is allowed (holding is
+# the safe half of the contract; RAII frees the array, never the handles).
+unsafe external "C" as libc because "raw buffers held in an array":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+
+fn main() i32:
+    let ptr a = libc.malloc(8 as i64)
+    let ptr b = libc.malloc(8 as i64)
+    let ptr[] handles = from([a, b])
+    let i32 count = handles.len()
+    foreach(h in handles.iter()):
+        libc.free(h)
+    println("freed {count}")
+    return Result.Ok(0)

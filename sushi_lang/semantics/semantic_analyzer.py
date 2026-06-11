@@ -70,9 +70,13 @@ class SemanticAnalyzer:
         self.constants, self.structs, self.enums, self.generic_enums, self.generic_structs, self.perks, self.perk_impls, self.funcs, self.extensions, self.generic_extensions, self.generic_funcs = collector.run(program)
         self.externals = collector.externals
 
-        # FFI: validate external signatures (CE5003) and emit CW5001
-        from sushi_lang.semantics.passes.types.externals import validate_external_signatures
+        # FFI: validate external signatures (CE5003), emit CW5001, and enforce
+        # the ptr unit gate (CE5009: no `unsafe external` block, no `ptr`).
+        from sushi_lang.semantics.passes.types.externals import (
+            validate_external_signatures, validate_ptr_unit_gate,
+        )
         validate_external_signatures(self.reporter, program)
+        validate_ptr_unit_gate(self.reporter, program)
 
         # Check if main function expects command line arguments
         self._check_main_function_args(program)
@@ -271,11 +275,15 @@ class SemanticAnalyzer:
         # FFI externals accumulate across all units in the shared collector table.
         self.externals = collector.externals
 
-        # FFI: validate external signatures (CE5003) and emit CW5001 per unit
-        from sushi_lang.semantics.passes.types.externals import validate_external_signatures
+        # FFI: validate external signatures (CE5003), emit CW5001, and enforce
+        # the ptr unit gate (CE5009) per unit.
+        from sushi_lang.semantics.passes.types.externals import (
+            validate_external_signatures, validate_ptr_unit_gate,
+        )
         for unit in compilation_order:
             if unit.ast is not None:
                 validate_external_signatures(self.reporter, unit.ast)
+                validate_ptr_unit_gate(self.reporter, unit.ast)
 
         # Register library types if any libraries are loaded
         # Order: structs first, then enums (may reference structs), then functions (may reference both)

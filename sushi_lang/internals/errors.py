@@ -1157,6 +1157,22 @@ _add(ErrorMessage("CE5008", Severity.ERROR,
     "public function '{name}' exposes a foreign `ptr` in its signature and cannot cross a unit boundary",
     Category.TYPE, "FFI is a private implementation detail of a unit. A `public fn` whose parameters or return type contain `ptr` (including inside Result or Maybe) cannot be part of a unit's public API. Keep the function private, or wrap the pointer in a struct (struct fields may carry `ptr` across units)."))
 
+_add(ErrorMessage("CE5009", Severity.ERROR,
+    "foreign `ptr` used in a unit with no `unsafe external` block",
+    Category.TYPE, "The `ptr` type may only be named in a unit that declares an `unsafe external` block - no danger zone, no ptr. This keeps every file that can traffic in raw foreign handles greppable by its `unsafe external` marker. Other units hold handles through wrapper structs declared in the FFI unit."))
+
+_add(ErrorMessage("CE5010", Severity.ERROR,
+    "foreign `ptr` cannot be used with operator '{op}'",
+    Category.TYPE, "A `ptr` is an opaque handle: it has no comparable identity, no arithmetic, and no truthiness. If null-checking is ever needed it will arrive as an `is_null(ptr)` intrinsic, never as `==`."))
+
+_add(ErrorMessage("CE5011", Severity.ERROR,
+    "foreign `ptr` has no methods (attempted '.{method}()')",
+    Category.TYPE, "A `ptr` is an opaque handle with no hash, no string form, and no methods. Pass it back to an external function, or wrap it in a struct and attach extension methods to the struct."))
+
+_add(ErrorMessage("CE5012", Severity.ERROR,
+    "foreign `ptr` cannot be a type argument of '{base}'",
+    Category.TYPE, "Only Result<ptr, E> and Maybe<ptr> support carrying a foreign `ptr`. Other generic containers (HashMap, List, user-defined generics) cannot store an opaque handle. Wrap the pointer in a concrete struct and store that instead."))
+
 # Array bounds errors
 _add(ErrorMessage("RE2020", Severity.ERROR,
     "array index out of bounds",

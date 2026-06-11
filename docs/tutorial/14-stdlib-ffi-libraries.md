@@ -1,6 +1,6 @@
 # 14. The Standard Library, FFI & Libraries
 
-You have a language. Now you need batteries. This final chapter is a guided tour of the
+You have a language. Now you need batteries. This chapter is a guided tour of the
 parts of Sushi that connect your programs to the wider universe: the **standard library**
 of ready-made modules, **variadic functions** for flexible argument lists, the **foreign
 function interface** for calling C, and the **library system** for sharing your own code
@@ -201,9 +201,10 @@ answer = 42
 printf reported 12 bytes written
 ```
 
-The full FFI guide — including the `ptr` type, the diagnostic codes CE5001–CE5005, and the
-C argument-promotion rules — lives in
-[the FFI documentation](../ffi.md).
+The story continues in [Chapter 16](16-foreign-pointers.md), which covers the `ptr` type —
+the opaque handle C functions like `malloc` return — and the fences that keep it inside the
+unsafe realm. The full FFI guide, including all diagnostic codes and the C
+argument-promotion rules, lives in [the FFI documentation](../ffi.md).
 
 ## Building a library
 
@@ -290,9 +291,10 @@ answer() = 42
 
 ## Where to go next
 
-That is the end of the tutorial — you have travelled from "Mostly Harmless" all the way to
-linking C and shipping libraries. So long, and thanks for all the fish. From here, the
-reference documentation goes deeper than any tutorial can:
+You have travelled from "Mostly Harmless" all the way to linking C and shipping libraries —
+and two more chapters await: [variadic functions](15-variadic-functions.md) and
+[foreign pointers](16-foreign-pointers.md). From here, the reference documentation goes
+deeper than any tutorial can:
 
 - [Language Reference](../language-reference.md)
   — the complete grammar, types, and operators.

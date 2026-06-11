@@ -254,6 +254,41 @@ unrestricted: inside the FFI unit, `ptr` parameters and returns flow freely.
 The same rule already held at the library boundary (`CE5002`); `CE5008`
 enforces it one level down, between the units of a single program.
 
+## No danger zone, no `ptr`
+
+The type name `ptr` may only be **spelled in a unit that declares an
+`unsafe external` block** (`CE5009`). A unit without externals has no way to
+ever *produce* a `ptr` value - there is no `null` literal, no cast yields a
+`ptr` (`CE2014`), and uninitialized `let` does not exist - so a `ptr` type
+written there is dead plumbing at best. The gate makes the unsafe realm
+textually identifiable: grep a codebase for `unsafe external` and you have
+found every file that can traffic in raw foreign handles.
+
+Other units still *hold* handles - through the wrapper structs the FFI unit
+declares. They just never name the raw type themselves.
+
+## What `ptr` cannot do
+
+A `ptr` is an **opaque token**, not a value with behavior. The compiler
+rejects every operation that would pretend otherwise:
+
+| Attempt | Diagnostic |
+|---|---|
+| `a == b`, `a < b`, arithmetic, `not`/`~`/`-` on a `ptr` | `CE5010` - no comparable identity, no arithmetic, no truthiness |
+| `p.hash()` or any method call on a `ptr` | `CE5011` - an opaque handle has no methods |
+| `HashMap<i32, ptr>`, `List<ptr>`, `Tagged<ptr>` (any generic argument) | `CE5012` - only `Result<ptr, E>` and `Maybe<ptr>` carry a `ptr` |
+| `"{p}"` interpolation | `CE2035` - no string form |
+| `0 as ptr`, `p as i64` | `CE2014` - cannot be forged from or laundered into an integer |
+
+What remains is exactly the *holding* set: local variables, private function
+parameters and returns, `Result<ptr, E>`/`Maybe<ptr>`, struct fields, and
+plain arrays (`ptr[]`). If a handle needs behavior - equality, hashing,
+methods, a place in a collection - wrap it in a concrete struct and give the
+*struct* those things; the struct is real Sushi and plays by all the rules.
+
+If null-checking is ever needed it will arrive as an `is_null(ptr) -> bool`
+intrinsic, never as `==` or a `null` literal.
+
 ## Diagnostics
 
 | Code | Severity | Rule |
@@ -265,6 +300,10 @@ enforces it one level down, between the units of a single program.
 | `CE5004` | error | A variadic external (`...`) declares no fixed parameter. The C ABI needs at least one named argument for `va_start`. |
 | `CE5005` | error | A non-C-ABI value is passed as a variadic (`...`) argument at a call site. |
 | `CE5008` | error | A `public fn` exposes a foreign `ptr` in its signature (parameter, return, or inside `Result`/`Maybe`). Keep the function private or wrap the pointer in a struct. |
+| `CE5009` | error | `ptr` is named in a unit that declares no `unsafe external` block. No danger zone, no ptr. |
+| `CE5010` | error | A `ptr` is used with an operator (comparison, arithmetic, bitwise, logical). An opaque handle has no identity or arithmetic. |
+| `CE5011` | error | A method is called on a `ptr`. Wrap the handle in a struct and extend the struct. |
+| `CE5012` | error | A `ptr` appears as a generic type argument outside `Result`/`Maybe` (e.g. `HashMap<i32, ptr>`, `List<ptr>`). |
 
 ## Linking: what can actually be resolved
 

@@ -1,0 +1,21 @@
+# A foreign handle's whole life: born in an external call, carried through
+# Result<ptr>, handed back to C. Holding it is safe; only C can act on it.
+unsafe external "C" as libc because "borrowing memory from the universe":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+
+# Safe wrapper: acquires the handle and folds it into Sushi's Result world.
+fn borrow_bytes(i64 n) ptr:
+    let ptr p = libc.malloc(n)
+    return Result.Ok(p)
+
+fn give_back(ptr p) ~:
+    libc.free(p)
+    println("returned to the universe")
+    return Result.Ok(~)
+
+fn main() i32:
+    match borrow_bytes(42 as i64):
+        Result.Ok(p) -> give_back(p)
+        Result.Err(_) -> println("the universe declined")
+    return Result.Ok(0)

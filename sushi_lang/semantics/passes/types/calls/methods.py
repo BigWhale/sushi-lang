@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType
+from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType, ForeignPtrType
 from sushi_lang.semantics.ast import MethodCall, Name
 from ..compatibility import types_compatible
 from ..utils import is_array_destroyed, mark_array_destroyed
@@ -34,6 +34,12 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
 
     # Infer receiver type
     receiver_type = validator.infer_expression_type(call.receiver)
+
+    # CE5011: a foreign ptr is an opaque handle - no methods (no hash, no
+    # string form, nothing). Wrap it in a struct and extend the struct instead.
+    if isinstance(receiver_type, ForeignPtrType):
+        er.emit(validator.reporter, er.ERR.CE5011, call.loc, method=call.method)
+        return
 
     # Special case: static-like method calls on generic type names (e.g., List.new(), HashMap.new())
     # The receiver is a type name, not an instance, so we need to check if this is a generic struct constructor

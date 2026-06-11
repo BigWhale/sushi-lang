@@ -22,7 +22,7 @@ feature the language has:
 - **Abstraction** — generics, perks (traits), extension methods
 - **Systems** — RAII, references and borrow checking, `Own<T>`
 - **Library** — `List<T>`, `HashMap<K, V>`, and the standard library
-- **Interop** — variadic functions, calling C, building libraries
+- **Interop** — variadic functions, calling C, foreign pointers, building libraries
 
 ## How to read this
 

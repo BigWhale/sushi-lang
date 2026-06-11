@@ -1,0 +1,12 @@
+# FFI: foreign `ptr` cannot be stored in a HashMap (only Result/Maybe carry ptr).
+# EXPECT_ERROR_CODE: CE5012
+use <collections/hashmap>
+
+unsafe external "C" as libc because "intentional ptr in HashMap":
+    fn malloc(i64 n) ptr = "malloc"
+
+fn main() i32:
+    let ptr a = libc.malloc(8 as i64)
+    let HashMap<i32, ptr> map = HashMap.new()
+    map.insert(1, a)
+    return Result.Ok(0)
