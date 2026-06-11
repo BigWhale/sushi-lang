@@ -78,6 +78,7 @@ nav:
       - "13. Collections": tutorial/13-collections.md
       - "14. Stdlib, FFI & Libraries": tutorial/14-stdlib-ffi-libraries.md
       - "15. Variadic Functions": tutorial/15-variadic-functions.md
+      - "16. Foreign Pointers": tutorial/16-foreign-pointers.md
   - Guides:
       - Getting Started: getting-started.md
       - Language Guide: language-guide.md

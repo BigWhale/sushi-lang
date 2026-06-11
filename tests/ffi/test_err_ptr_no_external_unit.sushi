@@ -1,0 +1,9 @@
+# FFI: `ptr` may only be named in a unit that declares an `unsafe external` block.
+# No danger zone, no ptr - this unit has no externals, so the spelled ptr type
+# is dead plumbing (no value could ever inhabit it) and is rejected.
+# EXPECT_ERROR_CODE: CE5009
+fn pass_through(ptr p) ptr:
+    return Result.Ok(p)
+
+fn main() i32:
+    return Result.Ok(0)

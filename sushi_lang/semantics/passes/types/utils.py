@@ -36,6 +36,17 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
             # Result<T, E> is valid - it will be resolved to ResultType during type checking
             return
 
+        # CE5012: foreign `ptr` as a generic type argument is only supported by
+        # the built-in Result/Maybe enum machinery. Other containers (HashMap,
+        # List, user generics) cannot carry an opaque handle - check BEFORE the
+        # existence checks so the user sees the real reason, not a missing
+        # monomorphization (CE2001).
+        if type_obj.base_name != "Maybe":
+            from sushi_lang.semantics.type_predicates import contains_foreign_ptr
+            if any(contains_foreign_ptr(arg) for arg in type_obj.type_args):
+                er.emit(validator.reporter, er.ERR.CE5012, span, base=type_obj.base_name)
+                return
+
         # Validate that the generic type base exists (check both enums and structs)
         is_generic_enum = type_obj.base_name in validator.generic_enum_table.by_name
         is_generic_struct = type_obj.base_name in validator.generic_struct_table.by_name

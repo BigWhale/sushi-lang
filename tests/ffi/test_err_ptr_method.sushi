@@ -1,0 +1,10 @@
+# FFI: a foreign `ptr` has no methods (no hash, no string form).
+# EXPECT_ERROR_CODE: CE5011
+unsafe external "C" as libc because "intentional ptr method call":
+    fn malloc(i64 n) ptr = "malloc"
+
+fn main() i32:
+    let ptr a = libc.malloc(8 as i64)
+    let u64 h = a.hash()
+    println(h)
+    return Result.Ok(0)

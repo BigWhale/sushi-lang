@@ -1,0 +1,28 @@
+# The wrapper-struct pattern: the raw handle rides inside a named struct,
+# and the struct - real Sushi - is what gets methods and crosses units.
+unsafe external "C" as libc because "a raw buffer behind a tidy struct":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+
+struct Towel:
+    ptr raw
+    i64 size
+
+fn issue_towel(i64 n) Towel:
+    return Result.Ok(Towel(libc.malloc(n), n))
+
+# Extension methods attach to the STRUCT, never to the ptr itself.
+extend Towel surrender() i64:
+    libc.free(self.raw)
+    return self.size
+
+fn use_towel(Towel t) ~:
+    let i64 freed = t.surrender()
+    println("towel surrendered, {freed} bytes returned")
+    return Result.Ok(~)
+
+fn main() i32:
+    match issue_towel(42 as i64):
+        Result.Ok(t) -> use_towel(t)
+        Result.Err(_) -> println("no towel today")
+    return Result.Ok(0)

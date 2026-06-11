@@ -50,6 +50,84 @@ def validate_external_signatures(reporter: Reporter, program: 'Program') -> None
         _emit_block_warning(reporter, block)
 
 
+def validate_ptr_unit_gate(reporter: Reporter, program: 'Program') -> None:
+    """CE5009: `ptr` may only be NAMED in a unit that declares an `unsafe external` block.
+
+    "No danger zone, no ptr." A unit with no external block has no way to ever
+    produce a `ptr` value (no null literal, no casts, no uninitialized lets),
+    so a spelled `ptr` type there is dead plumbing at best and confusion at
+    worst. Walks every declared type in the unit AST: function signatures,
+    struct fields, enum variants, extension/perk-method signatures, constants,
+    and `let`/`foreach` annotations inside bodies. Resolved types from OTHER
+    units (e.g. holding a wrapper struct whose field is `ptr`) are untouched -
+    the gate is purely about what this unit's source spells out.
+    """
+    if getattr(program, "externals", None):
+        return  # The unit declares a danger zone; ptr is legal here.
+
+    from sushi_lang.semantics.type_predicates import contains_foreign_ptr
+
+    def check(ty, span) -> None:
+        if ty is not None and contains_foreign_ptr(ty):
+            er.emit(reporter, er.ERR.CE5009, span)
+
+    def walk_block(block) -> None:
+        import dataclasses
+        from sushi_lang.semantics.ast import Node, Block
+        if block is None:
+            return
+        for stmt in getattr(block, "stmts", ()):
+            # Declared types on statements (Let.ty, Foreach.item_type)
+            check(getattr(stmt, "ty", None),
+                  getattr(stmt, "type_span", None) or getattr(stmt, "loc", None))
+            check(getattr(stmt, "item_type", None),
+                  getattr(stmt, "item_type_span", None) or getattr(stmt, "loc", None))
+            # Recurse into nested blocks (if/while/foreach/match arms ...)
+            if dataclasses.is_dataclass(stmt):
+                for f in dataclasses.fields(stmt):
+                    value = getattr(stmt, f.name, None)
+                    if isinstance(value, Block):
+                        walk_block(value)
+                    elif isinstance(value, list):
+                        for item in value:
+                            if isinstance(item, Block):
+                                walk_block(item)
+                            elif isinstance(item, Node) and isinstance(getattr(item, "body", None), Block):
+                                walk_block(item.body)
+
+    def walk_signature(fn) -> None:
+        span = getattr(fn, "name_span", None) or getattr(fn, "loc", None)
+        check(getattr(fn, "ret", None), getattr(fn, "ret_span", None) or span)
+        check(getattr(fn, "err_type", None), span)
+        for p in getattr(fn, "params", ()):
+            check(getattr(p, "ty", None), span)
+        walk_block(getattr(fn, "body", None))
+
+    for func in program.functions:
+        walk_signature(func)
+    for ext in program.extensions + program.generic_extensions:
+        check(getattr(ext, "target_type", None),
+              getattr(ext, "target_type_span", None) or ext.loc)
+        walk_signature(ext)
+    for impl in program.perk_impls:
+        check(getattr(impl, "target_type", None),
+              getattr(impl, "target_type_span", None) or impl.loc)
+        for method in impl.methods:
+            walk_signature(method)
+    for struct in program.structs:
+        for field in struct.fields:
+            if contains_foreign_ptr(getattr(field, "ty", None)):
+                er.emit(reporter, er.ERR.CE5009,
+                        getattr(struct, "name_span", None) or struct.loc)
+    for enum in program.enums:
+        for variant in enum.variants:
+            for ty in getattr(variant, "associated_types", ()) or ():
+                check(ty, getattr(enum, "name_span", None) or enum.loc)
+    for const in program.constants:
+        check(getattr(const, "ty", None),
+              getattr(const, "type_span", None) or const.loc)
+
+
 def _validate_block_abi(reporter: Reporter, block: 'ExternalBlock') -> None:
     """Reject any ABI string other than "C" (reuses CE5003)."""
     if block.abi != "C":

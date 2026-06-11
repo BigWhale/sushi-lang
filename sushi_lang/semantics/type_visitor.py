@@ -11,7 +11,7 @@ from typing import Optional
 from sushi_lang.internals.report import Reporter
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.visitors import NodeVisitor, RecursiveVisitor
-from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType, StructType
+from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType, StructType, ForeignPtrType
 from sushi_lang.semantics.type_predicates import is_string_convertible
 from sushi_lang.semantics.ast import (
     # Statements
@@ -154,6 +154,12 @@ class ExpressionValidator(RecursiveVisitor):
 
     def visit_unaryop(self, node: UnaryOp) -> None:
         """Validate unary operation."""
+        # CE5010: a foreign ptr is an opaque handle - no negation, NOT, or truthiness
+        operand_type = self.type_validator.infer_expression_type(node.expr)
+        if isinstance(operand_type, ForeignPtrType):
+            er.emit(self.type_validator.reporter, er.ERR.CE5010, node.loc, op=node.op)
+            return
+
         # A negated integer literal is range-checked as one signed value, so
         # that i32 min (-2147483648) stays legal while the positive literal
         # 2147483648 alone would not be.
@@ -177,6 +183,12 @@ class ExpressionValidator(RecursiveVisitor):
 
         left_type = self.type_validator.infer_expression_type(node.left)
         right_type = self.type_validator.infer_expression_type(node.right)
+
+        # CE5010: a foreign ptr is an opaque handle - no comparison, arithmetic,
+        # bitwise, or logical operations of any kind.
+        if isinstance(left_type, ForeignPtrType) or isinstance(right_type, ForeignPtrType):
+            er.emit(self.type_validator.reporter, er.ERR.CE5010, node.loc, op=node.op)
+            return
 
         # Check for string concatenation with + operator (CE2509)
         if node.op == "+":
