@@ -1,0 +1,19 @@
+# The error type is part of the function type, so a custom error propagates
+# through an indirect call exactly like it would through a direct one.
+enum DivError:
+    DivByZero
+
+fn safe_div(i32 a, i32 b) i32 | DivError:
+    if (b == 0):
+        return Result.Err(DivError.DivByZero)
+    return Result.Ok(a / b)
+
+fn run(fn(i32, i32) -> i32 | DivError op, i32 x, i32 y) i32 | DivError:
+    let i32 r = op(x, y)??
+    return Result.Ok(r)
+
+fn main() i32:
+    let fn(i32, i32) -> i32 | DivError f = safe_div
+    println(run(f, 84, 2).realise(-1))    # 42
+    println(run(f, 1, 0).realise(-1))     # -1  (DivByZero -> realise default)
+    return Result.Ok(0)

@@ -1,0 +1,18 @@
+# A function value can live in a struct field. To call it, bind the field to a
+# local first -- `op.run()` would parse as a method call on `op`.
+fn square(i32 x) i32:
+    return Result.Ok(x * x)
+
+struct Op:
+    string name
+    fn(i32) -> i32 run
+
+fn apply(Op op, i32 v) i32:
+    let fn(i32) -> i32 f = op.run
+    return Result.Ok(f(v)??)
+
+fn main() i32:
+    let Op op = Op("square", square)
+    println(op.name)
+    println(apply(op, 7).realise(0))   # 49
+    return Result.Ok(0)

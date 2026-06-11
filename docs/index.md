@@ -28,6 +28,7 @@ compiler internals in one place.
 - [Memory Management](memory-management.md) — RAII, references, borrowing, and `Own<T>`
 - [Generics](generics.md) — generic types, functions, and monomorphization
 - [Perks](perks.md) — traits/interfaces for polymorphism with static dispatch
+- [First-Class Functions](first-class-functions.md) — function types and function values (no closures)
 - [Foreign Function Interface](ffi.md) — calling external C functions via `unsafe external`
 
 ## Reference

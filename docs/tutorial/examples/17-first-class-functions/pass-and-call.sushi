@@ -1,0 +1,18 @@
+# A function value: reference a named function, pass it to another function,
+# and call through the parameter. No closures -- it is just a function pointer.
+fn add_one(i32 x) i32:
+    return Result.Ok(x + 1)
+
+fn triple(i32 x) i32:
+    return Result.Ok(x * 3)
+
+# `op` is a function-typed parameter; `op(v)` calls through it.
+fn apply(fn(i32) -> i32 op, i32 v) i32:
+    return Result.Ok(op(v)??)
+
+fn main() i32:
+    let fn(i32) -> i32 f = add_one
+    let fn(i32) -> i32 g = triple
+    println(apply(f, 41).realise(0))    # 42
+    println(apply(g, 14).realise(0))    # 42
+    return Result.Ok(0)
