@@ -1,11 +1,14 @@
 name: Deploy Docs Site
 
-# Manual-only by design. This workflow NEVER runs automatically: there is no
-# push/pull_request trigger, so merging to main does not publish anything.
-# Trigger it by hand from the Actions tab once you explicitly want the docs
-# live on GitHub Pages.
+# Deploys automatically after the Tests workflow succeeds on main (code only
+# reaches main through the PR / merge-queue gate, so tests have already passed
+# by then). Still triggerable by hand from the Actions tab.
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: read
@@ -19,6 +22,8 @@ concurrency:
 
 jobs:
   build:
+    # Manual runs always build; automatic runs only after Tests succeeded on main.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
