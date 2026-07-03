@@ -56,15 +56,20 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
         if isinstance(semantic_type, ReferenceType):
             semantic_type = semantic_type.referenced_type
 
-        if isinstance(semantic_type, EnumType) and semantic_type.name.startswith(prefix):
-            return semantic_type
+        # A known concrete enum type is authoritative for the receiver: only the
+        # generic handler whose prefix matches may claim it. Return None (rather than
+        # falling through to the Strategy 3 LLVM-layout heuristic) when it does not
+        # match, so a same-layout enum of the other family is never mis-selected --
+        # e.g. Maybe<Color> and Result<i32, StdError> can share {i32, [N x i8]}.
+        if isinstance(semantic_type, EnumType):
+            return semantic_type if semantic_type.name.startswith(prefix) else None
 
-        # Handle GenericTypeRef (e.g., Result<i32> before resolution)
-        # Resolve it to the actual EnumType from the enum table
+        # Handle GenericTypeRef (e.g., Result<i32> before resolution). A known enum
+        # ref is likewise authoritative.
         if isinstance(semantic_type, GenericTypeRef):
             type_name = str(semantic_type)  # e.g., "Result<i32>"
-            if type_name.startswith(prefix) and type_name in codegen.enum_table.by_name:
-                return codegen.enum_table.by_name[type_name]
+            if type_name in codegen.enum_table.by_name:
+                return codegen.enum_table.by_name[type_name] if type_name.startswith(prefix) else None
 
     # Strategy 2: Infer from function call return type (for Call expressions)
     if isinstance(receiver, Call):
@@ -81,7 +86,8 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
             elif isinstance(result_type, EnumType) and result_type.name.startswith(prefix):
                 return result_type
 
-    # Strategy 3: Fallback to LLVM type matching
+    # Strategy 3: Fallback to LLVM type matching (last resort, only when the
+    # receiver's semantic type could not be determined above).
     for enum_name, enum_type in codegen.enum_table.by_name.items():
         if isinstance(enum_type, EnumType) and enum_name.startswith(prefix):
             expected_llvm_type = codegen.types.ll_type(enum_type)

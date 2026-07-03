@@ -1,0 +1,25 @@
+# Maybe<EnumType>.realise(default) with a non-primitive (enum) payload. Bug F / CE0017.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "got green"
+
+enum Color:
+  Red
+  Green
+  Blue
+
+fn main() i32:
+  let Maybe<Color> some = Maybe.Some(Color.Green)
+  let Color c = some.realise(Color.Red)
+  match c:
+    Color.Green -> println("got green")
+    Color.Red -> println("got red")
+    Color.Blue -> println("got blue")
+
+  let Maybe<Color> nothing = Maybe.None()
+  let Color d = nothing.realise(Color.Blue)
+  match d:
+    Color.Green -> println("default green")
+    Color.Red -> println("default red")
+    Color.Blue -> println("default blue")
+
+  return Result.Ok(0)
