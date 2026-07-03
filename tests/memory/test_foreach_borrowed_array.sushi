@@ -1,0 +1,17 @@
+# foreach / .iter() over a borrowed (&peek) dynamic array. Bug D / CE0042.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "Sum: 6"
+
+fn sum_array(&peek i32[] numbers) i32:
+  let i32 total = 0
+  foreach(n in numbers.iter()):
+    total := total + n
+  return Result.Ok(total)
+
+fn main() i32:
+  let i32[] nums = from([1, 2, 3])
+  let i32 count = nums.len()
+  let i32 s = sum_array(&peek nums).realise(0)
+  println("Count: {count}")
+  println("Sum: {s}")
+  return Result.Ok(0)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional, List, TYPE_CHECKING
 from lark import Tree, Token
 from sushi_lang.semantics.generics.types import GenericTypeRef
-from sushi_lang.semantics.typesys import Type, TYPE_NODE_NAMES
+from sushi_lang.semantics.typesys import Type, TYPE_NODE_NAMES, UnknownType
 from sushi_lang.semantics.ast import BoundedTypeParam
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree
 from sushi_lang.internals.report import span_of
@@ -39,6 +39,13 @@ def parse_generic_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]:
 
     if not type_args:
         return None
+
+    # Normalize single-arg `Result<T>` to `Result<T, StdError>`. Result carries an
+    # implicit error type just like an `fn foo() T` declaration; supplying the default
+    # StdError here lets every downstream two-arg Result path (resolution, propagation,
+    # monomorphization) work unchanged. Mirrors FunctionType's implicit error slot.
+    if base_name == "Result" and len(type_args) == 1:
+        type_args.append(UnknownType("StdError"))
 
     return GenericTypeRef(base_name=base_name, type_args=tuple(type_args))
 

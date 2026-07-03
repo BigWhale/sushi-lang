@@ -604,8 +604,8 @@ _add(ErrorMessage("CE1001", Severity.ERROR,
 ))
 
 _add(ErrorMessage("CE1002", Severity.ERROR,
-    "rebind to undeclared variable '{name}'",
-    Category.SCOPE, "Use 'let' to declare a variable before using ':=' to rebind it."))
+    "assignment to undeclared variable '{name}'",
+    Category.SCOPE, "Use 'let' to declare a variable before reassigning it with ':='."))
 
 _add(ErrorMessage("CE1003", Severity.ERROR,
     "not allowed here (must be inside a loop).",
@@ -797,8 +797,8 @@ _add(ErrorMessage("CE2400", Severity.ERROR,
     Category.TYPE, "Attempted to borrow a variable that was not declared."))
 
 _add(ErrorMessage("CE2401", Severity.ERROR,
-    "cannot move/rebind '{name}' while it is borrowed",
-    Category.TYPE, "A variable cannot be moved or rebound while a reference to it is active."))
+    "cannot move/reassign '{name}' while it is borrowed",
+    Category.TYPE, "A variable cannot be moved or reassigned while a reference to it is active."))
 
 _add(ErrorMessage("CE2402", Severity.ERROR,
     "cannot destroy '{name}' while it is borrowed",

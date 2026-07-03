@@ -189,12 +189,18 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
     if inner_type is not None:
         # ResultType is always valid for ??
         if isinstance(inner_type, ResultType):
-            # ResultType is a semantic type - convert to EnumType for backend
-            # The enum table should have the corresponding Result<T, E> enum
+            # ResultType is a semantic type - convert to EnumType for backend when the
+            # concrete Result<T, E> enum has already been materialized.
+            result_type = inner_type
             result_enum_name = f"Result<{inner_type.ok_type}, {inner_type.err_type}>"
             if result_enum_name in validator.enum_table.by_name:
                 inner_type = validator.enum_table.by_name[result_enum_name]
-            # Extract variant info from ResultType
+            # Extract variant info. Prefer the materialized enum, but fall back to reading
+            # straight from the ResultType so the annotation does not depend on the enum
+            # already being registered (Result variants are canonically Ok=0, Err=1).
+            # Without this fallback a `??` through an fn-typed parameter fails
+            # order-dependently with CE0055 when the higher-order fn is defined before its
+            # concrete callee (so the Result<T, E> enum is not yet in the table).
             if isinstance(inner_type, EnumType):
                 ok_variant = inner_type.get_variant("Ok")
                 if ok_variant and ok_variant.associated_types:
@@ -204,6 +210,11 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
                 if err_variant and err_variant.associated_types:
                     error_type = err_variant.associated_types[0]
                     error_tag = inner_type.get_variant_index("Err")
+            else:
+                unwrapped_type = result_type.ok_type
+                success_tag = 0
+                error_type = result_type.err_type
+                error_tag = 1
         elif isinstance(inner_type, EnumType):
             # For EnumType, check if it matches Result-like or Maybe-like pattern
             # Check for Result-like pattern: Ok(value) and Err(...)
