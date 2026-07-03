@@ -172,3 +172,45 @@ def int_literal_fits_in_type(value: int, target_type: BuiltinType) -> bool:
 
     # For non-integer types, don't apply range check
     return False
+
+
+# Bit widths for the integer builtin types, used for radix bit-pattern range checks.
+_INT_WIDTHS = {
+    BuiltinType.I8: 8, BuiltinType.U8: 8,
+    BuiltinType.I16: 16, BuiltinType.U16: 16,
+    BuiltinType.I32: 32, BuiltinType.U32: 32,
+    BuiltinType.I64: 64, BuiltinType.U64: 64,
+}
+
+# Largest finite magnitude representable in IEEE-754 single precision.
+_F32_MAX = 3.4028234663852886e38
+
+
+def int_literal_fits(value: int, radix: int, target_type: BuiltinType) -> bool:
+    """Check whether an integer literal fits its context-typed target.
+
+    Decimal literals use value ranges (signed/unsigned per type). Radix literals
+    (hex/binary/octal) use bit-pattern semantics: any value fitting the type's bit
+    width is legal, so `0xFF` is a valid `i8` (the 8-bit pattern -1). This mirrors
+    the compiler's existing bare-i32 rule, now parameterized by width.
+    """
+    width = _INT_WIDTHS.get(target_type)
+    if width is None:
+        return False
+    if radix == 10:
+        return int_literal_fits_in_type(value, target_type)
+    return 0 <= value <= (1 << width) - 1
+
+
+def float_literal_fits(value: float, target_type: BuiltinType) -> bool:
+    """Check whether a float literal fits its context-typed target.
+
+    f64 holds any parsed literal; f32 rejects only overflow to infinity. Precision
+    loss on narrowing (e.g. 0.1 -> f32) is silently rounded to nearest, matching Go
+    and Rust.
+    """
+    if target_type == BuiltinType.F64:
+        return True
+    if target_type == BuiltinType.F32:
+        return abs(value) <= _F32_MAX
+    return False

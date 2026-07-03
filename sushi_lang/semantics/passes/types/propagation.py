@@ -24,13 +24,54 @@ eliminate duplication across statement validators.
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-from sushi_lang.semantics.typesys import ResultType, EnumType, StructType
-from sushi_lang.semantics.ast import EnumConstructor, DotCall, Call, Name
+from sushi_lang.semantics.typesys import ResultType, EnumType, StructType, BuiltinType
+from sushi_lang.semantics.ast import EnumConstructor, DotCall, Call, Name, IntLit, FloatLit, UnaryOp
+from sushi_lang.internals import errors as er
+from .inference import int_literal_fits, float_literal_fits
 
 if TYPE_CHECKING:
     from . import TypeValidator
     from sushi_lang.semantics.ast import Expr
     from sushi_lang.semantics.typesys import Type
+
+_NUMERIC_INT = {BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
+                BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64}
+_NUMERIC_FLOAT = {BuiltinType.F32, BuiltinType.F64}
+
+
+def _stamp_numeric_literal(validator: 'TypeValidator', node: 'Expr',
+                           expected: BuiltinType) -> None:
+    """Stamp a bare numeric literal (optionally negated) with its context type.
+
+    Range-checks the literal against the expected type; out-of-range emits CE2073.
+    Sets `resolved_type` (read by inference and the backend) and `range_checked`
+    (so the default-i32 CE2070 check in the validator skips it). A non-literal leaf
+    (a Name, a call result) is left untouched so a typed value still requires `as`.
+    """
+    sign = 1
+    lit = node
+    if (isinstance(lit, UnaryOp) and lit.op == "neg"
+            and isinstance(lit.expr, (IntLit, FloatLit))):
+        sign = -1
+        lit = lit.expr
+
+    if isinstance(lit, IntLit) and expected in _NUMERIC_INT:
+        value = sign * int(lit.value)
+        # A negated literal is a signed value, so use value (decimal) semantics.
+        radix = 10 if sign == -1 else lit.radix
+        if not int_literal_fits(value, radix, expected):
+            er.emit(validator.reporter, er.ERR.CE2073, lit.loc,
+                    literal=str(value), type=expected.value)
+            return
+        lit.resolved_type = expected
+        lit.range_checked = True
+    elif isinstance(lit, FloatLit) and expected in _NUMERIC_FLOAT:
+        value = sign * float(lit.value)
+        if not float_literal_fits(value, expected):
+            er.emit(validator.reporter, er.ERR.CE2073, lit.loc,
+                    literal=str(value), type=expected.value)
+            return
+        lit.resolved_type = expected
 
 
 def _propagate_to_enum_args(validator: 'TypeValidator', node: Expr,
@@ -353,6 +394,12 @@ def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
     validate_return_statement(), validate_let_statement(), and
     validate_rebind_statement().
     """
+    # Context-typed numeric literals: stamp a bare literal with the expected type.
+    if isinstance(expected_type, BuiltinType) and (
+            expected_type in _NUMERIC_INT or expected_type in _NUMERIC_FLOAT):
+        _stamp_numeric_literal(validator, value_expr, expected_type)
+        return
+
     # Handle Result<T, E> propagation
     if isinstance(expected_type, ResultType):
         _propagate_result_enum_type(validator, value_expr, expected_type)

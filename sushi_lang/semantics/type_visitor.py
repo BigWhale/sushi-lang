@@ -378,6 +378,10 @@ class ExpressionValidator(RecursiveVisitor):
         """
         if getattr(node, 'in_cast_context', False) or getattr(node, 'range_checked', False):
             return
+        # A context-typed literal was already range-checked against its stamped type
+        # at propagation time; skip the default-i32 overflow check.
+        if node.resolved_type is not None:
+            return
         value = int(node.value)
         if node.radix == 10:
             in_range = 0 <= value <= 2 ** 31 - 1
@@ -473,12 +477,12 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
     # === Type inference methods ===
 
     def visit_intlit(self, node: IntLit) -> Optional[Type]:
-        """Infer integer literal type."""
-        return BuiltinType.I32
+        """Infer integer literal type (context-typed if stamped, else default i32)."""
+        return node.resolved_type or BuiltinType.I32
 
     def visit_floatlit(self, node: FloatLit) -> Optional[Type]:
-        """Infer float literal type."""
-        return BuiltinType.F64  # Default floating literals to f64
+        """Infer float literal type (context-typed if stamped, else default f64)."""
+        return node.resolved_type or BuiltinType.F64
 
     def visit_boollit(self, node: BoolLit) -> Optional[Type]:
         """Infer boolean literal type."""

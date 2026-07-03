@@ -1,0 +1,5 @@
+# A literal that does not fit its annotated type is a compile error (Bug E / PR 2a).
+# EXPECT_ERROR_CODE: CE2073
+fn main() i32:
+  let i8 y = 200
+  return Result.Ok(0)

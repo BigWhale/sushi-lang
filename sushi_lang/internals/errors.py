@@ -938,6 +938,10 @@ _add(ErrorMessage("CE2072", Severity.ERROR,
     "range expression requires integer types for start and end bounds. Got {got}, expected {expected}",
     Category.TYPE, "Range expressions (.. and ..=) can only be used with integer types (i8, i16, i32, i64, u8, u16, u32, u64)."))
 
+_add(ErrorMessage("CE2073", Severity.ERROR,
+    "literal {literal} out of range for {type}",
+    Category.TYPE, "The literal does not fit the target type's range. Use a wider type, or an explicit 'as' cast if you intend the bit pattern."))
+
 # Named struct constructor errors (CE2080-CE2089)
 _add(ErrorMessage("CE2080", Severity.ERROR,
     "unknown field '{field}' for struct '{struct}'",

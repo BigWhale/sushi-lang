@@ -16,6 +16,7 @@ from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType
 
 from .utils import validate_type_name
 from .compatibility import validate_assignment_compatibility
+from .propagation import propagate_types_to_value
 
 
 def validate_constant(self, const: ConstDef) -> None:
@@ -41,6 +42,10 @@ def validate_constant(self, const: ConstDef) -> None:
     if const_value is None:
         # Error already emitted by evaluator
         return
+
+    # Context-type any bare numeric literal to the declared const type before the
+    # compatibility check (e.g. const u8 MAX = 200).
+    propagate_types_to_value(self, const.value, const.ty)
 
     # Validate value type matches declared type
     validate_assignment_compatibility(self, const.ty, const.value, const.type_span, const.loc)

@@ -1,0 +1,7 @@
+# Context typing applies to bare literals only; a typed value still needs `as`
+# (Bug E / PR 2a). Assigning an i32 variable to an i64 is CE2002, not silently coerced.
+# EXPECT_ERROR_CODE: CE2002
+fn main() i32:
+  let i32 a = 5
+  let i64 z = a
+  return Result.Ok(0)
