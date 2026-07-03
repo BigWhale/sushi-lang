@@ -85,19 +85,34 @@ let i32 perm = 0o644         # 420
 
 **Common features**:
 - All literal formats support underscore separators for readability
-- All default to `i32` type
 - Prefixes are case insensitive (`0xFF` == `0xff`, `0B1111` == `0b1111`)
+- A literal is **context-typed**: it takes its type from context (annotation,
+  argument, field, operand). With no numeric context it defaults to `i32`.
 
-**Range rules** (`CE2070`): a bare literal must fit its default `i32` type - a
-decimal literal the signed range (up to `2147483647`; `-2147483648` is legal),
-a hex/binary/octal literal the 32-bit pattern (up to `0xFFFFFFFF`). A literal
-**cast directly to an integer type is exempt** and materializes at the target
-width, exact and unwrapped:
+**Context typing**: a bare literal is typed by its
+expected type and range-checked at compile time, so no cast is needed to write a
+literal of a non-`i32` type. A decimal literal uses value ranges (signed/unsigned per
+type); a hex/binary/octal literal uses the target's bit-pattern width (so `0xFF` is a
+valid `i8` — the pattern `-1`); an `f32` rejects overflow to infinity (precision loss
+on `f64`->`f32` is silently rounded). An out-of-range literal is `CE2073`. This is
+literal *typing*, not value coercion — converting an already-typed value still needs
+`as` (see [Type Conversion](#type-conversion)).
 
 ```sushi
-let i64 big = 40000000000 as i64           # exact, needs the cast
-let u64 max = 18446744073709551615 as u64  # exact
-let i32 bad = 40000000000                  # CE2070: overflows i32
+let i64 big   = 40000000000                # context-typed i64, no cast needed
+let u64 max   = 18446744073709551615       # context-typed u64
+let u32 mask  = 0x01 | 0x02 | 0x04         # operands typed u32
+let i8  small = 200                        # CE2073: out of range for i8
+```
+
+**No-context default** (`CE2070`): a literal with no numeric context defaults to
+`i32`, and a bare decimal above the signed range (or a radix literal above the
+32-bit pattern) is a compile error. A literal cast directly with `as` is exempt and
+materializes at the target width:
+
+```sushi
+println(40000000000)              # CE2070: context-free, defaults to i32 and overflows
+let i64 x = 40000000000 as i64    # exempt: materializes at i64 width
 ```
 
 ### Type Conversion
