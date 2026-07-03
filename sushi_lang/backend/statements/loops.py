@@ -28,7 +28,11 @@ def emit_break(codegen: 'LLVMCodegen') -> None:
         AssertionError: If not inside a loop context.
     """
     assert codegen.loop_stack, "checker guarantees inside-loop"
-    _, break_bb = codegen.loop_stack[-1]
+    _, break_bb, scope_boundary = codegen.loop_stack[-1]
+    # Free heap-owning locals of the loop's own scopes before abandoning them; the
+    # branch terminates this block, so pop_scope would otherwise skip their destructors.
+    from sushi_lang.backend.statements.utils import emit_loop_exit_cleanup
+    emit_loop_exit_cleanup(codegen, scope_boundary)
     codegen.builder.branch(break_bb)
     codegen.utils.after_terminator_unreachable()
 
@@ -46,7 +50,10 @@ def emit_continue(codegen: 'LLVMCodegen') -> None:
         AssertionError: If not inside a loop context.
     """
     assert codegen.loop_stack, "checker guarantees inside-loop"
-    cont_bb, _ = codegen.loop_stack[-1]
+    cont_bb, _, scope_boundary = codegen.loop_stack[-1]
+    # Free heap-owning locals of the loop's own scopes before restarting the loop.
+    from sushi_lang.backend.statements.utils import emit_loop_exit_cleanup
+    emit_loop_exit_cleanup(codegen, scope_boundary)
     codegen.builder.branch(cont_bb)
     codegen.utils.after_terminator_unreachable()
 
@@ -258,7 +265,7 @@ def _emit_stdin_lines_foreach(
 
     # Body: use the line we just read
     codegen.builder.position_at_end(stdin_body_bb)
-    codegen.loop_stack.append((stdin_cond_bb, end_bb))
+    codegen.loop_stack.append((stdin_cond_bb, end_bb, codegen.memory._scope_depth + 1))
     codegen.memory.push_scope()
 
     # Create slot for loop variable with the line we read
@@ -335,7 +342,7 @@ def _emit_array_foreach_body(
 
     # Emit body
     codegen.builder.position_at_end(body_bb)
-    codegen.loop_stack.append((cond_bb, end_bb))
+    codegen.loop_stack.append((cond_bb, end_bb, codegen.memory._scope_depth + 1))
     codegen.memory.push_scope()
 
     # Get the current element: data_ptr[current_index]
@@ -456,7 +463,7 @@ def _emit_hashmap_foreach(
 
     # === Body: Extract element and execute foreach body ===
     codegen.builder.position_at_end(body_bb)
-    codegen.loop_stack.append((cond_bb, end_bb))
+    codegen.loop_stack.append((cond_bb, end_bb, codegen.memory._scope_depth + 1))
     codegen.memory.push_scope()
 
     if is_entries:
@@ -644,7 +651,7 @@ def _emit_range_loop_path(
     # === Body block ===
     codegen.builder.position_at_end(body_bb)
     # Push increment block to loop stack so continue jumps there
-    codegen.loop_stack.append((incr_bb, end_bb))
+    codegen.loop_stack.append((incr_bb, end_bb, codegen.memory._scope_depth + 1))
     codegen.memory.push_scope()
 
     # Register loop variable in scope
