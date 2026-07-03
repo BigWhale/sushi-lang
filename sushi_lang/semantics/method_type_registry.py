@@ -136,7 +136,7 @@ class StringMethodInferrer:
         from sushi_lang.backend.generics.maybe import ensure_maybe_type_in_table
         if is_builtin_string_method(self.method_name):
             # Special handling for methods returning Maybe<T>
-            if self.method_name == "find":
+            if self.method_name in ("find", "find_last"):
                 # Returns Maybe<i32>
                 maybe_i32_type = ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I32)
                 return maybe_i32_type

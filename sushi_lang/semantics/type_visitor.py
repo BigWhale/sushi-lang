@@ -711,6 +711,14 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 return self.type_validator.enum_table.by_name[result_i32_name]
             return None
 
+        # Check for sys/process module functions (getcwd -> Result<string>,
+        # chdir -> Result<i32>, getpid/getuid -> i32). Reuse the stdlib registry's
+        # declared return type so inline `match getcwd()` / `getcwd()??` type-check
+        # (the registry is the single source of truth the backend also consults).
+        process_func = self.type_validator.func_table.lookup_stdlib_function("sys/process", function_name)
+        if process_func is not None and not process_func.is_constant:
+            return process_func.get_return_type()
+
         # Check for io/files module functions
         if function_name in {'exists', 'is_file', 'is_dir'}:
             # These functions return bool (i8)
