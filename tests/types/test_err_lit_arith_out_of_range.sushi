@@ -1,0 +1,6 @@
+# A bare literal operand that overflows the sibling's type is CE2073 (Bug E / PR 2c).
+# EXPECT_ERROR_CODE: CE2073
+fn main() i32:
+  let u8 a = 10
+  let u8 b = a + 300
+  return Result.Ok(0)

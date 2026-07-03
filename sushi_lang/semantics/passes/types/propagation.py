@@ -25,7 +25,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sushi_lang.semantics.typesys import ResultType, EnumType, StructType, BuiltinType
-from sushi_lang.semantics.ast import EnumConstructor, DotCall, Call, Name, IntLit, FloatLit, UnaryOp
+from sushi_lang.semantics.ast import EnumConstructor, DotCall, Call, Name, IntLit, FloatLit, UnaryOp, BinaryOp
 from sushi_lang.internals import errors as er
 from .inference import int_literal_fits, float_literal_fits
 
@@ -37,6 +37,32 @@ if TYPE_CHECKING:
 _NUMERIC_INT = {BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
                 BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64}
 _NUMERIC_FLOAT = {BuiltinType.F32, BuiltinType.F64}
+
+# Binary operators whose result shares the operand type, so an expected numeric type
+# flows into both operands (`let u32 m = 0x01 | 0x02`).
+_ARITH_BITWISE_OPS = {"+", "-", "*", "/", "%", "&", "|", "^"}
+# Shift operators: the expected type flows into the shifted value (left) only; the
+# shift amount (right) is typed independently.
+_SHIFT_OPS = {"<<", ">>"}
+
+
+def _propagate_numeric_type(validator: 'TypeValidator', expr: 'Expr',
+                            expected: BuiltinType) -> None:
+    """Push an expected numeric type into a value's literal leaves.
+
+    Recurses through arithmetic/bitwise binary ops (both operands) and shifts
+    (left operand only) so `const u32 FLAGS = 0x01 | 0x02 | 0x04` stamps every leaf
+    u32. Comparison/logical ops are not recursed (their result is bool). Non-binary
+    leaves are handed to `_stamp_numeric_literal`.
+    """
+    if isinstance(expr, BinaryOp):
+        if expr.op in _ARITH_BITWISE_OPS:
+            _propagate_numeric_type(validator, expr.left, expected)
+            _propagate_numeric_type(validator, expr.right, expected)
+        elif expr.op in _SHIFT_OPS:
+            _propagate_numeric_type(validator, expr.left, expected)
+        return
+    _stamp_numeric_literal(validator, expr, expected)
 
 
 def _stamp_numeric_literal(validator: 'TypeValidator', node: 'Expr',
@@ -400,10 +426,11 @@ def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
     validate_return_statement(), validate_let_statement(), and
     validate_rebind_statement().
     """
-    # Context-typed numeric literals: stamp a bare literal with the expected type.
+    # Context-typed numeric literals: stamp bare literal leaves with the expected
+    # type, recursing through arithmetic/bitwise/shift operands.
     if isinstance(expected_type, BuiltinType) and (
             expected_type in _NUMERIC_INT or expected_type in _NUMERIC_FLOAT):
-        _stamp_numeric_literal(validator, value_expr, expected_type)
+        _propagate_numeric_type(validator, value_expr, expected_type)
         return
 
     # Handle Result<T, E> propagation
