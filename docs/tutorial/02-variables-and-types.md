@@ -49,9 +49,9 @@ strings. And `has_towel`, a `bool`, printed as `1` rather than `true`: booleans 
 
 !!! note "`:=` only reassigns existing variables"
     If you write `score := 10` without ever having declared `score` with `let`, the
-    compiler stops you (its error message calls this a "rebind to undeclared variable"). And
-    reassignment must keep the same type — you can't `:=` a `string` into an `i32`, because
-    `:=` writes into the existing variable rather than making a new one.
+    compiler stops you with "assignment to undeclared variable". And reassignment must keep
+    the same type — you can't `:=` a `string` into an `i32`, because `:=` writes into the
+    existing variable rather than making a new one.
 
 !!! note "Reassigning vs. shadowing"
     `:=` is **reassignment**: the same variable, a new value, the same type. Declaring the

@@ -102,8 +102,14 @@ def emit_dynamic_array_iter(codegen: 'LLVMCodegen', call: MethodCall, receiver_v
     from sushi_lang.semantics.typesys import IteratorType, DynamicArrayType as SushiDynamicArrayType
 
     # Determine element type from semantic information
+    from sushi_lang.semantics.typesys import ReferenceType
     if isinstance(call.receiver, Name):
         semantic_type = codegen.memory.find_semantic_type(call.receiver.id)
+        # A borrowed array (&peek/&poke T[]) surfaces as a ReferenceType; unwrap it
+        # to the referenced DynamicArrayType. The receiver_value is already the
+        # array-struct pointer (emit_receiver_value loads the reference slot).
+        if isinstance(semantic_type, ReferenceType):
+            semantic_type = semantic_type.referenced_type
         if isinstance(semantic_type, SushiDynamicArrayType):
             element_semantic_type = semantic_type.base_type
         else:
