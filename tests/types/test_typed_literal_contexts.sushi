@@ -1,0 +1,39 @@
+# Context-typed numeric literals in call args, returns, struct fields, Maybe.Some,
+# and array literals (Bug E / PR 2b).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "contexts ok"
+
+struct P:
+  u8 x
+  u8 y
+
+fn takes_u8(u8 v) u8:
+  return Result.Ok(v)
+
+fn ret_i8() i8:
+  return Result.Ok(120)
+
+fn main() i32:
+  let u8 c = takes_u8(200).realise(0)
+  let i8 r = ret_i8().realise(0)
+  let P p = P(127, 200)
+  let P pn = P(y: 200, x: 127)
+  let Maybe<i8> m = Maybe.Some(120)
+  let i8[3] fixed = [1, 2, 3]
+  let i8[] dyn = from([4, 5, 6])
+  if (c != 200 as u8):
+    return Result.Ok(1)
+  if (r != 120 as i8):
+    return Result.Ok(2)
+  if (p.x != 127 as u8):
+    return Result.Ok(3)
+  if (pn.y != 200 as u8):
+    return Result.Ok(4)
+  if (m.realise(0 as i8) != 120 as i8):
+    return Result.Ok(5)
+  if (fixed[0] != 1 as i8):
+    return Result.Ok(6)
+  if (dyn[2] != 6 as i8):
+    return Result.Ok(7)
+  println("contexts ok")
+  return Result.Ok(0)

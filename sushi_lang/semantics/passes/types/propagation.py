@@ -55,6 +55,12 @@ def _stamp_numeric_literal(validator: 'TypeValidator', node: 'Expr',
         sign = -1
         lit = lit.expr
 
+    # Idempotent: a literal may be reached by more than one propagation shim
+    # (enum + struct dotcall helpers both delegate here). Stamp once so we neither
+    # emit a duplicate CE2073 nor re-walk.
+    if isinstance(lit, (IntLit, FloatLit)) and lit.resolved_type is not None:
+        return
+
     if isinstance(lit, IntLit) and expected in _NUMERIC_INT:
         value = sign * int(lit.value)
         # A negated literal is a signed value, so use value (decimal) semantics.
@@ -62,7 +68,8 @@ def _stamp_numeric_literal(validator: 'TypeValidator', node: 'Expr',
         if not int_literal_fits(value, radix, expected):
             er.emit(validator.reporter, er.ERR.CE2073, lit.loc,
                     literal=str(value), type=expected.value)
-            return
+        # Stamp even on failure: CE2073 is authoritative and compilation aborts, but
+        # stamping keeps downstream type inference consistent (no secondary CE2049).
         lit.resolved_type = expected
         lit.range_checked = True
     elif isinstance(lit, FloatLit) and expected in _NUMERIC_FLOAT:
@@ -70,7 +77,6 @@ def _stamp_numeric_literal(validator: 'TypeValidator', node: 'Expr',
         if not float_literal_fits(value, expected):
             er.emit(validator.reporter, er.ERR.CE2073, lit.loc,
                     literal=str(value), type=expected.value)
-            return
         lit.resolved_type = expected
 
 

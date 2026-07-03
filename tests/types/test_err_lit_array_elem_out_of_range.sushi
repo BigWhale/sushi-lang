@@ -1,0 +1,5 @@
+# A literal array element out of the element type's range is CE2073 (Bug E / PR 2b).
+# EXPECT_ERROR_CODE: CE2073
+fn main() i32:
+  let i8[3] a = [1, 200, 3]
+  return Result.Ok(0)

@@ -104,25 +104,14 @@ def infer_element_type_with_context(validator: 'TypeValidator', expr: Expr, expe
     Returns:
         Inferred type, using expected_type for integer/float literals when provided
     """
-    # If we have an expected type and the expression is a numeric literal, use the expected type
-    if expected_type is not None:
-        # Integer literals: if expected type is numeric, use it
-        if isinstance(expr, IntLit) and isinstance(expected_type, BuiltinType):
-            if expected_type in [
-                BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-                BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64
-            ]:
-                # Validate that the literal value fits in the target type
-                if int_literal_fits_in_type(expr.value, expected_type):
-                    return expected_type
-                # If it doesn't fit, fall through to default inference (will cause type error later)
+    # Context-type a bare numeric literal to the expected element type (stamps the
+    # literal, range-checks it, emits CE2073 on overflow). Shares the single
+    # propagation path so dynamic-array elements behave like every other context.
+    if expected_type is not None and isinstance(expected_type, BuiltinType):
+        from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
+        propagate_types_to_value(validator, expr, expected_type)
 
-        # Float literals: if expected type is float, use it
-        if isinstance(expr, FloatLit) and isinstance(expected_type, BuiltinType):
-            if expected_type in [BuiltinType.F32, BuiltinType.F64]:
-                return expected_type
-
-    # Otherwise, use normal type inference
+    # Read back the (possibly stamped) type via normal inference.
     return validator.infer_expression_type(expr)
 
 
