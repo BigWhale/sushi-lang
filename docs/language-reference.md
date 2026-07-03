@@ -89,7 +89,7 @@ let i32 perm = 0o644         # 420
 - A literal is **context-typed**: it takes its type from context (annotation,
   argument, field, operand). With no numeric context it defaults to `i32`.
 
-**Context typing** (Rust/Go untyped-constant model): a bare literal is typed by its
+**Context typing**: a bare literal is typed by its
 expected type and range-checked at compile time, so no cast is needed to write a
 literal of a non-`i32` type. A decimal literal uses value ranges (signed/unsigned per
 type); a hex/binary/octal literal uses the target's bit-pattern width (so `0xFF` is a
