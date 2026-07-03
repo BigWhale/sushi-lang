@@ -1,0 +1,7 @@
+# A literal struct field out of the field's range is CE2073 (Bug E / PR 2b).
+# EXPECT_ERROR_CODE: CE2073
+struct P:
+  u8 x
+fn main() i32:
+  let P p = P(300)
+  return Result.Ok(0)

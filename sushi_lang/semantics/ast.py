@@ -350,10 +350,15 @@ class Name(Node):
 class IntLit(Node):
     value: int
     radix: int = 10  # 2 (binary), 8 (octal), 10 (decimal), 16 (hexadecimal)
+    # Context-typed literals: the expected numeric type stamped in by propagation
+    # (`propagate_types_to_value`). None means "no context" -> defaults to i32.
+    resolved_type: Optional[Type] = None
 
 @dataclass
 class FloatLit(Node):
     value: float
+    # As IntLit.resolved_type; None means "no context" -> defaults to f64.
+    resolved_type: Optional[Type] = None
 
 @dataclass
 class BoolLit(Node):

@@ -299,7 +299,7 @@ forms for all logical operators.
   ```
 - **Unsigned types** (`u8`, `u16`, `u32`, `u64`): Logical shift (zero-fills)
   ```sushi
-  let u32 a = 3221225472 as u32
+  let u32 a = 3221225472
   let u32 shifted = a >> 2  # Result: 805306368 (zero-fill from left)
   ```
 

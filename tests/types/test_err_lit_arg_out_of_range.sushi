@@ -1,0 +1,7 @@
+# A literal call argument out of the parameter's range is CE2073 (Bug E / PR 2b).
+# EXPECT_ERROR_CODE: CE2073
+fn takes_u8(u8 v) u8:
+  return Result.Ok(v)
+fn main() i32:
+  let u8 c = takes_u8(300).realise(0)
+  return Result.Ok(0)

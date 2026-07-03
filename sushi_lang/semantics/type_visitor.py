@@ -206,6 +206,11 @@ class ExpressionValidator(RecursiveVisitor):
         self.type_validator.validate_expression(node.left)
         self.type_validator.validate_expression(node.right)
 
+        # Operand-driven literal typing: when one operand is a bare (unstamped)
+        # numeric literal and the other a concrete numeric type, stamp the literal
+        # to that type so `a + 1` (a: u8) is u8 + u8, not the mixed u8 + i32 below.
+        self._context_type_operand_from_sibling(node)
+
         left_type = self.type_validator.infer_expression_type(node.left)
         right_type = self.type_validator.infer_expression_type(node.right)
 
@@ -245,6 +250,28 @@ class ExpressionValidator(RecursiveVisitor):
         # Additional validation for bitwise operators
         if node.op in ["&", "|", "^", "<<", ">>"]:
             self.type_validator._validate_bitwise_operation(node)
+
+    def _context_type_operand_from_sibling(self, node: BinaryOp) -> None:
+        """Stamp a bare numeric-literal operand with its concrete sibling's type.
+
+        Applies only when exactly one operand is an unstamped IntLit/FloatLit and
+        the other resolves to a concrete BuiltinType. Both-bare (`1 + 2`) keeps the
+        i32/f64 default; both-concrete-and-different stays a CE2510 mixed-type error.
+        """
+        left, right = node.left, node.right
+        left_bare = isinstance(left, (IntLit, FloatLit)) and left.resolved_type is None
+        right_bare = isinstance(right, (IntLit, FloatLit)) and right.resolved_type is None
+        if left_bare == right_bare:
+            return
+        from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
+        if left_bare:
+            sibling_type = self.type_validator.infer_expression_type(right)
+            if isinstance(sibling_type, BuiltinType):
+                propagate_types_to_value(self.type_validator, left, sibling_type)
+        else:
+            sibling_type = self.type_validator.infer_expression_type(left)
+            if isinstance(sibling_type, BuiltinType):
+                propagate_types_to_value(self.type_validator, right, sibling_type)
 
     def visit_call(self, node: Call) -> None:
         """Validate function call."""
@@ -378,6 +405,10 @@ class ExpressionValidator(RecursiveVisitor):
         """
         if getattr(node, 'in_cast_context', False) or getattr(node, 'range_checked', False):
             return
+        # A context-typed literal was already range-checked against its stamped type
+        # at propagation time; skip the default-i32 overflow check.
+        if node.resolved_type is not None:
+            return
         value = int(node.value)
         if node.radix == 10:
             in_range = 0 <= value <= 2 ** 31 - 1
@@ -473,12 +504,12 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
     # === Type inference methods ===
 
     def visit_intlit(self, node: IntLit) -> Optional[Type]:
-        """Infer integer literal type."""
-        return BuiltinType.I32
+        """Infer integer literal type (context-typed if stamped, else default i32)."""
+        return node.resolved_type or BuiltinType.I32
 
     def visit_floatlit(self, node: FloatLit) -> Optional[Type]:
-        """Infer float literal type."""
-        return BuiltinType.F64  # Default floating literals to f64
+        """Infer float literal type (context-typed if stamped, else default f64)."""
+        return node.resolved_type or BuiltinType.F64
 
     def visit_boollit(self, node: BoolLit) -> Optional[Type]:
         """Infer boolean literal type."""

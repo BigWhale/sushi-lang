@@ -37,6 +37,11 @@ def validate_assignment_compatibility(validator: 'TypeValidator', declared_type:
             er.emit(validator.reporter, er.ERR.CE2011, value_span,
                    got=len(value_expr.elements), expected=declared_type.size)
             return
+        # Context-type each element literal to the declared element type so
+        # `let i8[3] a = [1, 2, 3]` stamps the elements i8 (range-checked, CE2073).
+        from .propagation import propagate_types_to_value
+        for element in value_expr.elements:
+            propagate_types_to_value(validator, element, declared_type.base_type)
 
     # Special validation for dynamic array constructors
     if isinstance(declared_type, DynamicArrayType):

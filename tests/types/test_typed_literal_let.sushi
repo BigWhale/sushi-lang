@@ -1,0 +1,20 @@
+# Context-typed numeric literals in let statements (Bug E / PR 2a).
+# A bare literal takes its type from the annotation, range-checked at compile time.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "typed literals ok"
+
+fn main() i32:
+  let u8 a = 200
+  let i8 b = -128
+  let u32 c = 0xFF
+  let f32 e = 1.5
+  if (a != 200 as u8):
+    return Result.Ok(1)
+  if (b != -128 as i8):
+    return Result.Ok(2)
+  if (c != 255 as u32):
+    return Result.Ok(3)
+  if (e != 1.5 as f32):
+    return Result.Ok(4)
+  println("typed literals ok")
+  return Result.Ok(0)

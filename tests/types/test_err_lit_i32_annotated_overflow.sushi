@@ -1,0 +1,6 @@
+# An annotated i32 literal above range reports CE2073 (context-typed), the more
+# precise successor to the context-free CE2070 (issue #84).
+# EXPECT_ERROR_CODE: CE2073
+fn main() i32:
+  let i32 x = 40000000000
+  return Result.Ok(0)

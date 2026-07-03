@@ -1128,9 +1128,10 @@ class LLVMCodegen:
         if llvm_type is None:
             return  # Skip unsupported types
 
-        # Evaluate the constant value expression at compile time
-        # For now, we only support literal expressions in constants
-        const_value = self._evaluate_constant_expression(const.value)
+        # Evaluate the constant value expression at compile time, materializing the
+        # value at the declared type's width (so a context-typed literal such as
+        # `const u8 MAX = 200` yields a u8 initializer, not an i32 one).
+        const_value = self._evaluate_constant_expression(const.value, const.ty)
         if const_value is None:
             return  # Skip non-constant expressions
 

@@ -1,0 +1,5 @@
+# A negative literal assigned to an unsigned type is out of range (Bug E / PR 2a).
+# EXPECT_ERROR_CODE: CE2073
+fn main() i32:
+  let u8 x = -1
+  return Result.Ok(0)

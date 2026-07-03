@@ -11,6 +11,7 @@ from llvmlite import ir
 from sushi_lang.semantics.ast import (
     Expr, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString
 )
+from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -49,29 +50,26 @@ def emit_literal(codegen: 'LLVMCodegen', expr: Expr, to_i1: bool) -> ir.Value:
 
 
 def emit_int_literal(codegen: 'LLVMCodegen', expr: IntLit) -> ir.Value:
-    """Emit integer literal as i32 constant.
+    """Emit an integer literal at its context type's width (default i32).
 
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The integer literal expression.
-
-    Returns:
-        An i32 constant representing the integer value.
+    A context-typed literal (`resolved_type` stamped by propagation) materializes at
+    the annotated width, masked to that width -- identical IR to the equivalent
+    `<lit> as T` cast path. An unstamped literal keeps the i32 default.
     """
-    return ir.Constant(codegen.types.i32, int(expr.value) & 0xFFFFFFFF)
+    ty = expr.resolved_type or BuiltinType.I32
+    ll = codegen.types.ll_type(ty)
+    mask = (1 << ll.width) - 1
+    return ir.Constant(ll, int(expr.value) & mask)
 
 
 def emit_float_literal(codegen: 'LLVMCodegen', expr: FloatLit) -> ir.Value:
-    """Emit floating-point literal as f64 constant.
+    """Emit a float literal at its context type's width (default f64).
 
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The floating-point literal expression.
-
-    Returns:
-        An f64 constant representing the floating-point value.
+    A context-typed literal (`resolved_type` stamped by propagation) materializes as
+    f32/f64 as annotated; an unstamped literal keeps the f64 default.
     """
-    return ir.Constant(codegen.types.f64, float(expr.value))
+    ty = expr.resolved_type or BuiltinType.F64
+    return ir.Constant(codegen.types.ll_type(ty), float(expr.value))
 
 
 def emit_bool_literal(codegen: 'LLVMCodegen', expr: BoolLit, to_i1: bool) -> ir.Value:

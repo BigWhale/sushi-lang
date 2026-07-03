@@ -1,6 +1,7 @@
-# A bare decimal literal above i32 range is a compile error, not a silent wrap (issue #84).
+# A bare (context-free) decimal literal above i32 range defaults to i32 and is a
+# compile error, not a silent wrap (issue #84). An annotated overflow (let i32 x =
+# 40000000000) now reports the more precise CE2073 instead - see test_err_lit_*.
 # EXPECT_ERROR_CODE: CE2070
 fn main() i32:
-    let i32 x = 40000000000
-    println(x)
+    println(40000000000)
     return Result.Ok(0)
