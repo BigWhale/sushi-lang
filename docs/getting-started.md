@@ -41,13 +41,13 @@ source .venv/bin/activate
 [latest release](https://github.com/BigWhale/sushi-lang/releases/latest) and install it:
 
 ```bash
-pip install sushi_lang-0.8.0-py3-none-any.whl
+pip install sushi_lang-0.9.0-py3-none-any.whl
 ```
 
 Or install straight from the release URL without downloading first:
 
 ```bash
-pip install https://github.com/BigWhale/sushi-lang/releases/download/v0.8.0/sushi_lang-0.8.0-py3-none-any.whl
+pip install https://github.com/BigWhale/sushi-lang/releases/download/v0.9.0/sushi_lang-0.9.0-py3-none-any.whl
 ```
 
 Or, using the GitHub CLI together with `uv`:

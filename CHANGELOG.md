@@ -2,6 +2,44 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [0.9.0] - 2026-07-04
+
+A maintenance release: one new language feature — context-typed numeric literals — plus a
+batch of correctness fixes surfaced by a documentation audit, a diagnostic-wording change, and
+CI/docs improvements.
+
+### Added
+- Context-typed numeric literals (Rust/Go untyped-constant model): a bare numeric literal takes
+  its type from its expected/context type — annotation, const, function argument/return, struct
+  field, array element, and binary-op operand (`a + 1` where `a: u8` types the `1` as `u8`) —
+  range-checked at compile time. A literal with no numeric context still defaults to `i32`/`f64`.
+  This is literal *typing*, not value coercion (an already-typed value still needs `as`)
+  - New diagnostic **CE2073** (context-typed literal out of range for its target type); **CE2070**
+    retained for a context-free literal that overflows its `i32` default
+
+### Changed
+- Diagnostic wording: user-facing "rebind" renamed to "reassign" — **CE1002** now reads
+  "assignment to undeclared variable" and **CE2401** "cannot move/reassign"
+
+### Fixed
+- One-argument `Result<T>` annotation was rejected (CE2001); it now normalizes to
+  `Result<T, StdError>` at parse time
+- `foreach` / `.iter()` over a borrowed dynamic array (`&peek`/`&poke T[]`) failed with CE0042
+- Higher-order function call-through (`??` through an `fn`-typed parameter) was order-dependent
+  (CE0055 depending on definition order)
+- `Maybe<enum>.realise(default)` with a non-primitive (enum) payload misrouted to the `Result`
+  handler and failed to lower (CE0017)
+- Loop-body locals abandoned via `break`/`continue` were never freed (RAII leak); a bounded
+  loop-exit cleanup now frees them exactly once without double-freeing locals that outlive the loop
+- Inline `match` / `??` on stdlib builtins (`getcwd`, `getenv`, `.find_last`) failed with CE0055 /
+  "undefined name" unless the call was first bound to a `let`
+
+### Documentation
+- Language reference updated for context-typed numeric literals
+- `sys/process` guide examples corrected (all 20 examples compile with zero errors/warnings)
+- First-class-functions design note reconciled with the implemented compiler behavior
+- CI: docs site auto-deploys after the Tests workflow passes on `main`
+
 ## [0.8.0] - 2026-06-11
 
 A milestone release centered on self-hosting enablers: a foreign function interface, three
