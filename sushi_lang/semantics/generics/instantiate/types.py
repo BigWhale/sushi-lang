@@ -130,8 +130,8 @@ class TypeInferrer:
         """
         # String methods
         if receiver_type == BuiltinType.STRING:
-            if method_name == "find":
-                # string.find() returns Maybe<i32>
+            if method_name in ("find", "find_last"):
+                # string.find()/find_last() returns Maybe<i32>
                 return GenericTypeRef(base_name="Maybe", type_args=(BuiltinType.I32,))
             elif method_name in ("upper", "lower", "cap", "trim", "tleft", "tright"):
                 return BuiltinType.STRING

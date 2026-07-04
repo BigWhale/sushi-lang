@@ -56,15 +56,14 @@ def is_builtin_env_function(name: str) -> bool:
 
 def get_builtin_env_function_return_type(name: str) -> Type:
     """Get the return type for a built-in env function."""
-    from sushi_lang.semantics.typesys import BuiltinType, ResultType, BuiltinType
-    from sushi_lang.backend.generics.maybe import ensure_maybe_type_in_table
-    #from sushi_lang.semantics.symbols import get_enum_table
+    from sushi_lang.semantics.typesys import BuiltinType, ResultType
 
     if name == 'getenv':
-        # getenv(string key) -> Maybe<string>
-        enum_table = get_enum_table()
-        maybe_string_type = ensure_maybe_type_in_table(enum_table, BuiltinType.STRING)
-        return maybe_string_type
+        # getenv(string key) -> Maybe<string>. Return a type-ref rather than a
+        # concrete enum: get_return_type() has no access to the codegen enum table,
+        # so the consumer (semantic pass / backend) materializes Maybe<string>.
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        return GenericTypeRef("Maybe", (BuiltinType.STRING,))
 
     elif name == 'setenv':
         # setenv(string key, string value) -> Result<i32, EnvError>

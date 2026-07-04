@@ -948,8 +948,8 @@ def _infer_dotcall_return_type(codegen: 'CodegenProtocol', dotcall_expr: 'DotCal
 
     method_name = dotcall_expr.method
 
-    # Handle string.find() -> Maybe<i32>
-    if method_name == "find":
+    # Handle string.find()/find_last() -> Maybe<i32>
+    if method_name in ("find", "find_last"):
         maybe_i32_name = "Maybe<i32>"
         if maybe_i32_name in codegen.enum_table.by_name:
             return codegen.enum_table.by_name[maybe_i32_name]
@@ -1068,12 +1068,12 @@ def _get_stdlib_function_return_type(codegen: 'CodegenProtocol', func_name: str)
     Returns:
         EnumType for Result<T> or None if not a stdlib function
     """
-    from sushi_lang.semantics.typesys import ResultType, UnknownType
+    from sushi_lang.semantics.typesys import ResultType, UnknownType, EnumType
     from sushi_lang.backend.generics.results import ensure_result_type_in_table
     from sushi_lang.semantics.type_resolution import TypeResolver
 
     func_table = codegen.func_table
-    possible_modules = ["time", "sys/env", "math", "io/files"]
+    possible_modules = ["time", "sys/env", "sys/process", "math", "io/files"]
 
     for module_path in possible_modules:
         stdlib_func = func_table.lookup_stdlib_function(module_path, func_name)
@@ -1101,7 +1101,24 @@ def _get_stdlib_function_return_type(codegen: 'CodegenProtocol', func_name: str)
                 if result_enum:
                     return result_enum
                 raise_internal_error("CE0091", type=str(return_type))
-            else:
-                raise_internal_error("CE0091", type=f"Result<{return_type}> (missing error type)")
+            # A builtin returning Maybe<T> may hand back the concrete enum directly...
+            if isinstance(return_type, EnumType):
+                return return_type
+            # ...or a Maybe<T> type-ref (e.g. getenv), which we materialize here.
+            from sushi_lang.semantics.generics.types import GenericTypeRef
+            if (isinstance(return_type, GenericTypeRef)
+                    and return_type.base_name == "Maybe"
+                    and len(return_type.type_args) == 1):
+                from sushi_lang.backend.generics.maybe import ensure_maybe_type_in_table
+                element = return_type.type_args[0]
+                resolver = TypeResolver(codegen.struct_table.by_name, codegen.enum_table.by_name)
+                if isinstance(element, UnknownType):
+                    element = resolver.resolve(element)
+                maybe_enum = ensure_maybe_type_in_table(codegen.enum_table, element)
+                if maybe_enum:
+                    return maybe_enum
+            # A plain-value builtin (getpid -> i32, rand -> u64) has no Result/Maybe
+            # enum to unwrap, so it is not a valid `??` / match subject.
+            return None
 
     return None
