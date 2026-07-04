@@ -77,6 +77,34 @@ class StructCollector:
                 if isinstance(struct, StructDef):
                     self._collect_struct_def(struct)
 
+    def register_predefined_structs(self) -> None:
+        """Register stdlib-provided structs that are built into the language.
+
+        These are visible to user code globally, independent of any `use` statement
+        (mirroring how EnumCollector.register_predefined_enums registers ProcessError,
+        FileError, etc.). Only stdlib *functions* are gated by `use <...>`.
+
+        Currently:
+            - ProcessOutput { i32 exit_code, string stdout, string stderr }
+              (the success payload of sys/process `run()`).
+        """
+        from sushi_lang.semantics.typesys import BuiltinType
+
+        # Note: fields are named *_text (not stdout/stderr) because `stdin`/`stdout`/
+        # `stderr` are reserved stream tokens in the grammar and cannot be member names.
+        process_output = StructType(
+            name="ProcessOutput",
+            fields=(
+                ("exit_code", BuiltinType.I32),
+                ("stdout_text", BuiltinType.STRING),
+                ("stderr_text", BuiltinType.STRING),
+            ),
+        )
+        if "ProcessOutput" not in self.structs.by_name:
+            self.structs.order.append("ProcessOutput")
+            self.structs.by_name["ProcessOutput"] = process_output
+            self.known_types.add(process_output)
+
     def _collect_struct_def(self, struct: StructDef) -> None:
         """Collect struct definition and create StructType or GenericStructType.
 

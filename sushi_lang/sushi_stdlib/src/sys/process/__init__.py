@@ -6,6 +6,8 @@ Provides:
     - exit(i32 code) -> ~: Terminate process with exit code
     - getpid() -> i32: Get process ID
     - getuid() -> i32: Get user ID
+    - run(string cmd, string[] args) -> Result<ProcessOutput, ProcessError>:
+        Spawn a program by argv (no shell), capturing stdout/stderr + exit code
 """
 
 from llvmlite import ir
@@ -16,6 +18,7 @@ from sushi_lang.sushi_stdlib.src.sys.process.functions import (
     generate_exit,
     generate_getpid,
     generate_getuid,
+    generate_run,
 )
 
 
@@ -26,6 +29,7 @@ PROCESS_FUNCTIONS = {
     'exit',
     'getpid',
     'getuid',
+    'run',
 }
 
 
@@ -41,6 +45,10 @@ def get_builtin_process_function_return_type(name: str):
     if name == 'getcwd':
         from sushi_lang.semantics.typesys import UnknownType
         return ResultType(ok_type=BuiltinType.STRING, err_type=UnknownType("ProcessError"))
+    elif name == 'run':
+        from sushi_lang.semantics.typesys import UnknownType
+        # run(string cmd, string[] args) -> Result<ProcessOutput, ProcessError>
+        return ResultType(ok_type=UnknownType("ProcessOutput"), err_type=UnknownType("ProcessError"))
     elif name == 'chdir':
         from sushi_lang.semantics.typesys import UnknownType
         return ResultType(ok_type=BuiltinType.I32, err_type=UnknownType("ProcessError"))
@@ -61,6 +69,12 @@ def validate_process_function_call(name: str, signature) -> None:
     if name == 'getcwd':
         if len(signature.params) != 0:
             raise TypeError(f"getcwd() takes no arguments, got {len(signature.params)}")
+
+    elif name == 'run':
+        if len(signature.params) != 2:
+            raise TypeError(f"run() takes 2 arguments (string cmd, string[] args), got {len(signature.params)}")
+        if signature.params[0].param_type != BuiltinType.STRING:
+            raise TypeError(f"run() first argument must be string, got {signature.params[0].param_type}")
 
     elif name == 'chdir':
         if len(signature.params) != 1:
@@ -96,5 +110,6 @@ def generate_module_ir() -> ir.Module:
     generate_exit(module)
     generate_getpid(module)
     generate_getuid(module)
+    generate_run(module)
 
     return module

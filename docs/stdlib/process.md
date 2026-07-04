@@ -258,6 +258,66 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
+### run
+
+Spawn an external program by argv vector (PATH-searched, **no shell**), capturing its
+standard output and standard error and returning its exit code.
+
+```sushi
+fn run(string cmd, string[] args) -> Result<ProcessOutput, ProcessError>
+```
+
+**Parameters:**
+- `cmd` - The program to run (searched on `PATH`, e.g. `"clang"`, `"echo"`)
+- `args` - The argument vector passed to the program (not including `cmd` itself)
+
+**Returns:**
+- `Result.Ok(ProcessOutput)` if the program was spawned and ran to completion. A **non-zero
+  exit code is still `Ok`** - it is a normal outcome the caller inspects, not an error. The
+  `ProcessOutput` struct carries:
+  - `exit_code` (`i32`) - the program's exit status
+  - `stdout_text` (`string`) - everything the program wrote to standard output
+  - `stderr_text` (`string`) - everything the program wrote to standard error
+- `Result.Err(ProcessError.SpawnFailed)` if the program could not be started (e.g. command
+  not found)
+- `Result.Err(ProcessError.SignalReceived)` if the program was killed by a signal
+
+Because arguments are passed as a real argv vector rather than through a shell, there is no
+shell-quoting or injection surface. Field names are `stdout_text` / `stderr_text` (not
+`stdout` / `stderr`, which are reserved stream keywords).
+
+**Example:**
+
+```sushi
+use <sys/process>
+use <io/stdio>
+
+fn main() i32:
+    match run("echo", from(["Mostly Harmless"])):
+        Result.Ok(out) ->
+            println("exit={out.exit_code}")
+            println(out.stdout_text)
+        Result.Err(ProcessError.SpawnFailed) ->
+            println("command not found")
+        Result.Err(_) ->
+            println("spawn error")
+
+    return Result.Ok(0)
+```
+
+**Driving a toolchain (reading a child's diagnostics):**
+
+```sushi
+use <sys/process>
+use <io/stdio>
+
+fn compile_ir(string path) i32 | ProcessError:
+    let ProcessOutput out = run("clang", from([path, "-o", "out"]))??
+    if (out.exit_code != 0):
+        eprintln(out.stderr_text)
+    return Result.Ok(out.exit_code)
+```
+
 ## Error Handling
 
 Functions integrate with Sushi's error handling system:

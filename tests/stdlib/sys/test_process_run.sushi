@@ -1,0 +1,41 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: echo ok 0 hello
+# EXPECT_STDOUT_CONTAINS: exit ok 3
+# EXPECT_STDOUT_CONTAINS: stderr ok 0 oops
+# EXPECT_STDOUT_CONTAINS: missing spawnfailed
+# EXPECT_STDOUT_CONTAINS: big ok 588895
+# Safe process-spawn primitive: run(cmd, args) -> Result<ProcessOutput, ProcessError>.
+# Verifies argv (no shell), stdout+stderr capture, exit code, spawn failure, and that
+# large output does not deadlock (tmpfile-redirect capture rather than pipes).
+use <sys/process>
+use <io/stdio>
+use <collections/strings>
+
+fn report(string label, Result<ProcessOutput, ProcessError> r) ~:
+    match r:
+        Result.Ok(out) ->
+            println("{label} ok {out.exit_code} {out.stdout_text.trim()}{out.stderr_text.trim()}")
+        Result.Err(ProcessError.SpawnFailed) -> println("{label} spawnfailed")
+        Result.Err(ProcessError.SignalReceived) -> println("{label} signal")
+        Result.Err(_) -> println("{label} err")
+    return Result.Ok(~)
+
+fn main() i32:
+    # stdout capture + exit code 0
+    report("echo", run("echo", from(["hello"])))
+
+    # non-zero exit is Result.Ok (exit code carried in ProcessOutput)
+    report("exit", run("sh", from(["-c", "exit 3"])))
+
+    # stderr captured separately from stdout
+    report("stderr", run("sh", from(["-c", "echo oops 1>&2"])))
+
+    # command not found -> Result.Err(ProcessError.SpawnFailed) (posix_spawnp, no shell)
+    report("missing", run("definitely_not_a_program_xyz", from(["x"])))
+
+    # large output must not deadlock (tmpfile capture, not a bounded pipe)
+    match run("sh", from(["-c", "seq 1 100000"])):
+        Result.Ok(out) -> println("big ok {out.stdout_text.len()}")
+        Result.Err(_) -> println("big err")
+
+    return Result.Ok(0)

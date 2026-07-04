@@ -145,6 +145,64 @@ def get_file_type() -> ir.PointerType:
 
 
 # ==============================================================================
+# ProcessOutput Struct
+# ==============================================================================
+
+def get_process_output_type() -> ir.LiteralStructType:
+    """Get the ProcessOutput struct VALUE type: { i32 exit_code, string, string }.
+
+    LLVM layout: { i32, {i8*,i32}, {i8*,i32} }. Field access is by GEP index, so the
+    aligned in-memory offsets (exit_code@0, stdout@8, stderr@24) are chosen by LLVM's
+    DataLayout and match the compiler's own lowering of the ProcessOutput StructType.
+
+    Returns:
+        ProcessOutput struct type (the Ok payload value).
+    """
+    i32 = ir.IntType(32)
+    string_type = get_string_type()
+    return ir.LiteralStructType([i32, string_type, string_type])
+
+
+def _process_output_size_bytes() -> int:
+    """Aligned size of ProcessOutput, mirroring backend sizing.py `_calculate_struct_size`.
+
+    Fields (size, align): i32 (4,4), string (12,8), string (12,8). A string embeds with
+    tail padding (12 -> 16). Result: exit_code@0 -> pad to 8 -> stdout@8 (16) -> stderr@24
+    (16) = 40. This MUST equal the compiler's own enum-data sizing for
+    Result<ProcessOutput, ProcessError>, else the returned struct type mismatches the
+    caller's variable type (CE0017). Kept as an algorithm (not a magic number) so it tracks
+    the ABI rules if the field set ever changes.
+    """
+    string_size = 12  # fat pointer {i8*, i32} = 8 + 4 (backend FAT_POINTER_SIZE_BYTES)
+    fields = [(4, 4), (string_size, 8), (string_size, 8)]
+    offset = 0
+    max_align = 1
+    for size, align in fields:
+        max_align = max(max_align, align)
+        if offset % align:
+            offset += align - (offset % align)
+        if size % align:
+            size += align - (size % align)
+        offset += size
+    if offset % max_align:
+        offset += max_align - (offset % max_align)
+    return offset
+
+
+def get_process_output_result_type() -> ir.LiteralStructType:
+    """Result<ProcessOutput, ProcessError> LLVM layout: { i32 tag, [40 x i8] data }.
+
+    Uses the ALIGNED ProcessOutput size (see `_process_output_size_bytes`), matching the
+    compiler's enum-data sizing (backend/types/core/sizing.py). Single source of truth used
+    by BOTH the stdlib IR-gen (sys/process/functions.py) and the backend call-site
+    declaration (backend/.../stdlib/process.py), so they can never drift.
+    """
+    i32 = ir.IntType(32)
+    data_bytes = max(_process_output_size_bytes(), 1)
+    return ir.LiteralStructType([i32, ir.ArrayType(ir.IntType(8), data_bytes)])
+
+
+# ==============================================================================
 # Enum Type Helpers
 # ==============================================================================
 
