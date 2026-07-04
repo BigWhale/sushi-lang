@@ -136,6 +136,23 @@ def emit_enum_realise(
             raise_internal_error("CE0017", src=str(default_value.type), dst=str(value_llvm_type))
 
     # Select: is_success ? unpacked_value : default_value
+    #
+    # LLVM `select` on an aggregate whose fields are themselves aggregates (e.g. a
+    # struct with a `string` field, laid out {i32, {i8*, i32}}) miscompiles: the
+    # top-level scalar fields survive but the nested aggregate is corrupted, so the
+    # nested string's length comes out garbage and the first use crashes. A flat
+    # struct of scalars (e.g. {i32, i32}) is unaffected, which is why realise on a
+    # struct without an aggregate field works. Selecting the *pointers* and loading
+    # through the choice is always a scalar select and copies the whole aggregate
+    # correctly, so use that for any aggregate T (mem2reg/O1+ folds the alloca away).
+    if isinstance(value_llvm_type, ir.Aggregate):
+        value_slot = codegen.builder.alloca(value_llvm_type, name="realise_value_slot")
+        codegen.builder.store(unpacked_value, value_slot)
+        default_slot = codegen.builder.alloca(value_llvm_type, name="realise_default_slot")
+        codegen.builder.store(default_value, default_slot)
+        chosen_ptr = codegen.builder.select(is_success, value_slot, default_slot, name="realise_ptr")
+        return codegen.builder.load(chosen_ptr, name="realise_result")
+
     result = codegen.builder.select(is_success, unpacked_value, default_value, name="realise_result")
 
     return result

@@ -81,17 +81,6 @@ EXCLUDED_DIRS = {"helpers", "bin"}
 # must carry an issue URL.
 QUARANTINE: dict[str, dict] = {
     # --- broken-output: the compiler emits wrong output / crashes (real bug repros) ---
-    "error_handling/test_maybe_realise.sushi": {
-        "reason": "broken-output",
-        "issue": "https://github.com/BigWhale/sushi-lang/issues/105",
-    },
-    # Same root cause as #105 (Maybe<struct-with-string>.realise), but platform-dependent:
-    # this non-generic Maybe<Config>.realise works on macOS yet segfaults on Linux (exit -11).
-    # Silently tolerated before (TEST_TYPE: runtime, no assertion); asserting it surfaced the crash.
-    "error_handling/test_maybe_struct_regression.sushi": {
-        "reason": "broken-output",
-        "issue": "https://github.com/BigWhale/sushi-lang/issues/105",
-    },
     "memory/test_own_nested.sushi": {
         "reason": "broken-output",
         "issue": "https://github.com/BigWhale/sushi-lang/issues/106",
