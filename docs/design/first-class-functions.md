@@ -1,18 +1,20 @@
-# Design: First-Class Functions (P2-3)
+# Design: First-Class Functions
 
-Status: accepted. v1 scope — function *types* and *values* via bare function pointers; no
-closures. This is the sole remaining P3 gate (`REPORT.md` W8/§4, `P2.md` P2-3).
+Status: implemented in v1 (shipped in PR #91). Scope: function *types* and *values* via bare
+function pointers; no closures — closures are the additive v2 (see "path forward"). Historically
+the last self-hosting-enabler gate (`REPORT.md` W8/§4).
 
 ## Summary
 
 Sushi gains function **types** (`fn(i32) -> i32`) and function **values**: a top-level
-function can be referenced by name, stored in a variable / struct field / array / `List`,
-passed as an argument, and called through. This unblocks dispatch tables and iterator
-callbacks that otherwise require hand-rolled `match`.
+function can be referenced by name, stored in a variable / struct field / `List`, passed as
+an argument, and called through. This unblocks dispatch tables and iterator callbacks that
+otherwise require hand-rolled `match`. (A raw array of function pointers is not expressible —
+the `[]` in `fn() -> T[]` binds to the return type — so collections use `List<fn(...)>`.)
 
 The function value is a **zero-cost bare function pointer** — the raw address of an
-already-monomorphized LLVM function. There is no captured environment; this is option (a)
-from `P2.md`. Closures are designed to be additive later (see "path forward").
+already-monomorphized LLVM function. There is no captured environment — the bare-pointer choice
+(see "Options considered" below). Closures are designed to be additive later (see "path forward").
 
 ## Syntax
 
@@ -45,11 +47,14 @@ Collections of functions use the generic form: `List<fn(i32) -> i32>`.
   `??`, `if (result)`, and pattern matching all work unchanged.
 - **The function type captures `T` and `E`.** Two function types are compatible only when
   arity, every parameter type, the ok type `T`, and the error type `E` match exactly
-  (invariant — no variance in v1). A mismatch is **CE2092**.
+  (invariant — no variance in v1). A mismatch surfaces as **CE2002** on an assignment (or
+  passing a function value to an incompatible parameter) and **CE2092** on a call-through.
 - **Only plain top-level `fn`s are referenceable.** Extension methods, perk methods, and FFI
-  externals have incompatible ABIs (bare-value, `self`-bound, raw-C) and are rejected with
-  **CE2093**. This keeps the indirect-call path byte-identical to the existing
-  Result-returning direct-call path.
+  externals have incompatible ABIs (bare-value, `self`-bound, raw-C) and live in separate
+  tables, so a bare reference to one is never recognized as a function value — it fails as an
+  undeclared identifier (**CE1001**), not **CE2093**. (CE2093 is reserved for a *generic*
+  function reference, which *is* recognized but deferred.) This keeps the indirect-call path
+  byte-identical to the existing Result-returning direct-call path.
 - **No closures, no captures.** A function value is a single pointer; it carries no state.
 - **`Call.callee` stays a `Name`.** `f()` resolves to a *direct* call when `f` names a
   top-level function and to an *indirect* call when `f` is a local variable of function type.
@@ -69,7 +74,8 @@ Collections of functions use the generic form: `List<fn(i32) -> i32>`.
   core mechanism. Referencing a generic function is **CE2093** in v1.
 - **Extension/perk-method and FFI-extern values.** Three incompatible ABIs vs. the uniform
   `Result<T, E>` ABI of top-level fns; allowing them now would fork the indirect-call path
-  before it has earned its keep. **CE2093**.
+  before it has earned its keep. Not bare-referenceable at all — a bare name resolving to one
+  of these is an undeclared identifier (**CE1001**), not a function value.
 - **Call-through arbitrary expressions** — `(expr)()`, `arr[0]()`, `getfn()()` — and
   **call-through a struct field in one expression** (`obj.handler()` parses as a *method*
   call, not a call of the function-valued field `handler`). Both require widening
@@ -109,10 +115,13 @@ Collections of functions use the generic form: `List<fn(i32) -> i32>`.
 
 ## Diagnostics
 
-- **CE2092** — function-value type mismatch (arity / parameter / return / error type) at
-  assignment, argument passing, or call-through.
-- **CE2093** — illegal function reference: an extension method, perk method, FFI external, or
-  (deferred) a generic function.
+- **CE2092** — function-value type mismatch (arity / parameter / return / error type) when
+  **calling through** a function value. Function types are invariant.
+- **CE2002** — a function value assigned to a variable or parameter of an incompatible
+  function type (a plain assignment mismatch, *not* a call-through).
+- **CE2093** — illegal function reference: a **generic** function (deferred in v1). Extension
+  methods, perk methods, and FFI externals are not bare-referenceable at all — they surface as
+  an undeclared identifier (**CE1001**) / namespace error, not CE2093.
 
 ## Implementation map
 
@@ -126,7 +135,9 @@ Collections of functions use the generic form: `List<fn(i32) -> i32>`.
   members.
 - `semantics/passes/types/compatibility.py` — structural (invariant) `FunctionType` compat.
 - `semantics/type_visitor.py` — infer `FunctionType` for a top-level-fn `Name` in value
-  position; reject ext/perk/extern/generic refs (CE2093).
+  position (`function_value_type_of`); reject a generic-fn reference with CE2093. Ext/perk/
+  extern names are absent from the function table, so a bare reference to them is an
+  undeclared identifier (CE1001), not a function value.
 - `semantics/passes/types/calls/user_defined.py` — indirect-call validation (CE2092).
 - `backend/types/core/mapping.py` — lower `FunctionType` to
   `ptr to FunctionType(Result<T,E>, params)`.
