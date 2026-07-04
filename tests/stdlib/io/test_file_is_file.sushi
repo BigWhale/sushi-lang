@@ -1,11 +1,22 @@
+# EXPECT_STDOUT_EXACT: "OK: is_file() works correctly\n"
+# EXPECT_RUNTIME_EXIT: 0
 use <io/files>
 
 fn main() i32:
-    if (not is_file("tests/test_file_is_file.sushi")):
+    # Self-contained: create a known file so the test does not depend on the
+    # current working directory or on this test's own location in the tree.
+    match open("/tmp/sushi_r108_isfile.txt", FileMode.Write()):
+        FileResult.Ok(f) ->
+            f.close()
+        FileResult.Err(_) ->
+            println("ERROR: could not create test file")
+            return Result.Ok(1)
+
+    if (not is_file("/tmp/sushi_r108_isfile.txt")):
         println("ERROR: Should detect regular file")
         return Result.Ok(1)
 
-    if (is_file("tests")):
+    if (is_file("/tmp")):
         println("ERROR: Should not detect directory as file")
         return Result.Ok(1)
 

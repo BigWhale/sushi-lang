@@ -1,3 +1,7 @@
+# EXPECT_STDOUT_CONTAINS: 14 -> "fourteen"
+# EXPECT_STDOUT_CONTAINS: 11 -> "eleven"
+# EXPECT_STDOUT_CONTAINS: All 15 items preserved after resize
+# EXPECT_RUNTIME_EXIT: 0
 # Test automatic HashMap resize
 
 use <collections/hashmap>

@@ -262,12 +262,19 @@ def emit_debug_print_value(codegen: Any, builder: Any, value: ir.Value, value_ty
         emit_printf_i32(codegen, builder, value)
     elif value_type == BuiltinType.STRING:
         emit_printf_string(codegen, builder, '"')
-        # Print the string value
-        fmt_str = "%s"
+        # Sushi strings are length-prefixed {i8* data, i32 len} and are NOT
+        # null-terminated. Printing them with "%s" makes printf read past the
+        # end until a stray NUL, spilling adjacent strings into the output
+        # (e.g. "alice" followed by "bob" printed as "alicebob"). Use "%.*s"
+        # with the explicit length so printf copies exactly `len` bytes.
+        data_ptr = builder.extract_value(value, 0, name="str_data")
+        length = builder.extract_value(value, 1, name="str_len")
+
+        fmt_str = "%.*s"
         str_bytes = (fmt_str + '\0').encode('utf-8')
         str_type = ir.ArrayType(ir.IntType(8), len(str_bytes))
 
-        global_name = ".fmt_str_debug"
+        global_name = ".fmt_str_len_debug"
         try:
             str_const = codegen.builder.module.get_global(global_name)
         except KeyError:
@@ -280,7 +287,7 @@ def emit_debug_print_value(codegen: Any, builder: Any, value: ir.Value, value_ty
         str_ptr = builder.gep(str_const, [zero, zero], name="fmt_ptr")
 
         printf_fn = codegen.runtime.libc_stdio.printf
-        builder.call(printf_fn, [str_ptr, value])
+        builder.call(printf_fn, [str_ptr, length, data_ptr])
         emit_printf_string(codegen, builder, '"')
     elif value_type == BuiltinType.BOOL:
         # Convert bool (i32) to string
