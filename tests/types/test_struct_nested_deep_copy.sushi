@@ -1,3 +1,7 @@
+# EXPECT_STDOUT_CONTAINS: "After nesting - nested.data1.label: first"
+# EXPECT_STDOUT_CONTAINS: "Nested data1[2]: 30"
+# EXPECT_STDOUT_CONTAINS: "After push - nested data1 values: 4"
+# EXPECT_RUNTIME_EXIT: 0
 # Test nested struct deep copy to prevent double-free
 # This tests the exact scenario from CLAUDE.md Known Limitations #5:
 # Passing a struct with dynamic arrays to another struct's constructor

@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Config created successfully\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Config created successfully
 

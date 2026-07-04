@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "999999\nPASS: Custom hash used\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test that custom perk implementation OVERRIDES auto-derived hash
 # This was the critical bug that was just fixed
 

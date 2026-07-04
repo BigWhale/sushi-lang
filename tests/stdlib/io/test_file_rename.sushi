@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Renamed\nCleaned\nOK: rename() works\n"
+# EXPECT_RUNTIME_EXIT: 0
 use <io/files>
 use <io/stdio>
 

@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Before destroy: len=3\nHashMap.destroy() completed successfully!\n"
+# EXPECT_RUNTIME_EXIT: 0
 use <collections/hashmap>
 fn main() i32:
     # Test HashMap.destroy() - makes map unusable

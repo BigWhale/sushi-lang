@@ -1,3 +1,8 @@
+# EXPECT_STDOUT_CONTAINS: === Random Range Test ===
+# EXPECT_STDOUT_CONTAINS: Pass: Roll 1 in valid range [1, 7)
+# EXPECT_STDOUT_CONTAINS: Pass: Index 1 in valid range [0, 10)
+# EXPECT_STDOUT_CONTAINS: === Range Test Passed ===
+# EXPECT_RUNTIME_EXIT: 0
 use <random>
 
 fn test_die_rolls() ~:

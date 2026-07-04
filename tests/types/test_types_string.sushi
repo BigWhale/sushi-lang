@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Hello, World!She said "hello" today"
+# EXPECT_RUNTIME_EXIT: 0
 fn main() i32:
   let string msg = "Hello, World!"
   let string empty = ""

@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Length: 3\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test recursive IntList with Own<IntList>
 enum IntList:
     Nil()

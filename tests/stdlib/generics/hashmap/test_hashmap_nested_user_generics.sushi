@@ -1,3 +1,10 @@
+# EXPECT_STDOUT_CONTAINS: "Found: forty-two"
+# EXPECT_STDOUT_CONTAINS: "Nested found: nested"
+# EXPECT_STDOUT_CONTAINS: "Pair key works: 1"
+# EXPECT_STDOUT_CONTAINS: "Nested generic struct key: 555"
+# EXPECT_STDOUT_CONTAINS: "Deeply nested generics work: 1"
+# EXPECT_STDOUT_CONTAINS: "All nested user-defined generic tests passed"
+# EXPECT_RUNTIME_EXIT: 0
 # Test HashMap with nested user-defined generic structs
 # Use case: Container<Pair<i32, string>> as key/value types
 

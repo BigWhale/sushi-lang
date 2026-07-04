@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Read line 1: Mostly Harmless\nRead char: L\nFile is open\nFile I/O tests complete!\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test stdlib file I/O methods
 # This test exercises all 12 file methods using the stdlib IR implementation
 

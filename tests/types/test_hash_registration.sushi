@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Point hash: 14687699039417897699\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test that basic struct hashing still works (should pass even before we wire up Pass 1.8)
 
 struct Point:

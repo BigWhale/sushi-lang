@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Successfully read: Hello from FileResult test!\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test ?? operator with FileResult - success path
 # Creates a test file and uses ?? to read from it
 

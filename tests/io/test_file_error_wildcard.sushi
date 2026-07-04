@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Error opening file - using wildcard pattern\nWildcard error handling successful\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Error opening file - using wildcard pattern
 # EXPECTED_OUTPUT: Wildcard error handling successful

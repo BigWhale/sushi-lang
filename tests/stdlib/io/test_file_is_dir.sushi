@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "OK: is_dir() works correctly\n"
+# EXPECT_RUNTIME_EXIT: 0
 use <io/files>
 
 fn main() i32:

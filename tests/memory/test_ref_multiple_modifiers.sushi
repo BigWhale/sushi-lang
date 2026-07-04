@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "5\n0\n10\n20\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test: Multiple functions modifying the same reference in sequence
 # Should compile and run successfully
 

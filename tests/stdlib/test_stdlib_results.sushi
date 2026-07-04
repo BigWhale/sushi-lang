@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "i32 Ok: 42\ni32 Err: 99\nstring Ok: Mostly Harmless\nstring Err: default\nbool Ok: 1\nbool Err: 1\nf64 Ok: 3.14\nf64 Err: 2.71\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test stdlib Result<T> methods
 # This test verifies that Result<T>.realise() works with the stdlib implementation
 

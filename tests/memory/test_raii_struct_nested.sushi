@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "First value: 42\nSecond value: 43\nInner label: inner\nOuter name: outer\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test RAII for nested structs with dynamic array fields

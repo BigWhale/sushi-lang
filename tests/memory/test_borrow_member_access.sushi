@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "8080\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test: Try to borrow a struct field
 # This should currently fail with CE2404
 

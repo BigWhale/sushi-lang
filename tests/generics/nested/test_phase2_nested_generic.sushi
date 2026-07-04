@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: Server hash:
+# EXPECT_RUNTIME_EXIT: 0
 # Test that nested generic structs can be hashed
 # "I'd far rather be happy than right any day."
 

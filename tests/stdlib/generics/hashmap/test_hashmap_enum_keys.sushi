@@ -1,3 +1,10 @@
+# EXPECT_STDOUT_CONTAINS: "✓ HashMap has 4 entries"
+# EXPECT_STDOUT_CONTAINS: "Found red: red color"
+# EXPECT_STDOUT_CONTAINS: "Found custom: custom color"
+# EXPECT_STDOUT_CONTAINS: "Updated: updated red"
+# EXPECT_STDOUT_CONTAINS: "Removed: blue color"
+# EXPECT_STDOUT_CONTAINS: "✓ HashMap has 3 entries after removal"
+# EXPECT_RUNTIME_EXIT: 0
 # Test HashMap with enum keys
 
 use <collections/hashmap>

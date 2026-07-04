@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Value: Life\nVar: Life\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test for struct alignment bug fix in enum storage
 # This test ensures that structs with padding are correctly stored in enums
 struct Pair<T, U>:

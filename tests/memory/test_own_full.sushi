@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Value: 42\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test RAII automatic cleanup with usage
 # The Own<T> should be automatically destroyed at function exit
 fn main() i32:

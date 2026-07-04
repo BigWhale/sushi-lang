@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: "Response.Success(Status.Ok(200)) hash: 10101523306804264798"
+# EXPECT_STDOUT_CONTAINS: "Response.Success(Status.Err(404)) hash: 14267039903994526117"
+# EXPECT_RUNTIME_EXIT: 0
 # Test hashing of enum with nested enum variant data
 
 enum Status:

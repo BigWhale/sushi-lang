@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Initial size: 0\nIs empty: 1\nTombstones: 0\nAll basic methods working!\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test basic HashMap methods: new(), len(), is_empty(), tombstone_count()
 
 use <collections/hashmap>

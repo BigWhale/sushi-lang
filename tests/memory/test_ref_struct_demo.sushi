@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Config: host=localhost port=8080 debug=1\n8080\n1\nlocalhost\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Demo: Zero-cost struct borrowing with references
 # This test demonstrates that we can now pass structs by reference
 # and access their fields without copying the entire struct.

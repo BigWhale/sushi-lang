@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Arthur Dent\nUnknown\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test nested struct construction with named parameters
 
 struct Address:

@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Hello, references!\nHello, references!\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test reference to string
 
 fn print_string(&poke string s) ~:

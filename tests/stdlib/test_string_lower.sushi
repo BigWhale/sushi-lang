@@ -1,3 +1,7 @@
+# EXPECT_STDOUT_CONTAINS: hello world
+# EXPECT_STDOUT_CONTAINS: hello123world!
+# EXPECT_STDOUT_CONTAINS: cafÉ
+# EXPECT_RUNTIME_EXIT: 0
 use <collections/strings>
 
 fn main() i32:

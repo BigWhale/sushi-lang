@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Before free - map has 3 Status enum entries\nSize: 3\n\nAfter free - map should be empty\nSize: 0\n✓ Map freed successfully\n✓ Can reuse map after free\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test HashMap.free() with simple enum values
 
 use <collections/hashmap>

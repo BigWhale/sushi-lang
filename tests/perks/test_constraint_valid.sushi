@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "10\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test perk constraints on generic struct (works now!)
 # This tests the constraint validation infrastructure without requiring generic functions
 

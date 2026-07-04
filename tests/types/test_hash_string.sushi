@@ -1,3 +1,7 @@
+# EXPECT_STDOUT_CONTAINS: "string hash('Mostly Harmless') = 13309339697947974940"
+# EXPECT_STDOUT_CONTAINS: "string hash('') = 14695981039346656037"
+# EXPECT_STDOUT_CONTAINS: "string hash('12345') = 16534377278781491704"
+# EXPECT_RUNTIME_EXIT: 0
 # Test hash method for string type
 
 fn main() i32:

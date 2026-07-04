@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Before rebind: first\nBefore rebind length: 2\nAfter rebind: second\nAfter rebind length: 3\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test RAII for struct rebinding - cleanup of old value before assignment

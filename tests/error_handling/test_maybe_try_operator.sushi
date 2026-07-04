@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Found at position\nNot found (propagated from None)\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test ?? operator with Maybe<T> - basic usage
 # When Some(value): unwraps to value
 # When None(): propagates as Result.Err()

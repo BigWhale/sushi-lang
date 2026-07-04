@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "10\n30\nArthur Dent\nBetelgeuse Five\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test basic named struct construction
 
 struct Point:

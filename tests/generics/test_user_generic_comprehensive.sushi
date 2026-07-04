@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Test 1: Pair<i32, string> - 42 and hello\nTest 2: Pair<f64, i32> - 3.14 and 100\nTest 3: Mixed with Result - 200 300\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Test 1: Pair<i32, string> - 42 and hello
 # EXPECTED_OUTPUT: Test 2: Pair<f64, i32> - 3.14 and 100

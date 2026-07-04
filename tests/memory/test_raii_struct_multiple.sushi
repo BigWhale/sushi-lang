@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Number: 10\nName: hello\nFlag count: 2\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test RAII for structs with multiple dynamic array fields

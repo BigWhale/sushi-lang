@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "30\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test generic function with nested generic types
 
 perk Hashable:

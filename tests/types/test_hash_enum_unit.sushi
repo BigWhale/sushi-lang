@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: "Red hash: 12638153115695167455"
+# EXPECT_STDOUT_CONTAINS: "Blue hash: 12638155314718423877"
+# EXPECT_RUNTIME_EXIT: 0
 # Test hashing of enum with unit variants only
 
 enum Color:

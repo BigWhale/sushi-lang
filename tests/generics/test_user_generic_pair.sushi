@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Both: 42 and Thanks for all the fish.\nLeft: 100\nRight: So long!\nNeither\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Both: 42 and Thanks for all the fish.
 # EXPECTED_OUTPUT: Left: 100

@@ -1,3 +1,9 @@
+# EXPECT_STDOUT_CONTAINS: Binary file opened for writing
+# EXPECT_STDOUT_CONTAINS: Wrote 5 bytes
+# EXPECT_STDOUT_CONTAINS: Binary file opened for reading
+# EXPECT_STDOUT_CONTAINS: Read 5 bytes
+# EXPECT_STDOUT_CONTAINS: Binary file test completed
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Binary file opened for writing
 # EXPECTED_OUTPUT: Wrote 5 bytes

@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Testing msleep for 500 milliseconds...\nSleep completed successfully\nSleep was not interrupted\n"
+# EXPECT_RUNTIME_EXIT: 0
 use <time>
 
 fn run_test() i32:

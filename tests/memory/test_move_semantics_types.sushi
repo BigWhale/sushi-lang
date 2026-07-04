@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "42\n42\nhello\nhello\n3\n1\n1\n1\n5\n3\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Comprehensive test for move semantics vs copy semantics across different types
 # Move semantics should ONLY apply to dynamic arrays
 # All other types (primitives, strings, fixed arrays, structs) should be copied

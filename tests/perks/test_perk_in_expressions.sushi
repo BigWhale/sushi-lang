@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "100\n100\nGreater than 50\n100\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test perk method calls in expressions
 
 perk Hashable:

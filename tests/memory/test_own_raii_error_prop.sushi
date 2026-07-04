@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Success: 40\nFailure: -1\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test RAII cleanup with ?? error propagation operator
 fn may_fail(i32 x) i32:
     if (x < 0):

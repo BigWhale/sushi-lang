@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: Reading character by character:
+# EXPECT_STDOUT_CONTAINS: Read 5 characters
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Reading character by character:
 # EXPECTED_OUTPUT: H

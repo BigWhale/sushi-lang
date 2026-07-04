@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "5\n6\n2\n0\n72\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test string.to_bytes() method with runtime validation
 use <io/stdio>
 use <collections/strings>

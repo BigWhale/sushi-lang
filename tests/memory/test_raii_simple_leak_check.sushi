@@ -1,3 +1,7 @@
+# EXPECT_STDOUT_CONTAINS: "Allocating 1MB, 50 times in a loop"
+# EXPECT_STDOUT_CONTAINS: "Iteration 40/50"
+# EXPECT_STDOUT_CONTAINS: "Test complete!"
+# EXPECT_RUNTIME_EXIT: 0
 # Simple memory leak check - allocate and free in a tight loop
 # If RAII works, memory should stay constant
 

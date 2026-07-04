@@ -1,3 +1,9 @@
+# EXPECT_STDOUT_CONTAINS: "✓ HashMap has 3 entries"
+# EXPECT_STDOUT_CONTAINS: "max_connections = 100"
+# EXPECT_STDOUT_CONTAINS: "Updated buffer_size = 4096"
+# EXPECT_STDOUT_CONTAINS: "✓ Removed timeout"
+# EXPECT_STDOUT_CONTAINS: "✓ HashMap has 2 entries after removal"
+# EXPECT_RUNTIME_EXIT: 0
 # Test HashMap with nested generic types
 
 use <collections/hashmap>

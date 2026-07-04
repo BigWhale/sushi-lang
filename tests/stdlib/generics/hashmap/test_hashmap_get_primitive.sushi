@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Creating HashMap...\nInserting key 42...\nCalling get(42)...\nFound: true\nCalling get(99) (not in map)...\nCorrectly not found\nTest passed\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test HashMap.get() with primitive i32 key
 
 use <collections/hashmap>

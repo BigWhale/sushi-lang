@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "330\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test generic function with perk constraint - ACTUALLY CALL IT
 # This is critical: we define AND call the generic function
 

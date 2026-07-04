@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "2\n"
+# EXPECT_RUNTIME_EXIT: 0
 struct Container:
     i32[] numbers
 

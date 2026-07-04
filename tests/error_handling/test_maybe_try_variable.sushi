@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Some variant processed successfully\nNone propagated as expected\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test ?? operator with Maybe<T> stored in variable
 
 fn process_maybe(Maybe<i32> value) i32:

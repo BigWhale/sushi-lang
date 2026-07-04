@@ -1,3 +1,8 @@
+# EXPECT_STDOUT_CONTAINS: Reading ...
+# EXPECT_STDOUT_CONTAINS: Line 1: First line
+# EXPECT_STDOUT_CONTAINS: Line 3: Third line
+# EXPECT_STDOUT_CONTAINS: Read 3 lines total
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Line 1: First line
 # EXPECTED_OUTPUT: Line 2: Second line

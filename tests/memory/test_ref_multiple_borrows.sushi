@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "5\n1\n5\n3\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test multiple sequential borrows (non-overlapping)
 
 fn print_len(&poke i32[] arr) ~:

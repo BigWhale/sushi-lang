@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "42\n43\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test basic reference passing with primitive types
 
 

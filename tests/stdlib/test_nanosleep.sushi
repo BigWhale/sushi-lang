@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Testing nanosleep for 1.5 seconds (1 sec + 500,000,000 nsec)...\nSleep completed successfully\nSleep was not interrupted\n"
+# EXPECT_RUNTIME_EXIT: 0
 use <time>
 
 fn run_test() i32:

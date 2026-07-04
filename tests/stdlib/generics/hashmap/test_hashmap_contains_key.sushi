@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "alice found (expected)\nbob found (expected)\ncharlie not found (expected)\n"
+# EXPECT_RUNTIME_EXIT: 0
 use <collections/hashmap>
 fn main() i32:
     let HashMap<string, i32> map = HashMap.new()

@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "10\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test multiple &peek borrows of the same variable
 # Multiple read-only borrows should work simultaneously
 

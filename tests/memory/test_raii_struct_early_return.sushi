@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: "Result1: 1"
+# EXPECT_STDOUT_CONTAINS: "Result2: 2"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test RAII cleanup on early returns from functions

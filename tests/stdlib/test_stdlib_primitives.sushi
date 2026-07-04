@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "42\ntrue\n3.14159\nMostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test stdlib primitives module (PHASE 4 proof of concept)
 # This test validates that the standalone IR generation for primitives.to_str() works
 

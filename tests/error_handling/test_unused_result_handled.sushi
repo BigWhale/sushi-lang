@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "42\nSuccess\n42\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: compilation
 # Test for Phase 4.1 - Unused Result Detection
 # This test should NOT emit warnings because all Result<T> values are properly handled
