@@ -109,6 +109,52 @@ def emit_own_cleanup(codegen: 'LLVMCodegen') -> None:
     codegen.dynamic_arrays.emit_own_cleanup()
 
 
+def emit_loop_exit_cleanup(codegen: 'LLVMCodegen', min_scope_index: int) -> None:
+    """Emit RAII destructors for the loop's own scopes on a break/continue path.
+
+    Frees heap-owning locals -- dynamic arrays, List<T>, struct dynamic-array fields,
+    Own<T>, and marshalled C strings -- declared at scope index >= min_scope_index, i.e.
+    the loop-body scope captured at loop entry plus any nested if/match scopes inside it.
+    Enclosing (post-loop) scopes are deliberately left intact, so a local that outlives
+    the loop is not double-freed.
+
+    Like emit_scope_cleanup, this emits WITHOUT draining the tracking: each break/continue
+    block terminates immediately after and is mutually exclusive at runtime with the other
+    exit paths (return / ?? / fall-through), so every path frees exactly once and the
+    structural pop_scope drains the fall-through path (#59/#60). It differs only in being
+    bounded to the loop's scopes rather than the whole function.
+    """
+    da = getattr(codegen, 'dynamic_arrays', None)
+    if da is None:
+        return
+    mem = codegen.memory
+
+    # Dynamic arrays and List<T> live in per-scope stacks whose indices align with the
+    # memory scope depth captured as min_scope_index.
+    for scope_idx in range(len(da.scope_stack) - 1, min_scope_index - 1, -1):
+        for array_name in da.scope_stack[scope_idx]:
+            if array_name in da.arrays:
+                da._emit_array_destructor(array_name)
+    for scope_idx in range(len(da.list_scope_stack) - 1, min_scope_index - 1, -1):
+        for list_name in da.list_scope_stack[scope_idx]:
+            da._emit_list_destructor(list_name)
+
+    # Struct dynamic-array fields and Own<T> are tracked in flat maps keyed by name; use
+    # the per-scope variable sets to bound them to the loop's scopes.
+    for scope_idx in range(len(mem._scope_vars) - 1, min_scope_index - 1, -1):
+        for var_name in mem._scope_vars[scope_idx]:
+            if var_name in mem._struct_cleanup and not mem.is_struct_moved(var_name):
+                struct_type, alloca = mem._struct_cleanup[var_name]
+                da.emit_struct_field_cleanup(var_name, struct_type, alloca)
+            descriptor = da.owned_pointers.get(var_name)
+            if descriptor is not None and not descriptor.destroyed:
+                da._emit_own_destructor(var_name, descriptor.own_type)
+
+    # FFI marshalled C strings (per-scope).
+    for scope_idx in range(len(mem._cstr_cleanup) - 1, min_scope_index - 1, -1):
+        mem._free_cstr_list(mem._cstr_cleanup[scope_idx])
+
+
 def emit_scope_cleanup(codegen: 'LLVMCodegen', cleanup_type: str = 'all') -> None:
     """Emit cleanup code for resources in all scopes.
 

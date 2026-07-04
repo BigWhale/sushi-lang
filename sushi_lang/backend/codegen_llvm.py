@@ -95,8 +95,10 @@ class LLVMCodegen:
         self.entry_branch: Optional[ir.Instruction] = None
         self.in_extension_method: bool = False  # Track if compiling extension method
 
-        # Loop context tracking for break/continue statements
-        self.loop_stack: list[tuple[ir.Block, ir.Block]] = []
+        # Loop context tracking for break/continue statements. Each entry is
+        # (continue-target block, break-target block, loop-body scope index); the scope
+        # index bounds break/continue RAII cleanup to the loop's own scopes.
+        self.loop_stack: list[tuple[ir.Block, ir.Block, int]] = []
 
         # Function registry for declared functions
         self.funcs: Dict[str, ir.Function] = {}

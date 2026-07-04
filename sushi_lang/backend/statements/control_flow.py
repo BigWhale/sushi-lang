@@ -90,7 +90,9 @@ def emit_while(codegen: 'LLVMCodegen', node: 'While') -> None:
     codegen.builder.cbranch(cond_val, body_bb, end_bb)
 
     codegen.builder.position_at_end(body_bb)
-    codegen.loop_stack.append((cond_bb, end_bb))
+    # The loop-body scope is pushed next, so it will occupy index _scope_depth + 1;
+    # record that boundary so break/continue clean only the loop's own scopes.
+    codegen.loop_stack.append((cond_bb, end_bb, codegen.memory._scope_depth + 1))
     codegen.memory.push_scope()
     _emit_block(codegen, node.body)
     codegen.memory.pop_scope()
