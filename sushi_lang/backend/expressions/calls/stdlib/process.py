@@ -67,6 +67,35 @@ def emit_process_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: b
 
         return codegen.utils.as_i1(result) if to_i1 else result
 
+    elif func_name == "run":
+        # run(string cmd, string[] args) -> Result<ProcessOutput, ProcessError>
+        if len(expr.args) != 2:
+            raise_internal_error("CE0023", method="run", expected=2, got=len(expr.args))
+
+        cmd_value = codegen.expressions.emit_expr(expr.args[0])   # string {i8*,i32}
+        args_value = codegen.expressions.emit_expr(expr.args[1])  # string[] {i32,i32,string*}
+
+        # emit_expr yields a value for a variable but a pointer-to-slot for a temporary
+        # (e.g. an inline `from([...])`); normalize both to by-value for the call.
+        if isinstance(cmd_value.type, ir.PointerType):
+            cmd_value = codegen.builder.load(cmd_value, name="run_cmd_val")
+        if isinstance(args_value.type, ir.PointerType):
+            args_value = codegen.builder.load(args_value, name="run_args_val")
+
+        # Build Result<ProcessOutput, ProcessError> from the shared aligned-layout helper
+        # so the returned type matches both the .bc and the caller's variable type
+        # ({i32, [40 x i8]} — aligned ProcessOutput size).
+        from sushi_lang.sushi_stdlib.src.type_definitions import get_process_output_result_type
+        result_type = get_process_output_result_type()
+        argv_type = ir.LiteralStructType([i32, i32, string_type.as_pointer()])
+
+        stdlib_func = declare_stdlib_function(
+            codegen.module, stdlib_func_name, result_type, [string_type, argv_type]
+        )
+        result = codegen.builder.call(stdlib_func, [cmd_value, args_value], name="run_result")
+
+        return codegen.utils.as_i1(result) if to_i1 else result
+
     elif func_name == "chdir":
         # chdir(string path) -> Result<i32, ProcessError>
         if len(expr.args) != 1:

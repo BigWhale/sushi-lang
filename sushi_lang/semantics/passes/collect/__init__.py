@@ -162,6 +162,7 @@ class CollectorPass:
         )
 
         # Register predefined types (must happen after collectors initialized)
+        self._register_predefined_structs()
         self._register_predefined_enums()
         self._register_predefined_generics()
 
@@ -212,6 +213,14 @@ class CollectorPass:
             self.generic_extensions,
             self.generic_funcs
         )
+
+    def _register_predefined_structs(self) -> None:
+        """Register predefined structs (ProcessOutput, etc.).
+
+        Delegates to struct collector for actual registration. Must run before
+        enum registration so predefined enums/generics can reference these structs.
+        """
+        self.struct_collector.register_predefined_structs()
 
     def _register_predefined_enums(self) -> None:
         """Register predefined enums (FileMode, FileResult, etc.).

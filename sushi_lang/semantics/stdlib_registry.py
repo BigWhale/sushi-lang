@@ -74,10 +74,11 @@ def _get_param_specs():
     if _param_specs_cache is not None:
         return _param_specs_cache
 
-    from sushi_lang.semantics.typesys import BuiltinType
+    from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType
     I32, I64, U64, F64, STRING = (
         BuiltinType.I32, BuiltinType.I64, BuiltinType.U64, BuiltinType.F64, BuiltinType.STRING
     )
+    STRING_ARRAY = DynamicArrayType(BuiltinType.STRING)
 
     specs = {}
 
@@ -95,6 +96,7 @@ def _get_param_specs():
         specs[("process", fn)] = []
     specs[("process", "chdir")] = [STRING]
     specs[("process", "exit")] = [I32]
+    specs[("process", "run")] = [STRING, STRING_ARRAY]
 
     # math module - polymorphic
     for fn in ("abs", "min", "max"):
@@ -241,7 +243,7 @@ class StdlibRegistry:
         common_names = {
             "time": ["sleep", "msleep", "usleep", "nanosleep"],
             "env": ["getenv", "setenv"],
-            "process": ["getcwd", "chdir", "exit", "getpid", "getuid"],
+            "process": ["getcwd", "chdir", "exit", "getpid", "getuid", "run"],
             "math": [
                 # Basic
                 "abs", "min", "max", "sqrt", "pow", "floor", "ceil", "round", "trunc",
