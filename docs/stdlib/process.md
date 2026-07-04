@@ -339,35 +339,35 @@ Windows support is not yet implemented. The module requires POSIX compatibility.
 
 ### Directory Navigation
 
+Run an operation in another directory and always restore the original. `with_directory` takes
+the operation as a **function value** (`fn() -> i32`) and calls through it — see
+[First-Class Functions](../first-class-functions.md).
+
 ```sushi
 use <sys/process>
 
-fn with_directory(string path, fn() Result<i32> operation) Result<i32>:
-    # Save current directory
+fn with_directory(string path, fn() -> i32 operation) i32 | ProcessError:
+    # Save the current directory, then switch to the target
     let string original = getcwd()??
+    chdir(path)??
 
-    # Change to target directory
-    let i32 change_result = chdir(path)??
-    if (change_result != 0):
-        return Result.Err()
+    # Call through the operation function value, unwrapping its result
+    let i32 result = operation().realise(-1)
 
-    # Execute operation
-    let Result<i32> result = operation()
-
-    # Restore original directory
+    # Restore the original directory
     chdir(original)??
 
-    return result
+    return Result.Ok(result)
 
-fn process_files() Result<i32>:
+fn process_files() i32:
     println("Processing files in current directory")
     return Result.Ok(0)
 
 fn main() i32:
-    match with_directory("/var/log", process_files):
+    match with_directory("/tmp", process_files):
         Result.Ok(code) ->
             println("Operation completed: {code}")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Operation failed")
 
     return Result.Ok(0)
