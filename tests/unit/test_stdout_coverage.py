@@ -85,30 +85,6 @@ QUARANTINE: dict[str, dict] = {
         "reason": "broken-output",
         "issue": "https://github.com/BigWhale/sushi-lang/issues/106",
     },
-    "stdlib/generics/hashmap/test_hashmap_autoresize.sushi": {
-        "reason": "broken-output",
-        "issue": "https://github.com/BigWhale/sushi-lang/issues/107",
-    },
-    "stdlib/generics/hashmap/test_hashmap_autoresize_debug.sushi": {
-        "reason": "broken-output",
-        "issue": "https://github.com/BigWhale/sushi-lang/issues/107",
-    },
-    "stdlib/generics/hashmap/test_hashmap_autoresize_tombstones.sushi": {
-        "reason": "broken-output",
-        "issue": "https://github.com/BigWhale/sushi-lang/issues/107",
-    },
-    "stdlib/generics/hashmap/test_hashmap_debug_simple.sushi": {
-        "reason": "broken-output",
-        "issue": "https://github.com/BigWhale/sushi-lang/issues/107",
-    },
-    "stdlib/generics/hashmap/test_hashmap_free_basic.sushi": {
-        "reason": "broken-output",
-        "issue": "https://github.com/BigWhale/sushi-lang/issues/107",
-    },
-    "stdlib/generics/hashmap/test_hashmap_rehash_debug.sushi": {
-        "reason": "broken-output",
-        "issue": "https://github.com/BigWhale/sushi-lang/issues/107",
-    },
     # test-data (stale self-referential paths), tracked separately from compiler bugs
     "stdlib/io/test_file_exists.sushi": {
         "reason": "broken-output",

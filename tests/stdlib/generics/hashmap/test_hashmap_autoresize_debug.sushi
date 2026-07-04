@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: 14 -> "value"
+# EXPECT_STDOUT_CONTAINS: 3 -> "value"
+# EXPECT_RUNTIME_EXIT: 0
 # Test automatic HashMap resize with more debugging
 
 use <collections/hashmap>
