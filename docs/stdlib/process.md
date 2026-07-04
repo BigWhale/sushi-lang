@@ -37,7 +37,7 @@ fn main() i32:
     match getcwd():
         Result.Ok(path) ->
             println("Current directory: {path}")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Failed to get current directory")
 
     return Result.Ok(0)
@@ -48,13 +48,13 @@ fn main() i32:
 ```sushi
 use <sys/process>
 
-fn show_cwd() Result<i32>:
+fn show_cwd() i32 | ProcessError:
     let string cwd = getcwd()??
     println("Working in: {cwd}")
     return Result.Ok(0)
 
 fn main() i32:
-    return show_cwd().realise(1)
+    return Result.Ok(show_cwd().realise(1))
 ```
 
 ### chdir
@@ -84,7 +84,7 @@ fn main() i32:
                 println("Changed to /tmp")
             else:
                 println("Failed to change directory")
-        Result.Err() ->
+        Result.Err(_) ->
             println("chdir returned error")
 
     return Result.Ok(0)
@@ -95,7 +95,7 @@ fn main() i32:
 ```sushi
 use <sys/process>
 
-fn main() i32:
+fn navigate() i32 | ProcessError:
     # Save current directory
     let string original = getcwd()??
 
@@ -112,6 +112,9 @@ fn main() i32:
         println("Restored to {original}")
 
     return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(navigate().realise(1))
 ```
 
 ### exit
@@ -247,7 +250,7 @@ fn require_root() Result<i32, StdError>:
     return Result.Ok(0)
 
 fn main() i32:
-    require_root()??
+    require_root().realise(1)
 
     println("Running with root privileges")
     # Perform privileged operations...
@@ -266,20 +269,27 @@ Functions integrate with Sushi's error handling system:
 ```sushi
 use <sys/process>
 
-fn main() i32:
-    # With error propagation (??)
+# 1. Error propagation (??): the enclosing function carries the error type
+fn enter_tmp() string | ProcessError:
     let string dir = getcwd()??
     chdir("/tmp")??
+    return Result.Ok(dir)
 
-    # With pattern matching
+fn main() i32:
+    # 1. Propagation, handled at the boundary with .realise()
+    let string dir = enter_tmp().realise("/unknown")
+    println("Was in: {dir}")
+
+    # 2. Pattern matching
     match getcwd():
         Result.Ok(path) ->
             println("CWD: {path}")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Failed to get CWD")
 
-    # With .realise() for default value
+    # 3. .realise() for a default value
     let string safe_cwd = getcwd().realise("/unknown")
+    println("Safe CWD: {safe_cwd}")
 
     return Result.Ok(0)
 ```
@@ -339,35 +349,35 @@ Windows support is not yet implemented. The module requires POSIX compatibility.
 
 ### Directory Navigation
 
+Run an operation in another directory and always restore the original. `with_directory` takes
+the operation as a **function value** (`fn() -> i32`) and calls through it — see
+[First-Class Functions](../first-class-functions.md).
+
 ```sushi
 use <sys/process>
 
-fn with_directory(string path, fn() Result<i32> operation) Result<i32>:
-    # Save current directory
+fn with_directory(string path, fn() -> i32 operation) i32 | ProcessError:
+    # Save the current directory, then switch to the target
     let string original = getcwd()??
+    chdir(path)??
 
-    # Change to target directory
-    let i32 change_result = chdir(path)??
-    if (change_result != 0):
-        return Result.Err()
+    # Call through the operation function value, unwrapping its result
+    let i32 result = operation().realise(-1)
 
-    # Execute operation
-    let Result<i32> result = operation()
-
-    # Restore original directory
+    # Restore the original directory
     chdir(original)??
 
-    return result
+    return Result.Ok(result)
 
-fn process_files() Result<i32>:
+fn process_files() i32:
     println("Processing files in current directory")
     return Result.Ok(0)
 
 fn main() i32:
-    match with_directory("/var/log", process_files):
+    match with_directory("/tmp", process_files):
         Result.Ok(code) ->
             println("Operation completed: {code}")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Operation failed")
 
     return Result.Ok(0)
@@ -391,7 +401,7 @@ fn print_process_info() ~:
     return Result.Ok(~)
 
 fn main() i32:
-    print_process_info()??
+    print_process_info()
     return Result.Ok(0)
 ```
 
@@ -414,7 +424,7 @@ fn main() i32:
     let bool error = false
 
     if (error):
-        graceful_exit(1)??
+        graceful_exit(1)
 
     println("Normal execution")
     return Result.Ok(0)
@@ -429,11 +439,12 @@ Always validate paths to prevent directory traversal attacks:
 ```sushi
 use <sys/process>
 
-fn safe_chdir(string path) Result<i32>:
+fn safe_chdir(string path) i32 | ProcessError:
     # Validate path doesn't contain ../ components
     # Add your validation logic here
 
-    return chdir(path)
+    let i32 code = chdir(path)??
+    return Result.Ok(code)
 
 fn main() i32:
     # Bad: User-controlled path without validation
@@ -444,7 +455,7 @@ fn main() i32:
         Result.Ok(code) ->
             if (code == 0):
                 println("Changed directory safely")
-        Result.Err() ->
+        Result.Err(_) ->
             println("Invalid directory")
 
     return Result.Ok(0)
@@ -467,7 +478,7 @@ fn require_non_root() Result<i32, StdError>:
     return Result.Ok(0)
 
 fn main() i32:
-    require_non_root()??
+    require_non_root().realise(1)
     println("Running as unprivileged user")
     return Result.Ok(0)
 ```
@@ -501,7 +512,7 @@ fn main() i32:
 use <sys/process>
 use <io/stdio>
 
-fn process_directory(string dir_path) Result<i32>:
+fn process_directory(string dir_path) i32 | ProcessError:
     println("Processing directory: {dir_path}")
 
     # Save current location
@@ -538,9 +549,9 @@ fn main() i32:
         println("ERROR: Do not run as root")
         exit(1)
 
-    # Process each directory
-    let i32 result1 = process_directory("/tmp")??
-    let i32 result2 = process_directory("/var/log")??
+    # Process each directory (.realise maps a ProcessError to the failure code 1)
+    let i32 result1 = process_directory("/tmp").realise(1)
+    let i32 result2 = process_directory("/var/log").realise(1)
 
     if (result1 != 0 or result2 != 0):
         println("Some directories failed to process")
