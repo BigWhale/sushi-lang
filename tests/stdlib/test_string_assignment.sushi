@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Hello\n"
+# EXPECT_RUNTIME_EXIT: 0
 fn main() i32:
     let string s1 = "Hello"
     let string s2 = s1

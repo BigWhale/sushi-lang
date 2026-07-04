@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Success: 103\nError handled: 999\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test RAII cleanup with ?? operator
 # If cleanup doesn't work properly, this will cause memory leaks or crashes
 

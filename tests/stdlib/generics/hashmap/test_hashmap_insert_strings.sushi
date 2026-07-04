@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Size after 3 inserts: 3\nSize after update: 3\nString keys test passed!\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test HashMap insert with string keys
 
 use <collections/hashmap>

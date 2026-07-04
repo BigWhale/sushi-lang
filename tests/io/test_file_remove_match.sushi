@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Create: Success\nRemove: Success\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Create: Success
 # EXPECTED_OUTPUT: Remove: Success

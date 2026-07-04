@@ -1,3 +1,9 @@
+# EXPECT_STDOUT_CONTAINS: "✓ Inserted 100 items successfully"
+# EXPECT_STDOUT_CONTAINS: "  size: 100"
+# EXPECT_STDOUT_CONTAINS: "  capacity: 256"
+# EXPECT_STDOUT_CONTAINS: "  [52] Occupied: 100 -> 1000"
+# EXPECT_STDOUT_CONTAINS: "✓ Stress test passed!"
+# EXPECT_RUNTIME_EXIT: 0
 # Stress test for HashMap automatic resize
 
 use <collections/hashmap>

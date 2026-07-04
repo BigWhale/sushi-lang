@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_EXACT: "1one2two3three"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 

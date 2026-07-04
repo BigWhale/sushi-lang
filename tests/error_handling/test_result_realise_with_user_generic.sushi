@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Testing Result<Either>.realise()\nGot Left: 42\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test: Using Result<T>.realise() where T is a user-defined generic enum
 # Issue #3: This should work because we're calling .realise() on Result<T>, not on Either<T,U>
 

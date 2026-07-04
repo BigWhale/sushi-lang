@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Result: 17\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test recursive Expr AST with Own<Expr>
 enum Expr:
     IntLit(i32)

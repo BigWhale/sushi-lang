@@ -1,4 +1,6 @@
 
+# EXPECT_STDOUT_EXACT: "val1 = 123\nval2 = -1\n"
+# EXPECT_RUNTIME_EXIT: 0
 fn get_value(i32 should_error) i32:
     if (should_error == 1):
         return Result.Err(StdError.Error)

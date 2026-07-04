@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Hello, Sushi!\nThis is a test file.\nFile write and read successful!\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Hello, Sushi!
 # EXPECTED_OUTPUT: This is a test file.

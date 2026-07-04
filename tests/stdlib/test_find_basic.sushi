@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Test 1: Found 'world' at position 6\nTest 2: 'xyz' not found (expected)\nTest 3: Found 'hello' at position 0\nAll tests passed!\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test basic string.find() functionality
 use <collections/strings>
 

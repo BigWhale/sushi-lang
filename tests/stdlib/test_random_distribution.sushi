@@ -1,3 +1,7 @@
+# EXPECT_STDOUT_CONTAINS: === Random Distribution Test ===
+# EXPECT_STDOUT_CONTAINS: Pass: All f64 values in valid range
+# EXPECT_STDOUT_CONTAINS: === Distribution Test Complete ===
+# EXPECT_RUNTIME_EXIT: 0
 use <random>
 
 fn main() i32:

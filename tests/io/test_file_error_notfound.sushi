@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Error: File not found - nonexistent_file_12345.txt\nHandled file error successfully\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Error: File not found - nonexistent_file_12345.txt
 # EXPECTED_OUTPUT: Handled file error successfully

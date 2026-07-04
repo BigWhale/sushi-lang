@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "0\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test perk on empty struct (edge case)
 
 perk Hashable:

@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Either.Left: 42\nTriple.First: 99\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test: Generic enum parsing (Phase 0, Step 0.1)
 # Tests: Verify that generic enum syntax is correctly parsed by AST builder
 #        - Multiple type parameters: Either<T, U>

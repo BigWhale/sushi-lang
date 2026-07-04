@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Testing stdlib import syntax\n"
+# EXPECT_RUNTIME_EXIT: 0
 use <io>
 
 fn main() i32:

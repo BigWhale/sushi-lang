@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: "Iteration 900/1000"
+# EXPECT_STDOUT_CONTAINS: "Test complete - no double-free crashes!"
+# EXPECT_RUNTIME_EXIT: 0
 # Stress test for nested struct deep copy
 # Tests repeated allocation/deallocation to catch memory leaks and double-frees
 

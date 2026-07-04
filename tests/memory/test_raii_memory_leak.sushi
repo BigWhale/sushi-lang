@@ -1,3 +1,7 @@
+# EXPECT_STDOUT_CONTAINS: "Completed iteration 0/20"
+# EXPECT_STDOUT_CONTAINS: "Completed iteration 15/20"
+# EXPECT_STDOUT_CONTAINS: "Memory leak test completed!"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Memory leak test for RAII - allocates large arrays repeatedly

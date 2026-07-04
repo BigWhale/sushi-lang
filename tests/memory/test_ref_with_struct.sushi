@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "0\n0\n10\n0\n10\n5\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test: Mutable references with struct types
 # Should compile and run successfully
 

@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "42\nMostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: 42
 # EXPECTED_OUTPUT: Mostly Harmless

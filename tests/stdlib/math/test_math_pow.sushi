@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "pow(2.0, 10.0) = 1024\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test pow function
 use <math>
 

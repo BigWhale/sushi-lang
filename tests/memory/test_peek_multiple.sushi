@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "42\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test multiple &peek borrows allowed
 # Multiple read-only borrows should work
 

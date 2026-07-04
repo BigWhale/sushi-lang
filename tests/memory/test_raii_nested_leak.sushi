@@ -1,3 +1,7 @@
+# EXPECT_STDOUT_CONTAINS: "Testing nested struct cleanup - 50 iterations of 1MB each"
+# EXPECT_STDOUT_CONTAINS: "Iteration 40/50"
+# EXPECT_STDOUT_CONTAINS: "Test complete!"
+# EXPECT_RUNTIME_EXIT: 0
 # Test to verify nested struct RAII cleanup
 # If cleanup works: memory stays low
 # If cleanup broken: memory grows linearly

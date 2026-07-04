@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "5\n5\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test basic reference syntax parsing
 # This test verifies that the parser accepts reference types and borrow expressions
 

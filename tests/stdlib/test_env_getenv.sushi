@@ -1,3 +1,8 @@
+# EXPECT_STDOUT_CONTAINS: "Correctly returned None for non-existent variable"
+# EXPECT_STDOUT_CONTAINS: "Non-existent variable with default: default_value"
+# EXPECT_STDOUT_CONTAINS: "PATH exists"
+# EXPECT_STDOUT_CONTAINS: "FAKE_VAR_999 correctly does not exist"
+# EXPECT_RUNTIME_EXIT: 0
 # Test getenv() function for environment variables
 use <sys/env>
 

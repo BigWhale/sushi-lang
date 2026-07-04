@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Wrote 3 lines to file\nPosition after writes: 34\nAfter seek to start: First line\nSeek test completed\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Wrote 3 lines to file
 # EXPECTED_OUTPUT: Position after writes: 36

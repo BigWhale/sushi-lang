@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Parsed 42: 42\nParsed INT64_MAX: 9223372036854775807\nCorrectly rejected 'not a number'\nUsing realise(): 1234567890\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test string.to_i64() parsing
 use <collections/strings>
 

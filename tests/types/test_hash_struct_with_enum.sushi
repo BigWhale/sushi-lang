@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: "Response(Ok, 200) hash: 14062426658117138962"
+# EXPECT_STDOUT_CONTAINS: "Response(Error, 500) hash: 76711499098993981"
+# EXPECT_RUNTIME_EXIT: 0
 # Test hashing of struct containing enum field
 
 enum Status:

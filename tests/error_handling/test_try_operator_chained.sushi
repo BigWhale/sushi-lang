@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Result: 60\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # Test chained ?? operators
 

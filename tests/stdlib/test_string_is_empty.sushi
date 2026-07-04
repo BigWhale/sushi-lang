@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "empty: yes\nHello: not empty\nUTF-8: not empty\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT: empty: yes

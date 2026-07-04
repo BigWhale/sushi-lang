@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "first\nFound key1\n"
+# EXPECT_RUNTIME_EXIT: 0
 use <collections/hashmap>
 fn main() i32:
     let HashMap<i32[3], string> map = HashMap.new()

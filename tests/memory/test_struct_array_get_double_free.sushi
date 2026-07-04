@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "len: 2\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Regression for #60: a struct copied out of an array via .get() must deep-copy its

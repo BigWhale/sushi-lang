@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Test 1 passed: Maybe<Result<i32>>\nTest 2 passed: Result<Maybe<string>>\nTest 3 passed: Triple nested Maybe\nAll tests passed!\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test nested generic enum constructor literals
 # Regression test for ISSUES.md #13: "undefined name: Result" error
 # "Time is an illusion. Lunchtime doubly so."

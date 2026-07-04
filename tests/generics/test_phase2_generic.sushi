@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: Pair<i32, string> hash:
+# EXPECT_RUNTIME_EXIT: 0
 # Test that generic structs can now be hashed (Pass 1.8 handles monomorphized types)
 
 struct Pair<T, U>:

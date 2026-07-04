@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Testing generic type annotations\nParameter Left\nReturn type test passed\nVariable type test passed\nParameter type test passed\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test: Generic type annotations (Phase 0, Step 0.2)
 # Tests: Verify that generic type syntax is correctly parsed in type annotations
 #        - Function return types

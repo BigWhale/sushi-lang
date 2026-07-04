@@ -1,3 +1,10 @@
+# EXPECT_STDOUT_CONTAINS: "=== Process Control Tests ==="
+# EXPECT_STDOUT_CONTAINS: "✓ getcwd() succeeded"
+# EXPECT_STDOUT_CONTAINS: "✓ getpid() succeeded"
+# EXPECT_STDOUT_CONTAINS: "✓ getuid() succeeded"
+# EXPECT_STDOUT_CONTAINS: "✓ chdir() to /tmp succeeded"
+# EXPECT_STDOUT_CONTAINS: "=== All Tests Passed ==="
+# EXPECT_RUNTIME_EXIT: 0
 use <sys/process>
 use <io/stdio>
 

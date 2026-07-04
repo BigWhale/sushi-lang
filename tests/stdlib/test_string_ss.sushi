@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Hello\nWorld\ncaf\n0\n0\nllo\nHel\n0\ncopy\nd\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT: Hello

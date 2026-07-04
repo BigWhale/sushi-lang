@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "24\n24\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Minimal reference test
 
 fn test(&poke i32 x) i32:

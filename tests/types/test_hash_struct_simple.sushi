@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: "Point(10, 20).hash() = 14687699039417897699"
+# EXPECT_RUNTIME_EXIT: 0
 # Test hash method for simple structs
 
 struct Point:

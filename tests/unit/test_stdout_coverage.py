@@ -1,29 +1,35 @@
 """
 Coverage ratchet: success-category .sushi tests that print but lack stdout assertions.
 
-BASELINE should be lowered as more directories are backfilled. Current coverage status:
-- BACKFILLED (assertions added in p0-3-runtime-validation):
-    tests/operators/, tests/literals/, tests/constants/, tests/control_flow/,
-    tests/array/, tests/list/, tests/strings/, tests/basic/
-- NOT YET BACKFILLED (deliberate follow-up pass):
-    tests/stdlib/, tests/types/, tests/memory/, tests/generics/,
-    tests/perks/, tests/io/, tests/error_handling/
+The R0 test-correctness baseline (local ROADMAP.md Phase R0.2) drove this gap to 0: every
+success-category test that calls print/println either asserts its stdout (EXPECT_STDOUT_EXACT /
+EXPECT_STDOUT_CONTAINS) or is recorded in QUARANTINE below. BASELINE is therefore 0 — the ratchet
+now only ever admits a new printing test that asserts its output.
 
-To lower BASELINE after a follow-up backfill pass:
-1. Run: python3 -c "import re; from pathlib import Path; ..."  (see script below)
-2. Update BASELINE to the new gap count
-3. Commit
+Two exclusion paths, and only two:
+  1. The test asserts its stdout (has an EXPECT_STDOUT_* directive).
+  2. The test is listed in QUARANTINE (a known compiler bug it repros, an intentionally silent
+     test, or output that can't be asserted deterministically). Each such .sushi file is left
+     UNCHANGED; QUARANTINE is the single external record. See test_quarantine_registry_valid.
 
-How to compute the gap manually (from the repo root):
+To add a new printing test: give it an EXPECT_STDOUT_* assertion (do not raise BASELINE).
+When a quarantined bug is fixed: add the assertion to that test and delete its QUARANTINE entry.
+
+How to compute the gap manually (from the repo root) — must print 0:
     python3 -c "
     import re
     from pathlib import Path
+    import sys; sys.path.insert(0, 'tests/unit')
+    from test_stdout_coverage import QUARANTINE
     excluded = {'helpers', 'bin'}
     gap = 0
     for f in sorted(Path('tests').rglob('test_*.sushi')):
+        rel = str(f.relative_to('tests'))
         if any(x in excluded for x in f.parts):
             continue
         if f.name.startswith('test_err_') or f.name.startswith('test_warn_'):
+            continue
+        if rel in QUARANTINE:
             continue
         c = f.read_text()
         if re.search(r'\bprint\b|\bprintln\b', c) and \
@@ -41,21 +47,115 @@ from pathlib import Path
 # no EXPECT_STDOUT_CONTAINS or EXPECT_STDOUT_EXACT in their header (the "gap").
 # After each backfill pass this MUST be lowered to the new gap count — it may
 # never increase (that would mean new unasserted printing tests were added).
-BASELINE = 257
+#
+# The R0 test-correctness baseline (see local ROADMAP.md Phase R0.2) drives this
+# to 0: every printing success-category test either asserts its stdout, or — if it
+# reveals a real compiler bug (wrong output), is intentionally silent, or cannot be
+# asserted deterministically — is recorded in QUARANTINE below and excluded from the
+# gap. Once at 0 the ratchet only ever admits new printing tests that assert output.
+BASELINE = 0
 
 TESTS_ROOT = Path(__file__).parent.parent  # tests/
 EXCLUDED_DIRS = {"helpers", "bin"}
+
+# --------------------------------------------------------------------------- #
+# Quarantine registry (R0.2)
+#
+# Printing tests that are intentionally left WITHOUT a stdout assertion, keyed by
+# path relative to tests/. The .sushi files themselves are never edited — this is
+# the single external record of why each is exempt. _compute_gap() skips them so
+# the gap can reach 0 while the underlying issues stay tracked.
+#
+# Each entry: {"reason": <reason>, "issue": <url or None>}
+#   "broken-output" — the compiler emits WRONG output; the test is a real bug repro.
+#                     Requires a tracking issue. Fixing the bug means adding the
+#                     EXPECT_STDOUT_* assertion and removing the entry here.
+#   "needs-triage"  — the correct output could not be confidently derived; do NOT
+#                     lock in possibly-wrong output. Requires a tracking issue.
+#   "no-stdout"     — the test matches the print/println regex (e.g. in a comment or
+#                     string) but emits no assertable runtime stdout. A coverage
+#                     exclusion, not a bug — no issue required.
+#
+# The test_quarantine_registry_valid guard below keeps this honest: every entry must
+# point at a real file that still lacks a directive, and every non-"no-stdout" entry
+# must carry an issue URL.
+QUARANTINE: dict[str, dict] = {
+    # --- broken-output: the compiler emits wrong output / crashes (real bug repros) ---
+    "error_handling/test_maybe_realise.sushi": {
+        "reason": "broken-output",
+        "issue": "https://github.com/BigWhale/sushi-lang/issues/105",
+    },
+    # Same root cause as #105 (Maybe<struct-with-string>.realise), but platform-dependent:
+    # this non-generic Maybe<Config>.realise works on macOS yet segfaults on Linux (exit -11).
+    # Silently tolerated before (TEST_TYPE: runtime, no assertion); asserting it surfaced the crash.
+    "error_handling/test_maybe_struct_regression.sushi": {
+        "reason": "broken-output",
+        "issue": "https://github.com/BigWhale/sushi-lang/issues/105",
+    },
+    "memory/test_own_nested.sushi": {
+        "reason": "broken-output",
+        "issue": "https://github.com/BigWhale/sushi-lang/issues/106",
+    },
+    "stdlib/generics/hashmap/test_hashmap_autoresize.sushi": {
+        "reason": "broken-output",
+        "issue": "https://github.com/BigWhale/sushi-lang/issues/107",
+    },
+    "stdlib/generics/hashmap/test_hashmap_autoresize_debug.sushi": {
+        "reason": "broken-output",
+        "issue": "https://github.com/BigWhale/sushi-lang/issues/107",
+    },
+    "stdlib/generics/hashmap/test_hashmap_autoresize_tombstones.sushi": {
+        "reason": "broken-output",
+        "issue": "https://github.com/BigWhale/sushi-lang/issues/107",
+    },
+    "stdlib/generics/hashmap/test_hashmap_debug_simple.sushi": {
+        "reason": "broken-output",
+        "issue": "https://github.com/BigWhale/sushi-lang/issues/107",
+    },
+    "stdlib/generics/hashmap/test_hashmap_free_basic.sushi": {
+        "reason": "broken-output",
+        "issue": "https://github.com/BigWhale/sushi-lang/issues/107",
+    },
+    "stdlib/generics/hashmap/test_hashmap_rehash_debug.sushi": {
+        "reason": "broken-output",
+        "issue": "https://github.com/BigWhale/sushi-lang/issues/107",
+    },
+    # test-data (stale self-referential paths), tracked separately from compiler bugs
+    "stdlib/io/test_file_exists.sushi": {
+        "reason": "broken-output",
+        "issue": "https://github.com/BigWhale/sushi-lang/issues/108",
+    },
+    "stdlib/io/test_file_is_file.sushi": {
+        "reason": "broken-output",
+        "issue": "https://github.com/BigWhale/sushi-lang/issues/108",
+    },
+    # --- no-stdout: matches the print/println scan but emits no assertable runtime output ---
+    # (error path taken before print, uncalled printing helper, or empty-collection iteration)
+    "array/test_dynamic_arrays_bounds_runtime.sushi": {"reason": "no-stdout", "issue": None},
+    "basic/test_function_calls.sushi": {"reason": "no-stdout", "issue": None},
+    "list/test_list_match_get.sushi": {"reason": "no-stdout", "issue": None},
+    "list/test_tiny.sushi": {"reason": "no-stdout", "issue": None},
+    "strings/test_interpolation_example.sushi": {"reason": "no-stdout", "issue": None},
+    "stdlib/generics/hashmap/test_hashmap_entries_empty.sushi": {"reason": "no-stdout", "issue": None},
+    "stdlib/generics/hashmap/test_hashmap_keys_empty.sushi": {"reason": "no-stdout", "issue": None},
+}
+
+_VALID_QUARANTINE_REASONS = {"broken-output", "needs-triage", "no-stdout"}
 
 
 def _compute_gap() -> list[str]:
     """Return list of files in the gap (print but no stdout assertion)."""
     gap_files = []
     for f in sorted(TESTS_ROOT.rglob("test_*.sushi")):
+        rel = str(f.relative_to(TESTS_ROOT))
         # Skip non-test dirs
         if any(d in EXCLUDED_DIRS for d in f.relative_to(TESTS_ROOT).parts):
             continue
         # Skip error/warning categories
         if f.name.startswith("test_err_") or f.name.startswith("test_warn_"):
+            continue
+        # Skip quarantined tests (tracked separately; see QUARANTINE + guard test)
+        if rel in QUARANTINE:
             continue
         content = f.read_text(encoding="utf-8")
         has_print = bool(re.search(r"\bprint\b|\bprintln\b", content))
@@ -90,3 +190,36 @@ def test_stdout_coverage_ratchet():
         f"\nFiles in gap ({gap}):\n" + "\n".join(f"  {f}" for f in gap_files[:30])
         + (f"\n  ... and {gap - 30} more" if gap > 30 else "")
     )
+
+
+def test_quarantine_registry_valid():
+    """Keep the QUARANTINE registry honest.
+
+    Every entry must:
+      - point at a file that still exists (a moved/deleted test must be de-listed),
+      - carry a recognized reason,
+      - still lack an EXPECT_STDOUT_* directive (once a test is fixed and asserted,
+        it must be removed from QUARANTINE — otherwise it is silently double-counted
+        as both asserted and exempt), and
+      - carry a tracking issue URL unless the reason is "no-stdout".
+    """
+    problems = []
+    for rel, meta in QUARANTINE.items():
+        path = TESTS_ROOT / rel
+        if not path.is_file():
+            problems.append(f"{rel}: quarantined path does not exist")
+            continue
+        reason = meta.get("reason")
+        if reason not in _VALID_QUARANTINE_REASONS:
+            problems.append(
+                f"{rel}: invalid reason {reason!r} (expected one of {sorted(_VALID_QUARANTINE_REASONS)})"
+            )
+        content = path.read_text(encoding="utf-8")
+        if "EXPECT_STDOUT_CONTAINS" in content or "EXPECT_STDOUT_EXACT" in content:
+            problems.append(
+                f"{rel}: has an EXPECT_STDOUT_* directive — remove it from QUARANTINE"
+            )
+        if reason != "no-stdout" and not meta.get("issue"):
+            problems.append(f"{rel}: reason {reason!r} requires a tracking issue URL")
+
+    assert not problems, "quarantine registry invalid:\n" + "\n".join(f"  {p}" for p in problems)

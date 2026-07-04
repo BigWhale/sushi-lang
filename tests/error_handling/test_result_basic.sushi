@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Sum: 8, Prod: 42\n"
+# EXPECT_RUNTIME_EXIT: 42
 # Basic Result<T> test with Ok() returns
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 42

@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "First: 10\nLength: 3\nOuter scope start\nInner: 100\nOuter scope end\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test RAII for structs with dynamic array fields

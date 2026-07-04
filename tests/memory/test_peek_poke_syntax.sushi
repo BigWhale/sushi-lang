@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "42\n43\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test peek/poke syntax parsing
 # This test verifies that the new borrow syntax is correctly parsed
 

@@ -1,3 +1,7 @@
+# EXPECT_STDOUT_CONTAINS: "Point hash: 14687699039417897699"
+# EXPECT_STDOUT_CONTAINS: "Pair<i32, string> hash: 11154612224293470462"
+# EXPECT_STDOUT_CONTAINS: "All hash tests passed!"
+# EXPECT_RUNTIME_EXIT: 0
 # Comprehensive hash test covering all supported scenarios
 # Tests basic primitives, mixed types, nested structs, and generic structs
 

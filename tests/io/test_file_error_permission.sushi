@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Successfully opened file for writing\nPermission test completed\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Successfully opened file for writing
 # EXPECTED_OUTPUT: Permission test completed

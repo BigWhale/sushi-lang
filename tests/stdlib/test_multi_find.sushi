@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Test 1: 'world' not found in 'hello' (expected)\nTest 2: 'xyz' not found (expected)\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test multiple string.find() calls
 use <collections/strings>
 

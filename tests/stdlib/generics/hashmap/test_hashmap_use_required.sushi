@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Got value: one\nMostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test that HashMap works correctly with use statement
 use <collections/hashmap>
 

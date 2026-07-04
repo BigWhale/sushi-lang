@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "42\n999\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test enum implementing a perk
 
 perk Hashable:

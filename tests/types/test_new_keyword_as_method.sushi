@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Parser accepts 'new' as both keyword and method name!\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test that 'new' can be used as a method name (context-aware parsing)
 fn main() i32:
     # Test standalone new() for arrays (keyword)

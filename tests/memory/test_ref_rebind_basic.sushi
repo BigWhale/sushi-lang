@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "6\n"
+# EXPECT_RUNTIME_EXIT: 0
 fn increment(&poke i32 counter) ~:
     counter := counter + 1
     return Result.Ok(~)

@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Point\n30\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test generic function with multiple perk constraints
 
 perk Hashable:

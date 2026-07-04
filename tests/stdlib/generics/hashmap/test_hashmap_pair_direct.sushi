@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Pair key works: 1\nTest passed\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test HashMap with Pair<T, U> keys - direct construction
 
 use <collections/hashmap>

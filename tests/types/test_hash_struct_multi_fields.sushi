@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_CONTAINS: "Person('Arthur', 30, true).hash() = 6027346791390547837"
+# EXPECT_RUNTIME_EXIT: 0
 # Test hash method for structs with multiple fields
 
 struct Person:

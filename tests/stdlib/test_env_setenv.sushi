@@ -1,3 +1,8 @@
+# EXPECT_STDOUT_CONTAINS: SUSHI_TEST_VAR value: hello_world
+# EXPECT_STDOUT_CONTAINS: SUSHI_TEST_VAR after overwrite: new_value
+# EXPECT_STDOUT_CONTAINS: SUSHI_VAR_2: value_2
+# EXPECT_STDOUT_CONTAINS: SUSHI_EMPTY is set to empty string (length 0)
+# EXPECT_RUNTIME_EXIT: 0
 # Test setenv() function for setting environment variables
 use <sys/env>
 

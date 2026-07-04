@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Parsed 3.14159: 3.14159\nParsed -2.71828: -2.71828\nParsed integer as float: 42\nParsed scientific notation: 0.000123\nCorrectly rejected 'not a number'\nUsing realise(): 2.5\nUsing realise() with invalid: -1\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test string.to_f64() parsing
 use <collections/strings>
 

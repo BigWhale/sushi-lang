@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Left: 42\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test: Pattern matching on user-defined generic enums in variables
 # Issue #4: Pattern matching should work on extracted generic enum values
 

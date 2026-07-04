@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "The Answer is 42\n"
+# EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: The Answer is 42
 

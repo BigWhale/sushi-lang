@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Sum: 15\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test recursive binary tree with Own<Tree>
 enum Tree:
     Leaf(i32)

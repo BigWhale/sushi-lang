@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: "Success(42) hash: 4165524350563243767"
+# EXPECT_STDOUT_CONTAINS: "Failure(404) hash: 791165380904324248"
+# EXPECT_RUNTIME_EXIT: 0
 # Test hashing of enum with associated data
 
 enum MyResult:

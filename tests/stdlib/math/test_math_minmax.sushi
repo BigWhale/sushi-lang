@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "min(10, 20) = 10\nmin(3.14, 2.71) = 2.71\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test min/max
 use <math>
 

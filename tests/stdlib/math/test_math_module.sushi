@@ -1,3 +1,12 @@
+# EXPECT_STDOUT_CONTAINS: "PI  = 3.14159"
+# EXPECT_STDOUT_CONTAINS: "abs(-9999) = 9999"
+# EXPECT_STDOUT_CONTAINS: "min(3.14, 2.71) = 2.71"
+# EXPECT_STDOUT_CONTAINS: "sqrt(2.0) = 1.41421"
+# EXPECT_STDOUT_CONTAINS: "pow(16.0, 0.5) = 4"
+# EXPECT_STDOUT_CONTAINS: "floor(-2.3) = -3"
+# EXPECT_STDOUT_CONTAINS: "Compound interest (1000, 5%, 10yr) = 1628.89"
+# EXPECT_STDOUT_CONTAINS: "=== All Math Tests Completed ==="
+# EXPECT_RUNTIME_EXIT: 0
 # Test comprehensive math module functionality
 # Tests all math functions and constants
 

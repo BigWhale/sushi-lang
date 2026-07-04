@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Point\n330\n1\n5\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Comprehensive perk test covering multiple features
 
 # Define multiple perks

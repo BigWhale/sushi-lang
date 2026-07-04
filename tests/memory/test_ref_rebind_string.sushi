@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Updated!\n"
+# EXPECT_RUNTIME_EXIT: 0
 fn update_message(&poke string msg) ~:
     msg := "Updated!"
     return Result.Ok(~)

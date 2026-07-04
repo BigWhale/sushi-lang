@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "OK: Correctly returns Err for non-existent file\nOK: file_size() works correctly\n"
+# EXPECT_RUNTIME_EXIT: 0
 use <io/files>
 
 fn main() i32:

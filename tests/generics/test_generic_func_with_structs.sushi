@@ -1,3 +1,4 @@
+# EXPECT_STDOUT_EXACT: "test\n"
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 

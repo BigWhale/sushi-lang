@@ -1,3 +1,8 @@
+# EXPECT_STDOUT_CONTAINS: ✓ is_some() on Some(42) = true
+# EXPECT_STDOUT_CONTAINS: ✓ realise(99) on None() = 99
+# EXPECT_STDOUT_CONTAINS: ✓ Maybe<f64> realise: 3.14
+# EXPECT_STDOUT_CONTAINS: All Maybe<T> stdlib tests passed!
+# EXPECT_RUNTIME_EXIT: 0
 # TEST: Maybe<T> stdlib methods
 # Tests all 4 Maybe<T> methods with stdlib implementation
 

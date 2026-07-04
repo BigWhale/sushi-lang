@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Parsed 42: 42\nParsed -123: -123\nParsed INT32_MAX: 2147483647\nParsed INT32_MIN: -2147483648\nCorrectly rejected 'not a number'\nCorrectly rejected '123abc'\nCorrectly rejected overflow\nUsing realise(): 100\nUsing realise() with invalid: -1\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test string.to_i32() parsing
 use <collections/strings>
 

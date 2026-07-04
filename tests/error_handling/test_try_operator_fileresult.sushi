@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "Result: Error reading config\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test ?? operator with FileResult enum
 # This demonstrates error propagation for file operations
 

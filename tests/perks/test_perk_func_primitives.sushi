@@ -1,3 +1,5 @@
+# EXPECT_STDOUT_EXACT: "6807129317463932018\n18007334074686647077\n1\n"
+# EXPECT_RUNTIME_EXIT: 0
 # Test generic function with primitives implementing perks
 # Primitives like i32, string have auto-derived hash, but we need to test constraints work
 
