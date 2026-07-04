@@ -1,7 +1,18 @@
+# EXPECT_STDOUT_EXACT: "OK: exists() works correctly\n"
+# EXPECT_RUNTIME_EXIT: 0
 use <io/files>
 
 fn main() i32:
-    if (not exists("tests/test_file_exists.sushi")):
+    # Self-contained: create a known file so the test does not depend on the
+    # current working directory or on this test's own location in the tree.
+    match open("/tmp/sushi_r108_exists.txt", FileMode.Write()):
+        FileResult.Ok(f) ->
+            f.close()
+        FileResult.Err(_) ->
+            println("ERROR: could not create test file")
+            return Result.Ok(1)
+
+    if (not exists("/tmp/sushi_r108_exists.txt")):
         println("ERROR: File should exist")
         return Result.Ok(1)
 

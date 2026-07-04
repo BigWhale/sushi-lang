@@ -1,3 +1,7 @@
+# EXPECT_STDOUT_CONTAINS: 1 -> "one"
+# EXPECT_STDOUT_CONTAINS: 3 -> "three"
+# EXPECT_STDOUT_CONTAINS: 10 -> "ten"
+# EXPECT_RUNTIME_EXIT: 0
 # Test HashMap.free() with primitive values
 
 use <collections/hashmap>
