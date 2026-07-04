@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 from collections import namedtuple
 from pathlib import Path
 
@@ -190,8 +191,37 @@ fn main() i32:
 ]
 
 CASE_IDS = [c.id for c in CASES]
-DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs" / "stdlib"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DOCS_ROOT = PROJECT_ROOT / "docs" / "stdlib"
 SUSHIC = shutil.which("sushic")
+
+
+@pytest.fixture(scope="session")
+def platform_stdlib():
+    """Build the standard library for the current platform once per session.
+
+    The compile layer links per-platform stdlib bitcode (`sushi_stdlib/dist/<platform>/`).
+    Only the darwin bitcode is committed, and the CI pytest job does not run the stdlib
+    build (unlike the enhanced runner / test-linux job, which call run_tests.build_stdlib).
+    Without this, `sushic` on Linux falls back to the darwin io bitcode, whose stdio globals
+    (`__stderrp`/`__stdinp`/`__stdoutp`) are macOS-only symbols and fail to link. Building
+    here makes the end-to-end compile check correct on any platform. build.py is fast
+    (<1s) and deterministic (does not dirty committed bitcode).
+    """
+    build = PROJECT_ROOT / "sushi_lang" / "sushi_stdlib" / "build.py"
+    result = subprocess.run(
+        [sys.executable, str(build)],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    if result.returncode != 0:
+        pytest.fail(
+            "stdlib build (build.py) failed, cannot run the compile layer:\n"
+            f"--- stdout ---\n{result.stdout}\n--- stderr ---\n{result.stderr}"
+        )
+    return True
 
 # Modules whose symbols only resolve in the *full* compilation pipeline, not in the
 # in-process `analyze` fixture. `collections/hashmap` is a virtual unit: HashMap is
@@ -230,11 +260,12 @@ def test_documented_module_resolves(case, analyze):
 
 @pytest.mark.skipif(SUSHIC is None, reason="sushic not on PATH (run under `uv run pytest`)")
 @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
-def test_documented_module_compiles(case, tmp_path):
+def test_documented_module_compiles(case, tmp_path, platform_stdlib):
     """End-to-end layer: the documented program compiles and links (exit 0).
 
     Authoritative docs-vs-code check -- exercises the full pipeline including
     backend/``.bc`` linking, so a missing precompiled stdlib unit is caught here.
+    Depends on `platform_stdlib` so the correct per-platform bitcode is linked.
     """
     (tmp_path / "main.sushi").write_text(case.source, encoding="utf-8")
     result = subprocess.run(
