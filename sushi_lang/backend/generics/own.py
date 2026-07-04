@@ -4,9 +4,12 @@ Built-in extension methods for Own<T> generic struct.
 INLINE EMISSION ONLY. Own<T> methods work on-demand for all types.
 
 Implemented methods:
-- alloc(value: T) -> Own<T>: Allocate heap memory and store value
-- get() -> &T: Borrow the owned value (returns reference)
-- destroy() -> ~: Free the allocated memory (RAII)
+- alloc(value: T) -> Own<T>: Allocate heap memory and store value. Takes ownership of
+  an owning argument (the source variable is moved, so RAII will not double-free it).
+- get() -> T: Borrow the owned value. Returns the payload by value; the binding is a
+  NON-owning view of the container's payload and is never registered for RAII cleanup,
+  so a nested Own<Own<T>> is not double-freed (issue #106).
+- destroy() -> ~: Free the allocated memory (RAII), recursing into the payload.
 
 The Own<T> type is a generic struct for unique ownership of heap data:
     struct Own<T>:
@@ -96,7 +99,7 @@ def _validate_own_get(
     """Validate Own<T>.get() method call.
 
     Validates that no arguments are provided.
-    Returns &T (reference to owned value).
+    Yields the payload as a non-owning borrow (never a second RAII owner).
 
     Args:
         call: The method call AST node.
@@ -260,19 +263,52 @@ def emit_builtin_own_method(
 
     if call.method == "alloc":
         # Emit the argument value
-        arg_value = codegen.expressions.emit_expr(call.args[0])
+        arg = call.args[0]
+        arg_value = codegen.expressions.emit_expr(arg)
+        # Own.alloc takes ownership: if the argument is a named owning variable, move it
+        # so its RAII cleanup is skipped (the new Own is now the sole owner). Guarded on
+        # an owning type so primitives (copied) are untouched (#106).
+        from sushi_lang.semantics.ast import Name
+        if isinstance(arg, Name):
+            arg_ty = codegen.memory.find_semantic_type(arg.id)
+            if arg_ty is not None and _arg_type_is_owning(codegen, arg_ty):
+                codegen.moves.mark(arg.id)
         return emit_own_alloc(codegen, element_type, arg_value)
     elif call.method == "get":
         return emit_own_get(codegen, own_value, element_type)
     elif call.method == "destroy":
         # Extract variable name from receiver (if it's a Name node)
         from sushi_lang.semantics.ast import Name
-        var_name = None
         if isinstance(call.receiver, Name):
             var_name = call.receiver.id
-        return emit_own_destroy(codegen, own_value, var_name)
+            slot = codegen.memory.find_local_slot(var_name)
+            if slot is not None:
+                # Deep teardown via the general recursive destructor (same as the RAII
+                # path), so manual destroy of a nested Own<Own<T>> frees every level.
+                from sushi_lang.backend.destructors import emit_value_destructor
+                emit_value_destructor(codegen, codegen.builder, slot, own_type)
+                codegen.dynamic_arrays.mark_own_destroyed(var_name)
+                return ir.Constant(codegen.types.i32, 0)
+        # Temporary / non-Name receiver: shallow single free of the loaded value.
+        return emit_own_destroy(codegen, own_value)
     else:
         raise_internal_error("CE0080", method=call.method)
+
+
+def _arg_type_is_owning(codegen: Any, ty: Type) -> bool:
+    """Return True if a value of this type carries heap ownership, so passing it into
+    Own.alloc() should move (consume) the source variable.
+
+    Covers Own<T> and List<T> (whose single buffer field is a raw pointer that
+    needs_cleanup() does not recognise) plus everything needs_cleanup() catches
+    (dynamic arrays, structs with owned fields, enums with owned associated data).
+    """
+    from sushi_lang.backend.destructors import needs_cleanup
+    return (
+        codegen.dynamic_arrays.is_own_type(ty)
+        or codegen.dynamic_arrays.is_list_type(ty)
+        or needs_cleanup(ty)
+    )
 
 
 def get_own_element_type(own_type: StructType) -> Type:

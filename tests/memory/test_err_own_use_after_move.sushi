@@ -1,0 +1,9 @@
+# Own.alloc takes ownership of an owning argument: the source is moved.
+# Using the moved variable afterwards is a use-after-move error (CE2405).
+fn main() i32:
+    let Own<i32> a = Own.alloc(1)
+    let Own<Own<i32>> b = Own.alloc(a)
+    let Own<i32> live = b.get()
+    let i32 y = a.get()
+    println(y)
+    return Result.Ok(0)

@@ -426,6 +426,26 @@ fn main() i32:
 
 **Note:** Owned values are automatically cleaned up via RAII if not manually destroyed.
 
+### Ownership Semantics
+
+- **`alloc(value)` takes ownership.** When `value` is itself an owning value (an `Own<T>`,
+  a `List<T>`, a dynamic array, or a struct with owned fields), the source variable is
+  *moved* into the new `Own` and may not be used afterwards (use-after-move is `CE2405`).
+  Primitives are copied, so passing an `i32` variable leaves it usable.
+- **`get()` borrows.** It yields a non-owning view of the payload; the binding is never a
+  second owner, so the container remains responsible for freeing it. This makes nested
+  owners such as `Own<Own<T>>` safe: the outer owner frees every level exactly once.
+
+```sushi
+fn main() i32:
+    let Own<i32> inner = Own.alloc(42)
+    let Own<Own<i32>> outer = Own.alloc(inner)  # inner is moved into outer
+    let Own<i32> borrowed = outer.get()          # borrow, not a new owner
+    let i32 value = borrowed.get()
+    println(value)                               # 42
+    return Result.Ok(0)
+```
+
 ## Manual Memory Management
 
 When RAII isn't sufficient, use manual cleanup.

@@ -81,10 +81,6 @@ EXCLUDED_DIRS = {"helpers", "bin"}
 # must carry an issue URL.
 QUARANTINE: dict[str, dict] = {
     # --- broken-output: the compiler emits wrong output / crashes (real bug repros) ---
-    "memory/test_own_nested.sushi": {
-        "reason": "broken-output",
-        "issue": "https://github.com/BigWhale/sushi-lang/issues/106",
-    },
     # --- no-stdout: matches the print/println scan but emits no assertable runtime output ---
     # (error path taken before print, uncalled printing helper, or empty-collection iteration)
     "array/test_dynamic_arrays_bounds_runtime.sushi": {"reason": "no-stdout", "issue": None},

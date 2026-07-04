@@ -32,7 +32,7 @@ class DynamicArrayDescriptor:
     element_type: Type           # Element type (int, bool, string)
     llvm_alloca: ir.Instruction  # LLVM alloca for the struct
     destroyed: bool = False      # Track if explicitly destroyed
-    moved: bool = False          # Track if ownership has been moved (Rust-style move semantics)
+    # Move state lives in the unified codegen.moves MoveTracker (keyed by name).
 
 
 @dataclass
@@ -57,7 +57,7 @@ class ListDescriptor:
     list_type: StructType        # List<T> struct type
     llvm_alloca: ir.Instruction  # LLVM alloca for the List<T> struct
     destroyed: bool = False      # Explicitly .destroy()/.free()'d
-    moved: bool = False          # Ownership transferred (e.g. returned)
+    # Move state lives in the unified codegen.moves MoveTracker (keyed by name).
 
 
 class DynamicArrayManager:
@@ -290,14 +290,13 @@ class DynamicArrayManager:
     def mark_as_moved(self, name: str) -> None:
         """Mark a dynamic array as moved (ownership transferred).
 
-        Moved arrays are excluded from RAII cleanup. This implements move
-        semantics for return values, allowing ownership transfer without cleanup.
+        Delegates to the unified MoveTracker. Moved arrays are excluded from RAII
+        cleanup, implementing move semantics for return values.
 
         Args:
             name: The variable name to mark as moved.
         """
-        if name in self.arrays:
-            self.arrays[name].moved = True
+        self.codegen.moves.mark(name)
 
     def is_list_type(self, ty: Type) -> bool:
         """Check if a type is List<T>.
@@ -327,8 +326,7 @@ class DynamicArrayManager:
 
     def mark_list_moved(self, var_name: str) -> None:
         """Mark a List<T> as moved (ownership transferred to the caller); skip cleanup."""
-        if var_name in self.lists:
-            self.lists[var_name].moved = True
+        self.codegen.moves.mark(var_name)
 
     def mark_list_destroyed(self, var_name: str) -> None:
         """Mark a List<T> as explicitly destroyed/freed; skip redundant RAII cleanup."""
@@ -340,7 +338,7 @@ class DynamicArrayManager:
         if name not in self.lists:
             return
         descriptor = self.lists[name]
-        if descriptor.destroyed or descriptor.moved:
+        if descriptor.destroyed or self.codegen.moves.is_moved(name):
             return
         from sushi_lang.backend.generics.list.methods_destroy import emit_list_destroy
         emit_list_destroy(self.codegen, descriptor.llvm_alloca, descriptor.list_type)
@@ -369,6 +367,11 @@ class DynamicArrayManager:
         descriptor = OwnDescriptor(name=var_name, own_type=own_type, destroyed=False)
         self.owned_pointers[var_name] = descriptor
 
+    def mark_own_moved(self, var_name: str) -> None:
+        """Mark an Own<T> as moved (ownership transferred, e.g. into another Own or a
+        struct field); the unified MoveTracker excludes it from RAII cleanup."""
+        self.codegen.moves.mark(var_name)
+
     def mark_own_destroyed(self, var_name: str) -> None:
         """Mark an Own<T> variable as explicitly destroyed.
 
@@ -388,24 +391,27 @@ class DynamicArrayManager:
         This should be called at scope boundaries (function exit, before returns, etc.).
         """
         for var_name, descriptor in self.owned_pointers.items():
-            if not descriptor.destroyed:
+            if not descriptor.destroyed and not self.codegen.moves.is_moved(var_name):
                 self._emit_own_destructor(var_name, descriptor.own_type)
 
     def _emit_own_destructor(self, var_name: str, own_type: StructType) -> None:
         """Emit destructor code for a single Own<T> variable.
 
+        Uses the general recursive destructor (destructors.emit_value_destructor),
+        which descends into the owned payload before freeing the pointer. This is the
+        SAME deep teardown used for Own<T> stored in struct fields / array elements, so
+        a nested Own<Own<T>> frees every level exactly once regardless of storage.
+
         Args:
             var_name: The variable name.
             own_type: The Own<T> struct type.
         """
-        from sushi_lang.backend.generics import own
+        from sushi_lang.backend.destructors import emit_value_destructor
 
-        # Load Own<T> value from variable slot
+        # Pass the variable slot (address of the Own<T> struct); the recursive
+        # destructor geps field 0, recurses into the payload, then frees.
         own_slot = self.codegen.memory.find_local_slot(var_name)
-        own_value = self.builder.load(own_slot, name=f"{var_name}_own_value")
-
-        # Call Own<T>.destroy()
-        own.emit_own_destroy(self.codegen, own_value)
+        emit_value_destructor(self.codegen, self.builder, own_slot, own_type)
 
     def _emit_array_destructor(self, name: str) -> None:
         """Generate destructor code for a dynamic array.
@@ -419,7 +425,7 @@ class DynamicArrayManager:
             return
 
         descriptor = self.arrays[name]
-        if descriptor.destroyed or descriptor.moved:
+        if descriptor.destroyed or self.codegen.moves.is_moved(name):
             return
 
         # Use the general destructor for the array struct

@@ -55,8 +55,7 @@ class ScopeManager:
         # Only stores structs that need RAII cleanup (not duplicated per scope)
         self._struct_cleanup: Dict[str, tuple['StructType', ir.AllocaInstr]] = {}
 
-        # Track which struct variables have been moved (ownership transferred)
-        self.moved_structs: Set[str] = set()
+        # Struct move tracking is delegated to the unified codegen.moves MoveTracker.
 
         # FFI no-leak registry: per-scope stack of marshalled C strings (i8*) that
         # must be freed at scope exit. Parallel to the dynamic-array scope stack.
@@ -359,13 +358,13 @@ class ScopeManager:
     def mark_struct_as_moved(self, var_name: str) -> None:
         """Mark a struct variable as moved (ownership transferred).
 
-        Moved structs are excluded from RAII cleanup. This implements move
-        semantics for return values, allowing ownership transfer without cleanup.
+        Delegates to the unified MoveTracker. Moved structs are excluded from RAII
+        cleanup, implementing move semantics for return values.
 
         Args:
             var_name: The variable name to mark as moved.
         """
-        self.moved_structs.add(var_name)
+        self.codegen.moves.mark(var_name)
 
     def is_struct_moved(self, var_name: str) -> bool:
         """Check if a struct variable has been moved.
@@ -376,7 +375,7 @@ class ScopeManager:
         Returns:
             True if the variable has been moved, False otherwise.
         """
-        return var_name in self.moved_structs
+        return self.codegen.moves.is_moved(var_name)
 
     def reset_scope_stack(self) -> None:
         """Reset the scope stack to empty state.
@@ -397,7 +396,7 @@ class ScopeManager:
         self._cstr_cleanup = []
 
         # Clear moved tracking (function boundary)
-        self.moved_structs.clear()
+        self.codegen.moves.reset()
 
     def current_scope_size(self) -> int:
         """Get the current scope stack depth.

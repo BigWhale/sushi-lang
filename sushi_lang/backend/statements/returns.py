@@ -84,6 +84,11 @@ def emit_return(codegen: 'LLVMCodegen', stmt: 'Return') -> None:
                 # List<T> is a StructType; mark moved so RAII does not free the buffer
                 # the caller now owns (#61).
                 codegen.dynamic_arrays.mark_list_moved(var_name)
+            elif codegen.dynamic_arrays.is_own_type(semantic_type):
+                # Own<T> is a StructType whose pointer field struct_needs_cleanup() does
+                # not see; mark it moved explicitly so RAII does not free the allocation
+                # the caller now owns.
+                codegen.dynamic_arrays.mark_own_moved(var_name)
             elif isinstance(semantic_type, StructType):
                 if codegen.dynamic_arrays.struct_needs_cleanup(semantic_type):
                     # Mark as moved so RAII cleanup skips it
