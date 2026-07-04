@@ -1,3 +1,6 @@
+# EXPECT_STDOUT_CONTAINS: test_multiple_maybe_structs: 1
+# EXPECT_STDOUT_CONTAINS: All tests passed: 5
+# EXPECT_RUNTIME_EXIT: 0
 # Regression test for Maybe<StructType> support
 # Issues #2 and #3 from ISSUES.md claimed this didn't work - this test proves it does
 #
