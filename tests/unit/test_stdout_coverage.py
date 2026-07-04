@@ -85,15 +85,6 @@ QUARANTINE: dict[str, dict] = {
         "reason": "broken-output",
         "issue": "https://github.com/BigWhale/sushi-lang/issues/106",
     },
-    # test-data (stale self-referential paths), tracked separately from compiler bugs
-    "stdlib/io/test_file_exists.sushi": {
-        "reason": "broken-output",
-        "issue": "https://github.com/BigWhale/sushi-lang/issues/108",
-    },
-    "stdlib/io/test_file_is_file.sushi": {
-        "reason": "broken-output",
-        "issue": "https://github.com/BigWhale/sushi-lang/issues/108",
-    },
     # --- no-stdout: matches the print/println scan but emits no assertable runtime output ---
     # (error path taken before print, uncalled printing helper, or empty-collection iteration)
     "array/test_dynamic_arrays_bounds_runtime.sushi": {"reason": "no-stdout", "issue": None},
