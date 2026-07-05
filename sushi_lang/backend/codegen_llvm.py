@@ -29,6 +29,7 @@ from sushi_lang.backend.llvm_utils import LLVMUtils
 from sushi_lang.backend.runtime import LLVMRuntime
 from sushi_lang.backend.memory.scopes import ScopeManager
 from sushi_lang.backend.memory.dynamic_arrays import DynamicArrayManager
+from sushi_lang.backend.memory.moves import MoveTracker
 from sushi_lang.backend.expressions import ExpressionEmitter
 from sushi_lang.backend.statements import StatementEmitter
 from sushi_lang.backend.llvm_functions import LLVMFunctionManager
@@ -70,6 +71,7 @@ class LLVMCodegen:
         self.utils = LLVMUtils(self)
         self.runtime = LLVMRuntime(self)
         self.memory = ScopeManager(self)
+        self.moves = MoveTracker()  # Unified move tracking (arrays, lists, structs, Own<T>)
         self.dynamic_arrays: Optional[DynamicArrayManager] = None  # Will be initialized when builder is available
         self.expressions = ExpressionEmitter(self)
         self.statements = StatementEmitter(self)

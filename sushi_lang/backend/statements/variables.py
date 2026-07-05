@@ -67,7 +67,11 @@ def emit_let(codegen: 'CodegenProtocol', stmt: 'Let') -> None:
         # Register Own<T> and List<T> variables for RAII cleanup
         if isinstance(semantic_type, StructType) and hasattr(codegen, 'dynamic_arrays'):
             if codegen.dynamic_arrays.is_own_type(semantic_type):
-                codegen.dynamic_arrays.register_own(stmt.name, semantic_type)
+                # Own.get() yields a NON-owning borrow that aliases the container's
+                # payload. Binding it must not create a second RAII owner, or the
+                # container and the binding would both free the same pointer (#106).
+                if getattr(stmt.value, 'method', None) != 'get':
+                    codegen.dynamic_arrays.register_own(stmt.name, semantic_type)
             elif codegen.dynamic_arrays.is_list_type(semantic_type):
                 codegen.dynamic_arrays.register_list(stmt.name, semantic_type, slot)
 
@@ -204,8 +208,6 @@ def _emit_dynamic_array_rebind(
     if isinstance(stmt.value, Name):
         source_name = stmt.value.id
         if source_name in codegen.dynamic_arrays.arrays:
-            source_descriptor = codegen.dynamic_arrays.arrays[source_name]
-
             # Nullify the source array (set data=NULL, len=0, cap=0)
             source_slot = codegen.memory.find_local_slot(source_name)
             zero_i32 = ir.Constant(codegen.i32, 0)
@@ -226,7 +228,7 @@ def _emit_dynamic_array_rebind(
             codegen.builder.store(null_ptr, data_ptr_ptr)
 
             # Mark source as moved (prevents cleanup at scope exit)
-            source_descriptor.moved = True
+            codegen.moves.mark(source_name)
 
 
 def _emit_struct_rebind(codegen: 'CodegenProtocol', stmt: 'Rebind', slot: 'ir.Value', val: 'ir.Value') -> None:

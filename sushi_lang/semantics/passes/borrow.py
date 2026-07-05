@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 
 from sushi_lang.semantics.ast import *
 from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, Type
+from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.error_reporter import PassErrorReporter
@@ -280,6 +281,7 @@ class BorrowChecker:
             self._check_expr(expr.receiver)
             for arg in expr.args:
                 self._check_expr(arg)
+            self._maybe_mark_own_alloc_move(expr)
 
         elif isinstance(expr, DotCall):
             # DotCall is the unified X.Y(args) node used before type checking
@@ -287,6 +289,7 @@ class BorrowChecker:
             self._check_expr(expr.receiver)
             for arg in expr.args:
                 self._check_expr(arg)
+            self._maybe_mark_own_alloc_move(expr)
 
         elif isinstance(expr, BinaryOp):
             self._check_expr(expr.left)
@@ -461,6 +464,37 @@ class BorrowChecker:
         while isinstance(current, MemberAccess):
             current = current.receiver
         return current
+
+    def _maybe_mark_own_alloc_move(self, expr: Expr) -> None:
+        """Own.alloc(x) takes ownership of an owning x; mark x moved so a later use of x
+        is a use-after-move (CE2405), matching move semantics for arrays/lists/structs."""
+        if getattr(expr, 'method', None) != 'alloc':
+            return
+        receiver = getattr(expr, 'receiver', None)
+        if not (isinstance(receiver, Name) and receiver.id == 'Own'):
+            return
+        for arg in expr.args:
+            if isinstance(arg, Name) and arg.id in self.borrow_state:
+                state = self.borrow_state[arg.id]
+                if self._type_is_owning(state.var_type):
+                    state.is_moved = True
+
+    def _type_is_owning(self, vt: Optional[Type]) -> bool:
+        """True if a value of this type carries heap ownership (so Own.alloc moves it).
+
+        Handles the declared GenericTypeRef form and the resolved StructType form
+        (Own<...>/List<...>), plus dynamic arrays.
+        """
+        if vt is None:
+            return False
+        if isinstance(vt, DynamicArrayType):
+            return True
+        if isinstance(vt, GenericTypeRef) and vt.base_name in ('Own', 'List'):
+            return True
+        name = getattr(vt, 'name', None)
+        if isinstance(name, str) and (name.startswith('Own<') or name.startswith('List<')):
+            return True
+        return False
 
     def _mark_moved_if_applicable(self, expr: Expr) -> None:
         """Mark a variable as moved if the expression is a simple variable reference to a dynamic array.
