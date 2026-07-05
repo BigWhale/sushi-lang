@@ -110,38 +110,38 @@ fn main() i32:
 
 ## Documentation
 
-📚 **[Complete Documentation](docs/)**
+📚 **[Complete Documentation](https://bigwhale.github.io/sushi-lang/)**
 
 ### Getting Started
-- [Installation and Setup](docs/getting-started.md) - Get Sushi
+- [Installation and Setup](https://bigwhale.github.io/sushi-lang/getting-started/) - Get Sushi
   running on your machine
-- [Language Guide](docs/language-guide.md) - Friendly tour of
+- [Language Guide](https://bigwhale.github.io/sushi-lang/language-guide/) - Friendly tour of
   Sushi's features
-- [Examples](docs/examples/) - Learn by example (21 hands-on
+- [Examples](https://bigwhale.github.io/sushi-lang/examples/) - Learn by example (21 hands-on
   programs)
 
 ### Language Reference
-- [Language Reference](docs/language-reference.md) - Complete syntax
+- [Language Reference](https://bigwhale.github.io/sushi-lang/language-reference/) - Complete syntax
   and semantics
-- [Standard Library](docs/standard-library.md) - Built-in types and
+- [Standard Library](https://bigwhale.github.io/sushi-lang/standard-library/) - Built-in types and
   functions
-- [Error Handling](docs/error-handling.md) - `Result<T>`,
+- [Error Handling](https://bigwhale.github.io/sushi-lang/error-handling/) - `Result<T>`,
   `Maybe<T>`, and `??` operator
-- [Memory Management](docs/memory-management.md) - RAII, references,
+- [Memory Management](https://bigwhale.github.io/sushi-lang/memory-management/) - RAII, references,
   and ownership
-- [Generics](docs/generics.md) - Generic types and compile-time
+- [Generics](https://bigwhale.github.io/sushi-lang/generics/) - Generic types and compile-time
   monomorphization
-- [Perks](docs/perks.md) - Traits/interfaces for polymorphic behavior
+- [Perks](https://bigwhale.github.io/sushi-lang/perks/) - Traits/interfaces for polymorphic behavior
 
 ### Compiler
-- [Compiler Reference](docs/compiler-reference.md) - CLI options and
+- [Compiler Reference](https://bigwhale.github.io/sushi-lang/compiler-reference/) - CLI options and
   optimization levels
-- [Libraries](docs/libraries.md) - Creating and using precompiled libraries
-- [Architecture](docs/internals/architecture.md) - Compiler design
+- [Libraries](https://bigwhale.github.io/sushi-lang/libraries/) - Creating and using precompiled libraries
+- [Architecture](https://bigwhale.github.io/sushi-lang/internals/architecture/) - Compiler design
   and structure
-- [Semantic Passes](docs/internals/semantic-passes.md) - Pass-by-
+- [Semantic Passes](https://bigwhale.github.io/sushi-lang/internals/semantic-passes/) - Pass-by-
   pass analysis
-- [Backend](docs/internals/backend.md) - LLVM code generation
+- [Backend](https://bigwhale.github.io/sushi-lang/internals/backend/) - LLVM code generation
 
 ## Language Highlights
 
@@ -276,7 +276,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-See [docs/design/variadics.md](docs/design/variadics.md) for the full design and Phase-1 limitations.
+See [the variadics design doc](https://bigwhale.github.io/sushi-lang/design/variadics/) for the full design and Phase-1 limitations.
 
 ## Optimization Levels
 
@@ -311,18 +311,18 @@ python tests/run_tests.py --filter hashmap
 
 ## Examples
 
-Check out the [examples directory](docs/examples/) for hands-on
+Check out the [examples directory](https://bigwhale.github.io/sushi-lang/examples/) for hands-on
 learning:
 
-- [01-hello.sushi](docs/examples/01-hello.sushi) - Basic program
+- [01-hello.sushi](https://bigwhale.github.io/sushi-lang/examples/01-hello.sushi) - Basic program
   structure
-- [04-strings.sushi](docs/examples/04-strings.sushi) - String
+- [04-strings.sushi](https://bigwhale.github.io/sushi-lang/examples/04-strings.sushi) - String
   operations
-- [07-result.sushi](docs/examples/07-result.sushi) - Error handling
-- [15-lists.sushi](docs/examples/15-lists.sushi) - Generic lists
-- [16-hashmaps.sushi](docs/examples/16-hashmaps.sushi) - Hash tables
+- [07-result.sushi](https://bigwhale.github.io/sushi-lang/examples/07-result.sushi) - Error handling
+- [15-lists.sushi](https://bigwhale.github.io/sushi-lang/examples/15-lists.sushi) - Generic lists
+- [16-hashmaps.sushi](https://bigwhale.github.io/sushi-lang/examples/16-hashmaps.sushi) - Hash tables
 
-[See all 22 examples →](docs/examples/)
+[See all 22 examples →](https://bigwhale.github.io/sushi-lang/examples/)
 
 ## Project Structure
 
@@ -496,4 +496,4 @@ architecture.
 
 ---
 
-**[📚 Read the full documentation](docs/)** | **[🚀 Get started](docs/getting-started.md)** | **[💡 See examples](docs/examples/)**
+**[📚 Read the full documentation](https://bigwhale.github.io/sushi-lang/)** | **[🚀 Get started](https://bigwhale.github.io/sushi-lang/getting-started/)** | **[💡 See examples](https://bigwhale.github.io/sushi-lang/examples/)**
