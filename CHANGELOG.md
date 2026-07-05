@@ -2,6 +2,34 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [0.9.1] - 2026-07-06
+
+A maintenance release: a new safe process-spawn stdlib primitive (the last self-hosting
+linchpin), the correctness fixes surfaced by the 0.9.0 stdout-correctness test baseline, and a
+documentation-link fix.
+
+### Added
+- Safe process spawning in `sys/process`: `run(string cmd, string[] args) -> Result<ProcessOutput,
+  ProcessError>`. Built on `posix_spawnp` — argv, no shell — it returns the child's exit code plus
+  separately-captured stdout/stderr in `ProcessOutput`; a non-zero exit is `Ok`, and `SpawnFailed`
+  / `SignalReceived` are the `ProcessError` variants. `run("clang", [...])` is verified end to end,
+  completing the text-IR -> toolchain path for self-hosting
+
+### Fixed
+- `Maybe<T>` / `Result<T, E>` `.realise(default)` crashed for a struct payload with a nested
+  aggregate field
+- Nested `Own<Own<T>>` was double-freed on cleanup; ownership is now coherent through the nested box
+- `HashMap.debug()` corrupted string keys/values in its output
+
+### Testing
+- Established a stdout-correctness test baseline: the runtime-output ratchet is at gap 0
+  (`BASELINE = 0`) with a quarantine guard, so a wrong codegen result can no longer pass the suite
+  silently
+- Fixed stale hard-coded paths in the file-I/O tests
+
+### Documentation
+- README documentation links now point to the rendered docs site
+
 ## [0.9.0] - 2026-07-04
 
 A maintenance release: one new language feature — context-typed numeric literals — plus a
