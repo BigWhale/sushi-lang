@@ -21,20 +21,23 @@ fn report(string label, Result<ProcessOutput, ProcessError> r) ~:
     return Result.Ok(~)
 
 fn main() i32:
+    # run() is variadic: trailing args are collected into the argv (no `from([...])`).
     # stdout capture + exit code 0
-    report("echo", run("echo", from(["hello"])))
+    report("echo", run("echo", "hello"))
 
     # non-zero exit is Result.Ok (exit code carried in ProcessOutput)
-    report("exit", run("sh", from(["-c", "exit 3"])))
+    report("exit", run("sh", "-c", "exit 3"))
 
     # stderr captured separately from stdout
-    report("stderr", run("sh", from(["-c", "echo oops 1>&2"])))
+    report("stderr", run("sh", "-c", "echo oops 1>&2"))
 
     # command not found -> Result.Err(ProcessError.SpawnFailed) (posix_spawnp, no shell)
-    report("missing", run("definitely_not_a_program_xyz", from(["x"])))
+    report("missing", run("definitely_not_a_program_xyz", "x"))
 
-    # large output must not deadlock (tmpfile capture, not a bounded pipe)
-    match run("sh", from(["-c", "seq 1 100000"])):
+    # bloom: forward a computed argv array into the variadic slot (large output must
+    # not deadlock -- tmpfile capture, not a bounded pipe).
+    let string[] argv = from(["-c", "seq 1 100000"])
+    match run("sh", argv...):
         Result.Ok(out) -> println("big ok {out.stdout_text.len()}")
         Result.Err(_) -> println("big err")
 

@@ -407,6 +407,13 @@ class BinaryOp(Node):
     right: "Expr"
 
 @dataclass
+class Spread(Node):
+    """A bloomed call argument: `arr...` fans an existing array's elements into a
+    variadic `...T` slot. Only valid as the sole, last trailing argument of a call
+    to a variadic function; the source array is moved (consumed) into the callee."""
+    value: "Expr"   # the array expression being bloomed (e.g. Name("args"))
+
+@dataclass
 class Call(Node):
     callee: Name
     args: List["Expr"]
@@ -545,7 +552,7 @@ class RangeExpr(Node):
     end: "Expr"             # End expression (must evaluate to integer)
     inclusive: bool         # True for ..=, False for ..
 
-Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, StructConstructor, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr]
+Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, StructConstructor, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread]
 
 def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
     """

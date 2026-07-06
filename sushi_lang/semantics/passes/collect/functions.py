@@ -82,22 +82,17 @@ def validate_variadic_params(reporter: 'Reporter', params: List['Param']) -> Non
                 message="a variadic '...T' parameter must be the last parameter")
         return
 
-    # Reject a reference element type (T cannot be &peek/&poke).
+    # Reject a reference element type (T cannot be &peek/&poke). A borrow cannot be
+    # owned or moved into the callee-owned collected array.
     element_ty = vparam.ty.base_type if isinstance(vparam.ty, DynamicArrayType) else vparam.ty
     if isinstance(element_ty, ReferenceType):
         er.emit(reporter, ERR.CE0114, vparam.type_span or vparam.name_span,
                 message="a variadic '...T' element type cannot be a reference")
         return
 
-    # Reject an element type with move semantics (a dynamic array `T[]`). The call
-    # site copies each trailing arg into the synthesized array by value without
-    # moving the source, while the callee recursively destroys the array's elements
-    # at scope exit -- so a moved-only element type would be freed twice. Sushi has
-    # move semantics for dynamic arrays only, so that is the one element type to bar
-    # in v1 (deferred to a future spread/forwarding design).
-    if isinstance(element_ty, DynamicArrayType):
-        er.emit(reporter, ERR.CE0114, vparam.type_span or vparam.name_span,
-                message="a variadic '...T' element type cannot be a dynamic array")
+    # A dynamic-array element type (`...T[]`) is allowed: the call site MOVES each
+    # move-managed source array into the collected array (bloom semantics per element),
+    # so the callee owns and recursively destroys them exactly once with no double-free.
 
 
 def validate_type_pack_params(

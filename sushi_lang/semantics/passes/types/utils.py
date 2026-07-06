@@ -192,6 +192,27 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
                     pass
 
 
+def reject_spread_args(validator: 'TypeValidator', args: List) -> bool:
+    """Reject any bloom spread `arr...` argument in a context that is never variadic.
+
+    A bloom is only valid as the last trailing argument of a variadic function call
+    (a native `...T` function or the variadic `run` builtin). It is never valid in a
+    method call (methods cannot be variadic, CE0115), an enum constructor, or a struct
+    constructor. Emits CE0120 for each spread found and returns True if any were rejected,
+    so callers can short-circuit before type/backend handling that has no Spread support.
+    """
+    from sushi_lang.semantics.ast import Spread
+    found = False
+    for arg in args:
+        if isinstance(arg, Spread):
+            er.emit(validator.reporter, er.ERR.CE0120, arg.loc,
+                    message="bloom argument 'arr...' is only allowed as the last argument "
+                            "of a call to a variadic '...T' function")
+            validator.validate_expression(arg)
+            found = True
+    return found
+
+
 def mark_array_destroyed(validator: 'TypeValidator', name: str) -> None:
     """Mark a dynamic array as destroyed in the current scope."""
     if validator.destroyed_arrays:

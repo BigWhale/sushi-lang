@@ -1,0 +1,14 @@
+# A bloom (`arr...`) forwards an existing array into a `...T` slot instead of
+# passing its elements one at a time. The source array is MOVED into the
+# callee -- do not use `xs` again after the call.
+fn sum(...i32 nums) i32:
+    let i32 total = 0
+    foreach(n in nums.iter()):
+        total := total + n
+    return Result.Ok(total)
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3, 4])
+    let i32 s = sum(xs...).realise(0)   # bloom: xs is moved, not copied
+    println("sum = {s}")
+    return Result.Ok(0)

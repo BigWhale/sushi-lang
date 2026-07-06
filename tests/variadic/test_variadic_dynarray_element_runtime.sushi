@@ -1,0 +1,17 @@
+# A native variadic of dynamic arrays (...i32[]) collects several i32[] arguments
+# into an owned array-of-arrays. Each source array is MOVED into the callee (no
+# double-free): the callee owns and recursively destroys them at scope exit.
+# EXPECT_STDOUT_EXACT: "total = 36\n"
+fn total(...i32[] rows) i32:
+    let i32 sum = 0
+    foreach(row in rows.iter()):
+        foreach(n in row.iter()):
+            sum := sum + n
+    return Result.Ok(sum)
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let i32[] b = from([10, 20])
+    let i32 s = total(a, b).realise(0)
+    println("total = {s}")
+    return Result.Ok(0)

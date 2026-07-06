@@ -68,19 +68,25 @@ def emit_process_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: b
         return codegen.utils.as_i1(result) if to_i1 else result
 
     elif func_name == "run":
-        # run(string cmd, string[] args) -> Result<ProcessOutput, ProcessError>
-        if len(expr.args) != 2:
-            raise_internal_error("CE0023", method="run", expected=2, got=len(expr.args))
+        # run(string cmd, ...string args) -> Result<ProcessOutput, ProcessError>
+        # Variadic: the trailing string arguments are collected (or a single `arr...`
+        # bloomed) into the argv string[], via the same machinery as user variadics.
+        if len(expr.args) < 1:
+            raise_internal_error("CE0023", method="run", expected=1, got=len(expr.args))
+
+        from sushi_lang.backend.expressions.calls.variadic import build_variadic_array
+        from sushi_lang.semantics.typesys import DynamicArrayType
 
         cmd_value = codegen.expressions.emit_expr(expr.args[0])   # string {i8*,i32}
-        args_value = codegen.expressions.emit_expr(expr.args[1])  # string[] {i32,i32,string*}
-
         # emit_expr yields a value for a variable but a pointer-to-slot for a temporary
-        # (e.g. an inline `from([...])`); normalize both to by-value for the call.
+        # (e.g. an inline literal); normalize the command to by-value for the call.
         if isinstance(cmd_value.type, ir.PointerType):
             cmd_value = codegen.builder.load(cmd_value, name="run_cmd_val")
-        if isinstance(args_value.type, ir.PointerType):
-            args_value = codegen.builder.load(args_value, name="run_args_val")
+
+        # Build the owned argv string[] from the trailing args (collect or bloom). The
+        # helper returns a by-value struct, so no extra load is needed.
+        args_value = build_variadic_array(
+            codegen, expr.args[1:], DynamicArrayType(BuiltinType.STRING), "run")
 
         # Build Result<ProcessOutput, ProcessError> from the shared aligned-layout helper
         # so the returned type matches both the .bc and the caller's variable type

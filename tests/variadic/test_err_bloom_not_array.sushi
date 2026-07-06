@@ -1,0 +1,13 @@
+# Blooming a non-array value into a variadic '...T' slot is a type error: the source
+# of `x...` must be a T[], not a scalar. -> CE2006 (expected i32[], got i32).
+# EXPECT_ERROR_CODE: CE2006
+fn sum(...i32 nums) i32:
+    let i32 total = 0
+    foreach(n in nums.iter()):
+        total := total + n
+    return Result.Ok(total)
+
+fn main() i32:
+    let i32 x = 5
+    let i32 s = sum(x...).realise(0)
+    return Result.Ok(0)

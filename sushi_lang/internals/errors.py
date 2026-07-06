@@ -562,7 +562,7 @@ _add(ErrorMessage("CE0113", Severity.ERROR,
 
 _add(ErrorMessage("CE0114", Severity.ERROR,
     "{message}",
-    Category.FUNC, "A variadic '...T' parameter must be the last parameter, a function may declare at most one, and its element type must not be a reference."))
+    Category.FUNC, "A variadic '...T' parameter must be the last parameter, a function may declare at most one, and its element type must not be a reference (a dynamic-array element '...T[]' is allowed and moved per element)."))
 
 _add(ErrorMessage("CE0115", Severity.ERROR,
     "variadic '...T' parameter not allowed in {context}",
@@ -583,6 +583,10 @@ _add(ErrorMessage("CE0118", Severity.ERROR,
 _add(ErrorMessage("CE0119", Severity.ERROR,
     "malformed expand(...): {message}",
     Category.FUNC, "An expand(...) construct is malformed or used outside a type-pack context."))
+
+_add(ErrorMessage("CE0120", Severity.ERROR,
+    "{message}",
+    Category.FUNC, "A bloom argument 'arr...' requires a variadic '...T' parameter and must be the sole, last trailing argument at the call site."))
 
 # Struct errors
 _add(ErrorMessage("CE0004", Severity.ERROR,

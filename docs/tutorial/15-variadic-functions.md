@@ -27,6 +27,30 @@ That's perfect when every argument is an `i32`. But what if you want to accept a
 `string`, and a `bool` in the *same* call? An array can't hold three different types. That's
 where packs come in.
 
+## Forwarding an array: bloom
+
+Sometimes you already *have* the arguments in an array and want to forward the whole thing,
+rather than pulling elements out one at a time. The postfix `...` operator does exactly that —
+Sushi calls it a **bloom**, since the array "opens" and its elements fan out to fill the trailing
+call arguments, mirroring Go's `f(arr...)`:
+
+```sushi
+--8<-- "docs/tutorial/examples/15-variadic-functions/bloom-basics.sushi"
+```
+
+Output:
+
+```
+sum = 10
+```
+
+A bloom is a **move**, not a copy: `xs` is consumed by the call to `sum`, so don't read or pass it
+again afterward. It also has to be a bare variable — you can't bloom a call result, a struct
+field, or an inline array literal (`sum(from([1, 2])...)` doesn't work; bind it to a `let` first).
+And a bloom must be the *only* trailing argument: you can't mix it with individual trailing
+arguments in the same call. Anything else (blooming into a non-variadic parameter, blooming
+alongside other trailing args) is a compile error (**CE0120**).
+
 ## Parameter packs: arguments of different types
 
 A **parameter pack** binds a variable-length list of *concrete, possibly-different* types. It
@@ -135,6 +159,9 @@ reference.
 ## What you learned
 
 - **`...T`** gathers *same-typed* trailing arguments into an owned `T[]` (Chapter 14).
+- **Bloom** (`arr...`) forwards an existing array into a `...T` slot by moving it, instead of
+  passing elements one at a time — the array must be a bare variable, and the sole trailing
+  argument (CE0120 otherwise).
 - **Parameter packs** `...Ts` accept *different-typed* arguments; the type pack `...Ts` and the
   value pack `...Ts args` share a name.
 - **`expand(x in pack):`** is compile-time-unrolled — once per element, each typed concretely —
