@@ -1,0 +1,9 @@
+# T1.3-T1.6: a bare-name lambda param `|x|` infers its type from the binding's
+# fn(i32) -> i32, and the closure captures two locals.
+# EXPECT_STDOUT_EXACT: "17\n"
+fn main() i32:
+    let i32 a = 3
+    let i32 b = 4
+    let fn(i32) -> i32 f = |x| x + a + b
+    println(f(10).realise(0))
+    return Result.Ok(0)

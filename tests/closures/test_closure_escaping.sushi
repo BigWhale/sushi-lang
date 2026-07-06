@@ -1,0 +1,14 @@
+# T1.4-T1.6: an ESCAPING closure. make_adder returns a closure capturing its
+# parameter `n`; the closure outlives make_adder's frame (heap environment) and is
+# called later. (?? is used outside main to avoid CW2511.)
+# EXPECT_STDOUT_EXACT: "15\n"
+fn make_adder(i32 n) fn(i32) -> i32:
+    return Result.Ok(|i32 x| x + n)
+
+fn use_adder() i32:
+    let fn(i32) -> i32 add5 = make_adder(5)??
+    return Result.Ok(add5(10)??)
+
+fn main() i32:
+    println(use_adder().realise(0))
+    return Result.Ok(0)

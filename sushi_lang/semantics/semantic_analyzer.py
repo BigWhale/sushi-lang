@@ -205,6 +205,12 @@ class SemanticAnalyzer:
         for extend_def in self.monomorphized_extensions:
             type_validator._validate_extension_method(extend_def)
 
+        # Pass 2.5: lambda-lifting (needs resolved capture/param types from the type
+        # pass; its synthesized functions must be borrow-checked below).
+        from sushi_lang.semantics.passes.lambda_lift import LambdaLifter
+        LambdaLifter(self.structs, self.funcs, program,
+                     annotate=type_validator._validate_function).run()
+
         # Pass 3: borrow checking (reference safety)
         borrow_checker = BorrowChecker(self.reporter, struct_names=self.structs.by_name if self.structs else None)
         borrow_checker.run(program)
@@ -451,6 +457,11 @@ class SemanticAnalyzer:
             # Pass 2: type validation with global symbols (unit-specific reporter)
             type_validator = TypeValidator(unit_reporter, self.constants, self.structs, self.enums, self.funcs, self.extensions, self.generic_enums, self.generic_structs, self.perks, self.perk_impls, self.generic_extensions, self.generic_funcs, current_unit_name=unit.name, monomorphized_functions=monomorphizer.monomorphized_functions, external_table=self.externals)
             type_validator.run(unit.ast)
+
+            # Pass 2.5: lambda-lifting (between type and borrow, per unit).
+            from sushi_lang.semantics.passes.lambda_lift import LambdaLifter
+            LambdaLifter(self.structs, self.funcs, unit.ast,
+                         annotate=type_validator._validate_function).run()
 
             # Pass 3: borrow checking (unit-specific reporter)
             borrow_checker = BorrowChecker(unit_reporter, struct_names=self.structs.by_name if self.structs else None)

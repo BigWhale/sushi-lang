@@ -439,6 +439,9 @@ class Lambda(Node):
     # binding/argument context, used to infer bare-param types (`|x|`).
     resolved_type: Optional[Type] = None
     expected_type: Optional[Type] = None
+    # Filled by the lambda-lifting pass: the synthesized environment StructType
+    # holding the captured values (backend emit_lambda heap-allocs and populates it).
+    env_struct: Optional[Type] = None
 
 
 @dataclass
