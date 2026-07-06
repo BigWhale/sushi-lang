@@ -1,0 +1,13 @@
+# Generic higher-order function called with a bare function REFERENCE (not a lambda):
+# apply<T>(fn(T) -> T, T). This was CE2060 before Gap C (inference could not bind T
+# through a function-typed argument). inc(41) -> 42.
+# EXPECT_STDOUT_EXACT: "42\n"
+fn apply<T>(fn(T) -> T f, T x) T:
+    return Result.Ok(f(x)??)
+
+fn inc(i32 n) i32:
+    return Result.Ok(n + 1)
+
+fn main() i32:
+    println(apply(inc, 41).realise(-1))
+    return Result.Ok(0)

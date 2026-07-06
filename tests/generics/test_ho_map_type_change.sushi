@@ -1,0 +1,26 @@
+# Generic map<T, U> where U differs from T: map i32 -> bool. Confirms the two type params
+# are inferred and substituted independently (T=i32 from List<i32>, U=bool from the fn
+# return). Signs of [-1, 5, -3] against 0 -> [false, true, false]; one true.
+# EXPECT_STDOUT_EXACT: "1\n"
+fn map<T, U>(List<T> xs, fn(T) -> U f) List<U>:
+    let List<U> out = List.new()
+    foreach(x in xs.iter()):
+        out.push(f(x)??)
+    return Result.Ok(out)
+
+fn run() i32:
+    let i32 pivot = 0
+    let List<i32> xs = List.new()
+    xs.push(-1)
+    xs.push(5)
+    xs.push(-3)
+    let List<bool> signs = map(xs, |i32 x| x > pivot)??
+    let i32 count = 0
+    foreach(b in signs.iter()):
+        if (b):
+            count := count + 1
+    return Result.Ok(count)
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)

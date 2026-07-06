@@ -1,0 +1,21 @@
+# Generic higher-order function: fold<T, U>(List<T>, U, fn(U, T) -> U) with a capturing
+# combiner. Two type params both inferred from the args (U from `init` and the fn). Sum
+# [1,2,3] onto base 100 -> 106.
+# EXPECT_STDOUT_EXACT: "106\n"
+fn fold<T, U>(List<T> xs, U init, fn(U, T) -> U f) U:
+    let U acc = init
+    foreach(x in xs.iter()):
+        acc := f(acc, x)??
+    return Result.Ok(acc)
+
+fn run() i32:
+    let i32 base = 100
+    let List<i32> xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    xs.push(3)
+    return Result.Ok(fold(xs, base, |i32 acc, i32 x| acc + x)??)
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)

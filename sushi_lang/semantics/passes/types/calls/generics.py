@@ -317,6 +317,20 @@ def _unify_types_for_inference(
 
             return True
 
+    # Case 5: Function types (e.g., fn(T) -> U). Unify each parameter type and the
+    # return type so type params nested inside a function-typed argument (a fn ref,
+    # lambda, or fn-value) can be inferred -- the enabler for generic higher-order
+    # functions like map<T, U>(List<T>, fn(T) -> U).
+    from sushi_lang.semantics.typesys import FunctionType
+
+    if isinstance(param_type, FunctionType) and isinstance(arg_type, FunctionType):
+        if len(param_type.param_types) != len(arg_type.param_types):
+            return False
+        for p_param, a_param in zip(param_type.param_types, arg_type.param_types):
+            if not _unify_types_for_inference(p_param, a_param, type_param_map):
+                return False
+        return _unify_types_for_inference(param_type.ok_type, arg_type.ok_type, type_param_map)
+
     return False
 
 

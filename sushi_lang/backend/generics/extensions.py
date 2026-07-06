@@ -56,13 +56,22 @@ def substitute_type_params(
         return GenericTypeRef(base_name=ty.base_name, type_args=new_type_args)
 
     # Recursive case: ArrayType, DynamicArrayType - substitute element type
-    from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
+    from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, FunctionType
     if isinstance(ty, ArrayType):
         new_base = substitute_type_params(ty.base_type, substitution)
         return ArrayType(base_type=new_base, size=ty.size)
     elif isinstance(ty, DynamicArrayType):
         new_base = substitute_type_params(ty.base_type, substitution)
         return DynamicArrayType(base_type=new_base)
+
+    # Recursive case: FunctionType - substitute param/ok/err types (preserve captures)
+    elif isinstance(ty, FunctionType):
+        return FunctionType(
+            param_types=tuple(substitute_type_params(p, substitution) for p in ty.param_types),
+            ok_type=substitute_type_params(ty.ok_type, substitution),
+            err_type=substitute_type_params(ty.err_type, substitution),
+            captures=ty.captures,
+        )
 
     # Default: return type as-is (BuiltinType, StructType, etc.)
     return ty

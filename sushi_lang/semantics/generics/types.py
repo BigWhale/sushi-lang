@@ -279,7 +279,7 @@ def _substitute_type_params(ty: Type, substitution: dict[str, Type]) -> Type:
     Returns:
         Type with all type parameters substituted
     """
-    from sushi_lang.semantics.typesys import PointerType, ArrayType, DynamicArrayType, ReferenceType
+    from sushi_lang.semantics.typesys import PointerType, ArrayType, DynamicArrayType, ReferenceType, FunctionType
 
     # Direct type parameter
     if isinstance(ty, TypeParameter):
@@ -307,6 +307,16 @@ def _substitute_type_params(ty: Type, substitution: dict[str, Type]) -> Type:
     elif isinstance(ty, ReferenceType):
         substituted_ref = _substitute_type_params(ty.referenced_type, substitution)
         return ReferenceType(referenced_type=substituted_ref, mutability=ty.mutability)
+
+    # Function type: substitute in parameter, ok, and err types (preserve captures,
+    # which are metadata excluded from identity but relevant to ownership)
+    elif isinstance(ty, FunctionType):
+        return FunctionType(
+            param_types=tuple(_substitute_type_params(p, substitution) for p in ty.param_types),
+            ok_type=_substitute_type_params(ty.ok_type, substitution),
+            err_type=_substitute_type_params(ty.err_type, substitution),
+            captures=ty.captures,
+        )
 
     # No substitution needed for other types
     else:

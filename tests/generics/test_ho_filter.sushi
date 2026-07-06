@@ -1,0 +1,23 @@
+# Generic higher-order function: filter<T>(List<T>, fn(T) -> bool) with a capturing
+# predicate (captures `threshold`). Keeps elements > 2 from [1,2,3,4] -> [3,4], len 2.
+# EXPECT_STDOUT_EXACT: "2\n"
+fn filter<T>(List<T> xs, fn(T) -> bool pred) List<T>:
+    let List<T> out = List.new()
+    foreach(x in xs.iter()):
+        if (pred(x)??):
+            out.push(x)
+    return Result.Ok(out)
+
+fn run() i32:
+    let i32 threshold = 2
+    let List<i32> xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    xs.push(3)
+    xs.push(4)
+    let List<i32> big = filter(xs, |i32 x| x > threshold)??
+    return Result.Ok(big.len())
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)

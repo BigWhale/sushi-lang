@@ -40,9 +40,14 @@ Landed (in dependency order — see phase descriptions below for what each cover
 
 Outstanding:
 
-- **T1.8** — stdlib combinators (`List.map`/`.filter`/`.fold`, `compose`). Deferred: there is no
-  Sushi-authored stdlib today (every `List` method is a Python IR emitter), so this hinges on a
-  separate decision about a Sushi-source stdlib/prelude path.
+- **T1.8 — groundwork landed; stdlib delivery deferred.** Generic higher-order functions now work
+  in Sushi (see `generic-higher-order.md`): `map`/`filter`/`fold` are expressible and validated as
+  **free generic functions** (`map(xs, f)`) with capturing-closure or fn-ref arguments. Still
+  outstanding: the UFCS *method* form (`xs.map<U>(...)` — needs extension-method type params **and**
+  making `List<T>` extensible), `compose` (its returned lambda *calls* captured closures — Tier 2
+  T2.4), and where the combinators ship (no Sushi-authored stdlib exists yet). A pre-existing
+  closures leak surfaced: a capturing closure passed *inline* as a call argument (`map(xs, |x| ...)`)
+  leaks its env — bind it to a local first as a workaround (details in `generic-higher-order.md`).
 
 > **Resuming this work:** `closures-tier1-handoff.md` (same directory) is the detailed handoff —
 > current code state, the exact stubs (`drop_ptr = null`; owned-capture rejection), file:line

@@ -23,17 +23,21 @@ class TypeInferrer:
     without requiring full type checking infrastructure.
     """
 
-    def __init__(self, variable_types: dict[str, "Type"], struct_table: dict, enum_table: dict):
+    def __init__(self, variable_types: dict[str, "Type"], struct_table: dict, enum_table: dict,
+                 func_table: dict | None = None):
         """Initialize type inferrer.
 
         Args:
             variable_types: Map of variable names to their declared types
             struct_table: Table of struct definitions
             enum_table: Table of enum definitions
+            func_table: Table of plain top-level functions (name -> FuncSig), for
+                presenting a FunctionType for a bare function reference argument
         """
         self.variable_types = variable_types
         self.struct_table = struct_table
         self.enum_table = enum_table
+        self.func_table = func_table or {}
 
     def infer_simple_receiver_type(self, receiver) -> "Type | None":
         """Simple type inference for method call receivers.
@@ -166,7 +170,10 @@ class TypeInferrer:
         Returns:
             Inferred type or None if can't infer
         """
-        from sushi_lang.semantics.ast import IntLit, FloatLit, StringLit, BoolLit, Name, EnumConstructor, CastExpr, DotCall
+        from sushi_lang.semantics.ast import (
+            IntLit, FloatLit, StringLit, BoolLit, Name, EnumConstructor, CastExpr, DotCall,
+            Lambda, BinaryOp,
+        )
 
         # Integer literal
         if isinstance(expr, IntLit):
@@ -196,6 +203,22 @@ class TypeInferrer:
                 # Resolve UnknownType to concrete type if possible
                 resolved = resolve_unknown_type(var_type, self.struct_table, self.enum_table)
                 return resolved if resolved is not None else var_type
+            # A bare reference to a plain top-level function used as a higher-order
+            # argument: present its FunctionType (mirrors function_value_type_of).
+            sig = self.func_table.get(var_name) if self.func_table else None
+            if sig is not None:
+                from sushi_lang.semantics.typesys import FunctionType, UnknownType
+                params = getattr(sig, "params", None)
+                if params is not None and not any(
+                    getattr(p, "is_variadic", False) or getattr(p, "is_pack", False) for p in params
+                ):
+                    param_types = tuple(getattr(p, "ty", None) for p in params)
+                    if not any(pt is None for pt in param_types):
+                        ok_type = getattr(sig, "ret_type", None)
+                        if ok_type is not None:
+                            err_type = getattr(sig, "err_type", None) or UnknownType("StdError")
+                            return FunctionType(param_types=param_types, ok_type=ok_type,
+                                                err_type=err_type)
             return None
 
         # Enum constructor (e.g., Result.Ok(42), Maybe.Some(5))
@@ -221,6 +244,40 @@ class TypeInferrer:
                 if self.struct_table and receiver.id in self.struct_table:
                     return self.struct_table[receiver.id]
             return None
+
+        # Binary operation: comparison/logical ops are bool; arithmetic/bitwise ops take
+        # the operand type. Lets a lambda body like `x * 2` or `x > 3` be inferred so a
+        # function-typed argument's return type is known at instantiation collection.
+        if isinstance(expr, BinaryOp):
+            if expr.op in ("==", "!=", "<", "<=", ">", ">=", "and", "or", "xor"):
+                return BuiltinType.BOOL
+            left = self.infer_simple_expr_type(expr.left)
+            return left if left is not None else self.infer_simple_expr_type(expr.right)
+
+        # Lambda: present the FunctionType so type params nested in a function-typed
+        # argument (fn(T) -> U) can be inferred. Only TYPED params are supported here --
+        # a bare-param lambda's types come from expected-type propagation (Pass 2), which
+        # is not available at instantiation collection, so it returns None (best-effort).
+        if isinstance(expr, Lambda):
+            from sushi_lang.semantics.typesys import FunctionType, UnknownType
+            param_types = tuple(p.ty for p in expr.params)
+            if any(pt is None for pt in param_types):
+                return None
+            # ok_type: an explicit `-> T` annotation wins; otherwise infer an
+            # expression body with the lambda params in scope.
+            ok_type = expr.ret
+            if ok_type is None and not expr.is_block_body:
+                saved = self.variable_types
+                self.variable_types = dict(saved)
+                for p in expr.params:
+                    if p.ty is not None:
+                        self.variable_types[p.name] = p.ty
+                ok_type = self.infer_simple_expr_type(expr.body)
+                self.variable_types = saved
+            if ok_type is None:
+                return None
+            return FunctionType(param_types=param_types, ok_type=ok_type,
+                                err_type=UnknownType("StdError"))
 
         # For complex expressions, we can't infer without full type checking
         return None
@@ -316,6 +373,18 @@ class TypeInferrer:
                         return False
 
                 return True
+
+        # Case 4: Function types (fn(T) -> U). Twin of _unify_types_for_inference
+        # (Pass 2): unify each parameter type and the return type so type params nested
+        # inside a function-typed argument are inferred at instantiation collection.
+        from sushi_lang.semantics.typesys import FunctionType
+        if isinstance(param_type, FunctionType) and isinstance(arg_type, FunctionType):
+            if len(param_type.param_types) != len(arg_type.param_types):
+                return False
+            for p_param, a_param in zip(param_type.param_types, arg_type.param_types):
+                if not self.unify_types(p_param, a_param, type_param_map):
+                    return False
+            return self.unify_types(param_type.ok_type, arg_type.ok_type, type_param_map)
 
         return False
 
