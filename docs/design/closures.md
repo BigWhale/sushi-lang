@@ -1,11 +1,44 @@
 # Design: Closures
 
-**Status:** design only — not yet implemented. Successor to `first-class-functions.md` (v1 FCF,
-PR #91). Scope: capturing closures + lambda literals, delivered in two tiers. T1 is the minimal
-*but real* slice (escaping closures, heap env, copy + move capture); T2 is the ergonomic and
-hard-case remainder (`&poke` capture, bound methods, generic-fn refs, `Call.callee` widening,
-C callbacks). Additive over v1: a non-capturing function value stays a valid closure with a null
-environment, so all v1 code keeps compiling and running.
+**Status:** Tier 1 partially implemented (T1.0-T1.4, T1.6, T1.7 landed; T1.5 env RAII/move-capture
+and T1.8 stdlib combinators outstanding — see "Implementation status" below). Successor to
+`first-class-functions.md` (v1 FCF, PR #91). Scope: capturing closures + lambda literals, delivered
+in two tiers. T1 is the minimal *but real* slice (escaping closures, heap env, copy + move
+capture); T2 is the ergonomic and hard-case remainder (`&poke` capture, bound methods, generic-fn
+refs, `Call.callee` widening, C callbacks). Additive over v1: a non-capturing function value stays
+a valid closure with a null environment, so all v1 code keeps compiling and running.
+
+## Implementation status
+
+Landed (in dependency order — see phase descriptions below for what each covers):
+
+- **T1.0** — fat-pointer ABI + sizing (`FunctionType.captures`, 24-byte lowering).
+- **T1.1** — lambda grammar/AST (`lambda_expr`, `lambda_block`, `Lambda` node).
+- **T1.2** — capture analysis (free-name recording in the scope pass).
+- **T1.3** — type-checking + capture legality, including CE2094 for borrow capture.
+- **T1.4** — lambda-lifting pass (env struct + lifted function synthesis).
+- **T1.6** — backend materialization (`emit_lambda`, env heap-alloc, fat-value construction).
+- **T1.7** — indirect-call env threading; CE2094 additionally rejects owning/variadic
+  fn-value *parameter* types (dodging the indirect path's missing deep-copy).
+
+Outstanding:
+
+- **T1.5** — move-capture of owned types (dynamic array/`List<T>`/`Own<T>`) and environment RAII
+  (scope-exit free via `drop_ptr`). Currently owned-value capture is rejected (CE2094) rather than
+  silently aliased, and a capturing closure's heap environment is never freed (safe — no
+  double-free — but leaked). This is the main remaining correctness item.
+- **T1.8** — stdlib combinators (`List.map`/`.filter`/`.fold`, `compose`) authored in Sushi source
+  atop the now-working indirect-call path.
+
+The `|` prefix/infix disambiguation and the `|~|` zero-parameter form (see below) were validated
+by running the extended grammar through the parser generator with no new conflicts, as the T1.1
+acceptance gate required. Block-body lambdas (`|params|: <block>`) are admitted only as a `let`
+RHS — the grammar does not reach them from `expr` (see below), so a block-body lambda used directly
+as a call argument is a parse error; bind it to a `let` first.
+
+Test coverage: `tests/closures/` (positive: capture, escaping, bare-param inference, struct-field
+fat layout, thunk-name-collision regression; negative: borrow capture, owned capture, owning
+fn-value param).
 
 ## Summary
 
@@ -71,8 +104,10 @@ lambda `|` is disambiguated **by position**: a `|` appearing where an *operand/a
 (prefix position — start of an expression, call argument, RHS of `=`) opens a lambda parameter
 list; a `|` in *infix* position (between two operands) is bitwise-or. Inside the expression body
 of a lambda, a subsequent `|` is infix bitwise-or as usual (`|x| x | 2` = lambda with body
-`x | 2`). This is a clean earley-parser disambiguation; the grammar must be validated through the
-parser generator as an acceptance gate (see Risks).
+`x | 2`). Sushi's parser is LALR (`sushi_lang/internals/parser.py:54`), not Earley, so this
+disambiguation must be resolvable by the grammar's shift/reduce tables alone; the grammar must be
+validated through the parser generator as an acceptance gate (see Risks). Implementation note: this
+was validated with no new conflicts (see "Implementation status" above).
 
 ### Function types (unchanged from v1)
 

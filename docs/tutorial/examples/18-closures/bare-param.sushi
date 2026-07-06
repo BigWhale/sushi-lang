@@ -1,0 +1,8 @@
+# A bare-name lambda param (`|x|`, no type) infers its type from the expected
+# fn(i32) -> i32 on the binding. The lambda captures two locals, not just one.
+fn main() i32:
+    let i32 a = 3
+    let i32 b = 4
+    let fn(i32) -> i32 f = |x| x + a + b
+    println(f(10).realise(0))    # 17
+    return Result.Ok(0)

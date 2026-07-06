@@ -1,5 +1,6 @@
 # A function value: reference a named function, pass it to another function,
-# and call through the parameter. No closures -- it is just a function pointer.
+# and call through the parameter. A plain reference like this carries no
+# captured state -- see chapter 18 for closures, which do.
 fn add_one(i32 x) i32:
     return Result.Ok(x + 1)
 
