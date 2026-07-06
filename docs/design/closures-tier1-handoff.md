@@ -215,25 +215,31 @@ needs get-moves/refcounting, deferred.
 
 ## 3. T1.8 — stdlib combinators (`map`/`filter`/`fold`, `compose`)
 
-**Foundation is proven:** a capturing closure passed to a higher-order function and called returns
-correctly (verified: `apply_twice(f, 5)` with `f = |i32 x| x + step` → 25). So combinators are
-"just" Sushi source once written.
+**Groundwork landed** (branch `feature-generic-higher-order`; see
+`docs/design/generic-higher-order.md` for the detailed design + implementation map). The real
+blocker was not "where stdlib lives" but that **generic higher-order functions did not compile at
+all** (even `fn apply<T>(fn(T)->T f, T x) T` was CE2060). Two gaps were closed:
 
-- Author `List.map` / `List.filter` / `List.fold` in Sushi stdlib source
-  (`sushi_lang/sushi_stdlib/src/collections/`), as **generic extension methods with fn-typed
-  params**, e.g. conceptually `extend List<T> map<U>(fn(T) -> U f) List<U>`. First confirm the
-  current level of support for generic extension methods that take a `fn(...)` parameter and
-  monomorphize — that's the main unknown. They only ever *call* the fn param (never store it), so
-  they are legal under the T1.7 non-owning-param rule.
-- `compose(f, g)` returns `|x| f(g(x))`, which **captures `f` and `g`** (function values). A
-  *capturing* closure captured by another closure is an **owned** capture (a capturing
-  `FunctionType` is owning), so **`compose` over capturing closures depends on T1.5 move-capture**.
-  `compose` over *non-capturing* fn refs works today (they are copyable). Note this dependency when
-  scoping T1.8.
+- **Gap C** — type inference now binds type params nested in a `fn(T) -> U` argument (a
+  `FunctionType` branch in both twin unifiers; Pass 1.5 presents a `FunctionType` for a typed-param
+  lambda or a fn reference).
+- **Gap A** — monomorphization now substitutes `FunctionType` (branch added to all three
+  substitution routines).
 
-**T1.5 has landed**, so the general `compose` (which captures its two fn args — a *capturing*
-closure captured by another closure) now has its move-capture prerequisite. `map`/`filter`/`fold`
-over copyable elements were always independent of T1.5.
+`map` / `filter` / `fold` are validated as **free generic functions** (`tests/generics/test_ho_*`)
+with capturing-closure and fn-ref arguments.
+
+**Still outstanding (deferred, documented in `generic-higher-order.md`):**
+- The UFCS **method form** `xs.map<U>(...)` — needs **Gap B** (method-level type params on `extend`:
+  grammar + AST + collect + call-site inference for method params + on-demand extension
+  monomorphization) and **Gap D** (`List<T>` is not extensible at all — provider-backed, both
+  concrete and generic extends fail).
+- **`compose`** — its returned lambda calls the captured `f`/`g` (a non-`Name` callee), which needs
+  Tier 2 T2.4 `Call.callee` widening; graceful compile error today.
+- **Where the combinators ship** — no Sushi-authored stdlib exists; a prelude / source-stdlib path
+  is a separate decision.
+- **Pre-existing leak:** an inline capturing-closure call argument (`map(xs, |x| ...)`) leaks its
+  env (~16 B); bind to a local first as a workaround. Independent of Gaps C/A.
 
 ---
 

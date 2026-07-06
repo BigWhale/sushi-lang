@@ -87,7 +87,8 @@ class SemanticAnalyzer:
             struct_table=self.structs.by_name,
             enum_table=self.enums.by_name,
             generic_structs=self.generic_structs.by_name,
-            generic_funcs=self.generic_funcs.by_name
+            generic_funcs=self.generic_funcs.by_name,
+            func_table=self.funcs.by_name
         )
         type_instantiations, func_instantiations = instantiation_collector.run(program)
 
@@ -328,7 +329,8 @@ class SemanticAnalyzer:
             struct_table=self.structs.by_name,
             enum_table=self.enums.by_name,
             generic_structs=self.generic_structs.by_name,
-            generic_funcs=self.generic_funcs.by_name
+            generic_funcs=self.generic_funcs.by_name,
+            func_table=self.funcs.by_name
         )
         for unit in compilation_order:
             if unit.ast is not None:

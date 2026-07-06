@@ -173,6 +173,18 @@ class TypeSubstitutor:
                 type_args=tuple(new_type_args)
             )
 
+        # For function types (fn(T) -> U), substitute the parameter, ok, and err types.
+        # Captures are metadata (excluded from type identity) but drive ownership, so
+        # carry them through unchanged.
+        from sushi_lang.semantics.typesys import FunctionType
+        if isinstance(ty, FunctionType):
+            return FunctionType(
+                param_types=tuple(self.substitute_type(p, substitution) for p in ty.param_types),
+                ok_type=self.substitute_type(ty.ok_type, substitution),
+                err_type=self.substitute_type(ty.err_type, substitution),
+                captures=ty.captures,
+            )
+
         # For all other types (BuiltinType, etc.), return as-is
         return ty
 

@@ -67,6 +67,10 @@ class InstantiationCollector:
     # NEW: Generic function table for checking if a function name refers to a generic function
     generic_funcs: dict | None = field(default=None)
 
+    # Plain (non-generic) top-level function table (name -> FuncSig), used to present a
+    # FunctionType for a bare function reference passed as a higher-order argument.
+    func_table: dict | None = field(default=None)
+
     # Simple variable type table for tracking explicitly typed variables in current scope
     # Maps variable name -> type for variables with explicit type annotations
     variable_types: dict[str, "Type"] = field(default_factory=dict)
@@ -90,6 +94,7 @@ class InstantiationCollector:
             variable_types=self.variable_types,
             struct_table=self.struct_table or {},
             enum_table=self.enum_table or {},
+            func_table=self.func_table or {},
         )
 
         expression_scanner = ExpressionScanner(
