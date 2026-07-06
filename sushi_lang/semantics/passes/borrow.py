@@ -22,6 +22,7 @@ from typing import Dict, Set, Optional
 from dataclasses import dataclass, field
 
 from sushi_lang.semantics.ast import *
+from sushi_lang.semantics.ast import Lambda
 from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, Type, is_owning_type
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.internals.report import Reporter, Span
@@ -334,6 +335,17 @@ class BorrowChecker:
             for part in expr.parts:
                 if not isinstance(part, str):
                     self._check_expr(part)
+
+        elif isinstance(expr, Lambda):
+            # Move-capture: an owned captured value (dynamic array / List / Own /
+            # capturing closure) is moved into the closure's environment, so a later
+            # use of the outer binding is a use-after-move (CE2405). Copyable captures
+            # (primitives, strings) stay usable.
+            for cap in (expr.captures or []):
+                if isinstance(cap.name, str) and cap.name in self.borrow_state:
+                    state = self.borrow_state[cap.name]
+                    if self._type_is_owning(cap.ty):
+                        state.is_moved = True
 
         # Literals and other leaf expressions don't need checking
 

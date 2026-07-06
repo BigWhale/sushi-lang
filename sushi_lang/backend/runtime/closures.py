@@ -110,16 +110,76 @@ def materialize_function_ref(
     return build_closure_value(codegen, fn_ptr_i8, null_ptr(codegen), null_ptr(codegen))
 
 
+def get_or_create_env_drop(codegen: "LLVMCodegen", env_struct) -> ir.Function:
+    """Return (creating once, cached) the type-erased env destructor for a closure.
+
+        void __closure_env_N.__closure_drop(i8* env):
+            <destroy each owned captured field>
+            free(env)
+
+    Its address is stored in the fat value's `drop_ptr` slot; RAII frees the env by
+    calling through it (guarded by `drop_ptr != null`). Only *owned* captured fields
+    (move-captured dynamic arrays / `List<T>` / `Own<T>` / nested capturing closures)
+    are destroyed -- copy-captured primitives/strings/copyable structs share nothing
+    with the env, so the env just frees its buffer. The `.` in the symbol cannot appear
+    in a Sushi `NAME`, so it never collides with a user function; a cache hit also
+    re-checks the signature (mirroring `synthesize_thunk`).
+    """
+    from sushi_lang.backend.destructors import emit_value_destructor
+    from sushi_lang.semantics.typesys import is_owning_type
+
+    drop_name = f"{env_struct.name}.__closure_drop"
+    drop_ty = ir.FunctionType(ir.VoidType(), [codegen.types.str_ptr])
+    existing = codegen.module.globals.get(drop_name)
+    if isinstance(existing, ir.Function) and existing.function_type == drop_ty:
+        return existing
+
+    fn = ir.Function(codegen.module, drop_ty, name=drop_name)
+    fn.linkage = "internal"
+    b = ir.IRBuilder(fn.append_basic_block("entry"))
+    env_i8 = fn.args[0]
+    env_ll = codegen.types.ll_type(env_struct)
+    env_ptr = b.bitcast(env_i8, ir.PointerType(env_ll), name="env_typed")
+
+    # Destroy owned captured fields before freeing the buffer. The destructor helpers
+    # reach for codegen.builder / codegen.func (loop blocks, element frees), so point
+    # them at the drop fn while emitting, then restore the caller's context.
+    owned = [(i, fty) for i, (_, fty) in enumerate(env_struct.fields) if is_owning_type(fty)]
+    if owned:
+        saved_builder, saved_func = codegen.builder, codegen.func
+        codegen.builder, codegen.func = b, fn
+        try:
+            i32 = codegen.types.i32
+            zero = ir.Constant(i32, 0)
+            for idx, fty in owned:
+                field_ptr = b.gep(env_ptr, [zero, ir.Constant(i32, idx)], inbounds=True, name="cap_field")
+                da = codegen.dynamic_arrays
+                if da is not None and da.is_list_type(fty):
+                    from sushi_lang.backend.generics.list.methods_destroy import emit_list_destroy
+                    emit_list_destroy(codegen, field_ptr, fty)
+                else:
+                    emit_value_destructor(codegen, b, field_ptr, fty)
+        finally:
+            codegen.builder, codegen.func = saved_builder, saved_func
+
+    free_func = codegen.get_free_func()
+    b.call(free_func, [env_i8])
+    b.ret_void()
+    return fn
+
+
 def emit_lambda(codegen: "LLVMCodegen", lam, to_i1: bool) -> ir.Value:
     """Materialize a lambda literal as a function value at its use site.
 
     Non-capturing: `{&__lambda_N, null, null}` (the lifted fn ignores its env slot).
-    Capturing: heap-allocate the environment struct, copy each captured value into it,
-    and build `{&__lambda_N, env_ptr, drop_ptr}`. The `drop_ptr` is null in T1.4/T1.6;
-    T1.5 wires the env destructor here so RAII frees the environment.
+    Capturing: heap-allocate the environment struct, populate each captured value into
+    it (copy for copyable captures, move for owned captures), and build
+    `{&__lambda_N, env_ptr, drop_ptr}` where `drop_ptr` is the env destructor so RAII
+    frees the environment.
     """
     from sushi_lang.internals.errors import raise_internal_error
     from sushi_lang.semantics.ast import Name as _Name
+    from sushi_lang.semantics.typesys import is_owning_type
 
     lifted = codegen.funcs.get(getattr(lam, "lifted_name", None))
     if lifted is None:
@@ -131,7 +191,7 @@ def emit_lambda(codegen: "LLVMCodegen", lam, to_i1: bool) -> ir.Value:
         # No environment: pass a null env; the lifted body never reads it.
         return build_closure_value(codegen, fn_ptr_i8, null_ptr(codegen), null_ptr(codegen))
 
-    # Heap-allocate the environment struct and copy captured values into it.
+    # Heap-allocate the environment struct and populate captured values into it.
     env_struct = lam.env_struct
     env_ll = codegen.types.ll_type(env_struct)
     size = codegen.types.get_type_size_bytes(env_struct)
@@ -145,9 +205,16 @@ def emit_lambda(codegen: "LLVMCodegen", lam, to_i1: bool) -> ir.Value:
         value = codegen.expressions.emit_expr(_Name(id=cap.name, loc=lam.loc))
         field_ptr = codegen.builder.gep(env_ptr, [zero, ir.Constant(i32, idx)], inbounds=True)
         codegen.builder.store(value, field_ptr)
+        # Move-capture: an owned value (dynamic array / List / Own / capturing closure)
+        # is moved into the env, which now owns it and frees it in the env destructor.
+        # Mark the outer binding moved so its own scope exit does not also free it.
+        if is_owning_type(cap.ty):
+            codegen.moves.mark(cap.name)
 
     env_i8 = codegen.builder.bitcast(env_ptr, codegen.types.str_ptr)
-    return build_closure_value(codegen, fn_ptr_i8, env_i8, null_ptr(codegen))
+    drop_fn = get_or_create_env_drop(codegen, env_struct)
+    drop_i8 = codegen.builder.bitcast(drop_fn, codegen.types.str_ptr)
+    return build_closure_value(codegen, fn_ptr_i8, env_i8, drop_i8)
 
 
 def emit_indirect_call(

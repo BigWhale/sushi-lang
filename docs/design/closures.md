@@ -1,7 +1,7 @@
 # Design: Closures
 
-**Status:** Tier 1 partially implemented (T1.0-T1.4, T1.6, T1.7 landed; T1.5 env RAII/move-capture
-and T1.8 stdlib combinators outstanding — see "Implementation status" below). Successor to
+**Status:** Tier 1 nearly complete (T1.0-T1.7 landed, including T1.5 env RAII + move-capture;
+T1.8 stdlib combinators outstanding — see "Implementation status" below). Successor to
 `first-class-functions.md` (v1 FCF, PR #91). Scope: capturing closures + lambda literals, delivered
 in two tiers. T1 is the minimal *but real* slice (escaping closures, heap env, copy + move
 capture); T2 is the ergonomic and hard-case remainder (`&poke` capture, bound methods, generic-fn
@@ -20,15 +20,25 @@ Landed (in dependency order — see phase descriptions below for what each cover
 - **T1.6** — backend materialization (`emit_lambda`, env heap-alloc, fat-value construction).
 - **T1.7** — indirect-call env threading; CE2094 additionally rejects owning/variadic
   fn-value *parameter* types (dodging the indirect path's missing deep-copy).
+- **T1.5** — environment RAII + move-capture. A capturing lambda's heap env is freed on every
+  exit path (normal scope exit, early `return`, `??` propagation) through a synthesized,
+  type-erased env destructor stored in `drop_ptr`; a returned closure escapes (its owner frees it);
+  a closure stored in a `List` is owned and freed by the list. An owned **dynamic array** is now
+  **move-captured** into the env (outer binding consumed — use-after-move is CE2405 — and the env
+  destructor frees the value). Move-capturing a `List<T>`/`Own<T>`/capturing closure moves + frees
+  correctly, but reading it back inside the body (a method/call on `__closure_env.<name>`) hits a
+  lifted-body dispatch gap, so it is still CE2094 (deferred); borrow capture and owning fn-value
+  *param* types also remain CE2094.
 
 Outstanding:
 
-- **T1.5** — move-capture of owned types (dynamic array/`List<T>`/`Own<T>`) and environment RAII
-  (scope-exit free via `drop_ptr`). Currently owned-value capture is rejected (CE2094) rather than
-  silently aliased, and a capturing closure's heap environment is never freed (safe — no
-  double-free — but leaked). This is the main remaining correctness item.
 - **T1.8** — stdlib combinators (`List.map`/`.filter`/`.fold`, `compose`) authored in Sushi source
   atop the now-working indirect-call path.
+- **Container get-out aliasing (T1.5 residual).** Pulling a closure back *out* of a container that
+  also owns it — `let g = fns.get(0)??` from a `List`, then both `g`'s scope and `fns.free()` drop
+  the same env — double-frees; a simple rebind `let g = f` aliases the same way. Storing a closure
+  in a *struct field* is safe but the struct does not free it (leaks unless extracted). These need
+  env refcounting or get-moves ownership transfer and are deferred (see Risks).
 
 > **Resuming this work:** `closures-tier1-handoff.md` (same directory) is the detailed handoff —
 > current code state, the exact stubs (`drop_ptr = null`; owned-capture rejection), file:line
@@ -41,8 +51,9 @@ RHS — the grammar does not reach them from `expr` (see below), so a block-body
 as a call argument is a parse error; bind it to a `let` first.
 
 Test coverage: `tests/closures/` (positive: capture, escaping, bare-param inference, struct-field
-fat layout, thunk-name-collision regression; negative: borrow capture, owned capture, owning
-fn-value param).
+fat layout, thunk-name-collision regression, dynamic-array move-capture, `List`-owns-closures, `??`
+early-exit env free; negative: borrow capture, use-after-move-capture, `List` value capture
+deferred, owning fn-value param).
 
 ## Summary
 
@@ -281,8 +292,10 @@ returning a closure.
 
 New codes (next free is **CE2094**; `errors.py` currently ends at CE2093):
 
-- **CE2094** — illegal capture: a `&poke`/`&peek` borrow (T1) or, before T2.5, an owning/variadic
-  fn-value parameter type. Message names the deferred capability.
+- **CE2094** — illegal capture: a `&poke`/`&peek` borrow (Tier 2); an owning/variadic fn-value
+  parameter type (before T2.5); or a `List<T>`/`Own<T>`/closure *value* capture (deferred — the
+  lifted-body dispatch gap above). A **dynamic-array** value capture is allowed (move-capture,
+  T1.5). Message names the deferred capability.
 - A new "lambda parameter needs a type" diagnostic for un-inferable bare-name params (no expected
   `FunctionType` in context).
 

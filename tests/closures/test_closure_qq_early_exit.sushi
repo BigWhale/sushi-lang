@@ -1,0 +1,20 @@
+# T1.5: the env RAII must free a live capturing closure on EVERY exit path, including
+# the `??` error-propagation early-exit -- the path most likely to double-free. `run`
+# builds a capturing closure `f`, then `??` may early-exit before `f` is used; on that
+# error block the closure's environment is freed exactly once (no leak, no double free).
+# EXPECT_STDOUT_EXACT: "-1\n15\n"
+fn may_fail(i32 t) i32 | StdError:
+    if (t == 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(t)
+
+fn run(i32 t) i32:
+    let i32 base = 10
+    let fn(i32) -> i32 f = |i32 x| x + base
+    let i32 v = may_fail(t)??
+    return Result.Ok(f(v)??)
+
+fn main() i32:
+    println(run(0).realise(-1))
+    println(run(5).realise(-1))
+    return Result.Ok(0)

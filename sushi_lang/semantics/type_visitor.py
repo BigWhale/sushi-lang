@@ -338,18 +338,24 @@ class ExpressionValidator(RecursiveVisitor):
 
         # CE2094: capturing a &peek/&poke borrow is deferred to Tier 2. A captured
         # name whose enclosing type is a reference is a borrow capture.
-        from sushi_lang.semantics.typesys import ReferenceType, is_owning_type
+        from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, is_owning_type
         for cap in (node.captures or []):
             if isinstance(cap.ty, ReferenceType):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
                         reason=f"cannot capture '{cap.name}': it is a borrow (&peek/&poke capture is deferred to Tier 2)")
+            elif isinstance(cap.ty, DynamicArrayType):
+                # Move-capture (T1.5): a dynamic array is moved into the heap environment,
+                # which owns it and frees it in the env destructor. The outer binding is
+                # consumed (borrow-checked use-after-move, CE2405). No diagnostic.
+                pass
             elif is_owning_type(cap.ty):
-                # Owned captures need move semantics + env RAII (move-capture), not yet
-                # wired: a shallow env copy would alias/UAF the outer buffer. Copy-only
-                # capture (primitives, strings, copyable structs) is safe in this slice.
+                # Other owned types (List<T> / Own<T> / a capturing closure) move-capture
+                # into the env correctly, but reading them back inside the lambda body
+                # (a method/call on `__closure_env.<name>`) hits a lifted-body dispatch
+                # gap not yet closed. Reject for now rather than crash the backend.
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
-                        reason=f"cannot capture the owned value '{cap.name}' (type '{cap.ty}'); "
-                               f"move-capture of owned types is deferred")
+                        reason=f"cannot capture '{cap.name}' (type '{cap.ty}'): move-capture of "
+                               f"List/Own/closure values is deferred (only dynamic arrays for now)")
 
         # CE2094 (T1.7 cut): an owning parameter type on a function value has no
         # deep-copy on the indirect-call path yet (a latent double-free), so reject it.
