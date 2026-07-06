@@ -1,42 +1,52 @@
-# Closures Tier 1 — Handoff (remaining work: 3 items — see below)
+# Closures Tier 1 — Handoff (remaining work: 1 item — T1.8)
 
 This is the **resume-here** document for the outstanding Tier-1 work. The design
 rationale lives in `closures.md`; this file records the **current code state**, the
 **gotchas discovered during implementation**, and a **concrete, ordered plan** so the
 work can be picked up cold in a new session.
 
-Branch: `feature-closures-tier1`. Full enhanced suite is green (1055 tests). Closures
+Branch: `feature-closures-tier1`. Full enhanced suite is green (1062 tests). Closures
 compile and run for copy-capture (primitives, strings, copyable structs) AND, since
-**T1.5**, for **dynamic-array move-capture** with full **environment RAII**: a capturing
-lambda's heap env is freed on every exit path (scope exit, early `return`, `??`),
-escaping/returned closures are freed by their new owner, and a `List<fn(...)>` owns and
-frees the closures stored in it.
+**T1.5**, for **owned move-capture** (dynamic array, `List<T>`, `Own<T>`) with full
+**environment RAII**: a capturing lambda's heap env is freed on every exit path (scope
+exit, early `return`, `??`), escaping/returned closures are freed by their new owner, and
+a `List<fn(...)>` owns and frees the closures stored in it. **Closure aliasing is now
+sound** (rebind moves, container get-out / struct-field read borrow, struct-field closures
+are freed by struct cleanup).
 
 ## Remaining work (at a glance)
 
-Three items remain before Tier 1 is fully closed. In rough dependency/effort order:
+Only **T1.8** remains before Tier 1 is fully closed. The two former T1.5 residuals are
+**DONE** (this branch):
 
-1. **List/Own/closure *value* capture** (currently CE2094; detail in §2 step 6). The env
-   move + free already works for these types — the blocker is purely the lifted lambda
-   **body**: reading the captured value is a method/call on `__closure_env.<name>`, and
-   that member-access receiver mis-types to the dynamic-array dispatch and crashes the
-   backend. Fix = type a method-call-on-member-access receiver for generic collection
-   types in the re-annotated lifted body; then lift the CE2094 in `type_visitor.py`.
-   `tests/closures/test_err_closure_list_capture_deferred.sushi` pins the current behavior.
+1. **`List<T>`/`Own<T>` value capture — DONE.** The CE2094 gate in `type_visitor.py`
+   (`ExpressionValidator.visit_lambda`) now lets `List`/`Own` captures fall through like
+   dynamic arrays; the backend member-access receiver routing was fixed in
+   `backend/expressions/calls/utils.py` (`infer_generic_struct_type` + `emit_receiver_as_pointer`
+   gained a `MemberAccess` env-field strategy) so `__closure_env.xs.len()` dispatches to the
+   List/Own handler instead of crashing in the dynamic-array path. Capturing **and calling**
+   a *closure* value is still deferred (its call `env.f(x)` is a non-`Name` callee — T2.4;
+   now a graceful CE2094, not a crash). Tests: `test_closure_list_capture`,
+   `test_closure_own_capture`, `test_closure_list_mutate`,
+   `test_err_closure_capture_closure_deferred`.
 
-2. **Container get-out aliasing** (a soundness hole, not just a missing feature; detail in
-   §2.5). Pulling a closure back *out* of a container that also owns it double-frees:
-   `let g = fns.get(0)??` then `fns.free()`, and the same shape for a plain rebind
-   `let g = f`. A closure in a *struct field* is the mirror case (the struct never frees
-   it → leak). Needs env **refcounting**, **get-moves** ownership transfer, or extending
-   the (dynamic-array-only) struct-field cleanup path to closures. **No test yet** — these
-   patterns crash/leak at runtime and are currently only prose-documented.
+2. **Closure aliasing soundness — DONE.** `emit_let` (`backend/statements/variables.py`,
+   `_reconcile_closure_ownership`) keeps exactly one env owner: a plain rebind `let g = f`
+   **moves** (source marked moved in the `MoveTracker`; the borrow checker's
+   `_reconcile_closure_bind` tracks capturing-closure provenance so a later use is CE2405);
+   a container get-out (`fns.get(0)??`) and a struct-field read borrow (unregistered via
+   `scopes.unregister_closure_cleanup`); and struct-field closures are freed by struct
+   cleanup (`dynamic_arrays.struct_needs_cleanup`/`_get_cleanup_fields`/
+   `_emit_struct_field_closure_free`). Tests: `test_closure_rebind_move`,
+   `test_closure_get_out`, `test_closure_in_struct_field`,
+   `test_err_closure_use_after_move_rebind`.
 
 3. **T1.8 — stdlib combinators** (`List.map`/`.filter`/`.fold`, `compose`; detail in §3).
-   Greenfield: there is no Sushi-source stdlib for `List<T>` today. General `compose` over
-   *capturing* closures depends on item 1 (a captured closure is a List/Own/closure-style
-   owned capture); `compose` over non-capturing fn refs and `map`/`filter`/`fold` over
-   copyable elements do not.
+   Greenfield: there is no Sushi-source stdlib for `List<T>` today (every List method is a
+   Python IR emitter), so this hinges on a decision about a Sushi-authored stdlib/prelude
+   path. `compose` over fn params compiles today (copy-capture); its true dependency is the
+   now-closed aliasing soundness (item 2), not move-capture. `map`/`filter`/`fold` over
+   copyable elements are independent of both.
 
 ---
 
@@ -156,19 +166,17 @@ plugged into the *same* RAII machinery as owned structs (`#59/#60`) rather than 
    and `needs_cleanup(FunctionType)` returns True — so a `List<fn(...)>`'s element cleanup frees
    each stored closure's env (List-owns pattern).
 
-6. **Move-capture of owned types (dynamic arrays now; List/Own/closure deferred).** In
-   `type_visitor.py:ExpressionValidator.visit_lambda`, a `DynamicArrayType` capture is now allowed
-   (move-capture); `emit_lambda` marks the owned binding moved (`codegen.moves.mark(cap.name)`) and
-   the borrow checker's `_check_expr` `Lambda` case marks it moved semantically (`is_owning_type` →
-   `state.is_moved = True`), so a later use is CE2405. **`List<T>`/`Own<T>`/capturing-closure value
-   captures stay CE2094** — the env-side move + free works (the drop already handles them via
-   `emit_list_destroy` / `emit_value_destructor`), but reading the captured value back inside the
-   lambda body is a MethodCall/DotCall on `__closure_env.<name>`, and that member-access receiver
-   mis-types to the dynamic-array dispatch (crashes the backend). Extracting to an intermediate
-   local first works (`let zs = s.xs; zs.len()`), so the fix is in typing a
-   method-call-on-member-access receiver for generic collection types in the re-annotated lifted
-   body. Lifting this CE2094 (in `type_visitor.py`) is the only change needed to enable List/Own
-   move-capture once that dispatch is fixed.
+6. **Move-capture of owned types — dynamic array, `List<T>`, `Own<T>` all DONE.** In
+   `type_visitor.py:ExpressionValidator.visit_lambda`, `DynamicArrayType`, `List<T>`, and `Own<T>`
+   captures are allowed (move-capture); `emit_lambda` marks the owned binding moved
+   (`codegen.moves.mark(cap.name)`) and the borrow checker's `_check_expr` `Lambda` case marks it
+   moved semantically (`is_owning_type` → `state.is_moved = True`), so a later use is CE2405. The
+   backend dispatch gap is closed: `infer_generic_struct_type` + `emit_receiver_as_pointer`
+   (`backend/expressions/calls/utils.py`) gained a `MemberAccess` env-field strategy, so reading a
+   captured collection back as `__closure_env.<name>.len()` routes to the List/Own handler instead
+   of the dynamic-array path. **Only capturing + *calling* a closure value stays CE2094** — the call
+   `env.f(x)` is a non-`Name` callee (T2.4, `Call.callee` widening); it is now reported gracefully
+   (`validate_function_call` / `visit_call` guard the non-`Name` callee) rather than crashing.
 
 **Validated (macOS `leaks --atExit`):** copy-capture, escaping/returned closure, `??`-early-exit
 with a live closure, owned dynamic-array move-capture (+ its use-after-move CE2405), and
@@ -178,18 +186,30 @@ even in a trivial no-closure program), no closure-env leak, no double-free. Test
 `test_closure_qq_early_exit`, `test_err_closure_use_after_move_capture`,
 `test_err_closure_list_capture_deferred`). Full enhanced suite green.
 
-### 2.5 Residual — container get-out aliasing (remaining item 2; NOT a regression)
+### 2.5 Container get-out aliasing — DONE (move-on-rebind + borrow-on-get-out + struct-field free)
 
-Pulling a closure back *out* of a container that also owns it double-frees, because the extracted
-local registers for its own scope-exit free while the container will free the same env:
-`let g = fns.get(0)??` then `fns.free()` (crash), and the same shape for a plain rebind `let g = f`.
-A closure stored in a **struct field** is the mirror case: `struct_needs_cleanup` (dynamic-array
-specialized) does not see `FunctionType` fields, so the struct never frees them (leak unless
-extracted-and-scoped, which is then the sole freer — safe but by luck). Correctly closing this needs
-either env **refcounting**, **get-moves** ownership transfer out of the container, or extending the
-struct-field cleanup path (`dynamic_arrays.emit_struct_field_cleanup`/`_get_cleanup_fields`, today
-dynamic-array only) to closures. Deferred — it is orthogonal to the T1.5 lifecycle above and to
-T1.8.
+Previously, pulling a closure out of a container that also owned it double-freed, and a closure in
+a struct field leaked. Closed on this branch via **move semantics** (the option chosen over env
+refcounting). `emit_let` (`backend/statements/variables.py:_reconcile_closure_ownership`) reconciles
+the single-owner invariant by binding shape:
+
+- `let g = f` where `f` is a registered owning local → **MOVE**: `codegen.moves.mark(f)` so only `g`
+  frees. The borrow checker (`borrow.py:_reconcile_closure_bind`) tracks capturing-closure
+  provenance (`BorrowState.is_owning_closure`, set for a capturing lambda literal and propagated on
+  move) and marks `f` moved, so a later use of `f` is CE2405 (`_check_expr` also now visits
+  `Call.callee`, catching `f(x)` after a move).
+- `let g = fns.get(0)??` (container get-out) and `let g = s.handler` (struct-field read) → **BORROW**:
+  `scopes.unregister_closure_cleanup(g)` drops the second owner; the container/struct stays sole
+  owner (mirrors the `Own<T>.get()` guard).
+- A closure stored in a **struct field** is freed by struct cleanup:
+  `dynamic_arrays.struct_needs_cleanup`/`_get_cleanup_fields` now see `FunctionType` fields and
+  `_emit_struct_field_closure_free` emits the guarded env free.
+
+Validated with `leaks --atExit` (only the ~16-byte `user_main` baseline remains). Tests:
+`test_closure_rebind_move`, `test_closure_get_out`, `test_closure_in_struct_field`,
+`test_err_closure_use_after_move_rebind`. Residual (accepted, matches the pre-existing `Own<T>.get()`
+borrow model): returning a get-out/struct-read borrow while the container still owns it — a full fix
+needs get-moves/refcounting, deferred.
 
 ---
 

@@ -1,0 +1,12 @@
+# T1.5 (item 1): move-capture of an owned Own<T>. The allocation is moved into the
+# closure's heap environment, which owns and frees it. Reading it back (`boxed.get()`)
+# dispatches through the env-field member-access receiver path. f(8) = 8 + 42 = 50.
+# EXPECT_STDOUT_EXACT: "50\n"
+fn run() i32:
+    let Own<i32> boxed = Own.alloc(42)
+    let fn(i32) -> i32 f = |i32 x| x + boxed.get()
+    return Result.Ok(f(8)??)
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)

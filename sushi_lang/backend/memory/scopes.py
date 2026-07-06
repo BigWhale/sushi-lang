@@ -387,6 +387,24 @@ class ScopeManager:
         from sushi_lang.backend.destructors import emit_function_value_destructor
         emit_function_value_destructor(self.codegen, self.codegen.builder, slot)
 
+    def is_closure_registered(self, name: str) -> bool:
+        """True if `name` is a registered function-value RAII owner in the current scope.
+
+        Used to distinguish a rebind that MOVES from an owning closure local (source is
+        registered) from one that borrows an env owned elsewhere (a param / container
+        get-out / struct-field read, which is not registered).
+        """
+        return name in self._closure_cleanup
+
+    def unregister_closure_cleanup(self, name: str) -> None:
+        """Drop `name` from function-value RAII tracking (no-op if absent).
+
+        Used when a function-value local is a NON-owning alias -- bound from a container
+        get-out (`fns.get(i)??`) or a struct-field read (`s.handler`) whose env the
+        container/struct still owns. Registering it as a second owner would double-free
+        the shared environment (mirrors the Own<T>.get() non-owning-borrow guard)."""
+        self._closure_cleanup.pop(name, None)
+
     def mark_struct_as_moved(self, var_name: str) -> None:
         """Mark a struct variable as moved (ownership transferred).
 

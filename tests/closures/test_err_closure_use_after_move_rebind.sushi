@@ -1,0 +1,14 @@
+# T1.5 (item 2a): rebinding a capturing closure `let g = f` moves it, so a later use
+# of the source `f` is a use-after-move (CE2405) -- the same move semantics as arrays.
+# Non-capturing fn values stay copyable; only capturing closures move.
+# EXPECT_ERROR_CODE: CE2405
+fn run() i32:
+    let i32 base = 100
+    let fn(i32) -> i32 f = |i32 x| x + base
+    let fn(i32) -> i32 g = f
+    let i32 a = f(10)??
+    return Result.Ok(a + g(0)??)
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)

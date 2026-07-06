@@ -48,6 +48,9 @@ class BorrowState:
     poke_borrow_count: int = 0  # Number of active &poke borrows (max 1)
     peek_borrow_count: int = 0  # Number of active &peek borrows (unlimited)
     is_moved: bool = False  # Ownership has been transferred
+    is_owning_closure: bool = False  # A capturing closure that owns a heap env (capture
+                                     # is erased from the fn(...) type, so ownership is
+                                     # tracked by binding provenance, not var_type)
     is_destroyed: bool = False  # Variable has been explicitly destroyed (via .destroy())
     first_borrow_span: Optional[Span] = None  # Location of the first active borrow
 
@@ -142,6 +145,8 @@ class BorrowChecker:
             self.borrow_state[stmt.name] = BorrowState(name=stmt.name, var_type=stmt.ty)
             # Check the initialization expression
             self._check_expr(stmt.value)
+            # Closure move-on-bind: `let g = f` transfers a capturing closure's owned env.
+            self._reconcile_closure_bind(stmt)
             # Clear any borrows from the expression
             self._clear_borrows()
 
@@ -266,7 +271,9 @@ class BorrowChecker:
                     self.err.emit(er.ERR.CE2406, expr.loc, name=expr.id)
 
         elif isinstance(expr, Call):
-            # Check all arguments
+            # Check the callee (a moved closure used as `f(x)` is a use-after-move) and
+            # all arguments. A top-level fn name is not in borrow_state, so it is inert.
+            self._check_expr(expr.callee)
             for arg in expr.args:
                 self._check_expr(arg)
 
@@ -499,6 +506,29 @@ class BorrowChecker:
         capturing closure value.
         """
         return is_owning_type(vt)
+
+    def _reconcile_closure_bind(self, stmt: Let) -> None:
+        """Track capturing-closure ownership across `let` bindings.
+
+        Capture is erased from the `fn(...)` type, so a closure's heap-env ownership is
+        tracked by binding provenance: a capturing lambda literal owns its env, and a
+        plain rebind `let g = f` MOVES that ownership (a later use of `f` is CE2405, the
+        same move semantics as arrays/List/Own). Non-capturing fn values are copyable and
+        untracked, so plain fn-ref code keeps working."""
+        from sushi_lang.semantics.typesys import FunctionType
+        if not isinstance(stmt.ty, FunctionType):
+            return
+        dest = self.borrow_state.get(stmt.name)
+        if dest is None:
+            return
+        value = stmt.value
+        if isinstance(value, Lambda) and value.captures:
+            dest.is_owning_closure = True
+        elif isinstance(value, Name):
+            src = self.borrow_state.get(value.id)
+            if src is not None and src.is_owning_closure:
+                src.is_moved = True
+                dest.is_owning_closure = True
 
     def _mark_moved_if_applicable(self, expr: Expr) -> None:
         """Mark a variable as moved if the expression is a simple variable reference to a dynamic array.

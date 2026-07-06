@@ -338,24 +338,29 @@ class ExpressionValidator(RecursiveVisitor):
 
         # CE2094: capturing a &peek/&poke borrow is deferred to Tier 2. A captured
         # name whose enclosing type is a reference is a borrow capture.
-        from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, is_owning_type
+        from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, FunctionType, is_owning_type
         for cap in (node.captures or []):
             if isinstance(cap.ty, ReferenceType):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
                         reason=f"cannot capture '{cap.name}': it is a borrow (&peek/&poke capture is deferred to Tier 2)")
+            elif isinstance(cap.ty, FunctionType) and is_owning_type(cap.ty):
+                # Capturing a CLOSURE value is still deferred: reading it back means
+                # calling `__closure_env.<name>(...)`, whose non-Name callee needs
+                # Call.callee widening (Tier 2, T2.4). Reject rather than mis-dispatch.
+                er.emit(tv.reporter, er.ERR.CE2094, node.loc,
+                        reason=f"cannot capture '{cap.name}' (type '{cap.ty}'): capturing a "
+                               f"closure value is deferred to Tier 2")
             elif isinstance(cap.ty, DynamicArrayType):
                 # Move-capture (T1.5): a dynamic array is moved into the heap environment,
                 # which owns it and frees it in the env destructor. The outer binding is
                 # consumed (borrow-checked use-after-move, CE2405). No diagnostic.
                 pass
             elif is_owning_type(cap.ty):
-                # Other owned types (List<T> / Own<T> / a capturing closure) move-capture
-                # into the env correctly, but reading them back inside the lambda body
-                # (a method/call on `__closure_env.<name>`) hits a lifted-body dispatch
-                # gap not yet closed. Reject for now rather than crash the backend.
-                er.emit(tv.reporter, er.ERR.CE2094, node.loc,
-                        reason=f"cannot capture '{cap.name}' (type '{cap.ty}'): move-capture of "
-                               f"List/Own/closure values is deferred (only dynamic arrays for now)")
+                # List<T> / Own<T> move-capture into the env (T1.5 item 1): moved in,
+                # owned + freed by the env destructor, outer binding consumed (CE2405).
+                # Reading them back inside the body dispatches through the env-field
+                # member-access receiver path (backend calls/utils.py).
+                pass
 
         # CE2094 (T1.7 cut): an owning parameter type on a function value has no
         # deep-copy on the indirect-call path yet (a latent double-free), so reject it.
@@ -794,6 +799,12 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_call(self, node: Call) -> Optional[Type]:
         """Infer function call type."""
+        # A non-Name callee (`arr[0]()`, `(e)()`, or a captured/field closure called as
+        # `env.f(x)`) needs Call.callee widening (Tier 2, T2.4). The validator reports it
+        # (CE2094); here we just avoid crashing on `.id` during type inference.
+        if not isinstance(node.callee, Name):
+            return None
+
         # Look up function return type
         function_name = node.callee.id
 
