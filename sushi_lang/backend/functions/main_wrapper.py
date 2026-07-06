@@ -13,7 +13,6 @@ from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef
 from sushi_lang.semantics.typesys import Type as Ty, ResultType
 from sushi_lang.backend import enum_utils
-from sushi_lang.backend.llvm_constants import FALSE_I1
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -46,7 +45,9 @@ class MainFunctionWrapper:
         Args:
             result_enum: The Result<T> enum value
             value_type: The LLVM type of T (e.g., i32 for Result<i32>)
-            semantic_type: The semantic type of T (for accurate size calculation)
+            semantic_type: The semantic type of T (accepted for a stable call
+                signature; the typed load reads exactly value_type from the
+                variant buffer, so no separate size calculation is needed)
 
         Returns:
             A tuple (is_ok, value) where:
@@ -58,34 +59,20 @@ class MainFunctionWrapper:
             self.codegen, result_enum, variant_index=0, signed=True, name="is_ok"
         )
 
-        # Extract data field (array of bytes)
+        # Extract data field (array of bytes) and read the payload back through a typed
+        # pointer into that byte buffer, mirroring the match-binding path
+        # (statements/matching.py). We deliberately do NOT memcpy the [N x i8] blob into a
+        # separate value-typed alloca and load that: the extra byte-array<->struct round
+        # trip miscompiled the trailing field of a struct payload containing nested string
+        # fat-pointers at -O1/-O2 (issue #119: `run()?? ProcessOutput.stderr_text` read a
+        # garbage {data,len} and segfaulted, while the match/realise paths were unaffected).
+        # A single typed load from the variant buffer is both robust and cheaper.
         data_array = enum_utils.extract_enum_data(self.codegen, result_enum, name="result_data")
-
-        # Create stack allocation for the value
-        value_alloca = self.codegen.builder.alloca(value_type, name="result_value_temp")
-
-        # Get pointer to data array
-        # Note: data_array is a value, not a pointer, so we need to store it first
-        data_alloca = self.codegen.builder.alloca(data_array.type, name="data_temp")
+        data_alloca = self.codegen.builder.alloca(data_array.type, name="result_data_slot")
         self.codegen.builder.store(data_array, data_alloca)
 
-        # Bitcast both pointers to i8*
-        data_ptr = self.codegen.builder.bitcast(data_alloca, self.codegen.types.i8.as_pointer())
-        dest_ptr = self.codegen.builder.bitcast(value_alloca, self.codegen.types.i8.as_pointer())
-
-        # Get size of value type in bytes using the type system's authoritative calculation
-        # This correctly handles all types including structs, dynamic arrays, and nested types
-        size = self.codegen.types.get_type_size_bytes(semantic_type)
-        size_const = ir.Constant(self.codegen.types.i32, size)
-
-        # Copy bytes from data to value using LLVM memcpy intrinsic
-        # Signature: void @llvm.memcpy.p0i8.p0i8.i32(i8* dest, i8* src, i32 len, i1 is_volatile)
-        memcpy_fn = self.codegen.module.declare_intrinsic('llvm.memcpy', [ir.PointerType(self.codegen.types.i8), ir.PointerType(self.codegen.types.i8), self.codegen.types.i32])
-        is_volatile = FALSE_I1  # Not volatile
-        self.codegen.builder.call(memcpy_fn, [dest_ptr, data_ptr, size_const, is_volatile])
-
-        # Load the unpacked value
-        value = self.codegen.builder.load(value_alloca, name="result_value")
+        value_ptr = self.codegen.builder.bitcast(data_alloca, value_type.as_pointer())
+        value = self.codegen.builder.load(value_ptr, name="result_value")
 
         return (is_ok, value)
 
