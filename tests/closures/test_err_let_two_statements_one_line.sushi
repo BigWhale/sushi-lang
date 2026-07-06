@@ -1,0 +1,8 @@
+# Regression (found in review): scoping the block-body-lambda newline exception
+# must NOT legalize two statements on one physical line. A `let` whose RHS is a
+# plain expression still requires a terminating newline, so `let x = 5 let y = 6`
+# is a syntax error (exit 2), preserving Sushi's newline-delimited statement model.
+# (A raw parse error carries no CE code; the test_err_ filename asserts exit 2.)
+fn main() i32:
+    let i32 x = 5 let i32 y = 6
+    return Result.Ok(0)

@@ -1,0 +1,16 @@
+# Regression (found in review): a user function whose name looks like the
+# synthesized adapter thunk must NOT be mistaken for it. The thunk symbol embeds
+# a '.' (unreachable in a Sushi NAME), so `add.__closure_thunk` cannot collide
+# with a user `add__thunk`. `f(10)` must call `add` via its real thunk -> 11,
+# not accidentally invoke the user's add__thunk.
+# EXPECT_STDOUT_EXACT: "11\n"
+fn add(i32 x) i32:
+    return Result.Ok(x + 1)
+
+fn add__thunk(i32 x, i32 y) i32:
+    return Result.Ok(x + y)
+
+fn main() i32:
+    let fn(i32) -> i32 f = add
+    println(f(10).realise(0))
+    return Result.Ok(0)

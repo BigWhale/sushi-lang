@@ -9,7 +9,7 @@ from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.semantics.ast import (
     Program, FuncDef, ConstDef, ExtendDef, ExtendWithDef, Block, Stmt, Let, ExprStmt, Return, Print, PrintLn, While, Foreach, Match, MatchArm, Pattern, OwnPattern, Break,
     If, Expr, Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall,
-    DynamicArrayNew, DynamicArrayFrom, Rebind, Continue, CastExpr, MemberAccess, EnumConstructor, TryExpr, Borrow, RangeExpr, Spread
+    DynamicArrayNew, DynamicArrayFrom, Rebind, Continue, CastExpr, MemberAccess, EnumConstructor, TryExpr, Borrow, RangeExpr, Spread, Lambda, Param
 )
 from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, EnumTable, GenericEnumTable
 
@@ -52,6 +52,11 @@ class ScopeAnalyzer:
         # Names of top-level functions. A bare reference to one (not shadowed by a
         # local) is a first-class function value, not an undeclared identifier.
         self.function_names: set[str] = set()
+        # Active lambda capture collectors (one per enclosing lambda, innermost
+        # last). Each is {'boundary': int, 'names': dict[str, Param]}: a variable
+        # use resolving to a scope BELOW a collector's boundary is captured by that
+        # lambda (and every enclosing lambda whose boundary is also above it).
+        self._capture_collectors: List[dict] = []
 
     def run(self, program: Program) -> None:
         """Entry point for scope analysis."""
@@ -144,9 +149,10 @@ class ScopeAnalyzer:
 
     def _use_variable(self, name: str, usage_span: Optional[Span] = None, is_rebind: bool = False) -> None:
         """Mark a variable as used, searching through scope stack."""
-        for scope in reversed(self.scopes):
-            if name in scope:
-                scope[name].used = True
+        for i in range(len(self.scopes) - 1, -1, -1):
+            if name in self.scopes[i]:
+                self.scopes[i][name].used = True
+                self._record_capture(name, i, usage_span)
                 return
 
         # Variable not found in any scope - emit appropriate error
@@ -157,15 +163,50 @@ class ScopeAnalyzer:
 
     def _borrow_variable(self, name: str, usage_span: Optional[Span] = None) -> None:
         """Mark a variable as borrowed (used through a reference), searching through scope stack."""
-        for scope in reversed(self.scopes):
-            if name in scope:
+        for i in range(len(self.scopes) - 1, -1, -1):
+            if name in self.scopes[i]:
                 # Mark as borrowed but don't mark as directly used
                 # This allows us to detect variables that are ONLY borrowed
-                scope[name].borrowed = True
+                self.scopes[i][name].borrowed = True
+                self._record_capture(name, i, usage_span)
                 return
 
         # Variable not found in any scope - emit error
         self.err.emit(er.ERR.CE1001, usage_span, name=name)
+
+    def _record_capture(self, name: str, resolved_index: int, span: Optional[Span]) -> None:
+        """Record `name` as a capture for every enclosing lambda it is free in.
+
+        `resolved_index` is the absolute scope-stack index where `name` was found.
+        A lambda captures it iff the variable lives BELOW that lambda's scope
+        boundary (i.e. it is an enclosing local, not a lambda param or lambda-local).
+        Deep captures propagate through every enclosing lambda so an outer closure
+        also carries the value an inner closure needs.
+        """
+        for col in self._capture_collectors:
+            if resolved_index < col['boundary'] and name not in col['names']:
+                col['names'][name] = Param(name=name, ty=None, name_span=span, loc=span)
+
+    def _check_lambda(self, lam: Lambda) -> None:
+        """Scope-check a lambda body and record its captured free names.
+
+        The lambda's params open a fresh scope; free names in the body that resolve
+        to enclosing locals are recorded into `lam.captures` (types are None here and
+        filled by the type pass, T1.3).
+        """
+        boundary = len(self.scopes)
+        collector = {'boundary': boundary, 'names': {}}
+        self._capture_collectors.append(collector)
+        self._push_scope()
+        for p in lam.params:
+            self._declare_variable(p.name, p.name_span)
+        if lam.is_block_body:
+            self._check_block(lam.body)
+        else:
+            self._check_expression(lam.body)
+        self._pop_scope()
+        self._capture_collectors.pop()
+        lam.captures = list(collector['names'].values())
 
     def _mark_array_destroyed(self, name: str) -> None:
         """Mark a dynamic array as destroyed in the current scope."""
@@ -580,3 +621,5 @@ class ScopeAnalyzer:
             case Spread():
                 # Bloom argument: arr... uses (and moves) its source array.
                 self._check_expression(expr.value)
+            case Lambda():
+                self._check_lambda(expr)

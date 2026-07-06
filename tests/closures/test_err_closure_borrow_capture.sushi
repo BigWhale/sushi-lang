@@ -1,0 +1,9 @@
+# T1.3: capturing a &peek/&poke borrow through a closure is deferred to Tier 2.
+# The lambda captures `r`, which is a &peek borrow -> CE2094.
+# EXPECT_ERROR_CODE: CE2094
+fn use_ref(&peek i32 r) i32:
+    let fn(i32) -> i32 g = |i32 x| x + r
+    return Result.Ok(g(1).realise(0))
+
+fn main() i32:
+    return Result.Ok(0)

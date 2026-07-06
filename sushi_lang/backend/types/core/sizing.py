@@ -103,8 +103,10 @@ class TypeSizing:
                 # Opaque foreign pointer (LLVM i8*), 64-bit
                 return 8
             case FunctionType():
-                # First-class function value is a bare function pointer (64-bit)
-                return 8
+                # First-class function value is a 3-word fat pointer
+                # {i8* fn_ptr, i8* env_ptr, i8* drop_ptr} = 24 bytes.
+                from sushi_lang.backend.constants.sizes import CLOSURE_FAT_POINTER_SIZE_BYTES
+                return CLOSURE_FAT_POINTER_SIZE_BYTES
             case ResultType():
                 # Result<T, E> - ensure the corresponding enum exists and calculate its size
                 from sushi_lang.backend.generics.results import ensure_result_type_in_table

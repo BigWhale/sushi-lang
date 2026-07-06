@@ -262,16 +262,19 @@ class FunctionType:
                    UnknownType("StdError") at parse time and is resolved to the StdError
                    enum by the normal type-resolution pass.
 
-    A function value is the raw address of an already-monomorphized top-level function.
-    Calling through it yields the same Result<ok_type, err_type> a direct call would, so the
-    LLVM type is a pointer to FunctionType(Result<ok_type, err_type>, param_types).
+    A function value lowers to a 3-word fat pointer {fn_ptr, env_ptr, drop_ptr}. Calling
+    through it yields the same Result<ok_type, err_type> a direct call would.
 
-    v1 carries no captured environment (no closures); compatibility is invariant on every
-    component (arity + each param + ok + err must match exactly).
+    `captures` is an OPTIONAL descriptor of a capturing lambda's environment (list of
+    (name, Type) captured from the enclosing scope). It is metadata only: it is deliberately
+    EXCLUDED from __eq__/__hash__ so type identity stays capture-agnostic — `fn(i32) -> i32`
+    names both a plain fn and any closure of that arity/ok/err (compatibility is invariant on
+    arity + each param + ok + err, never on capture).
     """
     param_types: tuple["Type", ...]
     ok_type: "Type"
     err_type: "Type"
+    captures: Optional[tuple] = None
 
     def __str__(self) -> str:
         params = ", ".join(str(p) for p in self.param_types)
@@ -289,6 +292,36 @@ class FunctionType:
                 self.param_types == other.param_types and
                 self.ok_type == other.ok_type and
                 self.err_type == other.err_type)
+
+
+def is_owning_type(t: Optional["Type"]) -> bool:
+    """True if a value of this type carries heap ownership.
+
+    An owning value is MOVED on rebind/return/capture and RAII-freed at scope exit
+    (its outer binding is consumed). This is the single ownership predicate shared by
+    the borrow checker (move semantics) and the backend (deep-copy + destructor
+    dispatch) so they never disagree.
+
+    Owning: dynamic arrays, `List<T>`, `Own<T>`, and a CAPTURING function value (a
+    closure with a non-empty `captures` descriptor). A non-capturing function value
+    stays copyable (preserves v1 first-class-function ergonomics). Capture is metadata
+    excluded from type identity, so closure ownership is resolved off `captures` here,
+    while the backend additionally guards every function-value free at runtime by the
+    `drop_ptr` (a null drop makes a conservative free a no-op).
+    """
+    if t is None:
+        return False
+    if isinstance(t, DynamicArrayType):
+        return True
+    if isinstance(t, GenericTypeRef) and t.base_name in ('Own', 'List'):
+        return True
+    if isinstance(t, FunctionType) and t.captures:
+        return True
+    name = getattr(t, 'name', None)
+    if isinstance(name, str) and (name.startswith('Own<') or name.startswith('List<')):
+        return True
+    return False
+
 
 @dataclass(frozen=True)
 class EnumVariantInfo:

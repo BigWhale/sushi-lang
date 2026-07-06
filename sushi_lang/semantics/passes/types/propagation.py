@@ -433,6 +433,14 @@ def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
         _propagate_numeric_type(validator, value_expr, expected_type)
         return
 
+    # Function-typed context: hand a lambda its expected FunctionType so bare-name
+    # params (`|x|`) infer their types from the binding/argument context.
+    from sushi_lang.semantics.typesys import FunctionType as _FunctionType
+    from sushi_lang.semantics.ast import Lambda as _Lambda
+    if isinstance(expected_type, _FunctionType) and isinstance(value_expr, _Lambda):
+        value_expr.expected_type = expected_type
+        return
+
     # Handle Result<T, E> propagation
     if isinstance(expected_type, ResultType):
         _propagate_result_enum_type(validator, value_expr, expected_type)

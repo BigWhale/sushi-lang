@@ -41,9 +41,10 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
 
     # Indirect call through a first-class function value held in a local variable.
     # A local shadows any same-named top-level function, so this is checked first.
-    fn_ptr = _try_function_pointer_local(codegen, callee)
-    if fn_ptr is not None:
-        return _emit_indirect_call(codegen, expr, fn_ptr, to_i1)
+    fn_value = _try_function_value_local(codegen, callee)
+    if fn_value is not None:
+        fat_value, fn_type = fn_value
+        return _emit_indirect_call(codegen, expr, fat_value, fn_type, to_i1)
 
     # Check if this is a struct constructor
     if callee in codegen.struct_table.by_name:
@@ -105,34 +106,36 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     return codegen.utils.as_i1(result_struct) if to_i1 else result_struct
 
 
-def _try_function_pointer_local(codegen: 'LLVMCodegen', name: str) -> 'ir.Value | None':
-    """Return the loaded function pointer if `name` is a function-valued local, else None.
+def _try_function_value_local(codegen: 'LLVMCodegen', name: str):
+    """If `name` is a function-valued local, return `(fat_value, FunctionType)`, else None.
 
-    Inspects the alloca's allocated type (ptr to a function type) so no stray load is
-    emitted for ordinary variables.
+    Detection is by the local's SEMANTIC type, not its LLVM shape: a function value
+    now lowers to a `{i8*, i8*, i8*}` fat struct, which is byte-identical to any struct
+    of three pointer fields (e.g. three `ptr` fields), so shape sniffing would misfire.
     """
+    from sushi_lang.semantics.typesys import FunctionType
     try:
         slot = codegen.memory.find_local_slot(name)
     except KeyError:
         return None
-    allocated = slot.type.pointee
-    if isinstance(allocated, ir.PointerType) and isinstance(allocated.pointee, ir.FunctionType):
-        return codegen.builder.load(slot, name=f"{name}_fnptr")
-    return None
+    sem_ty = codegen.memory.find_semantic_type(name)
+    if not isinstance(sem_ty, FunctionType):
+        return None
+    fat_value = codegen.builder.load(slot, name=f"{name}_fnval")
+    return fat_value, sem_ty
 
 
-def _emit_indirect_call(codegen: 'LLVMCodegen', expr: Call, fn_ptr: 'ir.Value', to_i1: bool) -> ir.Value:
-    """Emit an indirect call through a function pointer.
+def _emit_indirect_call(codegen: 'LLVMCodegen', expr: Call, fat_value: 'ir.Value',
+                        fn_type, to_i1: bool) -> ir.Value:
+    """Emit an indirect call through a function value (fat pointer).
 
-    Mirrors the direct-call ABI: the pointee is FunctionType(Result<T,E>, params), so the
-    returned Result<T,E> struct flows downstream exactly like a direct call's.
+    Extracts `fn_ptr`/`env_ptr` from the fat struct and calls `fn_ptr(env_ptr, args...)`,
+    recovering the real callee signature from the semantic `FunctionType`. The returned
+    Result<T,E> struct flows downstream exactly like a direct call's.
     """
-    fn_ty = fn_ptr.type.pointee  # ir.FunctionType
-    params = list(fn_ty.args)
+    from sushi_lang.backend.runtime import closures
     args = [codegen.expressions.emit_expr(a) for a in expr.args]
-    casted = [codegen.utils.cast_for_param(v, pt) for v, pt in zip(args, params)]
-    result_struct = codegen.builder.call(fn_ptr, casted)
-    return codegen.utils.as_i1(result_struct) if to_i1 else result_struct
+    return closures.emit_indirect_call(codegen, fat_value, fn_type, args, to_i1)
 
 
 def _deep_copy_struct_value_args(codegen: 'LLVMCodegen', args: list, func_sig) -> None:

@@ -414,6 +414,34 @@ class Spread(Node):
     value: "Expr"   # the array expression being bloomed (e.g. Name("args"))
 
 @dataclass
+class Lambda(Node):
+    """A lambda literal (closure).
+
+    Two body forms, both new `atom` alternatives:
+      - expression body: `|params| expr`  (desugars to `return Result.Ok(expr)`)
+      - block body:      `|params|[ -> T [| E]]: <block>`  (a full fn body)
+
+    `params` reuses the `FuncDef` `Param` shape; a bare-name param (`|x|`) carries
+    `ty=None` until inference fills it from an expected `FunctionType`. The zero-param
+    form `|~|` yields an empty `params` list. `captures` is filled by the scope pass
+    (free names resolving to enclosing locals); `lifted_name` is filled by the
+    lambda-lifting pass (the synthesized top-level `__lambda_N`).
+    """
+    params: List[Param]
+    body: Union["Expr", "Block"]
+    is_block_body: bool = False
+    ret: Optional[Type] = None
+    err_type: Optional[Type] = None
+    captures: Optional[List["Param"]] = None
+    lifted_name: Optional[str] = None
+    # Filled by the type pass: the lambda's resolved FunctionType (params + captures
+    # typed, ok/err resolved). `expected_type` is a FunctionType propagated from the
+    # binding/argument context, used to infer bare-param types (`|x|`).
+    resolved_type: Optional[Type] = None
+    expected_type: Optional[Type] = None
+
+
+@dataclass
 class Call(Node):
     callee: Name
     args: List["Expr"]
@@ -552,7 +580,7 @@ class RangeExpr(Node):
     end: "Expr"             # End expression (must evaluate to integer)
     inclusive: bool         # True for ..=, False for ..
 
-Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, StructConstructor, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread]
+Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, StructConstructor, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread, Lambda]
 
 def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
     """

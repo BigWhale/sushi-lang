@@ -22,7 +22,7 @@ from typing import Dict, Set, Optional
 from dataclasses import dataclass, field
 
 from sushi_lang.semantics.ast import *
-from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, Type
+from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, Type, is_owning_type
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -482,19 +482,11 @@ class BorrowChecker:
     def _type_is_owning(self, vt: Optional[Type]) -> bool:
         """True if a value of this type carries heap ownership (so Own.alloc moves it).
 
-        Handles the declared GenericTypeRef form and the resolved StructType form
-        (Own<...>/List<...>), plus dynamic arrays.
+        Delegates to the shared `is_owning_type` predicate (typesys) so the borrow
+        checker and the backend RAII paths agree on what owns memory — including a
+        capturing closure value.
         """
-        if vt is None:
-            return False
-        if isinstance(vt, DynamicArrayType):
-            return True
-        if isinstance(vt, GenericTypeRef) and vt.base_name in ('Own', 'List'):
-            return True
-        name = getattr(vt, 'name', None)
-        if isinstance(name, str) and (name.startswith('Own<') or name.startswith('List<')):
-            return True
-        return False
+        return is_owning_type(vt)
 
     def _mark_moved_if_applicable(self, expr: Expr) -> None:
         """Mark a variable as moved if the expression is a simple variable reference to a dynamic array.

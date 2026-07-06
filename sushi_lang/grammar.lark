@@ -72,6 +72,7 @@ print_stmt: "print" "(" expr ")" _NEWLINE
 println_stmt: "println" "(" expr ")" _NEWLINE
 
 let_stmt: "let" [type] NAME "=" expr _NEWLINE
+        | "let" [type] NAME "=" lambda_block       -> let_stmt
 call_stmt: postfix _NEWLINE
 
 if_stmt: IF "(" expr ")" ":" block elif_part* else_part?
@@ -170,7 +171,28 @@ method_name: NAME | NEW
      | array_literal
      | dynamic_array_new
      | dynamic_array_from
+     | lambda_def
      | "(" expr ")"
+
+// Lambda literals (closures). The opening `|` only appears where an atom is
+// expected (prefix position), so it never collides with the infix bitwise-or
+// `|` in `bitwise_or`. Zero-param form is `|~|` (a BITNOT `~` between the
+// pipes) because the lexer munges `||` into a single OR token.
+//
+// Only the EXPRESSION-body lambda is a general expression (an `atom`). The
+// BLOCK-body lambda (`|x|: <block>`) is NOT reachable through `expr`: it ends in
+// a `_DEDENT` with no trailing `_NEWLINE`, so it is admitted only in the specific
+// statement tails that can absorb a trailing block (currently a `let` RHS, see
+// let_stmt). This keeps the newline-delimited statement model intact.
+lambda_def: BIT_OR lambda_params BIT_OR expr       -> lambda_expr
+
+lambda_block: BIT_OR lambda_params BIT_OR lambda_ret? ":" block
+
+lambda_params: BITNOT                              -> lambda_no_params
+             | lambda_param ("," lambda_param)*
+lambda_param: type NAME    -> lambda_typed_param
+            | NAME          -> lambda_bare_param
+lambda_ret: "->" type ["|" type]
 
 array_literal: "[" [array_elements] "]"
 array_elements: expr ("," expr)*

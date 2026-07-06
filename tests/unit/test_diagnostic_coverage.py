@@ -18,6 +18,8 @@ BASELINE may only go DOWN -- lower it when one of these is resolved.
 Parse-error limitations (Lark raises before semantic analysis; no CE#### code):
 - tests/perks/test_err_perk_no_methods -- empty perk body.
 - tests/array/test_err_hash_nested_arrays -- nested array type syntax i32[2][2].
+- tests/closures/test_err_let_two_statements_one_line -- two statements on one
+  physical line (the let newline is only optional before a block-body lambda).
 
 To lower BASELINE after a backfill pass:
 1. Run this file (it prints the current gap on failure), or recompute manually:
@@ -45,7 +47,7 @@ from pathlib import Path
 # in their header (the "gap"). After each backfill pass this MUST be lowered to
 # the new gap count -- it may never increase (that would mean a new error/warning
 # test landed without a code assertion).
-BASELINE = 2
+BASELINE = 3
 
 TESTS_ROOT = Path(__file__).parent.parent  # tests/
 EXCLUDED_DIRS = {"helpers", "bin"}

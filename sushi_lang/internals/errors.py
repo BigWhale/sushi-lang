@@ -989,6 +989,10 @@ _add(ErrorMessage("CE2093", Severity.ERROR,
     "cannot take a function value of '{name}': {reason}",
     Category.TYPE, "In v1 only plain top-level functions are first-class. Extension/perk methods, FFI externals, and generic functions cannot be referenced as function values."))
 
+_add(ErrorMessage("CE2094", Severity.ERROR,
+    "illegal closure capture: {reason}",
+    Category.TYPE, "Tier 1 closures capture by value (copy) or by move (owned types). Capturing a borrow (&peek/&poke) through a closure is deferred to Tier 2. An owning or variadic function-value parameter type is also rejected in Tier 1 (the indirect-call path has no deep-copy/variadic-collapse yet)."))
+
 # Unit Management Errors (CE3xxx)
 _add(ErrorMessage("CE3001", Severity.ERROR,
     "circular dependency detected: {cycle}",

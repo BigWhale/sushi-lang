@@ -26,14 +26,23 @@ def parse_let_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Let:
             break
 
     ty = ast_builder._parse_type(type_node) if type_node else None
-    expr_node = find_outer_expr_structural(node)
-    if expr_node is None:
-        raise NotImplementedError("let: expression missing")
+
+    # A block-body lambda RHS (`let h = |x|: <block>`) is admitted only here, not as
+    # a general expression (it ends in a _DEDENT, not a _NEWLINE). Build it directly.
+    lambda_block_node = first_tree(node.children, "lambda_block")
+    if lambda_block_node is not None:
+        from sushi_lang.semantics.ast_builder.expressions import lambdas
+        value = lambdas.parse_lambda(lambda_block_node, ast_builder)
+    else:
+        expr_node = find_outer_expr_structural(node)
+        if expr_node is None:
+            raise NotImplementedError("let: expression missing")
+        value = ast_builder._expr(expr_node)
 
     return Let(
         name=str(nm),
         ty=ty,
-        value=ast_builder._expr(expr_node),
+        value=value,
         name_span=span_of(nm),
         type_span=span_of(type_node) if type_node else None,
         loc=span_of(node)
