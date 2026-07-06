@@ -343,6 +343,13 @@ class ExpressionValidator(RecursiveVisitor):
             if isinstance(cap.ty, ReferenceType):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
                         reason=f"cannot capture '{cap.name}': it is a borrow (&peek/&poke capture is deferred to Tier 2)")
+            elif is_owning_type(cap.ty):
+                # Owned captures need move semantics + env RAII (move-capture), not yet
+                # wired: a shallow env copy would alias/UAF the outer buffer. Copy-only
+                # capture (primitives, strings, copyable structs) is safe in this slice.
+                er.emit(tv.reporter, er.ERR.CE2094, node.loc,
+                        reason=f"cannot capture the owned value '{cap.name}' (type '{cap.ty}'); "
+                               f"move-capture of owned types is deferred")
 
         # CE2094 (T1.7 cut): an owning parameter type on a function value has no
         # deep-copy on the indirect-call path yet (a latent double-free), so reject it.
