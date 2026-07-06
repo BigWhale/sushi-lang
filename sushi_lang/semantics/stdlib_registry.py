@@ -43,6 +43,7 @@ class StdlibFunction:
     get_return_type: Optional[Callable] = None
     validator: Optional[Callable] = None
     params: Optional[List] = None  # None=polymorphic, []=no args, [Type,...]=typed args
+    is_variadic: bool = False  # True if the last param is a native '...T' collecting variadic
 
 
 @dataclass
@@ -61,6 +62,11 @@ class StdlibModule:
     functions: Dict[str, StdlibFunction] = field(default_factory=dict)
     constants: Dict[str, StdlibFunction] = field(default_factory=dict)
 
+
+# Stdlib functions whose last parameter is a native '...T' collecting variadic. Their
+# param spec's last entry is the collected DynamicArrayType(T); trailing call arguments
+# are collected (or a single `arr...` bloomed) into it, exactly like a user variadic.
+_VARIADIC_STDLIB = {("process", "run")}
 
 _param_specs_cache = None
 
@@ -292,7 +298,8 @@ class StdlibRegistry:
                     is_constant=False,
                     get_return_type=get_ret_type,
                     validator=make_validator(name),
-                    params=param_spec
+                    params=param_spec,
+                    is_variadic=(module_name, name) in _VARIADIC_STDLIB
                 )
                 module.functions[name] = func
                 self._function_lookup[(module.path, name)] = func

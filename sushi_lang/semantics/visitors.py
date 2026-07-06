@@ -30,7 +30,7 @@ from sushi_lang.semantics.ast import (
     # Expressions
     Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
     UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, StructConstructor, EnumConstructor,
-    DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr
+    DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread
 )
 
 if TYPE_CHECKING:
@@ -271,6 +271,10 @@ class RecursiveVisitor(NodeVisitor[None]):
     def visit_blanklit(self, node: BlankLit) -> None:
         """Visit a blank literal (~). Default: no action."""
         pass
+
+    def visit_spread(self, node: Spread) -> None:
+        """Visit a spread argument (arr...). Default: visit the bloomed expression."""
+        self.visit(node.value)
 
 
 class ASTPassRunner:

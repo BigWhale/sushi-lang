@@ -9,7 +9,7 @@ from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.semantics.ast import (
     Program, FuncDef, ConstDef, ExtendDef, ExtendWithDef, Block, Stmt, Let, ExprStmt, Return, Print, PrintLn, While, Foreach, Match, MatchArm, Pattern, OwnPattern, Break,
     If, Expr, Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall,
-    DynamicArrayNew, DynamicArrayFrom, Rebind, Continue, CastExpr, MemberAccess, EnumConstructor, TryExpr, Borrow, RangeExpr
+    DynamicArrayNew, DynamicArrayFrom, Rebind, Continue, CastExpr, MemberAccess, EnumConstructor, TryExpr, Borrow, RangeExpr, Spread
 )
 from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, EnumTable, GenericEnumTable
 
@@ -577,3 +577,6 @@ class ScopeAnalyzer:
                 # Check both start and end expressions for variable usage
                 self._check_expression(expr.start)
                 self._check_expression(expr.end)
+            case Spread():
+                # Bloom argument: arr... uses (and moves) its source array.
+                self._check_expression(expr.value)

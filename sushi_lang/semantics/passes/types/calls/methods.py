@@ -15,7 +15,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType, ForeignPtrType
 from sushi_lang.semantics.ast import MethodCall, Name
 from ..compatibility import types_compatible
-from ..utils import is_array_destroyed, mark_array_destroyed
+from ..utils import is_array_destroyed, mark_array_destroyed, reject_spread_args
 
 if TYPE_CHECKING:
     from .. import TypeValidator
@@ -23,6 +23,11 @@ if TYPE_CHECKING:
 
 def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     """Validate method call - receiver type, method existence, argument types."""
+    # A bloom spread `arr...` is never valid in a method call (methods cannot be
+    # variadic, CE0115). Reject early so it never reaches the backend (CE0120).
+    if reject_spread_args(validator, call.args):
+        return
+
     # Check for use-after-destroy (CE2024)
     if isinstance(call.receiver, Name):
         if is_array_destroyed(validator, call.receiver.id):

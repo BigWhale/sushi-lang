@@ -478,6 +478,35 @@ fn handle_status(Status status) ~:
 
 **Use multi-line when:** The arm body has multiple statements or complex logic
 
+### Variadics and Bloom
+
+For a "N of a thing" API, prefer a native variadic `...T` parameter over a `T[]`
+parameter: a bare `[...]` literal is a *fixed* array and does not coerce to a dynamic
+`T[]`, so a `T[]` parameter forces callers into an explicit `from([...])` heap allocation.
+A variadic lets them pass the values directly.
+
+```sushi
+# Good - variadic: callers pass values directly
+fn log_all(string prefix, ...i32 values) ~:
+    foreach(v in values.iter()):
+        println("{prefix}: {v}")
+    return Result.Ok(~)
+
+log_all("val", 10, 20, 30)          # no from([...]) needed
+```
+
+When a caller already holds an array, forward it into the variadic slot with a **bloom**
+(the postfix `arr...` operator) rather than reaching for an array-taking overload:
+
+```sushi
+let string[] argv = build_argv()??
+let ProcessOutput out = run("clang", argv...)??   # bloom: argv is MOVED into the call
+```
+
+A bloom **moves** its source array into the callee, so do not use the array again after
+the call. The source must be a plain array variable, and the bloom must be the sole,
+trailing argument (mixing `f(1, xs...)` is not allowed).
+
 ## Comparison with Other Languages
 
 | Language  | Functions/Variables | Types          | Constants                |

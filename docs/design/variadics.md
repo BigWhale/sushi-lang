@@ -39,10 +39,11 @@ unsafe external "C" as libc because "formatted output via libc":
 ## Semantics
 
 - **Element type** is a single concrete `T` (homogeneous). Reference element types (`&peek`/`&poke`)
-  are not allowed in v1, and neither is a dynamic-array element (`...T[]`): the call site copies
-  each trailing argument into the synthesized array without moving the source, so a move-only
-  element type would be freed twice (Sushi has move semantics for dynamic arrays only). Both are
-  `CE0114`; a moved-element form is deferred to the spread/forwarding design.
+  are rejected with `CE0114`. A dynamic-array element `...T[]` is allowed: each trailing array
+  argument is *moved* (not copied) into the synthesized array-of-arrays, so there is no double-free.
+  Only the individual-args call form (`total(a, b)`) is reachable in practice, since a true
+  `i32[][]` source value cannot be constructed in surface syntax — see "Spread / forwarding
+  (bloom)" below for the array-of-`T` case.
 - **Zero trailing arguments** is valid; the native callee receives an empty `T[]`.
 - **Native ownership.** The call site synthesizes a `T[]`, which is moved into the callee; the
   callee owns and destroys it via the normal dynamic-array RAII path. The LLVM function itself stays
@@ -58,24 +59,69 @@ unsafe external "C" as libc because "formatted output via libc":
 - `CE5004` — variadic external requires at least one fixed parameter.
 - `CE5005` — non-C-ABI type passed as a variadic argument to an external call.
 - `CE0114` — variadic parameter must be the last parameter; a function may declare at most one;
-  its element type must not be a reference or a dynamic array (`...T[]`). Also rejected in generic
-  functions (generic variadics are out of scope for v1).
+  its element type must not be a reference. A dynamic-array element (`...T[]`) is allowed. Also
+  rejected in generic functions (generic variadics are out of scope for v1).
 - `CE0115` — variadic parameter not allowed in a perk method or extension method.
 - `CE0116` — a public *native* variadic (`...T`) function cannot appear in a `.slib` public API. A
   native variadic collects its trailing args into a runtime `T[]` inside one concrete function, so
   there is no template to monomorphize at the consumer; analogous to the CE5002 FFI boundary block.
   This blocks only v1 `...T` (`is_variadic`); v2 type packs (`...Ts`) ship as templates and are
   exportable (see "Cross-library packs" under the Phase-1 section below).
-- Native call arity/type errors reuse existing `CE2009` / `CE2006`.
+- `CE0120` — a bloom argument `arr...` used somewhere illegal: into a non-variadic parameter, or
+  not as the sole, last trailing argument at the call site.
+- Type mismatch when blooming (a non-array source, or an array of the wrong element type) reuses
+  `CE2006`. Native call arity/type errors otherwise reuse existing `CE2009` / `CE2006`.
+
+## Spread / forwarding (bloom)
+
+An existing array can be forwarded into a `...T` slot with the postfix `...` operator, written
+directly after the array expression: `arr...`. The operation is called **bloom** — the array
+"opens" and its elements fan out to fill the trailing call arguments — mirroring Go's `f(arr...)`.
+
+```sushi
+fn sum(...i32 nums) i32:
+    let i32 total = 0
+    foreach(n in nums.iter()):
+        total := total + n
+    return Result.Ok(total)
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let i32 s = sum(xs...).realise(0)   # bloom: xs is MOVED into the variadic slot
+    println("sum = {s}")                # sum = 6
+    return Result.Ok(0)
+```
+
+Semantics:
+
+- **Move, not copy.** The bloomed array is moved into the callee's synthesized `T[]` — the same
+  ownership transfer as a native variadic's own array construction, just skipping the copy. The
+  caller must not use the source array after the call.
+- **Source must be a bare variable.** `arr...` requires `arr` to be a `Name` referring to an
+  array-typed local/parameter; blooming an arbitrary expression (a call result, a field access, a
+  literal array) is not supported in v1.
+- **Sole, last trailing argument.** A bloom must be the only trailing argument — it cannot be
+  mixed with individual trailing arguments (`sum(1, xs...)` is not a bloom call shape), and it
+  cannot appear anywhere but the variadic slot. Any other placement is `CE0120`.
+- **Type-checked like any other argument.** The element type of the bloomed array must match the
+  variadic's declared element type; a mismatch (or blooming a non-array value) is `CE2006`.
+- **Only into `...T`.** Blooming into a non-variadic parameter is `CE0120` — there is no fixed-arity
+  spread.
+
+`...T[]` combined with bloom is a degenerate case: since a true `i32[][]` (array of dynamic arrays)
+value cannot be constructed in surface syntax, `rows...` blooming into a `...i32[]` parameter is
+moot in practice — that variadic form is only reachable via individual array arguments
+(`total(a, b)`), each moved in per element (see Semantics above).
 
 ## Deferred (additive, not in v1)
 
-- **Spread / forwarding** an existing array into a variadic slot (Go's `f(arr...)`).
 - **Generic variadics** (`...T` in a generic function).
 - **Variadics in perk / extension methods** (rejected with `CE0115` for now).
 - **Public `.slib` export** of a native variadic function — blocked for v1 with `CE0116` (the
   `is_variadic` flag is not serialized into the library format yet), analogous to the CE5002 FFI
   boundary block.
+- **Pack forwarding** (`f(pack...)`, forwarding a parameter pack into another variadic) and **pack
+  indexing** — bloom covers only a single `...T` array source, not `...Ts` packs.
 
 ## Variadic generics / parameter packs (Phase 1, landed)
 
@@ -151,7 +197,9 @@ fn main() i32:
   (a runtime array, not a template).
 - **Plain function definitions only**: perk methods and extension methods may not declare a value
   pack (CE0115 applies to both v1 `...T` and Phase-1 `...Ts`).
-- **No spread / forwarding**: `f(arr...)` and pack forwarding to another variadic are deferred.
+- **No pack forwarding**: a value pack cannot be forwarded into another variadic (`g(pack...)`) —
+  bloom (see "Spread / forwarding (bloom)" above) only spreads a single `...T` array, not a
+  `...Ts` pack.
 - **No pack indexing**: individual pack elements cannot be addressed by index.
 - **Same-enum-type element gap**: if all pack elements resolve to the same enum type, the
   instantiation-collection pass may raise CE2061 (a narrow limitation, separate from the

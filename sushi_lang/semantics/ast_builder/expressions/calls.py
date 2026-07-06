@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import List, Union, Tuple, Optional, TYPE_CHECKING
 from lark import Tree, Token
-from sushi_lang.semantics.ast import Expr, Call, MethodCall, Name
+from sushi_lang.semantics.ast import Expr, Call, MethodCall, Name, Spread
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, find_tree_recursive, first_name
 from sushi_lang.semantics.ast_builder.utils.expression_discovery import _EXPR_NODES
 from sushi_lang.internals.report import span_of
@@ -35,7 +35,13 @@ def extract_call_args(call_node: Tree, ast_builder: 'ASTBuilder') -> Tuple[List[
                 if positional:
                     # Positional arguments
                     for expr_node in positional.children:
-                        args.append(ast_builder._expr(expr_node))
+                        # A `spread_arg` tree wraps a bloomed argument `arr...`; unwrap its
+                        # inner expression into a Spread node. Plain args pass through.
+                        if isinstance(expr_node, Tree) and expr_node.data == "spread_arg":
+                            inner = ast_builder._expr(expr_node.children[0])
+                            args.append(Spread(value=inner, loc=span_of(expr_node)))
+                        else:
+                            args.append(ast_builder._expr(expr_node))
                     field_names = None
 
                 elif named:

@@ -13,12 +13,59 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, StructType
-from sushi_lang.semantics.ast import Call
+from sushi_lang.semantics.ast import Call, Spread
 from ..compatibility import types_compatible
 from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
 
 if TYPE_CHECKING:
     from .. import TypeValidator
+
+
+def _reject_misplaced_spread(validator: 'TypeValidator', arg) -> bool:
+    """Emit CE0120 if `arg` is a bloom spread `arr...` in a position where one is not
+    allowed (a non-variadic call, or a fixed/non-last argument). Still validates the
+    inner expression so downstream inference does not crash. Returns True if rejected.
+    """
+    if isinstance(arg, Spread):
+        er.emit(validator.reporter, er.ERR.CE0120, arg.loc,
+                message="bloom argument 'arr...' is only allowed as the last argument "
+                        "of a call to a variadic '...T' function")
+        validator.validate_expression(arg)
+        return True
+    return False
+
+
+def validate_variadic_trailing_args(validator: 'TypeValidator', trailing: list,
+                                    fixed_count: int, array_ty, element_ty) -> None:
+    """Validate the trailing arguments of a variadic call (native '...T' or stdlib).
+
+    Two accepted forms:
+      - individual values, each checked against the element type T;
+      - a single bloom spread `arr...`, checked against the whole array type T[].
+    A spread that is not the sole trailing argument is CE0120; a type mismatch is CE2006.
+    Shared by user-function and stdlib (run) variadic validation.
+    """
+    for offset, arg in enumerate(trailing):
+        index = fixed_count + offset + 1
+        if isinstance(arg, Spread):
+            if offset != 0 or len(trailing) != 1:
+                er.emit(validator.reporter, er.ERR.CE0120, arg.loc,
+                        message="bloom argument 'arr...' must be the sole, last trailing argument")
+            validator.validate_expression(arg)
+            if array_ty is not None:
+                arg_type = validator.infer_expression_type(arg)
+                if arg_type is not None and not types_compatible(validator, arg_type, array_ty):
+                    er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
+                            index=index, expected=str(array_ty), got=str(arg_type))
+        else:
+            propagate_enum_type_to_dotcall(validator, arg, element_ty)
+            propagate_struct_type_to_dotcall(validator, arg, element_ty)
+            validator.validate_expression(arg)
+            if element_ty is not None:
+                arg_type = validator.infer_expression_type(arg)
+                if arg_type is not None and not types_compatible(validator, arg_type, element_ty):
+                    er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
+                            index=index, expected=str(element_ty), got=str(arg_type))
 
 
 def validate_indirect_call(validator: 'TypeValidator', call: Call, fn_ty) -> None:
@@ -124,8 +171,10 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
             er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
                    name=function_name, expected=fixed_count, got=len(actual_args))
 
-        # Validate fixed (non-variadic) arguments.
+        # Validate fixed (non-variadic) arguments. A bloom spread is illegal here.
         for i, (arg, param) in enumerate(zip(actual_args[:fixed_count], expected_params[:fixed_count])):
+            if _reject_misplaced_spread(validator, arg):
+                continue
             propagate_enum_type_to_dotcall(validator, arg, param.ty)
             propagate_struct_type_to_dotcall(validator, arg, param.ty)
             validator.validate_expression(arg)
@@ -135,22 +184,17 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
                     er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
                            index=i + 1, expected=str(param.ty), got=str(arg_type))
 
-        # Validate trailing variadic arguments against element type T.
+        # Validate trailing variadic arguments. Two forms are accepted:
+        #   - individual values, each type-checked against element type T;
+        #   - a single bloom spread `arr...`, type-checked against the whole array T[].
         element_ty = (
             variadic_param.ty.base_type
             if isinstance(variadic_param.ty, DynamicArrayType)
             else variadic_param.ty
         )
-        for j in range(fixed_count, len(actual_args)):
-            arg = actual_args[j]
-            propagate_enum_type_to_dotcall(validator, arg, element_ty)
-            propagate_struct_type_to_dotcall(validator, arg, element_ty)
-            validator.validate_expression(arg)
-            if element_ty is not None:
-                arg_type = validator.infer_expression_type(arg)
-                if arg_type is not None and not types_compatible(validator, arg_type, element_ty):
-                    er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                           index=j + 1, expected=str(element_ty), got=str(arg_type))
+        validate_variadic_trailing_args(
+            validator, actual_args[fixed_count:], fixed_count,
+            variadic_param.ty, element_ty)
         return
 
     # Check argument count
@@ -161,6 +205,9 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
 
     # Validate each argument type against corresponding parameter type
     for i, (arg, param) in enumerate(zip(actual_args, expected_params)):
+        # A bloom spread `arr...` is illegal in a call to a non-variadic function.
+        if _reject_misplaced_spread(validator, arg):
+            continue
         # Propagate expected types to DotCall nodes for generic enums (before validation)
         # This allows Maybe.None(), Result.Ok(), etc. to work as function arguments
         propagate_enum_type_to_dotcall(validator, arg, param.ty)
@@ -190,6 +237,8 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
 
     # Validate any excess arguments (if more args than params)
     for i in range(len(expected_params), len(actual_args)):
+        if _reject_misplaced_spread(validator, actual_args[i]):
+            continue
         validator.validate_expression(actual_args[i])
 
 
@@ -257,20 +306,48 @@ def check_stdlib_function(validator: 'TypeValidator', call: Call) -> Optional[an
 
 def validate_stdlib_function(validator: 'TypeValidator', call: Call, module_and_func: tuple) -> None:
     """Validate a stdlib function call (arg count and types)."""
+    from sushi_lang.semantics.typesys import DynamicArrayType
     module_path, stdlib_func = module_and_func
     function_name = call.callee.id
     args = call.args if hasattr(call, 'args') else []
 
-    # Validate all argument expressions first
-    for arg in args:
-        validator.validate_expression(arg)
-
     # Polymorphic functions need special handling
     if stdlib_func.params is None:
+        # Validate all argument expressions first
+        for arg in args:
+            validator.validate_expression(arg)
         _validate_polymorphic_math(validator, call, function_name)
         return
 
     expected_params = stdlib_func.params
+
+    # Native variadic stdlib call (e.g. run): the last param is a collecting '...T'.
+    # Validate the fixed prefix, then the trailing args (individual values or a bloom)
+    # via the shared variadic-trailing policy. A bloom `arr...` is Spread-aware here,
+    # so it must be handled BEFORE any generic per-arg validation.
+    if getattr(stdlib_func, "is_variadic", False):
+        fixed_count = len(expected_params) - 1
+        if len(args) < fixed_count:
+            er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
+                   name=function_name, expected=fixed_count, got=len(args))
+            return
+        for i, (arg, expected_type) in enumerate(zip(args[:fixed_count], expected_params[:fixed_count])):
+            if _reject_misplaced_spread(validator, arg):
+                continue
+            validator.validate_expression(arg)
+            arg_type = validator.infer_expression_type(arg)
+            if arg_type is not None and not types_compatible(validator, arg_type, expected_type):
+                er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
+                       index=i+1, expected=str(expected_type), got=str(arg_type))
+        array_ty = expected_params[-1]
+        element_ty = array_ty.base_type if isinstance(array_ty, DynamicArrayType) else array_ty
+        validate_variadic_trailing_args(
+            validator, args[fixed_count:], fixed_count, array_ty, element_ty)
+        return
+
+    # Validate all argument expressions first
+    for arg in args:
+        validator.validate_expression(arg)
 
     # Check argument count
     if len(args) != len(expected_params):

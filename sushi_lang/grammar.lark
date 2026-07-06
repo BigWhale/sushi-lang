@@ -184,7 +184,9 @@ args: arg_list?
 arg_list: positional_args
         | named_args
 
-positional_args: expr ("," expr)*
+positional_args: positional_arg ("," positional_arg)*
+?positional_arg: expr
+              | expr ELLIPSIS   -> spread_arg
 
 named_args: named_arg ("," named_arg)*
 named_arg: NAME ":" expr

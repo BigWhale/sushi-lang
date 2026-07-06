@@ -14,7 +14,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import StructType, Type
 from sushi_lang.semantics.ast import Call
 from ..compatibility import types_compatible
-from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
+from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall, reject_spread_args
 
 if TYPE_CHECKING:
     from .. import TypeValidator
@@ -28,6 +28,10 @@ def validate_struct_constructor(validator: 'TypeValidator', call: Call) -> None:
     - Named construction: Point(x: 10, y: 20)
     - Generic structs: Box<i32>(value: 42)
     """
+    # A bloom spread `arr...` is not a struct-construction argument (CE0120).
+    if reject_spread_args(validator, call.args):
+        return
+
     struct_name = call.callee.id
 
     # Check if struct exists in the struct table

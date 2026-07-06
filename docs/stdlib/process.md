@@ -264,8 +264,13 @@ Spawn an external program by argv vector (PATH-searched, **no shell**), capturin
 standard output and standard error and returning its exit code.
 
 ```sushi
-fn run(string cmd, string[] args) -> Result<ProcessOutput, ProcessError>
+fn run(string cmd, ...string args) -> Result<ProcessOutput, ProcessError>
 ```
+
+`args` is variadic: pass individual arguments directly (`run("echo", "hello")`), or forward an
+already-built `string[]` with a [bloom](../variadics.md#spread-forwarding-bloom) (`run("sh",
+argv...)`) when the argument list is computed at runtime. A bloom moves the source array into the
+call, so don't reuse it afterward.
 
 **Parameters:**
 - `cmd` - The program to run (searched on `PATH`, e.g. `"clang"`, `"echo"`)
@@ -293,7 +298,7 @@ use <sys/process>
 use <io/stdio>
 
 fn main() i32:
-    match run("echo", from(["Mostly Harmless"])):
+    match run("echo", "Mostly Harmless"):
         Result.Ok(out) ->
             println("exit={out.exit_code}")
             println(out.stdout_text)
@@ -312,9 +317,10 @@ use <sys/process>
 use <io/stdio>
 
 fn compile_ir(string path) i32 | ProcessError:
-    let ProcessOutput out = run("clang", from([path, "-o", "out"]))??
+    let string[] argv = from([path, "-o", "out"])
+    let ProcessOutput out = run("clang", argv...)??   # bloom: argv is moved into the call
     if (out.exit_code != 0):
-        eprintln(out.stderr_text)
+        println("{out.stderr_text}")
     return Result.Ok(out.exit_code)
 ```
 

@@ -18,7 +18,7 @@ from sushi_lang.semantics.ast import (
     Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, MatchArm, Pattern, Break, Continue,
     # Expressions
     Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
-    UnaryOp, BinaryOp, Call, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom, CastExpr, EnumConstructor, TryExpr, RangeExpr, Borrow
+    UnaryOp, BinaryOp, Call, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom, CastExpr, EnumConstructor, TryExpr, RangeExpr, Borrow, Spread
 )
 
 
@@ -518,6 +518,14 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
     def visit_blanklit(self, node: 'BlankLit') -> Optional[Type]:
         """Infer blank literal type."""
         return BuiltinType.BLANK
+
+    def visit_spread(self, node: Spread) -> Optional[Type]:
+        """A bloomed argument `arr...` infers as the whole array type of its source.
+
+        Position/target validity (must be a variadic slot, sole last trailing arg)
+        is enforced by the call validators, not here.
+        """
+        return self.type_validator.infer_expression_type(node.value)
 
     def visit_stringlit(self, node: StringLit) -> Optional[Type]:
         """Infer string literal type."""

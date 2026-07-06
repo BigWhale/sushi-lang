@@ -1,7 +1,9 @@
-# A variadic '...T' element type cannot be a dynamic array (move semantics would
-# double-free the synthesized array). -> CE0114.
+# A variadic '...T' element type cannot be a reference (&peek/&poke): a borrow cannot
+# be owned or moved into the callee-owned collected array. -> CE0114.
+# (A dynamic-array element '...T[]' is now allowed and moved per element; see
+# test_variadic_dynarray_element_runtime.sushi.)
 # EXPECT_ERROR_CODE: CE0114
-fn f(...i32[] rows) i32:
+fn f(...&peek i32 rows) i32:
     return Result.Ok(0)
 
 fn main() i32:
