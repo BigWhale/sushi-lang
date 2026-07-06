@@ -338,11 +338,19 @@ class ExpressionValidator(RecursiveVisitor):
 
         # CE2094: capturing a &peek/&poke borrow is deferred to Tier 2. A captured
         # name whose enclosing type is a reference is a borrow capture.
-        from sushi_lang.semantics.typesys import ReferenceType
+        from sushi_lang.semantics.typesys import ReferenceType, is_owning_type
         for cap in (node.captures or []):
             if isinstance(cap.ty, ReferenceType):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
                         reason=f"cannot capture '{cap.name}': it is a borrow (&peek/&poke capture is deferred to Tier 2)")
+
+        # CE2094 (T1.7 cut): an owning parameter type on a function value has no
+        # deep-copy on the indirect-call path yet (a latent double-free), so reject it.
+        for p in node.params:
+            if is_owning_type(p.ty):
+                er.emit(tv.reporter, er.ERR.CE2094, node.loc,
+                        reason=f"lambda parameter '{p.name}' has an owning type '{p.ty}'; "
+                               f"owning function-value parameters are deferred to Tier 2")
 
         # Validate the body with the lambda's params in scope (captures already are).
         saved_vars = dict(tv.variable_types)
