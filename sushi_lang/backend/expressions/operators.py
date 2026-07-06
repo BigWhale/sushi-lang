@@ -539,11 +539,12 @@ def emit_name(codegen: 'CodegenProtocol', expr: Name, to_i1: bool) -> ir.Value:
         return codegen.utils.as_i1(v) if to_i1 else v
     except Exception:
         # Not a local: a bare reference to a top-level function is a first-class
-        # function value -> its address (an ir.Function is already a pointer value,
-        # typed exactly like the FunctionType lowering: ptr to Result<T,E>(params)).
+        # function value -> a non-capturing fat pointer {thunk, null, null}. The
+        # thunk bridges the bare fn into the uniform env-passing indirect ABI.
         llvm_fn = codegen.funcs.get(expr.id)
         if llvm_fn is not None:
-            return codegen.utils.as_i1(llvm_fn) if to_i1 else llvm_fn
+            from sushi_lang.backend.runtime import closures
+            return closures.materialize_function_ref(codegen, llvm_fn)
         # Variable/constant not found (should be caught in semantic analysis)
         raise_internal_error("CE0055", name=expr.id)
 

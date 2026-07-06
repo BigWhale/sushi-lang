@@ -1,0 +1,8 @@
+# T1.4-T1.6: a capturing closure. `|i32 x| x + n` captures the local `n` by value
+# into a heap environment; calling through the function value reads it back.
+# EXPECT_STDOUT_EXACT: "15\n"
+fn main() i32:
+    let i32 n = 5
+    let fn(i32) -> i32 f = |i32 x| x + n
+    println(f(10).realise(0))
+    return Result.Ok(0)

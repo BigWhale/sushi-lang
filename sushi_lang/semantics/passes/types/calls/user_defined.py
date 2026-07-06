@@ -93,6 +93,18 @@ def validate_indirect_call(validator: 'TypeValidator', call: Call, fn_ty) -> Non
 
 def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
     """Validate function call arguments and types (CE2006, CE2008)."""
+    from sushi_lang.semantics.ast import Name
+
+    # A non-Name callee -- `arr[0]()`, `(e)()`, or a captured/field closure called as
+    # `env.f(x)` in a lifted lambda body -- needs Call.callee widening (Tier 2, T2.4).
+    # Report it gracefully (bind the callee to a local first) instead of crashing on
+    # the `.id` access below.
+    if not isinstance(call.callee, Name):
+        er.emit(validator.reporter, er.ERR.CE2094, getattr(call.callee, 'loc', call.loc),
+                reason="calling this function value directly is deferred to Tier 2; "
+                       "bind it to a local variable first (let f = <expr>) and call f(...)")
+        return
+
     # Check if function exists
     function_name = call.callee.id
 

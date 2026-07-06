@@ -1,0 +1,29 @@
+# T1.0: a function value is now a 3-word fat pointer {fn_ptr, env_ptr, drop_ptr}.
+# This exercises the migrated ABI end to end for NON-capturing values: a bare fn
+# reference stored in a struct field alongside another field (so the 24-byte fat
+# layout must be laid out and copied correctly), passed by value, and called
+# through the parameter via the synthesized adapter thunk.
+# EXPECT_STDOUT_EXACT: "7\n30\n"
+fn add_one(i32 x) i32:
+    return Result.Ok(x + 1)
+
+fn triple(i32 x) i32:
+    return Result.Ok(x * 3)
+
+struct Ops:
+    fn(i32) -> i32 a
+    fn(i32) -> i32 b
+
+fn call_a(Ops o, i32 v) i32:
+    let fn(i32) -> i32 f = o.a
+    return Result.Ok(f(v)??)
+
+fn call_b(Ops o, i32 v) i32:
+    let fn(i32) -> i32 g = o.b
+    return Result.Ok(g(v)??)
+
+fn main() i32:
+    let Ops o = Ops(add_one, triple)
+    println(call_a(o, 6).realise(0))
+    println(call_b(o, 10).realise(0))
+    return Result.Ok(0)

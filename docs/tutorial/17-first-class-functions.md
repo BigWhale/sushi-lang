@@ -35,10 +35,11 @@ Three things to notice:
 - Calling through a function value returns a `Result` just like calling the function directly, so
   the familiar `??` works on `op(v)`.
 
-!!! note "It's just a pointer"
-    A function value carries no captured variables — it is the bare address of the compiled
-    function. There are **no closures** yet (a closure remembers surrounding variables; this
-    doesn't). That keeps function values free: one pointer, no allocation, no cleanup.
+!!! note "A plain reference vs. a closure"
+    A plain function reference like `add_one` above carries no captured variables — it's the bare
+    address of the compiled function, with no allocation and no cleanup. Sushi also has
+    [closures](../closures.md): a lambda literal that *does* capture surrounding variables, covered
+    in the next chapter. Both are `fn(...)`-typed values with identical call syntax.
 
 ## A dispatch table with `List`
 
@@ -121,13 +122,15 @@ identifier.
   `fn(params) -> return [| Error]`.
 - You can **store** function values (variables, struct fields, `List<fn(...)>`), **pass** them as
   arguments, and **call through** them; an indirect call returns a `Result` just like a direct one.
-- Function values are **bare pointers** — zero-cost, no captured state, **no closures** in v1.
+- A plain function reference is a **bare pointer** — zero-cost, no captured state. Sushi also has
+  **closures** (capturing lambda literals) — see the next chapter.
 - Call a function-valued **struct field** by binding it to a local first (`obj.field()` is a method
   call).
 - The **error type is part of the function type** and propagates through `??`.
 - Only **plain top-level functions** qualify; generic-function references are **CE2093**, a
   call-through mismatch is **CE2092**, and an assignment mismatch is **CE2002**.
 
-That's functions-as-data. For the complete reference — every form, the compilation model, and the
-roadmap toward closures — see the [First-Class Functions guide](../first-class-functions.md) and
-the [design note](../design/first-class-functions.md).
+That's functions-as-data. Next, [Chapter 18 (Closures)](18-closures.md) adds the capturing lambda
+literal. For the complete reference on this chapter's material, see the
+[First-Class Functions guide](../first-class-functions.md) and the
+[design note](../design/first-class-functions.md).

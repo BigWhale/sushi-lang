@@ -1,0 +1,13 @@
+# T1.5 (item 2a): rebinding a capturing closure `let g = f` MOVES its owned heap
+# environment. Only the new binding `g` owns and frees the env; `f` is consumed, so
+# there is exactly one owner and no double free. g(10) = 10 + base(100) = 110.
+# EXPECT_STDOUT_EXACT: "110\n"
+fn run() i32:
+    let i32 base = 100
+    let fn(i32) -> i32 f = |i32 x| x + base
+    let fn(i32) -> i32 g = f
+    return Result.Ok(g(10)??)
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)

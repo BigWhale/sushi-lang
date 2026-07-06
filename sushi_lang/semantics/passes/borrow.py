@@ -22,7 +22,8 @@ from typing import Dict, Set, Optional
 from dataclasses import dataclass, field
 
 from sushi_lang.semantics.ast import *
-from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, Type
+from sushi_lang.semantics.ast import Lambda
+from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, Type, is_owning_type
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -47,6 +48,9 @@ class BorrowState:
     poke_borrow_count: int = 0  # Number of active &poke borrows (max 1)
     peek_borrow_count: int = 0  # Number of active &peek borrows (unlimited)
     is_moved: bool = False  # Ownership has been transferred
+    is_owning_closure: bool = False  # A capturing closure that owns a heap env (capture
+                                     # is erased from the fn(...) type, so ownership is
+                                     # tracked by binding provenance, not var_type)
     is_destroyed: bool = False  # Variable has been explicitly destroyed (via .destroy())
     first_borrow_span: Optional[Span] = None  # Location of the first active borrow
 
@@ -141,6 +145,8 @@ class BorrowChecker:
             self.borrow_state[stmt.name] = BorrowState(name=stmt.name, var_type=stmt.ty)
             # Check the initialization expression
             self._check_expr(stmt.value)
+            # Closure move-on-bind: `let g = f` transfers a capturing closure's owned env.
+            self._reconcile_closure_bind(stmt)
             # Clear any borrows from the expression
             self._clear_borrows()
 
@@ -265,7 +271,9 @@ class BorrowChecker:
                     self.err.emit(er.ERR.CE2406, expr.loc, name=expr.id)
 
         elif isinstance(expr, Call):
-            # Check all arguments
+            # Check the callee (a moved closure used as `f(x)` is a use-after-move) and
+            # all arguments. A top-level fn name is not in borrow_state, so it is inert.
+            self._check_expr(expr.callee)
             for arg in expr.args:
                 self._check_expr(arg)
 
@@ -334,6 +342,17 @@ class BorrowChecker:
             for part in expr.parts:
                 if not isinstance(part, str):
                     self._check_expr(part)
+
+        elif isinstance(expr, Lambda):
+            # Move-capture: an owned captured value (dynamic array / List / Own /
+            # capturing closure) is moved into the closure's environment, so a later
+            # use of the outer binding is a use-after-move (CE2405). Copyable captures
+            # (primitives, strings) stay usable.
+            for cap in (expr.captures or []):
+                if isinstance(cap.name, str) and cap.name in self.borrow_state:
+                    state = self.borrow_state[cap.name]
+                    if self._type_is_owning(cap.ty):
+                        state.is_moved = True
 
         # Literals and other leaf expressions don't need checking
 
@@ -482,19 +501,34 @@ class BorrowChecker:
     def _type_is_owning(self, vt: Optional[Type]) -> bool:
         """True if a value of this type carries heap ownership (so Own.alloc moves it).
 
-        Handles the declared GenericTypeRef form and the resolved StructType form
-        (Own<...>/List<...>), plus dynamic arrays.
+        Delegates to the shared `is_owning_type` predicate (typesys) so the borrow
+        checker and the backend RAII paths agree on what owns memory — including a
+        capturing closure value.
         """
-        if vt is None:
-            return False
-        if isinstance(vt, DynamicArrayType):
-            return True
-        if isinstance(vt, GenericTypeRef) and vt.base_name in ('Own', 'List'):
-            return True
-        name = getattr(vt, 'name', None)
-        if isinstance(name, str) and (name.startswith('Own<') or name.startswith('List<')):
-            return True
-        return False
+        return is_owning_type(vt)
+
+    def _reconcile_closure_bind(self, stmt: Let) -> None:
+        """Track capturing-closure ownership across `let` bindings.
+
+        Capture is erased from the `fn(...)` type, so a closure's heap-env ownership is
+        tracked by binding provenance: a capturing lambda literal owns its env, and a
+        plain rebind `let g = f` MOVES that ownership (a later use of `f` is CE2405, the
+        same move semantics as arrays/List/Own). Non-capturing fn values are copyable and
+        untracked, so plain fn-ref code keeps working."""
+        from sushi_lang.semantics.typesys import FunctionType
+        if not isinstance(stmt.ty, FunctionType):
+            return
+        dest = self.borrow_state.get(stmt.name)
+        if dest is None:
+            return
+        value = stmt.value
+        if isinstance(value, Lambda) and value.captures:
+            dest.is_owning_closure = True
+        elif isinstance(value, Name):
+            src = self.borrow_state.get(value.id)
+            if src is not None and src.is_owning_closure:
+                src.is_moved = True
+                dest.is_owning_closure = True
 
     def _mark_moved_if_applicable(self, expr: Expr) -> None:
         """Mark a variable as moved if the expression is a simple variable reference to a dynamic array.

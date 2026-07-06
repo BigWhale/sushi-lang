@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 import llvmlite.ir as ir
 
-from sushi_lang.semantics.typesys import Type, BuiltinType, DynamicArrayType, StructType, EnumType
+from sushi_lang.semantics.typesys import Type, BuiltinType, DynamicArrayType, StructType, EnumType, FunctionType
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, DA_DATA_INDEX
 from sushi_lang.backend.llvm_constants import ZERO_I32, ONE_I32, make_i32_const
 
@@ -65,6 +65,37 @@ def emit_value_destructor(
     # Enums: switch on tag and destroy variant data
     elif isinstance(value_type, EnumType):
         _emit_enum_destructor(codegen, builder, value_ptr, value_type)
+
+    # Function values (closures): free the heap environment through the runtime-guarded
+    # drop pointer. Capture is erased from the type, so ownership is resolved at runtime:
+    # a non-capturing value carries drop_ptr = null, making the free a no-op.
+    elif isinstance(value_type, FunctionType):
+        emit_function_value_destructor(codegen, builder, value_ptr)
+
+
+def emit_function_value_destructor(
+    codegen: LLVMCodegen,
+    builder: ir.IRBuilder,
+    value_ptr: ir.Value
+) -> None:
+    """Free a closure's heap environment via its type-erased drop pointer.
+
+    `value_ptr` points at the `{i8* fn_ptr, i8* env_ptr, i8* drop_ptr}` fat value. The
+    free is `if (drop_ptr != null) drop_ptr(env_ptr)` -- a non-capturing function value
+    stores a null drop, so this is a guarded no-op for it (the whole point of the
+    data-driven drop slot: ownership cannot be told from the `fn(...)` type alone).
+    """
+    fat = builder.load(value_ptr, name="closure_val")
+    drop_ptr = builder.extract_value(fat, 2, name="closure_drop")
+    env_ptr = builder.extract_value(fat, 1, name="closure_env")
+
+    is_not_null = builder.icmp_unsigned(
+        "!=", drop_ptr, ir.Constant(drop_ptr.type, None)
+    )
+    with builder.if_then(is_not_null):
+        drop_fn_ty = ir.FunctionType(ir.VoidType(), [codegen.types.str_ptr])
+        drop_callee = builder.bitcast(drop_ptr, ir.PointerType(drop_fn_ty), name="closure_drop_fn")
+        builder.call(drop_callee, [env_ptr])
 
 
 def _emit_dynamic_array_destructor(
@@ -276,6 +307,11 @@ def needs_cleanup(value_type: Type) -> bool:
     from sushi_lang.semantics.typesys import ForeignPtrType
     if isinstance(value_type, ForeignPtrType):
         return False  # Foreign `ptr` is unmanaged: RAII never frees it
+    if isinstance(value_type, FunctionType):
+        # A function value may own a heap environment (a capturing closure). Capture is
+        # erased from the type, so we conservatively treat every function value as
+        # needing cleanup; the runtime-guarded drop makes a non-capturing free a no-op.
+        return True
     if isinstance(value_type, BuiltinType):
         return False  # Primitives don't need cleanup
     elif isinstance(value_type, DynamicArrayType):

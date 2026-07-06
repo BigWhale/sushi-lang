@@ -54,7 +54,7 @@ class ExpressionEmitter:
             IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString,
             ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Name, Call, MethodCall,
             MemberAccess, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow,
-            EnumConstructor, DotCall, TryExpr
+            EnumConstructor, DotCall, TryExpr, Lambda
         )
 
         # Delegate to appropriate specialized emitter based on expression type
@@ -154,6 +154,11 @@ class ExpressionEmitter:
             case CastExpr():
                 from sushi_lang.backend.expressions import casts
                 return casts.emit_cast_expression(self.codegen, expr)
+
+            # Lambda literal (closure): build the function value (fat pointer).
+            case Lambda():
+                from sushi_lang.backend.runtime import closures
+                return closures.emit_lambda(self.codegen, expr, to_i1)
 
             case _:
                 raise NotImplementedError(f"Expression type not supported: {type(expr).__name__}")

@@ -166,8 +166,9 @@ let i32 r = f(41)??                # call through it -> Result, like a direct ca
 ```
 
 Function types are invariant (arity, parameters, return, and error type must match exactly).
-v1 has no closures; only plain top-level functions are referenceable. See the
-[First-Class Functions guide](first-class-functions.md).
+A plain top-level function is referenceable as above; a **closure** — a capturing lambda literal
+(`|i32 x| x + n`) — is also a `fn(...)`-typed value and shares the same call syntax. See the
+[First-Class Functions guide](first-class-functions.md) and the [Closures guide](closures.md).
 
 ## Variables
 

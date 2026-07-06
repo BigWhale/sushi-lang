@@ -18,7 +18,7 @@ from sushi_lang.semantics.ast import (
     Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, MatchArm, Pattern, Break, Continue,
     # Expressions
     Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
-    UnaryOp, BinaryOp, Call, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom, CastExpr, EnumConstructor, TryExpr, RangeExpr, Borrow, Spread
+    UnaryOp, BinaryOp, Call, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom, CastExpr, EnumConstructor, TryExpr, RangeExpr, Borrow, Spread, Lambda
 )
 
 
@@ -45,6 +45,64 @@ def function_value_type_of(type_validator, name: str) -> Optional[Type]:
     ok_type = sig.ret_type if sig.ret_type is not None else BuiltinType.BLANK
     err_type = sig.err_type if sig.err_type is not None else UnknownType("StdError")
     return FunctionType(param_types=param_types, ok_type=ok_type, err_type=err_type)
+
+
+def infer_lambda_type(type_validator, lam: Lambda):
+    """Compute (and cache on the node) the FunctionType of a lambda literal.
+
+    Idempotent and diagnostic-free (the validator emits CE2094 separately). Resolves
+    each param's type — declared for a typed param `|i32 x|`, or, for a bare param
+    `|x|`, from an expected FunctionType propagated onto the node (`lam.expected_type`)
+    — and fills the types of the captured free names from the enclosing scope. The
+    result's `captures` descriptor marks the value as owning iff it captures anything.
+    """
+    from sushi_lang.semantics.typesys import FunctionType, UnknownType
+    if getattr(lam, "resolved_type", None) is not None:
+        return lam.resolved_type
+
+    expected = getattr(lam, "expected_type", None)
+    saved = dict(type_validator.variable_types)
+
+    param_types = []
+    for idx, p in enumerate(lam.params):
+        pty = p.ty
+        if pty is None and isinstance(expected, FunctionType) and idx < len(expected.param_types):
+            pty = expected.param_types[idx]
+            p.ty = pty  # persist the inferred type for the lift pass / backend
+        param_types.append(pty)
+        if pty is not None:
+            type_validator.variable_types[p.name] = pty
+
+    # Fill captured names' types from the ENCLOSING scope (pre-param bindings).
+    for cap in (lam.captures or []):
+        if cap.ty is None:
+            cap.ty = saved.get(cap.name)
+
+    if lam.ret is not None:
+        ok_type = lam.ret
+    elif not lam.is_block_body:
+        ok_type = type_validator.infer_expression_type(lam.body)
+    elif isinstance(expected, FunctionType):
+        ok_type = expected.ok_type
+    else:
+        ok_type = None
+
+    err_type = lam.err_type
+    if err_type is None:
+        err_type = expected.err_type if isinstance(expected, FunctionType) else UnknownType("StdError")
+
+    # Restore the enclosing variable table (params are lambda-local).
+    type_validator.variable_types.clear()
+    type_validator.variable_types.update(saved)
+
+    ft = FunctionType(
+        param_types=tuple(param_types),
+        ok_type=ok_type,
+        err_type=err_type,
+        captures=tuple(lam.captures or ()),
+    )
+    lam.resolved_type = ft
+    return ft
 
 
 class StatementValidator(RecursiveVisitor):
@@ -272,6 +330,65 @@ class ExpressionValidator(RecursiveVisitor):
             sibling_type = self.type_validator.infer_expression_type(left)
             if isinstance(sibling_type, BuiltinType):
                 propagate_types_to_value(self.type_validator, right, sibling_type)
+
+    def visit_lambda(self, node: Lambda) -> None:
+        """Validate a lambda body and reject illegal captures (CE2094)."""
+        tv = self.type_validator
+        ft = infer_lambda_type(tv, node)  # fills param + capture types (idempotent)
+
+        # CE2094: capturing a &peek/&poke borrow is deferred to Tier 2. A captured
+        # name whose enclosing type is a reference is a borrow capture.
+        from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, FunctionType, is_owning_type
+        for cap in (node.captures or []):
+            if isinstance(cap.ty, ReferenceType):
+                er.emit(tv.reporter, er.ERR.CE2094, node.loc,
+                        reason=f"cannot capture '{cap.name}': it is a borrow (&peek/&poke capture is deferred to Tier 2)")
+            elif isinstance(cap.ty, FunctionType) and is_owning_type(cap.ty):
+                # Capturing a CLOSURE value is still deferred: reading it back means
+                # calling `__closure_env.<name>(...)`, whose non-Name callee needs
+                # Call.callee widening (Tier 2, T2.4). Reject rather than mis-dispatch.
+                er.emit(tv.reporter, er.ERR.CE2094, node.loc,
+                        reason=f"cannot capture '{cap.name}' (type '{cap.ty}'): capturing a "
+                               f"closure value is deferred to Tier 2")
+            elif isinstance(cap.ty, DynamicArrayType):
+                # Move-capture (T1.5): a dynamic array is moved into the heap environment,
+                # which owns it and frees it in the env destructor. The outer binding is
+                # consumed (borrow-checked use-after-move, CE2405). No diagnostic.
+                pass
+            elif is_owning_type(cap.ty):
+                # List<T> / Own<T> move-capture into the env (T1.5 item 1): moved in,
+                # owned + freed by the env destructor, outer binding consumed (CE2405).
+                # Reading them back inside the body dispatches through the env-field
+                # member-access receiver path (backend calls/utils.py).
+                pass
+
+        # CE2094 (T1.7 cut): an owning parameter type on a function value has no
+        # deep-copy on the indirect-call path yet (a latent double-free), so reject it.
+        for p in node.params:
+            if is_owning_type(p.ty):
+                er.emit(tv.reporter, er.ERR.CE2094, node.loc,
+                        reason=f"lambda parameter '{p.name}' has an owning type '{p.ty}'; "
+                               f"owning function-value parameters are deferred to Tier 2")
+
+        # Validate the body with the lambda's params in scope (captures already are).
+        saved_vars = dict(tv.variable_types)
+        for p in node.params:
+            if p.ty is not None:
+                tv.variable_types[p.name] = p.ty
+        if node.is_block_body:
+            # Return statements inside must check against the LAMBDA's ok/err, not
+            # the enclosing function's, so swap current_function to a synthetic sig.
+            from sushi_lang.semantics.ast import FuncDef
+            synthetic = FuncDef(name="<lambda>", params=list(node.params), ret=ft.ok_type,
+                                body=node.body, err_type=ft.err_type, loc=node.loc)
+            saved_fn = tv.current_function
+            tv.current_function = synthetic
+            tv._validate_block(node.body)
+            tv.current_function = saved_fn
+        else:
+            tv.validate_expression(node.body)
+        tv.variable_types.clear()
+        tv.variable_types.update(saved_vars)
 
     def visit_call(self, node: Call) -> None:
         """Validate function call."""
@@ -620,6 +737,10 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
         return None
 
+    def visit_lambda(self, node: Lambda) -> Optional[Type]:
+        """Infer a lambda literal's type (its FunctionType)."""
+        return infer_lambda_type(self.type_validator, node)
+
     def visit_unaryop(self, node: UnaryOp) -> Optional[Type]:
         """Infer unary operation type."""
         # Logical NOT returns bool
@@ -678,6 +799,12 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_call(self, node: Call) -> Optional[Type]:
         """Infer function call type."""
+        # A non-Name callee (`arr[0]()`, `(e)()`, or a captured/field closure called as
+        # `env.f(x)`) needs Call.callee widening (Tier 2, T2.4). The validator reports it
+        # (CE2094); here we just avoid crashing on `.id` during type inference.
+        if not isinstance(node.callee, Name):
+            return None
+
         # Look up function return type
         function_name = node.callee.id
 

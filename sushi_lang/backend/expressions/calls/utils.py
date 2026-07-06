@@ -38,7 +38,27 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
             if type_name.startswith(prefix) and type_name in codegen.struct_table.by_name:
                 return codegen.struct_table.by_name[type_name]
 
-    # Strategy 2: For Own.new(), receiver might be a type name from let statement type annotation
+    # Strategy 2: Receiver is a struct-field member access (e.g. a captured List<T> read
+    # as `__closure_env.<name>` inside a lifted lambda body). Resolve the field's semantic
+    # type so List/Own methods claim the call instead of falling through to the raw
+    # dynamic-array dispatch (which crashes on a List backing struct).
+    if isinstance(receiver, MemberAccess):
+        from sushi_lang.backend.expressions.structs import infer_struct_type
+        try:
+            parent_struct = infer_struct_type(codegen, receiver.receiver)
+            field_type = parent_struct.get_field_type(receiver.member)
+        except Exception:
+            field_type = None
+        if isinstance(field_type, ReferenceType):
+            field_type = field_type.referenced_type
+        if isinstance(field_type, StructType) and field_type.name.startswith(prefix):
+            return field_type
+        if isinstance(field_type, GenericTypeRef):
+            type_name = str(field_type)
+            if type_name.startswith(prefix) and type_name in codegen.struct_table.by_name:
+                return codegen.struct_table.by_name[type_name]
+
+    # Strategy 3: For Own.new(), receiver might be a type name from let statement type annotation
     # This would be handled during type inference in semantic analysis
 
     return None
@@ -254,4 +274,12 @@ def emit_receiver_as_pointer(codegen: 'LLVMCodegen', receiver: Expr) -> Optional
         if type_utils.is_reference_parameter(codegen, receiver.id):
             return codegen.builder.load(slot, name=f"{receiver.id}_ref_ptr")
         return slot
+
+    # A captured collection read as `__closure_env.<name>` (any struct-field List/Own).
+    # try_get_struct_alloca recurses through the env reference param and GEPs to the
+    # field, yielding a pointer to the List/Own so mutating methods work in the body.
+    if isinstance(receiver, MemberAccess):
+        from sushi_lang.backend.expressions.structs import try_get_struct_alloca
+        return try_get_struct_alloca(codegen, receiver)
+
     return None

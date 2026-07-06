@@ -330,30 +330,15 @@ class FunctionMonomorphizer:
                 # Already monomorphized (from cache)
                 continue
 
-            # Create FuncSig for function table
-            concrete_sig = FuncSig(
-                name=mangled_name,
-                params=concrete_func.params,
-                ret_type=concrete_func.ret,
-                ret_span=concrete_func.ret_span,
-                is_public=concrete_func.is_public,
-                loc=None,
-                name_span=concrete_func.name_span,
-                unit_name=None
+            # Register the concrete function (FuncSig + program/unit append) through the
+            # shared synthesis helper so the monomorphizer and lambda-lifting stay in sync.
+            from sushi_lang.semantics.generics.synthesis import register_synthesized_function
+            register_synthesized_function(
+                self.monomorphizer.func_table,
+                concrete_func,
+                program=target_program if is_single_file else None,
+                units=None if is_single_file else units,
             )
-
-            # Register in function table
-            self.monomorphizer.func_table.by_name[mangled_name] = concrete_sig
-            self.monomorphizer.func_table.order.append(mangled_name)
-
-            # Add to program/unit functions list for backend emission
-            if is_single_file:
-                target_program.functions.append(concrete_func)
-            else:
-                # Multi-file mode: add to the main unit (first unit with main function)
-                # For now, just add to the first unit's AST
-                if units and len(units) > 0 and units[0].ast:
-                    units[0].ast.functions.append(concrete_func)
 
             # After monomorphizing, check if any new instantiations were discovered
             # and add them to the worklist

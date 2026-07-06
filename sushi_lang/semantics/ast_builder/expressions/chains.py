@@ -38,6 +38,14 @@ def expr_atom(atom: Tree | Token, ast_builder: 'ASTBuilder') -> Expr:
     if isinstance(atom, Tree) and atom.data == "stderr_literal":
         return Name(id="stderr", loc=span_of(atom))
 
+    # Expression-body lambda literal (closure). Must precede the parenthesized-
+    # expression fallback below, which would otherwise grab the lambda's first Tree
+    # child (the params). Block-body lambdas are not atoms; they are built from the
+    # `let` statement (see statements/variables.py).
+    if isinstance(atom, Tree) and atom.data == "lambda_expr":
+        from sushi_lang.semantics.ast_builder.expressions import lambdas
+        return lambdas.parse_lambda(atom, ast_builder)
+
     # Parenthesized expression
     inner = next((c for c in atom.children if isinstance(c, Tree)), None)
     if inner is not None:

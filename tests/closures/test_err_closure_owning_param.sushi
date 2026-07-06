@@ -1,0 +1,7 @@
+# T1.7: a function value whose parameter is an owning type (here a dynamic array)
+# is rejected in Tier 1 -- the indirect-call path has no deep-copy yet, so passing
+# an owned argument through it would double-free. Deferred to Tier 2 (CE2094).
+# EXPECT_ERROR_CODE: CE2094
+fn main() i32:
+    let fn(i32[]) -> i32 f = |i32[] xs| 0
+    return Result.Ok(0)

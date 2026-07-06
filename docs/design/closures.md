@@ -1,11 +1,63 @@
 # Design: Closures
 
-**Status:** design only — not yet implemented. Successor to `first-class-functions.md` (v1 FCF,
-PR #91). Scope: capturing closures + lambda literals, delivered in two tiers. T1 is the minimal
-*but real* slice (escaping closures, heap env, copy + move capture); T2 is the ergonomic and
-hard-case remainder (`&poke` capture, bound methods, generic-fn refs, `Call.callee` widening,
-C callbacks). Additive over v1: a non-capturing function value stays a valid closure with a null
-environment, so all v1 code keeps compiling and running.
+**Status:** Tier 1 complete except T1.8. T1.0-T1.7 landed, plus T1.5 env RAII + move-capture
+and both its residuals — `List<T>`/`Own<T>` value capture and closure-aliasing soundness (the
+get-out/rebind double-free and struct-field leak). Only T1.8 stdlib combinators remain outstanding
+(deferred pending a decision on Sushi-authored stdlib) — see "Implementation status" below. Successor to
+`first-class-functions.md` (v1 FCF, PR #91). Scope: capturing closures + lambda literals, delivered
+in two tiers. T1 is the minimal *but real* slice (escaping closures, heap env, copy + move
+capture); T2 is the ergonomic and hard-case remainder (`&poke` capture, bound methods, generic-fn
+refs, `Call.callee` widening, C callbacks). Additive over v1: a non-capturing function value stays
+a valid closure with a null environment, so all v1 code keeps compiling and running.
+
+## Implementation status
+
+Landed (in dependency order — see phase descriptions below for what each covers):
+
+- **T1.0** — fat-pointer ABI + sizing (`FunctionType.captures`, 24-byte lowering).
+- **T1.1** — lambda grammar/AST (`lambda_expr`, `lambda_block`, `Lambda` node).
+- **T1.2** — capture analysis (free-name recording in the scope pass).
+- **T1.3** — type-checking + capture legality, including CE2094 for borrow capture.
+- **T1.4** — lambda-lifting pass (env struct + lifted function synthesis).
+- **T1.6** — backend materialization (`emit_lambda`, env heap-alloc, fat-value construction).
+- **T1.7** — indirect-call env threading; CE2094 additionally rejects owning/variadic
+  fn-value *parameter* types (dodging the indirect path's missing deep-copy).
+- **T1.5** — environment RAII + move-capture. A capturing lambda's heap env is freed on every
+  exit path (normal scope exit, early `return`, `??` propagation) through a synthesized,
+  type-erased env destructor stored in `drop_ptr`; a returned closure escapes (its owner frees it);
+  a closure stored in a `List` is owned and freed by the list. Owned **dynamic array**, **`List<T>`**,
+  and **`Own<T>`** values are **move-captured** into the env (outer binding consumed — use-after-move
+  is CE2405 — and the env destructor frees the value); reading them back inside the body dispatches
+  through the env-field member-access receiver path (backend `calls/utils.py`). Borrow capture and
+  owning fn-value *param* types remain CE2094; capturing **and calling** a closure value is still
+  deferred (its call `env.f(x)` needs `Call.callee` widening, T2.4 — now a graceful CE2094).
+- **T1.5 item 2 — closure aliasing soundness.** Binding a closure from an existing owner keeps
+  exactly one RAII owner: a plain rebind `let g = f` **moves** the env (source consumed, CE2405 on
+  later use); a container get-out (`let g = fns.get(0)??`) and a struct-field read
+  (`let g = s.handler`) are non-owning **borrows** (the container/struct stays the sole owner,
+  mirroring `Own<T>.get()`); and a closure stored in a struct field is freed by the struct's RAII
+  cleanup. No leak, no double-free.
+
+Outstanding:
+
+- **T1.8** — stdlib combinators (`List.map`/`.filter`/`.fold`, `compose`). Deferred: there is no
+  Sushi-authored stdlib today (every `List` method is a Python IR emitter), so this hinges on a
+  separate decision about a Sushi-source stdlib/prelude path.
+
+> **Resuming this work:** `closures-tier1-handoff.md` (same directory) is the detailed handoff —
+> current code state, the exact stubs (`drop_ptr = null`; owned-capture rejection), file:line
+> anchors, discovered gotchas, and an ordered step-by-step plan for T1.5 and T1.8.
+
+The `|` prefix/infix disambiguation and the `|~|` zero-parameter form (see below) were validated
+by running the extended grammar through the parser generator with no new conflicts, as the T1.1
+acceptance gate required. Block-body lambdas (`|params|: <block>`) are admitted only as a `let`
+RHS — the grammar does not reach them from `expr` (see below), so a block-body lambda used directly
+as a call argument is a parse error; bind it to a `let` first.
+
+Test coverage: `tests/closures/` (positive: capture, escaping, bare-param inference, struct-field
+fat layout, thunk-name-collision regression, dynamic-array move-capture, `List`-owns-closures, `??`
+early-exit env free; negative: borrow capture, use-after-move-capture, `List` value capture
+deferred, owning fn-value param).
 
 ## Summary
 
@@ -71,8 +123,10 @@ lambda `|` is disambiguated **by position**: a `|` appearing where an *operand/a
 (prefix position — start of an expression, call argument, RHS of `=`) opens a lambda parameter
 list; a `|` in *infix* position (between two operands) is bitwise-or. Inside the expression body
 of a lambda, a subsequent `|` is infix bitwise-or as usual (`|x| x | 2` = lambda with body
-`x | 2`). This is a clean earley-parser disambiguation; the grammar must be validated through the
-parser generator as an acceptance gate (see Risks).
+`x | 2`). Sushi's parser is LALR (`sushi_lang/internals/parser.py:54`), not Earley, so this
+disambiguation must be resolvable by the grammar's shift/reduce tables alone; the grammar must be
+validated through the parser generator as an acceptance gate (see Risks). Implementation note: this
+was validated with no new conflicts (see "Implementation status" above).
 
 ### Function types (unchanged from v1)
 
@@ -242,8 +296,11 @@ returning a closure.
 
 New codes (next free is **CE2094**; `errors.py` currently ends at CE2093):
 
-- **CE2094** — illegal capture: a `&poke`/`&peek` borrow (T1) or, before T2.5, an owning/variadic
-  fn-value parameter type. Message names the deferred capability.
+- **CE2094** — illegal capture: a `&poke`/`&peek` borrow (Tier 2); an owning/variadic fn-value
+  parameter type (before T2.5); or capturing **and calling** a closure *value* (deferred — the call
+  `env.f(x)` is a non-`Name` callee needing `Call.callee` widening, T2.4; reported gracefully rather
+  than crashing, "bind the callee to a local first"). **Dynamic-array**, **`List<T>`**, and
+  **`Own<T>`** value captures are allowed (move-capture, T1.5). Message names the deferred capability.
 - A new "lambda parameter needs a type" diagnostic for un-inferable bare-name params (no expected
   `FunctionType` in context).
 

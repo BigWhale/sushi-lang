@@ -510,7 +510,7 @@ class DynamicArrayManager:
         Returns:
             True if the struct contains dynamic array fields, False otherwise.
         """
-        from sushi_lang.semantics.typesys import UnknownType
+        from sushi_lang.semantics.typesys import UnknownType, FunctionType
         for field_name, field_type in struct_type.fields:
             # Resolve UnknownType to StructType if needed
             if isinstance(field_type, UnknownType):
@@ -518,6 +518,10 @@ class DynamicArrayManager:
                     field_type = self.codegen.struct_table.by_name[field_type.name]
 
             if isinstance(field_type, DynamicArrayType):
+                return True
+            # A function-value (closure) field owns a heap environment freed through its
+            # runtime-guarded drop pointer (a no-op for a non-capturing value).
+            if isinstance(field_type, FunctionType):
                 return True
             # Check nested structs recursively
             if isinstance(field_type, StructType):
@@ -550,7 +554,7 @@ class DynamicArrayManager:
             base_indices = [0]  # First index is always 0 for GEP into struct pointer
 
         cleanup_fields = []
-        from sushi_lang.semantics.typesys import UnknownType
+        from sushi_lang.semantics.typesys import UnknownType, FunctionType
 
         for field_index, (field_name, field_type) in enumerate(struct_type.fields):
             field_gep_indices = base_indices + [field_index]
@@ -560,8 +564,10 @@ class DynamicArrayManager:
                 if field_type.name in self.codegen.struct_table.by_name:
                     field_type = self.codegen.struct_table.by_name[field_type.name]
 
-            if isinstance(field_type, DynamicArrayType):
-                # Found a dynamic array field - add it to cleanup list
+            if isinstance(field_type, (DynamicArrayType, FunctionType)):
+                # A dynamic-array or function-value (closure) field owns heap memory.
+                # The third tuple element carries the field's semantic type so
+                # emit_struct_field_cleanup can dispatch to the right destructor.
                 cleanup_fields.append((field_name, field_gep_indices, field_type))
 
             elif isinstance(field_type, StructType):
@@ -584,14 +590,19 @@ class DynamicArrayManager:
             struct_type: The struct type containing fields to clean up.
             struct_alloca: The alloca instruction for the struct variable.
         """
+        from sushi_lang.semantics.typesys import FunctionType
+
         cleanup_fields = self._get_cleanup_fields(struct_type)
 
         if not cleanup_fields:
             return  # No cleanup needed
 
-        # For each dynamic array field, emit destructor code
-        for field_path, gep_indices, array_type in cleanup_fields:
-            self._emit_struct_field_destructor(var_name, field_path, struct_alloca, gep_indices, array_type)
+        # For each owning field, emit destructor code by field type.
+        for field_path, gep_indices, field_type in cleanup_fields:
+            if isinstance(field_type, FunctionType):
+                self._emit_struct_field_closure_free(var_name, field_path, struct_alloca, gep_indices)
+            else:
+                self._emit_struct_field_destructor(var_name, field_path, struct_alloca, gep_indices, field_type)
 
     def _emit_struct_field_destructor(self, var_name: str, field_path: str,
                                        struct_alloca: ir.Value, gep_indices: List[int],
@@ -644,3 +655,21 @@ class DynamicArrayManager:
                 name=f"{var_name}_{field_name_safe}_void_ptr"
             )
             emit_free(self.builder, self.codegen, void_ptr)
+
+    def _emit_struct_field_closure_free(self, var_name: str, field_path: str,
+                                        struct_alloca: ir.Value, gep_indices: List[int]) -> None:
+        """Free a function-value (closure) field's heap environment.
+
+        GEPs to the `{fn_ptr, env_ptr, drop_ptr}` fat value inside the struct and emits
+        the runtime-guarded env free (`if drop_ptr: drop_ptr(env)`), so a struct that owns
+        a capturing closure frees its environment exactly once at scope exit. A
+        non-capturing field carries a null drop, making this a no-op."""
+        from sushi_lang.backend.destructors import emit_function_value_destructor
+
+        gep_index_values = [make_i32_const(idx) for idx in gep_indices]
+        field_name_safe = field_path.replace('.', '_')
+        field_ptr = self.builder.gep(
+            struct_alloca, gep_index_values,
+            name=f"{var_name}_{field_name_safe}_fnptr"
+        )
+        emit_function_value_destructor(self.codegen, self.builder, field_ptr)

@@ -1,0 +1,15 @@
+# T1.5 (item 1): capturing another CLOSURE value and calling it in the body is still
+# deferred to Tier 2. Reading it back means calling `__closure_env.g(...)`, whose
+# non-Name callee needs Call.callee widening (T2.4). Reported gracefully (CE2094), not a
+# crash. Bind the callee to a local first once T2.4 lands.
+# EXPECT_ERROR_CODE: CE2094
+fn run() i32:
+    let i32 n = 10
+    let fn(i32) -> i32 g = |i32 x| x + n
+    let fn(i32) -> i32 h = |i32 y|:
+        return Result.Ok(g(y)?? + 1)
+    return Result.Ok(h(5)??)
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)

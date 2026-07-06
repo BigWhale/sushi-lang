@@ -76,6 +76,13 @@ class TypeMapper:
         # String fat pointer type: {i8* data, i32 size}
         self.string_struct: ir.LiteralStructType = self._create_string_struct_type()
 
+        # Closure/function-value fat pointer type: {i8* fn_ptr, i8* env_ptr, i8* drop_ptr}
+        self.closure_struct: ir.LiteralStructType = ir.LiteralStructType([
+            self.str_ptr,  # fn_ptr  (opaque; bitcast to the real signature at call site)
+            self.str_ptr,  # env_ptr (null when non-capturing)
+            self.str_ptr,  # drop_ptr (null when non-capturing)
+        ])
+
         # Type mapping dictionary for O(1) lookups
         self._builtin_type_map: dict[BuiltinType, ir.Type] = {
             BuiltinType.I8: self.i8,
@@ -170,12 +177,13 @@ class TypeMapper:
                 # Map ForeignPtrType (`ptr`) to opaque LLVM i8* for the C ABI.
                 return ir.PointerType(self.i8)
             case FunctionType():
-                # Map a first-class function value to a pointer to the underlying LLVM
-                # function. A Sushi fn lowers to Result<T,E>(params), so the pointee
-                # signature mirrors the existing direct-call ABI exactly.
-                ret_llvm = self.ll_type(ResultType(ok_type=t.ok_type, err_type=t.err_type))
-                param_llvm = [self.ll_type(p) for p in t.param_types]
-                return ir.PointerType(ir.FunctionType(ret_llvm, param_llvm))
+                # Map a first-class function value to the 3-word fat pointer
+                # {i8* fn_ptr, i8* env_ptr, i8* drop_ptr}. Capture is erased from the
+                # type: a non-capturing value carries null env/drop; a closure carries a
+                # heap env and a type-erased destructor. The real callee signature
+                # (Result<T,E>(i8* env, params)) is recovered from the semantic
+                # FunctionType at the call site, not from this opaque LLVM type.
+                return self.closure_struct
             case UnknownType():
                 # UnknownType might be a struct or enum type that needs resolution
                 resolved = resolve_unknown_type(

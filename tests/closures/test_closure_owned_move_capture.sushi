@@ -1,0 +1,10 @@
+# T1.5: move-capture of an OWNED value (dynamic array). The array is moved into the
+# closure's heap environment, which owns it and frees it via the env destructor at
+# scope exit. The outer binding `nums` is consumed (a later use would be CE2405), so
+# there is exactly one owner and no double free.
+# EXPECT_STDOUT_EXACT: "13\n"
+fn main() i32:
+    let i32[] nums = from([1, 2, 3])
+    let fn(i32) -> i32 f = |i32 x| x + nums.len()
+    println(f(10).realise(0))
+    return Result.Ok(0)

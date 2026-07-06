@@ -75,6 +75,11 @@ def emit_let(codegen: 'CodegenProtocol', stmt: 'Let') -> None:
             elif codegen.dynamic_arrays.is_list_type(semantic_type):
                 codegen.dynamic_arrays.register_list(stmt.name, semantic_type, slot)
 
+        # Closure (function-value) ownership: create_local_nostore auto-registered this
+        # local as an env owner. A capturing closure owns a heap env, so aliasing it must
+        # keep exactly one owner (else double-free). Reconcile by binding shape:
+        _reconcile_closure_ownership(codegen, stmt, semantic_type)
+
         # Special handling for array literals
         if isinstance(stmt.ty, ArrayType) and isinstance(stmt.value, ArrayLiteral):
             from sushi_lang.backend.statements import initialization
@@ -83,6 +88,53 @@ def emit_let(codegen: 'CodegenProtocol', stmt: 'Let') -> None:
             rhs = codegen.expressions.emit_expr(stmt.value)
             casted_rhs = codegen.utils.cast_for_param(rhs, ll_type)
             codegen.builder.store(casted_rhs, slot)
+
+
+def _reconcile_closure_ownership(codegen: 'CodegenProtocol', stmt: 'Let', semantic_type) -> None:
+    """Keep exactly one RAII owner for a function-value (closure) binding.
+
+    `create_local_nostore` registered `stmt.name` as an env owner. That is correct only
+    when the RHS produces a FRESH owned closure (a lambda literal, a call that transferred
+    ownership on return, or a bare fn ref whose env is null). When the RHS aliases an
+    environment that something ELSE already owns, a second owner would double-free the
+    shared env. Reconcile by binding shape:
+
+    - `let g = f` where f is a registered owning local -> MOVE: mark f moved so only g
+      frees (mirrors dynamic-array/Own move-on-return).
+    - `let g = f` where f is NOT a registered owner (a param, or an already-borrowed
+      alias) -> BORROW: the real owner lives elsewhere, so g must not free.
+    - `let g = fns.get(i)??` / `let g = s.handler` (container get-out / struct-field read)
+      -> BORROW: the container/struct still owns the env (mirrors Own<T>.get()).
+
+    Only capturing closures carry a non-null env/drop, so for a non-capturing value every
+    branch is a harmless no-op (the guarded free of a null drop does nothing).
+    """
+    from sushi_lang.semantics.typesys import FunctionType
+    from sushi_lang.semantics.ast import Name, MemberAccess, TryExpr
+
+    if not isinstance(semantic_type, FunctionType):
+        return
+
+    value = stmt.value
+    # Unwrap `expr??` so a get-out through error propagation is visible.
+    if isinstance(value, TryExpr):
+        value = value.expr
+
+    if isinstance(value, Name):
+        source = value.id
+        if codegen.memory.is_closure_registered(source):
+            # MOVE: transfer ownership source -> g. g keeps its registration.
+            codegen.moves.mark(source)
+        else:
+            # BORROW: source is a param or an alias whose env is owned elsewhere.
+            codegen.memory.unregister_closure_cleanup(stmt.name)
+    elif isinstance(value, MemberAccess):
+        # BORROW: reading a closure out of a struct field; the struct owns it.
+        codegen.memory.unregister_closure_cleanup(stmt.name)
+    elif getattr(value, 'method', None) == 'get':
+        # BORROW: a container get-out (List/array `.get()`); the container owns it.
+        codegen.memory.unregister_closure_cleanup(stmt.name)
+    # else: lambda literal / call / fn ref -> g owns a fresh env; keep registration.
 
 
 def emit_rebind(codegen: 'CodegenProtocol', stmt: 'Rebind') -> None:

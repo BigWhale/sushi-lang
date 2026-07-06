@@ -69,6 +69,7 @@ class LLVMTypeSystem:
         self.str_ptr = self.mapper.str_ptr
         self.void = self.mapper.void
         self.string_struct = self.mapper.string_struct
+        self.closure_struct = self.mapper.closure_struct
 
     # Type mapping interface
     def ll_type(self, semantic_type: Ty) -> ir.Type:

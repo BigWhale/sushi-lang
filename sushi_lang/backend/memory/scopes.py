@@ -55,6 +55,14 @@ class ScopeManager:
         # Only stores structs that need RAII cleanup (not duplicated per scope)
         self._struct_cleanup: Dict[str, tuple['StructType', ir.AllocaInstr]] = {}
 
+        # Closure (function-value) cleanup tracking: variable name -> alloca holding
+        # the {fn_ptr, env_ptr, drop_ptr} fat value. Every function-typed `let` local is
+        # registered; the free is runtime-guarded by drop_ptr, so a non-capturing value
+        # frees to a no-op (capture is erased from the `fn(...)` type). Function
+        # PARAMETERS are deliberately NOT registered -- a passed closure is owned by the
+        # caller's binding, not the callee (freeing it here would double-free).
+        self._closure_cleanup: Dict[str, ir.AllocaInstr] = {}
+
         # Struct move tracking is delegated to the unified codegen.moves MoveTracker.
 
         # FFI no-leak registry: per-scope stack of marshalled C strings (i8*) that
@@ -121,6 +129,19 @@ class ScopeManager:
                         self.codegen.dynamic_arrays.emit_struct_field_cleanup(var_name, struct_type, alloca)
                     # Remove from cleanup tracking when leaving scope
                     del self._struct_cleanup[var_name]
+
+        # Free function-value locals (closures) on the fall-through exit, runtime-guarded
+        # by drop_ptr. Same mutual-exclusion discipline as structs (#59/#60): early-exit
+        # paths emit their own guarded free via emit_closure_cleanup; a moved (escaped)
+        # closure is skipped so its new owner frees it.
+        if self._closure_cleanup:
+            block = self.codegen.builder.block if self.codegen.builder is not None else None
+            block_live = block is not None and not block.is_terminated
+            for var_name in current_vars:
+                if var_name in self._closure_cleanup:
+                    if block_live and not self.is_struct_moved(var_name):
+                        self._emit_closure_free(self._closure_cleanup[var_name])
+                    del self._closure_cleanup[var_name]
 
         # Remove variables from flat caches
         for var_name in current_vars:
@@ -256,11 +277,14 @@ class ScopeManager:
             self._types[name].append((self._scope_depth, semantic_ty))
 
             # Track struct variables that need cleanup
-            from sushi_lang.semantics.typesys import StructType
+            from sushi_lang.semantics.typesys import StructType, FunctionType
             if isinstance(semantic_ty, StructType):
                 if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
                     if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
                         self._struct_cleanup[name] = (semantic_ty, slot)
+            # Track function-value locals for runtime-guarded env free at scope exit.
+            elif isinstance(semantic_ty, FunctionType):
+                self._closure_cleanup[name] = slot
 
         if init is not None:
             if self.codegen.builder is None:
@@ -306,11 +330,14 @@ class ScopeManager:
             self._types[name].append((self._scope_depth, semantic_ty))
 
             # Track struct variables that need cleanup
-            from sushi_lang.semantics.typesys import StructType
+            from sushi_lang.semantics.typesys import StructType, FunctionType
             if isinstance(semantic_ty, StructType):
                 if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
                     if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
                         self._struct_cleanup[name] = (semantic_ty, slot)
+            # Track function-value locals for runtime-guarded env free at scope exit.
+            elif isinstance(semantic_ty, FunctionType):
+                self._closure_cleanup[name] = slot
 
         return slot
 
@@ -355,6 +382,29 @@ class ScopeManager:
         """
         self._struct_cleanup[name] = (struct_type, slot)
 
+    def _emit_closure_free(self, slot: ir.AllocaInstr) -> None:
+        """Emit the runtime-guarded env free for a function-value local (`if drop: drop(env)`)."""
+        from sushi_lang.backend.destructors import emit_function_value_destructor
+        emit_function_value_destructor(self.codegen, self.codegen.builder, slot)
+
+    def is_closure_registered(self, name: str) -> bool:
+        """True if `name` is a registered function-value RAII owner in the current scope.
+
+        Used to distinguish a rebind that MOVES from an owning closure local (source is
+        registered) from one that borrows an env owned elsewhere (a param / container
+        get-out / struct-field read, which is not registered).
+        """
+        return name in self._closure_cleanup
+
+    def unregister_closure_cleanup(self, name: str) -> None:
+        """Drop `name` from function-value RAII tracking (no-op if absent).
+
+        Used when a function-value local is a NON-owning alias -- bound from a container
+        get-out (`fns.get(i)??`) or a struct-field read (`s.handler`) whose env the
+        container/struct still owns. Registering it as a second owner would double-free
+        the shared environment (mirrors the Own<T>.get() non-owning-borrow guard)."""
+        self._closure_cleanup.pop(name, None)
+
     def mark_struct_as_moved(self, var_name: str) -> None:
         """Mark a struct variable as moved (ownership transferred).
 
@@ -393,6 +443,7 @@ class ScopeManager:
         self._locals.clear()
         self._types.clear()
         self._struct_cleanup.clear()
+        self._closure_cleanup.clear()
         self._cstr_cleanup = []
 
         # Clear moved tracking (function boundary)

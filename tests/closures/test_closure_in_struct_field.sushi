@@ -1,0 +1,17 @@
+# T1.5 (item 2c): a capturing closure stored in a struct field is owned by the struct
+# and freed by the struct's RAII cleanup at scope exit (previously leaked). Reading the
+# field into a local (`let f = h.op`) is a non-owning borrow, so the struct remains the
+# sole owner -- exactly one free, no leak. f(10) = 10 + base(100) = 110.
+# EXPECT_STDOUT_EXACT: "110\n"
+struct Holder:
+    fn(i32) -> i32 op
+
+fn run() i32:
+    let i32 base = 100
+    let Holder h = Holder(|i32 x| x + base)
+    let fn(i32) -> i32 f = h.op
+    return Result.Ok(f(10)??)
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)

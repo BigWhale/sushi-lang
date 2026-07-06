@@ -46,6 +46,24 @@ def emit_struct_cleanup(codegen: 'LLVMCodegen') -> None:
                 codegen.dynamic_arrays.emit_struct_field_cleanup(var_name, struct_type, alloca)
 
 
+def emit_closure_cleanup(codegen: 'LLVMCodegen') -> None:
+    """Emit runtime-guarded env frees for all live function-value locals (closures).
+
+    Runs on an early-exit path (return / ?? / default return); the block terminates
+    immediately after. Emit the guarded `if drop: drop(env)` for every live, non-moved
+    closure local WITHOUT draining the tracking: each exit path is a separate,
+    mutually-exclusive basic block, so every path frees on its own block and the
+    structural pop_scope drains the fall-through path (#59/#60). Moved (escaped)
+    closures are skipped -- their new owner frees the env.
+    """
+    mem = getattr(codegen, 'memory', None)
+    if mem is None or not getattr(mem, '_closure_cleanup', None):
+        return
+    for var_name, slot in mem._closure_cleanup.items():
+        if not mem.is_struct_moved(var_name):
+            mem._emit_closure_free(slot)
+
+
 def emit_dynamic_array_cleanup(codegen: 'LLVMCodegen') -> None:
     """Emit cleanup code for top-level dynamic arrays.
 
@@ -139,13 +157,15 @@ def emit_loop_exit_cleanup(codegen: 'LLVMCodegen', min_scope_index: int) -> None
         for list_name in da.list_scope_stack[scope_idx]:
             da._emit_list_destructor(list_name)
 
-    # Struct dynamic-array fields and Own<T> are tracked in flat maps keyed by name; use
-    # the per-scope variable sets to bound them to the loop's scopes.
+    # Struct dynamic-array fields, Own<T>, and closures are tracked in flat maps keyed by
+    # name; use the per-scope variable sets to bound them to the loop's scopes.
     for scope_idx in range(len(mem._scope_vars) - 1, min_scope_index - 1, -1):
         for var_name in mem._scope_vars[scope_idx]:
             if var_name in mem._struct_cleanup and not mem.is_struct_moved(var_name):
                 struct_type, alloca = mem._struct_cleanup[var_name]
                 da.emit_struct_field_cleanup(var_name, struct_type, alloca)
+            if var_name in getattr(mem, '_closure_cleanup', {}) and not mem.is_struct_moved(var_name):
+                mem._emit_closure_free(mem._closure_cleanup[var_name])
             descriptor = da.owned_pointers.get(var_name)
             if descriptor is not None and not descriptor.destroyed:
                 da._emit_own_destructor(var_name, descriptor.own_type)
@@ -177,6 +197,9 @@ def emit_scope_cleanup(codegen: 'LLVMCodegen', cleanup_type: str = 'all') -> Non
 
     if cleanup_type in ('all', 'structs'):
         emit_struct_cleanup(codegen)
+
+    if cleanup_type == 'all':
+        emit_closure_cleanup(codegen)
 
     if cleanup_type in ('all', 'arrays'):
         emit_dynamic_array_cleanup(codegen)

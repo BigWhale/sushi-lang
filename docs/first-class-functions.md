@@ -4,7 +4,9 @@
 
 Complete guide to first-class functions in Sushi: **function types** (`fn(i32) -> i32`) and
 **function values** — referencing a named function, storing it, passing it, and calling through
-it. This is the v1 feature: zero-cost bare function pointers, no closures.
+it. This is the v1 feature: zero-cost bare function pointers. Sushi now also has
+[closures](closures.md) (capturing lambda literals); this guide covers the non-capturing floor
+both share.
 
 ## Table of Contents
 
@@ -40,9 +42,10 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-A function value is a **bare function pointer** — the raw address of an already-compiled
-function. It carries no captured state, so there are **no closures** in v1 (the design is
-deliberately additive toward them; see [below](#limitations-and-deferred-features)).
+A plain function reference like `add_one` above carries no captured state — it is a **bare
+function pointer**, the raw address of an already-compiled function. Sushi also has
+[closures](closures.md): a lambda literal (`|x| ...`) that *does* capture its enclosing scope. The
+two share the same function type and call syntax (see [below](#limitations-and-deferred-features)).
 
 ## Function types
 
@@ -146,15 +149,19 @@ ordinary `fn f() T` declaration.
 
 ## How it compiles
 
-A function value is a zero-cost **bare function pointer**:
+A function value lowers to a **three-word fat pointer** `{fn_ptr, env_ptr, drop_ptr}` (this
+widened from a bare one-word pointer when closures were added; see the
+[closures guide](closures.md#how-it-compiles) for the full picture):
 
 - A Sushi `fn add(i32) i32` lowers to an LLVM function with signature
-  `Result<i32, StdError>(i32)`. The function type `fn(i32) -> i32` therefore lowers to a *pointer*
-  to that signature.
-- Referencing a function takes its address; calling through it is a single indirect `call`
-  instruction — the same instruction a direct call uses, just against a loaded pointer.
-- There is no environment, no allocation, and no boxing. A function value is one pointer wide and
-  needs no cleanup (it owns nothing).
+  `Result<i32, StdError>(i32)`. Referencing it as a value builds `{f__thunk, null, null}` — a small
+  adapter thunk address, with `env_ptr`/`drop_ptr` null.
+- Calling through a function value is a single indirect `call`, with `env_ptr` passed as a hidden
+  leading argument (ignored by the thunk for a plain reference).
+- For a **non-capturing** value — everything on this page — there is no environment allocation and
+  no cleanup: the null `env_ptr`/`drop_ptr` make storage and destruction a no-op, so this stays
+  effectively zero-cost. A **capturing** lambda instead heap-allocates an environment; that's the
+  closures feature, not covered here.
 
 ## Type compatibility
 
@@ -178,10 +185,9 @@ that resolves to none of constant/variable/top-level-function is an undeclared i
 
 v1 is intentionally the smallest useful slice, designed so each deferred piece is **additive**:
 
-- **No closures / no lambda literals.** A function value captures no environment. Closures are the
-  planned next step: the value representation becomes a `{fn_ptr, env_ptr}` fat pointer (a plain
-  reference being the null-environment case), and a lambda desugars to a synthesized top-level
-  function plus a reference.
+- **Closures / lambda literals now exist** — see the [Closures guide](closures.md). Tier 1 covers
+  copy-capture and escaping closures; borrow capture, move-capture of owned types, and stdlib
+  combinators (`List.map`/`.filter`/`.fold`) remain outstanding there.
 - **No generic-function references** (`identity<i32>`) — **CE2093**. Deferred until the
   instantiation can be forced and its mangled address taken.
 - **Extension/perk-method and FFI-extern values** are not referenceable (different ABIs).
@@ -190,4 +196,5 @@ v1 is intentionally the smallest useful slice, designed so each deferred piece i
   local first: `let f = arr.get(0)??` then `f(x)`.
 
 The deeper design rationale, the options considered, and the migration path live in the
-[First-Class Functions design note](design/first-class-functions.md).
+[First-Class Functions design note](design/first-class-functions.md) and the
+[Closures design note](design/closures.md).
