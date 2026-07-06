@@ -30,6 +30,10 @@ Outstanding:
 - **T1.8** — stdlib combinators (`List.map`/`.filter`/`.fold`, `compose`) authored in Sushi source
   atop the now-working indirect-call path.
 
+> **Resuming this work:** `closures-tier1-handoff.md` (same directory) is the detailed handoff —
+> current code state, the exact stubs (`drop_ptr = null`; owned-capture rejection), file:line
+> anchors, discovered gotchas, and an ordered step-by-step plan for T1.5 and T1.8.
+
 The `|` prefix/infix disambiguation and the `|~|` zero-parameter form (see below) were validated
 by running the extended grammar through the parser generator with no new conflicts, as the T1.1
 acceptance gate required. Block-body lambdas (`|params|: <block>`) are admitted only as a `let`
