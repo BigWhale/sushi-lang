@@ -1,0 +1,20 @@
+# Issue #123: inline capturing closure passed as a call argument leaks its env
+# https://github.com/BigWhale/sushi-lang/issues/123
+# A capturing closure created directly as a call argument heap-allocates an
+# environment that was never freed (~16 bytes/closure) because it was not bound to
+# a local and thus never registered for RAII cleanup. This is a runtime-behaviour
+# guard; the leak itself is asserted in tests/unit/test_closure_temp_raii.py (the
+# corpus runner has no leak detector).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "17\n"
+
+fn apply(fn(i32) -> i32 f, i32 x) i32:
+    return Result.Ok(f(x)??)
+
+fn run() i32:
+    let i32 k = 7
+    return Result.Ok(apply(|i32 x| x + k, 10)??)
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)

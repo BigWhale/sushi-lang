@@ -80,6 +80,15 @@ class ScopeManager:
         # Net effect: exactly one free executes per runtime path, no double free.
         self._cstr_cleanup: List[List[ir.Value]] = []
 
+        # Inline-closure temp registry: per-scope stack of {fn,env,drop} fat VALUES for
+        # capturing closures created inline as a call argument (#123). Such a closure is
+        # never bound to a local, so it has no owner in _closure_cleanup; the caller's
+        # scope owns it and frees its heap env at scope exit. Value-keyed (SSA fat value,
+        # no name/slot) and freed via the runtime-guarded drop, mirroring _cstr_cleanup's
+        # mutual-exclusion discipline: register appends; early-exit emits without mutating;
+        # pop_scope drains exactly once on the fall-through. One free per runtime path.
+        self._closure_temp_cleanup: List[List[ir.Value]] = []
+
     def push_scope(self) -> None:
         """Push a new lexical scope onto the scope stack.
 
@@ -90,6 +99,7 @@ class ScopeManager:
         self._scope_depth += 1
         self._scope_vars.append(set())
         self._cstr_cleanup.append([])
+        self._closure_temp_cleanup.append([])
 
         # Also push dynamic array scope if the manager is initialized
         if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
@@ -169,6 +179,13 @@ class ScopeManager:
         if self._cstr_cleanup:
             self._free_cstr_list(self._cstr_cleanup.pop())
 
+        # Free inline-closure argument temporaries registered in this scope on the
+        # normal (fall-through) block exit -- the only place the per-scope list is
+        # removed. Early-exit paths emit their own guarded drop via
+        # emit_closure_temp_cleanup_all() without popping, so exactly one runs per path.
+        if self._closure_temp_cleanup:
+            self._free_closure_temp_list(self._closure_temp_cleanup.pop())
+
         self._scope_vars.pop()
         self._scope_depth -= 1
 
@@ -209,6 +226,33 @@ class ScopeManager:
         for scope_list in self._cstr_cleanup:
             self._free_cstr_list(scope_list)
 
+    def register_closure_temp(self, fat_value: 'ir.Value') -> None:
+        """Register an inline-closure argument temp ({fn,env,drop} value) for scope-exit free."""
+        if self._closure_temp_cleanup:
+            self._closure_temp_cleanup[-1].append(fat_value)
+
+    def _free_closure_temp_list(self, fat_values: List['ir.Value']) -> None:
+        """Emit the runtime-guarded env free for a list of closure temps, if the block is live."""
+        if not fat_values:
+            return
+        builder = self.codegen.builder
+        if builder is None or builder.block is None or builder.block.is_terminated:
+            return
+        from sushi_lang.backend.destructors import emit_function_value_destructor_from_value
+        for fat in fat_values:
+            emit_function_value_destructor_from_value(self.codegen, builder, fat)
+
+    def emit_closure_temp_cleanup_all(self) -> None:
+        """Emit the guarded env free for every live inline-closure temp across all open scopes.
+
+        Used on early-exit paths (return, ?? propagation), mirroring
+        emit_cstr_cleanup_all: the frees go into the CURRENT (terminating) block and the
+        registry is NOT mutated, so the fall-through pop_scope still frees on its own
+        mutually-exclusive block. Exactly one runs per runtime path -- no leak, no double free.
+        """
+        for scope_list in self._closure_temp_cleanup:
+            self._free_closure_temp_list(scope_list)
+
     def find_local_slot(self, name: str) -> ir.AllocaInstr:
         """Find local variable slot by name in scope stack (O(1) lookup).
 
@@ -244,6 +288,19 @@ class ScopeManager:
         if name in self._types and self._types[name]:
             return self._types[name][-1][1]
         return None
+
+    def set_semantic_type(self, name: str, semantic_ty: 'Type') -> None:
+        """Register the semantic type of an already-declared local at the current scope.
+
+        Only touches the semantic-type cache -- it deliberately does NOT register the
+        name for RAII cleanup (unlike create_local). Used to attach `self`/parameter
+        types in extension-method bodies, whose slots are created directly (fn_def=None)
+        so begin_function never records their semantic types. A by-value `self` must
+        NOT be freed by the callee, so the no-cleanup behaviour here is required.
+        """
+        if name not in self._types:
+            self._types[name] = []
+        self._types[name].append((self._scope_depth, semantic_ty))
 
     def create_local(self, name: str, ty: ir.Type, init: Optional[ir.Value] = None, semantic_ty: Optional['Type'] = None) -> ir.AllocaInstr:
         """Create local variable with optional initialization.
@@ -445,6 +502,7 @@ class ScopeManager:
         self._struct_cleanup.clear()
         self._closure_cleanup.clear()
         self._cstr_cleanup = []
+        self._closure_temp_cleanup = []
 
         # Clear moved tracking (function boundary)
         self.codegen.moves.reset()

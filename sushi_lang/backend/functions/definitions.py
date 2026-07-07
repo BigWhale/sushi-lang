@@ -140,6 +140,17 @@ class FunctionDefinitions:
             if param.ty is not None:
                 self.codegen.variable_types[param.name] = param.ty
 
+        # Register semantic types for 'self' and params in the memory manager so
+        # receiver dispatch (e.g. `self.iter()` on a List<T> receiver) can recognise
+        # them. Extension bodies begin_function with fn_def=None, so begin_function
+        # never records these. set_semantic_type does NOT register for RAII cleanup,
+        # keeping the by-value `self` unfreed (no double-free of a shared buffer).
+        if ext.target_type is not None:
+            self.codegen.memory.set_semantic_type("self", ext.target_type)
+        for param in ext.params:
+            if param.ty is not None:
+                self.codegen.memory.set_semantic_type(param.name, param.ty)
+
         self.codegen.statements.emit_block(ext.body)
 
         if self.codegen.builder.block.terminator is None:

@@ -86,6 +86,23 @@ def emit_function_value_destructor(
     data-driven drop slot: ownership cannot be told from the `fn(...)` type alone).
     """
     fat = builder.load(value_ptr, name="closure_val")
+    emit_function_value_destructor_from_value(codegen, builder, fat)
+
+
+def emit_function_value_destructor_from_value(
+    codegen: LLVMCodegen,
+    builder: ir.IRBuilder,
+    fat: ir.Value
+) -> None:
+    """Free a closure's heap environment given the SSA fat value directly.
+
+    Same guarded `if (drop_ptr != null) drop_ptr(env_ptr)` as
+    emit_function_value_destructor, but operates on an already-materialised
+    `{i8* fn_ptr, i8* env_ptr, i8* drop_ptr}` value rather than loading it from a
+    slot. Used to free an unnamed inline-closure argument temporary (#123), which has
+    no alloca -- only the SSA fat value produced by emit_lambda. The value is produced
+    before any branch, so it dominates every early-exit block.
+    """
     drop_ptr = builder.extract_value(fat, 2, name="closure_drop")
     env_ptr = builder.extract_value(fat, 1, name="closure_env")
 

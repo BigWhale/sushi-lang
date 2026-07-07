@@ -174,6 +174,12 @@ def emit_loop_exit_cleanup(codegen: 'LLVMCodegen', min_scope_index: int) -> None
     for scope_idx in range(len(mem._cstr_cleanup) - 1, min_scope_index - 1, -1):
         mem._free_cstr_list(mem._cstr_cleanup[scope_idx])
 
+    # Inline-closure argument temporaries (#123), per-scope.
+    closure_temps = getattr(mem, '_closure_temp_cleanup', None)
+    if closure_temps is not None:
+        for scope_idx in range(len(closure_temps) - 1, min_scope_index - 1, -1):
+            mem._free_closure_temp_list(closure_temps[scope_idx])
+
 
 def emit_scope_cleanup(codegen: 'LLVMCodegen', cleanup_type: str = 'all') -> None:
     """Emit cleanup code for resources in all scopes.
@@ -215,6 +221,9 @@ def emit_scope_cleanup(codegen: 'LLVMCodegen', cleanup_type: str = 'all') -> Non
     if cleanup_type == 'all' and hasattr(codegen, 'memory') and codegen.memory is not None:
         if hasattr(codegen.memory, 'emit_cstr_cleanup_all'):
             codegen.memory.emit_cstr_cleanup_all()
+        # Inline-closure argument temporaries (#123): same early-exit discipline.
+        if hasattr(codegen.memory, 'emit_closure_temp_cleanup_all'):
+            codegen.memory.emit_closure_temp_cleanup_all()
 
 
 # ============================================================================
