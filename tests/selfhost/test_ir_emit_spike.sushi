@@ -1,0 +1,52 @@
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+# EXPECT_STDOUT_CONTAINS: "emit=OK"
+# EXPECT_STDOUT_CONTAINS: "compile=OK"
+# EXPECT_STDOUT_CONTAINS: "ran exit=42"
+#
+# ROADMAP R2.1 - object-emission spike. Proves the self-host "emit text LLVM IR,
+# then shell out to clang" path end-to-end FROM SUSHI: a Sushi program builds a
+# trivial .ll module as text, writes it with io/files, compiles it via
+# run("clang", ...), then runs the produced native binary and observes its exit
+# code. No compiler internals involved -- only string building + stdlib.
+#
+# Requires clang on PATH (the same toolchain the Sushi compiler links with).
+use <io/stdio>
+use <io/files>
+use <sys/process>
+
+fn main() i32:
+    # 1. Emit a trivial LLVM IR module (a main that returns 42) as text.
+    let FileResult w = open("sushi_spike.ll", FileMode.Write())
+    match w:
+        FileResult.Ok(f) ->
+            f.writeln('define i32 @main() {')
+            f.writeln('  ret i32 42')
+            f.writeln('}')
+            f.close()
+        FileResult.Err(_) ->
+            println("emit=FAIL")
+            return Result.Err(StdError.Error)
+    println("emit=OK")
+
+    # 2. Compile the text IR straight to a native binary with clang.
+    match run("clang", "sushi_spike.ll", "-o", "sushi_spike_bin"):
+        Result.Ok(cout) ->
+            if (cout.exit_code == 0):
+                println("compile=OK")
+            else:
+                println("compile=FAIL {cout.stderr_text}")
+                return Result.Err(StdError.Error)
+        Result.Err(_) ->
+            println("compile=SPAWNFAIL")
+            return Result.Err(StdError.Error)
+
+    # 3. Run the produced binary; its exit code (42) proves it really executed.
+    match run("./sushi_spike_bin"):
+        Result.Ok(rout) ->
+            println("ran exit={rout.exit_code}")
+        Result.Err(_) ->
+            println("run=SPAWNFAIL")
+            return Result.Err(StdError.Error)
+
+    return Result.Ok(0)

@@ -35,7 +35,7 @@ def is_builtin_array_method(method_name: str) -> bool:
     # u8[] specific methods: to_string
     return method_name in {
         "len", "get", "push", "pop", "capacity", "destroy", "free",
-        "iter", "to_string", "clone", "hash", "fill", "reverse"
+        "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse"
     }
 
 
@@ -177,6 +177,10 @@ def emit_array_method(
         case "to_string":
             from .methods.transforms import emit_byte_array_to_string
             return emit_byte_array_to_string(codegen, expr, receiver_value, array_struct_type, to_i1)
+
+        case "to_string_checked":
+            from .methods.transforms import emit_byte_array_to_string_checked
+            return emit_byte_array_to_string_checked(codegen, expr, receiver_value, array_struct_type, to_i1)
 
         case "hash":
             # Dynamic array hash: compute hash of all elements

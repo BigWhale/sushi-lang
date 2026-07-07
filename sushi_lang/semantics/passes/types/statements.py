@@ -153,15 +153,26 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
     if stmt.value:
         rhs_type = validator.infer_expression_type(stmt.value)
 
+        # Robustly detect whether the LHS is itself a Result type. A declared
+        # `Result<T, E>` may remain a GenericTypeRef (line 113 keeps it) or resolve
+        # to a ResultType / Result<...> EnumType, so check all forms -- otherwise a
+        # Result-returning method assigned to a Result variable misfires as CE2505.
+        lhs_is_result = (
+            isinstance(resolved_type, ResultType)
+            or (isinstance(resolved_type, EnumType) and resolved_type.name.startswith("Result<"))
+            or (isinstance(stmt.ty, GenericTypeRef) and stmt.ty.base_name == "Result")
+            or (isinstance(stmt.ty, EnumType) and stmt.ty.name.startswith("Result<"))
+        )
+
         # Check if RHS is Result<T> but LHS is not
         if (rhs_type is not None and
             isinstance(rhs_type, EnumType) and
             rhs_type.name.startswith("Result<") and
-            not (isinstance(stmt.ty, EnumType) and stmt.ty.name.startswith("Result<"))):
+            not lhs_is_result):
 
             # Allow if RHS is already a method call (like .realise() or .clone())
             # because those methods return the unwrapped type
-            if not isinstance(stmt.value, MethodCall):
+            if not isinstance(stmt.value, (MethodCall, DotCall)):
                 # Error: assigning Result<T> to non-Result variable without handling
                 er.emit(validator.reporter, er.ERR.CE2505, stmt.value.loc)
 

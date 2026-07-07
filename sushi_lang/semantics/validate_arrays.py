@@ -179,6 +179,21 @@ def _validate_byte_array_to_string(call: MethodCall, array_type: DynamicArrayTyp
                name=f"{array_type}.to_string", expected=0, got=len(call.args))
 
 
+def _validate_byte_array_to_string_checked(call: MethodCall, array_type: DynamicArrayType, reporter: Any) -> None:
+    """Validate to_string_checked() method call on u8[] byte arrays.
+
+    Like to_string() but validates UTF-8 and returns Result<string, StdError>.
+    """
+    if array_type.base_type != BuiltinType.U8:
+        er.emit(reporter, er.ERR.CE2023, call.loc,
+               method="to_string_checked", expected="u8[]", got=str(array_type))
+        return
+
+    if call.args:
+        er.emit(reporter, er.ERR.CE2009, call.loc,
+               name=f"{array_type}.to_string_checked", expected=0, got=len(call.args))
+
+
 def _validate_dynamic_array_clone(call: MethodCall, array_type: DynamicArrayType, reporter: Any) -> None:
     """Validate clone() method call on dynamic arrays."""
     if call.args:
@@ -238,7 +253,7 @@ def is_builtin_array_method(method_name: str) -> bool:
     # Fixed array methods: len, get, iter, hash, fill, reverse
     # Dynamic array methods: len, get, push, pop, capacity, destroy, free, iter, clone, hash, fill, reverse
     # u8[] specific methods: to_string
-    return method_name in {"len", "get", "push", "pop", "capacity", "destroy", "free", "iter", "to_string", "clone", "hash", "fill", "reverse"}
+    return method_name in {"len", "get", "push", "pop", "capacity", "destroy", "free", "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse"}
 
 
 def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | DynamicArrayType, reporter: Any, validator: Any = None) -> None:
@@ -315,6 +330,14 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
                    method="to_string", expected="u8[]", got=str(array_type))
             return
         _validate_byte_array_to_string(call, array_type, reporter)
+
+    elif method_name == "to_string_checked":
+        # to_string_checked() - only available on u8[] (byte arrays); returns Result<string>
+        if not isinstance(array_type, DynamicArrayType):
+            er.emit(reporter, er.ERR.CE2023, call.loc,
+                   method="to_string_checked", expected="u8[]", got=str(array_type))
+            return
+        _validate_byte_array_to_string_checked(call, array_type, reporter)
 
     elif method_name == "clone":
         # clone() - only available on dynamic arrays

@@ -107,6 +107,74 @@ def emit_byte_array_to_string(codegen: "LLVMCodegen", call: MethodCall, receiver
     return struct_complete
 
 
+def emit_byte_array_to_string_checked(codegen: "LLVMCodegen", call: MethodCall, receiver_value: ir.Value,
+                                      receiver_type: ir.LiteralStructType, _to_i1: bool) -> ir.Value:
+    """Emit u8[] to_string_checked() -> Result<string, StdError>.
+
+    Validates the bytes are well-formed UTF-8 (via sushi_utf8_validate). On success
+    returns Result.Ok(string); on invalid UTF-8 returns Result.Err(StdError). Unlike
+    to_string(), this never produces an invalid string.
+    """
+    if len(call.args) != 0:
+        raise_internal_error("CE0023", method="to_string_checked", expected=0, got=len(call.args))
+
+    from sushi_lang.semantics.typesys import BuiltinType
+    from sushi_lang.backend.generics.results import ensure_result_type_in_table
+    from sushi_lang.backend.types.arrays.methods.utf8_validate import get_or_emit_utf8_validate
+
+    zero = make_i32_const(0)
+    len_ptr = codegen.builder.gep(receiver_value, [zero, make_i32_const(0)])
+    byte_count = codegen.builder.load(len_ptr)
+    data_ptr_ptr = codegen.builder.gep(receiver_value, [zero, make_i32_const(2)])
+    data_ptr = codegen.builder.load(data_ptr_ptr)
+
+    # Validate UTF-8 well-formedness.
+    validate_fn = get_or_emit_utf8_validate(codegen)
+    is_valid = codegen.builder.call(validate_fn, [data_ptr, byte_count], name="utf8_valid")
+
+    # Result<string, StdError> layout.
+    std_error = codegen.enum_table.by_name.get("StdError")
+    result_type = ensure_result_type_in_table(codegen.enum_table, BuiltinType.STRING, std_error)
+    result_llvm_type = codegen.types.ll_type(result_type)
+    ok_index = result_type.get_variant_index("Ok")
+    err_index = result_type.get_variant_index("Err")
+
+    ok_bb = codegen.builder.append_basic_block("to_string_checked_ok")
+    err_bb = codegen.builder.append_basic_block("to_string_checked_err")
+    merge_bb = codegen.builder.append_basic_block("to_string_checked_merge")
+    codegen.builder.cbranch(is_valid, ok_bb, err_bb)
+
+    # Ok path: build the string (reuse the unchecked conversion) and wrap in Result.Ok.
+    codegen.builder.position_at_end(ok_bb)
+    string_value = emit_byte_array_to_string(codegen, call, receiver_value, receiver_type, _to_i1)
+    ok_value = ir.Constant(result_llvm_type, ir.Undefined)
+    ok_value = codegen.builder.insert_value(
+        ok_value, ir.Constant(codegen.types.i32, ok_index), 0, name="Result_Ok_tag")
+    # Pack the string fat pointer into the enum data field.
+    data_array_type = result_llvm_type.elements[1]
+    temp_alloca = codegen.builder.alloca(data_array_type, name="ok_data_temp")
+    typed_ptr = codegen.builder.bitcast(temp_alloca, ir.PointerType(string_value.type), name="ok_value_ptr")
+    codegen.builder.store(string_value, typed_ptr)
+    packed = codegen.builder.load(temp_alloca, name="ok_packed")
+    ok_value = codegen.builder.insert_value(ok_value, packed, 1, name="Result_Ok_value")
+    ok_end_bb = codegen.builder.block
+    codegen.builder.branch(merge_bb)
+
+    # Err path: Result.Err(StdError) - discriminant only (matches the inline Result.Err
+    # construction used elsewhere for StdError-typed errors).
+    codegen.builder.position_at_end(err_bb)
+    err_value = ir.Constant(result_llvm_type, ir.Undefined)
+    err_value = codegen.builder.insert_value(
+        err_value, ir.Constant(codegen.types.i32, err_index), 0, name="Result_Err_tag")
+    codegen.builder.branch(merge_bb)
+
+    codegen.builder.position_at_end(merge_bb)
+    result_phi = codegen.builder.phi(result_llvm_type, name="to_string_checked_result")
+    result_phi.add_incoming(ok_value, ok_end_bb)
+    result_phi.add_incoming(err_value, err_bb)
+    return result_phi
+
+
 def emit_dynamic_array_clone(codegen: "LLVMCodegen", call: MethodCall, receiver_value: ir.Value,
                               receiver_type: ir.LiteralStructType, _to_i1: bool) -> ir.Value:
     """Emit LLVM IR for dynamic array clone() method (deep copy).

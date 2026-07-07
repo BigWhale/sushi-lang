@@ -548,6 +548,10 @@ class ScopeAnalyzer:
                     elif receiver_name in self.generic_structs.by_name:
                         # Struct constructor (e.g., Own.alloc) - don't check receiver as variable
                         pass
+                    # f64.from_bits(...) / f32.from_bits(...): a primitive type name used
+                    # as a static-method namespace, not a variable.
+                    elif receiver_name in ("f64", "f32") and expr.method == "from_bits":
+                        pass
                     else:
                         # Method call - check receiver as variable
                         self._check_expression(expr.receiver)

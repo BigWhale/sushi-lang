@@ -277,6 +277,29 @@ def try_emit_enum_hash(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
     return enum_hash_method.llvm_emitter(codegen, temp_expr, receiver_value, receiver_type, to_i1)
 
 
+def try_emit_primitive_static(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
+                              to_i1: bool) -> Optional[ir.Value]:
+    """Try to emit f64.from_bits(u64) / f32.from_bits(u32) static reinterpret.
+
+    The receiver is a primitive float type NAME (not a value), so this MUST run before
+    emit_receiver_value in the dispatcher (which would try to evaluate `f64` as a value).
+    Emits a single LLVM bitcast from the integer bit pattern to the float type. Returns
+    None if this is not a from_bits static call.
+    """
+    receiver = expr.receiver
+    if not (isinstance(receiver, Name) and receiver.id in ("f64", "f32")
+            and expr.method == "from_bits"):
+        return None
+
+    if len(expr.args) != 1:
+        raise_internal_error("CE0078", got=len(expr.args))
+
+    builder = require_builder(codegen)
+    arg_value = codegen.expressions.emit_expr(expr.args[0])
+    float_ll = ir.DoubleType() if receiver.id == "f64" else ir.FloatType()
+    return builder.bitcast(arg_value, float_ll, name="from_bits")
+
+
 def try_emit_primitive_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                               receiver_value: ir.Value, receiver_type: ir.Type,
                               semantic_type, to_i1: bool) -> Optional[ir.Value]:
@@ -293,8 +316,10 @@ def try_emit_primitive_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, Do
     if not is_builtin_primitive_method(expr.method):
         return None
 
-    # Check if stdlib unit is imported - if so, emit external call
-    if codegen.has_stdlib_unit("core/primitives"):
+    # Check if stdlib unit is imported - if so, emit external call.
+    # Only to_str() has a precompiled stdlib body; hash()/to_bits() are inline-only,
+    # so route to the stdlib path solely for to_str (otherwise they'd hit CE0028).
+    if codegen.has_stdlib_unit("core/primitives") and expr.method == "to_str":
         return emit_stdlib_primitive_call(codegen, expr.method, receiver_value, receiver_type, str(semantic_type))
     else:
         # Fall back to inline emission (backward compatibility)

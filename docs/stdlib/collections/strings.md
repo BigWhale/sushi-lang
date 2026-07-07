@@ -377,6 +377,11 @@ let u8[] bytes = text.to_bytes()
 # bytes = [72, 105]
 ```
 
+The inverse conversions are `u8[]` methods (core, no import):
+`bytes.to_string()` (zero-cost, assumes valid UTF-8) and
+`bytes.to_string_checked() -> Result<string, StdError>` (validates UTF-8, `Result.Err` on
+malformed input).
+
 ### `.to_i32() -> Maybe<i32>`
 
 Parse to i32.

@@ -291,6 +291,12 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     if result is not None:
         return result
 
+    # 9.5 Primitive static reinterpret: f64.from_bits(u64) / f32.from_bits(u32).
+    # Runs BEFORE emit_receiver_value below, since the receiver is a type name, not a value.
+    result = intrinsics.try_emit_primitive_static(codegen, expr, to_i1)
+    if result is not None:
+        return result
+
     # ========================================================================
     # For remaining handlers, emit receiver and infer types
     # ========================================================================
