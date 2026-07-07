@@ -1,0 +1,23 @@
+# Regression: matching directly on a `??`-unwrapped call that yields Maybe<T>
+# was rejected with a false CE2048 ("match scrutinee must be an enum type")
+# because the scrutinee inferred to a GenericTypeRef rather than a concrete
+# EnumType. validate_match_scrutinee now resolves generic enum refs to their
+# concrete monomorphized enum. See TODO.md "Compiler bug follow-up".
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "some 50\ndone 0\n"
+
+fn lookup(i32 k) Maybe<i32>:
+    if (k > 0):
+        return Result.Ok(Maybe.Some(k * 10))
+    return Result.Ok(Maybe.None())
+
+fn run_it() i32:
+    match lookup(5)??:
+        Maybe.Some(x) -> println("some {x}")
+        Maybe.None() -> println("none")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 code = run_it().realise(1)
+    println("done {code}")
+    return Result.Ok(0)

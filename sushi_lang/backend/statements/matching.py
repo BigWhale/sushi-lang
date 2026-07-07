@@ -38,8 +38,15 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     # Emit the scrutinee and get its enum value
     scrutinee_value = codegen.expressions.emit_expr(stmt.scrutinee)
 
-    # Get the scrutinee's type for pattern variable extraction
-    scrutinee_type = _get_scrutinee_type(codegen, stmt.scrutinee)
+    # Get the scrutinee's type for pattern variable extraction.
+    # Prefer the concrete enum type the type checker already resolved (Pass 2);
+    # only fall back to backend re-derivation when it is absent (older nodes /
+    # non-standard construction). The re-derivation cannot cover every scrutinee
+    # form, so relying on the annotation avoids silently dropping bindings.
+    from sushi_lang.semantics.typesys import EnumType
+    scrutinee_type = getattr(stmt, 'resolved_scrutinee_type', None)
+    if not isinstance(scrutinee_type, EnumType):
+        scrutinee_type = _get_scrutinee_type(codegen, stmt.scrutinee)
 
     # Extract the tag (discriminant) from the enum struct: {i32 tag, [N x i8] data}
     tag = enum_utils.extract_enum_tag(codegen, scrutinee_value, name="match_tag")
@@ -417,13 +424,21 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
     if not pattern.bindings:
         return
 
-    # Use scrutinee_type if available (handles generic enums), otherwise fall back to pattern lookup
+    # Use scrutinee_type if available (handles generic enums), otherwise fall back to pattern lookup.
+    # The fallback looks up the pattern's base enum name (e.g. "Result"/"Maybe"), which does NOT
+    # match a monomorphized key like "Result<i32, StdError>" - so for a generic scrutinee it only
+    # succeeds when scrutinee_type was already resolved. If it is still unresolved while the pattern
+    # carries bindings, we must fail loud: silently returning here drops the arm's binding locals and
+    # surfaces later as a confusing CE0055 in the arm body.
     enum_type = scrutinee_type
     if enum_type is None and hasattr(codegen, 'enum_table'):
         enum_type = codegen.enum_table.by_name.get(pattern.enum_name)
 
     if not enum_type:
-        return
+        raise_internal_error(
+            "CE0121",
+            pattern=f"{pattern.enum_name}.{pattern.variant_name}",
+        )
 
     variant = enum_type.get_variant(pattern.variant_name)
     if not variant or not variant.associated_types:

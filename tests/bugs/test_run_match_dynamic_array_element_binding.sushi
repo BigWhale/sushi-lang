@@ -1,0 +1,20 @@
+# Regression: matching on an indexed element of a Maybe<T>[] / Result<T,E>[]
+# array used to silently drop the arm's pattern binding and crash with the
+# internal CE0055 ("unknown variable or constant"). The backend could not
+# re-derive the scrutinee's concrete enum type for an IndexAccess scrutinee.
+# The type checker now resolves it (Pass 2) and annotates Match.resolved_scrutinee_type.
+# See TODO.md "Compiler bug follow-up".
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "got 1\ngot 2\n"
+
+fn main() i32:
+    let Maybe<i32> a = Maybe.Some(1)
+    let Maybe<i32> b = Maybe.Some(2)
+    let Maybe<i32>[] arr = from([a, b])
+    match arr[0]:
+        Maybe.Some(x) -> println("got {x}")
+        Maybe.None() -> println("none")
+    match arr[1]:
+        Maybe.Some(x) -> println("got {x}")
+        Maybe.None() -> println("none")
+    return Result.Ok(0)

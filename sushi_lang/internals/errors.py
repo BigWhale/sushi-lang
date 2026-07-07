@@ -588,6 +588,10 @@ _add(ErrorMessage("CE0120", Severity.ERROR,
     "{message}",
     Category.FUNC, "A bloom argument 'arr...' requires a variadic '...T' parameter and must be the sole, last trailing argument at the call site."))
 
+_add(ErrorMessage("CE0121", Severity.ERROR,
+    "could not resolve the concrete enum type for match pattern '{pattern}' - pattern bindings cannot be extracted",
+    Category.INTERNAL, "The backend could not determine the scrutinee's concrete enum type for a match arm with bindings. The type checker should have annotated Match.resolved_scrutinee_type; a miss here would otherwise silently drop the arm's binding locals."))
+
 # Struct errors
 _add(ErrorMessage("CE0004", Severity.ERROR,
     "duplicate struct '{name}'",

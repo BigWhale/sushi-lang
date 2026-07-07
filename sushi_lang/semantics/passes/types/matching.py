@@ -29,6 +29,11 @@ def validate_match_statement(validator: 'TypeValidator', stmt: Match) -> None:
     if scrutinee_type is None:
         return
 
+    # Stash the resolved concrete enum type on the node so the backend does not
+    # have to re-derive it from the scrutinee expression (which it cannot always
+    # do; a miss there silently drops pattern bindings and surfaces as CE0055).
+    stmt.resolved_scrutinee_type = scrutinee_type
+
     # Collect and validate all patterns
     covered_variants, has_wildcard = collect_and_validate_patterns(validator, stmt, scrutinee_type)
 
@@ -53,8 +58,21 @@ def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optiona
     if scrutinee_type is None:
         return None  # Error already emitted during expression validation
 
-    # Special handling for ResultType - convert to EnumType for pattern matching
+    # An unresolved generic scrutinee (e.g. an indexed element of a Maybe<i32>[]
+    # array, or a method returning Maybe<T>) infers to a GenericTypeRef/UnknownType.
+    # Resolve it to its concrete monomorphized enum (or a ResultType, handled below)
+    # so pattern matching sees a real EnumType instead of rejecting it (CE2048).
     from sushi_lang.semantics.typesys import ResultType, UnknownType
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    if isinstance(scrutinee_type, (GenericTypeRef, UnknownType)):
+        from sushi_lang.semantics.type_resolution import resolve_unknown_type
+        scrutinee_type = resolve_unknown_type(
+            scrutinee_type,
+            validator.struct_table.by_name,
+            validator.enum_table.by_name
+        )
+
+    # Special handling for ResultType - convert to EnumType for pattern matching
     if isinstance(scrutinee_type, ResultType):
         # Resolve UnknownType placeholders to actual types (for stdlib functions)
         from sushi_lang.semantics.type_resolution import resolve_unknown_type

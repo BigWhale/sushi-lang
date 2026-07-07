@@ -338,6 +338,12 @@ class Match(Stmt):
     """Match statement: match expr: pattern -> body"""
     scrutinee: "Expr"           # Expression being matched
     arms: List[MatchArm]        # Match arms
+    # Concrete monomorphized enum type of the scrutinee, resolved by the type
+    # checker (Pass 2) and consumed by the backend. Stored here because the
+    # backend cannot always re-derive it from the scrutinee expression alone
+    # (e.g. an indexed element, a fn-field call, or a user method returning
+    # Maybe/Result), and a miss would otherwise silently drop pattern bindings.
+    resolved_scrutinee_type: Optional[Type] = None
 
 
 # === Expressions ===
