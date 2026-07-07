@@ -48,8 +48,8 @@ def infer_index_access_type(validator: 'TypeValidator', expr: IndexAccess) -> Op
     if array_type is None:
         return None
 
-    # If array type is ArrayType, return its base type
-    if isinstance(array_type, ArrayType):
+    # Both fixed (T[N]) and dynamic (T[]) arrays index to their element type
+    if isinstance(array_type, (ArrayType, DynamicArrayType)):
         return array_type.base_type
 
     # If not an array type, this will be caught by other validation
