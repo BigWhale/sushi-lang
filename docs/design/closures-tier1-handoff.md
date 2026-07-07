@@ -1,52 +1,81 @@
-# Closures Tier 1 — Handoff (remaining work: 1 item — T1.8)
+# Closures Tier 1 — Handoff (remaining: Gap B + prelude-home + compose)
 
-This is the **resume-here** document for the outstanding Tier-1 work. The design
+This is the **resume-here** document for the outstanding closures work. The design
 rationale lives in `closures.md`; this file records the **current code state**, the
 **gotchas discovered during implementation**, and a **concrete, ordered plan** so the
 work can be picked up cold in a new session.
 
-Branch: `feature-closures-tier1`. Full enhanced suite is green (1062 tests). Closures
-compile and run for copy-capture (primitives, strings, copyable structs) AND, since
-**T1.5**, for **owned move-capture** (dynamic array, `List<T>`, `Own<T>`) with full
-**environment RAII**: a capturing lambda's heap env is freed on every exit path (scope
-exit, early `return`, `??`), escaping/returned closures are freed by their new owner, and
-a `List<fn(...)>` owns and frees the closures stored in it. **Closure aliasing is now
-sound** (rebind moves, container get-out / struct-field read borrow, struct-field closures
-are freed by struct cleanup).
+**Status (post-#126, on `main`).** Tier 1 is functionally complete: closures compile and run
+for copy-capture (primitives, strings, copyable structs) AND owned **move-capture** (dynamic
+array, `List<T>`, `Own<T>`) with full **environment RAII** — a capturing lambda's heap env is
+freed on every exit path (scope exit, early `return`, `??`), escaping/returned closures are
+freed by their new owner, a `List<fn(...)>` owns and frees the closures stored in it, and
+closure aliasing is sound (rebind moves; container get-out / struct-field read borrow;
+struct-field closures freed by struct cleanup). The **generic higher-order groundwork** landed
+too (#125): `map`/`filter`/`fold` work as **free generic functions** over closures/fn-refs. What
+remains is *ergonomics and delivery*, not core capability: the UFCS method form (Gap B),
+`compose` (Tier 2 T2.4), and deciding where a Sushi-authored prelude lives.
+
+> **Doc-drift note (reconciled 2026-07-07).** Earlier revisions of this file, `closures.md`,
+> and `generic-higher-order.md` listed **Gap D** (`List<T>` extensibility) and the **inline-
+> closure env leak** as open — both were **closed by PR #126** (issues #124 and #123). `ROADMAP.md`
+> and `FUTURE.md` conversely still described the env as leaking with owned-capture rejected — that
+> was **closed by T1.5** (PR #122). All five docs now reflect the post-#126 state.
 
 ## Remaining work (at a glance)
 
-Only **T1.8** remains before Tier 1 is fully closed. The two former T1.5 residuals are
-**DONE** (this branch):
+Tier 1's core is done. What is left is the method-form ergonomics + delivery decision:
+
+1. **Gap B — method-level type params on `extend`.** The single blocker for the *type-changing*
+   UFCS method form `xs.map(f)` (i32 → bool). A *same-type* combinator
+   (`extend List<T> map(fn(T)->T f) List<T>`) already works today (Gap D is closed). Detail +
+   options in §3 and §4.
+
+2. **`compose(f, g)` — Tier 2 (T2.4).** Its returned lambda `|x| f(g(x))` *calls* the captured
+   `f`/`g`; a captured-closure call lowers to `env.f(x)`, a non-`Name` callee that needs
+   `Call.callee` widening. Graceful compile error today, pinned by
+   `test_err_closure_capture_closure_deferred`.
+
+3. **Where the combinators ship.** There is no Sushi-authored stdlib for `List<T>` (every List
+   method is a Python IR emitter). `map`/`filter`/`fold` work as free generic functions today;
+   choosing a prelude / source-stdlib home is a separable decision (see §5).
+
+### Former T1.5 residuals — DONE (PR #122)
 
 1. **`List<T>`/`Own<T>` value capture — DONE.** The CE2094 gate in `type_visitor.py`
-   (`ExpressionValidator.visit_lambda`) now lets `List`/`Own` captures fall through like
-   dynamic arrays; the backend member-access receiver routing was fixed in
-   `backend/expressions/calls/utils.py` (`infer_generic_struct_type` + `emit_receiver_as_pointer`
-   gained a `MemberAccess` env-field strategy) so `__closure_env.xs.len()` dispatches to the
-   List/Own handler instead of crashing in the dynamic-array path. Capturing **and calling**
-   a *closure* value is still deferred (its call `env.f(x)` is a non-`Name` callee — T2.4;
-   now a graceful CE2094, not a crash). Tests: `test_closure_list_capture`,
-   `test_closure_own_capture`, `test_closure_list_mutate`,
-   `test_err_closure_capture_closure_deferred`.
+   (`ExpressionValidator.visit_lambda`) lets `List`/`Own` captures fall through like dynamic
+   arrays; the backend member-access receiver routing in `backend/expressions/calls/utils.py`
+   (`infer_generic_struct_type` + `emit_receiver_as_pointer` gained a `MemberAccess` env-field
+   strategy) routes `__closure_env.xs.len()` to the List/Own handler. Capturing **and calling** a
+   *closure* value is still deferred (its call `env.f(x)` is a non-`Name` callee — T2.4; graceful
+   CE2094). Tests: `test_closure_list_capture`, `test_closure_own_capture`,
+   `test_closure_list_mutate`, `test_err_closure_capture_closure_deferred`.
 
 2. **Closure aliasing soundness — DONE.** `emit_let` (`backend/statements/variables.py`,
    `_reconcile_closure_ownership`) keeps exactly one env owner: a plain rebind `let g = f`
    **moves** (source marked moved in the `MoveTracker`; the borrow checker's
-   `_reconcile_closure_bind` tracks capturing-closure provenance so a later use is CE2405);
-   a container get-out (`fns.get(0)??`) and a struct-field read borrow (unregistered via
-   `scopes.unregister_closure_cleanup`); and struct-field closures are freed by struct
-   cleanup (`dynamic_arrays.struct_needs_cleanup`/`_get_cleanup_fields`/
-   `_emit_struct_field_closure_free`). Tests: `test_closure_rebind_move`,
-   `test_closure_get_out`, `test_closure_in_struct_field`,
-   `test_err_closure_use_after_move_rebind`.
+   `_reconcile_closure_bind` in `semantics/passes/borrow.py` tracks capturing-closure provenance so
+   a later use is CE2405); a container get-out (`fns.get(0)??`) and a struct-field read borrow
+   (unregistered via `scopes.unregister_closure_cleanup`); and struct-field closures are freed by
+   struct cleanup (`backend/memory/dynamic_arrays.py`: `struct_needs_cleanup` /
+   `_emit_struct_field_closure_free`). Tests: `test_closure_rebind_move`, `test_closure_get_out`,
+   `test_closure_in_struct_field`, `test_err_closure_use_after_move_rebind`.
 
-3. **T1.8 — stdlib combinators** (`List.map`/`.filter`/`.fold`, `compose`; detail in §3).
-   Greenfield: there is no Sushi-source stdlib for `List<T>` today (every List method is a
-   Python IR emitter), so this hinges on a decision about a Sushi-authored stdlib/prelude
-   path. `compose` over fn params compiles today (copy-capture); its true dependency is the
-   now-closed aliasing soundness (item 2), not move-capture. `map`/`filter`/`fold` over
-   copyable elements are independent of both.
+### Also closed since (PRs #125, #126)
+
+- **Gap C + Gap A — DONE (#125).** Generic higher-order functions compile: type inference binds a
+  type param nested in a `fn(T)->U` argument, and monomorphization substitutes `FunctionType`.
+  `map`/`filter`/`fold`/`apply` validated as free generic functions (`tests/generics/test_ho_*`).
+  See `generic-higher-order.md`.
+- **Gap D — DONE (#124/#126).** `List<T>` is extensible: user `extend List<T> ...` (concrete and
+  generic) compiles and runs (`tests/bugs/test_run_issue124_list_extension_{concrete,generic}`).
+  There is no rejection error. Providers win on a builtin-name clash; the by-value-`self` vs
+  by-pointer receiver mismatch is reconciled at the dispatch site. See §4 (Gap B) — Gap D was the
+  *List-extensibility* half; Gap B (method type params) is the remaining half of the method form.
+- **Inline capturing-closure argument leak — FIXED (#123/#126).** A capturing closure passed
+  *inline* as a call argument (`apply(|i32 x| x + k, 10)`) is now RAII-tracked via the
+  `_closure_temp_cleanup` registry (`backend/memory/scopes.py`) and freed on every exit path.
+  IR free-count regression: `tests/unit/test_closure_temp_raii.py`.
 
 ---
 
@@ -215,10 +244,10 @@ needs get-moves/refcounting, deferred.
 
 ## 3. T1.8 — stdlib combinators (`map`/`filter`/`fold`, `compose`)
 
-**Groundwork landed** (branch `feature-generic-higher-order`; see
-`docs/design/generic-higher-order.md` for the detailed design + implementation map). The real
-blocker was not "where stdlib lives" but that **generic higher-order functions did not compile at
-all** (even `fn apply<T>(fn(T)->T f, T x) T` was CE2060). Two gaps were closed:
+**Groundwork landed** (PR #125; see `docs/design/generic-higher-order.md` for the detailed design
++ implementation map). The real blocker was not "where stdlib lives" but that **generic
+higher-order functions did not compile at all** (even `fn apply<T>(fn(T)->T f, T x) T` was CE2060).
+Two gaps were closed:
 
 - **Gap C** — type inference now binds type params nested in a `fn(T) -> U` argument (a
   `FunctionType` branch in both twin unifiers; Pass 1.5 presents a `FunctionType` for a typed-param
@@ -227,42 +256,107 @@ all** (even `fn apply<T>(fn(T)->T f, T x) T` was CE2060). Two gaps were closed:
   substitution routines).
 
 `map` / `filter` / `fold` are validated as **free generic functions** (`tests/generics/test_ho_*`)
-with capturing-closure and fn-ref arguments.
+with capturing-closure and fn-ref arguments — this is the T1.8 *payoff*, delivered as free
+functions. The **inline capturing-closure argument leak** the milestone surfaced is **FIXED**
+(#123/#126) — an inline `map(xs, |x| ...)` no longer leaks its env.
 
-**Still outstanding (deferred, documented in `generic-higher-order.md`):**
-- The UFCS **method form** `xs.map<U>(...)` — needs **Gap B** (method-level type params on `extend`:
-  grammar + AST + collect + call-site inference for method params + on-demand extension
-  monomorphization) and **Gap D** (`List<T>` is not extensible at all — provider-backed, both
-  concrete and generic extends fail).
+**Still outstanding:**
+- The UFCS **method form** `xs.map(f)` — needs only **Gap B** now (method-level type params on
+  `extend`). **Gap D** (`List<T>` extensibility) is **DONE** (#124/#126): a *same-type* method
+  (`extend List<T> map(fn(T)->T f) List<T>`) works today; only a *type-changing* method
+  (`fn(T)->U`, needing its own `<U>`) is blocked by Gap B. Full options in §4.
 - **`compose`** — its returned lambda calls the captured `f`/`g` (a non-`Name` callee), which needs
   Tier 2 T2.4 `Call.callee` widening; graceful compile error today.
 - **Where the combinators ship** — no Sushi-authored stdlib exists; a prelude / source-stdlib path
-  is a separate decision.
-- **Pre-existing leak:** an inline capturing-closure call argument (`map(xs, |x| ...)`) leaks its
-  env (~16 B); bind to a local first as a workaround. Independent of Gaps C/A.
+  is a separate decision (§5).
 
 ---
 
-## 4. Fast path to re-enter
+## 4. Gap B — the issue, and options
 
-1. Read `closures.md` (design) + this file, especially **Remaining work (at a glance)** above.
-2. `git log --oneline main..feature-closures-tier1` — the feature commits are the phase history.
+`extend List<T> map<U>(fn(T)->U f) List<U>` cannot be expressed. Four pieces are missing (all
+verified against the current tree):
+
+1. **Grammar** (`grammar.lark:36`): `extend_def` is `NAME "(" [parameters] ")" type ...` — there is
+   no `[type_params]` slot after the method name (contrast `function_def` at `:45`, which has it).
+   `xs.map(f)` (inference-only, no explicit `<U>` at the call — Sushi has no method type-arg syntax,
+   `method_call` at `:151`) already *parses*; only the **definition** needs the slot. Adding it
+   requires the LALR acceptance-gate (run the grammar through the parser generator, like the lambda
+   `|`); `<` after a method NAME in `extend_suffix` is unambiguous, so low risk.
+2. **AST/collect**: `ExtendDef` (`ast.py:135`) has no `type_params`; collect
+   (`semantics/passes/collect/functions.py:748`) derives extension type params from the *receiver's*
+   `target_type.type_args` **only** (stored on `GenericExtensionMethod.type_params`). Needs a
+   method-param field distinct from the receiver params, unioned for body type-resolution.
+3. **Call-site inference**: method calls (`semantics/passes/types/calls/methods.py:234-255`) are
+   receiver-driven — concrete type args come entirely from the receiver type; there is **no**
+   argument unification. The free-function unifier
+   (`semantics/passes/types/calls/generics.py:_unify_types_for_inference`, extended in #125 to
+   handle `fn(T)->U`) would need to be reused for method calls to solve `U` from the `f` argument.
+4. **Monomorphization**: `monomorphize_all_extension_methods`
+   (`backend/generics/extensions.py:148`) is eager/receiver-driven, keyed on `struct_instantiations`
+   with a strict `zip` of `generic_method.type_params` against the receiver's `type_args` (CE0096 on
+   count mismatch). Method params need a call-site-driven instantiation dimension combining receiver
+   args **and** independently-inferred method args.
+
+**Options:**
+
+- **(A) Do nothing — free-function form (recommended default).** `map(xs, f)` works today,
+  including type-changing (`i32 -> bool`) and capturing closures. The method form is pure UFCS
+  sugar. Zero cost; document the combinators as free functions.
+- **(B) Same-type-only method combinators.** Ship `extend List<T>` methods whose result type is `T`
+  (in-place-style map, `filter`, fold-to-`T`). Works **today** on the back of Gap D, no Gap B. Real
+  subset; type-changing map/fold still fall back to free functions.
+- **(C) Implement Gap B.** Medium–large. Reuses #125's inference (Gap C) and substitution (Gap A)
+  machinery; the crux is bridging the **eager receiver-driven** extension monomorphizer to a
+  **call-site-driven** one for method params. Unlocks the full ergonomic `xs.map(f)`.
+
+Gap B is medium–large; Gap D is already closed. Recommendation: pursue (A)/(B) for the parity
+payoff now; defer (C) until a concrete consumer wants the fluent method form.
+
+### Constraints on List extension methods (from the Gap D fix, worth knowing)
+
+- **Builtin names cannot be shadowed.** The backend dispatcher checks List provider methods
+  (`push`/`get`/`iter`/…) *before* the user-extension fallback, so a user `extend List<T> push()`
+  is unreachable. Only non-builtin names route to the extension path.
+- **Receiver ABI reconciliation.** A List-backed receiver shares the dynamic-array
+  `{i32, i32, T*}` layout and is passed by pointer, but `self` is declared by value; the dispatch
+  site loads the header to reconcile (safe because extension bodies never register `self` for
+  cleanup, so the shared buffer is not double-freed).
+
+## 5. Future options (parity, not self-host-critical)
+
+Closures are a **parity** feature — ROADMAP R1 (MessagePack) needs none of this. Rough
+leverage-per-effort order, once parity is the goal:
+
+1. **Decide the Sushi-prelude home** and ship `map`/`filter`/`fold` as free functions (they work
+   today; this is the T1.8 delivery decision).
+2. **T2.4 `Call.callee` widening** (small, self-contained) — unblocks `compose`,
+   capturing-and-calling closures, `arr[0]()`, and `obj.handler()`. Highest leverage-per-effort.
+3. **Gap B** (method-level type params) for the ergonomic `xs.map(f)` form.
+4. **Larger Tier 2:** `&poke`/`&peek` borrow capture, bound-method values, generic-fn references
+   (lift CE2093), T2.5 indirect-path parity for owning/variadic params, C callbacks.
+
+---
+
+## 6. Fast path to re-enter
+
+1. Read `closures.md` (design), `generic-higher-order.md` (Gaps A/C, and the Gap B/D framing), and
+   this file — especially **Remaining work (at a glance)** above.
+2. `git log --oneline 430b5bd..2f288a9` — the closures feature commits (#120/#122/#125/#126) are the
+   phase history; everything is on `main`.
 3. Reproduce the working baseline: compile+run `tests/closures/test_closure_escaping.sushi`
-   (prints 15) and the T1.5 tests (`test_closure_owned_move_capture`, `test_closure_list_owns`,
-   `test_closure_qq_early_exit`).
-4. Pick one of the three remaining items:
-   - **Item 1 (List/Own/closure capture, §2 step 6)** — the isolated repro is a lambda body reading
-     a captured `List<T>` (`|x| x + xs.len()`), which crashes in `backend/types/arrays/` dispatch;
-     `let zs = s.xs; zs.len()` (extract-to-local) works, so trace the method-call-on-member-access
-     receiver typing in the re-annotated lifted body. Then delete the CE2094 branch in
-     `type_visitor.py` and convert `test_err_closure_list_capture_deferred.sushi` to a positive test.
-   - **Item 2 (container get-out aliasing, §2.5)** — decide the ownership model (env refcount vs
-     get-moves vs struct-field cleanup extension) before coding; add the crashing/leaking repros as
-     tests once a model is chosen.
-   - **Item 3 (T1.8 combinators, §3)** — first confirm generic extension methods that take a
-     `fn(...)` parameter and monomorphize; there is **no** Sushi-source stdlib for `List<T>` today
-     (every List method is a Python LLVM emitter under `backend/generics/list/`, none take an fn
-     param), so a stdlib home + the fn-param-monomorphization path is the main unknown.
+   (prints 15), the T1.5 tests (`test_closure_owned_move_capture` → 13, `test_closure_list_owns`,
+   `test_closure_qq_early_exit`), and the Gap D tests
+   (`tests/bugs/test_run_issue124_list_extension_generic` → 7).
+4. Pick the remaining item that matches the goal:
+   - **Prelude + free-function combinators (§5 step 1)** — decide where a Sushi-authored prelude
+     lives; `map`/`filter`/`fold` already compile as free generic functions, so this is a delivery
+     decision, not a capability one.
+   - **T2.4 `Call.callee` widening (§5 step 2)** — unblocks `compose` and capturing-and-calling
+     closures; the pinning negative test is `test_err_closure_capture_closure_deferred`.
+   - **Gap B (§4)** — the method form `xs.map(f)`; start with the grammar acceptance-gate, reuse the
+     #125 unifier for method-call inference, then bridge the extension monomorphizer to a
+     call-site-driven path.
 5. Keep the enhanced suite green after each step (`python tests/run_tests.py --enhanced`);
    leak-check the runtime cases with macOS `leaks --atExit` (baseline noise: ~16 bytes in
    `user_main`, present even in a trivial no-closure program).

@@ -1,9 +1,12 @@
 # Design: Closures
 
-**Status:** Tier 1 complete except T1.8. T1.0-T1.7 landed, plus T1.5 env RAII + move-capture
+**Status:** Tier 1 functionally complete. T1.0-T1.7 landed, plus T1.5 env RAII + move-capture
 and both its residuals — `List<T>`/`Own<T>` value capture and closure-aliasing soundness (the
-get-out/rebind double-free and struct-field leak). Only T1.8 stdlib combinators remain outstanding
-(deferred pending a decision on Sushi-authored stdlib) — see "Implementation status" below. Successor to
+get-out/rebind double-free and struct-field leak). The T1.8 groundwork also landed (#125/#126):
+`map`/`filter`/`fold` run as **free generic functions**, `List<T>` is user-extensible (Gap D done,
+#124/#126), and the inline capturing-closure argument leak is fixed (#123/#126). What remains is
+ergonomics/delivery — the UFCS method form (Gap B), `compose` (Tier 2 T2.4), and choosing a
+Sushi-authored prelude home — see "Implementation status" below. Successor to
 `first-class-functions.md` (v1 FCF, PR #91). Scope: capturing closures + lambda literals, delivered
 in two tiers. T1 is the minimal *but real* slice (escaping closures, heap env, copy + move
 capture); T2 is the ergonomic and hard-case remainder (`&poke` capture, bound methods, generic-fn
@@ -42,16 +45,19 @@ Outstanding:
 
 - **T1.8 — groundwork landed; stdlib delivery deferred.** Generic higher-order functions now work
   in Sushi (see `generic-higher-order.md`): `map`/`filter`/`fold` are expressible and validated as
-  **free generic functions** (`map(xs, f)`) with capturing-closure or fn-ref arguments. Still
-  outstanding: the UFCS *method* form (`xs.map<U>(...)` — needs extension-method type params **and**
-  making `List<T>` extensible), `compose` (its returned lambda *calls* captured closures — Tier 2
-  T2.4), and where the combinators ship (no Sushi-authored stdlib exists yet). A pre-existing
-  closures leak surfaced: a capturing closure passed *inline* as a call argument (`map(xs, |x| ...)`)
-  leaks its env — bind it to a local first as a workaround (details in `generic-higher-order.md`).
+  **free generic functions** (`map(xs, f)`) with capturing-closure or fn-ref arguments — the T1.8
+  payoff, delivered as free functions. `List<T>` is now user-extensible (Gap D done, #124/#126) and
+  the inline capturing-closure argument leak is fixed (#123/#126). Still outstanding: the UFCS
+  *method* form (`xs.map(f)`) — blocked only by **Gap B** (method-level type params on `extend`; a
+  *same-type* `extend List<T> map(fn(T)->T f) List<T>` works today, only a *type-changing* `fn(T)->U`
+  needs Gap B); `compose` (its returned lambda *calls* captured closures — Tier 2 T2.4); and where
+  the combinators ship (no Sushi-authored stdlib exists yet). Gap B breakdown + options:
+  `closures-tier1-handoff.md` §4.
 
 > **Resuming this work:** `closures-tier1-handoff.md` (same directory) is the detailed handoff —
-> current code state, the exact stubs (`drop_ptr = null`; owned-capture rejection), file:line
-> anchors, discovered gotchas, and an ordered step-by-step plan for T1.5 and T1.8.
+> current code state, file:line anchors, discovered gotchas, the Gap B breakdown + options (§4),
+> and the future-options ordering (§5). The former T1.5 stubs (`drop_ptr = null`; owned-capture
+> rejection) are resolved; the handoff records what shipped and what remains.
 
 The `|` prefix/infix disambiguation and the `|~|` zero-parameter form (see below) were validated
 by running the extended grammar through the parser generator with no new conflicts, as the T1.1
