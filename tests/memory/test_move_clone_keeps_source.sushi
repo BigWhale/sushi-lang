@@ -1,0 +1,16 @@
+# Move-by-value escape hatch: passing `.clone()` moves the copy, leaving the source
+# usable afterward (explicit copy is the opt-in to keep an owned value).
+# EXPECT_STDOUT_CONTAINS: consumed=3
+# EXPECT_STDOUT_CONTAINS: original=3
+# EXPECT_RUNTIME_EXIT: 0
+
+fn consume(i32[] arr) i32:
+    return Result.Ok(arr.len())
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3])
+    let i32 n = consume(data.clone()).realise(-1)
+    println("consumed={n}")
+    # data is still owned here because only the clone was moved.
+    println("original={data.len()}")
+    return Result.Ok(0)

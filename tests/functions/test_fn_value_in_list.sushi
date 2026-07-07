@@ -17,7 +17,8 @@ fn main() i32:
     let List<fn(i32) -> i32> ops = List.new()
     ops.push(add_one)
     ops.push(add_two)
+    # ops is moved into dispatch(), which owns and frees the list (and its fn values)
+    # at scope exit -- no explicit ops.free() here (that would be a use-after-move).
     let i32 out = dispatch(ops, 10).realise(0)
     println(out)
-    ops.free()
     return Result.Ok(0)

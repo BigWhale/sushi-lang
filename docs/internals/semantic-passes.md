@@ -108,7 +108,7 @@ let i32 y = x  # OK: primitives copy
 ```sushi
 let i32[] arr = from([1, 2, 3])
 let i32[] moved = arr
-println(arr.len())  # ERROR CE1004: Use of moved variable 'arr'
+println(arr.len())  # ERROR CE2405: Use of moved variable 'arr'
 ```
 
 ### Scope Tracking
@@ -453,7 +453,7 @@ destroyed_variables.add(var)
 if var in destroyed_variables:
     raise UseAfterDestroyError("CE2406")
 if var in moved_variables:
-    raise UseAfterMoveError("CE1004")
+    raise UseAfterMoveError("CE2405")
 ```
 
 ## Pass Interdependencies
@@ -478,7 +478,7 @@ Constants  Vars   Instantiate  Monomorphize  Transform    Hash     Types   Borro
 
 **Phase 1:**
 - CE1003: Undefined variable
-- CE1004: Use of moved variable
+- CE2405: Use of moved variable
 
 **Phase 2:**
 - CE2xxx: Type mismatch

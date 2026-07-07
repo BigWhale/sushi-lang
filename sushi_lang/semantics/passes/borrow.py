@@ -277,13 +277,13 @@ class BorrowChecker:
             for arg in expr.args:
                 self._check_expr(arg)
 
-            # Check if this is a struct constructor - if so, mark dynamic array args as moved
-            if isinstance(expr.callee, Name) and self.struct_names is not None:
-                callee_name = expr.callee.id
-                if callee_name in self.struct_names:
-                    # This is a struct constructor - mark dynamic array arguments as moved
-                    for arg in expr.args:
-                        self._mark_moved_if_applicable(arg)
+            # A by-value owning argument (dynamic array / List / Own) is MOVED into the
+            # callee. Borrows are spelled explicitly at the call site (`&peek x` is a
+            # Borrow node, not a Name), so a bare owning Name argument is by definition
+            # by-value and therefore moved. This holds uniformly for ordinary function
+            # calls, indirect closure calls, and struct constructors.
+            for arg in expr.args:
+                self._mark_moved_if_applicable(arg)
 
         elif isinstance(expr, MethodCall):
             self._check_expr(expr.receiver)
@@ -531,18 +531,19 @@ class BorrowChecker:
                 dest.is_owning_closure = True
 
     def _mark_moved_if_applicable(self, expr: Expr) -> None:
-        """Mark a variable as moved if the expression is a simple variable reference to a dynamic array.
+        """Mark a variable as moved if the expression is a bare reference to an owning value.
 
-        Move semantics only apply to dynamic arrays in Sushi. Primitive types and other types are copied.
+        Move semantics apply to every owning type in Sushi -- dynamic arrays, `List<T>`,
+        `Own<T>`, and capturing closures (the shared `is_owning_type` predicate). Primitives,
+        strings, and copyable structs are copied, not moved.
         """
-        # In Sushi, rebinding from a variable moves ownership ONLY for dynamic arrays
-        # Example: arr1 := arr2  (arr2 is moved to arr1 if arr2 is a dynamic array)
-        # Example: x := y  (y is copied to x if y is a primitive like i32)
+        # Rebinding from / passing a bare owning variable transfers ownership:
+        # Example: arr1 := arr2  (arr2 is moved if arr2 is owning)
+        # Example: x := y        (y is copied if y is a primitive like i32)
         if isinstance(expr, Name):
             if expr.id in self.borrow_state:
                 state = self.borrow_state[expr.id]
-                # Only mark as moved if the variable is a dynamic array
-                if state.var_type and isinstance(state.var_type, DynamicArrayType):
+                if self._type_is_owning(state.var_type):
                     state.is_moved = True
 
     def _clear_borrows(self) -> None:

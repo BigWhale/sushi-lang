@@ -64,7 +64,8 @@ fn build_list(i32[] values) List<Node>:
     return Result.Ok(nodes)
 
 # Prints the list forward from a given start index
-fn print_forward(List<Node> nodes, i32 start_idx) ~:
+# nodes is only read -- borrow it &peek so the caller keeps the list.
+fn print_forward(&peek List<Node> nodes, i32 start_idx) ~:
     print("Forward: [")
 
     let Maybe<i32> current = Maybe.Some(start_idx)
@@ -89,7 +90,8 @@ fn print_forward(List<Node> nodes, i32 start_idx) ~:
     return Result.Ok(~)
 
 # Prints the list backward from a given start index
-fn print_backward(List<Node> nodes, i32 start_idx) ~:
+# nodes is only read -- borrow it &peek so the caller keeps the list.
+fn print_backward(&peek List<Node> nodes, i32 start_idx) ~:
     print("Backward: [")
 
     let Maybe<i32> current = Maybe.Some(start_idx)
@@ -114,7 +116,8 @@ fn print_backward(List<Node> nodes, i32 start_idx) ~:
     return Result.Ok(~)
 
 # Calculates the sum of all values in the list
-fn sum_list(List<Node> nodes, i32 start_idx) i32:
+# nodes is only read -- borrow it &peek so the caller keeps the list.
+fn sum_list(&peek List<Node> nodes, i32 start_idx) i32:
     let i32 total = 0
     let Maybe<i32> current = Maybe.Some(start_idx)
 
@@ -148,14 +151,14 @@ fn main() i32:
         println("")
 
         # Traverse forward from head
-        print_forward(list_final, 0)
+        print_forward(&peek list_final, 0)
 
         # Traverse backward from tail
-        print_backward(list_final, list_final.len() - 1)
+        print_backward(&peek list_final, list_final.len() - 1)
         println("")
 
         # Calculate sum
-        let i32 sum1 = sum_list(list_final, 0).realise(0)
+        let i32 sum1 = sum_list(&peek list_final, 0).realise(0)
         println("Sum: {sum1}")
         println("")
     else:
@@ -174,10 +177,10 @@ fn main() i32:
         println("Head index: 0, Tail index: {second_final.len() - 1}")
         println("")
 
-        print_forward(second_final, 0)
-        print_backward(second_final, second_final.len() - 1)
+        print_forward(&peek second_final, 0)
+        print_backward(&peek second_final, second_final.len() - 1)
 
-        let i32 sum2 = sum_list(second_final, 0).realise(0)
+        let i32 sum2 = sum_list(&peek second_final, 0).realise(0)
         println("Sum: {sum2}")
         println("")
 

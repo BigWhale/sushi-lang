@@ -1,0 +1,17 @@
+# Use-after-move: an Own<T> passed by value is moved into the callee, so using it
+# afterward is a use-after-move error.
+# EXPECT_ERROR_CODE: CE2405
+
+fn unwrap(Own<i32> b) i32:
+    return Result.Ok(b.get())
+
+fn run() i32:
+    let Own<i32> box = Own.alloc(5)
+    let i32 a = unwrap(box)??
+    # box was moved into unwrap() -- this reuse is illegal.
+    let i32 b = unwrap(box)??
+    return Result.Ok(b)
+
+fn main() i32:
+    let i32 r = run().realise(-1)
+    return Result.Ok(0)

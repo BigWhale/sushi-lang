@@ -1,0 +1,20 @@
+# Move-by-value: a List<T> parameter is moved into the callee. The callee owns and
+# frees it once; the caller does NOT free it again (no double-free at runtime).
+# EXPECT_STDOUT_CONTAINS: sum=60
+# EXPECT_RUNTIME_EXIT: 0
+
+fn total(List<i32> xs) i32:
+    let i32 acc = 0
+    foreach(x in xs.iter()):
+        acc := acc + x
+    return Result.Ok(acc)
+
+fn main() i32:
+    let List<i32> xs = List.new()
+    xs.push(10)
+    xs.push(20)
+    xs.push(30)
+    # xs is moved into total(); total() owns and frees it, main must not free again.
+    let i32 sum = total(xs).realise(-1)
+    println("sum={sum}")
+    return Result.Ok(0)

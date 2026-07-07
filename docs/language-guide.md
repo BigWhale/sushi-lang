@@ -184,11 +184,13 @@ fn main() i32:
 
 **Parameter passing**:
 - **Primitives and strings**: Passed by copy (cheap, no ownership transfer)
-- **Dynamic arrays**: Passed by move (ownership transfers to the callee)
-- **Structs**: Passed by move if they contain dynamic arrays
+- **Owning types** (`T[]`, `List<T>`, `Own<T>`): Passed by move — ownership transfers to the callee,
+  which frees the value at scope exit; using the source afterward is `CE2405` (use-after-move)
+- **Structs**: Passed by copy; a struct that owns heap memory (a dynamic-array field) is deep-copied
+  so the caller and callee own independent buffers
 - **References**: Use `&peek T` for read-only or `&poke T` for read-write references without transferring ownership
 
-If you need to keep using a dynamic array after passing it to a function, either pass a reference (`&peek i32[]` for read-only or `&poke i32[]` for modification) or explicitly clone it (`.clone()`) before passing.
+If you need to keep using an owning value after passing it to a function, either pass a reference (`&peek i32[]` for read-only or `&poke i32[]` for modification) or explicitly clone it (`.clone()`) before passing. (One special case: `main`'s `string[] args` is a borrowed view of the process argv — borrow it downstream, never move it by value.)
 
 ## Control Flow
 
