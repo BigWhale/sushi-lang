@@ -159,8 +159,9 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
         try:
             for unit_path in stdlib_units:
                 temp_cg.stdlib._resolve_stdlib_unit(unit_path)
-        except FileNotFoundError as e:
-            print(f"Error: {e}", file=sys.stderr)
+        except FileNotFoundError:
+            from sushi_lang.internals import errors as er
+            er.emit(reporter, er.ERR.CE3006, None, module=unit_path)
             return 2
 
         print(f"Linking {len(stdlib_units)} stdlib units:")

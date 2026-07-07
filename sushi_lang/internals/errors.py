@@ -1014,6 +1014,10 @@ _add(ErrorMessage("CE3005", Severity.ERROR,
     "cannot call private function '{name}' from unit '{current_unit}' (function is defined in '{func_unit}')",
     Category.SCOPE, "Private functions can only be called from within the same unit. Use 'public fn' to make the function accessible across units."))
 
+_add(ErrorMessage("CE3006", Severity.ERROR,
+    "unknown stdlib module <{module}>",
+    Category.SCOPE, "The imported standard-library module does not exist. Check the spelling against the available modules."))
+
 # Perk-related errors (CE4xxx)
 _add(ErrorMessage("CE4001", Severity.ERROR,
     "duplicate perk definition: {name}",
