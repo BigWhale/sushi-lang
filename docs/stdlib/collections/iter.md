@@ -85,6 +85,26 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
+### `compose<T, U, V>(fn(T) -> U g, fn(U) -> V f) -> fn(T) -> V`
+
+Build a new function that applies `g` first, then `f` (`f` after `g`). The returned
+closure captures `f` and `g`.
+
+```sushi
+use <collections/iter>
+
+fn inc(i32 x) i32:
+    return Result.Ok(x + 1)
+
+fn dbl(i32 x) i32:
+    return Result.Ok(x * 2)
+
+fn main() i32:
+    let fn(i32) -> i32 incthendouble = compose(inc, dbl).realise(dbl)
+    println(incthendouble(10).realise(-1))    # dbl(inc(10)) = 22
+    return Result.Ok(0)
+```
+
 ## See also
 
 - [List<T>](list.md) — the underlying collection

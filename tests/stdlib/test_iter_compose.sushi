@@ -1,0 +1,18 @@
+# collections/iter: compose(g, f) builds f-after-g. compose(inc, dbl) applied to 10 is
+# dbl(inc(10)) = dbl(11) = 22.
+# EXPECT_STDOUT_EXACT: "22\n"
+use <collections/iter>
+
+fn inc(i32 x) i32:
+    return Result.Ok(x + 1)
+
+fn dbl(i32 x) i32:
+    return Result.Ok(x * 2)
+
+fn run() i32:
+    let fn(i32) -> i32 h = compose(inc, dbl)??
+    return Result.Ok(h(10)??)
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)
