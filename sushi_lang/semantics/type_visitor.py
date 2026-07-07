@@ -559,6 +559,15 @@ class ExpressionValidator(RecursiveVisitor):
         if node.id in tv.variable_types or node.id in tv.const_table.by_name:
             return
         if node.id in tv.generic_func_table.by_name:
+            # T2.3: a generic-fn reference is allowed when an explicit expected fn type
+            # is present (e.g. `let fn(i32) -> i32 g = identity`). Solve the type args,
+            # rewrite the node to the mangled concrete name, and accept. A bare reference
+            # with no expected fn type stays CE2093 (the minimal-slice boundary).
+            from sushi_lang.semantics.passes.types.calls.generics import resolve_generic_fn_reference
+            resolved = resolve_generic_fn_reference(tv, node.id, getattr(node, "expected_type", None))
+            if resolved is not None:
+                node.id = resolved[0]  # mirror the call-site mangled-name rewrite
+                return
             er.emit(tv.reporter, er.ERR.CE2093, node.loc,
                     name=node.id, reason="generic function references are deferred (v1)")
 
@@ -786,6 +795,16 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         fn_value_type = function_value_type_of(self.type_validator, node.id)
         if fn_value_type is not None:
             return fn_value_type
+
+        # A generic-fn reference with an explicit expected fn type (T2.3): solve the type
+        # args and return the concrete FunctionType (the node is rewritten to the mangled
+        # name during validation).
+        if node.id in self.type_validator.generic_func_table.by_name:
+            from sushi_lang.semantics.passes.types.calls.generics import resolve_generic_fn_reference
+            resolved = resolve_generic_fn_reference(
+                self.type_validator, node.id, getattr(node, "expected_type", None))
+            if resolved is not None:
+                return resolved[1]
 
         return None
 

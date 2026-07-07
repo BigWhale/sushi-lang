@@ -172,6 +172,11 @@ class FunctionCollector:
             # NEW: Scan initialization expression
             if stmt.value is not None:
                 self.expression_scanner.scan_expression(stmt.value)
+                # Bare generic-fn reference `let fn(..) g = generic_fn` (T2.3): the
+                # declared function type drives the instantiation the backend needs.
+                from sushi_lang.semantics.ast import Name
+                if isinstance(stmt.value, Name) and stmt.ty is not None:
+                    self.expression_scanner.scan_generic_fn_reference(stmt.value.id, stmt.ty)
 
         elif isinstance(stmt, Foreach):
             # Foreach loop with type annotation

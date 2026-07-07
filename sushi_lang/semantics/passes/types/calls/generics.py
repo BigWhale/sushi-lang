@@ -91,6 +91,62 @@ def validate_generic_function_call(
     validate_call_arguments(validator, call, func_sig)
 
 
+def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected_ty):
+    """Resolve a bare generic-fn reference against an expected FunctionType (T2.3).
+
+    `let fn(i32) -> i32 g = identity` with `fn identity<T>(T x) T`: solve the type args
+    by unifying the generic signature `fn(T) -> T` against the expected type, mangle, and
+    return `(mangled_name, concrete_FunctionType)` when the monomorphized instance exists.
+    Returns None when not resolvable this way (no expected fn type, arity mismatch, a type
+    param unsolved by the expected type, a pack function, or no monomorphized instance).
+    """
+    from sushi_lang.semantics.typesys import FunctionType, UnknownType
+    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+    if not isinstance(expected_ty, FunctionType):
+        return None
+    generic_func = validator.generic_func_table.by_name.get(name)
+    if generic_func is None:
+        return None
+    # v1 slice: plain (non-pack) generic functions only.
+    type_params = generic_func.type_params or []
+    if type_params and getattr(type_params[-1], "is_pack", False):
+        return None
+    func_params = [p for p in generic_func.params if not getattr(p, "is_pack", False)]
+    if len(func_params) != len(expected_ty.param_types):
+        return None
+
+    type_param_map: Dict[str, Type] = {}
+    for param, exp_pty in zip(func_params, expected_ty.param_types):
+        if param.ty is None:
+            return None
+        if not _unify_types_for_inference(param.ty, exp_pty, type_param_map):
+            return None
+    if generic_func.ret is not None:
+        if not _unify_types_for_inference(generic_func.ret, expected_ty.ok_type, type_param_map):
+            return None
+
+    type_args = []
+    for tp in type_params:
+        tp_name = tp.name if hasattr(tp, "name") else str(tp)
+        if tp_name not in type_param_map:
+            return None
+        type_args.append(resolve_unknown_type(
+            type_param_map[tp_name], validator.struct_table, validator.enum_table))
+    type_args = tuple(type_args)
+
+    mangled_name = mangle_function_name(name, type_args)
+    func_sig = validator.func_table.by_name.get(mangled_name)
+    if func_sig is None:
+        return None
+    param_types = tuple(p.ty for p in func_sig.params)
+    if any(pt is None for pt in param_types):
+        return None
+    ok_type = func_sig.ret_type
+    err_type = func_sig.err_type if func_sig.err_type is not None else UnknownType("StdError")
+    concrete_ft = FunctionType(param_types=param_types, ok_type=ok_type, err_type=err_type)
+    return mangled_name, concrete_ft
+
+
 def _infer_type_args_from_call_site(
     validator: 'TypeValidator',
     call: Call,

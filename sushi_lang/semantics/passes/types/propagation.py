@@ -434,10 +434,12 @@ def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
         return
 
     # Function-typed context: hand a lambda its expected FunctionType so bare-name
-    # params (`|x|`) infer their types from the binding/argument context.
+    # params (`|x|`) infer their types from the binding/argument context; likewise hand
+    # a bare Name its expected fn type so a generic-fn reference (`let fn(i32)->i32 g =
+    # identity`) can solve its type args (T2.3).
     from sushi_lang.semantics.typesys import FunctionType as _FunctionType
-    from sushi_lang.semantics.ast import Lambda as _Lambda
-    if isinstance(expected_type, _FunctionType) and isinstance(value_expr, _Lambda):
+    from sushi_lang.semantics.ast import Lambda as _Lambda, Name as _Name
+    if isinstance(expected_type, _FunctionType) and isinstance(value_expr, (_Lambda, _Name)):
         value_expr.expected_type = expected_type
         return
 
