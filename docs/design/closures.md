@@ -111,6 +111,11 @@ let inc = |~| n + 1
   whose body is `return Result.Ok(e)`; a block-body lambda is a literal fn body. Calling through a
   closure yields `Result<T, E>` exactly like any call, so `f(x)??`, `if (f(x))`, and matching are
   unchanged.
+  - *Corollary:* because the expression body is auto-wrapped in `Ok`, a fallible call in the body
+    must be unwrapped with `??` **at its point of use** — a bare `Result` left in body position is
+    wrapped again (`Result<Result<T, E>, E>`) and fails to typecheck. This is why `compose`'s body
+    is `f(g(x)??)??`, not `f(g(x)??)`. The rule generalizes: a lambda body can never let an inner
+    `Result` pass through unchanged; every fallible call needs its own `??`.
 - **Block-body lambdas are a `let`-RHS-only form.** The grammar does not reach `lambda_block` from
   general `expr`, since it ends in a dedent with no trailing token, so `|x|: <block>` used directly
   as a call argument is a parse error — bind it to a `let` first.
