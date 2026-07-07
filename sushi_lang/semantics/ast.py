@@ -446,9 +446,16 @@ class Lambda(Node):
 
 @dataclass
 class Call(Node):
-    callee: Name
+    # Usually a Name (a direct function call), but widened to any Expr so a
+    # function VALUE can be called through: env.f(x) (a captured closure, from
+    # lambda-lifting), obj.handler() (a fn-typed field), arr[0](), (e)().
+    callee: "Expr"
     args: List["Expr"]
     field_names: Optional[List[str]] = None  # For named struct construction
+    # Set by the type checker when `callee` is a non-Name expression resolving to a
+    # FunctionType: the backend uses it to emit the fat-pointer indirect call without
+    # re-inferring the callee's signature.
+    callee_fn_type: Optional[Type] = None
 
 @dataclass
 class MethodCall(Node):

@@ -1,0 +1,18 @@
+# collections/iter: filter with a capturing predicate (captures threshold).
+# Keep elements > 2 from [1,2,3,4] -> [3,4], length 2.
+# EXPECT_STDOUT_EXACT: "2\n"
+use <collections/iter>
+
+fn run() i32:
+    let i32 threshold = 2
+    let List<i32> xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    xs.push(3)
+    xs.push(4)
+    let List<i32> big = filter(xs, |i32 x| x > threshold)??
+    return Result.Ok(big.len())
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)

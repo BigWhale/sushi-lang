@@ -196,5 +196,4 @@ v1 is intentionally the smallest useful slice, designed so each deferred piece i
   local first: `let f = arr.get(0)??` then `f(x)`.
 
 The deeper design rationale, the options considered, and the migration path live in the
-[First-Class Functions design note](design/first-class-functions.md) and the
-[Closures design note](design/closures.md).
+[Closures & First-Class Functions design note](design/closures.md).

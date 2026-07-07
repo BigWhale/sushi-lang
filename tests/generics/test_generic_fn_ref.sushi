@@ -1,0 +1,14 @@
+# T2.3: reference a generic function as a value via an explicit fn-type annotation. The
+# annotation `fn(i32) -> i32` drives the instantiation identity<i32>; call through it.
+# identity(41) + 1 = 42.
+# EXPECT_STDOUT_EXACT: "42\n"
+fn identity<T>(T x) T:
+    return Result.Ok(x)
+
+fn run() i32:
+    let fn(i32) -> i32 g = identity
+    return Result.Ok(g(41)?? + 1)
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)

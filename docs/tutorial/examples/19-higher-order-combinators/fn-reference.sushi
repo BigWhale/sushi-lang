@@ -1,0 +1,13 @@
+use <collections/iter>
+
+fn negate(i32 x) i32:
+    return Result.Ok(0 - x)
+
+fn main() i32:
+    let List<i32> owed = List.new()
+    owed.push(5)
+    owed.push(8)
+    # Pass a plain function by name -- no lambda needed.
+    let List<i32> credited = map(owed, negate).realise(List.new())
+    println(credited.get(0).realise(0))
+    return Result.Ok(0)

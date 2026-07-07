@@ -13,6 +13,7 @@ Complete reference for Sushi's standard library modules and types.
 - [HashMap<K, V>](stdlib/collections/hashmap.md) - Hash table with open addressing
 - [Arrays](stdlib/collections/arrays.md) - Fixed and dynamic array methods
 - [Strings](stdlib/collections/strings.md) - 33 string manipulation methods
+- [Iter combinators](stdlib/collections/iter.md) - `map`/`filter`/`fold`/`compose` over `List<T>`
 
 ### I/O Operations
 - [Console I/O](stdlib/io/console.md) - println, print, stdin/stdout/stderr
@@ -32,6 +33,7 @@ Complete reference for Sushi's standard library modules and types.
 
 ```sushi
 use <collections/strings>  # String methods
+use <collections/iter>     # Higher-order combinators (map/filter/fold/compose)
 use <io/stdio>             # Console I/O
 use <io/files>             # File operations
 use <math>                 # Math functions
@@ -169,6 +171,11 @@ match open("output.txt", FileMode.Write()):
 - Inspection, slicing, transformation, padding, stripping
 - Splitting/joining, case conversion, parsing
 - UTF-8 aware where needed
+
+**Iter combinators** - higher-order functions over `List<T>` (`use <collections/iter>`):
+- `map(xs, f)`, `filter(xs, pred)`, `fold(xs, init, f)`, `compose(g, f)`
+- Ordinary generic free functions (the first Sushi-source stdlib module, no bitcode)
+- Copy/primitive element types; pass a typed-param lambda (`|i32 x| ...`) or a function reference
 
 ### I/O (`use <io/stdio>`, `use <io/files>`)
 

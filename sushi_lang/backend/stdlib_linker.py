@@ -152,9 +152,13 @@ class StdlibLinker:
                 except Exception as e:
                     print(f"Warning: Failed to link stdlib unit {bc_path}: {e}")
 
-    # Virtual stdlib units that don't have .bc files (generic types emitted inline)
+    # Virtual stdlib units that don't have .bc files (generic types emitted inline).
+    # collections/iter is a bundled Sushi-SOURCE module (see stdlib_registry
+    # SOURCE_STDLIB_MODULES): it is merged as a compilation unit and monomorphized
+    # inline, so like the generic-provider units it resolves to no .bc.
     _virtual_units = {
         "collections/hashmap",
+        "collections/iter",
         # Future: "collections/list", "collections/set"
     }
 

@@ -1,0 +1,7 @@
+# An unknown stdlib module must still fail compilation (guards the name-validation
+# path now that collections/iter is a recognized bundled-source module).
+# EXPECT_ERROR_CODE: CE3006
+use <collections/nope>
+
+fn main() i32:
+    return Result.Ok(0)

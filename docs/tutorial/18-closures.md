@@ -6,7 +6,7 @@ around it, so a function value can carry a little state of its own.
 
 This builds directly on [Chapter 17 (First-Class Functions)](17-first-class-functions.md). If
 you've used closures in Python, JavaScript, or Rust, the shape will feel familiar; Sushi's version
-is typed, and — for now — captures by value only.
+is typed, and captures copyable values by copy and owned values by move.
 
 ## A capturing lambda
 
@@ -29,9 +29,10 @@ would have — a closure and a bare function pointer are interchangeable whereve
 is expected.
 
 !!! note "Captured by copy"
-    `n` is captured by **value** — the lambda gets its own copy at the moment it's created, stored
-    in a small heap-allocated environment. Mutating `n` afterward in `main` would not change what
-    `f` sees (and vice versa).
+    `n` is a primitive, so it is captured by **value** — the lambda gets its own copy at the moment
+    it's created, stored in a small heap-allocated environment. Mutating `n` afterward in `main`
+    would not change what `f` sees (and vice versa). Owned values are captured by *move* instead —
+    see [Capturing owned values](#capturing-owned-values) below.
 
 ## Bare parameters and multiple captures
 
@@ -73,38 +74,42 @@ Output:
 alive. This is the core new capability closures add over v1's bare function pointers, which had
 nothing to capture and therefore nothing that could outlive its scope.
 
-## What you can't capture (yet)
+## Capturing owned values
 
-Two things are rejected at compile time, both as **CE2094**:
-
-- **A `&peek`/`&poke` borrow.** Threading a borrow's exclusivity guarantee through an escaping
-  closure is a harder problem, deferred to a later Tier.
-- **An owned value** — a dynamic array, `List<T>`, or `Own<T>`. Capturing one safely needs
-  move-capture (the outer binding gets consumed) plus environment cleanup on drop; neither is
-  wired up yet, so the compiler rejects it rather than risk a use-after-free.
+Copy-capture handles primitives, strings, and copyable structs. An **owned** value — a dynamic
+array, `List<T>`, or `Own<T>` — is captured by **move**: the environment takes ownership, so the
+outer binding is consumed (using it afterward is a use-after-move error) and the value is freed
+when the closure's environment is:
 
 ```sushi
 fn main() i32:
     let i32[] nums = from([1, 2, 3])
-    let fn(i32) -> i32 f = |i32 x| x + nums.len()   # CE2094
+    let fn(i32) -> i32 f = |i32 x| x + nums.len()   # moves nums into the closure
+    println(f(10).realise(-1))                      # 13
     return Result.Ok(0)
 ```
 
-Copy-capture — primitives, strings, copyable structs — is unaffected by either restriction.
+A closure can even capture and call **another closure**, so you can build one function out of
+another (this is exactly what `compose` in [Chapter 19](19-higher-order-combinators.md) does).
 
-One more honest gap: a capturing closure's heap environment is not freed yet (the cleanup pass
-hasn't landed). It's safe — no double-free — just not memory-clean, so avoid building closures in
-a hot loop for now.
+The environment is **freed automatically** on every exit path — scope exit, an early `return`, or
+`??` — including when a closure is returned or stored in a `List`. No leaks, no double-frees.
+
+## What you can't capture (yet)
+
+Capturing a **`&peek`/`&poke` borrow** is still rejected at compile time as **CE2094** — threading
+a borrow's exclusivity guarantee through an escaping closure is a harder problem, deferred to a
+later Tier. Pass the borrowed data as a parameter to the closure instead of capturing the borrow.
 
 ## What you learned
 
 - A **lambda literal** (`|params| expr`, or `|params|: <block>` as a `let` RHS) is an anonymous
-  function value that can **capture** locals from its enclosing scope, by value copy.
+  function value that can **capture** locals from its enclosing scope.
 - `|~|` is the zero-parameter form (`||` isn't usable — the lexer reads it as `or`).
 - A capturing closure's environment is **heap-allocated**, so the closure can **escape** — be
-  returned or stored — and still work correctly.
-- Capturing a **borrow** or an **owned value** is rejected today (**CE2094**); only copyable data
-  captures.
+  returned or stored — and still work correctly, and it is **freed automatically** on every exit.
+- Copyable values are captured by **copy**; owned values (dynamic array, `List<T>`, `Own<T>`) by
+  **move** (the outer binding is consumed). Capturing a **borrow** is still **CE2094**.
 - A closure and a plain function value share the exact same type (`fn(...) -> T [| E]`) and call
   semantics — everything from Chapter 17 about parameters, struct fields, `List<fn(...)>`, and
   error types applies unchanged.

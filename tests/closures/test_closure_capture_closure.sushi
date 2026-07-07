@@ -1,0 +1,14 @@
+# T2.4: capturing another CLOSURE value and calling it in the body. `h` captures the
+# closure `g` and calls it -- reading it back lowers to `__closure_env.g(...)`, a non-Name
+# callee now handled by Call.callee widening. g(5) = 5 + n(10) = 15; h(5) = g(5) + 1 = 16.
+# EXPECT_STDOUT_EXACT: "16\n"
+fn run() i32:
+    let i32 n = 10
+    let fn(i32) -> i32 g = |i32 x| x + n
+    let fn(i32) -> i32 h = |i32 y|:
+        return Result.Ok(g(y)?? + 1)
+    return Result.Ok(h(5)??)
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)

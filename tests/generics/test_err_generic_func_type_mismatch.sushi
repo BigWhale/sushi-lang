@@ -1,5 +1,7 @@
-# Test: Type mismatch after inference should fail
-# EXPECT_ERROR_CODE: CE0017
+# Test: Type mismatch after inference should fail. identity(42) infers i32 through the
+# ?? unwrap, so the bad assignment is caught at the front end (CE2002) rather than as a
+# backend cast failure.
+# EXPECT_ERROR_CODE: CE2002
 
 fn identity<T>(T x) T:
     return Result.Ok(x)

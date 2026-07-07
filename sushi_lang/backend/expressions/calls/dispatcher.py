@@ -34,8 +34,17 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     Raises:
         TypeError: If callee is not a name or function not found.
     """
+    # Call-through an arbitrary expression that evaluates to a function value:
+    # `env.f(x)` (a captured closure in a lifted lambda body), `obj.handler()`,
+    # `arr[0]()`, `(e)()`. The type checker annotated the resolved FunctionType on the
+    # node; emit the callee expr to a fat value and dispatch through the indirect path.
     if not isinstance(expr.callee, Name):
-        raise_internal_error("CE0027", type=type(expr.callee).__name__)
+        from sushi_lang.semantics.typesys import FunctionType
+        fn_type = expr.callee_fn_type
+        if not isinstance(fn_type, FunctionType):
+            raise_internal_error("CE0027", type=type(expr.callee).__name__)
+        fat_value = codegen.expressions.emit_expr(expr.callee)
+        return _emit_indirect_call(codegen, expr, fat_value, fn_type, to_i1)
 
     callee = expr.callee.id
 
@@ -106,6 +115,18 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     # Return the full Result<T> struct - downstream code will handle extraction
     # (e.g., .realise() method, if (result) conditionals, etc.)
     return codegen.utils.as_i1(result_struct) if to_i1 else result_struct
+
+
+def emit_fn_field_call(codegen: 'LLVMCodegen', expr: DotCall, fn_type, to_i1: bool) -> ir.Value:
+    """Emit `obj.handler(args)` as an indirect call through the fn-typed field `handler`.
+
+    Reuses the fat-pointer indirect-call path: emit the field access to a fat value,
+    then call through it exactly like `env.f(x)` / `arr[0]()`.
+    """
+    from sushi_lang.semantics.ast import MemberAccess
+    field_access = MemberAccess(receiver=expr.receiver, member=expr.method, loc=expr.loc)
+    fat_value = codegen.expressions.emit_expr(field_access)
+    return _emit_indirect_call(codegen, expr, fat_value, fn_type, to_i1)
 
 
 def _try_function_value_local(codegen: 'LLVMCodegen', name: str):

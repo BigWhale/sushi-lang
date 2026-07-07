@@ -105,6 +105,56 @@ def infer_lambda_type(type_validator, lam: Lambda):
     return ft
 
 
+def resolve_fn_field_call(type_validator, node) -> Optional["Type"]:
+    """Field-vs-method rule for `obj.handler(args)` (a DotCall).
+
+    Returns the field's FunctionType when `node.receiver` has a struct type carrying a
+    fn-typed field named `node.method` AND no method of that name exists for that struct
+    (a same-named extension/perk/auto-derived method always WINS over the field). In that
+    case `obj.handler(args)` is an indirect call through the field value,
+    `(obj.handler)(args)`. Returns None otherwise (normal method-call dispatch).
+    """
+    from sushi_lang.semantics.typesys import StructType, FunctionType, ReferenceType
+    recv_ty = type_validator.infer_expression_type(node.receiver)
+    if isinstance(recv_ty, ReferenceType):
+        recv_ty = recv_ty.referenced_type
+    if not isinstance(recv_ty, StructType):
+        return None
+    field_ty = recv_ty.get_field_type(node.method)
+    if not isinstance(field_ty, FunctionType):
+        return None
+    # A method of the same name wins over the field: auto-derived .hash(), then
+    # concrete and generic extension/perk methods.
+    if node.method == "hash":
+        return None
+    if type_validator.extension_table.get_method(recv_ty, node.method) is not None:
+        return None
+    if '<' in recv_ty.name:
+        base_name = recv_ty.name.split('<')[0]
+        if type_validator.generic_extension_table.get_method(base_name, node.method) is not None:
+            return None
+    return field_ty
+
+
+def validate_fn_field_call_args(type_validator, node, fn_ty) -> None:
+    """Validate `obj.handler(args)` arg count and types against the field's FunctionType."""
+    expected = fn_ty.param_types
+    if len(node.args) != len(expected):
+        er.emit(type_validator.reporter, er.ERR.CE2092, node.loc,
+                expected=str(fn_ty),
+                actual=f"a call with {len(node.args)} argument(s)")
+        return
+    from sushi_lang.semantics.passes.types.compatibility import types_compatible
+    for arg, param_ty in zip(node.args, expected):
+        type_validator.validate_expression(arg)
+        arg_ty = type_validator.infer_expression_type(arg)
+        if arg_ty is None:
+            continue
+        if not types_compatible(type_validator, arg_ty, param_ty):
+            er.emit(type_validator.reporter, er.ERR.CE2092, getattr(arg, 'loc', node.loc),
+                    expected=str(param_ty), actual=str(arg_ty))
+
+
 class StatementValidator(RecursiveVisitor):
     """
     Visitor for validating statements using the Visitor Pattern.
@@ -343,13 +393,6 @@ class ExpressionValidator(RecursiveVisitor):
             if isinstance(cap.ty, ReferenceType):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
                         reason=f"cannot capture '{cap.name}': it is a borrow (&peek/&poke capture is deferred to Tier 2)")
-            elif isinstance(cap.ty, FunctionType) and is_owning_type(cap.ty):
-                # Capturing a CLOSURE value is still deferred: reading it back means
-                # calling `__closure_env.<name>(...)`, whose non-Name callee needs
-                # Call.callee widening (Tier 2, T2.4). Reject rather than mis-dispatch.
-                er.emit(tv.reporter, er.ERR.CE2094, node.loc,
-                        reason=f"cannot capture '{cap.name}' (type '{cap.ty}'): capturing a "
-                               f"closure value is deferred to Tier 2")
             elif isinstance(cap.ty, DynamicArrayType):
                 # Move-capture (T1.5): a dynamic array is moved into the heap environment,
                 # which owns it and frees it in the env destructor. The outer binding is
@@ -441,6 +484,15 @@ class ExpressionValidator(RecursiveVisitor):
                     node.resolved_enum_type = temp_constructor.resolved_enum_type
                 return
 
+        # obj.handler(): indirect call through a fn-typed struct field (a same-named
+        # method wins over the field -- see resolve_fn_field_call). The backend reads
+        # node.callee_fn_type to emit the fat-pointer indirect call.
+        fn_field_ty = resolve_fn_field_call(self.type_validator, node)
+        if fn_field_ty is not None:
+            node.callee_fn_type = fn_field_ty
+            validate_fn_field_call_args(self.type_validator, node, fn_field_ty)
+            return
+
         # Otherwise, it's a method call - validate as such
         # Convert to MethodCall for validation
         from sushi_lang.semantics.ast import MethodCall
@@ -507,6 +559,15 @@ class ExpressionValidator(RecursiveVisitor):
         if node.id in tv.variable_types or node.id in tv.const_table.by_name:
             return
         if node.id in tv.generic_func_table.by_name:
+            # T2.3: a generic-fn reference is allowed when an explicit expected fn type
+            # is present (e.g. `let fn(i32) -> i32 g = identity`). Solve the type args,
+            # rewrite the node to the mangled concrete name, and accept. A bare reference
+            # with no expected fn type stays CE2093 (the minimal-slice boundary).
+            from sushi_lang.semantics.passes.types.calls.generics import resolve_generic_fn_reference
+            resolved = resolve_generic_fn_reference(tv, node.id, getattr(node, "expected_type", None))
+            if resolved is not None:
+                node.id = resolved[0]  # mirror the call-site mangled-name rewrite
+                return
             er.emit(tv.reporter, er.ERR.CE2093, node.loc,
                     name=node.id, reason="generic function references are deferred (v1)")
 
@@ -735,6 +796,16 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if fn_value_type is not None:
             return fn_value_type
 
+        # A generic-fn reference with an explicit expected fn type (T2.3): solve the type
+        # args and return the concrete FunctionType (the node is rewritten to the mangled
+        # name during validation).
+        if node.id in self.type_validator.generic_func_table.by_name:
+            from sushi_lang.semantics.passes.types.calls.generics import resolve_generic_fn_reference
+            resolved = resolve_generic_fn_reference(
+                self.type_validator, node.id, getattr(node, "expected_type", None))
+            if resolved is not None:
+                return resolved[1]
+
         return None
 
     def visit_lambda(self, node: Lambda) -> Optional[Type]:
@@ -799,10 +870,15 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_call(self, node: Call) -> Optional[Type]:
         """Infer function call type."""
-        # A non-Name callee (`arr[0]()`, `(e)()`, or a captured/field closure called as
-        # `env.f(x)`) needs Call.callee widening (Tier 2, T2.4). The validator reports it
-        # (CE2094); here we just avoid crashing on `.id` during type inference.
+        from sushi_lang.semantics.typesys import FunctionType, ResultType
+        # Call-through an arbitrary expression that evaluates to a function value:
+        # `env.f(x)` (a captured closure in a lifted lambda body), `obj.handler()`,
+        # `arr[0]()`, `(e)()`. Calling through it yields Result<ok, err>, exactly like a
+        # direct call (so `f(x)??` unwraps to ok_type).
         if not isinstance(node.callee, Name):
+            callee_ty = self.type_validator.infer_expression_type(node.callee)
+            if isinstance(callee_ty, FunctionType):
+                return ResultType(ok_type=callee_ty.ok_type, err_type=callee_ty.err_type)
             return None
 
         # Look up function return type
@@ -810,7 +886,6 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
         # Indirect call through a first-class function value: yields Result<ok, err>,
         # exactly like a direct call (so `f(x)??` unwraps to ok_type).
-        from sushi_lang.semantics.typesys import FunctionType, ResultType
         callee_var_ty = self.type_validator.variable_types.get(function_name)
         if isinstance(callee_var_ty, FunctionType):
             return ResultType(ok_type=callee_var_ty.ok_type, err_type=callee_var_ty.err_type)
@@ -1039,6 +1114,16 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 # For now, return None and let the type be inferred from context
                 return None
 
+        # obj.handler(): indirect call through a fn-typed struct field yields
+        # Result<ok, err>, exactly like a direct call (so `obj.handler(x)??` unwraps).
+        fn_field_ty = resolve_fn_field_call(self.type_validator, node)
+        if fn_field_ty is not None:
+            from sushi_lang.semantics.typesys import ResultType
+            node.callee_fn_type = fn_field_ty
+            node.inferred_return_type = ResultType(ok_type=fn_field_ty.ok_type,
+                                                   err_type=fn_field_ty.err_type)
+            return node.inferred_return_type
+
         # Otherwise, it's a method call - infer return type from method
         # Convert to MethodCall temporarily for type inference
         from sushi_lang.semantics.ast import MethodCall
@@ -1093,14 +1178,19 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if inner_type is None:
             return None
 
-        # Check if it's a result-like enum (has Ok variant with associated type)
-        from sushi_lang.semantics.typesys import EnumType
+        # A first-class function value call yields a ResultType (not a concrete Result
+        # EnumType); `??` unwraps it to its ok_type -- e.g. a captured closure called in
+        # a lambda body, `f(x)??`.
+        from sushi_lang.semantics.typesys import EnumType, ResultType
+        if isinstance(inner_type, ResultType):
+            return inner_type.ok_type
+
+        # Result-like (Ok(T)) or Maybe (Some(T)) enum: `??` unwraps the payload variant.
         if isinstance(inner_type, EnumType):
-            # Extract T from Ok(T) variant
-            ok_variant = inner_type.get_variant("Ok")
-            if ok_variant and ok_variant.associated_types:
-                # Return the unwrapped type T
-                return ok_variant.associated_types[0]
+            for variant_name in ("Ok", "Some"):
+                variant = inner_type.get_variant(variant_name)
+                if variant and variant.associated_types:
+                    return variant.associated_types[0]
 
         # Not a result-like enum - will be caught by validation
         return None

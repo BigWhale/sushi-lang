@@ -1,5 +1,7 @@
-# Test type mismatch when assigning library return type to wrong variable type
-# EXPECT_ERROR_CODE: CE0017
+# Test type mismatch when assigning library return type to wrong variable type.
+# The ?? unwrap infers Point, so the bad assignment is caught at the front end (CE2002)
+# rather than as a backend cast failure.
+# EXPECT_ERROR_CODE: CE2002
 # Should produce a type error
 
 use <lib/types_lib>

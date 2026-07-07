@@ -829,8 +829,16 @@ def _infer_call_return_type(codegen: 'CodegenProtocol', call_expr: 'Call') -> 'E
     Raises:
         RuntimeError: If function or return type cannot be determined.
     """
-    from sushi_lang.semantics.ast import Call
-    from sushi_lang.semantics.typesys import ResultType
+    from sushi_lang.semantics.ast import Call, Name
+    from sushi_lang.semantics.typesys import ResultType, FunctionType
+
+    # Indirect call through a function value (non-Name callee: env.f(x), arr[0](), (e)()):
+    # recover the Result EnumType from the FunctionType the type checker annotated.
+    if not isinstance(call_expr.callee, Name):
+        fn_ty = getattr(call_expr, 'callee_fn_type', None)
+        if isinstance(fn_ty, FunctionType):
+            from sushi_lang.backend.generics.results import ensure_result_type_in_table
+            return ensure_result_type_in_table(codegen.enum_table, fn_ty.ok_type, fn_ty.err_type)
 
     func_name = call_expr.callee.id
 

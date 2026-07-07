@@ -1,0 +1,15 @@
+# T2.3 minimal-slice boundary: a generic-fn reference is only allowed when an explicit
+# expected fn type is present (an fn-type annotation / typed binding). Referencing it
+# directly in an argument position, with no typed binding, is still CE2093 -- bind it to
+# a typed local first.
+# EXPECT_ERROR_CODE: CE2093
+fn identity<T>(T x) T:
+    return Result.Ok(x)
+
+fn take(fn(i32) -> i32 f) i32:
+    return Result.Ok(f(1)??)
+
+fn main() i32:
+    let i32 r = take(identity)??
+    println(r)
+    return Result.Ok(0)

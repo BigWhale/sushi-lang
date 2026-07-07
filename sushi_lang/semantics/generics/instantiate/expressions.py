@@ -344,6 +344,54 @@ class ExpressionScanner:
 
         return tuple(type_args)
 
+    def scan_generic_fn_reference(self, name: str, expected_ty) -> None:
+        """Record an instantiation for a bare generic-fn reference (T2.3).
+
+        For `let fn(i32) -> i32 g = identity` with `fn identity<T>(T x) T`, solve the
+        generic's type args by unifying its signature `fn(T) -> T` against the expected
+        `FunctionType`, then add `(name, type_args)` so the monomorphize pass emits the
+        concrete instance. No-ops unless `expected_ty` is a FunctionType and `name` is a
+        known generic function whose arity matches and whose type params are all solved.
+        """
+        from sushi_lang.semantics.typesys import FunctionType
+        from sushi_lang.semantics.type_resolution import resolve_unknown_type
+        if not isinstance(expected_ty, FunctionType):
+            return
+        if not self.generic_funcs or name not in self.generic_funcs:
+            return
+        generic_func = self.generic_funcs[name]
+        # v1 slice: plain (non-pack) generic functions only.
+        func_params = [p for p in generic_func.params if not getattr(p, "is_pack", False)]
+        if len(func_params) != len(expected_ty.param_types):
+            return
+
+        type_param_map: dict[str, "Type"] = {}
+        for param, exp_param_ty in zip(func_params, expected_ty.param_types):
+            if param.ty is None:
+                return
+            if not self.type_inferrer.unify_types(param.ty, exp_param_ty, type_param_map):
+                return
+        if generic_func.ret is not None:
+            if not self.type_inferrer.unify_types(generic_func.ret, expected_ty.ok_type, type_param_map):
+                return
+
+        leading_type_params = [
+            tp for tp in generic_func.type_params if not getattr(tp, "is_pack", False)
+        ]
+        type_args = []
+        for tp in leading_type_params:
+            tp_name = tp.name if hasattr(tp, 'name') else str(tp)
+            if tp_name not in type_param_map:
+                return  # a type param not solvable from the expected type
+            resolved = resolve_unknown_type(
+                type_param_map[tp_name],
+                self.type_inferrer.struct_table or {},
+                self.type_inferrer.enum_table or {},
+            )
+            type_args.append(resolved)
+
+        self.function_instantiations.add((name, tuple(type_args)))
+
     def _collect_from_type(self, ty: "Type") -> None:
         """Collect generic instantiations from a type annotation.
 

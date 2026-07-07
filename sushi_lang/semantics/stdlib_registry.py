@@ -18,12 +18,35 @@ Architecture:
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional, Dict, Tuple, List
 import importlib
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
     from sushi_lang.semantics.symbols import Signature
+
+
+# Bundled Sushi-SOURCE stdlib modules: `use <path>` maps to a .sushi file that is
+# parsed and merged as an ordinary compilation unit (no .bc). Its generic free
+# functions are collected and monomorphized like any user generic -- nothing is
+# emitted unless a program instantiates one. Distinct from KNOWN_MODULES (Python
+# metadata for .bc/native modules) and the .bc virtual-unit table in stdlib_linker.
+_SRC_SUSHI_ROOT = Path(__file__).resolve().parent.parent / "sushi_stdlib" / "src_sushi"
+
+SOURCE_STDLIB_MODULES: Dict[str, Path] = {
+    "collections/iter": _SRC_SUSHI_ROOT / "collections" / "iter.sushi",
+}
+
+
+def is_source_stdlib_module(module_path: str) -> bool:
+    """True if `use <module_path>` resolves to a bundled Sushi-source module."""
+    return module_path in SOURCE_STDLIB_MODULES
+
+
+def resolve_source_stdlib_path(module_path: str) -> Optional[Path]:
+    """Return the bundled .sushi Path for a source stdlib module, or None."""
+    return SOURCE_STDLIB_MODULES.get(module_path)
 
 @dataclass
 class StdlibFunction:

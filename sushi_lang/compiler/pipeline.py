@@ -12,7 +12,55 @@ from sushi_lang.compiler.loader import (
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.ast import Program
 from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
-from sushi_lang.semantics.units import UnitManager
+from sushi_lang.semantics.units import Unit, UnitManager
+
+
+def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -> bool:
+    """Merge bundled Sushi-source stdlib modules (e.g. <collections/iter>) as units.
+
+    A `use <path>` whose path is a SOURCE_STDLIB_MODULES entry is parsed from its
+    bundled .sushi and inserted into the unit manager, so its generic free functions
+    are collected + monomorphized whole-program exactly like a user unit (no .bc).
+    The worklist follows a source module's own source-stdlib imports transitively.
+
+    Returns True on success, False on a read/parse error (already reported).
+    """
+    from sushi_lang.internals.parser import parse_to_ast
+    from sushi_lang.semantics.stdlib_registry import (
+        SOURCE_STDLIB_MODULES, resolve_source_stdlib_path,
+    )
+
+    def _needed(units) -> set:
+        needed = set()
+        for unit in units:
+            if unit.ast is None:
+                continue
+            for use_stmt in unit.ast.uses:
+                if use_stmt.is_stdlib and use_stmt.path in SOURCE_STDLIB_MODULES:
+                    needed.add(use_stmt.path)
+        return needed
+
+    while True:
+        todo = _needed(list(unit_manager.units.values())) - set(unit_manager.units.keys())
+        if not todo:
+            return True
+        for module_path in sorted(todo):
+            src_path = resolve_source_stdlib_path(module_path)
+            if src_path is None or not src_path.exists():
+                print(f"error: bundled stdlib module '{module_path}' not found "
+                      f"at {src_path}", file=sys.stderr)
+                return False
+            try:
+                module_src = src_path.read_text(encoding="utf-8")
+                module_ast, _ = parse_to_ast(module_src, dump_parse=False)
+            except Exception as e:
+                print(f"error: failed to parse bundled stdlib module "
+                      f"'{module_path}': {e}", file=sys.stderr)
+                return False
+            unit_manager.units[module_path] = Unit(
+                name=module_path, file_path=src_path, ast=module_ast,
+                dependencies=[], public_symbols={},
+            )
 
 
 def _activate_generic_provider(unit_path: str) -> None:
@@ -72,6 +120,11 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
         assert unit_name in unit_manager.units, \
             f"Unit '{unit_name}' was loaded but not found in unit manager"
 
+    # Merge bundled Sushi-source stdlib modules (e.g. <collections/iter>) as units
+    # so their generic combinators are collected + monomorphized whole-program.
+    if not _inject_source_stdlib_units(unit_manager, reporter):
+        return 2
+
     # Build global symbol table and check for conflicts
     if not unit_manager.build_global_symbol_table():
         return 2
@@ -106,8 +159,9 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
         try:
             for unit_path in stdlib_units:
                 temp_cg.stdlib._resolve_stdlib_unit(unit_path)
-        except FileNotFoundError as e:
-            print(f"Error: {e}", file=sys.stderr)
+        except FileNotFoundError:
+            from sushi_lang.internals import errors as er
+            er.emit(reporter, er.ERR.CE3006, None, module=unit_path)
             return 2
 
         print(f"Linking {len(stdlib_units)} stdlib units:")
@@ -361,6 +415,11 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
     # Compile stdlib modules to cached .o files
     for stdlib_unit in sorted(stdlib_units):
         bc_paths = cg.stdlib._resolve_stdlib_unit(stdlib_unit)
+        if not bc_paths:
+            # Virtual/source stdlib unit (e.g. collections/hashmap, collections/iter):
+            # no .bc to compile -- generic types are emitted inline and source
+            # modules ship as compilation units. Nothing to cache or link here.
+            continue
         fp = compute_stdlib_fingerprint(bc_paths)
         if cache.has_cached_stdlib(stdlib_unit, fp):
             obj_paths.append(cache.stdlib_object_path(stdlib_unit))

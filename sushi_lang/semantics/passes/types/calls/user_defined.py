@@ -95,14 +95,20 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
     """Validate function call arguments and types (CE2006, CE2008)."""
     from sushi_lang.semantics.ast import Name
 
-    # A non-Name callee -- `arr[0]()`, `(e)()`, or a captured/field closure called as
-    # `env.f(x)` in a lifted lambda body -- needs Call.callee widening (Tier 2, T2.4).
-    # Report it gracefully (bind the callee to a local first) instead of crashing on
-    # the `.id` access below.
+    # Call-through an arbitrary expression that evaluates to a function value:
+    # `env.f(x)` (a captured closure in a lifted lambda body), `obj.handler()`,
+    # `arr[0]()`, `(e)()`. If the callee is a FunctionType, validate it as an indirect
+    # call; otherwise the expression is not callable.
+    from sushi_lang.semantics.typesys import FunctionType
     if not isinstance(call.callee, Name):
-        er.emit(validator.reporter, er.ERR.CE2094, getattr(call.callee, 'loc', call.loc),
-                reason="calling this function value directly is deferred to Tier 2; "
-                       "bind it to a local variable first (let f = <expr>) and call f(...)")
+        callee_ty = validator.infer_expression_type(call.callee)
+        if isinstance(callee_ty, FunctionType):
+            call.callee_fn_type = callee_ty  # backend reads this for the indirect call
+            validate_indirect_call(validator, call, callee_ty)
+        else:
+            er.emit(validator.reporter, er.ERR.CE2092, getattr(call.callee, 'loc', call.loc),
+                    expected="a function value",
+                    actual=str(callee_ty) if callee_ty is not None else "a non-function expression")
         return
 
     # Check if function exists
@@ -110,7 +116,6 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
 
     # Indirect call through a first-class function value held in a local variable.
     # A local shadows any same-named top-level function, so this is checked first.
-    from sushi_lang.semantics.typesys import FunctionType
     callee_var_ty = validator.variable_types.get(function_name)
     if isinstance(callee_var_ty, FunctionType):
         validate_indirect_call(validator, call, callee_var_ty)
