@@ -1,11 +1,12 @@
 # Design: Generic Higher-Order Functions (T1.8 groundwork)
 
-**Status:** Gaps C + A landed. Generic functions that take and call a function-typed
-parameter (`fn(T) -> U`) now infer, monomorphize, and run. `map` / `filter` / `fold` work
-as **free generic functions** with capturing-closure or function-reference arguments. The
-UFCS *method* form (`xs.map<U>(...)`), `compose`, and where combinators ship are deferred
-(see "Deferred" below). Successor context: `closures.md` (Tier 1 closures), which this
-builds on.
+**Status:** Gaps C + A landed (#125); **Gap D landed** (#124/#126). Generic functions that
+take and call a function-typed parameter (`fn(T) -> U`) now infer, monomorphize, and run.
+`map` / `filter` / `fold` work as **free generic functions** with capturing-closure or
+function-reference arguments, and `List<T>` is now user-extensible. The UFCS *method* form
+(`xs.map(f)`) is blocked only by **Gap B** (method-level type params on `extend`); `compose`
+needs Tier 2 (T2.4); and where combinators ship is a separable delivery decision (see
+"Deferred" below). Successor context: `closures.md` (Tier 1 closures), which this builds on.
 
 ## Motivation
 
@@ -86,17 +87,22 @@ Combinators as free generic functions, runtime-validated (`tests/generics/test_h
 
 ## Deferred
 
-- **Method form `xs.map<U>(...)` (Gap B + Gap D).** Two pieces: **(B)** extension methods
-  have no method-level type params — the single-line `extend_def` grammar is `NAME "("
-  params ")" ...` with no `[type_params]`, `ExtendDef` carries none, collect
-  (`passes/collect/functions.py`) derives type params from the *receiver* only, and there is
-  no call-site inference or on-demand monomorphization for extension type params (it is
-  driven eagerly by receiver instantiations). **(D)** `List<T>` is not extensible at all
-  today — it is dynamic-array/provider-backed, and both concrete (`extend List<i32>` → CE0017
-  on the `self` List) and generic (`extend List<T>` → a `Param.__init__` crash in collect)
-  extends fail; the dispatch/monomorphization path is gated on `StructType` receivers /
-  `struct_instantiations`. UFCS resolves only to registered `extend` methods, not free
-  functions, so the method form needs both B and D.
+- **Method form `xs.map(f)` — needs Gap B only (Gap D is DONE).** **Gap D landed** (#124/#126):
+  `List<T>` is now user-extensible — a first-class generic struct, with both concrete
+  (`extend List<i32> sum_all()`) and generic (`extend List<T> first_or(T)`) extends compiling and
+  running (`tests/bugs/test_run_issue124_list_extension_{concrete,generic}.sushi`). The old
+  `CE0017` (by-value `self` vs by-pointer List receiver) and `Param.__init__` crash are fixed;
+  there is no rejection error. **Constraints:** a user List method **cannot shadow a builtin** List
+  method name (providers are checked first at dispatch), and the receiver ABI is reconciled at the
+  dispatch site. So a *same-type* method (`extend List<T> map(fn(T)->T f) List<T>`) works today.
+  What remains is **(B)**: extension methods have no method-level type params — the `extend_def`
+  grammar is `NAME "(" params ")" ...` with no `[type_params]` (`grammar.lark:36`), `ExtendDef`
+  carries none (`ast.py:135`), collect (`passes/collect/functions.py:748`) derives type params from
+  the *receiver* only, and there is no call-site inference or call-site-driven monomorphization for
+  method type params (extension monomorphization is eager/receiver-driven,
+  `backend/generics/extensions.py:148`). So a *type-changing* `fn(T)->U` method (needing its own
+  `<U>`) is the only piece still blocked. Full Gap B breakdown + options:
+  `docs/design/closures-tier1-handoff.md` §4.
 
 - **`compose(f, g)` (Tier 2, T2.4).** Its returned lambda `|x| f(g(x))` *calls* the captured
   `f`/`g`; a captured closure call lowers to `env.f(x)`, a non-`Name` callee that needs
@@ -104,15 +110,13 @@ Combinators as free generic functions, runtime-validated (`tests/generics/test_h
   calling-a-closure case is already pinned by
   `tests/closures/test_err_closure_capture_closure_deferred.sushi`).
 
-- **Inline capturing-closure argument leaks its env (pre-existing closures RAII gap).**
-  Passing a capturing closure *inline* as a call argument — `map(xs, |x| x * k)` — heap-
-  allocates an environment that is never freed (~16 bytes/closure), because a closure created
-  as a call argument is not bound to a local and so is not RAII-tracked. This is independent
-  of Gaps C/A (pure inference/substitution, no runtime effect) and reproduces with a plain
-  non-generic higher-order call. **Workaround:** bind the closure to a local first
-  (`let f = |i32 x| x * k` then `map(xs, f)`) — the local is registered and freed. A proper
-  fix (register inline closure-argument envs for enclosing-scope cleanup) belongs with
-  closures RAII, not this milestone.
+- **Inline capturing-closure argument leak — FIXED (#123/#126).** Passing a capturing closure
+  *inline* as a call argument — `map(xs, |x| x * k)` — previously heap-allocated an environment that
+  was never freed (~16 bytes/closure), because a closure created as a call argument was not bound to
+  a local and so was not RAII-tracked. It is now registered in a per-scope temporary registry
+  (`_closure_temp_cleanup`, `backend/memory/scopes.py`) and freed via the runtime-guarded drop on
+  every exit path; regression `tests/unit/test_closure_temp_raii.py`. Binding to a local is no
+  longer required.
 
 ## Implementation map (verified anchors)
 
@@ -122,7 +126,8 @@ Combinators as free generic functions, runtime-validated (`tests/generics/test_h
 | Pass 1.5 arg-type presentation | `semantics/generics/instantiate/types.py:infer_simple_expr_type` (Lambda / BinaryOp / fn-ref) |
 | func_table threading | `semantics/generics/instantiate/__init__.py`; `semantics/semantic_analyzer.py` (2 sites) |
 | FunctionType substitution | `semantics/generics/monomorphize/transformer.py`; `semantics/generics/types.py`; `backend/generics/extensions.py` |
-| Deferred method form (B/D) | `grammar.lark:extend_def`; `semantics/ast.py:ExtendDef`; `semantics/passes/collect/functions.py`; `backend/generics/extensions.py`; `semantics/passes/types/calls/methods.py` |
+| Gap D (List extensibility) — DONE (#124/#126) | `semantics/passes/collect/__init__.py:373` (List as generic struct); `backend/expressions/calls/dispatcher.py:268,308,355` (provider-first dispatch + by-value-`self` reconcile); tests `tests/bugs/test_run_issue124_list_extension_*` |
+| Deferred method form (Gap B only) | `grammar.lark:36` (`extend_def`, no `[type_params]`); `semantics/ast.py:135` (`ExtendDef`); `semantics/passes/collect/functions.py:748`; `backend/generics/extensions.py:148`; `semantics/passes/types/calls/methods.py:234` |
 
 ## References
 
