@@ -1,0 +1,17 @@
+# First-class functions: call a fn-typed struct field directly as obj.field(args).
+# The DotCall routes to an indirect field-call (a same-named method would win). No
+# `let f = h.op` workaround needed. add_one(10) = 11.
+# EXPECT_STDOUT_EXACT: "11\n"
+fn add_one(i32 x) i32:
+    return Result.Ok(x + 1)
+
+struct Handler:
+    fn(i32) -> i32 op
+
+fn run(Handler h, i32 v) i32:
+    return Result.Ok(h.op(v)??)
+
+fn main() i32:
+    let Handler h = Handler(add_one)
+    println(run(h, 10).realise(0))
+    return Result.Ok(0)

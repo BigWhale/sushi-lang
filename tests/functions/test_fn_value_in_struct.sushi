@@ -1,6 +1,6 @@
-# First-class functions: store a function value in a struct field, load it to a
-# local, and call through it. (Calling obj.field() directly parses as a method
-# call, so bind to a local first -- a documented v1 limitation.)
+# First-class functions: store a function value in a struct field and call it. Binding
+# the field to a local (`let f = h.op`) still works; calling `h.op()` directly is covered
+# by test_fn_value_field_call.
 # EXPECT_STDOUT_EXACT: "11\n"
 fn add_one(i32 x) i32:
     return Result.Ok(x + 1)

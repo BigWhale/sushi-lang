@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Union
 from lark import Tree, Token
-from sushi_lang.semantics.ast import Expr, Name, BlankLit, MemberAccess, DotCall, TryExpr
+from sushi_lang.semantics.ast import Expr, Name, BlankLit, MemberAccess, DotCall, TryExpr, Call
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, first_method_name
 from sushi_lang.internals.report import span_of
 
@@ -83,7 +83,16 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
                         loc=span_of(t)
                     )
                 else:
-                    raise NotImplementedError("only NAME(...) or X.Y(...) calls supported for now")
+                    # Call-through an arbitrary expression that evaluates to a
+                    # function value: arr[0](), (e)(), getfn()(). The callee is
+                    # any Expr; the type checker requires it to be a FunctionType.
+                    args, field_names = calls.extract_call_args(call_node, ast_builder)
+                    result_expr = Call(
+                        callee=result_expr,
+                        args=args,
+                        field_names=field_names,
+                        loc=span_of(t),
+                    )
 
             elif call_node.data == "method_call":
                 method_name_tree = first_tree(call_node.children, "method_name")

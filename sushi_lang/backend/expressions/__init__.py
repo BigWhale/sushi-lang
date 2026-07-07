@@ -108,6 +108,14 @@ class ExpressionEmitter:
                 return calls.emit_method_call(self.codegen, expr, to_i1)
 
             case DotCall():
+                # obj.handler(): indirect call through a fn-typed struct field (the
+                # type checker annotated node.callee_fn_type -- see resolve_fn_field_call).
+                _fn_field_ty = getattr(expr, 'callee_fn_type', None)
+                if _fn_field_ty is not None:
+                    from sushi_lang.semantics.typesys import FunctionType
+                    if isinstance(_fn_field_ty, FunctionType):
+                        from sushi_lang.backend.expressions import calls
+                        return calls.emit_fn_field_call(self.codegen, expr, _fn_field_ty, to_i1)
                 # Resolve DotCall to either enum constructor or method call
                 if isinstance(expr.receiver, Name):
                     receiver_name = expr.receiver.id
