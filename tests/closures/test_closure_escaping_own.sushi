@@ -1,0 +1,21 @@
+# T1.5: an ESCAPING closure that MOVE-captures an Own<T>. make_boxed_adder allocates
+# an Own<i32> and returns a closure capturing it; the closure outlives the creating
+# frame (the Own lives in the closure's heap environment) and is called multiple times
+# afterward. The env destructor frees the Own exactly once when the closure's owner is
+# cleaned up -- no dangle across the escape, no per-call double-free.
+# add(i) = i + 10 for i = 0,1,2 -> 10 + 11 + 12 = 33.
+# EXPECT_STDOUT_EXACT: "33\n"
+fn make_boxed_adder(i32 base) fn(i32) -> i32:
+    let Own<i32> boxed = Own.alloc(base)
+    return Result.Ok(|i32 x| x + boxed.get())
+
+fn use_it() i32:
+    let fn(i32) -> i32 add = make_boxed_adder(10)??
+    let i32 total = 0
+    foreach(i in 0..3):
+        total := total + add(i)??
+    return Result.Ok(total)
+
+fn main() i32:
+    println(use_it().realise(-1))
+    return Result.Ok(0)
