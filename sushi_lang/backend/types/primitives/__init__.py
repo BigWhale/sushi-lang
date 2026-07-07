@@ -10,6 +10,8 @@ All methods are implemented as LLVM IR for optimal performance.
 
 # Import hash methods to register them
 import sushi_lang.backend.types.primitives.hashing  # noqa: F401
+# Import bit-reinterpret methods (f32/f64 .to_bits()) to register them
+import sushi_lang.backend.types.primitives.bit_reinterpret  # noqa: F401
 
 # Re-export all public APIs from submodules
 from sushi_lang.backend.types.primitives.to_str import (
@@ -20,7 +22,7 @@ from sushi_lang.backend.types.primitives.to_str import (
 
 def is_builtin_primitive_method(method_name: str) -> bool:
     """Check if a method name is a builtin primitive method."""
-    return method_name in ("to_str", "hash")
+    return method_name in ("to_str", "hash", "to_bits")
 
 
 __all__ = [

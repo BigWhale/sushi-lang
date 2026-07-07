@@ -451,6 +451,14 @@ class ExpressionValidator(RecursiveVisitor):
             self.type_validator._validate_external_call_args(node)
             return
 
+        # f64.from_bits(bits) / f32.from_bits(bits): static bit-reinterpret constructor.
+        # The receiver is a primitive float type NAME, not a value, so handle it before
+        # validating the receiver as an expression.
+        if (isinstance(node.receiver, Name) and node.receiver.id in ("f64", "f32")
+                and node.method == "from_bits"):
+            self._validate_from_bits(node)
+            return
+
         # Validate receiver first
         self.type_validator.validate_expression(node.receiver)
 
@@ -513,6 +521,26 @@ class ExpressionValidator(RecursiveVisitor):
         # This is set by Result<T>/Maybe<T> method validation
         if hasattr(temp_method_call, 'resolved_enum_type') and temp_method_call.resolved_enum_type is not None:
             node.resolved_enum_type = temp_method_call.resolved_enum_type
+
+    def _validate_from_bits(self, node: DotCall) -> None:
+        """Validate f64.from_bits(u64) / f32.from_bits(u32) static reinterpret calls."""
+        tv = self.type_validator
+        is_f64 = node.receiver.id == "f64"
+        float_ty = BuiltinType.F64 if is_f64 else BuiltinType.F32
+        expected_arg = BuiltinType.U64 if is_f64 else BuiltinType.U32
+        node.inferred_return_type = float_ty
+
+        if len(node.args) != 1:
+            er.emit(tv.reporter, er.ERR.CE2009, node.loc,
+                    name=f"{node.receiver.id}.from_bits", expected=1, got=len(node.args))
+            return
+
+        arg = node.args[0]
+        tv.validate_expression(arg)
+        arg_type = tv.infer_expression_type(arg)
+        if arg_type is not None and arg_type != expected_arg:
+            er.emit(tv.reporter, er.ERR.CE2006, getattr(arg, 'loc', node.loc),
+                    index=0, expected=str(expected_arg), got=str(arg_type))
 
     def visit_arrayliteral(self, node: ArrayLiteral) -> None:
         """Validate array literal."""
@@ -1098,6 +1126,13 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if sig is not None:
             node.inferred_return_type = sig.ret_type
             return sig.ret_type
+
+        # f64.from_bits(bits) / f32.from_bits(bits): static bit-reinterpret -> f64/f32.
+        if (isinstance(node.receiver, Name) and node.receiver.id in ("f64", "f32")
+                and node.method == "from_bits"):
+            ty = BuiltinType.F64 if node.receiver.id == "f64" else BuiltinType.F32
+            node.inferred_return_type = ty
+            return ty
 
         # Check if receiver is an enum type name
         if isinstance(node.receiver, Name):

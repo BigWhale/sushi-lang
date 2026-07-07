@@ -168,6 +168,8 @@ method_name: NAME | NEW
      | STDIN -> stdin_literal
      | STDOUT -> stdout_literal
      | STDERR -> stderr_literal
+     | "f64" -> f64_name
+     | "f32" -> f32_name
      | array_literal
      | dynamic_array_new
      | dynamic_array_from

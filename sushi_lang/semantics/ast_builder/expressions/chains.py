@@ -38,6 +38,16 @@ def expr_atom(atom: Tree | Token, ast_builder: 'ASTBuilder') -> Expr:
     if isinstance(atom, Tree) and atom.data == "stderr_literal":
         return Name(id="stderr", loc=span_of(atom))
 
+    # Primitive float type names usable as a static-method namespace, e.g.
+    # f64.from_bits(bits) / f32.from_bits(bits). They lower to a Name receiver so the
+    # call chain builds a DotCall, exactly like List.new(). A bare `f64`/`f32` in value
+    # position is meaningless and is rejected downstream by the from_bits handler.
+    if isinstance(atom, Tree) and atom.data == "f64_name":
+        return Name(id="f64", loc=span_of(atom))
+
+    if isinstance(atom, Tree) and atom.data == "f32_name":
+        return Name(id="f32", loc=span_of(atom))
+
     # Expression-body lambda literal (closure). Must precede the parenthesized-
     # expression fallback below, which would otherwise grab the lambda's first Tree
     # child (the params). Block-body lambdas are not atoms; they are built from the

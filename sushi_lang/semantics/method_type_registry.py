@@ -121,6 +121,12 @@ class ArrayMethodInferrer:
                 maybe_type = ensure_maybe_type_in_table(self.validator.enum_table, element_type)
                 return maybe_type
 
+            # u8[].to_string_checked() returns Result<string, StdError>
+            if self.method_name == "to_string_checked":
+                from sushi_lang.backend.generics.results import ensure_result_type_in_table
+                std_error = self.validator.enum_table.by_name.get("StdError")
+                return ensure_result_type_in_table(self.validator.enum_table, BuiltinType.STRING, std_error)
+
             return get_builtin_array_method_return_type(self.method_name, actual_type)
         return None
 
@@ -154,6 +160,26 @@ class StringMethodInferrer:
                 return maybe_f64_type
             else:
                 return get_builtin_string_method_return_type(self.method_name, BuiltinType.STRING)
+        return None
+
+
+@dataclass
+class PrimitiveMethodInferrer:
+    """Type inferrer for built-in primitive methods (to_str, hash, to_bits).
+
+    Looks up the return type from the builtin-method registry, which is keyed by the
+    primitive BuiltinType. Handles the numeric/bool primitives; string has its own
+    checker (StringMethodInferrer) registered ahead of this one.
+    """
+    receiver_type: 'Type'
+    method_name: str
+    validator: 'TypeValidator'
+
+    def infer_return_type(self) -> Optional['Type']:
+        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
+        method = get_builtin_method(self.receiver_type, self.method_name)
+        if method is not None:
+            return method.return_type
         return None
 
 
@@ -341,6 +367,25 @@ def check_array_methods(receiver_type, method_name, validator):
 def check_string_methods(receiver_type, method_name, validator):
     if receiver_type == BuiltinType.STRING:
         return StringMethodInferrer(method_name, validator)
+    return None
+
+
+_PRIMITIVE_INFER_TYPES = {
+    BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
+    BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
+    BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL,
+}
+
+
+@METHOD_TYPE_REGISTRY.register_checker
+def check_primitive_methods(receiver_type, method_name, validator):
+    # String is handled by check_string_methods (registered earlier). Only numeric/bool
+    # primitives are handled here; return an inferrer only when the method is actually
+    # registered for this type so we don't shadow other checkers for unrelated names.
+    if receiver_type in _PRIMITIVE_INFER_TYPES:
+        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
+        if get_builtin_method(receiver_type, method_name) is not None:
+            return PrimitiveMethodInferrer(receiver_type, method_name, validator)
     return None
 
 

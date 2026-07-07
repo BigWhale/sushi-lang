@@ -1,0 +1,10 @@
+# EXPECT_ERROR_CODE: CE2023
+#
+# to_string_checked() is only valid on u8[] byte arrays.
+fn main() i32:
+    let i32[] nums = from([1, 2, 3])
+    let Result<string, StdError> r = nums.to_string_checked()
+    match r:
+        Result.Ok(s) -> println("{s}")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

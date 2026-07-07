@@ -1,0 +1,7 @@
+# EXPECT_ERROR_CODE: CE2009
+#
+# f64.from_bits takes exactly one argument.
+fn main() i32:
+    let f64 x = f64.from_bits()
+    println("{x}")
+    return Result.Ok(0)

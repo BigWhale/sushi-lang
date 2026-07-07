@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2008
+#
+# to_bits() is only defined on floats; calling it on an integer is an
+# undefined method (it must not crash with an internal error).
+fn main() i32:
+    let i32 n = 5
+    let u32 b = n.to_bits()
+    println("{b}")
+    return Result.Ok(0)

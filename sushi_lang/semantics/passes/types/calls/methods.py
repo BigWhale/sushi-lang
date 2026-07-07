@@ -209,7 +209,12 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
         BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL, BuiltinType.STRING
     ]:
         from sushi_lang.backend.types.primitives import is_builtin_primitive_method, validate_builtin_primitive_method_with_validator
-        if is_builtin_primitive_method(call.method):
+        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
+        # A method name may be a builtin primitive method in general (to_str/hash/to_bits)
+        # but only registered for some types (e.g. to_bits only on f32/f64). Require the
+        # method to be registered for THIS receiver type; otherwise fall through so an
+        # unregistered call (e.g. i32.to_bits()) gets a clean unknown-method error.
+        if is_builtin_primitive_method(call.method) and get_builtin_method(receiver_type, call.method) is not None:
             validate_builtin_primitive_method_with_validator(call, receiver_type, validator.reporter, validator)
             return
 
