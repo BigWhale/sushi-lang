@@ -83,11 +83,13 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     if variadic_param is not None:
         fixed_count = len(func_sig.params) - 1
         fixed_args = [codegen.expressions.emit_expr(a) for a in expr.args[:fixed_count]]
+        _register_inline_closure_temps(codegen, expr.args[:fixed_count], fixed_args)
         array_struct = build_variadic_array(
             codegen, expr.args[fixed_count:], variadic_param.ty, callee)
         args = fixed_args + [array_struct]
     else:
         args = [codegen.expressions.emit_expr(a) for a in expr.args]
+        _register_inline_closure_temps(codegen, expr.args, args)
         # Value semantics (#60): a heap-owning struct passed by value must be deep-copied
         # so the callee owns an independent buffer (the callee frees its copy at scope
         # exit). Reference params (&peek/&poke) are borrows and must NOT be copied.
@@ -135,7 +137,24 @@ def _emit_indirect_call(codegen: 'LLVMCodegen', expr: Call, fat_value: 'ir.Value
     """
     from sushi_lang.backend.runtime import closures
     args = [codegen.expressions.emit_expr(a) for a in expr.args]
+    _register_inline_closure_temps(codegen, expr.args, args)
     return closures.emit_indirect_call(codegen, fat_value, fn_type, args, to_i1)
+
+
+def _register_inline_closure_temps(codegen: 'LLVMCodegen', arg_exprs: list, arg_values: list) -> None:
+    """Register inline-closure argument temporaries for scope-exit cleanup (#123).
+
+    A capturing closure written directly as a call argument (`f(|x| x + k, ...)`) is
+    emitted by emit_lambda -- which mallocs its env -- but is never bound to a local, so
+    nothing owns it. Register each such fresh fat value as a caller-scope temp so its env
+    is freed at the enclosing scope exit. Only a syntactic inline `Lambda` is registered:
+    a `Name` arg is already owned by its local's cleanup slot (re-registering would
+    double-free), and a container get-out / struct-field read is a non-owning borrow.
+    """
+    from sushi_lang.semantics.ast import Lambda
+    for arg_expr, value in zip(arg_exprs, arg_values):
+        if isinstance(arg_expr, Lambda):
+            codegen.memory.register_closure_temp(value)
 
 
 def _deep_copy_struct_value_args(codegen: 'LLVMCodegen', args: list, func_sig) -> None:
@@ -325,11 +344,27 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
         raise KeyError(f"Extension method not found: {func_name}")
 
     emitted_args = [receiver_value]
-    emitted_args.extend(codegen.expressions.emit_expr(arg) for arg in expr.args)
+    arg_values = [codegen.expressions.emit_expr(arg) for arg in expr.args]
+    _register_inline_closure_temps(codegen, expr.args, arg_values)
+    emitted_args.extend(arg_values)
 
     params = list(llvm_fn.args)
     if len(emitted_args) != len(params):
         raise_internal_error("CE0026", expected=len(params), got=len(emitted_args))
+
+    # Reconcile a by-pointer receiver against a by-value `self` parameter (#124).
+    # A List<T> receiver shares the dynamic-array LLVM layout {i32, i32, T*}, so
+    # emit_receiver_value hands us the alloca POINTER, but user extension methods
+    # declare `self` by value (ll_type of the target). Load the header value here so
+    # `cast_for_param` does not raise CE0017. Only the receiver (index 0) is affected;
+    # a &peek/&poke reference param has a pointer param type, so PointerType(ptr) !=
+    # arg.type and this never misfires. The by-value `self` is a shallow copy sharing
+    # the caller's `data*`; the extension callee never registers it for RAII cleanup
+    # (its body is emitted with fn_def=None), so there is no double-free.
+    if (emitted_args
+            and isinstance(params[0].type, ir.LiteralStructType)
+            and emitted_args[0].type == ir.PointerType(params[0].type)):
+        emitted_args[0] = codegen.builder.load(emitted_args[0], name="self_by_value")
 
     casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(emitted_args, params)]
     result_value = codegen.builder.call(llvm_fn, casted)

@@ -128,7 +128,6 @@ def monomorphize_extension_method(
             ty=concrete_param_type,
             name_span=param.name_span,
             type_span=param.type_span,
-            index=param.index
         ))
 
     # Create concrete ExtendDef (preserving the body from generic method)

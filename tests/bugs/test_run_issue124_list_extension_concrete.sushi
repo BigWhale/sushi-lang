@@ -1,0 +1,20 @@
+# Issue #124: Extension methods on List<T> fail (concrete form)
+# https://github.com/BigWhale/sushi-lang/issues/124
+# A concrete `extend List<i32>` used to fail with CE0017 because `self` is declared
+# by value but the List-backed receiver was passed by pointer.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "30\n"
+
+extend List<i32> sum_all() i32:
+    let i32 acc = 0
+    foreach(x in self.iter()):
+        acc := acc + x
+    return acc
+
+fn main() i32:
+    let List<i32> xs = List.new()
+    xs.push(10)
+    xs.push(20)
+    let i32 s = xs.sum_all()
+    println(s)
+    return Result.Ok(0)
