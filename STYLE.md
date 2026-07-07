@@ -423,6 +423,26 @@ match risky_operation():
     Result.Err() -> println("Failed")
 ```
 
+### Closures and Lambdas
+
+An expression-body lambda `|x| e` desugars to `return Result.Ok(e)`, so the body's
+value is **auto-wrapped in `Ok`**. The rule that falls out of this: **every fallible
+call inside a lambda body needs its own `??` at the point of use.** A lambda body
+must never let an inner `Result` pass through -- the desugar would wrap it a second
+time (`Result<Result<T, E>, E>`), which fails to typecheck.
+
+```sushi
+# Good - each fallible call is unwrapped at its point of use
+let compose = |x| f(g(x)??)??       # body value is V; desugars to Result.Ok(V)
+
+# Wrong - body yields Result<V, E>; the desugar wraps it again into
+# Result<Result<V, E>, E>, which mismatches the declared fn(T) -> V
+let compose = |x| f(g(x)??)
+```
+
+This reads as a bug to anyone applying conventional Result-passing intuition (where
+the inner `Result` would "just flow out"), so unwrap deliberately at each call site.
+
 ### Maybe/Option Handling
 
 Check for `None` before accessing values:

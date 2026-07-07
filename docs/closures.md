@@ -80,6 +80,11 @@ Result.Ok(e)`, so calling through a closure yields `Result<T, E>` and `??`/`.rea
 (result)`/matching all work unchanged. The block form optionally takes a `-> T [| E]` annotation
 after the closing pipe, exactly like a `fn` declaration.
 
+Because the body is auto-wrapped in `Ok`, a fallible call inside a lambda body needs its own `??`
+at the point of use — you can't let an inner `Result` flow straight out, since the desugar would
+wrap it again (`Result<Result<T, E>, E>`) and the types won't match. That is why `compose` is
+written `|x| f(g(x)??)??` and not `|x| f(g(x)??)`.
+
 ## Capture
 
 Tier 1 supports **copy capture** only: primitives, strings, and copyable structs/fixed arrays are

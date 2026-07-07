@@ -1,4 +1,4 @@
-"""A Pygments lexer for the Sushi programming language."""
+"""A Pygments lexer for the Sushi programming language (targets Sushi 0.10.0 syntax)."""
 
 from pygments.lexer import RegexLexer, bygroups, words
 from pygments.token import (
@@ -17,8 +17,9 @@ __all__ = ["SushiLexer"]
 # Reserved words that introduce declarations, control flow, and modifiers.
 _KEYWORDS = (
     "fn", "let", "const", "return", "if", "elif", "else", "while", "foreach",
-    "in", "match", "struct", "enum", "perk", "extend", "with", "use", "public",
-    "unsafe", "external", "because", "break", "continue", "as",
+    "expand", "in", "match", "struct", "enum", "perk", "extend", "with", "use",
+    "public", "unsafe", "external", "because", "break", "continue", "as", "new",
+    "peek", "poke",
 )
 
 # Word-form operators.
@@ -30,7 +31,7 @@ _KEYWORD_CONSTANTS = ("true", "false", "self")
 # Built-in primitive and scalar types.
 _TYPES = (
     "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64",
-    "f32", "f64", "bool", "string", "ptr",
+    "f32", "f64", "bool", "string", "file", "ptr",
 )
 
 # Built-in generic types, collections, and error enums.
@@ -41,6 +42,9 @@ _BUILTIN_TYPES = (
 
 # Built-in free functions / constructors.
 _BUILTIN_FUNCS = ("print", "println", "from")
+
+# Built-in I/O stream values.
+_BUILTIN_VALUES = ("stdin", "stdout", "stderr")
 
 
 class SushiLexer(RegexLexer):
@@ -80,9 +84,16 @@ class SushiLexer(RegexLexer):
             (words(_TYPES, suffix=r"\b"), Keyword.Type),
             (words(_BUILTIN_TYPES, suffix=r"\b"), Name.Builtin),
             (words(_BUILTIN_FUNCS, suffix=r"\b"), Name.Builtin),
+            (words(_BUILTIN_VALUES, suffix=r"\b"), Name.Builtin),
 
-            # Multi-character operators (range operators before the dot rule).
-            (r"\?\?|:=|==|!=|<=|>=|->|\.\.=|\.\.|<<|>>|&&|\|\||\^\^", Operator),
+            # Multi-character operators. Order matters: the `...` variadic/bloom
+            # spread must precede the range operators, which precede the dot rule.
+            # Closures (`|params| expr`, `|~|`) get no dedicated rule -- the `|`
+            # disambiguation is positional (the compiler's LALR parser resolves it)
+            # and cannot be done robustly in a regex lexer; a lambda still renders
+            # acceptably as `|` operators + `Name` params + a `~` operator.
+            (r"\?\?|:=|==|!=|<=|>=|->|\.\.\.|\.\.=|\.\.|<<|>>|&&|\|\||\^\^",
+             Operator),
             (r"[+\-*/%=<>&|\^~!]", Operator),
 
             # Member access: `.field` / `.method` / `.Variant`.
