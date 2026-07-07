@@ -1,0 +1,12 @@
+use <collections/iter>
+
+fn main() i32:
+    let i32 crew = 4
+    let List<i32> ages = List.new()
+    ages.push(30)
+    ages.push(42)
+    ages.push(200)
+    # Everyone gains `crew` years while stuck on the Heart of Gold.
+    let List<i32> older = map(ages, |i32 a| a + crew).realise(List.new())
+    println(older.get(1).realise(-1))
+    return Result.Ok(0)

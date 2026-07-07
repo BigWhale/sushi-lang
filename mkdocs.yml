@@ -81,6 +81,7 @@ nav:
       - "16. Foreign Pointers": tutorial/16-foreign-pointers.md
       - "17. First-Class Functions": tutorial/17-first-class-functions.md
       - "18. Closures": tutorial/18-closures.md
+      - "19. Higher-Order Combinators": tutorial/19-higher-order-combinators.md
   - Guides:
       - Getting Started: getting-started.md
       - Language Guide: language-guide.md
@@ -106,6 +107,7 @@ nav:
       - List: stdlib/collections/list.md
       - HashMap: stdlib/collections/hashmap.md
       - Strings: stdlib/collections/strings.md
+      - Iter combinators: stdlib/collections/iter.md
       - Console: stdlib/io/console.md
       - Files: stdlib/io/files.md
       - Math: stdlib/math.md
@@ -120,6 +122,5 @@ nav:
       - Backend: internals/backend.md
       - Stdlib Build: internals/stdlib-build.md
       - "Variadics (design)": design/variadics.md
-      - "First-Class Functions (design)": design/first-class-functions.md
-      - "Closures (design)": design/closures.md
+      - "Closures & First-Class Functions (design)": design/closures.md
   - Examples: examples/README.md

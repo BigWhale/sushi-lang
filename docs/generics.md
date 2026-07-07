@@ -254,6 +254,33 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
+### Referencing a Generic Function as a Value
+
+A generic function can be used as a [first-class function value](first-class-functions.md) when an
+**explicit expected function type** is present. The annotation fixes which instantiation you mean:
+
+```sushi
+fn identity<T>(T x) T:
+    return Result.Ok(x)
+
+fn main() i32:
+    let fn(i32) -> i32 g = identity   # picks identity<i32>
+    let i32 n = g(41).realise(-1)     # 41
+    println(n)
+    return Result.Ok(0)
+```
+
+The same typed binding lets you hand a generic function to a higher-order function such as `map`:
+
+```sushi
+let fn(i32) -> i32 id = identity
+let List<i32> same = map(xs, id).realise(List.new())
+```
+
+The requirement is the **expected type**: referencing a generic function with no expected function
+type — for example passing `identity` directly as a call argument without a typed binding — is
+still **CE2093**. Bind it to a typed local first.
+
 ### Known Limitations
 
 1. **Type parameters must be inferrable from function parameters**

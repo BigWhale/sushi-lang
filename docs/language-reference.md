@@ -167,7 +167,13 @@ let i32 r = f(41)??                # call through it -> Result, like a direct ca
 
 Function types are invariant (arity, parameters, return, and error type must match exactly).
 A plain top-level function is referenceable as above; a **closure** — a capturing lambda literal
-(`|i32 x| x + n`) — is also a `fn(...)`-typed value and shares the same call syntax. See the
+(`|i32 x| x + n`) — is also a `fn(...)`-typed value and shares the same call syntax. A **generic**
+function is referenceable when the expected function type is explicit (`let fn(i32) -> i32 g =
+identity`); otherwise it is `CE2093`.
+
+You can also call through any expression that evaluates to a function value, not just a bare name —
+a fn-typed struct field (`obj.handler(x)`, when no method of that name exists), a container get-out
+(`fns.get(0)??(x)`), or a parenthesized expression (`(e)(x)`). See the
 [First-Class Functions guide](first-class-functions.md) and the [Closures guide](closures.md).
 
 ## Variables

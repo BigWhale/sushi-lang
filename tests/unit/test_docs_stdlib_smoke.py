@@ -169,6 +169,19 @@ fn main() i32:
 """,
     ),
     Case(
+        "collections/iter",
+        "collections/iter.md",
+        """use <collections/iter>
+fn main() i32:
+    let List<i32> xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    let List<i32> ys = map(xs, |i32 x| x + 1).realise(List.new())
+    println("iter {ys.len()}")
+    return Result.Ok(0)
+""",
+    ),
+    Case(
         "maybe",
         "maybe.md",
         """fn main() i32:
@@ -226,9 +239,11 @@ def platform_stdlib():
 # Modules whose symbols only resolve in the *full* compilation pipeline, not in the
 # in-process `analyze` fixture. `collections/hashmap` is a virtual unit: HashMap is
 # registered as a generic provider by compiler/pipeline.py (generic_type_map), a step
-# the semantics-only fixture does not replicate. These are still fully covered by the
+# the semantics-only fixture does not replicate. `collections/iter` is a bundled
+# Sushi-source module that compiler/pipeline.py injects as a compilation unit (its
+# combinators are not otherwise in scope). Both are still fully covered by the
 # authoritative subprocess compile layer below.
-SEMANTIC_LAYER_SKIP = {"collections/hashmap"}
+SEMANTIC_LAYER_SKIP = {"collections/hashmap", "collections/iter"}
 
 
 def test_docs_present():

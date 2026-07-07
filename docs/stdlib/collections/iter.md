@@ -2,8 +2,7 @@
 
 [← Back to Standard Library](../../standard-library.md)
 
-Higher-order combinators over `List<T>`: `map`, `filter`, `fold` (and
-[`compose`](#compose)).
+Higher-order combinators over `List<T>`: `map`, `filter`, `fold`, and `compose`.
 
 ## Import
 

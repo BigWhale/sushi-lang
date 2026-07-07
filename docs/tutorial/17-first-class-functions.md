@@ -77,9 +77,10 @@ square
 49
 ```
 
-One wrinkle worth remembering: you **bind the field to a local before calling it**. Writing
-`op.run(7)` directly would parse as *"call the method `run` on `op`"*, not *"call the function
-stored in the field `run`"*. So `let fn(i32) -> i32 f = op.run` first, then `f(7)`.
+You can call the field **directly** — `op.run(7)`. When a struct has a fn-typed field and no
+method of the same name, `op.run(7)` routes to the function stored in the field. (If a method
+`run` also existed, the method would win; bind the field to a local first — `let f = op.run` — to
+call the field in that case.)
 
 ## The error type travels with the function
 
@@ -101,12 +102,36 @@ Output:
 `op(x, y)??` propagates that error out, and the caller turns it into a default with `.realise(-1)`.
 Omit the `| E` and the error type is the implicit `StdError`, exactly as for a normal `fn`.
 
-## What you can and can't reference (yet)
+## Calling through any expression
 
-Only **plain top-level functions** are referenceable as values in v1. The compiler will stop you,
-clearly, in the other cases:
+A function value doesn't have to sit in a plain variable to be called. You can call through any
+expression that produces one — a `List` element or a parenthesized expression:
 
-- A **generic** function (`identity<i32>`) → **CE2093** (deferred to a later release).
+```sushi
+let List<fn(i32) -> i32> table = List.new()
+table.push(add_one)
+let i32 a = table.get(0)??(41)??      # call the retrieved function value
+let i32 b = (table.get(0)??)(41)??    # same, parenthesized
+```
+
+## Referencing a generic function
+
+A **generic** function can be referenced as a value when you give the binding an explicit function
+type — the annotation fixes which instantiation you mean:
+
+```sushi
+fn identity<T>(T x) T:
+    return Result.Ok(x)
+
+let fn(i32) -> i32 g = identity      # identity<i32>, chosen by the annotation
+let i32 n = g(41)??                  # 41
+```
+
+Without an expected function type — for instance passing `identity` straight into a call argument
+with no typed binding — the reference is still **CE2093**; bind it to a typed local first.
+
+## What else the compiler checks
+
 - A wrong-shaped call through a function value (wrong arity or argument type) → **CE2092**.
 - Assigning a function value to an incompatible function-typed variable → **CE2002**. Function
   types are *invariant*: arity, every parameter, the return type, and the error type must match
@@ -124,13 +149,14 @@ identifier.
   arguments, and **call through** them; an indirect call returns a `Result` just like a direct one.
 - A plain function reference is a **bare pointer** — zero-cost, no captured state. Sushi also has
   **closures** (capturing lambda literals) — see the next chapter.
-- Call a function-valued **struct field** by binding it to a local first (`obj.field()` is a method
-  call).
+- Call a function-valued **struct field** directly (`obj.field(x)`); a same-named method would win.
+  You can also call through any expression that yields a function value (`table.get(0)??(x)`).
+- Reference a **generic function** as a value when an explicit function type is present
+  (`let fn(i32) -> i32 g = identity`); a bare reference with no expected type is **CE2093**.
 - The **error type is part of the function type** and propagates through `??`.
-- Only **plain top-level functions** qualify; generic-function references are **CE2093**, a
-  call-through mismatch is **CE2092**, and an assignment mismatch is **CE2002**.
+- A call-through mismatch is **CE2092**, and an assignment mismatch is **CE2002**.
 
 That's functions-as-data. Next, [Chapter 18 (Closures)](18-closures.md) adds the capturing lambda
 literal. For the complete reference on this chapter's material, see the
 [First-Class Functions guide](../first-class-functions.md) and the
-[design note](../design/first-class-functions.md).
+[design note](../design/closures.md#1-the-v1-floor-function-types-and-values-non-capturing).

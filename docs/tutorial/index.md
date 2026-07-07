@@ -23,6 +23,8 @@ feature the language has:
 - **Systems** — RAII, references and borrow checking, `Own<T>`
 - **Library** — `List<T>`, `HashMap<K, V>`, and the standard library
 - **Interop** — variadic functions, calling C, foreign pointers, building libraries
+- **Functions as values** — first-class functions, closures, and higher-order combinators
+  (`map`/`filter`/`fold`/`compose`)
 
 ## How to read this
 

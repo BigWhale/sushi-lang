@@ -2,6 +2,39 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [0.10.0] - 2026-07-07
+
+The closures release. Tier 1 closures are complete, and three follow-ups land together: an
+opt-in combinators module, call-through arbitrary function values, and generic-function
+references. This supersedes the 0.9.0 note that there were "no closures in v1".
+
+### Added
+- `use <collections/iter>`: `map`, `filter`, `fold`, and `compose` over `List<T>`, as ordinary
+  generic free functions. This is the first Sushi-source standard-library module -- a bundled
+  `.sushi` file merged as a compilation unit and monomorphized through the normal generic
+  pipeline (no bitcode; nothing emitted unless a combinator is instantiated). Element types are
+  copy/primitive for now
+- Call-through arbitrary expressions that evaluate to a function value (T2.4): a captured closure
+  called in a lambda body (`env.f(x)`, the basis for `compose` and capturing-and-calling a
+  closure), a fn-typed struct field called directly as `obj.handler()` (a same-named method
+  wins), and call-through a `List` get-out or parenthesized expression (`fns.get(0)??(x)`,
+  `(e)()`)
+- Generic-function references (T2.3): a generic function may be referenced as a value when an
+  explicit function type is present, e.g. `let fn(i32) -> i32 g = identity` with
+  `fn identity<T>(T x) T`. Passing a generic-fn reference into a higher-order function works via
+  such a typed binding
+
+### Changed
+- The `??` operator now unwraps a first-class function call's result and a `Maybe` `Some`
+  payload during type inference, so a function value called in a lambda body infers its return
+  type. As a result, two type mismatches that previously surfaced as a backend cast failure now
+  report the precise front-end `CE2002` at the assignment
+- `CE2094` no longer rejects capturing-and-calling a closure value; an owning closure value is
+  move-captured into the environment like `List`/`Own`
+- `CE2093` is lifted for a generic-fn reference that has an explicit expected function type; a
+  bare reference with no expected type (an argument position without a typed binding) still
+  reports `CE2093`
+
 ## [0.9.1] - 2026-07-06
 
 A maintenance release: a new safe process-spawn stdlib primitive (the last self-hosting

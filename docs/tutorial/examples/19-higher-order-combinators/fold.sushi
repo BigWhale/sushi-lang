@@ -1,0 +1,11 @@
+use <collections/iter>
+
+fn main() i32:
+    let List<i32> bill = List.new()
+    bill.push(6)
+    bill.push(6)
+    bill.push(30)
+    # Sum the tab at Milliways, starting from a base cover charge of 0.
+    let i32 total = fold(bill, 0, |i32 acc, i32 item| acc + item).realise(-1)
+    println(total)
+    return Result.Ok(0)

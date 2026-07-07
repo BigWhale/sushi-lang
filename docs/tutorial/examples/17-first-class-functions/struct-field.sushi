@@ -1,5 +1,5 @@
-# A function value can live in a struct field. To call it, bind the field to a
-# local first -- `op.run()` would parse as a method call on `op`.
+# A function value can live in a struct field, and you can call it directly:
+# `op.run(v)` routes to the fn-typed field when there is no method of that name.
 fn square(i32 x) i32:
     return Result.Ok(x * x)
 
@@ -8,8 +8,7 @@ struct Op:
     fn(i32) -> i32 run
 
 fn apply(Op op, i32 v) i32:
-    let fn(i32) -> i32 f = op.run
-    return Result.Ok(f(v)??)
+    return Result.Ok(op.run(v)??)
 
 fn main() i32:
     let Op op = Op("square", square)
