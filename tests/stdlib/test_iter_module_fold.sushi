@@ -1,0 +1,15 @@
+# collections/iter: fold with a capturing combiner. Sum [1,2,3] onto base 100 -> 106.
+# EXPECT_STDOUT_EXACT: "106\n"
+use <collections/iter>
+
+fn run() i32:
+    let i32 base = 100
+    let List<i32> xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    xs.push(3)
+    return Result.Ok(fold(xs, base, |i32 acc, i32 x| acc + x)??)
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)

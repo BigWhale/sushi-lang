@@ -1,0 +1,17 @@
+# collections/iter: map with a typed-param capturing lambda.
+# [1,2,3] each * factor(10) -> [10,20,30]; element 2 is 30.
+# EXPECT_STDOUT_EXACT: "30\n"
+use <collections/iter>
+
+fn run() i32:
+    let i32 factor = 10
+    let List<i32> xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    xs.push(3)
+    let List<i32> ys = map(xs, |i32 x| x * factor)??
+    return Result.Ok(ys.get(2).realise(-1))
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)

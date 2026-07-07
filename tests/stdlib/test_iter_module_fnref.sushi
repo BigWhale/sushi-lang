@@ -1,0 +1,19 @@
+# collections/iter: a combinator called with a plain top-level function reference
+# (not a lambda). double each of [1,2,3] -> [2,4,6]; element 2 is 6.
+# EXPECT_STDOUT_EXACT: "6\n"
+use <collections/iter>
+
+fn double(i32 x) i32:
+    return Result.Ok(x * 2)
+
+fn run() i32:
+    let List<i32> xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    xs.push(3)
+    let List<i32> ys = map(xs, double)??
+    return Result.Ok(ys.get(2).realise(-1))
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)

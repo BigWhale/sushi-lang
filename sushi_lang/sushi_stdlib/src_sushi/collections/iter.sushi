@@ -1,0 +1,34 @@
+# collections/iter -- opt-in higher-order combinators over List<T>.
+#
+# The first Sushi-source stdlib module: it ships as bundled .sushi source and is
+# merged as a compilation unit when imported (`use <collections/iter>`). The
+# combinators are ordinary generic free functions -- they monomorphize through
+# the normal generic pipeline, so there is no bitcode and nothing is emitted
+# unless a program actually instantiates one.
+#
+# Element types are copy/primitive for now (filter re-pushes each element, map
+# reads each one); owned-element combinators are deferred. Pass a typed-param
+# lambda (`|i32 x| ...`) or a plain function reference -- a bare-param lambda
+# (`|x| ...`) cannot be inferred against a generic parameter.
+
+# map: apply `f` to every element, collecting the results into a new List<U>.
+fn map<T, U>(List<T> xs, fn(T) -> U f) List<U>:
+    let List<U> out = List.new()
+    foreach(x in xs.iter()):
+        out.push(f(x)??)
+    return Result.Ok(out)
+
+# filter: keep the elements for which `pred` returns true.
+fn filter<T>(List<T> xs, fn(T) -> bool pred) List<T>:
+    let List<T> out = List.new()
+    foreach(x in xs.iter()):
+        if (pred(x)??):
+            out.push(x)
+    return Result.Ok(out)
+
+# fold: reduce the list left-to-right, threading `acc` through `f`.
+fn fold<T, U>(List<T> xs, U init, fn(U, T) -> U f) U:
+    let U acc = init
+    foreach(x in xs.iter()):
+        acc := f(acc, x)??
+    return Result.Ok(acc)
