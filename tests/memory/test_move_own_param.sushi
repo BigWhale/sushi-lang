@@ -1,0 +1,14 @@
+# Move-by-value: an Own<T> parameter is moved into the callee, which owns and frees
+# the heap box exactly once (the caller must not free it again).
+# EXPECT_STDOUT_CONTAINS: boxed=42
+# EXPECT_RUNTIME_EXIT: 0
+
+fn unwrap(Own<i32> b) i32:
+    return Result.Ok(b.get())
+
+fn main() i32:
+    let Own<i32> box = Own.alloc(42)
+    # box is moved into unwrap(); unwrap() owns and frees it.
+    let i32 v = unwrap(box).realise(-1)
+    println("boxed={v}")
+    return Result.Ok(0)

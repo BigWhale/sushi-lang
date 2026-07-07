@@ -90,17 +90,20 @@ fn build_tree() ~:
 
 ## Move Semantics
 
-Dynamic arrays use move semantics (ownership transfer).
+Owning types use move semantics (ownership transfer): **dynamic arrays (`T[]`), `List<T>`, and
+`Own<T>`**. Passing one by value, binding it to a new name, or capturing it in a closure transfers
+ownership; the source is consumed and using it afterward is a use-after-move error (`CE2405`).
+Primitives, strings, and copyable structs are copied instead.
 
 ### What Moves
 
-**Dynamic arrays:**
+**Dynamic arrays, `List<T>`, `Own<T>`:**
 ```sushi
 fn main() i32:
     let i32[] a = from([1, 2, 3])
     let i32[] b = a  # a moved to b
 
-    # ERROR CE1004: Use of moved variable 'a'
+    # ERROR CE2405: cannot borrow moved variable 'a'
     # println(a.len())
 
     return Result.Ok(0)
@@ -128,18 +131,27 @@ fn main() i32:
 ```sushi
 fn consume(i32[] arr) ~:
     println("Length: {arr.len()}")
-    # arr automatically freed here
+    # arr automatically freed here (the callee now owns it)
     return Result.Ok(~)
 
 fn main() i32:
     let i32[] data = from([1, 2, 3])
     consume(data)  # data moved into function
 
-    # ERROR CE1004: Use of moved variable 'data'
+    # ERROR CE2405: cannot borrow moved variable 'data'
     # println(data.len())
 
     return Result.Ok(0)
 ```
+
+The same holds for `List<T>` and `Own<T>` value parameters: a bare owning argument is moved into the
+callee, which frees it exactly once at scope exit. To pass an owning value without giving it up,
+borrow it (`&peek` / `&poke`) or pass an explicit `.clone()`.
+
+> **`main`'s `args`.** The `string[] args` parameter of `main` is a borrowed view of the process
+> argument vector (its strings alias C `argv` memory), not a heap-owned array. Do not move it by
+> value into a helper -- borrow it (`fn run(&peek string[] args)`), or the callee would try to free
+> `argv` and crash.
 
 ### Solution: Use References
 

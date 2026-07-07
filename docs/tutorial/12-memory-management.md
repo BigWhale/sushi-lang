@@ -66,9 +66,15 @@ Why the difference? A dynamic array owns a heap buffer. If assigning `dest := so
 copied the pointer, you'd have two variables believing they own the same buffer — and when
 both went out of scope, RAII would free it twice. By **moving** instead (transferring
 ownership and marking the source as gone), Sushi guarantees exactly one owner, so exactly one
-free. Touch a moved-out variable and the compiler stops you cold with **CE1004: use of moved
+free. Touch a moved-out variable and the compiler stops you cold with **CE2405: cannot borrow moved
 variable** — a use-after-free caught before the program ever runs. If you genuinely need two
 independent arrays, ask for one explicitly with `.clone()`.
+
+The same move rule covers every owning type — dynamic arrays, `List<T>`, and `Own<T>`. Passing one
+by value to a function moves it: the callee takes ownership and frees it at scope exit, so the caller
+must not use it afterwards. Borrow with `&peek` / `&poke` (or pass a `.clone()`) when you want to keep
+it. (One special case: `main`'s `string[] args` is a borrowed view of the process argument vector,
+not a heap-owned array — borrow it downstream, never move it by value.)
 
 ## References: borrowing without owning
 
@@ -174,7 +180,7 @@ null-free.
 
 - **RAII** frees resources automatically at scope exit — no collector, no manual `free`.
 - Primitives and strings are **copied** on assignment; dynamic arrays are **moved**, leaving
-  the source invalid (use-after-move is caught as **CE1004**), so each heap buffer has exactly
+  the source invalid (use-after-move is caught as **CE2405**), so each heap buffer has exactly
   one owner and one free. Use `.clone()` for an independent copy.
 - **References** lend without owning: `&peek` is read-only and shareable, `&poke` is
   read-write and exclusive, and `&poke` coerces down to `&peek`.

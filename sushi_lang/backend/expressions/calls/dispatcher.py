@@ -99,14 +99,32 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     else:
         args = [codegen.expressions.emit_expr(a) for a in expr.args]
         _register_inline_closure_temps(codegen, expr.args, args)
-        # Value semantics (#60): a heap-owning struct passed by value must be deep-copied
-        # so the callee owns an independent buffer (the callee frees its copy at scope
-        # exit). Reference params (&peek/&poke) are borrows and must NOT be copied.
+        # Value semantics (#60): a heap-owning USER struct passed by value must be
+        # deep-copied so the callee owns an independent buffer (the callee frees its
+        # copy at scope exit). Owning move-types (T[]/List/Own) are moved instead, not
+        # copied (struct_needs_cleanup is false for them, so they pass through here).
+        # Reference params (&peek/&poke) are borrows and are never copied.
         _deep_copy_struct_value_args(codegen, args, func_sig)
+        # Move-by-value for owning params (#131): a bare owning argument (T[]/List/Own)
+        # is moved into the callee, which owns and frees it. Mark the source local moved
+        # so the caller's scope-exit RAII skips it (exactly one owner frees).
+        _move_owning_value_args(codegen, expr, func_sig)
 
     params = list(llvm_fn.args)
     if len(args) != len(params):
         raise_internal_error("CE0026", expected=len(params), got=len(args))
+
+    # Normalize a by-pointer owning argument (e.g. an inline `from([...])`, which lowers
+    # to the array-struct POINTER) against a by-value struct parameter, so cast_for_param
+    # does not raise CE0017 (issue #131). Mirrors the self-by-value reconcile in
+    # emit_method_call; fires only on an exact pointer-to-value-struct mismatch, so a
+    # &peek/&poke pointer param (PointerType != struct) never triggers it.
+    args = [
+        codegen.builder.load(v, name="arg_by_value")
+        if isinstance(p.type, ir.LiteralStructType) and v.type == ir.PointerType(p.type)
+        else v
+        for v, p in zip(args, params)
+    ]
 
     casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(args, params)]
     result_struct = codegen.builder.call(llvm_fn, casted)
@@ -196,6 +214,26 @@ def _deep_copy_struct_value_args(codegen: 'LLVMCodegen', args: list, func_sig) -
         if isinstance(param.ty, ReferenceType):
             continue
         args[i] = memory.deep_copy_if_owning_struct(codegen, args[i], param.ty)
+
+
+def _move_owning_value_args(codegen: 'LLVMCodegen', expr: Call, func_sig) -> None:
+    """Mark bare owning arguments (T[]/List/Own) passed by value as moved (#131).
+
+    A by-value owning parameter takes ownership: the callee frees the value at scope
+    exit (see begin_function's param registration). Mark the source local moved so the
+    caller's scope-exit RAII skips it -- exactly one owner frees, no double-free. Borrows
+    (`&peek x`) are Borrow nodes, not Name nodes, and reference params are not owning, so
+    neither is ever marked. No-op without a signature (indirect/builtin calls).
+    """
+    if func_sig is None or not func_sig.params:
+        return
+    from sushi_lang.semantics.typesys import is_owning_type
+    for i, param in enumerate(func_sig.params):
+        if i >= len(expr.args):
+            break
+        arg = expr.args[i]
+        if isinstance(arg, Name) and is_owning_type(param.ty):
+            codegen.moves.mark(arg.id)
 
 
 def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool = False, is_dotcall: bool = False) -> ir.Value:

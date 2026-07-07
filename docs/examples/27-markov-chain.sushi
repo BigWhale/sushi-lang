@@ -22,7 +22,8 @@ use <collections/hashmap>
 use <collections/strings>
 
 # Pick random word from vocabulary
-fn random_word(string[] vocab) string:
+# vocab is read on every step -- borrow it &peek so the caller keeps ownership.
+fn random_word(&peek string[] vocab) string:
     let i32 idx = rand_range(0, vocab.len())
     return Result.Ok(vocab[idx])
 
@@ -50,20 +51,20 @@ fn build_chain(&poke HashMap<string, string> chain, string[] words) ~:
     return Result.Ok(~)
 
 # Generate text using the chain with improbability factor
-fn generate_text(&peek HashMap<string, string> chain, string[] vocab, f64 factor, i32 count) ~:
-    let string current = "the"
+fn generate_text(&peek HashMap<string, string> chain, &peek string[] vocab, f64 factor, i32 count) ~:
+    let string current = vocab[0]
     let i32 c = 0
 
     while (c < count):
         let f64 roll = rand_f64()
         if (roll < factor):
-            current := random_word(vocab).realise("")
+            current := random_word(&peek vocab).realise("")
         else:
             match chain.get(current):
                 Maybe.Some(opts) ->
                     current := pick_from_options(opts).realise("")
                 Maybe.None() ->
-                    current := random_word(vocab).realise("")
+                    current := random_word(&peek vocab).realise("")
         print(" {current}")
         c := c + 1
     return Result.Ok(~)
@@ -97,6 +98,7 @@ fn main() i32:
     println("  \"{corpus}\"")
     println("")
     println("Learned {chain.len()} unique word transitions")
+    println("Vocabulary: {vocab.len()} words")
     println("")
 
     # Generate text with different improbability levels
@@ -116,7 +118,7 @@ fn main() i32:
     let i32 f = 0
     while (f < 5):
         print("{labels[f]}the")
-        generate_text(&peek chain, vocab, factors[f], 12)
+        generate_text(&peek chain, &peek vocab, factors[f], 12)
         println("")
         f := f + 1
 

@@ -1,5 +1,7 @@
 # Maybe<T> models "a value, or nothing" without sentinels like -1 or null.
-fn find_index(string[] crew, string name) Maybe<i32>:
+# crew is borrowed (&peek) so the caller keeps it and can search again; a by-value
+# string[] would be moved into find_index and freed there.
+fn find_index(&peek string[] crew, string name) Maybe<i32>:
     let i32 i = 0
     while (i < crew.len()):
         let Maybe<string> member = crew.get(i)
@@ -10,10 +12,11 @@ fn find_index(string[] crew, string name) Maybe<i32>:
 
 fn main() i32:
     let string[] crew = from(["Arthur", "Ford", "Zaphod"])
+    println("Crew of {crew.len()} aboard")
 
     # find_index returns Result<Maybe<i32>>, so unwrap the Result with match,
     # then inspect the Maybe.
-    match find_index(crew, "Ford"):
+    match find_index(&peek crew, "Ford"):
         Result.Ok(spot) ->
             # .is_some() / .is_none() return bools.
             if (spot.is_some()):
@@ -23,7 +26,7 @@ fn main() i32:
         Result.Err(_) ->
             println("search failed")
 
-    match find_index(crew, "Vogon"):
+    match find_index(&peek crew, "Vogon"):
         Result.Ok(spot) ->
             if (spot.is_none()):
                 println("No Vogons aboard, thankfully")

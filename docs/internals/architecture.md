@@ -406,7 +406,7 @@ array_len(arr)  # Function call
 - Track reference lifetimes
 
 **Errors detected:**
-- CE1004: Use of moved variable
+- CE2405: Use of moved variable
 - CE1007: Cannot rebind while borrowed
 - CE2406: Use of destroyed variable
 
@@ -810,7 +810,7 @@ self.moved_variables.add(var_name)
 Checked on every use:
 ```python
 if var_name in self.moved_variables:
-    raise CompilerError(f"CE1004: Use of moved variable '{var_name}'")
+    raise CompilerError(f"CE2405: Use of moved variable '{var_name}'")
 ```
 
 ### Borrow Tracking

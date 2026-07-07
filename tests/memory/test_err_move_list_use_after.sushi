@@ -1,0 +1,19 @@
+# Use-after-move: a List<T> passed by value is moved into the callee, so using it
+# afterward is a use-after-move error.
+# EXPECT_ERROR_CODE: CE2405
+
+fn total(List<i32> xs) i32:
+    return Result.Ok(xs.len())
+
+fn run() i32:
+    let List<i32> xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    let i32 a = total(xs)??
+    # xs was moved into total() -- this reuse is illegal.
+    let i32 b = total(xs)??
+    return Result.Ok(b)
+
+fn main() i32:
+    let i32 r = run().realise(-1)
+    return Result.Ok(0)

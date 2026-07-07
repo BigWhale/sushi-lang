@@ -146,6 +146,7 @@ crash with a message — use only when absence would be a genuine bug).
 Output:
 
 ```
+Crew of 3 aboard
 Ford is aboard
 Ford index (or -1): 1
 No Vogons aboard, thankfully

@@ -1,0 +1,21 @@
+# Regression guard: a &peek borrow does NOT move its argument. The array is still
+# owned by the caller after the borrowing call and can be used again (and accessed
+# directly).
+# EXPECT_STDOUT_CONTAINS: a=3
+# EXPECT_STDOUT_CONTAINS: b=3
+# EXPECT_STDOUT_CONTAINS: direct=3
+# EXPECT_RUNTIME_EXIT: 0
+
+fn peek_len(&peek i32[] arr) i32:
+    return Result.Ok(arr.len())
+
+fn main() i32:
+    let i32[] data = from([7, 8, 9])
+    let i32 first = peek_len(&peek data).realise(-1)
+    println("a={first}")
+    # Not moved -- borrowing leaves data usable.
+    let i32 second = peek_len(&peek data).realise(-1)
+    println("b={second}")
+    # Direct access after borrows still works.
+    println("direct={data.len()}")
+    return Result.Ok(0)

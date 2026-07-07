@@ -288,33 +288,56 @@ class FunctionHelpers:
         for arg, slot in param_slots:
             self.codegen.builder.store(arg, slot)
 
-        # Register native variadic '...T' array parameters for RAII cleanup.
-        # The callee owns the collected T[] (the caller moved it), so it must be
-        # freed at scope exit. General array parameters are intentionally NOT
-        # registered here -- only the variadic one.
-        if fn_def is not None:
+        # Register owning value parameters (moved-in T[] / List<T> / Own<T>, and native
+        # variadic '...T' arrays) for RAII cleanup: the callee owns them and frees them
+        # at scope exit.
+        #
+        # Exception: the user `main`'s `args` parameter is a BORROWED view of C argv --
+        # its string elements point directly at process argv memory, not heap-owned
+        # copies -- so it must never be freed. Skip cleanup registration for main's
+        # parameters entirely (callers must borrow `args`, not move it by value).
+        is_user_main = fn_def is not None and fn_def.name == "main"
+        if fn_def is not None and not is_user_main:
             slot_by_name = {arg.name or f"arg{i}": slot
                             for i, (arg, slot) in enumerate(param_slots)}
             for param in fn_def.params:
-                if getattr(param, "is_variadic", False) and isinstance(param.ty, DynamicArrayType):
-                    slot = slot_by_name.get(param.name)
-                    if slot is not None:
-                        self.codegen.dynamic_arrays.register_param_array(
-                            param.name, param.ty.base_type, slot
-                        )
-                    continue
-                # Register by-value struct parameters that own heap memory for RAII
-                # cleanup (#60): the callee owns its independent (deep-copied) copy and
-                # must free it at scope exit, like a `let` local. Reference parameters
-                # are borrows and are skipped.
+                # Reference parameters (&peek/&poke) are borrows -- never owned/freed.
                 if isinstance(param.ty, ReferenceType):
                     continue
+                slot = slot_by_name.get(param.name)
+                if slot is None:
+                    continue
+
+                # A native variadic '...T' array parameter: the callee owns the
+                # caller-collected T[] and frees it at scope exit.
+                if getattr(param, "is_variadic", False) and isinstance(param.ty, DynamicArrayType):
+                    self.codegen.dynamic_arrays.register_param_array(
+                        param.name, param.ty.base_type, slot
+                    )
+                    continue
+
+                # Move-by-value owning parameters (#131): a bare owning value (dynamic
+                # array / List<T> / Own<T>) passed by value is MOVED into the callee,
+                # which now owns it and must free it exactly once at scope exit (the
+                # caller marked its source moved and skips its own free). Registration
+                # mirrors what a `let` local of the same type gets.
+                if isinstance(param.ty, DynamicArrayType):
+                    self.codegen.dynamic_arrays.register_param_array(
+                        param.name, param.ty.base_type, slot
+                    )
+                    continue
+
                 resolved = param.ty
                 if isinstance(resolved, UnknownType):
                     resolved = self.codegen.struct_table.by_name.get(resolved.name, resolved)
-                if isinstance(resolved, StructType) and self.codegen.dynamic_arrays.struct_needs_cleanup(resolved):
-                    slot = slot_by_name.get(param.name)
-                    if slot is not None:
+                if isinstance(resolved, StructType):
+                    if self.codegen.dynamic_arrays.is_own_type(resolved):
+                        self.codegen.dynamic_arrays.register_own(param.name, resolved)
+                    elif self.codegen.dynamic_arrays.is_list_type(resolved):
+                        self.codegen.dynamic_arrays.register_list(param.name, resolved, slot)
+                    elif self.codegen.dynamic_arrays.struct_needs_cleanup(resolved):
+                        # By-value owning USER struct (#60): copy semantics, callee frees
+                        # its independent deep copy.
                         self.codegen.memory.register_struct_cleanup(param.name, resolved, slot)
 
     def end_function(self) -> None:

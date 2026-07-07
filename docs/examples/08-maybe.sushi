@@ -13,7 +13,8 @@
 # Note: All functions return Result<T, E>, so we use match statements to
 # unwrap the Result layer before working with the Maybe<T> value.
 
-fn find_crew_member(string[] crew, string name) Maybe<i32>:
+# crew is only read -- borrow it &peek so the caller keeps it across searches.
+fn find_crew_member(&peek string[] crew, string name) Maybe<i32>:
     # Search for a crew member by name and return their position
     # Returns Maybe.Some(index) if found, Maybe.None() if not found
     let i32 i = 0
@@ -30,9 +31,10 @@ fn find_crew_member(string[] crew, string name) Maybe<i32>:
 
 fn main() i32:
     let string[] crew = from(["Arthur", "Ford", "Zaphod", "Trillian", "Marvin"])
+    println("Crew size: {crew.len()}")
 
     # Find existing member - use match to unwrap Result<Maybe<i32>, StdError>
-    let Result<Maybe<i32>, StdError> arthur_result = find_crew_member(crew, "Arthur")
+    let Result<Maybe<i32>, StdError> arthur_result = find_crew_member(&peek crew, "Arthur")
 
     match arthur_result:
         Result.Ok(arthur_pos) ->
@@ -51,11 +53,11 @@ fn main() i32:
             # This is safe - no runtime errors, just a fallback value
             let i32 pos1 = arthur_pos.realise(-1)
             println("Arthur position (or -1): {pos1}")
-        Result.Err(e) ->
+        Result.Err(_) ->
             println("Error searching for Arthur")
 
     # Find non-existent member
-    let Result<Maybe<i32>, StdError> vogon_result = find_crew_member(crew, "Vogon")
+    let Result<Maybe<i32>, StdError> vogon_result = find_crew_member(&peek crew, "Vogon")
 
     match vogon_result:
         Result.Ok(vogon_pos) ->
@@ -65,18 +67,18 @@ fn main() i32:
 
             let i32 pos2 = vogon_pos.realise(-1)
             println("Vogon position (or -1): {pos2}")
-        Result.Err(e) ->
+        Result.Err(_) ->
             println("Error searching for Vogon")
 
     # .expect(msg) unwraps Maybe.Some or triggers runtime error with message
     # Use this when you're certain the value should exist
-    let Result<Maybe<i32>, StdError> ford_result = find_crew_member(crew, "Ford")
+    let Result<Maybe<i32>, StdError> ford_result = find_crew_member(&peek crew, "Ford")
 
     match ford_result:
         Result.Ok(ford_pos) ->
             let i32 ford_index = ford_pos.expect("Ford must be on the crew")
             println("Ford is at index {ford_index}")
-        Result.Err(e) ->
+        Result.Err(_) ->
             println("Error searching for Ford")
 
     return Result.Ok(0)
