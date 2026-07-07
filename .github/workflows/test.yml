@@ -48,7 +48,11 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg allow-insecure=yes] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee /etc/apt/sources.list.d/llvm.list
           echo "deb-src [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg allow-insecure=yes] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee -a /etc/apt/sources.list.d/llvm.list
           apt-get update -o Acquire::AllowInsecureRepositories=true
-          apt-get install -y --allow-unauthenticated llvm-20 llvm-20-dev
+          apt-get install -y --allow-unauthenticated llvm-20 llvm-20-dev clang-20
+          # The IR-emission spike (tests/selfhost) shells out to a bare `clang` to
+          # compile text .ll; macOS ships one via Xcode, Linux does not. Symlink the
+          # versioned clang-20 onto PATH as `clang`.
+          ln -sf "$(command -v clang-20)" /usr/local/bin/clang
 
       - name: Install uv from Astral
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
@@ -106,7 +110,11 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg allow-insecure=yes] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee /etc/apt/sources.list.d/llvm.list
           echo "deb-src [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg allow-insecure=yes] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee -a /etc/apt/sources.list.d/llvm.list
           apt-get update -o Acquire::AllowInsecureRepositories=true
-          apt-get install -y --allow-unauthenticated llvm-20 llvm-20-dev
+          apt-get install -y --allow-unauthenticated llvm-20 llvm-20-dev clang-20
+          # The IR-emission spike (tests/selfhost) shells out to a bare `clang` to
+          # compile text .ll; macOS ships one via Xcode, Linux does not. Symlink the
+          # versioned clang-20 onto PATH as `clang`.
+          ln -sf "$(command -v clang-20)" /usr/local/bin/clang
 
       - name: Install uv from Astral
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
@@ -206,7 +214,11 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg allow-insecure=yes] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee /etc/apt/sources.list.d/llvm.list
           echo "deb-src [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg allow-insecure=yes] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee -a /etc/apt/sources.list.d/llvm.list
           apt-get update -o Acquire::AllowInsecureRepositories=true
-          apt-get install -y --allow-unauthenticated llvm-20 llvm-20-dev
+          apt-get install -y --allow-unauthenticated llvm-20 llvm-20-dev clang-20
+          # The IR-emission spike (tests/selfhost) shells out to a bare `clang` to
+          # compile text .ll; macOS ships one via Xcode, Linux does not. Symlink the
+          # versioned clang-20 onto PATH as `clang`.
+          ln -sf "$(command -v clang-20)" /usr/local/bin/clang
 
       - name: Install uv from Astral
         run: |
