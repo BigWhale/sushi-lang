@@ -35,7 +35,7 @@ if typing.TYPE_CHECKING:
 RESERVED_EXTERNS: dict[str, tuple] = {
     "strlen":  ((BuiltinType.STRING,), BuiltinType.I64),
     "strcmp":  ((ForeignPtrType(), ForeignPtrType()), BuiltinType.I32),
-    "memcmp":  ((ForeignPtrType(), ForeignPtrType(), BuiltinType.I32), BuiltinType.I32),
+    "memcmp":  ((ForeignPtrType(), ForeignPtrType(), BuiltinType.I64), BuiltinType.I32),
     "sprintf": ((ForeignPtrType(), ForeignPtrType()), BuiltinType.I32),
     "printf":  ((ForeignPtrType(),), BuiltinType.I32),
     "malloc":  ((BuiltinType.I64,), ForeignPtrType()),

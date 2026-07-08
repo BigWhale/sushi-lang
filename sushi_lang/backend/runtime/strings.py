@@ -112,8 +112,10 @@ class StringOperations:
 
         # Block for checking data when sizes match
         self.codegen.builder.position_at_end(check_data_block)
-        # Use memcmp to compare data
-        memcmp_result = self.codegen.builder.call(self.codegen.runtime.libc_strings.memcmp, [lhs_data, rhs_data, lhs_size])
+        # Use memcmp to compare data. memcmp's n is size_t (i64); zero-extend the
+        # i32 string size so the full 64-bit length register is defined (issue #149).
+        lhs_size_n = self.codegen.builder.zext(lhs_size, self.codegen.types.i64)
+        memcmp_result = self.codegen.builder.call(self.codegen.runtime.libc_strings.memcmp, [lhs_data, rhs_data, lhs_size_n])
         data_equal = self.codegen.builder.icmp_signed('==', memcmp_result, ir.Constant(self.codegen.i32, 0))
         self.codegen.builder.branch(merge_block)
 
