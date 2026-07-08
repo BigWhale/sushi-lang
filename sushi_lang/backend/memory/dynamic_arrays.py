@@ -147,14 +147,17 @@ class DynamicArrayManager:
         Returns:
             The alloca instruction for the array struct.
         """
-        # Resolve UnknownType to StructType if needed
+        # Resolve UnknownType to StructType/EnumType if needed
         from sushi_lang.semantics.typesys import UnknownType
         element_type = array_type.base_type
         if isinstance(element_type, UnknownType):
-            # Resolve to StructType from struct table
+            # Resolve to a concrete struct or enum from the symbol tables
             if element_type.name in self.codegen.struct_table.by_name:
                 element_type = self.codegen.struct_table.by_name[element_type.name]
+            elif element_type.name in self.codegen.enum_table.by_name:
+                element_type = self.codegen.enum_table.by_name[element_type.name]
             else:
+                from sushi_lang.internals.errors import raise_internal_error
                 raise_internal_error("CE0020", type=element_type.name)
 
         # Create LLVM struct type for the dynamic array
@@ -212,7 +215,10 @@ class DynamicArrayManager:
         if isinstance(element_type, UnknownType):
             if element_type.name in self.codegen.struct_table.by_name:
                 element_type = self.codegen.struct_table.by_name[element_type.name]
+            elif element_type.name in self.codegen.enum_table.by_name:
+                element_type = self.codegen.enum_table.by_name[element_type.name]
             else:
+                from sushi_lang.internals.errors import raise_internal_error
                 raise_internal_error("CE0020", type=element_type.name)
 
         descriptor = DynamicArrayDescriptor(
