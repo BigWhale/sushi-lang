@@ -170,6 +170,9 @@ class StringOperations:
         malloc_func = self.codegen.get_malloc_func()
         total_size_i64 = self.codegen.builder.zext(total_size, ir.IntType(INT64_BIT_WIDTH))
         new_data = self.codegen.builder.call(malloc_func, [total_size_i64])
+        # If emitted inside a print/println argument, this concat buffer is a temporary
+        # to free after output (#141). No-op elsewhere.
+        self.codegen.register_string_temp(new_data)
 
         # Copy first string using llvm.memcpy intrinsic
         memcpy_fn = self.codegen.module.declare_intrinsic(
