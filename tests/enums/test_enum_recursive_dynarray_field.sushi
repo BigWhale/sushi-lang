@@ -1,0 +1,34 @@
+# Test: a recursive enum whose variant holds a dynamic array of itself
+# (Arr(MsgValue[])). Issue #136 lifted CE2059, so this shape now compiles.
+# Guards against issue #139 regressing to a compile-time destructor-emission crash:
+# the self-referential dtor(MsgValue) -> dtor(MsgValue[]) -> dtor(MsgValue) chain must
+# terminate, and a nested value must build, traverse, and produce correct output.
+# NOTE: recursive/nested RAII cleanup still leaks the inner arrays at scope exit
+# (issue #139, open) -- not observable through the stdout suite; tracked separately.
+# EXPECT_STDOUT_EXACT: "10\n"
+
+enum MsgValue:
+    Int(i32)
+    Arr(MsgValue[])
+
+fn sum_value(MsgValue v) i32:
+    match v:
+        MsgValue.Int(n) ->
+            return Result.Ok(n)
+        MsgValue.Arr(items) ->
+            let i32 total = 0
+            foreach(child in items.iter()):
+                total := total + sum_value(child).realise(0)
+            return Result.Ok(total)
+
+fn run_test() i32:
+    let MsgValue leaf_a = MsgValue.Arr(from([MsgValue.Int(1), MsgValue.Int(2)]))
+    let MsgValue leaf_b = MsgValue.Arr(from([MsgValue.Int(3), MsgValue.Int(4)]))
+    let MsgValue root = MsgValue.Arr(from([leaf_a, leaf_b]))
+    let i32 s = sum_value(root).realise(-1)
+    println("{s}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)
