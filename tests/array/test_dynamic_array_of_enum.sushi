@@ -1,0 +1,27 @@
+# Test: a dynamic array whose element type is an enum (issue #136 follow-up).
+# Resolving the array element against the enum table was previously an internal crash.
+# EXPECT_STDOUT_EXACT: "3\n"
+
+enum Color:
+    Red
+    Green
+    Blue
+
+fn label(Color c) i32:
+    match c:
+        Color.Red ->
+            return Result.Ok(1)
+        Color.Green ->
+            return Result.Ok(2)
+        Color.Blue ->
+            return Result.Ok(3)
+
+fn run() i32:
+    let Color[] xs = from([Color.Red, Color.Green, Color.Blue])
+    let i32 last = label(xs[2]).realise(0)
+    println("{last}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run().realise(99)
+    return Result.Ok(r)

@@ -180,7 +180,8 @@ The hash function is auto-derived for all types:
 
 ## Known Limitations
 
-- Enum variants with dynamic array fields cause type system errors
+- Storing an owning value (a struct/enum with a dynamic-array field, `List<T>`, or `Own<T>`) as a
+  map value currently crashes at runtime on `get`/`free` (issue #140)
 - Keys must be hashable (implement `.hash() -> u64`)
 - `.rehash()` takes no arguments; it rebuilds at the current capacity (cannot resize to a chosen capacity)
 - `.keys()`/`.values()`/`.entries()` require the receiver to be a plain variable (no chaining)

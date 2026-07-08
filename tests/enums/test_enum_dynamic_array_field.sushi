@@ -1,0 +1,31 @@
+# Test: enum variant holding a dynamic-array field (issue #136)
+# The enum moves by value into total(), which owns and RAII-frees the inner array.
+# EXPECT_STDOUT_EXACT: "3 60\n"
+
+enum Value:
+    Empty
+    Ints(i32[])
+
+fn total(Value v) i32:
+    match v:
+        Value.Empty ->
+            return Result.Ok(0)
+        Value.Ints(arr) ->
+            let i32 count = arr.len()
+            let i32 sum = 0
+            foreach(n in arr.iter()):
+                sum := sum + n
+            println("{count} {sum}")
+            return Result.Ok(sum)
+
+fn run_test() i32:
+    let i32[] data = from([10, 20, 30])
+    let Value v = Value.Ints(data)
+    let i32 s = total(v).realise(0)
+    if (s != 60):
+        return Result.Ok(1)
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)

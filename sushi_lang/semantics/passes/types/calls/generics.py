@@ -387,6 +387,19 @@ def _unify_types_for_inference(
                 return False
         return _unify_types_for_inference(param_type.ok_type, arg_type.ok_type, type_param_map)
 
+    # Case 6: Array types. Unify the element type so a T[] parameter position binds the
+    # element type parameter from a concrete i32[]/string[] argument (issue #137: T[] -> T
+    # inference). Fixed-size arrays additionally require equal size.
+    from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
+
+    if isinstance(param_type, DynamicArrayType) and isinstance(arg_type, DynamicArrayType):
+        return _unify_types_for_inference(param_type.base_type, arg_type.base_type, type_param_map)
+
+    if isinstance(param_type, ArrayType) and isinstance(arg_type, ArrayType):
+        if param_type.size != arg_type.size:
+            return False
+        return _unify_types_for_inference(param_type.base_type, arg_type.base_type, type_param_map)
+
     return False
 
 
