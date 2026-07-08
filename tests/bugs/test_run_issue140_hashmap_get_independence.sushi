@@ -1,0 +1,43 @@
+# Issue #140: the value returned by HashMap.get must be an INDEPENDENT deep copy, not a
+# view into the map. Pushing onto the returned List copy must not affect the value still
+# stored in the map (proved by a second get seeing the original length). Guards against a
+# shallow-copy regression that happens not to crash but shares the buffer.
+# https://github.com/BigWhale/sushi-lang/issues/140
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n"
+use <collections/hashmap>
+
+fn make_list() List<i32>:
+    let List<i32> xs = List.new()
+    xs.push(7)
+    return Result.Ok(xs)
+
+fn len_of(Maybe<List<i32>> m) i32:
+    match m:
+        Maybe.Some(lst) ->
+            return Result.Ok(lst.len())
+        Maybe.None ->
+            return Result.Ok(-1)
+
+fn run() i32:
+    let HashMap<i32, List<i32>> map = HashMap.new()
+    map.insert(1, make_list()??)  # stored list has length 1
+
+    # First get: grow the returned copy. If get shared the map's buffer, this would also
+    # change the stored list.
+    let Maybe<List<i32>> first = map.get(1)
+    match first:
+        Maybe.Some(copy) ->
+            copy.push(8)
+            copy.push(9)
+        Maybe.None ->
+            println("missing")
+
+    # Second get: the stored list must still have length 1 (independent buffers).
+    let i32 stored_len = len_of(map.get(1))??
+    map.free()
+    return Result.Ok(stored_len)
+
+fn main() i32:
+    println(run().realise(99))
+    return Result.Ok(0)

@@ -150,8 +150,8 @@ def emit_array_method(
 
         case "push":
             element_value = codegen.expressions.emit_expr(expr.args[0])
-            from sushi_lang.backend.expressions.memory import move_string_arg_into_container
-            move_string_arg_into_container(codegen, expr.args[0])
+            from sushi_lang.backend.expressions.memory import move_owning_arg_into_container
+            move_owning_arg_into_container(codegen, expr.args[0])
             return core.emit_dynamic_array_push(codegen, receiver_value, array_struct_type, element_value)
 
         case "pop":

@@ -517,6 +517,13 @@ class ScopeManager:
         read / container get-out, which is not registered)."""
         return name in self._string_cleanup
 
+    def is_struct_registered(self, name: str) -> bool:
+        """True if `name` is a registered owning-struct local (a struct with heap-owning
+        fields tracked for RAII cleanup). Used to decide whether handing the local to a
+        container that stores it shallowly must MOVE it, so scope exit does not double-free
+        the shared buffer (#140)."""
+        return name in self._struct_cleanup
+
     def unregister_string_cleanup(self, name: str) -> None:
         """Drop `name` from string RAII tracking (no-op if absent) (#145).
 
