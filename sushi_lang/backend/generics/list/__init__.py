@@ -116,7 +116,9 @@ def emit_list_method(
     elif method == "is_empty":
         result = emit_list_is_empty(codegen, receiver_value)
     elif method == "push":
+        from sushi_lang.backend.expressions.memory import move_string_arg_into_container
         result = emit_list_push(codegen, expr, receiver_value, receiver_type)
+        move_string_arg_into_container(codegen, expr.args[0])
     elif method == "pop":
         result = emit_list_pop(codegen, receiver_value, receiver_type)
     elif method == "get":
@@ -124,7 +126,10 @@ def emit_list_method(
     elif method == "clear":
         result = emit_list_clear(codegen, receiver_value, receiver_type)
     elif method == "insert":
+        from sushi_lang.backend.expressions.memory import move_string_arg_into_container
         result = emit_list_insert(codegen, expr, receiver_value, receiver_type)
+        if len(expr.args) >= 2:
+            move_string_arg_into_container(codegen, expr.args[1])
     elif method == "remove":
         result = emit_list_remove(codegen, expr, receiver_value, receiver_type)
     elif method == "reserve":

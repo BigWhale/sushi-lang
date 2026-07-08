@@ -1,0 +1,21 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 20
+# EXPECT_STDERR_EMPTY: true
+# Issue #145: heap string values bound to locals are freed at scope exit (no leak, no
+# double-free). join/upper/interpolation results are owned; a literal is a no-op free.
+use <collections/strings>
+
+fn main() i32:
+    let string[] parts = from(['p', 'q', 'r'])
+    let string j = ','.join(parts)
+
+    let string s = 'hello world'
+    let string u = s.upper()
+
+    let i32 x = 60
+    let string t = "x={x}"
+
+    let string lit = "literal-control"
+    let i32 control = lit.len() - lit.len()   # exercise the literal binding; 0
+
+    return Result.Ok(j.len() + u.len() + t.len() + control)

@@ -7,6 +7,7 @@ Implements the replace() method for fat pointer strings.
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc, declare_memcpy
+from ...common import build_string_struct, clone_string_to_owned
 
 
 def emit_string_replace(module: ir.Module) -> ir.Function:
@@ -240,15 +241,14 @@ def emit_string_replace(module: ir.Module) -> ir.Function:
     copy_dst_pos_phi.add_incoming(copy_dst_next, copy_inner_mismatch)
     builder.branch(copy_loop_cond)
 
-    # Copy done: build and return result string
+    # Copy done: build and return result string (freshly malloc'd -> heap-owned)
     builder = ir.IRBuilder(copy_done)
-    undef_result = ir.Constant(string_type, ir.Undefined)
-    result_with_data = builder.insert_value(undef_result, result_data, 0, name="result_with_data")
-    result_complete = builder.insert_value(result_with_data, result_size, 1, name="result_complete")
+    result_complete = build_string_struct(builder, string_type, result_data, result_size, owned=1)
     builder.ret(result_complete)
 
-    # Return original: no matches found or empty old string, return original
+    # Return original: no matches / empty old string. Clone so the result is independently
+    # owned (aliasing the input would double-free under string RAII, issue #145).
     builder = ir.IRBuilder(return_original)
-    builder.ret(func.args[0])
+    builder.ret(clone_string_to_owned(builder, module, func.args[0], string_type))
 
     return func

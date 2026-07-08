@@ -96,6 +96,14 @@ def calculate_llvm_type_size(llvm_type: 'ir.Type') -> int:
     elif isinstance(llvm_type, ir.DoubleType):
         return 8
     elif isinstance(llvm_type, ir.LiteralStructType):
+        # String fat pointer {i8*, i32, i8 owned}: use the ALIGNED sizeof (16), not the raw
+        # field sum (13). The owned byte at offset 12 must survive a round-trip through an
+        # enum/Result/Maybe payload, whose data array is sized from this (#145).
+        els = llvm_type.elements
+        if (len(els) == 3 and isinstance(els[0], ir.PointerType)
+                and isinstance(els[1], ir.IntType) and els[1].width == 32
+                and isinstance(els[2], ir.IntType) and els[2].width == 8):
+            return 16
         # For structs (including enums), calculate total size
         total_size = 0
         for element_type in llvm_type.elements:
@@ -369,6 +377,20 @@ def deep_copy_if_owning_struct(codegen: 'LLVMCodegen', value: ir.Value, semantic
     if isinstance(resolved, StructType) and codegen.dynamic_arrays.struct_needs_cleanup(resolved):
         return deep_copy_struct(codegen, value, resolved)
     return value
+
+
+def move_string_arg_into_container(codegen: 'LLVMCodegen', arg_ast) -> None:
+    """Mark a bare-Name owning string local as moved when it is stored into a container (#145).
+
+    `container.push(s)` / `.insert(s)` / `map.insert(k, s)` transfers ownership of the string
+    buffer to the container (which frees it on `.destroy()`/`.free()`/scope exit). The source
+    local `s` must therefore be moved so scope-exit RAII does not ALSO free the same buffer
+    (double-free). Only a bare Name of a currently-registered owning string local is moved;
+    a literal / method result / other expression is a fresh value the container simply owns.
+    """
+    from sushi_lang.semantics.ast import Name
+    if isinstance(arg_ast, Name) and codegen.memory.is_string_registered(arg_ast.id):
+        codegen.moves.mark(arg_ast.id)
 
 
 def deep_copy_struct(codegen: 'LLVMCodegen', struct_value: ir.Value, struct_type: StructType) -> ir.Value:

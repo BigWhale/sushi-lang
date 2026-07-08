@@ -53,7 +53,10 @@ class StringOperations:
         zero = ir.Constant(self.codegen.i32, 0)
         data_ptr = self.codegen.builder.gep(global_str, [zero, zero])
 
-        # Build fat pointer struct: {i8* data, i32 size}
+        # Build fat pointer struct: {i8* data, i32 size, i8 owned}
+        # Literals are backed by a deduplicated global -> owned=0 (RAII must NEVER free it).
+        # The owned field must be set concretely (not left undef): on ARM64 `size` and
+        # `owned` share one by-value argument register, so an undef owned poisons `size`.
         string_struct_type = self.codegen.types.string_struct
         size = len(string_value.encode('utf-8'))
         size_value = ir.Constant(self.codegen.i32, size)
@@ -61,7 +64,9 @@ class StringOperations:
         # Use insertvalue to build the struct
         undef_struct = ir.Constant(string_struct_type, ir.Undefined)
         struct_with_data = self.codegen.builder.insert_value(undef_struct, data_ptr, 0)
-        struct_complete = self.codegen.builder.insert_value(struct_with_data, size_value, 1)
+        struct_with_size = self.codegen.builder.insert_value(struct_with_data, size_value, 1)
+        struct_complete = self.codegen.builder.insert_value(
+            struct_with_size, ir.Constant(self.codegen.i8, 0), 2)
 
         return struct_complete
 
@@ -186,11 +191,13 @@ class StringOperations:
         offset_ptr = self.codegen.builder.gep(new_data, [size1])
         self.codegen.builder.call(memcpy_fn, [offset_ptr, data2, size2, is_volatile])
 
-        # Build and return fat pointer struct
+        # Build and return fat pointer struct (freshly malloc'd -> heap-owned)
         string_struct_type = self.codegen.types.string_struct
         undef_struct = ir.Constant(string_struct_type, ir.Undefined)
         struct_with_data = self.codegen.builder.insert_value(undef_struct, new_data, 0)
-        struct_complete = self.codegen.builder.insert_value(struct_with_data, total_size, 1)
+        struct_with_size = self.codegen.builder.insert_value(struct_with_data, total_size, 1)
+        struct_complete = self.codegen.builder.insert_value(
+            struct_with_size, ir.Constant(self.codegen.i8, 1), 2)
 
         return struct_complete
 
@@ -236,17 +243,24 @@ class StringOperations:
 
         return c_str
 
-    def emit_cstr_to_fat_pointer(self, c_str: ir.Value) -> ir.Value:
+    def emit_cstr_to_fat_pointer(self, c_str: ir.Value, owned: int) -> ir.Value:
         """Convert null-terminated C string to fat pointer struct.
 
         This is the inverse of emit_to_cstr() - used when C functions
         return strings that need to be converted to fat pointers.
 
+        `owned` is REQUIRED and wraps `c_str` in place (no copy): pass 1 when `c_str`
+        is a fresh Sushi-owned heap buffer the RAII path must free (e.g. an int/float
+        to-string conversion buffer); pass 0 when it is foreign / borrowed memory Sushi
+        must never free. The FFI copy-to-owned policy (issue #145) is applied at the FFI
+        call site by copying the foreign buffer first, then wrapping the copy with owned=1.
+
         Args:
             c_str: Null-terminated i8* from C function.
+            owned: 1 if Sushi owns `c_str` (RAII frees it), 0 if it is foreign/borrowed.
 
         Returns:
-            Fat pointer struct {i8* data, i32 size}.
+            Fat pointer struct {i8* data, i32 size, i8 owned}.
 
         Raises:
             AssertionError: If required runtime functions are not declared.
@@ -257,11 +271,13 @@ class StringOperations:
         # Use strlen to get the size
         size = self.codegen.builder.call(self.codegen.runtime.libc_strings.strlen, [c_str])
 
-        # Build fat pointer struct: {i8* data, i32 size}
+        # Build fat pointer struct: {i8* data, i32 size, i8 owned}
         string_struct_type = self.codegen.types.string_struct
         undef_struct = ir.Constant(string_struct_type, ir.Undefined)
         struct_with_data = self.codegen.builder.insert_value(undef_struct, c_str, 0)
-        struct_complete = self.codegen.builder.insert_value(struct_with_data, size, 1)
+        struct_with_size = self.codegen.builder.insert_value(struct_with_data, size, 1)
+        struct_complete = self.codegen.builder.insert_value(
+            struct_with_size, ir.Constant(self.codegen.i8, 1 if owned else 0), 2)
 
         return struct_complete
 

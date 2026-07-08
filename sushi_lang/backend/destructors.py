@@ -45,11 +45,16 @@ def emit_value_destructor(
         value_ptr: Pointer to the value to destroy (not the value itself)
         value_type: The Sushi type of the value
     """
-    # Primitives and strings: no cleanup needed
+    # Strings: runtime-guarded free of the heap buffer via the owned bit (#145). A literal /
+    # borrow carries owned=0, making the free a no-op -- same data-driven discipline as the
+    # closure drop_ptr (ownership can't be told from the uniform `string` type alone).
     if isinstance(value_type, BuiltinType):
-        if value_type in (BuiltinType.STRING, BuiltinType.STDIN, BuiltinType.STDOUT,
+        if value_type == BuiltinType.STRING:
+            emit_string_destructor(codegen, builder, value_ptr)
+            return
+        if value_type in (BuiltinType.STDIN, BuiltinType.STDOUT,
                           BuiltinType.STDERR, BuiltinType.FILE):
-            # Strings and I/O types don't need cleanup
+            # I/O handle types don't need cleanup
             return
         # All numeric types and bool: no cleanup
         return
@@ -113,6 +118,43 @@ def emit_function_value_destructor_from_value(
         drop_fn_ty = ir.FunctionType(ir.VoidType(), [codegen.types.str_ptr])
         drop_callee = builder.bitcast(drop_ptr, ir.PointerType(drop_fn_ty), name="closure_drop_fn")
         builder.call(drop_callee, [env_ptr])
+
+
+def emit_string_destructor(
+    codegen: LLVMCodegen,
+    builder: ir.IRBuilder,
+    value_ptr: ir.Value
+) -> None:
+    """Runtime-guarded free of a string's heap buffer via the owned bit (#145).
+
+    `value_ptr` points at the `{i8* data, i32 size, i8 owned}` fat pointer. The free is
+    `if (owned != 0) free(data)` -- a literal/borrow carries owned=0, so this is a guarded
+    no-op for it. This makes strings inside structs / arrays / List / HashMap / enum
+    variants free correctly through the ordinary recursive destructor, with no per-container
+    special-casing (the bit travels with the value).
+    """
+    fat = builder.load(value_ptr, name="string_val")
+    emit_string_destructor_from_value(codegen, builder, fat)
+
+
+def emit_string_destructor_from_value(
+    codegen: LLVMCodegen,
+    builder: ir.IRBuilder,
+    fat: ir.Value
+) -> None:
+    """Owned-bit-guarded free given the SSA fat value directly (`if owned: free(data)`) (#145).
+
+    Used to free an unnamed fresh string temporary that has no alloca -- e.g. an
+    interpolation intermediate (a to-string or intermediate-concat buffer) consumed by the
+    next concat. A borrowed part (owned bit set but aliasing another owner) must NOT be
+    passed here; only genuinely fresh temporaries.
+    """
+    owned = builder.extract_value(fat, 2, name="string_owned")
+    is_owned = builder.icmp_unsigned("!=", owned, ir.Constant(owned.type, 0))
+    with builder.if_then(is_owned):
+        data_ptr = builder.extract_value(fat, 0, name="string_data")
+        free_fn = codegen.get_free_func()
+        builder.call(free_fn, [data_ptr])
 
 
 def _emit_dynamic_array_destructor(

@@ -1,0 +1,30 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: HELLO
+# EXPECT_STDOUT_CONTAINS: WORLD
+# EXPECT_STDERR_EMPTY: true
+# Issue #145: string move semantics -- return, alias, and container push each transfer
+# ownership so the buffer is freed exactly once (a double-free would SIGABRT this test).
+use <collections/strings>
+
+fn make(string base) string:
+    # returned heap string escapes: the caller owns and frees it (return-move)
+    return Result.Ok(base.upper())
+
+fn run() i32:
+    let string a = make("hello")??
+    let string b = a            # alias: MOVE, only b frees
+    println(b)
+
+    let string[] xs = new()
+    let string w = make("world")??
+    xs.push(w)                  # move into container: xs owns w, no double-free
+    foreach(item in xs.iter()):
+        println(item)
+    xs.destroy()
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 rc = run().realise(1)
+    return Result.Ok(rc)

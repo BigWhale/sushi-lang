@@ -7,7 +7,7 @@ Implements the strip_prefix() and strip_suffix() methods for fat pointer strings
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc, declare_memcpy
-from ...common import build_string_struct
+from ...common import build_string_struct, clone_string_to_owned
 
 
 def emit_string_strip_prefix(module: ir.Module) -> ir.Function:
@@ -99,11 +99,13 @@ def emit_string_strip_prefix(module: ir.Module) -> ir.Function:
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [result_data, new_data_ptr, new_size, is_volatile])
 
-    result = build_string_struct(builder, string_type, result_data, new_size)
+    result = build_string_struct(builder, string_type, result_data, new_size, owned=1)
     builder.ret(result)
 
     builder = ir.IRBuilder(return_original)
-    builder.ret(func.args[0])
+    # Clone rather than alias the input: an aliased owned=1 buffer would double-free under
+    # string RAII (issue #145). Every string method returns a fresh, independently owned string.
+    builder.ret(clone_string_to_owned(builder, module, func.args[0], string_type))
 
     return func
 
@@ -198,10 +200,12 @@ def emit_string_strip_suffix(module: ir.Module) -> ir.Function:
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [result_data, str_data, new_size, is_volatile])
 
-    result = build_string_struct(builder, string_type, result_data, new_size)
+    result = build_string_struct(builder, string_type, result_data, new_size, owned=1)
     builder.ret(result)
 
     builder = ir.IRBuilder(return_original)
-    builder.ret(func.args[0])
+    # Clone rather than alias the input: an aliased owned=1 buffer would double-free under
+    # string RAII (issue #145). Every string method returns a fresh, independently owned string.
+    builder.ret(clone_string_to_owned(builder, module, func.args[0], string_type))
 
     return func

@@ -159,7 +159,7 @@ def emit_string_cap(module: ir.Module) -> ir.Function:
 
     # Empty return: return empty string
     builder = ir.IRBuilder(empty_return)
-    result = IRStructBuilder.build_fat_pointer(builder, string_type, new_data, size)
+    result = IRStructBuilder.build_fat_pointer(builder, string_type, new_data, size, owned=1)
     builder.ret(result)
 
     # First character block: capitalize first character
@@ -199,7 +199,7 @@ def emit_string_cap(module: ir.Module) -> ir.Function:
 
     # Loop end: build and return fat pointer
     builder = ir.IRBuilder(loop_end_block)
-    result = IRStructBuilder.build_fat_pointer(builder, string_type, new_data, size)
+    result = IRStructBuilder.build_fat_pointer(builder, string_type, new_data, size, owned=1)
     builder.ret(result)
 
     return func

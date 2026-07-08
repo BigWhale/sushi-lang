@@ -376,7 +376,7 @@ def emit_string_char_at(module: ir.Module) -> ir.Function:
     # Invalid index: return empty string
     builder.position_at_end(invalid_index_block)
     empty_data = builder.call(malloc, [ir.Constant(i64, 1)], name="empty_data")
-    result_invalid = build_string_struct(builder, string_type, empty_data, zero)
+    result_invalid = build_string_struct(builder, string_type, empty_data, zero, owned=1)
     builder.branch(merge_block)
 
     # Merge: phi node to select result

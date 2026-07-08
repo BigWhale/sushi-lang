@@ -186,7 +186,7 @@ class FormattingOperations:
         self.codegen.builder.call(self.codegen.runtime.libc_strings.sprintf, [buffer, fmt_str, converted_value])
 
         # Convert C string to fat pointer struct
-        return self.codegen.runtime.strings.emit_cstr_to_fat_pointer(buffer)
+        return self.codegen.runtime.strings.emit_cstr_to_fat_pointer(buffer, owned=1)
 
     def emit_float_to_string(self, float_value: ir.Value, is_double: bool) -> ir.Value:
         """Generate float to string conversion using sprintf.
@@ -220,7 +220,7 @@ class FormattingOperations:
         self.codegen.builder.call(self.codegen.runtime.libc_strings.sprintf, [buffer, fmt_str, float_value])
 
         # Convert C string to fat pointer struct
-        return self.codegen.runtime.strings.emit_cstr_to_fat_pointer(buffer)
+        return self.codegen.runtime.strings.emit_cstr_to_fat_pointer(buffer, owned=1)
 
     def emit_bool_to_string(self, bool_value: ir.Value) -> ir.Value:
         """Generate bool to string conversion.

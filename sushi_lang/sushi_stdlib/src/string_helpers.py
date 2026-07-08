@@ -86,17 +86,23 @@ def allocate_string_buffer(builder: ir.IRBuilder, malloc_fn: ir.Function, size: 
 def cstr_to_fat_pointer(
     module: ir.Module,
     builder: ir.IRBuilder,
-    c_str: ir.Value
+    c_str: ir.Value,
+    owned: int,
 ) -> ir.Value:
-    """Convert null-terminated C string to fat pointer struct {i8*, i32}.
+    """Convert null-terminated C string to fat pointer struct {i8*, i32, i8 owned}.
+
+    `owned` is REQUIRED (issue #145): 1 if `c_str` is a fresh Sushi-owned heap buffer the
+    RAII path must free, 0 if it is foreign/borrowed memory (a literal global, or a pointer
+    into `environ`) that must never be freed. Wraps `c_str` in place (no copy).
 
     Args:
         module: The LLVM module (for declaring functions).
         builder: The IR builder for creating instructions.
         c_str: Null-terminated i8* from C function.
+        owned: 1 = heap (RAII frees), 0 = foreign/borrowed (never freed).
 
     Returns:
-        Fat pointer struct {i8* data, i32 size}.
+        Fat pointer struct {i8* data, i32 size, i8 owned}.
     """
     # Declare strlen
     strlen_fn = declare_strlen(module)
@@ -108,31 +114,37 @@ def cstr_to_fat_pointer(
     i32 = ir.IntType(32)
     size = builder.trunc(size_i64, i32, name="str_size")
 
-    return cstr_to_fat_pointer_with_len(builder, c_str, size)
+    return cstr_to_fat_pointer_with_len(builder, c_str, size, owned)
 
 
 def cstr_to_fat_pointer_with_len(
     builder: ir.IRBuilder,
     c_str: ir.Value,
-    length: ir.Value
+    length: ir.Value,
+    owned: int,
 ) -> ir.Value:
     """Convert C string to fat pointer struct using pre-computed length.
+
+    `owned` is REQUIRED (issue #145): 1 = heap (RAII frees), 0 = foreign/borrowed.
 
     Args:
         builder: The IR builder for creating instructions.
         c_str: Null-terminated i8* from C function.
         length: Pre-computed i32 length of the string.
+        owned: 1 = heap (RAII frees), 0 = foreign/borrowed (never freed).
 
     Returns:
-        Fat pointer struct {i8* data, i32 size}.
+        Fat pointer struct {i8* data, i32 size, i8 owned}.
     """
-    # Build fat pointer struct: {i8* data, i32 size}
+    # Build fat pointer struct: {i8* data, i32 size, i8 owned}
     i8_ptr = ir.IntType(8).as_pointer()
     i32 = ir.IntType(32)
-    string_struct_type = ir.LiteralStructType([i8_ptr, i32])
+    i8 = ir.IntType(8)
+    string_struct_type = ir.LiteralStructType([i8_ptr, i32, i8])  # {data, size, owned} (#145)
     undef_struct = ir.Constant(string_struct_type, ir.Undefined)
     struct_with_data = builder.insert_value(undef_struct, c_str, 0, name="str_with_data")
-    struct_complete = builder.insert_value(struct_with_data, length, 1, name="str_complete")
+    struct_with_size = builder.insert_value(struct_with_data, length, 1, name="str_with_size")
+    struct_complete = builder.insert_value(struct_with_size, ir.Constant(i8, 1 if owned else 0), 2, name="str_complete")
 
     return struct_complete
 

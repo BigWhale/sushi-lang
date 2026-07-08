@@ -33,18 +33,25 @@ def get_basic_types() -> Tuple[ir.IntType, ir.PointerType, ir.IntType, ir.IntTyp
 # ==============================================================================
 
 def get_string_type() -> ir.LiteralStructType:
-    """Get the string fat pointer type: { i8*, i32 }
+    """Get the string fat pointer type: { i8*, i32, i8 }
 
     Sushi strings are represented as fat pointers containing:
     - Field 0: i8* data - pointer to string bytes
     - Field 1: i32 size - size in bytes
+    - Field 2: i8 owned - runtime ownership discriminator (issue #145): 1 = heap
+      (malloc'd, freed by RAII), 0 = literal/borrow (global-backed or aliased, never freed)
+
+    LLVM sizeof stays 16 (already alignment-padded), so this is byte-compatible with the
+    old { i8*, i32 } layout everywhere a string embeds (structs, enums, Result payloads).
+    Must stay in lockstep with backend mapping.py:_create_string_struct_type.
 
     Returns:
         String fat pointer struct type
     """
-    i8_ptr = ir.IntType(8).as_pointer()
+    i8 = ir.IntType(8)
+    i8_ptr = i8.as_pointer()
     i32 = ir.IntType(32)
-    return ir.LiteralStructType([i8_ptr, i32])
+    return ir.LiteralStructType([i8_ptr, i32, i8])
 
 
 def get_string_types() -> Tuple[ir.IntType, ir.PointerType, ir.IntType, ir.IntType, ir.LiteralStructType]:
@@ -173,7 +180,7 @@ def _process_output_size_bytes() -> int:
     caller's variable type (CE0017). Kept as an algorithm (not a magic number) so it tracks
     the ABI rules if the field set ever changes.
     """
-    string_size = 12  # fat pointer {i8*, i32} = 8 + 4 (backend FAT_POINTER_SIZE_BYTES)
+    string_size = 16  # fat pointer {i8*, i32, i8 owned} aligned sizeof (backend FAT_POINTER_SIZE_BYTES) (#145)
     fields = [(4, 4), (string_size, 8), (string_size, 8)]
     offset = 0
     max_align = 1

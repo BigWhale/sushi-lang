@@ -71,4 +71,4 @@ def _emit_readln(codegen: Any, expr: MethodCall, file_ptr: ir.Value) -> ir.Value
     # Convert C string to fat pointer, passing pre-computed length
     final_len_val = codegen.builder.load(final_length)
     from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer_with_len
-    return cstr_to_fat_pointer_with_len(codegen.builder, buffer, final_len_val)
+    return cstr_to_fat_pointer_with_len(codegen.builder, buffer, final_len_val, owned=1)

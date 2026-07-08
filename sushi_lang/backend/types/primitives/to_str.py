@@ -218,7 +218,7 @@ def _generate_bool_to_str(module: ir.Module) -> None:
     i8 = ir.IntType(INT8_BIT_WIDTH)
     i8_ptr = i8.as_pointer()
     i32 = ir.IntType(INT32_BIT_WIDTH)
-    string_struct = ir.LiteralStructType([i8_ptr, i32])
+    string_struct = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
 
     # Function signature: sushi_bool_to_str(i8 value) -> {i8*, i32}
     fn_ty = ir.FunctionType(string_struct, [i8])
@@ -238,7 +238,7 @@ def _generate_string_to_str(module: ir.Module) -> None:
     """Generate string.to_str() -> string (identity operation)"""
     i8_ptr = ir.IntType(INT8_BIT_WIDTH).as_pointer()
     i32 = ir.IntType(INT32_BIT_WIDTH)
-    string_struct = ir.LiteralStructType([i8_ptr, i32])
+    string_struct = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
 
     # Function signature: sushi_string_to_str({i8*, i32} value) -> {i8*, i32}
     fn_ty = ir.FunctionType(string_struct, [string_struct])
@@ -270,7 +270,7 @@ def _generate_integer_to_str(
     """
     i8_ptr = ir.IntType(INT8_BIT_WIDTH).as_pointer()
     i32 = ir.IntType(INT32_BIT_WIDTH)
-    string_struct = ir.LiteralStructType([i8_ptr, i32])
+    string_struct = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
 
     # Function signature: sushi_{type}_to_str(int_type value) -> {i8*, i32}
     fn_ty = ir.FunctionType(string_struct, [int_type])
@@ -304,7 +304,7 @@ def _generate_float_to_str(
     """
     i8_ptr = ir.IntType(INT8_BIT_WIDTH).as_pointer()
     i32 = ir.IntType(INT32_BIT_WIDTH)
-    string_struct = ir.LiteralStructType([i8_ptr, i32])
+    string_struct = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
 
     # Function signature: sushi_{type}_to_str(float_type value) -> {i8*, i32}
     fn_ty = ir.FunctionType(string_struct, [float_type])

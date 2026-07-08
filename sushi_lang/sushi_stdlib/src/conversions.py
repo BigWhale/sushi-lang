@@ -100,7 +100,7 @@ def emit_integer_to_string(
     builder.call(sprintf_fn, [buffer, fmt_str, converted_value])
 
     # Convert C string to fat pointer struct
-    return cstr_to_fat_pointer(module, builder, buffer)
+    return cstr_to_fat_pointer(module, builder, buffer, owned=1)
 
 
 # ==============================================================================
@@ -144,7 +144,7 @@ def emit_float_to_string(
     builder.call(sprintf_fn, [buffer, fmt_str, float_value])
 
     # Convert C string to fat pointer struct
-    return cstr_to_fat_pointer(module, builder, buffer)
+    return cstr_to_fat_pointer(module, builder, buffer, owned=1)
 
 
 # ==============================================================================
@@ -181,4 +181,4 @@ def emit_bool_to_string(
     selected_cstr = builder.select(bool_i1, true_cstr, false_cstr, name="bool_cstr")
 
     # Convert to fat pointer struct
-    return cstr_to_fat_pointer(module, builder, selected_cstr)
+    return cstr_to_fat_pointer(module, builder, selected_cstr, owned=0)

@@ -307,7 +307,7 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     builder.call(memcpy, [substr_data_raw, start_ptr_gep, substr_size, is_volatile])
 
     # Build substring struct
-    substr_complete = build_string_struct(builder, string_type, substr_data_raw, substr_size)
+    substr_complete = build_string_struct(builder, string_type, substr_data_raw, substr_size, owned=1)
 
     # Store in array
     array_idx = builder.load(array_idx_ptr, name="array_idx")
@@ -342,7 +342,7 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     builder.call(memcpy, [final_substr_data_raw, final_start_ptr, final_substr_size, is_volatile])
 
     # Build final substring struct
-    final_complete = build_string_struct(builder, string_type, final_substr_data_raw, final_substr_size)
+    final_complete = build_string_struct(builder, string_type, final_substr_data_raw, final_substr_size, owned=1)
 
     # Store final substring
     final_array_idx = builder.load(array_idx_ptr, name="final_array_idx")
@@ -421,7 +421,7 @@ def emit_string_join(module: ir.Module) -> ir.Function:
     builder.cbranch(is_empty, empty_array_block, calc_size_block)
 
     builder.position_at_end(empty_array_block)
-    empty_string = build_string_struct(builder, string_type, ir.Constant(i8_ptr, None), ir.Constant(i32, 0))
+    empty_string = build_string_struct(builder, string_type, ir.Constant(i8_ptr, None), ir.Constant(i32, 0), owned=0)
     builder.branch(return_block)
 
     builder.position_at_end(calc_size_block)
@@ -437,7 +437,7 @@ def emit_string_join(module: ir.Module) -> ir.Function:
     single_copy = builder.call(malloc, [single_size_i64], name="single_copy")
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [single_copy, single_data, single_size, is_volatile])
-    single_result = build_string_struct(builder, string_type, single_copy, single_size)
+    single_result = build_string_struct(builder, string_type, single_copy, single_size, owned=1)
     builder.branch(return_block)
 
     builder.position_at_end(size_loop_block)
@@ -517,7 +517,7 @@ def emit_string_join(module: ir.Module) -> ir.Function:
     builder.branch(copy_loop_block)
 
     builder.position_at_end(copy_done_block)
-    join_result = build_string_struct(builder, string_type, result_data, final_size)
+    join_result = build_string_struct(builder, string_type, result_data, final_size, owned=1)
     builder.branch(return_block)
 
     builder.position_at_end(return_block)

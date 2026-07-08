@@ -1,0 +1,27 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: ok:good
+# EXPECT_STDOUT_CONTAINS: failed
+# EXPECT_STDERR_EMPTY: true
+# Issue #145: an owned string local is live when a later `??` short-circuits. The early-exit
+# RAII must free it exactly once. The string local is registered BEFORE its `??`-containing
+# initializer runs, so its slot is zero-initialised (owned=0) to make a premature free on
+# the propagation path a no-op (else a garbage owned byte would free a wild pointer).
+use <collections/strings>
+
+fn check(string s) string:
+    if (s == "boom"):
+        return Result.Err(StdError.Error)
+    return Result.Ok("ok:{s}")
+
+fn proc() string:
+    let string c0 = check("good")??
+    println(c0)
+    let string c1 = check("boom")??
+    println(c1)
+    return Result.Ok("done")
+
+fn main() i32:
+    let string o = proc().realise("failed")
+    println(o)
+    return Result.Ok(0)

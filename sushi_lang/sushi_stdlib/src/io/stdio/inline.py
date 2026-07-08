@@ -71,7 +71,7 @@ def _emit_readln(codegen: Any, expr: MethodCall) -> ir.Value:
     empty_buf = builder.call(malloc_func, [ir.Constant(i64, 1)], name="empty_buf")
     builder.store(ir.Constant(codegen.i8, 0), empty_buf)
     from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer_with_len
-    empty_fat = cstr_to_fat_pointer_with_len(builder, empty_buf, ir.Constant(codegen.i32, 0))
+    empty_fat = cstr_to_fat_pointer_with_len(builder, empty_buf, ir.Constant(codegen.i32, 0), owned=0)
 
     # We need a merge block after all paths for the final return
     merge_block = builder.append_basic_block(name="readln_merge")
@@ -133,13 +133,13 @@ def _emit_readln(codegen: Any, expr: MethodCall) -> ir.Value:
     # Build fat pointer for success path and branch to merge
     builder.position_at_end(to_merge_block)
     final_len_val = builder.load(final_length, name="final_len")
-    success_fat = cstr_to_fat_pointer_with_len(builder, lineptr_val, final_len_val)
+    success_fat = cstr_to_fat_pointer_with_len(builder, lineptr_val, final_len_val, owned=1)
     builder.branch(merge_block)
 
     # Merge block: phi node to select between EOF and success results
     builder.position_at_end(merge_block)
     i8_ptr_ty = codegen.i8.as_pointer()
-    string_struct_ty = ir.LiteralStructType([i8_ptr_ty, codegen.i32])
+    string_struct_ty = ir.LiteralStructType([i8_ptr_ty, codegen.i32, ir.IntType(8)])  # {data, size, owned} (#145)
     result_phi = builder.phi(string_struct_ty, name="readln_result")
     result_phi.add_incoming(empty_fat, eof_ret_block)
     result_phi.add_incoming(success_fat, to_merge_block)

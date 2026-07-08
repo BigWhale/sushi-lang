@@ -497,7 +497,7 @@ def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
         return ir.Constant(codegen.i32, 0)
     # `string` return: convert C char* back to a Sushi fat pointer.
     if isinstance(ret_ty, BuiltinType) and ret_ty == BuiltinType.STRING:
-        return codegen.runtime.strings.emit_cstr_to_fat_pointer(call_result)
+        return codegen.runtime.strings.emit_cstr_to_fat_pointer(call_result, owned=0)
     return call_result
 
 

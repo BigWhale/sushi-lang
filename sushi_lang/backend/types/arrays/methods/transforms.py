@@ -98,11 +98,12 @@ def emit_byte_array_to_string(codegen: "LLVMCodegen", call: MethodCall, receiver
     null_term_ptr = codegen.builder.gep(string_ptr, [byte_count])
     codegen.builder.store(ZERO_I8, null_term_ptr)
 
-    # Build fat pointer struct: {i8* data, i32 size}
+    # Build fat pointer struct: {i8* data, i32 size, i8 owned} (freshly malloc'd -> heap)
     string_struct_type = codegen.types.string_struct
     undef_struct = ir.Constant(string_struct_type, ir.Undefined)
     struct_with_data = codegen.builder.insert_value(undef_struct, string_ptr, 0)
-    struct_complete = codegen.builder.insert_value(struct_with_data, byte_count, 1)
+    struct_with_size = codegen.builder.insert_value(struct_with_data, byte_count, 1)
+    struct_complete = codegen.builder.insert_value(struct_with_size, ir.Constant(codegen.types.i8, 1), 2)
 
     return struct_complete
 

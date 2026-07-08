@@ -69,7 +69,7 @@ def generate_getenv(module: ir.Module) -> None:
 
     # Maybe<string> type: {i32 tag, [12 x i8] data}
     # data must hold a string (12 bytes is enough for {i8*, i32} on 64-bit)
-    maybe_string_data_size = 12
+    maybe_string_data_size = 16
     maybe_string_type = ir.LiteralStructType([i32, ir.ArrayType(i8, maybe_string_data_size)])
 
     # Define function signature: sushi_getenv(string key) -> Maybe<string>
@@ -123,7 +123,7 @@ def generate_getenv(module: ir.Module) -> None:
     builder.call(memcpy_fn, [string_buffer, result_ptr, result_len, is_volatile])
 
     # Build Sushi string fat pointer using helper
-    string_complete = cstr_to_fat_pointer_with_len(builder, string_buffer, result_len)
+    string_complete = cstr_to_fat_pointer_with_len(builder, string_buffer, result_len, owned=1)
 
     # Pack string into Maybe.Some
     # Create a temporary array to hold the string

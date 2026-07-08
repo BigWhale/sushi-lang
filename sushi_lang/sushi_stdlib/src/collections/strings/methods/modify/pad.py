@@ -119,13 +119,13 @@ def emit_string_repeat(module: ir.Module) -> ir.Function:
 
     # Loop done: build and return result string
     builder = ir.IRBuilder(loop_done)
-    result_string = build_string_struct(builder, string_type, result_data, total_size)
+    result_string = build_string_struct(builder, string_type, result_data, total_size, owned=1)
     builder.ret(result_string)
 
     # Return empty: return empty string { NULL, 0 }
     builder = ir.IRBuilder(return_empty)
     null_ptr = ir.Constant(i8_ptr, None)
-    empty_string = build_string_struct(builder, string_type, null_ptr, ir.Constant(i32, 0))
+    empty_string = build_string_struct(builder, string_type, null_ptr, ir.Constant(i32, 0), owned=0)
     builder.ret(empty_string)
 
     return func
@@ -186,7 +186,7 @@ def emit_string_pad_left(module: ir.Module) -> ir.Function:
     no_pad_copy = builder.call(malloc, [str_size_i64], name="no_pad_copy")
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [no_pad_copy, str_data, str_size, is_volatile])
-    no_pad_result = build_string_struct(builder, string_type, no_pad_copy, str_size)
+    no_pad_result = build_string_struct(builder, string_type, no_pad_copy, str_size, owned=1)
     builder.branch(return_block)
 
     builder.position_at_end(do_padding_block)
@@ -223,7 +223,7 @@ def emit_string_pad_left(module: ir.Module) -> ir.Function:
     final_offset = builder.load(offset_ptr, name="final_offset")
     str_dest_ptr = builder.gep(result_data, [final_offset], name="str_dest_ptr")
     builder.call(memcpy, [str_dest_ptr, str_data, str_size, is_volatile])
-    padded_result = build_string_struct(builder, string_type, result_data, total_size)
+    padded_result = build_string_struct(builder, string_type, result_data, total_size, owned=1)
     builder.branch(return_block)
 
     builder.position_at_end(return_block)
@@ -289,7 +289,7 @@ def emit_string_pad_right(module: ir.Module) -> ir.Function:
     no_pad_copy = builder.call(malloc, [str_size_i64], name="no_pad_copy")
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [no_pad_copy, str_data, str_size, is_volatile])
-    no_pad_result = build_string_struct(builder, string_type, no_pad_copy, str_size)
+    no_pad_result = build_string_struct(builder, string_type, no_pad_copy, str_size, owned=1)
     builder.branch(return_block)
 
     builder.position_at_end(do_padding_block)
@@ -326,7 +326,7 @@ def emit_string_pad_right(module: ir.Module) -> ir.Function:
     builder.branch(padding_loop_block)
 
     builder.position_at_end(padding_done_block)
-    padded_result = build_string_struct(builder, string_type, result_data, total_size)
+    padded_result = build_string_struct(builder, string_type, result_data, total_size, owned=1)
     builder.branch(return_block)
 
     builder.position_at_end(return_block)

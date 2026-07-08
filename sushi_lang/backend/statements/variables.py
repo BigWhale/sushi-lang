@@ -80,6 +80,23 @@ def emit_let(codegen: 'CodegenProtocol', stmt: 'Let') -> None:
         # keep exactly one owner (else double-free). Reconcile by binding shape:
         _reconcile_closure_ownership(codegen, stmt, semantic_type)
 
+        # String ownership (#145): create_local_nostore auto-registered this string local
+        # for owned-bit-guarded free. Reconcile by binding shape so exactly one owner frees
+        # the heap buffer (else double-free / use-after-free).
+        _reconcile_string_ownership(codegen, stmt, semantic_type)
+
+        # Zero-initialise a string local's slot ({null, 0, owned=0}) BEFORE emitting the RHS.
+        # The local is already registered for scope-exit free, but its RHS may contain a `??`
+        # (e.g. `let checked = check(s)??`) whose early-exit emit_string_cleanup_all frees
+        # every live string local -- including this one, whose slot is not yet stored. Without
+        # zero-init the slot holds poison, so the guarded free reads a garbage owned byte and
+        # may free a garbage/global pointer (SIGABRT). owned=0 makes that premature free a
+        # no-op; the real value is stored just below (#145).
+        from sushi_lang.semantics.typesys import BuiltinType as _BT
+        if semantic_type == _BT.STRING and codegen.memory.is_string_registered(stmt.name):
+            from llvmlite import ir as _ir
+            codegen.builder.store(_ir.Constant(ll_type, None), slot)
+
         # Special handling for array literals
         if isinstance(stmt.ty, ArrayType) and isinstance(stmt.value, ArrayLiteral):
             from sushi_lang.backend.statements import initialization
@@ -135,6 +152,49 @@ def _reconcile_closure_ownership(codegen: 'CodegenProtocol', stmt: 'Let', semant
         # BORROW: a container get-out (List/array `.get()`); the container owns it.
         codegen.memory.unregister_closure_cleanup(stmt.name)
     # else: lambda literal / call / fn ref -> g owns a fresh env; keep registration.
+
+
+def _reconcile_string_ownership(codegen: 'CodegenProtocol', stmt: 'Let', semantic_type) -> None:
+    """Keep exactly one RAII owner for a string binding (#145).
+
+    `create_local_nostore` registered `stmt.name` for owned-bit-guarded free. That is correct
+    only when the RHS produces a FRESH owned string (a string method / interpolation / call
+    return / literal). When the RHS aliases a buffer that something ELSE already owns, a second
+    owner would double-free. Reconcile by binding shape, mirroring closures:
+
+    - `let s2 = s` where s is a registered owning local -> MOVE: mark s moved so only s2 frees.
+    - `let s2 = s` where s is NOT registered (a param / already-borrowed alias) -> BORROW: the
+      caller's binding owns the buffer, so s2 must not free (unregister it).
+    - `let s2 = obj.field` (struct-field read) / `let s2 = c.get(i)??` (container get-out)
+      -> BORROW: the struct/container still owns the buffer (unregister s2).
+    - literal / method / interpolation / other call -> s2 owns a fresh string; keep it. A
+      literal carries owned=0, so its eventual free is a runtime no-op.
+    """
+    from sushi_lang.semantics.typesys import BuiltinType
+    from sushi_lang.semantics.ast import Name, MemberAccess, TryExpr
+
+    if semantic_type != BuiltinType.STRING:
+        return
+
+    value = stmt.value
+    if isinstance(value, TryExpr):
+        value = value.expr
+
+    if isinstance(value, Name):
+        source = value.id
+        if codegen.memory.is_string_registered(source):
+            # MOVE: transfer ownership source -> s2. s2 keeps its registration.
+            codegen.moves.mark(source)
+        else:
+            # BORROW: source is a param or an alias whose buffer is owned elsewhere.
+            codegen.memory.unregister_string_cleanup(stmt.name)
+    elif isinstance(value, MemberAccess):
+        # BORROW: reading a string out of a struct field; the struct owns it.
+        codegen.memory.unregister_string_cleanup(stmt.name)
+    elif getattr(value, 'method', None) == 'get':
+        # BORROW: a container get-out (List/array/HashMap `.get()`); the container owns it.
+        codegen.memory.unregister_string_cleanup(stmt.name)
+    # else: literal / string method / interpolation / call -> s2 owns a fresh string; keep it.
 
 
 def emit_rebind(codegen: 'CodegenProtocol', stmt: 'Rebind') -> None:

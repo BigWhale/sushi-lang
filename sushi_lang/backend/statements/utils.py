@@ -166,6 +166,9 @@ def emit_loop_exit_cleanup(codegen: 'LLVMCodegen', min_scope_index: int) -> None
                 da.emit_struct_field_cleanup(var_name, struct_type, alloca)
             if var_name in getattr(mem, '_closure_cleanup', {}) and not mem.is_struct_moved(var_name):
                 mem._emit_closure_free(mem._closure_cleanup[var_name])
+            # String locals (#145): owned-bit-guarded free, bounded to the loop's scopes.
+            if var_name in getattr(mem, '_string_cleanup', {}) and not mem.is_struct_moved(var_name):
+                mem._emit_string_free(mem._string_cleanup[var_name])
             descriptor = da.owned_pointers.get(var_name)
             if descriptor is not None and not descriptor.destroyed:
                 da._emit_own_destructor(var_name, descriptor.own_type)
@@ -224,6 +227,10 @@ def emit_scope_cleanup(codegen: 'LLVMCodegen', cleanup_type: str = 'all') -> Non
         # Inline-closure argument temporaries (#123): same early-exit discipline.
         if hasattr(codegen.memory, 'emit_closure_temp_cleanup_all'):
             codegen.memory.emit_closure_temp_cleanup_all()
+        # String-value RAII (#145): owned-bit-guarded free of live string locals, same
+        # early-exit discipline (moved strings skipped so their new owner frees them).
+        if hasattr(codegen.memory, 'emit_string_cleanup_all'):
+            codegen.memory.emit_string_cleanup_all()
 
 
 # ============================================================================
