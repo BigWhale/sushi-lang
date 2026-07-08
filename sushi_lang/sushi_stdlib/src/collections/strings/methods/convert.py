@@ -58,7 +58,7 @@ def emit_string_to_bytes(module: ir.Module) -> ir.Function:
 
     # Copy string bytes to array using llvm.memcpy intrinsic
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy, [byte_data, data, size, is_volatile])
+    builder.call(memcpy, [byte_data, data, builder.zext(size, ir.IntType(64)), is_volatile])
 
     # Build dynamic array struct: {i32 len, i32 cap, u8* data}
     # len = cap = size (exact fit, no extra capacity)
@@ -304,7 +304,7 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     # Copy substring bytes using llvm.memcpy intrinsic
     start_ptr_gep = builder.gep(str_data, [start], name="start_ptr_gep")
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy, [substr_data_raw, start_ptr_gep, substr_size, is_volatile])
+    builder.call(memcpy, [substr_data_raw, start_ptr_gep, builder.zext(substr_size, ir.IntType(64)), is_volatile])
 
     # Build substring struct
     substr_complete = build_string_struct(builder, string_type, substr_data_raw, substr_size, owned=1)
@@ -339,7 +339,7 @@ def emit_string_split(module: ir.Module) -> ir.Function:
 
     # Copy final bytes using llvm.memcpy intrinsic
     final_start_ptr = builder.gep(str_data, [final_start], name="final_start_ptr")
-    builder.call(memcpy, [final_substr_data_raw, final_start_ptr, final_substr_size, is_volatile])
+    builder.call(memcpy, [final_substr_data_raw, final_start_ptr, builder.zext(final_substr_size, ir.IntType(64)), is_volatile])
 
     # Build final substring struct
     final_complete = build_string_struct(builder, string_type, final_substr_data_raw, final_substr_size, owned=1)
@@ -436,7 +436,7 @@ def emit_string_join(module: ir.Module) -> ir.Function:
     single_size_i64 = builder.zext(single_size, i64, name="single_size_i64")
     single_copy = builder.call(malloc, [single_size_i64], name="single_copy")
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy, [single_copy, single_data, single_size, is_volatile])
+    builder.call(memcpy, [single_copy, single_data, builder.zext(single_size, ir.IntType(64)), is_volatile])
     single_result = build_string_struct(builder, string_type, single_copy, single_size, owned=1)
     builder.branch(return_block)
 
@@ -496,7 +496,7 @@ def emit_string_join(module: ir.Module) -> ir.Function:
 
     offset = builder.load(offset_ptr, name="offset")
     dest_ptr = builder.gep(result_data, [offset], name="dest_ptr")
-    builder.call(memcpy, [dest_ptr, part_data, part_size, is_volatile])
+    builder.call(memcpy, [dest_ptr, part_data, builder.zext(part_size, ir.IntType(64)), is_volatile])
     new_offset = builder.add(offset, part_size, name="new_offset")
     builder.store(new_offset, offset_ptr)
 
@@ -506,7 +506,7 @@ def emit_string_join(module: ir.Module) -> ir.Function:
     builder.position_at_end(copy_sep_block)
     sep_offset = builder.load(offset_ptr, name="sep_offset")
     sep_dest_ptr = builder.gep(result_data, [sep_offset], name="sep_dest_ptr")
-    builder.call(memcpy, [sep_dest_ptr, sep_data, sep_size, is_volatile])
+    builder.call(memcpy, [sep_dest_ptr, sep_data, builder.zext(sep_size, ir.IntType(64)), is_volatile])
     sep_new_offset = builder.add(sep_offset, sep_size, name="sep_new_offset")
     builder.store(sep_new_offset, offset_ptr)
     builder.branch(copy_continue_block)

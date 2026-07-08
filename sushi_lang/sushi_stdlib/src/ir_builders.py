@@ -372,7 +372,7 @@ class IRMemoryBuilder:
 
         # Copy using llvm.memcpy intrinsic
         is_volatile = ir.Constant(ir.IntType(1), 0)
-        builder.call(memcpy_fn, [new_data, src_ptr, byte_count, is_volatile])
+        builder.call(memcpy_fn, [new_data, src_ptr, builder.zext(byte_count, ir.IntType(64)), is_volatile])
 
         return new_data
 

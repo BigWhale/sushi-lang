@@ -108,12 +108,13 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
         src_ptr = codegen.builder.bitcast(value_alloca, codegen.types.i8.as_pointer())
         dest_ptr = codegen.builder.bitcast(data_alloca, codegen.types.i8.as_pointer())
 
-        # Copy i32 value into data array (4 bytes)
-        size_const = ir.Constant(codegen.types.i32, 4)
+        # Copy i32 value into data array (4 bytes). i64-length llvm.memcpy so the
+        # length register is never fed a value with garbage upper bits (#149/#151).
+        size_const = ir.Constant(codegen.types.i64, 4)
         memcpy_fn = codegen.module.declare_intrinsic('llvm.memcpy', [
             ir.PointerType(codegen.types.i8),
             ir.PointerType(codegen.types.i8),
-            codegen.types.i32
+            codegen.types.i64
         ])
         is_volatile = FALSE_I1
         codegen.builder.call(memcpy_fn, [dest_ptr, src_ptr, size_const, is_volatile])

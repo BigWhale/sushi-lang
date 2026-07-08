@@ -190,7 +190,7 @@ def fat_pointer_to_cstr(
 
     # Copy data to cstr using llvm.memcpy intrinsic
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy_fn, [cstr, data, size, is_volatile])
+    builder.call(memcpy_fn, [cstr, data, builder.zext(size, ir.IntType(64)), is_volatile])
 
     # Add null terminator
     null_pos = builder.gep(cstr, [size], name="null_pos")

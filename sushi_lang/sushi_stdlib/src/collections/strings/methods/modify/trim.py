@@ -97,7 +97,7 @@ def emit_string_strip_prefix(module: ir.Module) -> ir.Function:
 
     new_data_ptr = builder.gep(str_data, [prefix_size], name="new_data_ptr")
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy, [result_data, new_data_ptr, new_size, is_volatile])
+    builder.call(memcpy, [result_data, new_data_ptr, builder.zext(new_size, ir.IntType(64)), is_volatile])
 
     result = build_string_struct(builder, string_type, result_data, new_size, owned=1)
     builder.ret(result)
@@ -198,7 +198,7 @@ def emit_string_strip_suffix(module: ir.Module) -> ir.Function:
     result_data = builder.call(malloc, [new_size_i64], name="result_data")
 
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy, [result_data, str_data, new_size, is_volatile])
+    builder.call(memcpy, [result_data, str_data, builder.zext(new_size, ir.IntType(64)), is_volatile])
 
     result = build_string_struct(builder, string_type, result_data, new_size, owned=1)
     builder.ret(result)

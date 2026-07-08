@@ -50,20 +50,25 @@ def declare_realloc(module: ir.Module) -> ir.Function:
 def declare_memcpy(module: ir.Module) -> ir.Function:
     """Declare LLVM memcpy intrinsic (replaces libc memcpy).
 
-    Returns llvm.memcpy.p0i8.p0i8.i32 intrinsic for platform-independent
-    memory copying with better optimization potential.
+    Returns the llvm.memcpy.p0.p0.i64 intrinsic for platform-independent memory
+    copying. The length is i64 (size_t), NOT i32: callers pass string sizes taken
+    from the fat pointer's i32 size field, and passing that raw i32 lets adjacent
+    bytes (the `owned` byte and padding) leak into the 64-bit length register that
+    glibc's memcpy reads on x86-64, producing a garbage huge length and an
+    out-of-bounds read. Callers must zero-extend their i32 size to i64 (issue #151,
+    same class as #149).
 
     Note: The intrinsic takes 4 parameters (dest, src, len, is_volatile),
     so callers must pass is_volatile=0 as the 4th argument.
     """
     i8 = ir.IntType(8)
-    i32 = ir.IntType(32)
+    i64 = ir.IntType(64)
 
     # Declare llvm.memcpy intrinsic
-    # Signature: void @llvm.memcpy.p0i8.p0i8.i32(i8* dest, i8* src, i32 len, i1 is_volatile)
+    # Signature: void @llvm.memcpy.p0.p0.i64(i8* dest, i8* src, i64 len, i1 is_volatile)
     return module.declare_intrinsic(
         'llvm.memcpy',
-        [ir.PointerType(i8), ir.PointerType(i8), i32]
+        [ir.PointerType(i8), ir.PointerType(i8), i64]
     )
 
 

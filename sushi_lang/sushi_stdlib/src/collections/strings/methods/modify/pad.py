@@ -109,7 +109,7 @@ def emit_string_repeat(module: ir.Module) -> ir.Function:
 
     # Copy string data
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy, [dest_ptr, str_data, str_size, is_volatile])
+    builder.call(memcpy, [dest_ptr, str_data, builder.zext(str_size, ir.IntType(64)), is_volatile])
 
     # Increment i
     i_next = builder.add(i_phi, ir.Constant(i32, 1), name="i_next")
@@ -185,7 +185,7 @@ def emit_string_pad_left(module: ir.Module) -> ir.Function:
     str_size_i64 = builder.zext(str_size, i64, name="str_size_i64")
     no_pad_copy = builder.call(malloc, [str_size_i64], name="no_pad_copy")
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy, [no_pad_copy, str_data, str_size, is_volatile])
+    builder.call(memcpy, [no_pad_copy, str_data, builder.zext(str_size, ir.IntType(64)), is_volatile])
     no_pad_result = build_string_struct(builder, string_type, no_pad_copy, str_size, owned=1)
     builder.branch(return_block)
 
@@ -212,7 +212,7 @@ def emit_string_pad_left(module: ir.Module) -> ir.Function:
     builder.position_at_end(padding_body_block)
     offset = builder.load(offset_ptr, name="offset")
     dest_ptr = builder.gep(result_data, [offset], name="dest_ptr")
-    builder.call(memcpy, [dest_ptr, pad_data, pad_size, is_volatile])
+    builder.call(memcpy, [dest_ptr, pad_data, builder.zext(pad_size, ir.IntType(64)), is_volatile])
     new_offset = builder.add(offset, pad_size, name="new_offset")
     builder.store(new_offset, offset_ptr)
     next_idx = builder.add(idx, ir.Constant(i32, 1), name="next_idx")
@@ -222,7 +222,7 @@ def emit_string_pad_left(module: ir.Module) -> ir.Function:
     builder.position_at_end(padding_done_block)
     final_offset = builder.load(offset_ptr, name="final_offset")
     str_dest_ptr = builder.gep(result_data, [final_offset], name="str_dest_ptr")
-    builder.call(memcpy, [str_dest_ptr, str_data, str_size, is_volatile])
+    builder.call(memcpy, [str_dest_ptr, str_data, builder.zext(str_size, ir.IntType(64)), is_volatile])
     padded_result = build_string_struct(builder, string_type, result_data, total_size, owned=1)
     builder.branch(return_block)
 
@@ -288,7 +288,7 @@ def emit_string_pad_right(module: ir.Module) -> ir.Function:
     str_size_i64 = builder.zext(str_size, i64, name="str_size_i64")
     no_pad_copy = builder.call(malloc, [str_size_i64], name="no_pad_copy")
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy, [no_pad_copy, str_data, str_size, is_volatile])
+    builder.call(memcpy, [no_pad_copy, str_data, builder.zext(str_size, ir.IntType(64)), is_volatile])
     no_pad_result = build_string_struct(builder, string_type, no_pad_copy, str_size, owned=1)
     builder.branch(return_block)
 
@@ -299,7 +299,7 @@ def emit_string_pad_right(module: ir.Module) -> ir.Function:
     total_size_i64 = builder.zext(total_size, i64, name="total_size_i64")
     result_data = builder.call(malloc, [total_size_i64], name="result_data")
 
-    builder.call(memcpy, [result_data, str_data, str_size, is_volatile])
+    builder.call(memcpy, [result_data, str_data, builder.zext(str_size, ir.IntType(64)), is_volatile])
 
     idx_ptr = builder.alloca(i32, name="idx_ptr")
     builder.store(ir.Constant(i32, 0), idx_ptr)
@@ -318,7 +318,7 @@ def emit_string_pad_right(module: ir.Module) -> ir.Function:
     builder.position_at_end(padding_body_block)
     offset = builder.load(offset_ptr, name="offset")
     dest_ptr = builder.gep(result_data, [offset], name="dest_ptr")
-    builder.call(memcpy, [dest_ptr, pad_data, pad_size, is_volatile])
+    builder.call(memcpy, [dest_ptr, pad_data, builder.zext(pad_size, ir.IntType(64)), is_volatile])
     new_offset = builder.add(offset, pad_size, name="new_offset")
     builder.store(new_offset, offset_ptr)
     next_idx = builder.add(idx, ir.Constant(i32, 1), name="next_idx")

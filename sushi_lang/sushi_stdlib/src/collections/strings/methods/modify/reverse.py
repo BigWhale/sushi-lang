@@ -139,7 +139,7 @@ def emit_string_reverse(module: ir.Module) -> ir.Function:
 
     # Copy character bytes
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy, [dst_ptr, src_ptr, char_byte_length, is_volatile])
+    builder.call(memcpy, [dst_ptr, src_ptr, builder.zext(char_byte_length, ir.IntType(64)), is_volatile])
 
     # Update indices
     char_index_next = builder.sub(char_index_phi, ir.Constant(i32, 1), name="char_index_next")

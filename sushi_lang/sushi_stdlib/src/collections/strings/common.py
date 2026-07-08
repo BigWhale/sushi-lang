@@ -61,7 +61,7 @@ def allocate_and_copy_bytes(
 
     # Copy bytes using llvm.memcpy intrinsic
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy, [new_data, src_ptr, byte_count, is_volatile])
+    builder.call(memcpy, [new_data, src_ptr, builder.zext(byte_count, ir.IntType(64)), is_volatile])
 
     return new_data
 
@@ -171,7 +171,7 @@ def clone_string_to_owned(
     size_i64 = builder.zext(size, i64, name="clone_size_i64")
     new_data = builder.call(malloc, [size_i64], name="clone_data")
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy, [new_data, src_data, size, is_volatile])
+    builder.call(memcpy, [new_data, src_data, builder.zext(size, ir.IntType(64)), is_volatile])
     return build_string_struct(builder, string_type, new_data, size, owned=1)
 
 

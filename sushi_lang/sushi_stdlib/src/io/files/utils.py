@@ -38,7 +38,7 @@ def generate_exists(module: ir.Module) -> None:
         malloc_type = ir.FunctionType(i8_ptr, [i64])
         malloc_func = ir.Function(module, malloc_type, name="malloc")
 
-    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i32])
+    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
     func_type = ir.FunctionType(i8, [string_type])
     func = ir.Function(module, func_type, name="sushi_io_files_exists")
@@ -56,7 +56,7 @@ def generate_exists(module: ir.Module) -> None:
 
     # Copy string data to buffer
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy_fn, [null_term_path, path_ptr, path_len, is_volatile])
+    builder.call(memcpy_fn, [null_term_path, path_ptr, builder.zext(path_len, ir.IntType(64)), is_volatile])
 
     # Add null terminator
     null_pos = builder.gep(null_term_path, [path_len], name="null_pos")
@@ -90,7 +90,7 @@ def generate_is_file(module: ir.Module) -> None:
         malloc_type = ir.FunctionType(i8_ptr, [i64])
         malloc_func = ir.Function(module, malloc_type, name="malloc")
 
-    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i32])
+    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
     func_type = ir.FunctionType(i8, [string_type])
     func = ir.Function(module, func_type, name="sushi_io_files_is_file")
@@ -108,7 +108,7 @@ def generate_is_file(module: ir.Module) -> None:
 
     # Copy string data and add null terminator
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy_fn, [null_term_path, path_ptr, path_len, is_volatile])
+    builder.call(memcpy_fn, [null_term_path, path_ptr, builder.zext(path_len, ir.IntType(64)), is_volatile])
     null_pos = builder.gep(null_term_path, [path_len], name="null_pos")
     builder.store(ir.Constant(i8, 0), null_pos)
 
@@ -172,7 +172,7 @@ def generate_is_dir(module: ir.Module) -> None:
         malloc_type = ir.FunctionType(i8_ptr, [i64])
         malloc_func = ir.Function(module, malloc_type, name="malloc")
 
-    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i32])
+    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
     func_type = ir.FunctionType(i8, [string_type])
     func = ir.Function(module, func_type, name="sushi_io_files_is_dir")
@@ -190,7 +190,7 @@ def generate_is_dir(module: ir.Module) -> None:
 
     # Copy string data and add null terminator
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy_fn, [null_term_path, path_ptr, path_len, is_volatile])
+    builder.call(memcpy_fn, [null_term_path, path_ptr, builder.zext(path_len, ir.IntType(64)), is_volatile])
     null_pos = builder.gep(null_term_path, [path_len], name="null_pos")
     builder.store(ir.Constant(i8, 0), null_pos)
 
@@ -256,7 +256,7 @@ def generate_file_size(module: ir.Module) -> None:
         malloc_type = ir.FunctionType(i8_ptr, [i64])
         malloc_func = ir.Function(module, malloc_type, name="malloc")
 
-    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i32])
+    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
     # Result<i64> = {i32 tag, [8 x i8] data}
     data_array_type = ir.ArrayType(i8, 8)
@@ -278,7 +278,7 @@ def generate_file_size(module: ir.Module) -> None:
 
     # Copy string data and add null terminator
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy_fn, [null_term_path, path_ptr, path_len, is_volatile])
+    builder.call(memcpy_fn, [null_term_path, path_ptr, builder.zext(path_len, ir.IntType(64)), is_volatile])
     null_pos = builder.gep(null_term_path, [path_len], name="null_pos")
     builder.store(ir.Constant(i8, 0), null_pos)
 
@@ -324,9 +324,9 @@ def generate_file_size(module: ir.Module) -> None:
     dest_ptr = builder.bitcast(data_alloca, i8_ptr)
     size_const = ir.Constant(i32, 8)
 
-    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i32])
+    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy_fn, [dest_ptr, src_ptr, size_const, is_volatile])
+    builder.call(memcpy_fn, [dest_ptr, src_ptr, builder.zext(size_const, ir.IntType(64)), is_volatile])
 
     data_value = builder.load(data_alloca, name="data_value")
 
@@ -349,7 +349,7 @@ def generate_remove(module: ir.Module) -> None:
     platform_files = get_platform_module('files')
     unlink_func = platform_files.declare_unlink(module)
 
-    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i32])
+    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
     data_array_type = ir.ArrayType(i8, 4)
     result_type = ir.LiteralStructType([i32, data_array_type])
@@ -389,7 +389,7 @@ def generate_remove(module: ir.Module) -> None:
     dest_ptr = builder.bitcast(data_alloca, i8_ptr)
     size_const = ir.Constant(i32, 4)
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy_fn, [dest_ptr, src_ptr, size_const, is_volatile])
+    builder.call(memcpy_fn, [dest_ptr, src_ptr, builder.zext(size_const, ir.IntType(64)), is_volatile])
 
     data_value = builder.load(data_alloca, name="data_value")
 
@@ -412,7 +412,7 @@ def generate_rmdir(module: ir.Module) -> None:
     platform_files = get_platform_module('files')
     rmdir_func = platform_files.declare_rmdir(module)
 
-    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i32])
+    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
     data_array_type = ir.ArrayType(i8, 4)
     result_type = ir.LiteralStructType([i32, data_array_type])
@@ -452,7 +452,7 @@ def generate_rmdir(module: ir.Module) -> None:
     dest_ptr = builder.bitcast(data_alloca, i8_ptr)
     size_const = ir.Constant(i32, 4)
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy_fn, [dest_ptr, src_ptr, size_const, is_volatile])
+    builder.call(memcpy_fn, [dest_ptr, src_ptr, builder.zext(size_const, ir.IntType(64)), is_volatile])
 
     data_value = builder.load(data_alloca, name="data_value")
 
@@ -475,7 +475,7 @@ def generate_mkdir(module: ir.Module) -> None:
     platform_files = get_platform_module('files')
     mkdir_func = platform_files.declare_mkdir(module)
 
-    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i32])
+    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
     data_array_type = ir.ArrayType(i8, 4)
     result_type = ir.LiteralStructType([i32, data_array_type])
@@ -517,7 +517,7 @@ def generate_mkdir(module: ir.Module) -> None:
     dest_ptr = builder.bitcast(data_alloca, i8_ptr)
     size_const = ir.Constant(i32, 4)
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy_fn, [dest_ptr, src_ptr, size_const, is_volatile])
+    builder.call(memcpy_fn, [dest_ptr, src_ptr, builder.zext(size_const, ir.IntType(64)), is_volatile])
 
     data_value = builder.load(data_alloca, name="data_value")
 
@@ -540,7 +540,7 @@ def generate_rename(module: ir.Module) -> None:
     platform_files = get_platform_module('files')
     rename_func = platform_files.declare_rename(module)
 
-    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i32])
+    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
     data_array_type = ir.ArrayType(i8, 4)
     result_type = ir.LiteralStructType([i32, data_array_type])
@@ -583,7 +583,7 @@ def generate_rename(module: ir.Module) -> None:
     dest_ptr = builder.bitcast(data_alloca, i8_ptr)
     size_const = ir.Constant(i32, 4)
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy_fn, [dest_ptr, src_ptr, size_const, is_volatile])
+    builder.call(memcpy_fn, [dest_ptr, src_ptr, builder.zext(size_const, ir.IntType(64)), is_volatile])
 
     data_value = builder.load(data_alloca, name="data_value")
 
@@ -624,7 +624,7 @@ def generate_copy(module: ir.Module) -> None:
     from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc
     malloc_func = declare_malloc(module)
 
-    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i32])
+    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
     data_array_type = ir.ArrayType(i8, 4)
     result_type = ir.LiteralStructType([i32, data_array_type])
@@ -712,7 +712,7 @@ def generate_copy(module: ir.Module) -> None:
     dest_ptr_cast = builder.bitcast(data_alloca, i8_ptr)
     size_const = ir.Constant(i32, 4)
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy_fn, [dest_ptr_cast, src_ptr_cast, size_const, is_volatile])
+    builder.call(memcpy_fn, [dest_ptr_cast, src_ptr_cast, builder.zext(size_const, ir.IntType(64)), is_volatile])
 
     data_value = builder.load(data_alloca, name="data_value")
 
