@@ -265,7 +265,7 @@ def _emit_variant_data_hash(codegen: Any, enum_value: ir.Value, variant: Any, in
         value_ptr_typed = builder.bitcast(value_ptr_i8, ir.PointerType(llvm_type), name=f"assoc{assoc_idx}_ptr_typed")
 
         # Load the value
-        value = builder.load(value_ptr_typed, name=f"assoc{assoc_idx}_value")
+        value = builder.load(value_ptr_typed, name=f"assoc{assoc_idx}_value", align=1)  # under-aligned enum payload (#145)
 
         # Get hash of this value by calling its .hash() method
         value_hash = _emit_associated_value_hash(codegen, value, assoc_type)

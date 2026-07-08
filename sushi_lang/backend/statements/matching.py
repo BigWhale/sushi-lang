@@ -464,7 +464,7 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
         # Load the value from the data field
         field_ptr_i8 = codegen.builder.gep(data_ptr, [ir.Constant(codegen.types.i32, offset)], name="field_ptr")
         field_ptr_typed = codegen.builder.bitcast(field_ptr_i8, ir.PointerType(binding_llvm_type), name="field_ptr_typed")
-        field_value = codegen.builder.load(field_ptr_typed, name="field_value")
+        field_value = codegen.builder.load(field_ptr_typed, name="field_value", align=1)  # under-aligned enum payload (#145)
 
         # Handle simple bindings (strings), nested patterns (Pattern), and Own patterns (OwnPattern)
         if isinstance(binding_item, str):
