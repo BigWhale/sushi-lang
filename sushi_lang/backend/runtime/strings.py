@@ -181,17 +181,23 @@ class StringOperations:
         # to free after output (#141). No-op elsewhere.
         self.codegen.register_string_temp(new_data)
 
-        # Copy first string using llvm.memcpy intrinsic
+        # Copy first string using llvm.memcpy intrinsic. Use the i64-length form and
+        # zero-extend the i32 string size: the fat-pointer size field sits next to the
+        # `owned` byte and padding, and passing the raw i32 lets those adjacent bytes
+        # leak into the 64-bit length register that glibc's memcpy reads, giving a
+        # garbage huge length and an out-of-bounds read on x86-64 (issue #149).
         memcpy_fn = self.codegen.module.declare_intrinsic(
             'llvm.memcpy',
-            [ir.PointerType(self.codegen.i8), ir.PointerType(self.codegen.i8), self.codegen.i32]
+            [ir.PointerType(self.codegen.i8), ir.PointerType(self.codegen.i8), ir.IntType(INT64_BIT_WIDTH)]
         )
         is_volatile = FALSE_I1
-        self.codegen.builder.call(memcpy_fn, [new_data, data1, size1, is_volatile])
+        size1_i64 = self.codegen.builder.zext(size1, ir.IntType(INT64_BIT_WIDTH))
+        self.codegen.builder.call(memcpy_fn, [new_data, data1, size1_i64, is_volatile])
 
         # Copy second string after first
         offset_ptr = self.codegen.builder.gep(new_data, [size1])
-        self.codegen.builder.call(memcpy_fn, [offset_ptr, data2, size2, is_volatile])
+        size2_i64 = self.codegen.builder.zext(size2, ir.IntType(INT64_BIT_WIDTH))
+        self.codegen.builder.call(memcpy_fn, [offset_ptr, data2, size2_i64, is_volatile])
 
         # Build and return fat pointer struct (freshly malloc'd -> heap-owned)
         string_struct_type = self.codegen.types.string_struct
@@ -231,13 +237,15 @@ class StringOperations:
         size_i64 = self.codegen.builder.zext(size_plus_one, ir.IntType(INT64_BIT_WIDTH))
         c_str = self.codegen.builder.call(malloc_func, [size_i64])
 
-        # Copy string data using llvm.memcpy intrinsic
+        # Copy string data using llvm.memcpy intrinsic. i64-length form + zero-extended
+        # size so adjacent fat-pointer bytes cannot leak into the length register (#149).
         memcpy_fn = self.codegen.module.declare_intrinsic(
             'llvm.memcpy',
-            [ir.PointerType(self.codegen.i8), ir.PointerType(self.codegen.i8), self.codegen.i32]
+            [ir.PointerType(self.codegen.i8), ir.PointerType(self.codegen.i8), ir.IntType(INT64_BIT_WIDTH)]
         )
         is_volatile = FALSE_I1
-        self.codegen.builder.call(memcpy_fn, [c_str, data_ptr, size, is_volatile])
+        size_copy_i64 = self.codegen.builder.zext(size, ir.IntType(INT64_BIT_WIDTH))
+        self.codegen.builder.call(memcpy_fn, [c_str, data_ptr, size_copy_i64, is_volatile])
 
         # Add null terminator
         null_ptr = self.codegen.builder.gep(c_str, [size])
