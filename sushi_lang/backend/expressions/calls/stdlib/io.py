@@ -59,14 +59,14 @@ def emit_stdlib_stdio_call(
         if method == "readln":
             # {ptr, i32} @sushi_stdin_readln()
             # Returns fat pointer struct {i8*, i32}
-            string_struct_ty = ir.LiteralStructType([i8_ptr, i32])
+            string_struct_ty = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
             stdlib_func = declare_stdlib_function(codegen.module, func_name, string_struct_ty, [])
             return codegen.builder.call(stdlib_func, [], name="stdin_readln_result")
 
         elif method == "read":
             # {ptr, i32} @sushi_stdin_read()
             # Returns fat pointer struct {i8*, i32}
-            string_struct_ty = ir.LiteralStructType([i8_ptr, i32])
+            string_struct_ty = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
             stdlib_func = declare_stdlib_function(codegen.module, func_name, string_struct_ty, [])
             return codegen.builder.call(stdlib_func, [], name="stdin_read_result")
 
@@ -86,7 +86,7 @@ def emit_stdlib_stdio_call(
         elif method == "lines":
             # {i32, i32, {i8*, i32}*} @sushi_stdin_lines()
             # Returns iterator struct with fat pointer element type
-            string_struct_ty = ir.LiteralStructType([i8_ptr, i32])
+            string_struct_ty = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
             iterator_struct_ty = ir.LiteralStructType([i32, i32, string_struct_ty.as_pointer()])
             stdlib_func = declare_stdlib_function(codegen.module, func_name, iterator_struct_ty, [])
             return codegen.builder.call(stdlib_func, [], name="stdin_lines_result")
@@ -95,7 +95,7 @@ def emit_stdlib_stdio_call(
         if method == "write":
             # i32 @sushi_stdout_write({ptr, i32} %str)
             # Accepts fat pointer struct {i8*, i32}
-            string_struct_ty = ir.LiteralStructType([i8_ptr, i32])
+            string_struct_ty = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
             arg_value = codegen.expressions.emit_expr(args[0])
             stdlib_func = declare_stdlib_function(codegen.module, func_name, i32, [string_struct_ty])
             return codegen.builder.call(stdlib_func, [arg_value], name=f"{stream_name}_write_result")
@@ -155,7 +155,7 @@ def emit_stdlib_file_call(
     if method in ("read", "readln", "readch"):
         # {ptr, i32} @sushi_file_{method}(ptr %file_ptr)
         # Returns fat pointer struct {i8*, i32}
-        string_struct_ty = ir.LiteralStructType([i8_ptr, i32])
+        string_struct_ty = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
         stdlib_func = declare_stdlib_function(codegen.module, func_name, string_struct_ty, [i8_ptr])
         result = codegen.builder.call(stdlib_func, [file_ptr], name=f"file_{method}_result")
         return result
@@ -163,7 +163,7 @@ def emit_stdlib_file_call(
     elif method == "lines":
         # {i32, i32, {i8*, i32}*} @sushi_file_lines(ptr %file_ptr)
         # Returns iterator struct with fat pointer element type
-        string_struct_ty = ir.LiteralStructType([i8_ptr, i32])
+        string_struct_ty = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
         iterator_struct_ty = ir.LiteralStructType([i32, i32, string_struct_ty.as_pointer()])
         stdlib_func = declare_stdlib_function(codegen.module, func_name, iterator_struct_ty, [i8_ptr])
         result = codegen.builder.call(stdlib_func, [file_ptr], name="file_lines_result")
@@ -172,7 +172,7 @@ def emit_stdlib_file_call(
     elif method in ("write", "writeln"):
         # i32 @sushi_file_{method}(ptr %file_ptr, {ptr, i32} %string)
         # Accepts fat pointer struct {i8*, i32}
-        string_struct_ty = ir.LiteralStructType([i8_ptr, i32])
+        string_struct_ty = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
         arg_value = codegen.expressions.emit_expr(args[0])
         stdlib_func = declare_stdlib_function(codegen.module, func_name, i32, [i8_ptr, string_struct_ty])
         result = codegen.builder.call(stdlib_func, [file_ptr, arg_value], name=f"file_{method}_result")

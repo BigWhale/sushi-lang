@@ -117,6 +117,12 @@ def try_emit_hashmap_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     receiver = expr.receiver
     args = expr.args
 
+    # HashMap.insert(k, v): a string value is moved into the map, which owns and frees it
+    # -- mark a bare-Name owning string source moved so scope exit does not double-free (#145).
+    if method == "insert" and len(args) >= 2:
+        from sushi_lang.backend.expressions.memory import move_string_arg_into_container
+        move_string_arg_into_container(codegen, args[1])
+
     # For HashMap.new(), we don't emit the receiver (it's just the type name)
     if method == "new":
         receiver_semantic_type = infer_semantic_type(codegen, expr, None, "HashMap<", StructType)

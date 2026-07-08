@@ -73,7 +73,12 @@ class TypeMapper:
         self.str_ptr: ir.PointerType = ir.PointerType(self.i8)
         self.void: ir.VoidType = ir.VoidType()
 
-        # String fat pointer type: {i8* data, i32 size}
+        # String fat pointer type: {i8* data, i32 size, i8 owned}
+        # `owned` is the runtime ownership discriminator (issue #145): 0 = literal/borrow
+        # (backed by a global or aliased, never freed), 1 = heap (malloc'd, freed by RAII).
+        # Same role as the closure fat value's drop_ptr slot. LLVM sizeof stays 16 (already
+        # alignment-padded), so enum/struct/Result layouts are byte-identical to the old
+        # {i8*, i32} and FAT_POINTER_SIZE_BYTES stays 12.
         self.string_struct: ir.LiteralStructType = self._create_string_struct_type()
 
         # Closure/function-value fat pointer type: {i8* fn_ptr, i8* env_ptr, i8* drop_ptr}
@@ -105,10 +110,11 @@ class TypeMapper:
         }
 
     def _create_string_struct_type(self) -> ir.LiteralStructType:
-        """Create LLVM struct type for fat pointer strings: {i8* data, i32 size}"""
+        """Create LLVM struct type for fat pointer strings: {i8* data, i32 size, i8 owned}"""
         return ir.LiteralStructType([
             ir.PointerType(self.i8),
             self.i32,
+            self.i8,  # owned: 1 = heap (RAII frees), 0 = literal/borrow (never freed)
         ])
 
     def ll_type(self, t: Ty) -> ir.Type:

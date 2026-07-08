@@ -489,10 +489,12 @@ def emit_maybe_some(codegen: 'LLVMCodegen', value_type: Type, value: ir.Value) -
     # Cast to i8* for bitcasting
     data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")
 
-    # Store the value
+    # Store the value. align=1: the data array is [N x i8] (byte-aligned), so a 16-byte
+    # {i8*,i32,i8} string stored here is under-aligned; without align=1 LLVM emits an aligned
+    # vector move that faults (SIGSEGV) on x86-64 (#145).
     value_llvm_type = value.type
     value_ptr_typed = codegen.builder.bitcast(data_ptr, ir.PointerType(value_llvm_type), name="value_ptr_typed")
-    codegen.builder.store(value, value_ptr_typed)
+    codegen.builder.store(value, value_ptr_typed, align=1)
 
     # Load the packed data back into the enum
     packed_data = codegen.builder.load(temp_alloca, name="packed_data")

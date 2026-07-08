@@ -101,10 +101,17 @@ class LibCStrings:
         )
 
     def _declare_memcmp(self) -> None:
-        """Declare memcmp: int memcmp(const void* s1, const void* s2, size_t n)"""
+        """Declare memcmp: int memcmp(const void* s1, const void* s2, size_t n)
+
+        The length is size_t (i64 on LP64), NOT i32. Declaring it i32 makes the
+        caller write only edx and leave the upper 32 bits of rdx uninitialized on
+        x86-64 SysV; glibc reads the full 64-bit rdx as n, yielding a garbage huge
+        length and an out-of-bounds SIMD read (SIGSEGV). ARM64 is immune because a
+        w-register write zero-extends into the x-register. See issue #149.
+        """
         self.memcmp = self._declare_extern(
             "memcmp",
             "memcmp",
             self.codegen.i32,
-            [self.codegen.i8.as_pointer(), self.codegen.i8.as_pointer(), self.codegen.i32]
+            [self.codegen.i8.as_pointer(), self.codegen.i8.as_pointer(), self.codegen.types.i64]
         )

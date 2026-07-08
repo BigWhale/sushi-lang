@@ -122,9 +122,9 @@ class TypeInference:
         if not isinstance(llvm_type, ir.LiteralStructType):
             return False
 
-        # Check struct layout: {i8*, i32}
+        # Check struct layout: {i8* data, i32 size, i8 owned}  (owned = RAII bit, #145)
         elements = llvm_type.elements
-        if len(elements) != 2:
+        if len(elements) != 3:
             return False
 
         # Check field types
@@ -132,7 +132,9 @@ class TypeInference:
             isinstance(elements[0], ir.PointerType) and
             isinstance(elements[0].pointee, ir.IntType) and
             elements[0].pointee.width == 8 and
-            elements[1] == self.i32
+            elements[1] == self.i32 and
+            isinstance(elements[2], ir.IntType) and
+            elements[2].width == 8
         )
 
     def is_dynamic_array_type(self, llvm_type: ir.Type) -> bool:

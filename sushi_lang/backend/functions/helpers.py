@@ -286,7 +286,16 @@ class FunctionHelpers:
             param_slots.append((arg, slot))
 
         for arg, slot in param_slots:
-            self.codegen.builder.store(arg, slot)
+            val = arg
+            # A by-value `string` parameter is a BORROW: the caller's binding retains
+            # ownership and frees the buffer. Clear the callee's copy's owned bit to 0 so
+            # anything the callee does with it (notably `return self` in an extension method,
+            # or forwarding it onward) is treated as a borrow and never frees the caller's
+            # buffer -- no double-free (#145). The callee never frees a string param anyway
+            # (params are not registered in _string_cleanup); this makes RETURNING one safe.
+            if self.codegen.types.is_string_type(arg.type):
+                val = self.codegen.builder.insert_value(arg, ir.Constant(self.codegen.i8, 0), 2)
+            self.codegen.builder.store(val, slot)
 
         # Register owning value parameters (moved-in T[] / List<T> / Own<T>, and native
         # variadic '...T' arrays) for RAII cleanup: the callee owns them and frees them

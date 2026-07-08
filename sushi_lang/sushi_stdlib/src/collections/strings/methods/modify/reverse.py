@@ -8,7 +8,7 @@ import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc, declare_memcpy
 from ...intrinsics import declare_utf8_count_intrinsic, declare_utf8_byte_offset_intrinsic
-from ...common import build_string_struct
+from ...common import build_string_struct, clone_string_to_owned
 
 
 def emit_string_reverse(module: ir.Module) -> ir.Function:
@@ -152,11 +152,12 @@ def emit_string_reverse(module: ir.Module) -> ir.Function:
 
     # Loop done: build result string
     builder = ir.IRBuilder(loop_done)
-    result_string = build_string_struct(builder, string_type, result_data, str_size)
+    result_string = build_string_struct(builder, string_type, result_data, str_size, owned=1)
     builder.ret(result_string)
 
-    # Return original: return input unchanged
+    # Return original: reversal is identity here, but clone so the result is independently
+    # owned (aliasing the input's buffer would double-free under string RAII, issue #145).
     builder = ir.IRBuilder(return_original)
-    builder.ret(func.args[0])
+    builder.ret(clone_string_to_owned(builder, module, func.args[0], string_type))
 
     return func

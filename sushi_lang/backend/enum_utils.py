@@ -274,7 +274,10 @@ def unpack_variant_field(
         name=f"{name}_typed_ptr"
     )
 
-    value = codegen.builder.load(typed_ptr, name=name)
+    # align=1: enum variant data is under-aligned (byte array after the i32 tag); load
+    # unaligned so an over-aligned field (a 16-byte string at a 4-aligned offset) does not
+    # fault on x86-64 (see pack_variant_field) (#145).
+    value = codegen.builder.load(typed_ptr, name=name, align=1)
     return value, offset + field_size
 
 
@@ -365,7 +368,11 @@ def pack_variant_field(
         name=f"{name}_typed_ptr"
     )
 
-    codegen.builder.store(field_value, typed_ptr)
+    # align=1: an enum variant's data is a byte array after the i32 tag, so fields sit at
+    # under-aligned offsets. A field whose natural alignment exceeds its actual offset (e.g. a
+    # 16-byte {i8*,i32,i8} string at data offset 0 -> enum offset 4) must be stored unaligned,
+    # or LLVM emits an aligned 16-byte vector move that faults (SIGSEGV) on x86-64 (#145).
+    codegen.builder.store(field_value, typed_ptr, align=1)
     return offset + field_size
 
 

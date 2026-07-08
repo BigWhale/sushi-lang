@@ -157,7 +157,7 @@ def emit_string_concat(module: ir.Module) -> ir.Function:
     builder.call(memcpy, [offset_ptr, data2, size2, is_volatile])
 
     # Build and return fat pointer struct
-    result = build_string_struct(builder, string_type, new_data, total_size)
+    result = build_string_struct(builder, string_type, new_data, total_size, owned=1)
     builder.ret(result)
 
     return func

@@ -36,7 +36,7 @@ def generate_stdin_readln(module: ir.Module) -> None:
     # Function signature: {ptr, i32} @sushi_stdin_readln()
     i8_ptr = ir.IntType(8).as_pointer()
     i32 = ir.IntType(32)
-    string_struct_ty = ir.LiteralStructType([i8_ptr, i32])
+    string_struct_ty = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
     fn_ty = ir.FunctionType(string_struct_ty, [])
     func = ir.Function(module, fn_ty, name="sushi_stdin_readln")
 
@@ -83,7 +83,7 @@ def generate_stdin_readln(module: ir.Module) -> None:
     empty_buf = builder.call(malloc_fn, [ir.Constant(i64, 1)], name="empty_buf")
     builder.store(ir.Constant(i8, 0), empty_buf)
     from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer_with_len
-    empty_fat = cstr_to_fat_pointer_with_len(builder, empty_buf, ir.Constant(i32, 0))
+    empty_fat = cstr_to_fat_pointer_with_len(builder, empty_buf, ir.Constant(i32, 0), owned=0)
     builder.ret(empty_fat)
 
     # Success path: strip trailing \n and \r\n
@@ -146,7 +146,7 @@ def generate_stdin_readln(module: ir.Module) -> None:
     # Exit: return fat pointer with getline's buffer
     builder.position_at_end(exit_block)
     final_len_val = builder.load(final_length, name="final_len")
-    fat_ptr = cstr_to_fat_pointer_with_len(builder, lineptr_val, final_len_val)
+    fat_ptr = cstr_to_fat_pointer_with_len(builder, lineptr_val, final_len_val, owned=1)
     builder.ret(fat_ptr)
 
 
@@ -168,7 +168,7 @@ def generate_stdin_read(module: ir.Module) -> None:
     # Function signature: {ptr, i32} @sushi_stdin_read()
     i8_ptr = ir.IntType(8).as_pointer()
     i32 = ir.IntType(32)
-    string_struct_ty = ir.LiteralStructType([i8_ptr, i32])
+    string_struct_ty = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
     fn_ty = ir.FunctionType(string_struct_ty, [])
     func = ir.Function(module, fn_ty, name="sushi_stdin_read")
 
@@ -262,7 +262,7 @@ def generate_stdin_read(module: ir.Module) -> None:
     builder.store(null_char, null_ptr)
 
     # Convert C string to fat pointer
-    fat_ptr = cstr_to_fat_pointer(module, builder, final_buffer)
+    fat_ptr = cstr_to_fat_pointer(module, builder, final_buffer, owned=1)
     builder.ret(fat_ptr)
 
 

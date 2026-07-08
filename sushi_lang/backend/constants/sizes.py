@@ -34,8 +34,11 @@ POINTER_SIZE_BYTES = 8       # 64-bit pointers (i8*, T*)
 # Composite Structure Sizes (bytes)
 # ============================================================================
 
-# String fat pointer: {i8* data, i32 size} = 8 + 4 = 12 bytes
-FAT_POINTER_SIZE_BYTES = 12
+# String fat pointer: {i8* data, i32 size, i8 owned} -- aligned LLVM sizeof = 16 bytes
+# (data@0..8, size@8..12, owned@12, pad@13..16). MUST be the aligned sizeof, not the raw
+# 13, so a string round-tripped through an enum/Result/Maybe payload preserves the owned
+# byte at offset 12 (#145). calculate_llvm_type_size() special-cases the string to 16 too.
+FAT_POINTER_SIZE_BYTES = 16
 
 # Closure/function-value fat pointer: {i8* fn_ptr, i8* env_ptr, i8* drop_ptr}
 # = 8 + 8 + 8 = 24 bytes. Distinct from the string fat pointer above.

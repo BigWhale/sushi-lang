@@ -19,7 +19,7 @@ def generate_write(module: ir.Module) -> None:
     i32 = ir.IntType(32)
     i64 = ir.IntType(64)
     i8_ptr = ir.IntType(8).as_pointer()
-    string_struct_type = ir.LiteralStructType([i8_ptr, i32])
+    string_struct_type = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
 
     # Function signature: i32 @sushi_file_write(ptr %file_ptr, {ptr, i32} %string)
     fn_ty = ir.FunctionType(i32, [i8_ptr, string_struct_type])
@@ -59,7 +59,7 @@ def generate_writeln(module: ir.Module) -> None:
     i32 = ir.IntType(32)
     i64 = ir.IntType(64)
     i8_ptr = ir.IntType(8).as_pointer()
-    string_struct_type = ir.LiteralStructType([i8_ptr, i32])
+    string_struct_type = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
 
     # Function signature: i32 @sushi_file_writeln(ptr %file_ptr, {ptr, i32} %string)
     fn_ty = ir.FunctionType(i32, [i8_ptr, string_struct_type])

@@ -81,7 +81,7 @@ def generate_getcwd(module: ir.Module) -> None:
     builder.position_at_end(success_block)
     str_len = builder.call(strlen_fn, [result_ptr])
     str_len_i32 = builder.trunc(str_len, i32)
-    sushi_string = cstr_to_fat_pointer_with_len(builder, result_ptr, str_len_i32)
+    sushi_string = cstr_to_fat_pointer_with_len(builder, result_ptr, str_len_i32, owned=0)
 
     # Note: Do NOT free the buffer - the fat pointer points to it,
     # and Sushi's RAII will handle cleanup when the string goes out of scope
@@ -313,7 +313,7 @@ def generate_run(module: ir.Module) -> None:
         buf = b.call(malloc_fn, [b.add(n64, ir.Constant(i64, 1))])
         b.call(fread_fn, [buf, ir.Constant(i64, 1), n64, f])
         b.store(ir.Constant(i8, 0), b.gep(buf, [n64]))                    # NUL terminate
-        return cstr_to_fat_pointer_with_len(b, buf, b.trunc(n64, i32))
+        return cstr_to_fat_pointer_with_len(b, buf, b.trunc(n64, i32), owned=1)
 
     # entry: allocas + open capture files
     args_slot = b.alloca(argv_type)

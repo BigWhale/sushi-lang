@@ -145,6 +145,6 @@ def declare_strcmp_intrinsic(module: ir.Module) -> ir.Function:
 
     i8_ptr = ir.IntType(8).as_pointer()
     i32 = ir.IntType(32)
-    string_type = ir.LiteralStructType([i8_ptr, i32])
+    string_type = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
     fn_ty = ir.FunctionType(i32, [string_type, string_type])
     return ir.Function(module, fn_ty, name=func_name)

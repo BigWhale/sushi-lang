@@ -53,7 +53,10 @@ class StringOperations:
         zero = ir.Constant(self.codegen.i32, 0)
         data_ptr = self.codegen.builder.gep(global_str, [zero, zero])
 
-        # Build fat pointer struct: {i8* data, i32 size}
+        # Build fat pointer struct: {i8* data, i32 size, i8 owned}
+        # Literals are backed by a deduplicated global -> owned=0 (RAII must NEVER free it).
+        # The owned field must be set concretely (not left undef): on ARM64 `size` and
+        # `owned` share one by-value argument register, so an undef owned poisons `size`.
         string_struct_type = self.codegen.types.string_struct
         size = len(string_value.encode('utf-8'))
         size_value = ir.Constant(self.codegen.i32, size)
@@ -61,7 +64,9 @@ class StringOperations:
         # Use insertvalue to build the struct
         undef_struct = ir.Constant(string_struct_type, ir.Undefined)
         struct_with_data = self.codegen.builder.insert_value(undef_struct, data_ptr, 0)
-        struct_complete = self.codegen.builder.insert_value(struct_with_data, size_value, 1)
+        struct_with_size = self.codegen.builder.insert_value(struct_with_data, size_value, 1)
+        struct_complete = self.codegen.builder.insert_value(
+            struct_with_size, ir.Constant(self.codegen.i8, 0), 2)
 
         return struct_complete
 
@@ -107,8 +112,10 @@ class StringOperations:
 
         # Block for checking data when sizes match
         self.codegen.builder.position_at_end(check_data_block)
-        # Use memcmp to compare data
-        memcmp_result = self.codegen.builder.call(self.codegen.runtime.libc_strings.memcmp, [lhs_data, rhs_data, lhs_size])
+        # Use memcmp to compare data. memcmp's n is size_t (i64); zero-extend the
+        # i32 string size so the full 64-bit length register is defined (issue #149).
+        lhs_size_n = self.codegen.builder.zext(lhs_size, self.codegen.types.i64)
+        memcmp_result = self.codegen.builder.call(self.codegen.runtime.libc_strings.memcmp, [lhs_data, rhs_data, lhs_size_n])
         data_equal = self.codegen.builder.icmp_signed('==', memcmp_result, ir.Constant(self.codegen.i32, 0))
         self.codegen.builder.branch(merge_block)
 
@@ -174,23 +181,31 @@ class StringOperations:
         # to free after output (#141). No-op elsewhere.
         self.codegen.register_string_temp(new_data)
 
-        # Copy first string using llvm.memcpy intrinsic
+        # Copy first string using llvm.memcpy intrinsic. Use the i64-length form and
+        # zero-extend the i32 string size: the fat-pointer size field sits next to the
+        # `owned` byte and padding, and passing the raw i32 lets those adjacent bytes
+        # leak into the 64-bit length register that glibc's memcpy reads, giving a
+        # garbage huge length and an out-of-bounds read on x86-64 (issue #149).
         memcpy_fn = self.codegen.module.declare_intrinsic(
             'llvm.memcpy',
-            [ir.PointerType(self.codegen.i8), ir.PointerType(self.codegen.i8), self.codegen.i32]
+            [ir.PointerType(self.codegen.i8), ir.PointerType(self.codegen.i8), ir.IntType(INT64_BIT_WIDTH)]
         )
         is_volatile = FALSE_I1
-        self.codegen.builder.call(memcpy_fn, [new_data, data1, size1, is_volatile])
+        size1_i64 = self.codegen.builder.zext(size1, ir.IntType(INT64_BIT_WIDTH))
+        self.codegen.builder.call(memcpy_fn, [new_data, data1, size1_i64, is_volatile])
 
         # Copy second string after first
         offset_ptr = self.codegen.builder.gep(new_data, [size1])
-        self.codegen.builder.call(memcpy_fn, [offset_ptr, data2, size2, is_volatile])
+        size2_i64 = self.codegen.builder.zext(size2, ir.IntType(INT64_BIT_WIDTH))
+        self.codegen.builder.call(memcpy_fn, [offset_ptr, data2, size2_i64, is_volatile])
 
-        # Build and return fat pointer struct
+        # Build and return fat pointer struct (freshly malloc'd -> heap-owned)
         string_struct_type = self.codegen.types.string_struct
         undef_struct = ir.Constant(string_struct_type, ir.Undefined)
         struct_with_data = self.codegen.builder.insert_value(undef_struct, new_data, 0)
-        struct_complete = self.codegen.builder.insert_value(struct_with_data, total_size, 1)
+        struct_with_size = self.codegen.builder.insert_value(struct_with_data, total_size, 1)
+        struct_complete = self.codegen.builder.insert_value(
+            struct_with_size, ir.Constant(self.codegen.i8, 1), 2)
 
         return struct_complete
 
@@ -222,13 +237,15 @@ class StringOperations:
         size_i64 = self.codegen.builder.zext(size_plus_one, ir.IntType(INT64_BIT_WIDTH))
         c_str = self.codegen.builder.call(malloc_func, [size_i64])
 
-        # Copy string data using llvm.memcpy intrinsic
+        # Copy string data using llvm.memcpy intrinsic. i64-length form + zero-extended
+        # size so adjacent fat-pointer bytes cannot leak into the length register (#149).
         memcpy_fn = self.codegen.module.declare_intrinsic(
             'llvm.memcpy',
-            [ir.PointerType(self.codegen.i8), ir.PointerType(self.codegen.i8), self.codegen.i32]
+            [ir.PointerType(self.codegen.i8), ir.PointerType(self.codegen.i8), ir.IntType(INT64_BIT_WIDTH)]
         )
         is_volatile = FALSE_I1
-        self.codegen.builder.call(memcpy_fn, [c_str, data_ptr, size, is_volatile])
+        size_copy_i64 = self.codegen.builder.zext(size, ir.IntType(INT64_BIT_WIDTH))
+        self.codegen.builder.call(memcpy_fn, [c_str, data_ptr, size_copy_i64, is_volatile])
 
         # Add null terminator
         null_ptr = self.codegen.builder.gep(c_str, [size])
@@ -236,17 +253,24 @@ class StringOperations:
 
         return c_str
 
-    def emit_cstr_to_fat_pointer(self, c_str: ir.Value) -> ir.Value:
+    def emit_cstr_to_fat_pointer(self, c_str: ir.Value, owned: int) -> ir.Value:
         """Convert null-terminated C string to fat pointer struct.
 
         This is the inverse of emit_to_cstr() - used when C functions
         return strings that need to be converted to fat pointers.
 
+        `owned` is REQUIRED and wraps `c_str` in place (no copy): pass 1 when `c_str`
+        is a fresh Sushi-owned heap buffer the RAII path must free (e.g. an int/float
+        to-string conversion buffer); pass 0 when it is foreign / borrowed memory Sushi
+        must never free. The FFI copy-to-owned policy (issue #145) is applied at the FFI
+        call site by copying the foreign buffer first, then wrapping the copy with owned=1.
+
         Args:
             c_str: Null-terminated i8* from C function.
+            owned: 1 if Sushi owns `c_str` (RAII frees it), 0 if it is foreign/borrowed.
 
         Returns:
-            Fat pointer struct {i8* data, i32 size}.
+            Fat pointer struct {i8* data, i32 size, i8 owned}.
 
         Raises:
             AssertionError: If required runtime functions are not declared.
@@ -257,11 +281,13 @@ class StringOperations:
         # Use strlen to get the size
         size = self.codegen.builder.call(self.codegen.runtime.libc_strings.strlen, [c_str])
 
-        # Build fat pointer struct: {i8* data, i32 size}
+        # Build fat pointer struct: {i8* data, i32 size, i8 owned}
         string_struct_type = self.codegen.types.string_struct
         undef_struct = ir.Constant(string_struct_type, ir.Undefined)
         struct_with_data = self.codegen.builder.insert_value(undef_struct, c_str, 0)
-        struct_complete = self.codegen.builder.insert_value(struct_with_data, size, 1)
+        struct_with_size = self.codegen.builder.insert_value(struct_with_data, size, 1)
+        struct_complete = self.codegen.builder.insert_value(
+            struct_with_size, ir.Constant(self.codegen.i8, 1 if owned else 0), 2)
 
         return struct_complete
 

@@ -139,13 +139,18 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
     if len(expr.parts) == 1 and isinstance(expr.parts[0], str):
         return codegen.runtime.strings.emit_string_literal(expr.parts[0])
 
-    # Build list of string values to concatenate
+    # Build list of (value, is_fresh) to concatenate. `is_fresh` marks a heap temporary this
+    # interpolation OWNS and may free after it is consumed (a to-string / concat buffer);
+    # a literal (owned=0) or an existing string variable (a BORROW aliasing another owner)
+    # is NOT fresh and must never be freed here (#145).
     string_values = []
+    fresh_flags = []
 
     for part in expr.parts:
         if isinstance(part, str):
-            # String literal part - emit as string literal
+            # String literal part - emit as string literal (owned=0, borrow-like: not fresh)
             string_values.append(codegen.runtime.strings.emit_string_literal(part))
+            fresh_flags.append(False)
         else:
             # Expression part - emit expression and convert to string if needed
             # Use codegen.expressions for recursive call
@@ -153,8 +158,10 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
 
             # Check if the expression is already a string (fat pointer struct)
             if codegen.types.is_string_type(expr_value.type):
-                # Already a string fat pointer, use it directly
+                # Already a string fat pointer -- a BORROW of its owner (e.g. `{name}`);
+                # use directly and never free it here.
                 string_values.append(expr_value)
+                fresh_flags.append(False)
             else:
                 # Not a string, need to convert using appropriate to_str implementation
                 # Directly call the conversion functions based on LLVM type
@@ -166,6 +173,7 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
                     if width == 1:
                         # bool (i1)
                         string_values.append(codegen.runtime.formatting.emit_bool_to_string(expr_value))
+                        fresh_flags.append(True)
                     elif width in [8, 16, 32, 64]:
                         # Determine signedness from the expression's type
                         is_signed = True  # default to signed
@@ -180,6 +188,7 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
                             # integer path; format them as true/false explicitly.
                             if inferred_type == BuiltinType.BOOL:
                                 string_values.append(codegen.runtime.formatting.emit_bool_to_string(expr_value))
+                                fresh_flags.append(True)
                                 continue
                             if inferred_type in [BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64]:
                                 is_signed = False
@@ -193,12 +202,14 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
                                     is_signed = False
 
                         string_values.append(codegen.runtime.formatting.emit_integer_to_string(expr_value, is_signed=is_signed, bit_width=width))
+                        fresh_flags.append(True)
                     else:
                         raise_internal_error("CE0022", type=f"i{{width}}")
                 elif isinstance(llvm_type, (ir.FloatType, ir.DoubleType)):
                     # Float type
                     is_double = isinstance(llvm_type, ir.DoubleType)
                     string_values.append(codegen.runtime.formatting.emit_float_to_string(expr_value, is_double=is_double))
+                    fresh_flags.append(True)
                 else:
                     raise_internal_error("CE0022", type=str(llvm_type))
 
@@ -206,10 +217,25 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
     if len(string_values) == 1:
         return string_values[0]
 
-    # Concatenate all string values using runtime string concatenation
+    # Concatenate all string values, freeing each consumed FRESH intermediate right after the
+    # concat copies its bytes (#145). A literal / borrowed variable part is not fresh and is
+    # never freed. The final result is returned unfreed (its new owner -- a `let` local via the
+    # scope registry, or the print statement -- frees it). Skip the freeing entirely inside a
+    # print argument: the #141 print-temp registry already frees these buffers there, and doing
+    # it here too would double-free.
+    from sushi_lang.backend.destructors import emit_string_destructor_from_value
+    free_intermediates = not codegen._string_temp_stack
+
     result = string_values[0]
-    for string_value in string_values[1:]:
-        # Use the runtime string concatenation function
-        result = codegen.runtime.strings.emit_string_concat(result, string_value)
+    result_fresh = fresh_flags[0]
+    for string_value, sv_fresh in zip(string_values[1:], fresh_flags[1:]):
+        new_result = codegen.runtime.strings.emit_string_concat(result, string_value)
+        if free_intermediates:
+            if result_fresh:
+                emit_string_destructor_from_value(codegen, codegen.builder, result)
+            if sv_fresh:
+                emit_string_destructor_from_value(codegen, codegen.builder, string_value)
+        result = new_result
+        result_fresh = True  # a concat output is always a fresh heap buffer
 
     return result

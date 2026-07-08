@@ -75,7 +75,7 @@ def allocate_and_read_line(
     # Convert C string to fat pointer, passing pre-computed length
     final_len_val = builder.load(final_length)
     from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer_with_len
-    return cstr_to_fat_pointer_with_len(builder, buffer, final_len_val)
+    return cstr_to_fat_pointer_with_len(builder, buffer, final_len_val, owned=1)
 
 
 def allocate_and_read_char(
@@ -133,7 +133,7 @@ def allocate_and_read_char(
 
     # Merge block: Convert C string to fat pointer and return
     builder.position_at_end(merge_block)
-    return cstr_to_fat_pointer(module, builder, buffer)
+    return cstr_to_fat_pointer(module, builder, buffer, owned=1)
 
 
 def allocate_and_read_full_file(
@@ -233,4 +233,4 @@ def allocate_and_read_full_file(
     builder.store(null_char, null_ptr)
 
     # Convert C string to fat pointer and return
-    return cstr_to_fat_pointer(module, builder, final_buffer)
+    return cstr_to_fat_pointer(module, builder, final_buffer, owned=1)

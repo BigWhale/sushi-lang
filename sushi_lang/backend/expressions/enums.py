@@ -150,10 +150,12 @@ def emit_enum_constructor_from_method_call(
             arg_llvm_type = arg_value.type
             arg_size = memory.get_type_size(arg_llvm_type)
 
-            # Store the argument at the current offset
+            # Store the argument at the current offset. align=1: enum variant data is a byte
+            # array, so a 16-byte {i8*,i32,i8} string here is under-aligned; without align=1
+            # LLVM emits an aligned vector move that faults (SIGSEGV) on x86-64 (#145).
             arg_ptr_i8 = codegen.builder.gep(data_ptr, [ir.Constant(codegen.types.i32, offset)], name=f"arg{i}_ptr")
             arg_ptr_typed = codegen.builder.bitcast(arg_ptr_i8, ir.PointerType(arg_llvm_type), name=f"arg{i}_ptr_typed")
-            codegen.builder.store(arg_value, arg_ptr_typed)
+            codegen.builder.store(arg_value, arg_ptr_typed, align=1)
 
             offset += arg_size
 

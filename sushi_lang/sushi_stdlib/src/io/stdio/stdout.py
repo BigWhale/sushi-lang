@@ -28,7 +28,7 @@ def generate_stdout_write(module: ir.Module) -> None:
     i8_ptr = ir.IntType(8).as_pointer()
     i32 = ir.IntType(32)
     i64 = ir.IntType(64)
-    string_struct_ty = ir.LiteralStructType([i8_ptr, i32])
+    string_struct_ty = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
     fn_ty = ir.FunctionType(i32, [string_struct_ty])
     func = ir.Function(module, fn_ty, name="sushi_stdout_write")
     func.args[0].name = "str"

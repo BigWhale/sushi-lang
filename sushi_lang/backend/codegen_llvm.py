@@ -1151,10 +1151,11 @@ class LLVMCodegen:
             zero = ir.Constant(self.i32, 0)
             data_ptr = data_global.gep([zero, zero])
 
-            # Create fat pointer struct constant {i8*, i32}
+            # Create fat pointer struct constant {i8*, i32, i8 owned}; a const string is
+            # backed by a global -> owned=0 (RAII must never free it) (#145).
             string_struct_type = self.types.string_struct
             size_value = ir.Constant(self.i32, size)
-            struct_value = ir.Constant.literal_struct([data_ptr, size_value])
+            struct_value = ir.Constant.literal_struct([data_ptr, size_value, ir.Constant(self.i8, 0)])
 
             # Create global variable to hold the fat pointer struct
             struct_global = ir.GlobalVariable(self.module, string_struct_type, name=const.name)

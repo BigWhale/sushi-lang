@@ -165,7 +165,7 @@ class ResultBuilder:
             value_ptr_typed = codegen.builder.bitcast(
                 data_ptr, ir.PointerType(value.type), name="ok_ptr_typed"
             )
-            codegen.builder.store(value, value_ptr_typed)
+            codegen.builder.store(value, value_ptr_typed, align=1)  # under-aligned enum payload; avoid x86-64 vector-move fault (#145)
 
             packed_data = codegen.builder.load(temp_alloca, name="packed_ok_data")
             enum_value = enum_utils.set_enum_data(
@@ -214,7 +214,7 @@ class ResultBuilder:
             error_ptr_typed = codegen.builder.bitcast(
                 data_ptr, ir.PointerType(error_value.type), name="err_ptr_typed"
             )
-            codegen.builder.store(error_value, error_ptr_typed)
+            codegen.builder.store(error_value, error_ptr_typed, align=1)  # under-aligned enum payload (#145)
 
             packed_data = codegen.builder.load(temp_alloca, name="packed_err_data")
             enum_value = enum_utils.set_enum_data(

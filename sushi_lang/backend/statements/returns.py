@@ -75,12 +75,17 @@ def emit_return(codegen: 'LLVMCodegen', stmt: 'Return') -> None:
 
     # Mark returned struct and dynamic array variables as moved (transfer ownership to caller)
     # This prevents RAII cleanup from freeing memory that the caller will receive
-    from sushi_lang.semantics.typesys import StructType, DynamicArrayType, FunctionType
+    from sushi_lang.semantics.typesys import StructType, DynamicArrayType, FunctionType, BuiltinType
     for var_name in moved_vars:
         # Check if variable is a struct with dynamic arrays or a dynamic array itself
         semantic_type = codegen.memory.find_semantic_type(var_name)
         if semantic_type:
-            if isinstance(semantic_type, FunctionType):
+            if semantic_type == BuiltinType.STRING:
+                # A returned string escapes: mark it moved so scope-exit cleanup skips its
+                # owned-bit free (the caller's binding now owns and frees the buffer). Freeing
+                # here would return a dangling pointer (use-after-free) (#145).
+                codegen.moves.mark(var_name)
+            elif isinstance(semantic_type, FunctionType):
                 # A returned closure escapes: mark it moved so the local scope skips its
                 # env free (the caller's binding now owns and frees the environment).
                 codegen.moves.mark(var_name)

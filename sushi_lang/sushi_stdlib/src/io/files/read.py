@@ -25,7 +25,7 @@ def generate_read(module: ir.Module) -> None:
     i8 = ir.IntType(8)
     i32 = ir.IntType(32)
     i8_ptr = i8.as_pointer()
-    string_struct_type = ir.LiteralStructType([i8_ptr, i32])
+    string_struct_type = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
 
     # Function signature: {ptr, i32} @sushi_file_read(ptr %file_ptr)
     fn_ty = ir.FunctionType(string_struct_type, [i8_ptr])
@@ -53,7 +53,7 @@ def generate_readln(module: ir.Module) -> None:
     i8 = ir.IntType(8)
     i32 = ir.IntType(32)
     i8_ptr = i8.as_pointer()
-    string_struct_type = ir.LiteralStructType([i8_ptr, i32])
+    string_struct_type = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
 
     # Function signature: {ptr, i32} @sushi_file_readln(ptr %file_ptr)
     fn_ty = ir.FunctionType(string_struct_type, [i8_ptr])
@@ -81,7 +81,7 @@ def generate_readch(module: ir.Module) -> None:
     i8 = ir.IntType(8)
     i32 = ir.IntType(32)
     i8_ptr = i8.as_pointer()
-    string_struct_type = ir.LiteralStructType([i8_ptr, i32])
+    string_struct_type = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
 
     # Function signature: {ptr, i32} @sushi_file_readch(ptr %file_ptr)
     fn_ty = ir.FunctionType(string_struct_type, [i8_ptr])
@@ -124,7 +124,7 @@ def generate_lines(module: ir.Module) -> None:
     i32 = ir.IntType(32)
     i64 = ir.IntType(64)
     i8_ptr = ir.IntType(8).as_pointer()
-    string_fat_ptr = ir.LiteralStructType([i8_ptr, i32])
+    string_fat_ptr = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
 
     # Iterator struct type: {i32, i32, {i8*, i32}*}
     # For streaming iterators, we store FILE* casted to this type

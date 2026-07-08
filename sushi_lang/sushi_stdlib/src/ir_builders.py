@@ -26,22 +26,28 @@ class IRStructBuilder:
         builder: ir.IRBuilder,
         string_type: ir.LiteralStructType,
         data_ptr: ir.Value,
-        size: ir.Value
+        size: ir.Value,
+        owned: int,
     ) -> ir.Value:
-        """Build a fat pointer struct { i8*, i32 }.
+        """Build a string fat pointer struct { i8*, i32, i8 owned }.
+
+        `owned` is REQUIRED (issue #145): 1 = heap (RAII frees), 0 = literal/borrow.
 
         Args:
             builder: IR builder
             string_type: Fat pointer struct type
             data_ptr: Data pointer (i8*)
             size: Size in bytes (i32)
+            owned: 1 if fresh heap allocation the runtime must free, else 0.
 
         Returns:
             Fat pointer struct value
         """
         undef_struct = ir.Constant(string_type, ir.Undefined)
         struct_with_data = builder.insert_value(undef_struct, data_ptr, 0, name="struct_with_data")
-        struct_complete = builder.insert_value(struct_with_data, size, 1, name="struct_complete")
+        struct_with_size = builder.insert_value(struct_with_data, size, 1, name="struct_with_size")
+        struct_complete = builder.insert_value(
+            struct_with_size, ir.Constant(ir.IntType(8), 1 if owned else 0), 2, name="struct_complete")
         return struct_complete
 
     @staticmethod
@@ -238,7 +244,7 @@ class IRLoopBuilder:
 
         # Exit: build and return fat pointer
         builder = ir.IRBuilder(exit_block)
-        result = IRStructBuilder.build_fat_pointer(builder, string_type, new_data, size)
+        result = IRStructBuilder.build_fat_pointer(builder, string_type, new_data, size, owned=1)
         builder.ret(result)
 
 
@@ -406,4 +412,4 @@ class IRMemoryBuilder:
         )
 
         # Build fat pointer
-        return IRStructBuilder.build_fat_pointer(builder, string_type, new_data, byte_length)
+        return IRStructBuilder.build_fat_pointer(builder, string_type, new_data, byte_length, owned=1)

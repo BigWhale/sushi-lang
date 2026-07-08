@@ -89,6 +89,13 @@ class ScopeManager:
         # pop_scope drains exactly once on the fall-through. One free per runtime path.
         self._closure_temp_cleanup: List[List[ir.Value]] = []
 
+        # String-value RAII (#145): local `string` bindings whose heap buffer is freed at
+        # scope exit via the owned bit (a literal/borrow carries owned=0 -> the free is a
+        # runtime no-op). Name-keyed like _closure_cleanup; move-tracked via MoveTracker so
+        # a returned/aliased owning string is skipped (its new owner frees it). Parameters
+        # are NOT registered -- a passed string is owned by the caller's binding.
+        self._string_cleanup: Dict[str, ir.AllocaInstr] = {}
+
     def push_scope(self) -> None:
         """Push a new lexical scope onto the scope stack.
 
@@ -152,6 +159,19 @@ class ScopeManager:
                     if block_live and not self.is_struct_moved(var_name):
                         self._emit_closure_free(self._closure_cleanup[var_name])
                     del self._closure_cleanup[var_name]
+
+        # Free string locals on the fall-through exit, runtime-guarded by the owned bit (#145).
+        # Same mutual-exclusion discipline as structs/closures: early-exit paths emit their own
+        # guarded free via emit_string_cleanup_all; a moved (returned/aliased) string is skipped
+        # so its new owner frees it. A literal/borrow (owned=0) frees to a no-op.
+        if self._string_cleanup:
+            block = self.codegen.builder.block if self.codegen.builder is not None else None
+            block_live = block is not None and not block.is_terminated
+            for var_name in current_vars:
+                if var_name in self._string_cleanup:
+                    if block_live and not self.is_struct_moved(var_name):
+                        self._emit_string_free(self._string_cleanup[var_name])
+                    del self._string_cleanup[var_name]
 
         # Remove variables from flat caches
         for var_name in current_vars:
@@ -334,7 +354,7 @@ class ScopeManager:
             self._types[name].append((self._scope_depth, semantic_ty))
 
             # Track struct variables that need cleanup
-            from sushi_lang.semantics.typesys import StructType, FunctionType
+            from sushi_lang.semantics.typesys import StructType, FunctionType, BuiltinType
             if isinstance(semantic_ty, StructType):
                 if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
                     if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
@@ -342,6 +362,9 @@ class ScopeManager:
             # Track function-value locals for runtime-guarded env free at scope exit.
             elif isinstance(semantic_ty, FunctionType):
                 self._closure_cleanup[name] = slot
+            # Track string locals for owned-bit-guarded free at scope exit (#145).
+            elif semantic_ty == BuiltinType.STRING:
+                self._string_cleanup[name] = slot
 
         if init is not None:
             if self.codegen.builder is None:
@@ -387,7 +410,7 @@ class ScopeManager:
             self._types[name].append((self._scope_depth, semantic_ty))
 
             # Track struct variables that need cleanup
-            from sushi_lang.semantics.typesys import StructType, FunctionType
+            from sushi_lang.semantics.typesys import StructType, FunctionType, BuiltinType
             if isinstance(semantic_ty, StructType):
                 if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
                     if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
@@ -395,6 +418,9 @@ class ScopeManager:
             # Track function-value locals for runtime-guarded env free at scope exit.
             elif isinstance(semantic_ty, FunctionType):
                 self._closure_cleanup[name] = slot
+            # Track string locals for owned-bit-guarded free at scope exit (#145).
+            elif semantic_ty == BuiltinType.STRING:
+                self._string_cleanup[name] = slot
 
         return slot
 
@@ -444,6 +470,27 @@ class ScopeManager:
         from sushi_lang.backend.destructors import emit_function_value_destructor
         emit_function_value_destructor(self.codegen, self.codegen.builder, slot)
 
+    def _emit_string_free(self, slot: ir.AllocaInstr) -> None:
+        """Emit the owned-bit-guarded free for a string local (`if owned: free(data)`) (#145)."""
+        from sushi_lang.backend.destructors import emit_string_destructor
+        emit_string_destructor(self.codegen, self.codegen.builder, slot)
+
+    def emit_string_cleanup_all(self) -> None:
+        """Emit the guarded free for every live string local across all open scopes.
+
+        Used on early-exit paths (return / ?? propagation), mirroring the struct/closure
+        early-exit emitters: the frees go into the CURRENT (terminating) block and the
+        registry is NOT mutated, so the fall-through pop_scope still frees on its own
+        mutually-exclusive block. A moved (returned/aliased) string is skipped so its new
+        owner frees it; exactly one free runs per runtime path -- no leak, no double free.
+        """
+        builder = self.codegen.builder
+        if builder is None or builder.block is None or builder.block.is_terminated:
+            return
+        for var_name, slot in self._string_cleanup.items():
+            if not self.is_struct_moved(var_name):
+                self._emit_string_free(slot)
+
     def is_closure_registered(self, name: str) -> bool:
         """True if `name` is a registered function-value RAII owner in the current scope.
 
@@ -461,6 +508,22 @@ class ScopeManager:
         container/struct still owns. Registering it as a second owner would double-free
         the shared environment (mirrors the Own<T>.get() non-owning-borrow guard)."""
         self._closure_cleanup.pop(name, None)
+
+    def is_string_registered(self, name: str) -> bool:
+        """True if `name` is a registered owning string local in the current scope (#145).
+
+        Used to distinguish a rebind that MOVES from an owning string local (source is
+        registered) from one that borrows a buffer owned elsewhere (a param / struct-field
+        read / container get-out, which is not registered)."""
+        return name in self._string_cleanup
+
+    def unregister_string_cleanup(self, name: str) -> None:
+        """Drop `name` from string RAII tracking (no-op if absent) (#145).
+
+        Used when a string local is a NON-owning alias -- bound from a struct-field read or
+        a container get-out whose buffer the struct/container still owns. Registering it as a
+        second owner would double-free (mirrors the closure/Own<T> non-owning-borrow guard)."""
+        self._string_cleanup.pop(name, None)
 
     def mark_struct_as_moved(self, var_name: str) -> None:
         """Mark a struct variable as moved (ownership transferred).
@@ -501,6 +564,7 @@ class ScopeManager:
         self._types.clear()
         self._struct_cleanup.clear()
         self._closure_cleanup.clear()
+        self._string_cleanup.clear()
         self._cstr_cleanup = []
         self._closure_temp_cleanup = []
 
