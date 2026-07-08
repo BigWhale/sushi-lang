@@ -16,7 +16,7 @@ then `str(cg.module)`.
 from __future__ import annotations
 import subprocess
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from llvmlite import ir, binding as llvm
 
@@ -112,6 +112,15 @@ class LLVMCodegen:
         self._malloc_func: Optional[ir.Function] = None
         self._free_func: Optional[ir.Function] = None
         self._realloc_func: Optional[ir.Function] = None
+
+        # Print-argument string-temp registry (#141): a stack of lists of heap data
+        # pointers allocated while a print/println argument is being emitted (concat
+        # buffers, int/float to-string buffers). The print statement pushes a frame,
+        # emits+prints the argument, then frees the frame -- so the formatted temporary
+        # string and its intermediates are released after output. Only real allocations
+        # register, so a literal (global), a bool-select (globals), or a plain variable
+        # load registers nothing and is never freed.
+        self._string_temp_stack: List[List[ir.Value]] = []
 
         # Command line arguments support
         self.main_expects_args: bool = False
@@ -219,6 +228,34 @@ class LLVMCodegen:
             )
             self._free_func = ir.Function(self.module, free_type, name="free")
         return self._free_func
+
+    def push_string_temp_scope(self) -> None:
+        """Open a print-argument string-temp frame (#141). See `_string_temp_stack`."""
+        self._string_temp_stack.append([])
+
+    def register_string_temp(self, data_ptr: ir.Value) -> None:
+        """Register a freshly heap-allocated string buffer if a print-arg frame is open.
+
+        No-op outside a print/println argument (the stack is empty), so ordinary string
+        building elsewhere is unaffected.
+        """
+        if self._string_temp_stack:
+            self._string_temp_stack[-1].append(data_ptr)
+
+    def pop_and_free_string_temp_scope(self) -> None:
+        """Free every buffer registered in the current print-arg frame and pop it.
+
+        Called after the value has been written to stdout, so the read via `%.*s`
+        happens before the free. Straight-line within the print statement's block.
+        """
+        if not self._string_temp_stack:
+            return
+        temps = self._string_temp_stack.pop()
+        if self.builder is None or self.builder.block is None or self.builder.block.is_terminated:
+            return
+        from sushi_lang.backend.memory.heap import emit_free
+        for data_ptr in temps:
+            emit_free(self.builder, self, data_ptr)
 
     def get_realloc_func(self) -> ir.Function:
         """Get or declare realloc function."""
@@ -580,6 +617,7 @@ class LLVMCodegen:
         self._malloc_func = None
         self._free_func = None
         self._realloc_func = None
+        self._string_temp_stack = []
         self.string_manager = StringConstantManager(self)
 
         # Rebuild runtime-formatted strings for this fresh module
@@ -694,6 +732,7 @@ class LLVMCodegen:
         self._malloc_func = None
         self._free_func = None
         self._realloc_func = None
+        self._string_temp_stack = []
         self.string_manager = StringConstantManager(self)
         self.runtime = LLVMRuntime(self)
 

@@ -82,10 +82,13 @@ class FormattingOperations:
         )
 
         if self.codegen.types.is_string_type(v.type):
-            fmt_ptr = self.codegen.utils.cstr_ptr(self.fmt_str)
-            # Convert fat pointer to null-terminated C string for printf
-            c_str = self.codegen.runtime.strings.emit_to_cstr(v)
-            self.codegen.builder.call(self.codegen.runtime.libc_stdio.printf, [fmt_ptr, c_str])
+            # Print the fat-pointer string in place with a bounded "%.*s": the precision
+            # arg is the byte size and the data pointer needs no null terminator. This
+            # avoids the heap C-string copy (emit_to_cstr) that was never freed (#141).
+            data_ptr = self.codegen.builder.extract_value(v, 0)
+            size = self.codegen.builder.extract_value(v, 1)
+            fmt_ptr = self._get_format_string("str_prec", "%.*s")
+            self.codegen.builder.call(self.codegen.runtime.libc_stdio.printf, [fmt_ptr, size, data_ptr])
         elif isinstance(v.type, ir.FloatType):
             fmt_ptr = self.codegen.utils.cstr_ptr(self.fmt_f32)
             # Convert f32 to f64 for printf (C variadic function requirement)
@@ -99,10 +102,9 @@ class FormattingOperations:
 
         # Print newline if this is println
         if is_line:
-            newline_struct = self.codegen.runtime.strings.emit_string_literal("\n")
-            # Convert fat pointer to C string for printf
-            newline_ptr = self.codegen.runtime.strings.emit_to_cstr(newline_struct)
-            self.codegen.builder.call(self.codegen.runtime.libc_stdio.printf, [newline_ptr])
+            # Emit the newline via a dedicated format-string global -- no heap copy (#141).
+            newline_fmt = self._get_format_string("newline", "\n")
+            self.codegen.builder.call(self.codegen.runtime.libc_stdio.printf, [newline_fmt])
 
     def _emit_print_integer(self, v: ir.Value, semantic_type=None) -> None:
         """Print an integer at its own width with signedness-aware formatting.
@@ -358,7 +360,11 @@ class FormattingOperations:
         """
         malloc_func = self.codegen.get_malloc_func()
         buffer_size = make_i64_const(size)
-        return self.codegen.builder.call(malloc_func, [buffer_size])
+        buffer = self.codegen.builder.call(malloc_func, [buffer_size])
+        # If emitted inside a print/println argument, this to-string buffer is a temporary
+        # to free after output (#141). No-op elsewhere.
+        self.codegen.register_string_temp(buffer)
+        return buffer
 
     def _prepare_integer_for_sprintf(
         self, int_value: ir.Value, is_signed: bool, bit_width: int
