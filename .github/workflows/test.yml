@@ -138,6 +138,28 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           uv run python tests/run_tests.py --enhanced
 
+      - name: DEBUG issue #149 - gdb backtrace of test_stdlib_results
+        if: always()
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          apt-get install -y gdb
+          uv run python -m sushi_lang --no-incremental -o /tmp/sr_bin tests/stdlib/test_stdlib_results.sushi
+          echo "=== plain run (exit code) ==="
+          /tmp/sr_bin; echo "EXIT=$?"
+          echo "=== gdb backtrace at fault ==="
+          gdb -q -batch \
+            -ex 'run' \
+            -ex 'echo \n=== BACKTRACE ===\n' \
+            -ex 'bt' \
+            -ex 'echo \n=== REGISTERS ===\n' \
+            -ex 'info registers rip rdi rsi rdx rcx r8 r9 rax rbx rbp rsp' \
+            -ex 'echo \n=== FAULTING INSN ===\n' \
+            -ex 'x/4i $pc' \
+            -ex 'echo \n=== FRAME 1 (our code) ===\n' \
+            -ex 'frame 1' \
+            -ex 'x/8i $pc-16' \
+            /tmp/sr_bin || true
+
   test-macos:
     needs: pytest
     if: github.event_name != 'push'
