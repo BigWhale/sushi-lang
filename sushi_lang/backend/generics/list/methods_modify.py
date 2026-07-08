@@ -511,14 +511,16 @@ def emit_list_insert(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Str
         src_i8 = codegen.builder.bitcast(src_ptr, ir.PointerType(codegen.types.i8))
         dest_i8 = codegen.builder.bitcast(dest_ptr, ir.PointerType(codegen.types.i8))
 
-        # Call llvm.memmove intrinsic
-        # Signature: void @llvm.memmove.p0i8.p0i8.i32(i8* dest, i8* src, i32 len, i1 is_volatile)
+        # Call llvm.memmove intrinsic. i64-length form + zero-extended byte count so the
+        # runtime i32 length cannot leak garbage upper bits into the length register that
+        # glibc's memmove reads on x86-64 (#149/#151).
         memmove_fn = codegen.module.declare_intrinsic(
             'llvm.memmove',
-            [ir.PointerType(codegen.types.i8), ir.PointerType(codegen.types.i8), codegen.types.i32]
+            [ir.PointerType(codegen.types.i8), ir.PointerType(codegen.types.i8), codegen.types.i64]
         )
         is_volatile = FALSE_I1
-        codegen.builder.call(memmove_fn, [dest_i8, src_i8, bytes_to_move, is_volatile])
+        bytes_to_move_i64 = codegen.builder.zext(bytes_to_move, codegen.types.i64)
+        codegen.builder.call(memmove_fn, [dest_i8, src_i8, bytes_to_move_i64, is_volatile])
 
     # Evaluate element value to insert
     element_value = codegen.expressions.emit_expr(expr.args[1])
@@ -664,13 +666,15 @@ def emit_list_remove(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Str
         src_i8 = codegen.builder.bitcast(src_ptr, ir.PointerType(codegen.types.i8))
         dest_i8 = codegen.builder.bitcast(dest_ptr, ir.PointerType(codegen.types.i8))
 
-        # Call llvm.memmove intrinsic to shift left
+        # Call llvm.memmove intrinsic to shift left. i64-length form + zero-extended byte
+        # count so the runtime i32 length cannot leak garbage upper bits (#149/#151).
         memmove_fn = codegen.module.declare_intrinsic(
             'llvm.memmove',
-            [ir.PointerType(codegen.types.i8), ir.PointerType(codegen.types.i8), codegen.types.i32]
+            [ir.PointerType(codegen.types.i8), ir.PointerType(codegen.types.i8), codegen.types.i64]
         )
         is_volatile = FALSE_I1
-        codegen.builder.call(memmove_fn, [dest_i8, src_i8, bytes_to_move, is_volatile])
+        bytes_to_move_i64 = codegen.builder.zext(bytes_to_move, codegen.types.i64)
+        codegen.builder.call(memmove_fn, [dest_i8, src_i8, bytes_to_move_i64, is_volatile])
 
     # Decrement length
     new_len = codegen.builder.sub(current_len, one, name="new_len")

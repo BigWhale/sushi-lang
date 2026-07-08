@@ -150,11 +150,11 @@ def emit_string_concat(module: ir.Module) -> ir.Function:
 
     # Copy first string using llvm.memcpy intrinsic
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy, [new_data, data1, size1, is_volatile])
+    builder.call(memcpy, [new_data, data1, builder.zext(size1, ir.IntType(64)), is_volatile])
 
     # Copy second string after first
     offset_ptr = builder.gep(new_data, [size1], name="offset_ptr")
-    builder.call(memcpy, [offset_ptr, data2, size2, is_volatile])
+    builder.call(memcpy, [offset_ptr, data2, builder.zext(size2, ir.IntType(64)), is_volatile])
 
     # Build and return fat pointer struct
     result = build_string_struct(builder, string_type, new_data, total_size, owned=1)

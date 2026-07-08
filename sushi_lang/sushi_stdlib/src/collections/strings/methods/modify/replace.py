@@ -218,7 +218,7 @@ def emit_string_replace(module: ir.Module) -> ir.Function:
     # Copy new string to result
     copy_dst_ptr = builder.gep(result_data, [copy_dst_pos_phi], name="copy_dst_ptr")
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy, [copy_dst_ptr, new_data, new_size, is_volatile])
+    builder.call(memcpy, [copy_dst_ptr, new_data, builder.zext(new_size, ir.IntType(64)), is_volatile])
 
     # Update positions
     copy_src_skip = builder.add(copy_src_pos_phi, old_size, name="copy_src_skip")

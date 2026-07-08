@@ -120,7 +120,7 @@ def generate_getenv(module: ir.Module) -> None:
     from sushi_lang.sushi_stdlib.src.libc_declarations import declare_memcpy
     memcpy_fn = declare_memcpy(module)
     is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy_fn, [string_buffer, result_ptr, result_len, is_volatile])
+    builder.call(memcpy_fn, [string_buffer, result_ptr, builder.zext(result_len, ir.IntType(64)), is_volatile])
 
     # Build Sushi string fat pointer using helper
     string_complete = cstr_to_fat_pointer_with_len(builder, string_buffer, result_len, owned=1)
