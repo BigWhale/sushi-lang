@@ -132,6 +132,12 @@ jobs:
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: chmod +x sushic
 
+      - name: Build standard library
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run python sushi_lang/sushi_stdlib/build.py
+
       - name: Run tests
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: |
@@ -180,6 +186,12 @@ jobs:
       - name: Make sushic executable
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: chmod +x sushic
+
+      - name: Build standard library
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run --python 3.13 python sushi_lang/sushi_stdlib/build.py
 
       - name: Run tests
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
@@ -232,6 +244,11 @@ jobs:
 
       - name: Make sushic executable
         run: chmod +x sushic
+
+      - name: Build standard library
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run python sushi_lang/sushi_stdlib/build.py
 
       - name: Run tests
         id: run_tests
