@@ -287,9 +287,14 @@ still **CE2093**. Bind it to a typed local first.
    - Cannot use generic functions with no parameters
    - Type arguments must appear in parameter types
 
-2. **Cannot extract from complex generic types**
-   - Cannot infer from `Pair<T, U>` parameters
-   - Cannot infer from `T[]` array parameters
+2. **A few inference positions are still unsupported**
+   - Named generics (`Pair<T, U>`, `List<T>`, `Maybe<T>`), array elements (`T[]`, `T[N]`), and
+     function-typed parameters (`fn(T) -> U`) all infer their type parameters
+   - A **bare-parameter** lambda argument (`|x| ...`) to a generic cannot be inferred (its type
+     would come from the type parameter being inferred — circular); use a typed lambda
+     (`|i32 x| ...`) or a function reference instead
+   - A nested generic of an enclosing type parameter (e.g. `first(singleton(x))` where
+     `singleton(x): List<T>` inside a `<T>` function) still fails inference
 
 3. **No explicit type arguments**
    - Cannot write `identity<i32>(42)`

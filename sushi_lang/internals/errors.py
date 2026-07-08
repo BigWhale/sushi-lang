@@ -911,7 +911,7 @@ _add(ErrorMessage("CE2058", Severity.ERROR,
     "HashMap<K, V> key type '{key_type}' is not comparable (dynamic arrays cannot be HashMap keys)",
     Category.TYPE, "Dynamic arrays are not allowed as HashMap keys due to memory management constraints. Use fixed-size arrays instead (e.g., i32[3] instead of i32[])."))
 
-# Array indexing errors (CE2056-CE2057, CE2059)
+# Array indexing errors (CE2056-CE2057)
 _add(ErrorMessage("CE2056", Severity.ERROR,
     "array index {index} is negative (indices must be >= 0)",
     Category.TYPE, "Array indices must be non-negative. Negative indices are not supported."))
@@ -919,10 +919,6 @@ _add(ErrorMessage("CE2056", Severity.ERROR,
 _add(ErrorMessage("CE2057", Severity.ERROR,
     "array index {index} out of bounds for array of size {size}",
     Category.TYPE, "Array index exceeds array bounds. This error is caught at compile-time for constant indices."))
-
-_add(ErrorMessage("CE2059", Severity.ERROR,
-    "enum variant '{variant}' cannot have dynamic array field '{field_type}'",
-    Category.TYPE, "Dynamic arrays in enum variants cause memory management issues. Use fixed-size arrays instead (e.g., i32[3] instead of i32[])."))
 
 # Generic function call errors (CE2060-CE2069)
 _add(ErrorMessage("CE2060", Severity.ERROR,

@@ -1,0 +1,33 @@
+# Test: generic function inferring element type T from a T[] parameter (issue #137 part 1)
+# Inference now unifies a T[] parameter position against a concrete i32[]/string[] argument.
+# Owning T[] params move by value (#133), so each call uses its own array.
+# EXPECT_STDOUT_EXACT: "1 6 a z\n"
+
+fn first<T>(T[] arr) T:
+    let T elem = arr.get(0)??
+    return Result.Ok(elem)
+
+fn last<T>(T[] arr) T:
+    let i32 len = arr.len()
+    let T elem = arr.get(len - 1)??
+    return Result.Ok(elem)
+
+fn run_test() i32:
+    let i32[] a = from([1, 2, 3])
+    let i32 first_int = first(a).realise(99)
+
+    let i32[] b = from([4, 5, 6])
+    let i32 last_int = last(b).realise(99)
+
+    let string[] c = from(["a", "b"])
+    let string first_str = first(c).realise("z")
+
+    let string[] d = from(["y", "z"])
+    let string last_str = last(d).realise("q")
+
+    println("{first_int} {last_int} {first_str} {last_str}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

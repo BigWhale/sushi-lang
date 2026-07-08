@@ -386,6 +386,18 @@ class TypeInferrer:
                     return False
             return self.unify_types(param_type.ok_type, arg_type.ok_type, type_param_map)
 
+        # Case 5: Array types. Twin of _unify_types_for_inference (Pass 2): unify the
+        # element type so a T[] parameter binds the element type parameter from a concrete
+        # i32[]/string[] argument at instantiation collection (issue #137). Fixed-size
+        # arrays additionally require equal size.
+        from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
+        if isinstance(param_type, DynamicArrayType) and isinstance(arg_type, DynamicArrayType):
+            return self.unify_types(param_type.base_type, arg_type.base_type, type_param_map)
+        if isinstance(param_type, ArrayType) and isinstance(arg_type, ArrayType):
+            if param_type.size != arg_type.size:
+                return False
+            return self.unify_types(param_type.base_type, arg_type.base_type, type_param_map)
+
         return False
 
     def substitute_type_simple(self, ty: "Type", type_params: tuple, type_args: tuple) -> "Type":

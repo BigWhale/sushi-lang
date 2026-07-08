@@ -14,7 +14,6 @@ from sushi_lang.semantics.typesys import (
     BuiltinType,
     EnumType,
     EnumVariantInfo,
-    DynamicArrayType,
 )
 from sushi_lang.semantics.generics.types import GenericEnumType, TypeParameter
 
@@ -301,14 +300,6 @@ class EnumCollector:
             # Convert associated types list to tuple
             if variant_types is None:
                 variant_types = []
-
-            # Validate: reject dynamic arrays in enum variants
-            for assoc_type in variant_types:
-                if isinstance(assoc_type, DynamicArrayType):
-                    er.emit(self.r, ERR.CE2059, variant_loc,
-                           variant=f"{name}.{variant_name}",
-                           field_type=str(assoc_type))
-                    # Continue collecting other variants, but this one is invalid
 
             variant_names.add(variant_name)
             variants_list.append(EnumVariantInfo(
