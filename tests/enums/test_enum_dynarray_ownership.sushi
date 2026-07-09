@@ -32,7 +32,7 @@ fn main() i32:
 
     # a still usable (copy semantics): plain enum array of aliases, then get-out
     let Msg[] pair = from([a, b])                                     # a, b cloned again
-    let Msg first = pair.get(0)??                                     # get-out: independent copy of a
+    let Msg first = pair[0]                                           # index get-out: independent copy of a
     let i32 t2 = total(root).realise(-1) + total(first).realise(-1)   # 21 + 6
     println(t2)                                                       # 27
 
