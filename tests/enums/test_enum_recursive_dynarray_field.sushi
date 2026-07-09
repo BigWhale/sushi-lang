@@ -1,10 +1,10 @@
 # Test: a recursive enum whose variant holds a dynamic array of itself
 # (Arr(MsgValue[])). Issue #136 lifted CE2059, so this shape now compiles.
-# Guards against issue #139 regressing to a compile-time destructor-emission crash:
-# the self-referential dtor(MsgValue) -> dtor(MsgValue[]) -> dtor(MsgValue) chain must
-# terminate, and a nested value must build, traverse, and produce correct output.
-# NOTE: recursive/nested RAII cleanup still leaks the inner arrays at scope exit
-# (issue #139, open) -- not observable through the stdout suite; tracked separately.
+# Guards against issue #139: the self-referential dtor(MsgValue) -> dtor(MsgValue[]) ->
+# dtor(MsgValue) chain must terminate (out-of-line per-type destructor), and a nested value
+# must build, traverse, and produce correct output. Issue #139 is fixed: the enum owns its
+# dynamic-array payload and every nested array is freed exactly once at scope exit (verified
+# leak-free with `leaks --atExit`; the stdout suite cannot see the former leak directly).
 # EXPECT_STDOUT_EXACT: "10\n"
 
 enum MsgValue:

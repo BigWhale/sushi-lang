@@ -100,11 +100,13 @@ def initialize_dynamic_array(
         # Optimized path: empty array with new()
         codegen.dynamic_arrays.emit_array_constructor_new(name)
     elif isinstance(constructor_expr, DynamicArrayFrom):
-        # Optimized path: array literal with from([...])
-        elements = []
-        for element_expr in constructor_expr.elements.elements:
-            element_value = codegen.expressions.emit_expr(element_expr)
-            elements.append(element_value)
+        # Optimized path: array literal with from([...]). A heap-owning element that aliases
+        # a live owner is deep-copied so the array and the source each own independent
+        # buffers (#139); a fresh temp element is the sole owner and moved in.
+        from sushi_lang.backend.types.arrays import emit_array_literal_elements
+        elements = emit_array_literal_elements(
+            codegen, constructor_expr.elements.elements, array_type.base_type
+        )
         codegen.dynamic_arrays.emit_array_constructor_from(name, elements)
     else:
         # General case: any expression returning a dynamic array

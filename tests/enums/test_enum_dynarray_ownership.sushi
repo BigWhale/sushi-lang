@@ -1,0 +1,47 @@
+# Issue #139: an enum whose variant owns a dynamic array is a copy type with correct RAII.
+# Exercises the aliasing sites that must deep-copy or borrow (not shallow-share) so nothing
+# leaks or double-frees: array-payload construction from live locals, plain enum arrays,
+# bare rebind, get-out, foreach borrow, by-value enum params, and enum struct fields.
+# Verified leak-free with `leaks --atExit`; the stdout assertions guard the behaviour.
+# EXPECT_STDOUT_EXACT: "21\n27\n21\n"
+
+enum Msg:
+    Num(i32)
+    Arr(Msg[])
+
+struct Holder:
+    Msg m
+
+fn total(Msg v) i32:
+    match v:
+        Msg.Num(n) ->
+            return Result.Ok(n)
+        Msg.Arr(items) ->
+            let i32 acc = 0
+            foreach(child in items.iter()):
+                acc := acc + total(child).realise(0)
+            return Result.Ok(acc)
+
+fn main() i32:
+    # leaf locals aliased into a nested array (deep-copied per element into root)
+    let Msg a = Msg.Arr(from([Msg.Num(1), Msg.Num(2), Msg.Num(3)]))   # total 6
+    let Msg b = Msg.Arr(from([Msg.Num(4), Msg.Num(5), Msg.Num(6)]))   # total 15
+    let Msg root = Msg.Arr(from([a, b]))                              # a, b cloned in
+    let i32 t1 = total(root).realise(-1)                             # by-value + foreach + recursion
+    println(t1)                                                       # 21
+
+    # a still usable (copy semantics): plain enum array of aliases, then get-out
+    let Msg[] pair = from([a, b])                                     # a, b cloned again
+    let Msg first = pair[0]                                           # index get-out: independent copy of a
+    let i32 t2 = total(root).realise(-1) + total(first).realise(-1)   # 21 + 6
+    println(t2)                                                       # 27
+
+    # bare rebind + enum struct field + reassignment
+    let Msg g = a                                                     # bare rebind: deep-copy
+    let Holder h = Holder(m: g)                                       # enum struct field: deep-copy alias
+    let Msg reassigned = Msg.Num(0)
+    reassigned := b                                                   # assignment: free old, clone new
+    let i32 t3 = total(h.m).realise(-1) + total(reassigned).realise(-1)  # 6 + 15
+    println(t3)                                                       # 21
+
+    return Result.Ok(0)

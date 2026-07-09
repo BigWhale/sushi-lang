@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
-from sushi_lang.semantics.typesys import StructType, DynamicArrayType, Type
+from sushi_lang.semantics.typesys import StructType, DynamicArrayType, EnumType, Type
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -322,10 +322,15 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     cond = codegen.builder.icmp_unsigned('<', idx, source_len)
     codegen.builder.cbranch(cond, copy_loop_body, copy_loop_exit)
 
-    # Loop body: copy element
+    # Loop body: deep-copy element. An owning element (a string / nested array / owning
+    # struct / enum with heap payload) must get its OWN buffers, else the clone and the
+    # source share element buffers and both free them at scope exit (double-free on a
+    # nested container). emit_value_clone is a runtime no-op for a non-owning element type,
+    # and is recursion-safe for a self-referential element type (out-of-line clone fn).
     codegen.builder.position_at_end(copy_loop_body)
     src_elem_ptr = codegen.builder.gep(source_data_ptr, [idx])
     elem = codegen.builder.load(src_elem_ptr)
+    elem = emit_value_clone(codegen, elem, element_type)
     dst_elem_ptr = codegen.builder.gep(new_data_ptr, [idx])
     codegen.builder.store(elem, dst_elem_ptr)
 
@@ -451,7 +456,12 @@ def emit_value_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) 
     )
 
     if isinstance(value_type, UnknownType):
-        value_type = codegen.struct_table.by_name.get(value_type.name, value_type)
+        # A named type may be a struct OR an enum; resolve against both tables, else an
+        # owning enum passed as UnknownType would fall through as a no-op and not be
+        # deep-copied (double-free on a shared payload, #139).
+        value_type = (codegen.struct_table.by_name.get(value_type.name)
+                      or codegen.enum_table.by_name.get(value_type.name)
+                      or value_type)
 
     # Foreign ptr / function values: passthrough. A capturing closure's heap env
     # cannot be generically duplicated (capture is erased from the type), so a
@@ -465,20 +475,107 @@ def emit_value_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) 
             return _clone_string_value(codegen, value)
         return value  # numerics, bool, I/O handles: nothing to clone
 
+    if isinstance(value_type, (DynamicArrayType, StructType, EnumType)):
+        return _emit_composite_clone(codegen, value, value_type)
+
+    return value
+
+
+def _clone_type_key(value_type: Type) -> str:
+    """Stable identity key for a composite type's deep clone (mirrors the destructor key)."""
+    if isinstance(value_type, DynamicArrayType):
+        return "[]" + _clone_type_key(value_type.base_type)
+    if isinstance(value_type, (StructType, EnumType)):
+        return value_type.name
+    return getattr(value_type, "name", type(value_type).__name__)
+
+
+def _clone_symbol(value_type: Type) -> str:
+    """Deterministic, symbol-safe name for a per-type clone function (linkonce_odr)."""
+    mapping = {"<": "_L", ">": "_G", ",": "_C", "[": "_A", "]": "_E", " ": ""}
+    out = []
+    for ch in _clone_type_key(value_type):
+        out.append(ch if (ch.isalnum() or ch == "_") else mapping.get(ch, "_"))
+    return "__sushi_clone_" + "".join(out)
+
+
+def _inline_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) -> ir.Value:
+    """Inline deep-clone dispatch for a composite type (no recursion guard)."""
     if isinstance(value_type, DynamicArrayType):
         return clone_dynamic_array_value(codegen, value, value_type.base_type)
-
     if isinstance(value_type, StructType):
         if value_type.name.startswith("Own<"):
             return _clone_own_value(codegen, value, value_type)
         if value_type.name.startswith("List<"):
             return _clone_list_value(codegen, value, value_type)
         return _clone_struct_value(codegen, value, value_type)
-
     if isinstance(value_type, EnumType):
         return _clone_enum_value(codegen, value, value_type)
+    raise AssertionError(f"not a composite clone type: {value_type!r}")
 
-    return value
+
+def _emit_composite_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) -> ir.Value:
+    """Deep-clone a composite type, breaking self-referential cycles.
+
+    Structural inverse of ``destructors._emit_composite_destructor``: a non-recursive type
+    is cloned inline (unchanged behaviour), but when cloning re-enters a type already in
+    progress (a self-referential type such as ``enum MsgValue: Arr(MsgValue[])`` or
+    ``Own<Tree>``), an out-of-line per-type clone function is called at that position so the
+    deep copy recurses at runtime over the actual data and terminates -- instead of
+    recursing unbounded at compile time.
+    """
+    key = _clone_type_key(value_type)
+    stack = getattr(codegen, "_clone_inprogress", None)
+    if stack is None:
+        stack = []
+        codegen._clone_inprogress = stack
+
+    if key in stack:
+        fn = _get_or_emit_clone_func(codegen, value_type)
+        return codegen.builder.call(fn, [value])
+
+    stack.append(key)
+    try:
+        return _inline_clone(codegen, value, value_type)
+    finally:
+        stack.pop()
+
+
+def _get_or_emit_clone_func(codegen: 'LLVMCodegen', value_type: Type) -> ir.Function:
+    """Get (or lazily emit) the out-of-line deep-clone function for a recursive type.
+
+    Signature is ``<T> __sushi_clone_<mangled>(<T> value)``. Inserted into the cache before
+    its body is emitted, so a self-referential position inside the body resolves to a call
+    to this same function. The inline clone helpers use ``codegen.builder``, so it is swapped
+    to the new function's builder while the body is emitted, then restored.
+    """
+    key = _clone_type_key(value_type)
+    funcs = getattr(codegen, "_clone_funcs", None)
+    if funcs is None:
+        funcs = {}
+        codegen._clone_funcs = funcs
+    if key in funcs:
+        return funcs[key]
+
+    lltype = codegen.types.ll_type(value_type)
+    fn_ty = ir.FunctionType(lltype, [lltype])
+    fn = ir.Function(codegen.module, fn_ty, name=_clone_symbol(value_type))
+    fn.linkage = "linkonce_odr"
+    funcs[key] = fn
+
+    entry = fn.append_basic_block(name="entry")
+    fb = ir.IRBuilder(entry)
+    saved_builder = codegen.builder
+    saved_stack = getattr(codegen, "_clone_inprogress", None)
+    codegen.builder = fb
+    codegen._clone_inprogress = [key]
+    try:
+        result = _inline_clone(codegen, fn.args[0], value_type)
+        codegen.builder.ret(result)
+    finally:
+        codegen.builder = saved_builder
+        codegen._clone_inprogress = saved_stack if saved_stack is not None else []
+    return fn
 
 
 def _declare_memcpy(codegen: 'LLVMCodegen'):

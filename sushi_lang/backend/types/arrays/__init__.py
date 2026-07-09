@@ -42,7 +42,7 @@ from .methods.core import (
     emit_dynamic_array_pop,
     emit_dynamic_array_destroy,
 )
-from .utils import create_dynamic_array_from_elements
+from .utils import create_dynamic_array_from_elements, emit_array_literal_elements
 from .methods.iterators import emit_fixed_array_iter, emit_dynamic_array_iter
 from .methods.transforms import emit_dynamic_array_clone, emit_byte_array_to_string
 from .methods.hashing import emit_fixed_array_hash_direct, emit_dynamic_array_hash_direct
@@ -77,4 +77,5 @@ __all__ = [
     'emit_array_method',
     # Utils
     'create_dynamic_array_from_elements',
+    'emit_array_literal_elements',
 ]

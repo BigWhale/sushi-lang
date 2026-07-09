@@ -54,13 +54,20 @@ def emit_let(codegen: 'CodegenProtocol', stmt: 'Let') -> None:
         if isinstance(stmt.ty, StructType):
             semantic_type = stmt.ty
         elif isinstance(stmt.ty, UnknownType):
-            # UnknownType has a name attribute - look it up in struct_table
+            # UnknownType has a name attribute - look it up in struct_table, then enum_table.
+            # Resolving to a concrete EnumType lets create_local register the enum local for
+            # RAII cleanup when it owns heap (a dynamic-array / string / ... variant payload);
+            # #143 lifted CE2059 without this owner, so such enum locals leaked (#139).
             type_name = stmt.ty.name
             if type_name in codegen.struct_table.by_name:
                 semantic_type = codegen.struct_table.by_name[type_name]
+            elif type_name in codegen.enum_table.by_name:
+                semantic_type = codegen.enum_table.by_name[type_name]
         elif isinstance(stmt.ty, str):
             if stmt.ty in codegen.struct_table.by_name:
                 semantic_type = codegen.struct_table.by_name[stmt.ty]
+            elif stmt.ty in codegen.enum_table.by_name:
+                semantic_type = codegen.enum_table.by_name[stmt.ty]
 
         slot = codegen.memory.create_local_nostore(stmt.name, ll_type, semantic_type)
 
@@ -122,13 +129,19 @@ def _clone_owning_struct_alias(codegen: 'CodegenProtocol', stmt: 'Let', rhs: 'ir
     live; a constructor, call return, or array `.get()`/index get-out (already deep-copied at
     the access site) is a fresh sole owner and is returned unchanged.
     """
-    from sushi_lang.semantics.typesys import StructType, UnknownType
+    from sushi_lang.semantics.typesys import StructType, EnumType, UnknownType
     from sushi_lang.semantics.ast import Name, MemberAccess
 
     resolved = semantic_type
     if isinstance(resolved, UnknownType):
-        resolved = codegen.struct_table.by_name.get(resolved.name, resolved)
-    if not isinstance(resolved, StructType):
+        resolved = (codegen.struct_table.by_name.get(resolved.name)
+                    or codegen.enum_table.by_name.get(resolved.name)
+                    or resolved)
+    # An enum whose active variant owns heap is a copy type too (#139): `let g = e` must
+    # deep-copy so g and e each own independent buffers and free once. A get-out
+    # (`let e0 = es[0]` / `.get()??`) is already deep-copied at the access site and its RHS
+    # is not a bare Name/MemberAccess, so it is left unchanged here (no double clone).
+    if not isinstance(resolved, (StructType, EnumType)):
         return rhs
     if not codegen.dynamic_arrays.struct_needs_cleanup(resolved):
         return rhs
@@ -383,26 +396,34 @@ def _emit_struct_rebind(codegen: 'CodegenProtocol', stmt: 'Rebind', slot: 'ir.Va
         slot: The destination slot.
         val: The new value to store.
     """
-    from sushi_lang.semantics.typesys import StructType
-    from sushi_lang.semantics.ast import Name
+    from sushi_lang.semantics.typesys import StructType, EnumType, UnknownType
+    from sushi_lang.semantics.ast import Name, MemberAccess
 
     # Extract variable name from target (must be Name for this function)
     if not isinstance(stmt.target, Name):
         raise_internal_error("CE0022", type=f"Expected Name target, got {type(stmt.target)}")
     var_name = stmt.target.id
 
-    # User-defined struct rebind - need to clean up old value first
-    # Get the semantic type to check if cleanup is needed
+    # User-defined struct / enum rebind - free the OLD owning value before overwriting it.
     semantic_type = codegen.memory.find_semantic_type(var_name)
+    resolved = semantic_type
+    if isinstance(resolved, UnknownType):
+        resolved = (codegen.struct_table.by_name.get(resolved.name)
+                    or codegen.enum_table.by_name.get(resolved.name)
+                    or resolved)
 
-    if isinstance(semantic_type, StructType):
-        # Check if this struct needs cleanup (has dynamic array fields)
-        if hasattr(codegen, 'dynamic_arrays') and codegen.dynamic_arrays is not None:
-            if codegen.dynamic_arrays.struct_needs_cleanup(semantic_type):
-                # Clean up dynamic array fields in the old struct value before rebinding
-                codegen.dynamic_arrays.emit_struct_field_cleanup(var_name, semantic_type, slot)
+    if (isinstance(resolved, (StructType, EnumType))
+            and hasattr(codegen, 'dynamic_arrays') and codegen.dynamic_arrays is not None
+            and codegen.dynamic_arrays.struct_needs_cleanup(resolved)):
+        # Destroy the old value's heap so it does not leak when overwritten (#139).
+        codegen.dynamic_arrays.emit_struct_field_cleanup(var_name, resolved, slot)
+        # The new value must own independent buffers: a bare-Name / member alias is deep-copied
+        # (the source stays a live owner), else the target and the source both free it.
+        if isinstance(stmt.value, (Name, MemberAccess)):
+            from sushi_lang.backend.expressions.memory import emit_value_clone
+            val = emit_value_clone(codegen, val, resolved)
 
-    # Store the new struct value
+    # Store the new value
     codegen.builder.store(val, slot)
 
 

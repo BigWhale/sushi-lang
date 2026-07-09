@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import Expr, Name, Call, MemberAccess, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom
-from sushi_lang.semantics.typesys import UnknownType, StructType, DynamicArrayType, ReferenceType, BuiltinType
+from sushi_lang.semantics.typesys import UnknownType, StructType, EnumType, DynamicArrayType, ReferenceType, BuiltinType
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -64,15 +64,13 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
                 array_struct = codegen.builder.insert_value(array_struct, null_ptr, 2)
                 field_values.append(array_struct)
             elif isinstance(arg, DynamicArrayFrom):
-                # Create initialized dynamic array struct from array literal
-                # Emit all elements
-                elements = []
-                for element_expr in arg.elements.elements:
-                    element_value = codegen.expressions.emit_expr(element_expr)
-                    elements.append(element_value)
-
-                # Allocate and initialize array
+                # Create initialized dynamic array struct from array literal. A heap-owning
+                # element that aliases a live owner is deep-copied so the struct field and
+                # the source each own independent buffers (#139); a fresh temp is moved in.
                 from sushi_lang.backend.types import arrays
+                elements = arrays.emit_array_literal_elements(
+                    codegen, arg.elements.elements, field_type.base_type
+                )
                 element_llvm_type = codegen.types.ll_type(field_type.base_type)
                 array_struct = arrays.create_dynamic_array_from_elements(
                     codegen, field_type.base_type, element_llvm_type, elements
@@ -106,11 +104,13 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
             # Regular field - emit normally
             arg_value = codegen.expressions.emit_expr(arg)
 
-            # Resolve UnknownType to StructType if needed
+            # Resolve UnknownType to a concrete struct or enum if needed
             resolved_field_type = field_type
             if isinstance(field_type, UnknownType):
                 if field_type.name in codegen.struct_table.by_name:
                     resolved_field_type = codegen.struct_table.by_name[field_type.name]
+                elif field_type.name in codegen.enum_table.by_name:
+                    resolved_field_type = codegen.enum_table.by_name[field_type.name]
 
             # Deep-copy structs with dynamic arrays to avoid double-free
             # When passing a struct with dynamic arrays to another struct constructor,
@@ -119,6 +119,16 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
                 if codegen.dynamic_arrays.struct_needs_cleanup(resolved_field_type):
                     from sushi_lang.backend.expressions import memory
                     arg_value = memory.deep_copy_struct(codegen, arg_value, resolved_field_type)
+
+            # An owning enum field (a variant carrying heap, #139): when the arg ALIASES an
+            # existing owner (a bare-Name local / param, or a struct-field read), CLONE it so
+            # the struct field and the source each own independent buffers and free once. A
+            # fresh RHS (constructor / call) is a sole owner and stored as-is.
+            elif (isinstance(resolved_field_type, EnumType)
+                  and isinstance(arg, (Name, MemberAccess))
+                  and codegen.dynamic_arrays.struct_needs_cleanup(resolved_field_type)):
+                from sushi_lang.backend.expressions.memory import emit_value_clone
+                arg_value = emit_value_clone(codegen, arg_value, resolved_field_type)
 
             # A `string` field: when the arg ALIASES an existing owner (a bare-Name local /
             # param, or a struct-field read), CLONE it so the struct gets an independent buffer

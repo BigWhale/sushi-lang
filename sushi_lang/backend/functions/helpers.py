@@ -338,7 +338,9 @@ class FunctionHelpers:
 
                 resolved = param.ty
                 if isinstance(resolved, UnknownType):
-                    resolved = self.codegen.struct_table.by_name.get(resolved.name, resolved)
+                    resolved = (self.codegen.struct_table.by_name.get(resolved.name)
+                                or self.codegen.enum_table.by_name.get(resolved.name)
+                                or resolved)
                 if isinstance(resolved, StructType):
                     if self.codegen.dynamic_arrays.is_own_type(resolved):
                         self.codegen.dynamic_arrays.register_own(param.name, resolved)
@@ -347,6 +349,12 @@ class FunctionHelpers:
                     elif self.codegen.dynamic_arrays.struct_needs_cleanup(resolved):
                         # By-value owning USER struct (#60): copy semantics, callee frees
                         # its independent deep copy.
+                        self.codegen.memory.register_struct_cleanup(param.name, resolved, slot)
+                elif isinstance(resolved, EnumType):
+                    # By-value owning ENUM param (#139): the call site deep-copies an
+                    # owning-enum arg (copy semantics), so the callee owns its independent
+                    # copy and frees it at scope exit, reusing the struct-cleanup registry.
+                    if self.codegen.dynamic_arrays.struct_needs_cleanup(resolved):
                         self.codegen.memory.register_struct_cleanup(param.name, resolved, slot)
 
     def end_function(self) -> None:

@@ -468,9 +468,12 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
 
         # Handle simple bindings (strings), nested patterns (Pattern), and Own patterns (OwnPattern)
         if isinstance(binding_item, str):
-            # Simple binding: create local variable (skip wildcards "_")
+            # Simple binding: create local variable (skip wildcards "_"). The binding
+            # BORROWS the enum's payload (the enum, its owner, frees it at scope exit), so
+            # it is not registered for its own RAII free -- registering an owning payload
+            # binding too would double-free (#139/#147).
             if binding_item != "_":
-                codegen.memory.create_local(binding_item, binding_llvm_type, field_value, binding_type)
+                codegen.memory.create_local(binding_item, binding_llvm_type, field_value, binding_type, register_cleanup=False)
                 # Also register in variable_types for member access and other operations
                 codegen.variable_types[binding_item] = binding_type
         elif isinstance(binding_item, PatternNode):
