@@ -159,6 +159,54 @@ def build_sys_process(platform_dir: Path):
     compile_module_to_bc(module, output)
 
 
+def build_all(platform_name: str, quiet: bool = False) -> None:
+    """Build every stdlib unit for the given platform into dist/{platform_name}/.
+
+    The generated IR reflects the *current* host platform (via common.py); the
+    platform_name selects only the output directory. This is the single build
+    path shared by the CLI (--build-stdlib) and the compiler's on-the-fly
+    auto-builder.
+
+    Args:
+        platform_name: Output platform directory name ("darwin" or "linux").
+        quiet: Suppress the per-unit progress banner (used by auto-build).
+    """
+    init_llvm()
+
+    script_dir = Path(__file__).parent.resolve()  # sushi_stdlib/
+    platform_dir = script_dir / "dist" / platform_name
+
+    # io/stdio's IR-generator logs the host OS; get the current platform for it.
+    platform = get_current_platform()
+
+    if not quiet:
+        print(f"Building stdlib for {platform_name}...")
+        print(f"Output directory: {platform_dir}")
+        print()
+
+    # Build platform-agnostic modules
+    build_collections_strings(platform_dir)
+    build_core_primitives(platform_dir)
+    build_io_files(platform_dir)
+    build_time(platform_dir)
+    build_math(platform_dir)
+    build_sys_env(platform_dir)
+    build_sys_process(platform_dir)
+    build_random(platform_dir)
+
+    # Build platform-specific modules
+    build_io_stdio(platform_dir, platform)
+
+    # Note: core/results and core/maybe use inline emission only
+    # They are not built as stdlib units because monomorphizing for
+    # all possible user types is impractical.
+
+    # Record the generator-source fingerprint so the compiler can detect
+    # staleness and skip a rebuild when nothing changed.
+    from sushi_lang.backend.stdlib_builder import write_build_marker
+    write_build_marker(platform_name)
+
+
 def main():
     """Build all stdlib units for the current or specified platform."""
     parser = argparse.ArgumentParser(description="Sushi Standard Library Build Script")
@@ -173,18 +221,6 @@ def main():
     print("=" * 60)
     print("Sushi Standard Library Build Script")
     print("=" * 60)
-    print()
-
-    init_llvm()
-
-    # Determine project root (parent of stdlib directory)
-    # This script is at: <project_root>/stdlib/build.py
-    script_dir = Path(__file__).parent.resolve()  # stdlib/
-    project_root = script_dir.parent  # project root
-    stdlib_dist = script_dir / "dist"  # stdlib/dist
-
-    print(f"Project root: {project_root}")
-    print(f"Build output: {stdlib_dist}")
     print()
 
     # Detect target platform
@@ -209,29 +245,9 @@ def main():
         print("       Currently supported platforms: darwin (macOS), linux")
         sys.exit(1)
 
-    # Create platform-specific output directory
-    platform_dir = stdlib_dist / platform_name
-    print(f"Building stdlib for {platform_name}...")
-    print(f"Output directory: {platform_dir}")
-    print()
+    build_all(platform_name)
 
-    # Build platform-agnostic modules
-    build_collections_strings(platform_dir)
-    build_core_primitives(platform_dir)
-    build_io_files(platform_dir)
-    build_time(platform_dir)
-    build_math(platform_dir)
-    build_sys_env(platform_dir)
-    build_sys_process(platform_dir)
-    build_random(platform_dir)
-
-    # Build platform-specific modules
-    build_io_stdio(platform_dir, platform)
-
-    # Note: core/results and core/maybe use inline emission only
-    # They are not built as stdlib units because monomorphizing for
-    # all possible user types is impractical.
-
+    platform_dir = Path(__file__).parent.resolve() / "dist" / platform_name
     print()
     print("=" * 60)
     print("✓ Stdlib build complete!")
