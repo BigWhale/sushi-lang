@@ -433,7 +433,12 @@ def needs_cleanup(value_type: Type) -> bool:
         # needing cleanup; the runtime-guarded drop makes a non-capturing free a no-op.
         return True
     if isinstance(value_type, BuiltinType):
-        return False  # Primitives don't need cleanup
+        # A `string` owns a heap buffer when its runtime `owned` bit is set (#145/#147); the
+        # destructor's free is guarded on that bit, so a literal/borrow frees to a no-op. This
+        # is what lets strings inside structs / arrays / List / HashMap / enum payloads free
+        # through the ordinary recursive destructor. All other builtins (numerics, bool, I/O
+        # handles) are unmanaged.
+        return value_type == BuiltinType.STRING
     elif isinstance(value_type, DynamicArrayType):
         return True  # Dynamic arrays need cleanup
     elif isinstance(value_type, StructType):

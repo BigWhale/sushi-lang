@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import Expr, Name, Call, MemberAccess, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom
-from sushi_lang.semantics.typesys import UnknownType, StructType, DynamicArrayType, ReferenceType
+from sushi_lang.semantics.typesys import UnknownType, StructType, DynamicArrayType, ReferenceType, BuiltinType
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -119,6 +119,16 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
                 if codegen.dynamic_arrays.struct_needs_cleanup(resolved_field_type):
                     from sushi_lang.backend.expressions import memory
                     arg_value = memory.deep_copy_struct(codegen, arg_value, resolved_field_type)
+
+            # A `string` field: when the arg ALIASES an existing owner (a bare-Name local /
+            # param, or a struct-field read), CLONE it so the struct gets an independent buffer
+            # and each owner frees once (#147). Cloning -- not moving -- is required because the
+            # borrow checker does not flag a string reused across two constructors, which a move
+            # (shallow share) would double-free. A fresh RHS (literal / interpolation / method /
+            # call) is a sole owner with no other owner to alias, so it is stored as-is.
+            elif resolved_field_type == BuiltinType.STRING and isinstance(arg, (Name, MemberAccess)):
+                from sushi_lang.backend.expressions.memory import emit_value_clone
+                arg_value = emit_value_clone(codegen, arg_value, BuiltinType.STRING)
 
             # Cast to the expected field type
             llvm_field_type = codegen.types.ll_type(field_type)

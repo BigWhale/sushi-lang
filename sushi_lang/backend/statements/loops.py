@@ -320,6 +320,7 @@ def _emit_array_foreach_body(
     """
     from llvmlite import ir
     from sushi_lang.backend.statements import utils
+    from sushi_lang.semantics.typesys import BuiltinType
 
     cond_bb = codegen.func.append_basic_block(name="foreach.cond")
     body_bb = codegen.func.append_basic_block(name="foreach.body")
@@ -356,6 +357,12 @@ def _emit_array_foreach_body(
     # Create slot for loop variable and store element
     element_ll_type = codegen.types.ll_type(node.item_type)
     codegen.memory.create_local(node.item_name, element_ll_type, element_value, node.item_type)
+    # A foreach item is a read-only BORROW of the container's element: the shallow-loaded
+    # value aliases the array's heap buffer, which the array destructor frees (#147, now that
+    # a `string[]` frees its element buffers). Unregister the item so it is not ALSO freed at
+    # loop-body scope exit (double-free). create_local auto-registered it as a string owner.
+    if node.item_type == BuiltinType.STRING:
+        codegen.memory.unregister_string_cleanup(node.item_name)
 
     # Increment current_index
     incremented_index = codegen.builder.add(current_index, ir.Constant(codegen.types.i32, 1), name="next_index")

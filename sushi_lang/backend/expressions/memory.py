@@ -368,14 +368,24 @@ def deep_copy_if_owning_struct(codegen: 'LLVMCodegen', value: ir.Value, semantic
     Returns:
         A deep copy with independent buffers, or `value` unchanged.
     """
-    from sushi_lang.semantics.typesys import UnknownType
+    from sushi_lang.semantics.typesys import UnknownType, EnumType
+    from sushi_lang.backend.destructors import needs_cleanup
 
     resolved = semantic_type
     if isinstance(resolved, UnknownType):
-        resolved = codegen.struct_table.by_name.get(resolved.name, resolved)
+        # An element type may name a struct OR an enum; resolve against both tables.
+        resolved = (codegen.struct_table.by_name.get(resolved.name)
+                    or codegen.enum_table.by_name.get(resolved.name)
+                    or resolved)
 
     if isinstance(resolved, StructType) and codegen.dynamic_arrays.struct_needs_cleanup(resolved):
         return deep_copy_struct(codegen, value, resolved)
+    # An enum with an owning payload (e.g. a `string` variant, #147) taken out of a container
+    # by value must also get an independent copy, else the extracted value aliases the
+    # container's buffer and both free it at scope exit (double-free). Clone via the unified
+    # deep-copy, which mirrors the enum destructor's payload free.
+    if isinstance(resolved, EnumType) and needs_cleanup(resolved):
+        return emit_value_clone(codegen, value, resolved)
     return value
 
 
@@ -405,48 +415,15 @@ def move_owning_arg_into_container(codegen: 'LLVMCodegen', arg_ast) -> None:
 
 
 def deep_copy_struct(codegen: 'LLVMCodegen', struct_value: ir.Value, struct_type: StructType) -> ir.Value:
-    """Deep copy a struct value, cloning all dynamic array fields recursively.
+    """Deep copy a struct value so it owns independent heap buffers.
 
-    This recursively deep-copies any dynamic array or nested struct fields
-    that contain dynamic arrays. Ensures that the copied struct has independent
-    memory allocations.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        struct_value: The struct value to copy.
-        struct_type: The semantic struct type.
-
-    Returns:
-        A new struct value with cloned dynamic arrays.
-
-    Note:
-        This feature is fully implemented and tested. Prevents double-free crashes
-        when passing structs with dynamic arrays to other struct constructors.
-        See tests/test_struct_nested_deep_copy*.sushi for test cases.
+    Delegates to the unified `emit_value_clone` (via `_clone_struct_value`), which clones
+    exactly the fields `emit_value_destructor` would free -- dynamic-array, string (#147),
+    nested-struct, enum, List and Own -- gated on the same `needs_cleanup` predicate. This
+    replaces the former array-and-nested-struct-only field walk, so a struct string field
+    now gets its own buffer on every copy path (no double-free with the scope-exit free).
     """
-    # Start with the original struct value
-    new_struct = struct_value
-
-    # Iterate through fields and deep-copy dynamic arrays
-    for field_idx, (field_name, field_type) in enumerate(struct_type.fields):
-        if isinstance(field_type, DynamicArrayType):
-            # Extract the dynamic array from the struct
-            array_value = codegen.builder.extract_value(struct_value, field_idx)
-
-            # Clone the dynamic array
-            cloned_array = clone_dynamic_array_value(codegen, array_value, field_type.base_type)
-
-            # Insert the cloned array into the new struct
-            new_struct = codegen.builder.insert_value(new_struct, cloned_array, field_idx)
-
-        elif isinstance(field_type, StructType):
-            # Nested struct - recursively deep copy if it needs cleanup
-            if codegen.dynamic_arrays.struct_needs_cleanup(field_type):
-                nested_struct_value = codegen.builder.extract_value(struct_value, field_idx)
-                cloned_nested = deep_copy_struct(codegen, nested_struct_value, field_type)
-                new_struct = codegen.builder.insert_value(new_struct, cloned_nested, field_idx)
-
-    return new_struct
+    return emit_value_clone(codegen, struct_value, struct_type)
 
 
 def emit_value_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) -> ir.Value:

@@ -516,7 +516,7 @@ class DynamicArrayManager:
         Returns:
             True if the struct contains dynamic array fields, False otherwise.
         """
-        from sushi_lang.semantics.typesys import UnknownType, FunctionType
+        from sushi_lang.semantics.typesys import UnknownType, FunctionType, BuiltinType
         for field_name, field_type in struct_type.fields:
             # Resolve UnknownType to StructType if needed
             if isinstance(field_type, UnknownType):
@@ -529,153 +529,30 @@ class DynamicArrayManager:
             # runtime-guarded drop pointer (a no-op for a non-capturing value).
             if isinstance(field_type, FunctionType):
                 return True
+            # A `string` field owns a heap buffer when its runtime `owned` bit is set (#147);
+            # scope-exit RAII frees it (guarded on the bit, so a literal/borrow is a no-op).
+            if field_type == BuiltinType.STRING:
+                return True
             # Check nested structs recursively
             if isinstance(field_type, StructType):
                 if self.struct_needs_cleanup(field_type):
                     return True
         return False
 
-    def _get_cleanup_fields(self, struct_type: StructType, base_indices: Optional[List[int]] = None) -> List[Tuple[str, List[int], DynamicArrayType]]:
-        """Get list of dynamic array fields that need cleanup from a struct.
-
-        Returns a list of tuples: (field_path, gep_indices, field_type)
-        where gep_indices is the list of indices to reach the field via GEP.
-
-        Args:
-            struct_type: The struct type to analyze.
-            base_indices: The GEP indices accumulated from parent structs (for nested structs).
-
-        Returns:
-            List of (field_path, gep_indices, dynamic_array_type) tuples.
-
-        Example:
-            For: struct Container { i32[] numbers, string name }
-            Returns: [("numbers", [0, 0], DynamicArrayType(I32))]
-
-            For: struct Outer { Inner data, string name }
-                 struct Inner { i32[] values }
-            Returns: [("data.values", [0, 0, 0], DynamicArrayType(I32))]
-        """
-        if base_indices is None:
-            base_indices = [0]  # First index is always 0 for GEP into struct pointer
-
-        cleanup_fields = []
-        from sushi_lang.semantics.typesys import UnknownType, FunctionType
-
-        for field_index, (field_name, field_type) in enumerate(struct_type.fields):
-            field_gep_indices = base_indices + [field_index]
-
-            # Resolve UnknownType to StructType if needed
-            if isinstance(field_type, UnknownType):
-                if field_type.name in self.codegen.struct_table.by_name:
-                    field_type = self.codegen.struct_table.by_name[field_type.name]
-
-            if isinstance(field_type, (DynamicArrayType, FunctionType)):
-                # A dynamic-array or function-value (closure) field owns heap memory.
-                # The third tuple element carries the field's semantic type so
-                # emit_struct_field_cleanup can dispatch to the right destructor.
-                cleanup_fields.append((field_name, field_gep_indices, field_type))
-
-            elif isinstance(field_type, StructType):
-                # Nested struct - recursively scan its fields
-                nested_fields = self._get_cleanup_fields(field_type, field_gep_indices)
-                # Prepend parent field name to nested field paths
-                for nested_name, nested_indices, nested_type in nested_fields:
-                    full_path = f"{field_name}.{nested_name}"
-                    cleanup_fields.append((full_path, nested_indices, nested_type))
-
-        return cleanup_fields
-
     def emit_struct_field_cleanup(self, var_name: str, struct_type: StructType, struct_alloca: ir.Value) -> None:
-        """Emit cleanup code for all dynamic array fields in a struct variable.
+        """Emit scope-exit cleanup for a struct local's owning fields.
 
-        Generates LLVM IR to free memory for each dynamic array field at scope exit.
+        Delegates to the unified recursive value destructor (`emit_value_destructor`),
+        which frees dynamic-array, string (#147), function-value (closure), nested-struct,
+        enum, List and Own fields through a single code path -- the owned bit / drop pointer
+        make borrowed or non-owning fields runtime no-ops. This replaces the former
+        array-only field-walk (`_get_cleanup_fields` / `_emit_struct_field_*`), consolidating
+        onto the same destructor used for structs nested in arrays/List/Own/enum/HashMap.
 
         Args:
-            var_name: The struct variable name (for debugging).
+            var_name: The struct variable name (unused; kept for call-site compatibility).
             struct_type: The struct type containing fields to clean up.
-            struct_alloca: The alloca instruction for the struct variable.
+            struct_alloca: The alloca (pointer) holding the struct value.
         """
-        from sushi_lang.semantics.typesys import FunctionType
-
-        cleanup_fields = self._get_cleanup_fields(struct_type)
-
-        if not cleanup_fields:
-            return  # No cleanup needed
-
-        # For each owning field, emit destructor code by field type.
-        for field_path, gep_indices, field_type in cleanup_fields:
-            if isinstance(field_type, FunctionType):
-                self._emit_struct_field_closure_free(var_name, field_path, struct_alloca, gep_indices)
-            else:
-                self._emit_struct_field_destructor(var_name, field_path, struct_alloca, gep_indices, field_type)
-
-    def _emit_struct_field_destructor(self, var_name: str, field_path: str,
-                                       struct_alloca: ir.Value, gep_indices: List[int],
-                                       array_type: DynamicArrayType) -> None:
-        """Emit destructor code for a single dynamic array field in a struct.
-
-        Args:
-            var_name: The struct variable name.
-            field_path: The field path (e.g., "numbers" or "data.values").
-            struct_alloca: The alloca instruction for the struct variable.
-            gep_indices: The GEP indices to reach the field.
-            array_type: The dynamic array type of the field.
-        """
-        # Get pointer to the dynamic array field using GEP
-        # Convert Python ints to LLVM constants
-        gep_index_values = [make_i32_const(idx) for idx in gep_indices]
-        field_name_safe = field_path.replace('.', '_')
-        field_ptr = self.builder.gep(
-            struct_alloca, gep_index_values,
-            name=f"{var_name}_{field_name_safe}_ptr"
-        )
-
-        # Load the dynamic array struct {i32 len, i32 cap, T* data}
-        field_value = self.builder.load(field_ptr, name=f"{var_name}_{field_name_safe}")
-
-        # Emit destructor logic - same as _emit_array_destructor
-        # but operating on field_value instead of a top-level array
-
-        # The field_value is the array struct by value, we need its address to GEP into it
-        # Allocate a temporary slot for the array struct so we can GEP into it
-        array_struct_slot = self.builder.alloca(
-            field_value.type,
-            name=f"{var_name}_{field_name_safe}_slot"
-        )
-        self.builder.store(field_value, array_struct_slot)
-
-        # Get pointer to data pointer using helper method
-        data_ptr_ptr = self.codegen.types.get_dynamic_array_data_ptr(self.builder, array_struct_slot)
-        data_ptr = self.builder.load(data_ptr_ptr, name=f"{var_name}_{field_name_safe}_data")
-
-        # Check if data is not null before freeing
-        null_ptr = ir.Constant(data_ptr.type, None)
-        is_not_null = self.builder.icmp_unsigned("!=", data_ptr, null_ptr)
-
-        with self.builder.if_then(is_not_null):
-            # Cast typed pointer back to void* for free()
-            void_ptr_type = ir.PointerType(ir.IntType(INT8_BIT_WIDTH))
-            void_ptr = self.builder.bitcast(
-                data_ptr, void_ptr_type,
-                name=f"{var_name}_{field_name_safe}_void_ptr"
-            )
-            emit_free(self.builder, self.codegen, void_ptr)
-
-    def _emit_struct_field_closure_free(self, var_name: str, field_path: str,
-                                        struct_alloca: ir.Value, gep_indices: List[int]) -> None:
-        """Free a function-value (closure) field's heap environment.
-
-        GEPs to the `{fn_ptr, env_ptr, drop_ptr}` fat value inside the struct and emits
-        the runtime-guarded env free (`if drop_ptr: drop_ptr(env)`), so a struct that owns
-        a capturing closure frees its environment exactly once at scope exit. A
-        non-capturing field carries a null drop, making this a no-op."""
-        from sushi_lang.backend.destructors import emit_function_value_destructor
-
-        gep_index_values = [make_i32_const(idx) for idx in gep_indices]
-        field_name_safe = field_path.replace('.', '_')
-        field_ptr = self.builder.gep(
-            struct_alloca, gep_index_values,
-            name=f"{var_name}_{field_name_safe}_fnptr"
-        )
-        emit_function_value_destructor(self.codegen, self.builder, field_ptr)
+        from sushi_lang.backend.destructors import emit_value_destructor
+        emit_value_destructor(self.codegen, self.builder, struct_alloca, struct_type)

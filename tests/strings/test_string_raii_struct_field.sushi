@@ -1,0 +1,47 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: made-1
+# EXPECT_STDOUT_CONTAINS: alias-9
+# EXPECT_STDOUT_CONTAINS: twice-2
+# EXPECT_STDERR_EMPTY: true
+# Issue #147: a heap string in a struct field is freed at scope exit, and every struct
+# copy path (return-by-value, alias, constructor field, array get-out) clones the string
+# so each owner frees exactly once. A leak or double-free would break this test (a
+# double-free SIGABRTs -> nonzero exit + nonempty stderr).
+
+struct P:
+    string name
+
+fn make(i32 k) P:
+    let P p = P(name: "made-{k}")
+    return Result.Ok(p)
+
+fn run() i32:
+    # returned by value (move): caller owns and frees once
+    let P r = make(1)??
+    println(r.name)
+
+    # alias (copy): p and p2 each own an independent buffer
+    let i32 nine = 9
+    let P p = P(name: "alias-{nine}")
+    let P p2 = p
+    println(p.name)
+    println(p2.name)
+
+    # owned-string variable used in TWO constructors (each clones; no double-free)
+    let string s = "twice-{2}"
+    let P a = P(name: s)
+    let P b = P(name: s)
+    println(a.name)
+    println(b.name)
+
+    # struct stored in a dynamic array, extracted by index (get-out clone)
+    let P[] arr = from([make(1)??, make(1)??])
+    let P e0 = arr[0]
+    println(e0.name)
+
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 rc = run().realise(1)
+    return Result.Ok(rc)
