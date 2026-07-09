@@ -508,34 +508,71 @@ class DynamicArrayManager:
         return 1 << (n - 1).bit_length()
 
     def struct_needs_cleanup(self, struct_type: StructType) -> bool:
-        """Check if a struct type contains any dynamic array fields that need cleanup.
+        """Check if a struct (or enum) type owns heap that needs scope-exit cleanup.
+
+        Accepts an EnumType at the top level too, so enum locals can reuse this gate
+        (an enum owns heap when its active variant carries a dynamic-array / string /
+        closure / owning-struct / Own / List payload).
 
         Args:
-            struct_type: The struct type to analyze.
+            struct_type: The struct (or enum) type to analyze.
 
         Returns:
-            True if the struct contains dynamic array fields, False otherwise.
+            True if the type owns heap requiring cleanup, False otherwise.
         """
+        from sushi_lang.semantics.typesys import EnumType
+        if isinstance(struct_type, EnumType):
+            return self._enum_needs_cleanup(struct_type)
+
         from sushi_lang.semantics.typesys import UnknownType, FunctionType, BuiltinType
         for field_name, field_type in struct_type.fields:
-            # Resolve UnknownType to StructType if needed
-            if isinstance(field_type, UnknownType):
-                if field_type.name in self.codegen.struct_table.by_name:
-                    field_type = self.codegen.struct_table.by_name[field_type.name]
+            if self._payload_needs_cleanup(field_type):
+                return True
+        return False
 
-            if isinstance(field_type, DynamicArrayType):
+    def _payload_needs_cleanup(self, ty: Type) -> bool:
+        """Whether a single field / variant-payload type owns heap needing cleanup.
+
+        Cycle-safe: recursion through a heap-indirected payload (dynamic array / Own /
+        List) short-circuits to True before descending into the element/payload type,
+        so a self-referential type (e.g. `enum MsgValue: Arr(MsgValue[])`,
+        `enum Tree: Node(Own<Tree>)`) terminates instead of looping.
+        """
+        from sushi_lang.semantics.typesys import (
+            UnknownType, FunctionType, BuiltinType, StructType, EnumType)
+        # Resolve a named type to its concrete struct/enum definition.
+        if isinstance(ty, UnknownType):
+            if ty.name in self.codegen.struct_table.by_name:
+                ty = self.codegen.struct_table.by_name[ty.name]
+            elif ty.name in self.codegen.enum_table.by_name:
+                ty = self.codegen.enum_table.by_name[ty.name]
+
+        if isinstance(ty, DynamicArrayType):
+            return True
+        # A function-value (closure) owns a heap environment freed through its
+        # runtime-guarded drop pointer (a no-op for a non-capturing value).
+        if isinstance(ty, FunctionType):
+            return True
+        # A `string` owns a heap buffer when its runtime `owned` bit is set (#147);
+        # scope-exit RAII frees it (guarded on the bit, so a literal/borrow is a no-op).
+        if ty == BuiltinType.STRING:
+            return True
+        if isinstance(ty, StructType):
+            # Own<T> / List<T> always own a heap allocation; other structs are checked
+            # field-by-field. Named-prefix check short-circuits the self-referential
+            # Own<Tree> / List<Node> cycle without recursing into the payload type.
+            if ty.name.startswith("Own<") or ty.name.startswith("List<"):
                 return True
-            # A function-value (closure) field owns a heap environment freed through its
-            # runtime-guarded drop pointer (a no-op for a non-capturing value).
-            if isinstance(field_type, FunctionType):
-                return True
-            # A `string` field owns a heap buffer when its runtime `owned` bit is set (#147);
-            # scope-exit RAII frees it (guarded on the bit, so a literal/borrow is a no-op).
-            if field_type == BuiltinType.STRING:
-                return True
-            # Check nested structs recursively
-            if isinstance(field_type, StructType):
-                if self.struct_needs_cleanup(field_type):
+            return self.struct_needs_cleanup(ty)
+        if isinstance(ty, EnumType):
+            return self._enum_needs_cleanup(ty)
+        return False
+
+    def _enum_needs_cleanup(self, enum_type: 'StructType') -> bool:
+        """Whether any variant of an enum carries a heap-owning payload."""
+        for variant in enum_type.variants:
+            for assoc_type in variant.associated_types:
+                if self._payload_needs_cleanup(assoc_type):
                     return True
         return False
 

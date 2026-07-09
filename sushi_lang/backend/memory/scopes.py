@@ -322,7 +322,7 @@ class ScopeManager:
             self._types[name] = []
         self._types[name].append((self._scope_depth, semantic_ty))
 
-    def create_local(self, name: str, ty: ir.Type, init: Optional[ir.Value] = None, semantic_ty: Optional['Type'] = None) -> ir.AllocaInstr:
+    def create_local(self, name: str, ty: ir.Type, init: Optional[ir.Value] = None, semantic_ty: Optional['Type'] = None, register_cleanup: bool = True) -> ir.AllocaInstr:
         """Create local variable with optional initialization.
 
         Allocates space for a local variable in the function entry block
@@ -334,6 +334,11 @@ class ScopeManager:
             ty: The LLVM type for the variable.
             init: Optional initial value to store.
             semantic_ty: Optional semantic type for the variable.
+            register_cleanup: When False, the local is NOT registered for scope-exit RAII
+                (the semantic type is still recorded for method dispatch). Used for a
+                borrow-like binding that aliases memory owned elsewhere -- e.g. a match
+                variant-payload binding, which borrows the enum's payload; the enum (its
+                owner) frees it, so registering the binding too would double-free (#139).
 
         Returns:
             The alloca instruction for the variable.
@@ -353,9 +358,17 @@ class ScopeManager:
                 self._types[name] = []
             self._types[name].append((self._scope_depth, semantic_ty))
 
-            # Track struct variables that need cleanup
-            from sushi_lang.semantics.typesys import StructType, FunctionType, BuiltinType
-            if isinstance(semantic_ty, StructType):
+            # Track struct / enum variables that need cleanup
+            from sushi_lang.semantics.typesys import StructType, EnumType, FunctionType, BuiltinType
+            if not register_cleanup:
+                pass  # borrow-like binding: aliases memory owned elsewhere, do not free
+            elif isinstance(semantic_ty, (StructType, EnumType)):
+                # An enum local whose active variant owns heap (a dynamic-array / string /
+                # closure / owning-struct payload) is freed at scope exit like a struct
+                # local, reusing the struct-cleanup registry so both the fall-through
+                # (pop_scope) and early-exit (emit_struct_cleanup) paths free it through
+                # the recursion-safe emit_value_destructor. #143 lifted CE2059 (enum may
+                # hold T[]) without wiring this owner, so such enum locals leaked (#139).
                 if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
                     if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
                         self._struct_cleanup[name] = (semantic_ty, slot)
@@ -409,9 +422,15 @@ class ScopeManager:
                 self._types[name] = []
             self._types[name].append((self._scope_depth, semantic_ty))
 
-            # Track struct variables that need cleanup
-            from sushi_lang.semantics.typesys import StructType, FunctionType, BuiltinType
-            if isinstance(semantic_ty, StructType):
+            # Track struct / enum variables that need cleanup
+            from sushi_lang.semantics.typesys import StructType, EnumType, FunctionType, BuiltinType
+            if isinstance(semantic_ty, (StructType, EnumType)):
+                # An enum local whose active variant owns heap (a dynamic-array / string /
+                # closure / owning-struct payload) is freed at scope exit like a struct
+                # local, reusing the struct-cleanup registry so both the fall-through
+                # (pop_scope) and early-exit (emit_struct_cleanup) paths free it through
+                # the recursion-safe emit_value_destructor. #143 lifted CE2059 (enum may
+                # hold T[]) without wiring this owner, so such enum locals leaked (#139).
                 if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
                     if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
                         self._struct_cleanup[name] = (semantic_ty, slot)

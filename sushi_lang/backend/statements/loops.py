@@ -354,15 +354,14 @@ def _emit_array_foreach_body(
     element_ptr = codegen.builder.gep(data_ptr, [current_index], name="element_ptr")
     element_value = codegen.builder.load(element_ptr, name=node.item_name)
 
-    # Create slot for loop variable and store element
+    # Create slot for loop variable and store element. A foreach item is a read-only BORROW
+    # of the container's element: the shallow-loaded value aliases the array's heap buffer,
+    # which the array destructor frees. So it must NOT be registered for its own RAII free
+    # (register_cleanup=False), else an owning element (string #147, or an owning enum /
+    # struct #139) is freed by both the item and the container -- double-free.
     element_ll_type = codegen.types.ll_type(node.item_type)
-    codegen.memory.create_local(node.item_name, element_ll_type, element_value, node.item_type)
-    # A foreach item is a read-only BORROW of the container's element: the shallow-loaded
-    # value aliases the array's heap buffer, which the array destructor frees (#147, now that
-    # a `string[]` frees its element buffers). Unregister the item so it is not ALSO freed at
-    # loop-body scope exit (double-free). create_local auto-registered it as a string owner.
-    if node.item_type == BuiltinType.STRING:
-        codegen.memory.unregister_string_cleanup(node.item_name)
+    codegen.memory.create_local(node.item_name, element_ll_type, element_value, node.item_type,
+                                register_cleanup=False)
 
     # Increment current_index
     incremented_index = codegen.builder.add(current_index, ir.Constant(codegen.types.i32, 1), name="next_index")

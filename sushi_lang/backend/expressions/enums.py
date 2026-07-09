@@ -128,15 +128,16 @@ def emit_enum_constructor_from_method_call(
             from sushi_lang.semantics.typesys import DynamicArrayType
 
             if isinstance(arg_type, DynamicArrayType) and isinstance(arg_expr, DynamicArrayFrom):
-                # Create a fresh dynamic array with its own heap allocation
-                # This prevents dangling pointers when the original array is destroyed
-                elements = []
-                for element_expr in arg_expr.elements.elements:
-                    element_value = codegen.expressions.emit_expr(element_expr)
-                    elements.append(element_value)
-
-                # Allocate and initialize array
+                # Create a fresh dynamic array with its own heap allocation. A heap-owning
+                # element that aliases a live local (a bare Name / member access) is
+                # deep-copied so the array and the source each own independent buffers --
+                # otherwise the enum local (now RAII-owned, #139) and the source both free
+                # the shared element buffer at scope exit (double-free). A fresh temp
+                # element is the sole owner and moved in unchanged.
                 from sushi_lang.backend.types import arrays
+                elements = arrays.emit_array_literal_elements(
+                    codegen, arg_expr.elements.elements, arg_type.base_type
+                )
                 element_llvm_type = codegen.types.ll_type(arg_type.base_type)
                 arg_value = arrays.create_dynamic_array_from_elements(
                     codegen, arg_type.base_type, element_llvm_type, elements

@@ -456,7 +456,12 @@ def emit_value_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) 
     )
 
     if isinstance(value_type, UnknownType):
-        value_type = codegen.struct_table.by_name.get(value_type.name, value_type)
+        # A named type may be a struct OR an enum; resolve against both tables, else an
+        # owning enum passed as UnknownType would fall through as a no-op and not be
+        # deep-copied (double-free on a shared payload, #139).
+        value_type = (codegen.struct_table.by_name.get(value_type.name)
+                      or codegen.enum_table.by_name.get(value_type.name)
+                      or value_type)
 
     # Foreign ptr / function values: passthrough. A capturing closure's heap env
     # cannot be generically duplicated (capture is erased from the type), so a

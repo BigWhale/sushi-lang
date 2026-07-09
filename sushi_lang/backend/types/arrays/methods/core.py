@@ -80,10 +80,12 @@ def emit_dynamic_array_from(codegen: 'LLVMCodegen', expr: DynamicArrayFrom) -> i
     Returns:
         Pointer to stack-allocated dynamic array struct.
     """
-    from ..utils import create_dynamic_array_from_elements
+    from ..utils import create_dynamic_array_from_elements, emit_array_literal_elements
 
-    # Evaluate all element expressions
-    elements = [codegen.expressions.emit_expr(elem) for elem in expr.elements.elements]
+    # Evaluate all element expressions, deep-copying heap-owning aliases so the new array
+    # and the source each own independent buffers (a bare-Name element aliases a live owner;
+    # a fresh temp is the sole owner and moved in). Element type is derived per alias.
+    elements = emit_array_literal_elements(codegen, expr.elements.elements, None)
 
     if not elements:
         # Empty array case
