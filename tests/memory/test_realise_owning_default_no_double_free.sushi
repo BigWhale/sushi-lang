@@ -1,0 +1,22 @@
+# EXPECT_STDOUT_EXACT: "first=4 fallback=4\n"
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+# Regression for the `realise` ownership bug found while fixing #159: when the default is a
+# named binding that owns heap, the failure path returned a shallow alias of it, so the
+# result and the binding both freed the same buffer at scope exit (double-free, exit 133).
+# The default must be cloned when it is borrowed, so each side frees exactly once. The
+# binding stays usable afterwards.
+
+struct Buf:
+    i32[] data
+
+fn run() i32:
+    let Buf[] arr = from([Buf(data: from([1, 2, 3]))])
+    let Buf fallback = Buf(data: from([7, 8, 9, 10]))
+    let Buf first = arr.get(99).realise(fallback)
+    println("first={first.data.len()} fallback={fallback.data.len()}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run().realise(1)
+    return Result.Ok(r)

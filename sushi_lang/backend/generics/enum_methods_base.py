@@ -17,6 +17,10 @@ from sushi_lang.backend.constants import INT32_BIT_WIDTH
 from sushi_lang.semantics.typesys import EnumType, Type
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend import enum_utils
+from sushi_lang.backend.destructors import (
+    emit_value_destructor, needs_cleanup, resolve_named_type
+)
+from sushi_lang.backend.expressions.memory import emit_value_clone
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -146,6 +150,15 @@ def emit_enum_realise(
     # through the choice is always a scalar select and copies the whole aggregate
     # correctly, so use that for any aggregate T (mem2reg/O1+ folds the alloca away).
     if isinstance(value_llvm_type, ir.Aggregate):
+        # `t_type` reaches here as a bare name for a user struct/enum; the ownership test,
+        # the clone and the destructor all dispatch on the resolved class.
+        owned_type = resolve_named_type(codegen, t_type)
+        if needs_cleanup(owned_type):
+            return _emit_owning_realise(
+                codegen, call, is_success, unpacked_value, default_value,
+                value_llvm_type, owned_type
+            )
+
         value_slot = codegen.builder.alloca(value_llvm_type, name="realise_value_slot")
         codegen.builder.store(unpacked_value, value_slot)
         default_slot = codegen.builder.alloca(value_llvm_type, name="realise_default_slot")
@@ -156,3 +169,62 @@ def emit_enum_realise(
     result = codegen.builder.select(is_success, unpacked_value, default_value, name="realise_result")
 
     return result
+
+
+def _expression_is_borrow(expr) -> bool:
+    """Does `expr` name storage that keeps owning its heap after we read it?
+
+    A bare name or a struct-field read hands back a shallow view of a value some other
+    owner still frees; anything else (constructor, call return, get-out) is a temporary.
+    Same clone-vs-adopt discipline the `let` binding uses in `statements/variables.py`.
+    """
+    from sushi_lang.semantics.ast import Name, MemberAccess
+    return isinstance(expr, (Name, MemberAccess))
+
+
+def _emit_owning_realise(
+    codegen: 'LLVMCodegen',
+    call: 'MethodCall',
+    is_success: ir.Value,
+    unpacked_value: ir.Value,
+    default_value: ir.Value,
+    value_llvm_type: ir.Type,
+    owned_type: Type
+) -> ir.Value:
+    """Emit `realise(default)` for a `T` that owns heap, keeping exactly one owner.
+
+    `realise` picks one of two candidate values and returns it. Both arrive as shallow
+    views, so each side is cloned when it belongs to a binding that stays live, and adopted
+    when it is a temporary; the losing candidate is then destroyed. Getting this wrong fails
+    in both directions: returning an alias of a live binding double-frees at scope exit,
+    while never destroying the loser strands its buffers.
+
+    The payload is only touched under `is_success`. On the failure path the enum's data
+    field holds the *other* variant's bytes (`Err`'s payload, `None`'s uninitialised slot)
+    reinterpreted as `T`, so cloning or destroying through it would walk a bogus pointer.
+    """
+    borrowed_receiver = _expression_is_borrow(call.receiver)
+    borrowed_default = _expression_is_borrow(call.args[0])
+
+    # The default is evaluated unconditionally (its expression may have side effects), so
+    # park it in a slot: the success path needs a pointer to destroy it through.
+    default_slot = codegen.builder.alloca(value_llvm_type, name="realise_default_slot")
+    codegen.builder.store(default_value, default_slot)
+    result_slot = codegen.builder.alloca(value_llvm_type, name="realise_result_slot")
+
+    with codegen.builder.if_else(is_success) as (then_block, else_block):
+        with then_block:
+            payload = unpacked_value
+            if borrowed_receiver:
+                payload = emit_value_clone(codegen, payload, owned_type)
+            codegen.builder.store(payload, result_slot)
+            if not borrowed_default:
+                # We adopted the default temporary and are not returning it.
+                emit_value_destructor(codegen, codegen.builder, default_slot, owned_type)
+        with else_block:
+            fallback = codegen.builder.load(default_slot, name="realise_default")
+            if borrowed_default:
+                fallback = emit_value_clone(codegen, fallback, owned_type)
+            codegen.builder.store(fallback, result_slot)
+
+    return codegen.builder.load(result_slot, name="realise_result")

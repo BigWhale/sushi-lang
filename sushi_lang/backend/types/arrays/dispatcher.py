@@ -174,7 +174,11 @@ def emit_array_method(
 
         case "clone":
             from .methods.transforms import emit_dynamic_array_clone
-            return emit_dynamic_array_clone(codegen, expr, receiver_value, array_struct_type, to_i1)
+            # The element type drives the per-element deep copy of owning elements (#158).
+            if not isinstance(semantic_type, DynamicArrayType):
+                raise_internal_error("CE0042", type=type(semantic_type).__name__)
+            return emit_dynamic_array_clone(codegen, expr, receiver_value, array_struct_type,
+                                            to_i1, semantic_type.base_type)
 
         case "to_string":
             from .methods.transforms import emit_byte_array_to_string
