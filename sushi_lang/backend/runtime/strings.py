@@ -291,6 +291,45 @@ class StringOperations:
 
         return struct_complete
 
+    def emit_cstr_to_owned_fat_pointer(self, c_str: ir.Value) -> ir.Value:
+        """Copy a foreign C `char*` into a fresh Sushi-owned buffer (owned=1).
+
+        The FFI copy-to-owned policy (#145/#147): Sushi never frees foreign memory, so a
+        C-returned `char*` is COPIED (strlen + malloc + i64-length memcpy) into a Sushi heap
+        buffer that RAII frees at scope exit; the foreign pointer is left untouched. This
+        makes an FFI string return a normal owning `string` (no leak). Authors who want
+        zero-copy foreign data use the `ptr` escape hatch instead.
+
+        Args:
+            c_str: Null-terminated i8* returned by a C function.
+
+        Returns:
+            Fat pointer struct {i8* data, i32 size, i8 owned=1} owning a fresh copy.
+        """
+        if self.codegen.builder is None:
+            raise_internal_error("CE0009")
+        b = self.codegen.builder
+
+        size = b.call(self.codegen.runtime.libc_strings.strlen, [c_str])  # i32 byte count
+        size_i64 = b.zext(size, ir.IntType(INT64_BIT_WIDTH))
+
+        malloc_func = self.codegen.get_malloc_func()
+        new_data = b.call(malloc_func, [size_i64])
+
+        # i64-length memcpy with the zero-extended size (never the raw i32, see #149).
+        memcpy_fn = self.codegen.module.declare_intrinsic(
+            'llvm.memcpy',
+            [ir.PointerType(self.codegen.i8), ir.PointerType(self.codegen.i8), ir.IntType(INT64_BIT_WIDTH)]
+        )
+        b.call(memcpy_fn, [new_data, c_str, size_i64, FALSE_I1])
+
+        string_struct_type = self.codegen.types.string_struct
+        s = ir.Constant(string_struct_type, ir.Undefined)
+        s = b.insert_value(s, new_data, 0)
+        s = b.insert_value(s, size, 1)
+        s = b.insert_value(s, ir.Constant(self.codegen.i8, 1), 2)
+        return s
+
     def emit_string_byte_count(self, string_ptr: ir.Value) -> ir.Value:
         """Generate call to strlen for string BYTE count (not character count).
 

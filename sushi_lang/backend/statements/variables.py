@@ -103,8 +103,39 @@ def emit_let(codegen: 'CodegenProtocol', stmt: 'Let') -> None:
             initialization.initialize_array_literal(codegen, slot, stmt.value, ll_type)
         else:
             rhs = codegen.expressions.emit_expr(stmt.value)
+            # Owning-struct copy semantics (#60/#134/#147): a struct that owns heap memory
+            # (a string / array / ... field) must get INDEPENDENT buffers when it is aliased
+            # by value, or two scope-registered owners double-free at scope exit. A bare-Name
+            # or struct-field-read alias is deep-copied here; a fresh RHS (constructor / call
+            # return) or an already-cloned array get-out is a sole owner and left as-is.
+            rhs = _clone_owning_struct_alias(codegen, stmt, rhs, semantic_type)
             casted_rhs = codegen.utils.cast_for_param(rhs, ll_type)
             codegen.builder.store(casted_rhs, slot)
+
+
+def _clone_owning_struct_alias(codegen: 'CodegenProtocol', stmt: 'Let', rhs: 'ir.Value', semantic_type) -> 'ir.Value':
+    """Deep-copy an owning-struct RHS when the binding aliases an existing owner.
+
+    Structs are copy types (#60/#134): `let p2 = p` and `let inner = outer.field` must give
+    the new binding its own heap buffers so each of the two registered owners frees exactly
+    once (#147). Only a bare-Name alias or a struct-field read aliases an owner that stays
+    live; a constructor, call return, or array `.get()`/index get-out (already deep-copied at
+    the access site) is a fresh sole owner and is returned unchanged.
+    """
+    from sushi_lang.semantics.typesys import StructType, UnknownType
+    from sushi_lang.semantics.ast import Name, MemberAccess
+
+    resolved = semantic_type
+    if isinstance(resolved, UnknownType):
+        resolved = codegen.struct_table.by_name.get(resolved.name, resolved)
+    if not isinstance(resolved, StructType):
+        return rhs
+    if not codegen.dynamic_arrays.struct_needs_cleanup(resolved):
+        return rhs
+    if isinstance(stmt.value, (Name, MemberAccess)):
+        from sushi_lang.backend.expressions.memory import emit_value_clone
+        return emit_value_clone(codegen, rhs, resolved)
+    return rhs
 
 
 def _reconcile_closure_ownership(codegen: 'CodegenProtocol', stmt: 'Let', semantic_type) -> None:

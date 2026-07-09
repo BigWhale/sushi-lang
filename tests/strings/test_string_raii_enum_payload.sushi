@@ -1,0 +1,37 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: bare-1
+# EXPECT_STDOUT_CONTAINS: arr-2
+# EXPECT_STDOUT_CONTAINS: iter-3
+# EXPECT_STDERR_EMPTY: true
+# Issue #147: enum string payloads and arrays of strings stay leak-free and double-free-free
+# after the needs_cleanup(STRING) flip. Covers: a matched bare enum local, an enum with a
+# string payload extracted from a dynamic array then matched, and a foreach over a string[]
+# (the iteration item is a borrow, so only the array frees the elements).
+
+enum E:
+    V(string)
+    N(i32)
+
+fn main() i32:
+    let i32 one = 1
+    # bare enum local, matched (payload owned by the binding)
+    let E e = E.V("bare-{one}")
+    match e:
+        E.V(s) -> println(s)
+        E.N(rest) -> println("n-{rest}")
+
+    # enum with a string payload inside a dynamic array, extracted then matched
+    let i32 two = 2
+    let E[] es = from([E.V("arr-{two}"), E.N(3)])
+    let E e0 = es[0]
+    match e0:
+        E.V(s) -> println(s)
+        E.N(rest) -> println("n-{rest}")
+
+    # foreach over a string[] (borrowed items; the array frees the element buffers)
+    let string[] xs = from(["iter-{3}", "iter-{4}"])
+    foreach(item in xs.iter()):
+        println(item)
+
+    return Result.Ok(0)

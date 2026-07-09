@@ -495,9 +495,10 @@ def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     # `~` (void) return: nothing to use - hand back an i32 blank value.
     if ret_ty is None or (isinstance(ret_ty, BuiltinType) and ret_ty == BuiltinType.BLANK):
         return ir.Constant(codegen.i32, 0)
-    # `string` return: convert C char* back to a Sushi fat pointer.
+    # `string` return: COPY the C char* into a fresh Sushi-owned buffer (#147). Sushi never
+    # frees the foreign pointer; the owned copy is RAII-freed at scope exit (no leak).
     if isinstance(ret_ty, BuiltinType) and ret_ty == BuiltinType.STRING:
-        return codegen.runtime.strings.emit_cstr_to_fat_pointer(call_result, owned=0)
+        return codegen.runtime.strings.emit_cstr_to_owned_fat_pointer(call_result)
     return call_result
 
 
