@@ -1,0 +1,21 @@
+# EXPECT_STDOUT_EXACT: "first=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_TYPE: runtime
+# Regression for the `realise` ownership bug found while fixing #159: when the receiver is a
+# named `Maybe` binding whose payload owns heap, the success path returned a shallow alias of
+# that payload, so the result and the binding both freed the same buffer at scope exit
+# (double-free, exit 133). A borrowed receiver's payload must be cloned.
+
+struct Buf:
+    i32[] data
+
+fn run() i32:
+    let Buf[] arr = from([Buf(data: from([1, 2, 3])), Buf(data: from([4, 5]))])
+    let Maybe<Buf> held = arr.get(0)
+    let Buf first = held.realise(Buf(data: from([0])))
+    println("first={first.data.len()}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run().realise(1)
+    return Result.Ok(r)

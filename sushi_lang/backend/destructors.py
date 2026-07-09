@@ -527,8 +527,26 @@ def _emit_enum_destructor(
         builder.position_at_end(end_block)
 
 
+def resolve_named_type(codegen: LLVMCodegen, value_type: Type) -> Type:
+    """Resolve an `UnknownType` name against the struct and enum tables.
+
+    A named type may be a struct OR an enum. `needs_cleanup` and
+    `emit_value_destructor` both dispatch on the resolved class, so an unresolved
+    name silently reports "no cleanup needed" and destroys nothing.
+    """
+    from sushi_lang.semantics.typesys import UnknownType
+    if not isinstance(value_type, UnknownType):
+        return value_type
+    return (codegen.struct_table.by_name.get(value_type.name)
+            or codegen.enum_table.by_name.get(value_type.name)
+            or value_type)
+
+
 def needs_cleanup(value_type: Type) -> bool:
     """Check if a type needs cleanup (has resources to free).
+
+    Named types must be resolved (see `resolve_named_type`) before calling this:
+    a bare `UnknownType` falls through to False.
 
     Args:
         value_type: The type to check
