@@ -59,23 +59,135 @@ def emit_value_destructor(
         # All numeric types and bool: no cleanup
         return
 
-    # Dynamic arrays: free the data pointer
-    elif isinstance(value_type, DynamicArrayType):
-        _emit_dynamic_array_destructor(codegen, builder, value_ptr, value_type)
-
-    # Structs: recursively destroy each field
-    elif isinstance(value_type, StructType):
-        _emit_struct_destructor(codegen, builder, value_ptr, value_type)
-
-    # Enums: switch on tag and destroy variant data
-    elif isinstance(value_type, EnumType):
-        _emit_enum_destructor(codegen, builder, value_ptr, value_type)
+    # Composite owning types (dynamic arrays, structs/List/Own, enums): routed through
+    # the recursion-safe wrapper. It inlines the destructor for a non-recursive type
+    # (zero behaviour change) but, when a type transitively contains itself (e.g.
+    # `enum MsgValue: Arr(MsgValue[])` or `Own<Tree>`), emits an out-of-line per-type
+    # destructor function and calls it at the self-referential position, so cleanup
+    # terminates via runtime recursion instead of unbounded compile-time inlining (#139).
+    elif isinstance(value_type, (DynamicArrayType, StructType, EnumType)):
+        _emit_composite_destructor(codegen, builder, value_ptr, value_type)
 
     # Function values (closures): free the heap environment through the runtime-guarded
     # drop pointer. Capture is erased from the type, so ownership is resolved at runtime:
     # a non-capturing value carries drop_ptr = null, making the free a no-op.
     elif isinstance(value_type, FunctionType):
         emit_function_value_destructor(codegen, builder, value_ptr)
+
+
+def _select_inline_destructor(value_type: Type):
+    """Pick the inline destructor emitter for a composite type."""
+    if isinstance(value_type, DynamicArrayType):
+        return _emit_dynamic_array_destructor
+    if isinstance(value_type, StructType):
+        return _emit_struct_destructor
+    if isinstance(value_type, EnumType):
+        return _emit_enum_destructor
+    raise AssertionError(f"not a composite destructor type: {value_type!r}")
+
+
+def _dtor_type_key(value_type: Type) -> str:
+    """A stable identity key for a composite type's destructor.
+
+    Two occurrences of the same type share a key (so a self-referential type is
+    detected on re-entry, and its out-of-line destructor is emitted once).
+    """
+    if isinstance(value_type, DynamicArrayType):
+        return "[]" + _dtor_type_key(value_type.base_type)
+    if isinstance(value_type, (StructType, EnumType)):
+        return value_type.name
+    return getattr(value_type, "name", type(value_type).__name__)
+
+
+def _dtor_symbol(value_type: Type) -> str:
+    """Deterministic, symbol-safe name for a per-type destructor function.
+
+    Deterministic across compilation units so the `linkonce_odr` bodies emitted in
+    different units for the same recursive type deduplicate at link time.
+    """
+    mapping = {"<": "_L", ">": "_G", ",": "_C", "[": "_A", "]": "_E", " ": ""}
+    out = []
+    for ch in _dtor_type_key(value_type):
+        if ch.isalnum() or ch == "_":
+            out.append(ch)
+        else:
+            out.append(mapping.get(ch, "_"))
+    return "__sushi_dtor_" + "".join(out)
+
+
+def _emit_composite_destructor(
+    codegen: LLVMCodegen,
+    builder: ir.IRBuilder,
+    value_ptr: ir.Value,
+    value_type: Type,
+) -> None:
+    """Emit a composite type's destructor, breaking self-referential cycles.
+
+    A non-recursive type is inlined exactly as before. When emission re-enters a
+    type already on the in-progress stack (a self-referential type such as
+    `enum MsgValue: Arr(MsgValue[])` or `Own<Tree>`), a call to an out-of-line
+    per-type destructor is emitted at that position instead of inlining the body
+    again -- so the cleanup recurses at runtime over the actual data and terminates,
+    rather than recursing unbounded at compile time (the original #139 crash).
+    """
+    key = _dtor_type_key(value_type)
+    stack = getattr(codegen, "_dtor_inprogress", None)
+    if stack is None:
+        stack = []
+        codegen._dtor_inprogress = stack
+
+    if key in stack:
+        fn = _get_or_emit_dtor_func(codegen, value_type)
+        i8_ptr = builder.bitcast(value_ptr, ir.PointerType(ir.IntType(INT8_BIT_WIDTH)))
+        builder.call(fn, [i8_ptr])
+        return
+
+    stack.append(key)
+    try:
+        _select_inline_destructor(value_type)(codegen, builder, value_ptr, value_type)
+    finally:
+        stack.pop()
+
+
+def _get_or_emit_dtor_func(codegen: LLVMCodegen, value_type: Type) -> ir.Function:
+    """Get (or lazily emit) the out-of-line destructor function for a recursive type.
+
+    Signature is `void __sushi_dtor_<mangled>(i8* value_ptr)`. The function is inserted
+    into the cache BEFORE its body is emitted, so a self-referential position inside the
+    body resolves to a call to this same function (terminating the emission). The body is
+    built with a fresh in-progress stack seeded with this type's key, so the recursion
+    point becomes a self-call while unrelated nested types still inline.
+    """
+    key = _dtor_type_key(value_type)
+    funcs = getattr(codegen, "_dtor_funcs", None)
+    if funcs is None:
+        funcs = {}
+        codegen._dtor_funcs = funcs
+    if key in funcs:
+        return funcs[key]
+
+    i8_ptr_ty = ir.PointerType(ir.IntType(INT8_BIT_WIDTH))
+    fn_ty = ir.FunctionType(ir.VoidType(), [i8_ptr_ty])
+    fn = ir.Function(codegen.module, fn_ty, name=_dtor_symbol(value_type))
+    fn.linkage = "linkonce_odr"
+    funcs[key] = fn
+
+    entry = fn.append_basic_block(name="entry")
+    fb = ir.IRBuilder(entry)
+    typed_ptr = fb.bitcast(
+        fn.args[0],
+        ir.PointerType(codegen.types.ll_type(value_type)),
+        name="self_ptr",
+    )
+
+    saved = getattr(codegen, "_dtor_inprogress", None)
+    codegen._dtor_inprogress = [key]
+    try:
+        _select_inline_destructor(value_type)(codegen, fb, typed_ptr, value_type)
+    finally:
+        codegen._dtor_inprogress = saved if saved is not None else []
+    fb.ret_void()
+    return fn
 
 
 def emit_function_value_destructor(
