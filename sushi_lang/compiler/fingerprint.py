@@ -116,6 +116,46 @@ def compute_stdlib_fingerprint(bc_paths: list) -> str:
     return hasher.hexdigest()
 
 
+def compute_stdlib_source_fingerprint() -> str:
+    """Compute a content fingerprint of the stdlib bitcode *generators*.
+
+    The precompiled stdlib `.bc` are build artifacts produced by Python
+    IR-generators; this hashes those generator sources so the compiler can
+    detect when the shipped `.bc` are stale and rebuild them on the fly.
+
+    Global (whole-tree) granularity: every `.py` under
+    `sushi_stdlib/src/`, plus `backend/types/primitives.py` (the source of the
+    `core/primitives` unit) and `sushi_stdlib/build.py` (the build logic
+    itself). Any generator edit flips the digest and triggers a rebuild of the
+    current platform's units -- deliberately over-eager, since shared helpers
+    (common.py, ir_builders.py, ...) legitimately affect many units. The value
+    is platform-independent (the same sources emit both platforms' `.bc`).
+
+    Returns:
+        Hex SHA-256 digest of the generator sources.
+    """
+    from pathlib import Path
+
+    # sushi_lang/compiler/fingerprint.py -> sushi_lang/
+    sushi_lang_dir = Path(__file__).resolve().parent.parent
+    src_dir = sushi_lang_dir / "sushi_stdlib" / "src"
+
+    sources: list[Path] = sorted(src_dir.rglob("*.py"))
+    sources.append(sushi_lang_dir / "backend" / "types" / "primitives.py")
+    sources.append(sushi_lang_dir / "sushi_stdlib" / "build.py")
+
+    hasher = hashlib.sha256()
+    hasher.update(b"STDLIB_SRC:")
+    for path in sorted(sources, key=str):
+        if not path.exists():
+            continue
+        # Path-relative-to-sushi_lang keeps the digest stable across checkouts.
+        rel = path.resolve().relative_to(sushi_lang_dir)
+        hasher.update(f"{rel}:".encode())
+        hasher.update(path.read_bytes())
+    return hasher.hexdigest()
+
+
 def compute_lib_fingerprint(slib_path) -> str:
     """Compute a fingerprint for a library .slib file."""
     from pathlib import Path

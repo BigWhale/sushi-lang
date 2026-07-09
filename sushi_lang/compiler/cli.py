@@ -219,17 +219,13 @@ def main(argv: list[str] | None = None) -> int:
     # Handle --build-stdlib flag
     if args.build_stdlib:
         print("Building standard library...")
-        build_script = Path(__file__).parent.parent / "stdlib" / "build.py"
-
-        if build_script.exists():
-            import subprocess
-            result = subprocess.run([sys.executable, str(build_script)])
-            if result.returncode != 0:
-                print("Error: Stdlib build failed", file=sys.stderr)
-                return 2
+        try:
+            from sushi_lang.sushi_stdlib.build import build_all
+            from sushi_lang.backend.stdlib_builder import detect_platform
+            build_all(detect_platform())
             print()
-        else:
-            print("Error: Build script not found", file=sys.stderr)
+        except Exception as e:
+            print(f"Error: Stdlib build failed: {e}", file=sys.stderr)
             return 2
 
         if not args.source:

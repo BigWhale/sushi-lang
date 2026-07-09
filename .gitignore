@@ -15,12 +15,11 @@ a.out
 /tests/*.bin
 /tests/*.txt
 
-# Standard library build artifacts
-/stdlib/dist/
-/stdlib/**/*.bc
-/stdlib/**/*.o
-/stdlib/**/__pycache__/
-/stdlib/**/*.pyc
+# Standard library build artifacts (precompiled .bc are built on the fly /
+# in CI, not tracked in git)
+/sushi_lang/sushi_stdlib/dist/
+/sushi_lang/sushi_stdlib/**/*.bc
+/sushi_lang/sushi_stdlib/**/*.o
 
 # Backup files
 *.py.old

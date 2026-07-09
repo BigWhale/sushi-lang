@@ -154,6 +154,11 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
 
     # Validate and display stdlib units being linked
     if stdlib_units:
+        # Auto-build the current platform's stdlib bitcode if missing or if a
+        # generator source changed, so we never link stale/absent .bc.
+        from sushi_lang.backend.stdlib_builder import ensure_stdlib_built
+        ensure_stdlib_built()
+
         from sushi_lang.backend.codegen_llvm import LLVMCodegen
         temp_cg = LLVMCodegen()
         try:

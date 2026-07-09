@@ -198,7 +198,7 @@ class StdlibLinker:
                 raise FileNotFoundError(
                     f"Stdlib directory exists but contains no .bc files: <{unit_path}>\n"
                     f"Platform: {self.platform}\n"
-                    f"The stdlib may not be built. Try running: python stdlib/build.py"
+                    f"The stdlib may not be built. Try running: ./sushic --build-stdlib"
                 )
             return bc_files
 
@@ -216,12 +216,12 @@ class StdlibLinker:
                 f"Platform: {self.platform}\n"
                 f"Available units: {available_str}\n"
                 f"Note: Use angle brackets like 'use <io/stdio>' for stdlib imports\n"
-                f"Hint: Try running 'python stdlib/build.py' to build stdlib for your platform"
+                f"Hint: Try running './sushic --build-stdlib' to build stdlib for your platform"
             )
         else:
             raise FileNotFoundError(
                 f"Stdlib unit not found: <{unit_path}>\n"
-                f"No stdlib units are available. Try running: python stdlib/build.py"
+                f"No stdlib units are available. Try running: ./sushic --build-stdlib"
             )
 
     def _list_available_stdlib_units(self, stdlib_dist: Path) -> list[str]:
