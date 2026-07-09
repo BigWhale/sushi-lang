@@ -379,18 +379,29 @@ def deep_copy_if_owning_struct(codegen: 'LLVMCodegen', value: ir.Value, semantic
     return value
 
 
-def move_string_arg_into_container(codegen: 'LLVMCodegen', arg_ast) -> None:
-    """Mark a bare-Name owning string local as moved when it is stored into a container (#145).
+def move_owning_arg_into_container(codegen: 'LLVMCodegen', arg_ast) -> None:
+    """Mark a bare-Name owning local as moved when it is stored into a container.
 
-    `container.push(s)` / `.insert(s)` / `map.insert(k, s)` transfers ownership of the string
-    buffer to the container (which frees it on `.destroy()`/`.free()`/scope exit). The source
-    local `s` must therefore be moved so scope-exit RAII does not ALSO free the same buffer
-    (double-free). Only a bare Name of a currently-registered owning string local is moved;
-    a literal / method result / other expression is a fresh value the container simply owns.
+    `container.push(x)` / `.insert(x)` / `map.insert(k, x)` stores the value SHALLOWLY --
+    the container's slot aliases the same heap buffer(s) as the source. Ownership therefore
+    transfers to the container (which frees the value on `.destroy()`/`.free()`/scope exit),
+    and the source local must be moved so scope-exit RAII does not ALSO free the shared
+    buffer (double-free). Covers every owning local kind: strings (#145), dynamic arrays,
+    `List<T>`, `Own<T>`, and heap-owning structs (#140). Only a bare Name of a
+    currently-registered owning local is moved; a literal / temporary / method result is a
+    fresh value the container simply takes over, with no source to move.
     """
     from sushi_lang.semantics.ast import Name
-    if isinstance(arg_ast, Name) and codegen.memory.is_string_registered(arg_ast.id):
-        codegen.moves.mark(arg_ast.id)
+    if not isinstance(arg_ast, Name):
+        return
+    name = arg_ast.id
+    da = codegen.dynamic_arrays
+    if (codegen.memory.is_string_registered(name)
+            or codegen.memory.is_struct_registered(name)
+            or name in da.arrays
+            or name in da.lists
+            or name in da.owned_pointers):
+        codegen.moves.mark(name)
 
 
 def deep_copy_struct(codegen: 'LLVMCodegen', struct_value: ir.Value, struct_type: StructType) -> ir.Value:
@@ -436,3 +447,237 @@ def deep_copy_struct(codegen: 'LLVMCodegen', struct_value: ir.Value, struct_type
                 new_struct = codegen.builder.insert_value(new_struct, cloned_nested, field_idx)
 
     return new_struct
+
+
+def emit_value_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) -> ir.Value:
+    """Return a deep copy of `value` that owns independent heap buffers.
+
+    Exact structural inverse of `destructors.emit_value_destructor`: it duplicates
+    precisely the set of heap buffers that destructor would free for the same
+    `value_type`. Clone fewer buffers -> double-free; clone more -> leak. It is a
+    no-op passthrough for non-owning shapes, so callers invoke it unconditionally,
+    mirroring how the free site calls the destructor unconditionally on the value.
+
+    Value-in / value-out SSA (takes and returns the value, not a pointer), so it
+    composes with a freshly loaded value such as a HashMap entry (#140).
+
+    Args:
+        codegen: The LLVM codegen instance.
+        value: The emitted SSA value to clone.
+        value_type: The value's semantic type (may be an UnknownType struct name).
+
+    Returns:
+        A deep copy with independent buffers, or `value` unchanged when non-owning.
+    """
+    from sushi_lang.semantics.typesys import (
+        UnknownType, BuiltinType, ForeignPtrType, EnumType, FunctionType
+    )
+
+    if isinstance(value_type, UnknownType):
+        value_type = codegen.struct_table.by_name.get(value_type.name, value_type)
+
+    # Foreign ptr / function values: passthrough. A capturing closure's heap env
+    # cannot be generically duplicated (capture is erased from the type), so a
+    # closure HashMap value is an accepted, pre-existing gap -- identical to the
+    # closure gap in array `.get()`.
+    if isinstance(value_type, (ForeignPtrType, FunctionType)):
+        return value
+
+    if isinstance(value_type, BuiltinType):
+        if value_type == BuiltinType.STRING:
+            return _clone_string_value(codegen, value)
+        return value  # numerics, bool, I/O handles: nothing to clone
+
+    if isinstance(value_type, DynamicArrayType):
+        return clone_dynamic_array_value(codegen, value, value_type.base_type)
+
+    if isinstance(value_type, StructType):
+        if value_type.name.startswith("Own<"):
+            return _clone_own_value(codegen, value, value_type)
+        if value_type.name.startswith("List<"):
+            return _clone_list_value(codegen, value, value_type)
+        return _clone_struct_value(codegen, value, value_type)
+
+    if isinstance(value_type, EnumType):
+        return _clone_enum_value(codegen, value, value_type)
+
+    return value
+
+
+def _declare_memcpy(codegen: 'LLVMCodegen'):
+    """Declare the i64-length llvm.memcpy intrinsic (safe on ARM64, see #149)."""
+    i8_ptr = ir.PointerType(codegen.types.i8)
+    return codegen.module.declare_intrinsic(
+        'llvm.memcpy', [i8_ptr, i8_ptr, ir.IntType(INT64_BIT_WIDTH)]
+    )
+
+
+def _clone_string_value(codegen: 'LLVMCodegen', fat: ir.Value) -> ir.Value:
+    """Deep-copy a string's heap buffer, mirroring the owned-bit guard of the destructor.
+
+    Fat layout is `{i8* data@0, i32 size@1, i8 owned@2}`. If `owned != 0` the buffer is
+    heap-owned: malloc a fresh copy (i64-length memcpy -- the raw i32 size is unsafe on
+    ARM64, #149) and set owned=1. A literal/borrow (owned=0) passes through unchanged, so
+    exactly one owner frees each buffer -- symmetric with `emit_string_destructor`.
+    """
+    b = codegen.builder
+    owned = b.extract_value(fat, 2, name="clone_str_owned")
+    size = b.extract_value(fat, 1, name="clone_str_size")
+    data = b.extract_value(fat, 0, name="clone_str_data")
+
+    slot = b.alloca(fat.type, name="clone_str_slot")
+    b.store(fat, slot)  # default: return input unchanged (owned == 0)
+
+    is_owned = b.icmp_unsigned("!=", owned, ir.Constant(owned.type, 0))
+    with b.if_then(is_owned):
+        size_i64 = b.zext(size, ir.IntType(INT64_BIT_WIDTH))
+        new_data = emit_malloc_call(codegen, size_i64)  # i8*
+        b.call(_declare_memcpy(codegen),
+               [new_data, data, size_i64, ir.Constant(ir.IntType(1), 0)])
+        cloned = b.insert_value(fat, new_data, 0)
+        cloned = b.insert_value(cloned, ir.Constant(codegen.types.i8, 1), 2)
+        b.store(cloned, slot)
+
+    return b.load(slot, name="cloned_string")
+
+
+def _clone_own_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: StructType) -> ir.Value:
+    """Deep-copy an Own<T>: mirror the destructor's Own path (recurse pointee, own ptr).
+
+    Own<T> is `{T* value@0}`. Null-guard the pointer, recursively clone the pointee (so
+    nested Own<Own<T>> descends), malloc a fresh pointee slot, and store the clone -- the
+    returned Own owns an independent allocation that its destructor frees exactly once.
+    """
+    from sushi_lang.backend.generics.own import get_own_element_type
+
+    b = codegen.builder
+    elem_ty = get_own_element_type(value_type)
+    elem_llvm = codegen.types.ll_type(elem_ty)
+    ptr = b.extract_value(value, 0, name="clone_own_ptr")  # T*
+
+    slot = b.alloca(value.type, name="clone_own_slot")
+    b.store(value, slot)  # default: passthrough (null ptr)
+
+    is_not_null = b.icmp_unsigned("!=", ptr, ir.Constant(ptr.type, None))
+    with b.if_then(is_not_null):
+        pointee = b.load(ptr, name="own_pointee")
+        cloned_pointee = emit_value_clone(codegen, pointee, elem_ty)
+        new_raw = emit_malloc_call(codegen, codegen.types.get_type_size_constant(elem_ty))
+        new_ptr = b.bitcast(new_raw, ir.PointerType(elem_llvm), name="own_new_ptr")
+        b.store(cloned_pointee, new_ptr)
+        b.store(b.insert_value(value, new_ptr, 0), slot)
+
+    return b.load(slot, name="cloned_own")
+
+
+def _clone_list_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: StructType) -> ir.Value:
+    """Deep-copy a List<T>: allocate a fresh buffer and copy the elements.
+
+    List<T> is `{i32 len@0, i32 cap@1, T* data@2}`. Null-data passes through unchanged
+    (empty list). Otherwise malloc cap*sizeof(T) and memcpy the `len` live elements
+    (shallow per element -- one level, matching `clone_dynamic_array_value`). The new
+    buffer is freed exactly once by the symmetric List branch added to the destructor.
+    """
+    from sushi_lang.backend.generics.list.types import extract_element_type
+
+    b = codegen.builder
+    elem_ty = extract_element_type(value_type, codegen)
+    elem_llvm = codegen.types.ll_type(elem_ty)
+    length = b.extract_value(value, 0, name="clone_list_len")
+    cap = b.extract_value(value, 1, name="clone_list_cap")
+    data = b.extract_value(value, 2, name="clone_list_data")  # T*
+
+    slot = b.alloca(value.type, name="clone_list_slot")
+    b.store(value, slot)  # default: passthrough (null data)
+
+    is_not_null = b.icmp_unsigned("!=", data, ir.Constant(data.type, None))
+    with b.if_then(is_not_null):
+        elem_size_i64 = b.zext(codegen.types.get_type_size_constant(elem_ty),
+                               ir.IntType(INT64_BIT_WIDTH))
+        cap_i64 = b.zext(cap, ir.IntType(INT64_BIT_WIDTH))
+        total_bytes = b.mul(cap_i64, elem_size_i64)
+        new_raw = emit_malloc_call(codegen, total_bytes)
+        new_data = b.bitcast(new_raw, ir.PointerType(elem_llvm), name="list_new_data")
+
+        len_i64 = b.zext(length, ir.IntType(INT64_BIT_WIDTH))
+        bytes_to_copy = b.mul(len_i64, elem_size_i64)
+        old_i8 = b.bitcast(data, ir.PointerType(codegen.types.i8), name="list_old_i8")
+        b.call(_declare_memcpy(codegen),
+               [new_raw, old_i8, bytes_to_copy, ir.Constant(ir.IntType(1), 0)])
+        b.store(b.insert_value(value, new_data, 2), slot)
+
+    return b.load(slot, name="cloned_list")
+
+
+def _clone_struct_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: StructType) -> ir.Value:
+    """Deep-copy a regular struct field-by-field, recursing through emit_value_clone.
+
+    Gated on `needs_cleanup(field_type)` -- the SAME predicate `_emit_struct_destructor`
+    uses -- so exactly the fields the destructor frees get cloned, at full depth (a struct
+    holding an enum/List/Own field is handled, unlike `deep_copy_struct` which only covers
+    array and nested-struct fields; that helper's other call sites are left untouched).
+    """
+    from sushi_lang.backend.destructors import needs_cleanup
+
+    b = codegen.builder
+    new_struct = value
+    for i, (_field_name, field_type) in enumerate(value_type.fields):
+        if needs_cleanup(field_type):
+            field_val = b.extract_value(value, i, name=f"clone_field_{i}")
+            cloned = emit_value_clone(codegen, field_val, field_type)
+            new_struct = b.insert_value(new_struct, cloned, i, name=f"cloned_field_{i}")
+    return new_struct
+
+
+def _clone_enum_value(codegen: 'LLVMCodegen', value: ir.Value, value_type) -> ir.Value:
+    """Deep-copy an enum by cloning the active variant's owning associated data.
+
+    Mirrors `_emit_enum_destructor`: switch on the tag and walk the same byte offsets into
+    the `[N x i8]` data blob -- but CLONE each owning field in place (load, clone, store
+    back) instead of destroying. Materialised through an alloca so the byte-offset GEPs
+    have an address; the mutated value is reloaded as a single dominating SSA result.
+    """
+    from sushi_lang.backend.destructors import needs_cleanup
+    from sushi_lang.backend.llvm_constants import ZERO_I32, ONE_I32, make_i32_const
+
+    b = codegen.builder
+    variants_nc = [
+        (i, v) for i, v in enumerate(value_type.variants)
+        if v.associated_types and any(needs_cleanup(t) for t in v.associated_types)
+    ]
+    if not variants_nc:
+        return value  # no owning payload in any variant -> nothing to clone
+
+    slot = b.alloca(value.type, name="clone_enum_slot")
+    b.store(value, slot)
+
+    tag_ptr = b.gep(slot, [ZERO_I32, ZERO_I32], name="clone_enum_tag_ptr")
+    tag = b.load(tag_ptr, name="clone_enum_tag")
+    data_ptr = b.gep(slot, [ZERO_I32, ONE_I32], name="clone_enum_data_ptr")
+
+    end_bb = b.append_basic_block(name="enum_clone_end")
+    switch = b.switch(tag, end_bb)
+
+    for tag_val, variant in variants_nc:
+        case_bb = b.append_basic_block(name=f"clone_variant_{variant.name}")
+        switch.add_case(make_i32_const(tag_val), case_bb)
+        b.position_at_end(case_bb)
+
+        offset = 0
+        for assoc_type in variant.associated_types:
+            if needs_cleanup(assoc_type):
+                data_i8_ptr = b.bitcast(data_ptr, ir.PointerType(ir.IntType(8)),
+                                        name="clone_enum_data_i8")
+                field_i8_ptr = b.gep(data_i8_ptr, [make_i32_const(offset)],
+                                     name="clone_enum_field_i8")
+                field_llvm = codegen.types.ll_type(assoc_type)
+                field_ptr = b.bitcast(field_i8_ptr, ir.PointerType(field_llvm),
+                                      name="clone_enum_field_ptr")
+                orig = b.load(field_ptr, name="clone_enum_orig")
+                b.store(emit_value_clone(codegen, orig, assoc_type), field_ptr)
+            offset += codegen.types.get_type_size_bytes(assoc_type)
+
+        b.branch(end_bb)
+
+    b.position_at_end(end_bb)
+    return b.load(slot, name="cloned_enum")

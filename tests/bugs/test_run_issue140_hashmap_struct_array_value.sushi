@@ -1,0 +1,31 @@
+# Issue #140: HashMap with an owning value (struct containing a dynamic array) crashed
+# (exit 133 / SIGTRAP) on get + free -- HashMap.get returned a shallow copy that aliased
+# the still-owned map entry, double-freeing the shared buffer at map.free(). emit_value_clone
+# now hands out an independent deep copy from get.
+# https://github.com/BigWhale/sushi-lang/issues/140
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n"
+use <collections/hashmap>
+
+struct Items:
+    i32[] data
+
+fn len_of(Maybe<Items> got) i32:
+    match got:
+        Maybe.Some(it) ->
+            return Result.Ok(it.data.len())
+        Maybe.None ->
+            return Result.Ok(-2)
+
+fn run() i32:
+    let HashMap<i32, Items> map = HashMap.new()
+    let i32[] xs = from([1, 2, 3])
+    let Items it = Items(xs)      # named owning local -> insert must MOVE it (no double-free)
+    map.insert(7, it)
+    let i32 out = len_of(map.get(7))??
+    map.free()
+    return Result.Ok(out)
+
+fn main() i32:
+    println(run().realise(99))
+    return Result.Ok(0)

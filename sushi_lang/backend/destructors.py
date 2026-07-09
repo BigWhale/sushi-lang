@@ -268,6 +268,12 @@ def _emit_struct_destructor(
             void_ptr = builder.bitcast(owned_ptr, ir.PointerType(ir.IntType(INT8_BIT_WIDTH)))
             free_func = codegen.get_free_func()
             builder.call(free_func, [void_ptr])
+    elif value_type.name.startswith("List<"):
+        # List<T> owns a single heap buffer at field 2 (data), like a dynamic array but
+        # with a raw T* rather than a DynamicArrayType field -- so the generic field loop
+        # below would free nothing. Destroy live elements then free the buffer, keeping
+        # this in lockstep with _clone_list_value (issue #140).
+        _emit_list_value_destructor(codegen, builder, value_ptr, value_type)
     else:
         # Regular struct: recursively destroy each field
         for i, (field_name, field_type) in enumerate(value_type.fields):
@@ -278,6 +284,61 @@ def _emit_struct_destructor(
                     make_i32_const(i)
                 ], name=f"field_{field_name}_ptr")
                 emit_value_destructor(codegen, builder, field_ptr, field_type)
+
+
+def _emit_list_value_destructor(
+    codegen: LLVMCodegen,
+    builder: ir.IRBuilder,
+    value_ptr: ir.Value,
+    value_type: StructType
+) -> None:
+    """Free a List<T> value's heap buffer, destroying live elements first.
+
+    List<T> is `{i32 len@0, i32 cap@1, T* data@2}`. This mirrors the dynamic-array
+    destructor (null-guard, per-element recursive cleanup when the element needs it,
+    then free the buffer) so a List stored as a HashMap value -- reached through the
+    generic emit_value_destructor rather than the by-name scope destructor -- is freed
+    exactly once, symmetric with _clone_list_value (issue #140).
+    """
+    from sushi_lang.backend.generics.list.types import extract_element_type
+
+    element_type = extract_element_type(value_type, codegen)
+
+    # data is field index 2 (DA_DATA_INDEX == 2 happens to match List's data slot)
+    data_ptr_ptr = builder.gep(value_ptr, [ZERO_I32, make_i32_const(2)], name="list_data_field")
+    data_ptr = builder.load(data_ptr_ptr, name="list_data")
+
+    is_not_null = builder.icmp_unsigned("!=", data_ptr, ir.Constant(data_ptr.type, None))
+    with builder.if_then(is_not_null):
+        if needs_cleanup(element_type):
+            len_ptr = builder.gep(value_ptr, [ZERO_I32, ZERO_I32], name="list_len_field")
+            list_len = builder.load(len_ptr, name="list_len")
+
+            loop_i = builder.alloca(ZERO_I32.type, name="list_cleanup_i")
+            builder.store(ZERO_I32, loop_i)
+
+            cond_bb = builder.append_basic_block(name="list_cleanup_cond")
+            body_bb = builder.append_basic_block(name="list_cleanup_body")
+            done_bb = builder.append_basic_block(name="list_cleanup_done")
+
+            builder.branch(cond_bb)
+            builder.position_at_end(cond_bb)
+            i_val = builder.load(loop_i, name="list_i")
+            cond = builder.icmp_unsigned("<", i_val, list_len, name="list_cleanup_cond_v")
+            builder.cbranch(cond, body_bb, done_bb)
+
+            builder.position_at_end(body_bb)
+            i_val = builder.load(loop_i, name="list_i")
+            element_ptr = builder.gep(data_ptr, [i_val], name="list_element_ptr")
+            emit_value_destructor(codegen, builder, element_ptr, element_type)
+            builder.store(builder.add(i_val, ONE_I32), loop_i)
+            builder.branch(cond_bb)
+
+            builder.position_at_end(done_bb)
+
+        void_ptr = builder.bitcast(data_ptr, ir.PointerType(ir.IntType(INT8_BIT_WIDTH)))
+        free_func = codegen.get_free_func()
+        builder.call(free_func, [void_ptr])
 
 
 def _emit_enum_destructor(

@@ -1,0 +1,27 @@
+# Issue #140 regression guard: the get-side clone must be a no-op for a primitive value and
+# a correct owned-bit clone for a heap string value (built via interpolation). Both must get
+# + free cleanly. Confirms emit_value_clone's passthrough and string branches.
+# https://github.com/BigWhale/sushi-lang/issues/140
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "5\nhi-there\n"
+use <collections/hashmap>
+
+fn get_num() i32:
+    let HashMap<i32, i32> nums = HashMap.new()
+    nums.insert(1, 5)
+    let i32 n = nums.get(1)??
+    nums.free()
+    return Result.Ok(n)
+
+fn get_word() string:
+    let HashMap<i32, string> words = HashMap.new()
+    let string base = "there"
+    words.insert(2, "hi-{base}")
+    let string got = words.get(2)??
+    words.free()
+    return Result.Ok(got)
+
+fn main() i32:
+    println(get_num().realise(-1))
+    println(get_word().realise("err"))
+    return Result.Ok(0)

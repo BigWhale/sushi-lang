@@ -325,6 +325,13 @@ def emit_hashmap_get(
     entry_value_ptr = builder.gep(entry_ptr, [zero_i32, one_i32], name="entry_value_ptr")
     entry_value = builder.load(entry_value_ptr, name="entry_value")
 
+    # Deep-copy an owning value out so the returned Some(V) owns independent heap buffers.
+    # map.free() runs emit_value_destructor on the entry that stays OCCUPIED, so without
+    # this clone the returned copy and the entry would double-free the shared buffer (#140).
+    # No-op for non-owning V. Mirrors the deep_copy_if_owning_struct that array .get() does.
+    from sushi_lang.backend.expressions.memory import emit_value_clone
+    entry_value = emit_value_clone(codegen, entry_value, value_type)
+
     # Create Maybe<V> enum for return
     # Get the Maybe<V> enum type from the generic enum table
     from sushi_lang.semantics.generics.types import GenericEnumType
@@ -368,6 +375,9 @@ def emit_hashmap_get(
     data_value = builder.load(data_ptr, name="some_data")
     maybe_some = builder.insert_value(maybe_some, data_value, 1, name="maybe_some_value")
 
+    # emit_value_clone (for enum/Own/List/string V) may have appended basic blocks, so the
+    # predecessor that reaches get_done_bb is the current block, not necessarily found_bb.
+    some_pred_bb = builder.block
     builder.branch(get_done_bb)
 
     # Not found: return Maybe.None()
@@ -389,7 +399,7 @@ def emit_hashmap_get(
     # Done: merge results
     builder.position_at_end(get_done_bb)
     result_phi = builder.phi(maybe_llvm_type, name="get_result")
-    result_phi.add_incoming(maybe_some, found_bb)
+    result_phi.add_incoming(maybe_some, some_pred_bb)
     result_phi.add_incoming(maybe_none, not_found_bb)
 
     return result_phi

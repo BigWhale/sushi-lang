@@ -1,0 +1,26 @@
+# Issue #140: HashMap with an Own<T> value. Own<T> owns a heap allocation, so get
+# returning a shallow copy double-freed the pointer at map.free(). _clone_own_value now
+# mallocs a fresh pointee and recursively clones it.
+# https://github.com/BigWhale/sushi-lang/issues/140
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "99\n"
+use <collections/hashmap>
+
+fn val_of(Maybe<Own<i32>> got) i32:
+    match got:
+        Maybe.Some(o) ->
+            return Result.Ok(o.get())
+        Maybe.None ->
+            return Result.Ok(-2)
+
+fn run() i32:
+    let HashMap<i32, Own<i32>> map = HashMap.new()
+    let Own<i32> boxed = Own.alloc(99)   # named owning Own local -> insert must MOVE it
+    map.insert(3, boxed)
+    let i32 out = val_of(map.get(3))??
+    map.free()
+    return Result.Ok(out)
+
+fn main() i32:
+    println(run().realise(99))
+    return Result.Ok(0)

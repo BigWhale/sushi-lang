@@ -145,6 +145,14 @@ def emit_enum_constructor_from_method_call(
                 # Regular argument - emit normally
                 arg_value = codegen.expressions.emit_expr(arg_expr)
 
+                # A bare-Name owning arg (dynamic array / List<T> / Own<T> / heap-owning
+                # struct) is stored SHALLOWLY into the variant's data blob, so the enum
+                # takes ownership of the shared buffer -- move the source local so scope-exit
+                # RAII does not ALSO free it (double-free). Mirrors the struct constructor's
+                # move handling (#140).
+                from sushi_lang.backend.expressions.memory import move_owning_arg_into_container
+                move_owning_arg_into_container(codegen, arg_expr)
+
             # Calculate size of this argument
             from sushi_lang.backend.expressions import memory
             arg_llvm_type = arg_value.type
