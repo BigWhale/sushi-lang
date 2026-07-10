@@ -104,6 +104,18 @@ def emit_let(codegen: 'CodegenProtocol', stmt: 'Let') -> None:
             from llvmlite import ir as _ir
             codegen.builder.store(_ir.Constant(ll_type, None), slot)
 
+        # Zero-initialise a closure (function-value) local's fat-pointer slot
+        # ({null fn, null env, null drop}) BEFORE emitting the RHS -- the same
+        # hazard as the string case above. The local is already registered for
+        # scope-exit env cleanup, so a `??` in the RHS (`let g = fallible()??`)
+        # whose early-exit path runs closure cleanup would load an unstored slot
+        # and call a garbage drop_ptr (SIGBUS). A null drop_ptr makes that
+        # premature cleanup a no-op; the real value is stored just below.
+        from sushi_lang.semantics.typesys import FunctionType as _FT
+        if isinstance(semantic_type, _FT) and codegen.memory.is_closure_registered(stmt.name):
+            from llvmlite import ir as _ir
+            codegen.builder.store(_ir.Constant(ll_type, None), slot)
+
         # Special handling for array literals
         if isinstance(stmt.ty, ArrayType) and isinstance(stmt.value, ArrayLiteral):
             from sushi_lang.backend.statements import initialization
