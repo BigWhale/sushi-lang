@@ -1,6 +1,6 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: -3000000000
+# EXPECT_STDOUT_EXACT: "-3000000000\n2999999999\n"
 
 # Unary negation and bitwise NOT preserve the i64 operand width (issue #84).
 fn main() i32:

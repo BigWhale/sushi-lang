@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Mostly Harmless
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n-1117939656\n"
 # Test basic hexadecimal literal support
 
 fn main() i32:

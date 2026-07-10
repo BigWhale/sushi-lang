@@ -1,6 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: List<i32> {
-# EXPECT_STDOUT_CONTAINS: len: 3, capacity: 4
-# EXPECT_STDOUT_CONTAINS: [1] 20
+# EXPECT_STDOUT_EXACT: "=== List Debug ===\nList<i32> {\n  len: 3, capacity: 4\n  [0] 10\n  [1] 20\n  [2] 30\n}\n"
 fn main() i32:
     let List<i32> numbers = List.new()
 

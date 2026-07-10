@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Mostly Harmless
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n531\n"
 # Test binary literals for bit flags
 
 fn main() i32:

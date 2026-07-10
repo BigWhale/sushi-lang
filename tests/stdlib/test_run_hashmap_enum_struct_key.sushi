@@ -2,9 +2,7 @@
 # data_equal = TRUE for a struct payload, so two distinct Key.Loc(...) keys collapse
 # into one. Expected len = 2 with independent values; today len = 1.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: len = 2
-# EXPECT_STDOUT_CONTAINS: a = 10
-# EXPECT_STDOUT_CONTAINS: b = 20
+# EXPECT_STDOUT_EXACT: "len = 2\na = 10\nb = 20\n"
 
 use <collections/hashmap>
 

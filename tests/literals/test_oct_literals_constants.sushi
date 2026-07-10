@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Mostly Harmless
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n493\n"
 # Test octal literals in constants
 
 const i32 OCT_CONST = 0o755

@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: helloworld
+# EXPECT_STDOUT_EXACT: "00011000320304302201002helloworld"
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # Test dynamic array push/pop operations

@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Mostly Harmless
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n239\n"
 # Test hex literals in constants
 
 const i32 HEX_CONST = 0xDEADBEEF

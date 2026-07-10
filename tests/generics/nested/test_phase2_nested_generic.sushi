@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Server hash:
+# EXPECT_STDOUT_EXACT: "Server hash: 4489963857104368061\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Test that nested generic structs can be hashed
 # "I'd far rather be happy than right any day."

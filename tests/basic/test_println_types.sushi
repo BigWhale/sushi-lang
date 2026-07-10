@@ -1,7 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 42
-# EXPECT_STDOUT_CONTAINS: 3.14
-# EXPECT_STDOUT_CONTAINS: Hello, World!
-# EXPECT_STDOUT_CONTAINS: Goodbye
+# EXPECT_STDOUT_EXACT: "42\n3.14\n1\nHello, World!\n100\nGoodbye\n"
 fn main() i32:
     println(42)
     println(3.14)

@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 0
-# EXPECT_STDOUT_CONTAINS: -36
+# EXPECT_STDOUT_EXACT: "0\n1\n1\n1\n1\n-36\n"
 fn main() i32:
     # Test combining bitwise and logical operators
 

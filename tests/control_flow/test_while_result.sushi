@@ -1,6 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Count: 1
-# EXPECT_STDOUT_CONTAINS: Count: 3
-# EXPECT_STDOUT_CONTAINS: Done!
+# EXPECT_STDOUT_EXACT: "Count: 1\nCount: 2\nCount: 3\nDone!\n"
 
 fn try_increment(i32 current) i32:
     if (current >= 3):

@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 805306368
-# EXPECT_STDOUT_CONTAINS: 60
+# EXPECT_STDOUT_EXACT: "805306368\n60\n20\n"
 fn main() i32:
     # Test logical right shift with unsigned types
     let u32 a = 3221225472 as u32  # 0xC0000000 (binary: 11000000...)

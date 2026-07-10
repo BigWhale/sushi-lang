@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Mostly Harmless
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n278\n"
 # Test mixing octal literals with hex, binary, and decimal
 
 fn main() i32:

@@ -1,6 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Outer name: outer
-# EXPECT_STDOUT_CONTAINS: First value: 100
-# EXPECT_STDOUT_CONTAINS: Values length: 3
+# EXPECT_STDOUT_EXACT: "Outer name: outer\nInner label: inner\nFirst value: 100\nSecond value: 200\nThird value: 300\nValues length: 3\n"
 # Test nested struct with dynamic array fields
 # This validates that nested struct field access works correctly
 

@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: "Inner array value before: 42"
-# EXPECT_STDOUT_CONTAINS: "Inner array value after nesting: 42"
+# EXPECT_STDOUT_EXACT: "Inner array length before: 1\nInner array value before: 42\nOuter.data array length after: 1\nOuter.data array value after: 42\nInner array length after nesting: 1\nInner array value after nesting: 42\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Simplified test to debug the issue
 

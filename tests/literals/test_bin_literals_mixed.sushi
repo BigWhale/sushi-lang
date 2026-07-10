@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Mostly Harmless
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n66572\n"
 # Test mixing binary literals with hex and decimal
 
 fn main() i32:
