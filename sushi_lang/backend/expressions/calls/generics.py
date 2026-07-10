@@ -117,11 +117,14 @@ def try_emit_hashmap_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     receiver = expr.receiver
     args = expr.args
 
-    # HashMap.insert(k, v): the value is stored shallowly, so the map takes ownership and
-    # frees it on .free()/scope exit -- mark a bare-Name owning source (string, array,
-    # List<T>, Own<T>, or heap-owning struct) moved so scope exit does not double-free (#140).
+    # HashMap.insert(k, v): BOTH the key and the value are stored shallowly, so the map takes
+    # ownership of each and frees them on .free()/scope exit -- mark a bare-Name owning source
+    # (string, array, List<T>, Own<T>, or heap-owning struct) moved so scope exit does not
+    # double-free (#140). The key was previously left un-moved, so a heap-owning key (e.g. a
+    # string bound out of a split() array) was freed by both its own RAII and the map (N1).
     if method == "insert" and len(args) >= 2:
         from sushi_lang.backend.expressions.memory import move_owning_arg_into_container
+        move_owning_arg_into_container(codegen, args[0])
         move_owning_arg_into_container(codegen, args[1])
 
     # For HashMap.new(), we don't emit the receiver (it's just the type name)

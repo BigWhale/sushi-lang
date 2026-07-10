@@ -272,7 +272,7 @@ def emit_builtin_own_method(
         if isinstance(arg, Name):
             arg_ty = codegen.memory.find_semantic_type(arg.id)
             if arg_ty is not None and _arg_type_is_owning(codegen, arg_ty):
-                codegen.moves.mark(arg.id)
+                codegen.memory.mark_struct_as_moved(arg.id)
         return emit_own_alloc(codegen, element_type, arg_value)
     elif call.method == "get":
         return emit_own_get(codegen, own_value, element_type)

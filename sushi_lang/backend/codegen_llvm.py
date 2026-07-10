@@ -122,6 +122,15 @@ class LLVMCodegen:
         # load registers nothing and is never freed.
         self._string_temp_stack: List[List[ir.Value]] = []
 
+        # Parallel print-arg frame for whole string fat VALUES (not raw data pointers) that
+        # need an owned-bit-guarded free after output -- e.g. a string cloned out of an array
+        # element (`println(words[0])`). Unlike _string_temp_stack (unconditional free of a
+        # known-heap buffer), these are freed via the string destructor, so a literal element
+        # (owned=0) is a no-op and a heap element (owned=1) is freed exactly once. A `let`/
+        # container store happens outside any print frame, so its clone is not registered here
+        # and its new owner frees it instead (#145 / N1).
+        self._string_value_temp_stack: List[List[ir.Value]] = []
+
         # Command line arguments support
         self.main_expects_args: bool = False
 
@@ -234,6 +243,7 @@ class LLVMCodegen:
     def push_string_temp_scope(self) -> None:
         """Open a print-argument string-temp frame (#141). See `_string_temp_stack`."""
         self._string_temp_stack.append([])
+        self._string_value_temp_stack.append([])
 
     def register_string_temp(self, data_ptr: ir.Value) -> None:
         """Register a freshly heap-allocated string buffer if a print-arg frame is open.
@@ -244,6 +254,15 @@ class LLVMCodegen:
         if self._string_temp_stack:
             self._string_temp_stack[-1].append(data_ptr)
 
+    def register_string_value_temp(self, fat_value: ir.Value) -> None:
+        """Register a whole string fat VALUE for an owned-bit-guarded free after output.
+
+        No-op outside a print-arg frame, so a `let`/container store (which happens outside
+        any frame) is unaffected -- its new owner frees the value instead.
+        """
+        if self._string_value_temp_stack:
+            self._string_value_temp_stack[-1].append(fat_value)
+
     def pop_and_free_string_temp_scope(self) -> None:
         """Free every buffer registered in the current print-arg frame and pop it.
 
@@ -253,11 +272,15 @@ class LLVMCodegen:
         if not self._string_temp_stack:
             return
         temps = self._string_temp_stack.pop()
+        value_temps = self._string_value_temp_stack.pop() if self._string_value_temp_stack else []
         if self.builder is None or self.builder.block is None or self.builder.block.is_terminated:
             return
         from sushi_lang.backend.memory.heap import emit_free
         for data_ptr in temps:
             emit_free(self.builder, self, data_ptr)
+        from sushi_lang.backend.destructors import emit_string_destructor_from_value
+        for fat_value in value_temps:
+            emit_string_destructor_from_value(self, self.builder, fat_value)
 
     def get_realloc_func(self) -> ir.Function:
         """Get or declare realloc function."""

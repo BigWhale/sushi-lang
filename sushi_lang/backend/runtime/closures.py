@@ -209,7 +209,7 @@ def emit_lambda(codegen: "LLVMCodegen", lam, to_i1: bool) -> ir.Value:
         # is moved into the env, which now owns it and frees it in the env destructor.
         # Mark the outer binding moved so its own scope exit does not also free it.
         if is_owning_type(cap.ty):
-            codegen.moves.mark(cap.name)
+            codegen.memory.mark_struct_as_moved(cap.name)
 
     env_i8 = codegen.builder.bitcast(env_ptr, codegen.types.str_ptr)
     drop_fn = get_or_create_env_drop(codegen, env_struct)

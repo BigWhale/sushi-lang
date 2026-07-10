@@ -233,7 +233,7 @@ def _move_owning_value_args(codegen: 'LLVMCodegen', expr: Call, func_sig) -> Non
             break
         arg = expr.args[i]
         if isinstance(arg, Name) and is_owning_type(param.ty):
-            codegen.moves.mark(arg.id)
+            codegen.memory.mark_struct_as_moved(arg.id)
 
 
 def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool = False, is_dotcall: bool = False) -> ir.Value:

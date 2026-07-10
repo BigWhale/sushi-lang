@@ -343,7 +343,7 @@ class FunctionHelpers:
                                 or resolved)
                 if isinstance(resolved, StructType):
                     if self.codegen.dynamic_arrays.is_own_type(resolved):
-                        self.codegen.dynamic_arrays.register_own(param.name, resolved)
+                        self.codegen.dynamic_arrays.register_own(param.name, resolved, slot)
                     elif self.codegen.dynamic_arrays.is_list_type(resolved):
                         self.codegen.dynamic_arrays.register_list(param.name, resolved, slot)
                     elif self.codegen.dynamic_arrays.struct_needs_cleanup(resolved):

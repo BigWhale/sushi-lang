@@ -105,16 +105,32 @@ def emit_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, to_i1: bool = F
     # Load the value from the pointer
     result = codegen.builder.load(element_ptr)
 
-    # Value semantics (#60): a struct element that owns heap memory must be deep-copied so
-    # the indexed copy does not shallow-share the array element's buffer. Only the
+    # Value semantics (#60, #145): an element that owns heap memory must be deep-copied so
+    # the indexed copy does not shallow-share the array element's buffer. Two owners of one
+    # buffer (the array's element destructor and the new binding / the container it is stored
+    # into) would otherwise double-free. Covers owning structs/enums AND heap-owned string
+    # elements (`let s = words[0]`, `m.insert(words[0], ...)` on a split() array, N1). Only the
     # Name-array case carries a resolvable element type; other forms are left unchanged.
     if not to_i1 and isinstance(expr.array, Name):
-        from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, ReferenceType
+        from sushi_lang.semantics.typesys import (
+            ArrayType, DynamicArrayType, ReferenceType, BuiltinType)
         array_sem = codegen.variable_types.get(expr.array.id) or codegen.memory.find_semantic_type(expr.array.id)
         if isinstance(array_sem, ReferenceType):
             array_sem = array_sem.referenced_type
         if isinstance(array_sem, (ArrayType, DynamicArrayType)):
             from sushi_lang.backend.expressions import memory
-            result = memory.deep_copy_if_owning_struct(codegen, result, array_sem.base_type)
+            if array_sem.base_type == BuiltinType.STRING:
+                # A string element clones its heap buffer (owned=1) so a `let` binding or a
+                # container the value is stored into becomes the sole owner of an independent
+                # buffer, while the array keeps and frees the original element. A literal
+                # element (owned=0) clones to another owned=0, whose free is a no-op.
+                result = memory.emit_value_clone(codegen, result, array_sem.base_type)
+                # A transient index-load with no binding (e.g. println(words[0])) would leak
+                # this clone; register it for an owned-bit-guarded free at the end of the
+                # print-arg frame. Outside a print frame (a `let`/container store) this is a
+                # no-op and the new owner frees the clone.
+                codegen.register_string_value_temp(result)
+            else:
+                result = memory.deep_copy_if_owning_struct(codegen, result, array_sem.base_type)
 
     return codegen.utils.as_i1(result) if to_i1 else result

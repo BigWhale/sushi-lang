@@ -375,7 +375,7 @@ def move_owning_arg_into_container(codegen: 'LLVMCodegen', arg_ast) -> None:
             or name in da.arrays
             or name in da.lists
             or name in da.owned_pointers):
-        codegen.moves.mark(name)
+        codegen.memory.mark_struct_as_moved(name)
 
 
 def deep_copy_struct(codegen: 'LLVMCodegen', struct_value: ir.Value, struct_type: StructType) -> ir.Value:

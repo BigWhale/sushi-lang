@@ -42,7 +42,7 @@ def emit_struct_cleanup(codegen: 'LLVMCodegen') -> None:
     for scope_idx in range(len(codegen.memory.struct_variables) - 1, -1, -1):
         struct_scope = codegen.memory.struct_variables[scope_idx]
         for var_name, (struct_type, alloca) in struct_scope.items():
-            if not codegen.memory.is_struct_moved(var_name):
+            if not codegen.moves.is_moved(alloca):
                 codegen.dynamic_arrays.emit_struct_field_cleanup(var_name, struct_type, alloca)
 
 
@@ -59,9 +59,10 @@ def emit_closure_cleanup(codegen: 'LLVMCodegen') -> None:
     mem = getattr(codegen, 'memory', None)
     if mem is None or not getattr(mem, '_closure_cleanup', None):
         return
-    for var_name, slot in mem._closure_cleanup.items():
-        if not mem.is_struct_moved(var_name):
-            mem._emit_closure_free(slot)
+    for var_name, entries in mem._closure_cleanup.items():
+        for _depth, slot in entries:
+            if not codegen.moves.is_moved(slot):
+                mem._emit_closure_free(slot)
 
 
 def emit_dynamic_array_cleanup(codegen: 'LLVMCodegen') -> None:
@@ -157,20 +158,32 @@ def emit_loop_exit_cleanup(codegen: 'LLVMCodegen', min_scope_index: int) -> None
         for list_name in da.list_scope_stack[scope_idx]:
             da._emit_list_destructor(list_name)
 
-    # Struct dynamic-array fields, Own<T>, and closures are tracked in flat maps keyed by
-    # name; use the per-scope variable sets to bound them to the loop's scopes.
+    # Struct dynamic-array fields, Own<T>, and closures are tracked in stacked maps keyed by
+    # name; use the per-scope variable sets to bound them to the loop's scopes, matching each
+    # binding to the entry registered at its own scope level so a shadow is not confused with
+    # its namesake and the move check uses that binding's exact slot.
     for scope_idx in range(len(mem._scope_vars) - 1, min_scope_index - 1, -1):
         for var_name in mem._scope_vars[scope_idx]:
-            if var_name in mem._struct_cleanup and not mem.is_struct_moved(var_name):
-                struct_type, alloca = mem._struct_cleanup[var_name]
-                da.emit_struct_field_cleanup(var_name, struct_type, alloca)
-            if var_name in getattr(mem, '_closure_cleanup', {}) and not mem.is_struct_moved(var_name):
-                mem._emit_closure_free(mem._closure_cleanup[var_name])
+            for entry in mem._struct_cleanup.get(var_name, ()):
+                if entry[0] == scope_idx:
+                    _d, struct_type, alloca = entry
+                    if not codegen.moves.is_moved(alloca):
+                        da.emit_struct_field_cleanup(var_name, struct_type, alloca)
+                    break
+            for entry in mem._closure_cleanup.get(var_name, ()):
+                if entry[0] == scope_idx:
+                    if not codegen.moves.is_moved(entry[-1]):
+                        mem._emit_closure_free(entry[-1])
+                    break
             # String locals (#145): owned-bit-guarded free, bounded to the loop's scopes.
-            if var_name in getattr(mem, '_string_cleanup', {}) and not mem.is_struct_moved(var_name):
-                mem._emit_string_free(mem._string_cleanup[var_name])
+            for entry in mem._string_cleanup.get(var_name, ()):
+                if entry[0] == scope_idx:
+                    if not codegen.moves.is_moved(entry[-1]):
+                        mem._emit_string_free(entry[-1])
+                    break
             descriptor = da.owned_pointers.get(var_name)
-            if descriptor is not None and not descriptor.destroyed:
+            if (descriptor is not None and descriptor.depth == scope_idx
+                    and not descriptor.destroyed and not codegen.moves.is_moved(descriptor.slot)):
                 da._emit_own_destructor(var_name, descriptor.own_type)
 
     # FFI marshalled C strings (per-scope).
