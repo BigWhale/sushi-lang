@@ -1,9 +1,11 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: 30
-# EXPECT_STDOUT_CONTAINS: 99
+# EXPECT_STDOUT_EXACT: "30\n99\n"
 
-# Test struct field rebinding
+# Test struct field rebinding.
+# The fields are printed one per line: `print(p.x)` followed by `println(p.y)`
+# concatenated them into "3099", where CONTAINS 30 and CONTAINS 99 both matched
+# the same run of digits and would have kept matching for many wrong values.
 struct Point:
     i32 x
     i32 y
@@ -12,6 +14,6 @@ fn main() i32:
     let Point p = Point(10, 20)
     p.x := 30
     p.y := 99
-    print(p.x)
+    println(p.x)
     println(p.y)
     return Result.Ok(0)

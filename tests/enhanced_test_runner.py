@@ -34,6 +34,29 @@ from run_tests import build_stdlib, build_test_helpers, COMPILATION_QUARANTINE
 RUNTIME_QUARANTINE: set[str] = set()
 
 
+_NUMERIC = re.compile(r"-?\d+")
+
+
+def stdout_contains(stdout: str, expected: str) -> bool:
+    """
+    Substring match for EXPECT_STDOUT_CONTAINS, with one exception.
+
+    A bare number must match as a whole token. Plain `in` lets `42` be satisfied by
+    `420`, `-42` or `1425`, so an assertion can survive the very change it exists to
+    catch -- the Tier 1 cast fixes alter the width of printed integers on purpose.
+    Anchoring on digit/./- boundaries makes the 101 bare-numeric assertions in the
+    suite mean what they say. Non-numeric expectations keep plain substring semantics.
+    """
+    if not _NUMERIC.fullmatch(expected.strip()):
+        return expected in stdout
+
+    token = expected.strip()
+    # No digit or '.' may abut either side, and no '-' may precede (so `42` does not
+    # match inside `-42`, and `3.14` does not satisfy an assertion of `3`).
+    lookbehind = r"(?<![\d.])" if token.startswith("-") else r"(?<![-\d.])"
+    return re.search(lookbehind + re.escape(token) + r"(?![\d.])", stdout) is not None
+
+
 @dataclass
 class TestResult:
     """Result of running a single test."""
@@ -463,7 +486,7 @@ class TestRunner:
                 success = False
 
         for expected_content in metadata.expect_stdout_contains:
-            if expected_content in result.stdout:
+            if stdout_contains(result.stdout, expected_content):
                 messages.append(f"✓ Stdout contains: {repr(expected_content)}")
             else:
                 messages.append(f"✗ Stdout missing: {repr(expected_content)}\nActual stdout: {repr(result.stdout)}")

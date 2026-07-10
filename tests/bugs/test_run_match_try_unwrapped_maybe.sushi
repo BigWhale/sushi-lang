@@ -2,7 +2,7 @@
 # was rejected with a false CE2048 ("match scrutinee must be an enum type")
 # because the scrutinee inferred to a GenericTypeRef rather than a concrete
 # EnumType. validate_match_scrutinee now resolves generic enum refs to their
-# concrete monomorphized enum. See TODO.md "Compiler bug follow-up".
+# concrete monomorphized enum.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "some 50\ndone 0\n"
 

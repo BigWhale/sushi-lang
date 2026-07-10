@@ -1,9 +1,5 @@
 # Tests error for non-enum error type
 # EXPECT_ERROR_CODE: CE2084
-# KNOWN BUG: Compiler does not validate that error type is an enum
-# This test currently hits an LLVM IR error instead of a proper type error
-# Should emit error during type checking, not during codegen
-# TODO: Add validation that error type in | ErrorType must be an enum
 
 struct MyError:
     i32 code

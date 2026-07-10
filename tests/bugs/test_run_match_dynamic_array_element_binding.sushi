@@ -3,7 +3,6 @@
 # internal CE0055 ("unknown variable or constant"). The backend could not
 # re-derive the scrutinee's concrete enum type for an IndexAccess scrutinee.
 # The type checker now resolves it (Pass 2) and annotates Match.resolved_scrutinee_type.
-# See TODO.md "Compiler bug follow-up".
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "got 1\ngot 2\n"
 

@@ -1,18 +1,33 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# Same-type unsigned integer comparisons should pass
+# EXPECT_STDOUT_EXACT: "125\n75\n2500\n4\n0\nMostly Harmless\n"
+# Same-type unsigned integer comparisons and arithmetic.
 fn main() i32:
-  # u32 comparisons only (arithmetic ops have compiler bug)
   let u32 a = 100 as u32
   let u32 b = 25 as u32
 
-  # Comparisons should work
+  # Comparisons
   let bool eq = a == a
   let bool gt = a > b
   let bool lt = b < a
   let bool neq = a != b
 
-  if (eq and gt and lt and neq):
+  # Arithmetic. This block was previously omitted; the defect it avoided no longer
+  # exists, and leaving it out only removed coverage.
+  let u32 sum = a + b
+  let u32 diff = a - b
+  let u32 prod = a * b
+  let u32 quot = a / b
+  let u32 rem = a % b
+  println(sum)
+  println(diff)
+  println(prod)
+  println(quot)
+  println(rem)
+
+  if (eq and gt and lt and neq and sum == (125 as u32) and diff == (75 as u32)
+      and prod == (2500 as u32) and quot == (4 as u32) and rem == (0 as u32)):
+    println("Mostly Harmless")
     return Result.Ok(0)
 
   return Result.Ok(1)
