@@ -524,6 +524,7 @@ class DynamicArrayFrom(Node):
 class CastExpr(Node):
     expr: "Expr"           # The expression being cast
     target_type: Type      # The target type to cast to
+    source_type: Optional[Type] = None  # Operand's semantic type, stamped in Pass 2 (signedness for codegen)
 
 @dataclass
 class Borrow(Node):

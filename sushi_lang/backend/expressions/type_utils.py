@@ -206,7 +206,5 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
 
 def is_unsigned_type(semantic_type: Optional[Type]) -> bool:
     """Check whether a semantic type is an unsigned integer type."""
-    from sushi_lang.semantics.typesys import BuiltinType
-    return semantic_type in (
-        BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-    )
+    from sushi_lang.semantics.type_predicates import is_unsigned_int
+    return is_unsigned_int(semantic_type)
