@@ -1,0 +1,19 @@
+# Guards PLAN.md T2.1, the opposite symptom: `If` arms share one mutable borrow_state
+# with no save/restore, so a move in the then-arm leaks into the else-arm and produces
+# a SPURIOUS CE2405. Exactly one arm ever executes, so this program is sound.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n"
+
+fn consume(i32[] arr) i32:
+    return Result.Ok(arr.len())
+
+fn run(bool flag) i32:
+    let i32[] xs = from([1, 2, 3])
+    if (flag):
+        return Result.Ok(consume(xs)??)
+    else:
+        return Result.Ok(consume(xs)?? + 100)
+
+fn main() i32:
+    println(run(true).realise(-1))
+    return Result.Ok(0)

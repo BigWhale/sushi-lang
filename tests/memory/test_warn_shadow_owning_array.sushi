@@ -1,0 +1,17 @@
+# Guards PLAN.md T2.2: the ownership registries (DynamicArrayManager.arrays et al.) are
+# flat dicts keyed by bare NAME, not by slot identity. A nested shadow of an owning
+# dynamic array overwrites the outer descriptor; the outer scope pop then cannot find
+# it. Today the compiler dies with CE0015 "Instruction does not dominate all uses".
+# Shadowing is legal-but-warned (CW1002), so this is a warning test: it must COMPILE.
+# EXPECT_ERROR_CODE: CW1002
+# EXPECT_NO_LEAKS: true
+fn main() i32:
+    let i32[] buf = from([1, 2, 3])
+    if (buf.len() == 3):
+        let i32[] buf = from([4, 5])
+        if (buf.len() == 2):
+            let i32[] buf = from([6])
+            println(buf.len())
+        println(buf.len())
+    println(buf.len())
+    return Result.Ok(0)

@@ -1,0 +1,11 @@
+# Guards PLAN.md T1.5: runtime_error builds its message with "\\n" inside a
+# non-raw f-string, so fprintf emits a literal backslash-n instead of a newline.
+# The trailing "\n" below is a REAL newline once the metadata parser unescapes it.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDERR_CONTAINS: RE2020
+# EXPECT_STDERR_CONTAINS: "of size 3\n"
+fn main() i32:
+    let i32[3] f = [1, 2, 3]
+    let i32 i = 10
+    println(f[i])
+    return Result.Ok(0)

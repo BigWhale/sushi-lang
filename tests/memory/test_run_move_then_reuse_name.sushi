@@ -1,0 +1,23 @@
+# Guards PLAN.md T2.2, move-poisoning variant: MoveTracker._moved is a flat Set[str]
+# reset only at function boundary and never un-marked. Moving `buf` in one scope marks
+# the NAME moved, so a different `buf` in a later SIBLING scope is treated as already
+# moved and skipped by RAII. No shadowing, so no CW1002. Leaks 16 bytes today.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n2\n"
+# EXPECT_NO_LEAKS: true
+
+fn consume(i32[] arr) i32:
+    return Result.Ok(arr.len())
+
+fn main() i32:
+    let i32 n = 3
+
+    if (n == 3):
+        let i32[] buf = from([1, 2, 3])
+        println(consume(buf).realise(0))
+
+    if (n == 3):
+        let i32[] buf = from([4, 5])
+        println(buf.len())
+
+    return Result.Ok(0)
