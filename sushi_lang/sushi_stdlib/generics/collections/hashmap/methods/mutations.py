@@ -422,6 +422,12 @@ def emit_hashmap_remove(
     entry_value_ptr = builder.gep(entry_ptr, [zero_i32, one_i32], name="entry_value_ptr")
     entry_value = builder.load(entry_value_ptr, name="entry_value")
 
+    # Destroy the removed key (the map owned it); the value is moved out into the
+    # returned Maybe.Some, so it must NOT be destroyed. Without this, a heap-owning
+    # key (e.g. a string) is leaked when its entry becomes a tombstone.
+    from sushi_lang.backend.destructors import emit_value_destructor
+    emit_value_destructor(codegen, builder, entry_key_ptr, key_type)
+
     # Mark entry as Tombstone
     builder.store(ir.Constant(codegen.types.i8, ENTRY_TOMBSTONE), state_ptr)
 
@@ -468,6 +474,9 @@ def emit_hashmap_remove(
     data_value = builder.load(data_ptr, name="some_data")
     maybe_some = builder.insert_value(maybe_some, data_value, 1, name="maybe_some_value")
 
+    # Capture the live block: destroying an owning key above may have inserted
+    # basic blocks, so the phi predecessor is no longer found_bb.
+    found_pred_bb = builder.block
     builder.branch(remove_done_bb)
 
     # Not found: return Maybe.None()
@@ -489,7 +498,7 @@ def emit_hashmap_remove(
     # Done: merge results
     builder.position_at_end(remove_done_bb)
     result_phi = builder.phi(maybe_llvm_type, name="remove_result")
-    result_phi.add_incoming(maybe_some, found_bb)
+    result_phi.add_incoming(maybe_some, found_pred_bb)
     result_phi.add_incoming(maybe_none, not_found_bb)
 
     return result_phi

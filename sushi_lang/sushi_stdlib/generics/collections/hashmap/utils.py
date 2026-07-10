@@ -155,54 +155,45 @@ def emit_enum_equality(codegen: Any, enum_type: EnumType, enum1: ir.Value, enum2
     if not any(variant.associated_types for variant in enum_type.variants):
         return tags_equal
 
-    # For enums with data, we need to compare data fields when tags match
-    # Extract data (field 1) using extractvalue
-    data1 = enum_utils.extract_enum_data(codegen, enum1, name="data1")
-    data2 = enum_utils.extract_enum_data(codegen, enum2, name="data2")
+    # For enums with data, compare the matching variant's payload. The data field
+    # is a raw [N x i8] union, so its LLVM type carries no field structure; switch
+    # on the (equal) tag and unpack each data-carrying variant's fields with their
+    # real semantic types, then compare field-by-field.
+    i1_ty = ir.IntType(1)
+    data_eq_slot = builder.alloca(i1_ty, name="enum_data_eq")
+    builder.store(TRUE_I1, data_eq_slot)
 
-    # Get the LLVM type of the enum to find data type
     enum_llvm_type = codegen.types.get_enum_type(enum_type)
-    if len(enum_llvm_type.elements) > 1:
-        data_llvm_type = enum_llvm_type.elements[1]
+    enum1_ptr = builder.alloca(enum_llvm_type, name="enum1_tmp")
+    enum2_ptr = builder.alloca(enum_llvm_type, name="enum2_tmp")
+    builder.store(enum1, enum1_ptr)
+    builder.store(enum2, enum2_ptr)
+    data1_ptr = enum_utils.get_data_ptr(codegen, enum1_ptr, name="enum1_data")
+    data2_ptr = enum_utils.get_data_ptr(codegen, enum2_ptr, name="enum2_data")
 
-        # Compare based on data type
-        zero_i32 = ZERO_I32
+    switch_end = builder.append_basic_block("enum_eq_end")
+    # Default (unit variants): tag equality is sufficient, data stays equal.
+    switch_instr = builder.switch(tag1, switch_end)
+    for variant_index, variant in enumerate(enum_type.variants):
+        if not variant.associated_types:
+            continue
+        case_block = builder.append_basic_block(f"enum_eq_v{variant_index}")
+        switch_instr.add_case(make_i32_const(variant_index), case_block)
+        builder.position_at_end(case_block)
 
-        if isinstance(data_llvm_type, ir.IntType):
-            data_equal = builder.icmp_signed("==", data1, data2, name="data_equal")
-        elif isinstance(data_llvm_type, ir.DoubleType) or isinstance(data_llvm_type, ir.FloatType):
-            data_equal = builder.fcmp_ordered("==", data1, data2, name="data_equal")
-        elif isinstance(data_llvm_type, ir.LiteralStructType):
-            # For struct types (including fat pointer strings {i8*, i32})
-            # Check if this is a string type by looking at the struct elements
-            if (len(data_llvm_type.elements) == 2 and
-                isinstance(data_llvm_type.elements[0], ir.PointerType) and
-                data_llvm_type.elements[0].pointee == ir.IntType(8) and
-                data_llvm_type.elements[1] == ir.IntType(32)):
-                # This is a fat pointer string {i8*, i32}
-                # Use llvm_strcmp intrinsic (emit inline if needed)
-                if "llvm_strcmp" not in codegen.module.globals:
-                    from sushi_lang.sushi_stdlib.src.collections.strings_inline import emit_strcmp_intrinsic_inline
-                    strcmp_fn = emit_strcmp_intrinsic_inline(codegen.module)
-                else:
-                    strcmp_fn = codegen.module.globals["llvm_strcmp"]
-                # Call llvm_strcmp with full fat pointer structs
-                cmp_result = builder.call(strcmp_fn, [data1, data2], name="strcmp_result")
-                data_equal = builder.icmp_signed("==", cmp_result, zero_i32, name="data_equal")
-            else:
-                # For other struct types, assume equal if tags match (conservative)
-                data_equal = TRUE_I1
-        elif isinstance(data_llvm_type, ir.PointerType):
-            # For pointers (legacy case, shouldn't happen with fat pointers)
-            # Generic pointer comparison
-            data_equal = builder.icmp_signed("==", data1, data2, name="data_equal")
-        else:
-            # For complex types (structs), recursively compare
-            # This handles nested enums with struct data
-            data_equal = TRUE_I1  # Conservative: assume equal if tags match
-    else:
-        # No data field, tags being equal is enough
-        data_equal = TRUE_I1
+        field_types = list(variant.associated_types)
+        vals1 = enum_utils.unpack_all_variant_fields(codegen, data1_ptr, field_types, "k1")
+        vals2 = enum_utils.unpack_all_variant_fields(codegen, data2_ptr, field_types, "k2")
+
+        variant_eq = TRUE_I1
+        for field_type, v1, v2 in zip(field_types, vals1, vals2):
+            field_eq = emit_key_equality_check(codegen, field_type, v1, v2)
+            variant_eq = builder.and_(variant_eq, field_eq, name="variant_field_eq")
+        builder.store(variant_eq, data_eq_slot)
+        builder.branch(switch_end)
+
+    builder.position_at_end(switch_end)
+    data_equal = builder.load(data_eq_slot, name="enum_data_equal")
 
     # Combine: tags must be equal AND data must be equal
     result = builder.and_(tags_equal, data_equal, name="enum_equal")
