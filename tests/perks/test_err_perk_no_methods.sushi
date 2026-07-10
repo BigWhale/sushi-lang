@@ -1,5 +1,9 @@
-# tests/test_err_perk_no_methods.sushi
-# Error: perk with no methods - should fail to parse
+# Error: a perk with no methods has an empty body and fails to parse.
+#
+# A raw parse error carries no CE code, so the message itself is the assertion --
+# otherwise this test would pass on any compile failure, including a typo.
+# EXPECT_STDERR_CONTAINS: Unexpected token Token('FN', 'fn')
+# EXPECT_STDERR_CONTAINS: _INDENT
 
 perk Empty:
 

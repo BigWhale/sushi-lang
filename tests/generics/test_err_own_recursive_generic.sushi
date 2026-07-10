@@ -2,7 +2,11 @@
 # substituting every field, so a self-referential field re-enters and blows the
 # Python stack. Today this dumps a raw RecursionError traceback and exits 1.
 # The compiler must instead report a CE-coded diagnostic and exit 2.
-# The exact code is chosen when T2.5 lands; add EXPECT_ERROR_CODE then.
+#
+# The exact code is chosen when T2.5 lands; until then assert that SOME coded
+# diagnostic is emitted, which a RecursionError traceback cannot satisfy. Replace
+# this with EXPECT_ERROR_CODE once the code exists.
+# EXPECT_STDERR_CONTAINS: error [CE
 
 enum Tree<T>:
     Leaf
