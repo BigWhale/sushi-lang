@@ -186,8 +186,14 @@ def main():
                        help="Output results in JSON format")
     parser.add_argument("--skip-build", action="store_true",
                        help="Skip building stdlib and test helpers")
+    parser.add_argument("--leaks", action="store_true",
+                       help="Enforce EXPECT_NO_LEAKS assertions (implies --enhanced)")
 
     args = parser.parse_args()
+
+    # The leak gate lives in the enhanced runner; the basic one never executes binaries.
+    if args.leaks:
+        args.enhanced = True
 
     # Delegate to enhanced runner if requested
     if args.enhanced:
@@ -206,6 +212,8 @@ def main():
                 sys.argv.append("--json")
             if args.skip_build:
                 sys.argv.append("--skip-build")
+            if args.leaks:
+                sys.argv.append("--leaks")
             return enhanced_test_runner.main()
         except ImportError:
             if not args.json:

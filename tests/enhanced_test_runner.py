@@ -9,6 +9,7 @@ Provides two-phase testing:
 Supports test metadata for specifying expected runtime behavior.
 """
 
+import re
 import subprocess
 import sys
 import tempfile
@@ -56,7 +57,7 @@ class TestResult:
 class TestRunner:
     """Enhanced test runner with compilation and runtime testing."""
 
-    def __init__(self, tests_dir: Path, mode: str = "full", verbose: bool = False, parallel_jobs: int = 4, json_output: bool = False):
+    def __init__(self, tests_dir: Path, mode: str = "full", verbose: bool = False, parallel_jobs: int = 4, json_output: bool = False, leaks: bool = False):
         """
         Initialize the test runner.
 
@@ -66,12 +67,15 @@ class TestRunner:
             verbose: Enable verbose output
             parallel_jobs: Number of parallel test jobs
             json_output: Output results in JSON format
+            leaks: Enforce EXPECT_NO_LEAKS assertions (needs a platform leak checker)
         """
         self.tests_dir = tests_dir
         self.mode = mode
         self.verbose = verbose
         self.parallel_jobs = parallel_jobs
         self.json_output = json_output
+        self.leaks = leaks
+        self.leaks_skipped: List[str] = []
         self.temp_dir = None
 
     def __enter__(self):
@@ -200,7 +204,7 @@ class TestRunner:
         if (self.mode in ("runtime", "full") and
             compilation_success and
             test_name not in RUNTIME_QUARANTINE and
-            should_run_runtime_test(test_file, metadata)):
+            should_run_runtime_test(test_file, metadata, leaks_mode=self.leaks)):
 
             runtime_success, runtime_message = self._run_runtime_test(test_file, metadata)
             result.runtime_success = runtime_success
@@ -352,6 +356,14 @@ class TestRunner:
             # Validate runtime behavior
             success, message = self._validate_runtime_result(result, metadata)
 
+            # Leak assertion, opt-in per test and gated on --leaks. Runs the binary a
+            # second time under the platform leak checker.
+            if self.leaks and metadata.expect_no_leaks:
+                leak_ok, leak_message = self._check_leaks(binary_path, metadata)
+                message += "\n" + leak_message
+                if leak_ok is False:
+                    success = False
+
             # Clean up binary after execution
             try:
                 binary_path.unlink()
@@ -364,6 +376,44 @@ class TestRunner:
             return False, f"✗ Runtime: Timeout ({metadata.timeout_seconds}s)"
         except Exception as e:
             return False, f"✗ Runtime: Exception: {e}"
+
+    def _check_leaks(self, binary_path: Path, metadata: TestMetadata) -> Tuple[Optional[bool], str]:
+        """
+        Re-run a binary under the platform leak checker and assert it leaks nothing.
+
+        Returns:
+            (True, msg)  no leaks
+            (False, msg) leaks found -- the test fails
+            (None, msg)  no leak checker on this platform -- the assertion is SKIPPED,
+                         recorded, and reported in the summary. It is never silently
+                         treated as a pass.
+        """
+        if sys.platform != "darwin" or not shutil.which("leaks"):
+            self.leaks_skipped.append(binary_path.name)
+            return None, f"- Leak check skipped: no leak checker on {sys.platform}"
+
+        cmd = ["leaks", "--atExit", "--", str(binary_path)]
+        if metadata.cmd_args:
+            cmd.extend(metadata.cmd_args.split())
+
+        try:
+            result = subprocess.run(
+                cmd,
+                input=metadata.stdin_input if metadata.stdin_input else None,
+                capture_output=True,
+                text=True,
+                timeout=metadata.timeout_seconds + 30,
+            )
+        except subprocess.TimeoutExpired:
+            return False, "✗ Leak check: Timeout"
+
+        # The summary line is singular for one leak ("1 leak for 16 total leaked bytes")
+        # and plural otherwise, and it is not the last line of output.
+        match = re.search(r"\d+ leaks? for \d+ total leaked bytes", result.stdout)
+        summary = match.group(0) if match else ""
+        if result.returncode == 0:
+            return True, f"✓ Leak check: {summary or 'no leaks'}"
+        return False, f"✗ Leak check: {summary or result.stdout.strip()[-200:]}"
 
     def _validate_runtime_result(self, result: subprocess.CompletedProcess, metadata: TestMetadata) -> Tuple[bool, str]:
         """
@@ -481,7 +531,8 @@ class TestRunner:
                 "passed": passed_tests,
                 "failed": failed_tests,
                 "duration_seconds": round(duration, 2),
-                "failed_tests": failed_test_list
+                "failed_tests": failed_test_list,
+                "leak_checks_skipped": len(self.leaks_skipped),
             }
             print(json.dumps(json_output, indent=2))
         else:
@@ -491,6 +542,9 @@ class TestRunner:
             print(f"  Runtime tests: {runtime_tests}")
             print(f"  Passed: {passed_tests}")
             print(f"  Failed: {failed_tests}")
+            if self.leaks_skipped:
+                print(f"  Leak checks SKIPPED: {len(self.leaks_skipped)} "
+                      f"(no leak checker on {sys.platform})")
 
             if failed_tests == 0:
                 print("\nAll tests passed! ✓")
@@ -549,6 +603,12 @@ def main():
         help="Skip building stdlib and test helpers"
     )
 
+    parser.add_argument(
+        "--leaks",
+        action="store_true",
+        help="Enforce EXPECT_NO_LEAKS assertions (macOS: leaks --atExit)"
+    )
+
     args = parser.parse_args()
 
     tests_dir = Path(__file__).parent
@@ -571,7 +631,7 @@ def main():
     libs_bin_dir = tests_dir / "libs" / "bin"
     os.environ["SUSHI_LIB_PATH"] = str(libs_bin_dir)
 
-    with TestRunner(tests_dir, args.mode, args.verbose, args.jobs, args.json) as runner:
+    with TestRunner(tests_dir, args.mode, args.verbose, args.jobs, args.json, args.leaks) as runner:
         results = runner.run_all_tests(filter_pattern=args.filter)
 
     # Exit with appropriate code

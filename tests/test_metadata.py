@@ -26,6 +26,10 @@ class TestMetadata:
     # Enforced on the compilation path, not the runtime path.
     expect_error_code: Optional[List[str]] = None
 
+    # Opt-in leak assertion. Only honoured when the runner is invoked with --leaks;
+    # the default suite never pays the cost of a leak checker.
+    expect_no_leaks: bool = False
+
     # Test behavior flags
     requires_runtime: bool = False
     timeout_seconds: int = 10
@@ -62,6 +66,7 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
     # EXPECT_STDOUT_CONTAINS: "Result: 17"
     # EXPECT_STDOUT_EXACT: "Hello World\\nDone\\n"
     # EXPECT_STDERR_EMPTY: true
+    # EXPECT_NO_LEAKS: true
     # EXPECT_ERROR_CODE: CE2007
     # TIMEOUT_SECONDS: 10
     # TEST_TYPE: runtime
@@ -127,6 +132,10 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
             elif directive.startswith('EXPECT_STDERR_EMPTY:'):
                 value = directive.split(':', 1)[1].strip().lower()
                 metadata.expect_stderr_empty = value in ('true', 'yes', '1')
+
+            elif directive.startswith('EXPECT_NO_LEAKS:'):
+                value = directive.split(':', 1)[1].strip().lower()
+                metadata.expect_no_leaks = value in ('true', 'yes', '1')
 
             elif directive.startswith('EXPECT_ERROR_CODE:'):
                 value = directive.split(':', 1)[1].strip()
@@ -224,26 +233,33 @@ def get_test_category(test_file: Path) -> str:
         return 'success'
 
 
-def should_run_runtime_test(test_file: Path, metadata: TestMetadata) -> bool:
+def should_run_runtime_test(test_file: Path, metadata: TestMetadata,
+                            leaks_mode: bool = False) -> bool:
     """
     Determine if a test should have its compiled binary executed.
+
+    Reduces to "run everything that is not test_err_ / test_warn_", because
+    _apply_category_defaults marks every runnable test as requires_runtime.
+
+    The one exception is leaks_mode: a test_warn_ test compiles successfully and does
+    produce a binary, so a warning test that declares EXPECT_NO_LEAKS is executed
+    under --leaks. Shadowing is a warned-but-legal construct, so this is the only way
+    to leak-check it.
 
     Args:
         test_file: Path to the test file
         metadata: Parsed test metadata
+        leaks_mode: True when the runner was invoked with --leaks
 
     Returns:
         True if the test should be executed after compilation
     """
     category = get_test_category(test_file)
 
-    # Never run runtime tests for compilation-only categories
-    if category in ('error', 'warning'):
+    if category == 'error':
         return False
 
-    # Always run for explicit runtime tests
-    if category == 'runtime':
-        return True
+    if category == 'warning':
+        return leaks_mode and metadata.expect_no_leaks
 
-    # For regular tests, check metadata requirements
     return metadata.requires_runtime
