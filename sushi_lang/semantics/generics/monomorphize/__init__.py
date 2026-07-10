@@ -24,13 +24,15 @@ Result<Maybe<i32>> by:
 This ensures zero-overhead monomorphization for arbitrarily nested generics.
 """
 from __future__ import annotations
-from typing import Dict, Tuple, Set
+from contextlib import contextmanager
+from typing import Dict, Iterator, Tuple, Set
 from dataclasses import dataclass, field
 
 from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
 from sushi_lang.semantics.typesys import Type, EnumType, StructType
 from sushi_lang.semantics.ast import BoundedTypeParam
 from sushi_lang.internals.report import Reporter
+from sushi_lang.internals import errors as er
 
 # Import constraint validator for perk constraint checking
 try:
@@ -40,8 +42,10 @@ except ImportError:
 
 # Import specialized sub-modules
 from .transformer import TypeSubstitutor
-from .types import TypeMonomorphizer
+from .types import TypeMonomorphizer, MonomorphizationDepthExceeded
 from .functions import FunctionMonomorphizer
+
+__all__ = ["Monomorphizer", "MonomorphizationDepthExceeded"]
 
 
 @dataclass
@@ -97,6 +101,10 @@ class Monomorphizer:
     # Pending instantiations worklist (for nested generic function calls)
     pending_instantiations: Set[Tuple[str, Tuple[Type, ...]]] = field(default_factory=set)
 
+    # Depth of the current recursive type-monomorphization chain. Tie-the-knot
+    # bounds finite self-reference; this bounds the pathological infinite case.
+    _monomorphize_depth: int = field(default=0, init=False, repr=False)
+
     # Specialized sub-modules (initialized lazily)
     _substitutor: TypeSubstitutor | None = field(default=None, init=False, repr=False)
     _type_monomorphizer: TypeMonomorphizer | None = field(default=None, init=False, repr=False)
@@ -144,6 +152,29 @@ class Monomorphizer:
             if isinstance(param, BoundedTypeParam) and param.constraints:
                 # Validate all constraints on this type parameter
                 self.constraint_validator.validate_all_constraints(param, arg, None)
+
+    # Ceiling on nested type monomorphization. Real programs stay well under this
+    # (a deeply nested Result<Maybe<HashMap<...>>> is only a handful of levels);
+    # exceeding it means the instantiation is growing without bound.
+    MONOMORPHIZE_MAX_DEPTH = 128
+
+    @contextmanager
+    def _monomorphize_depth_guard(self, type_name: str) -> Iterator[None]:
+        """Bound recursive type monomorphization.
+
+        Enter once per nested monomorphize_enum/struct call while its fields are
+        being substituted. If the chain grows past MONOMORPHIZE_MAX_DEPTH the type
+        is infinitely recursive: report CE0122 and raise MonomorphizationDepthExceeded
+        so the substitution unwinds cleanly instead of overflowing the Python stack.
+        """
+        self._monomorphize_depth += 1
+        try:
+            if self._monomorphize_depth > self.MONOMORPHIZE_MAX_DEPTH:
+                er.emit(self.reporter, er.ERR.CE0122, None, name=type_name)
+                raise MonomorphizationDepthExceeded(type_name)
+            yield
+        finally:
+            self._monomorphize_depth -= 1
 
     # ===== ENUM MONOMORPHIZATION API =====
 

@@ -1,0 +1,35 @@
+# Guards PLAN.md T2.5: a recursive generic enum whose recursion passes through an
+# opaque Own<T> pointer (enum Tree<T>: Node(Own<Tree<T>>)) used to blow the Python
+# stack in the monomorphizer, because monomorphize_enum wrote its cache entry only
+# AFTER substituting every field, so the self-referential field re-entered forever.
+#
+# The monomorphizer now ties the knot: it publishes an empty shell into the cache
+# before substituting, so the self-reference resolves to that shell by identity and
+# the shell is then patched in place. The finite type is therefore fully supported
+# end to end: it compiles, constructs both variants (including a real Own alloc),
+# matches, and frees the recursive payload with no leak. (CLAUDE.md limitation #12.)
+# EXPECT_STDOUT_EXACT: "leaf\nnode\n"
+# EXPECT_NO_LEAKS
+
+enum Tree<T>:
+    Leaf
+    Node(Own<Tree<T>>)
+
+fn main() i32:
+    let Tree<i32> leaf = Tree.Leaf()
+    match leaf:
+        Tree.Leaf() ->
+            println("leaf")
+        Tree.Node(_) ->
+            println("node")
+
+    let Tree<i32> inner = Tree.Leaf()
+    let Own<Tree<i32>> child = Own.alloc(inner)
+    let Tree<i32> node = Tree.Node(child)
+    match node:
+        Tree.Leaf() ->
+            println("leaf")
+        Tree.Node(_) ->
+            println("node")
+
+    return Result.Ok(0)

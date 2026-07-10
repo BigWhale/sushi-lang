@@ -1,0 +1,20 @@
+# Guards PLAN.md T2.5's depth backstop: tie-the-knot makes a FINITE recursive
+# generic (Own<Tree<T>>, same T) compile, but a type argument that GROWS on every
+# self-reference has no fixpoint - Grow<T> instantiates Grow<Grow<T>>, then
+# Grow<Grow<Grow<T>>>, forever. The monomorphizer must stop at a bounded depth and
+# report a coded diagnostic instead of overflowing the Python stack with a raw
+# RecursionError. Before the fix this exited 1 with a traceback.
+# EXPECT_ERROR_CODE: CE0122
+
+enum Grow<T>:
+    Stop
+    More(Own<Grow<Grow<T>>>)
+
+fn main() i32:
+    let Grow<i32> g = Grow.Stop()
+    match g:
+        Grow.Stop() ->
+            println("stop")
+        Grow.More(_) ->
+            println("more")
+    return Result.Ok(0)
