@@ -188,10 +188,14 @@ def main():
                        help="Skip building stdlib and test helpers")
     parser.add_argument("--leaks", action="store_true",
                        help="Enforce EXPECT_NO_LEAKS assertions (implies --enhanced)")
+    parser.add_argument("--leaks-only", action="store_true",
+                       help="Run only the tests declaring EXPECT_NO_LEAKS (implies --leaks)")
 
     args = parser.parse_args()
 
     # The leak gate lives in the enhanced runner; the basic one never executes binaries.
+    if args.leaks_only:
+        args.leaks = True
     if args.leaks:
         args.enhanced = True
 
@@ -214,6 +218,8 @@ def main():
                 sys.argv.append("--skip-build")
             if args.leaks:
                 sys.argv.append("--leaks")
+            if args.leaks_only:
+                sys.argv.append("--leaks-only")
             return enhanced_test_runner.main()
         except ImportError:
             if not args.json:

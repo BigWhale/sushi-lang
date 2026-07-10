@@ -57,7 +57,7 @@ class TestResult:
 class TestRunner:
     """Enhanced test runner with compilation and runtime testing."""
 
-    def __init__(self, tests_dir: Path, mode: str = "full", verbose: bool = False, parallel_jobs: int = 4, json_output: bool = False, leaks: bool = False):
+    def __init__(self, tests_dir: Path, mode: str = "full", verbose: bool = False, parallel_jobs: int = 4, json_output: bool = False, leaks: bool = False, leaks_only: bool = False):
         """
         Initialize the test runner.
 
@@ -68,6 +68,7 @@ class TestRunner:
             parallel_jobs: Number of parallel test jobs
             json_output: Output results in JSON format
             leaks: Enforce EXPECT_NO_LEAKS assertions (needs a platform leak checker)
+            leaks_only: Run only the tests that declare EXPECT_NO_LEAKS
         """
         self.tests_dir = tests_dir
         self.mode = mode
@@ -75,6 +76,7 @@ class TestRunner:
         self.parallel_jobs = parallel_jobs
         self.json_output = json_output
         self.leaks = leaks
+        self.leaks_only = leaks_only
         self.leaks_skipped: List[str] = []
         self.temp_dir = None
 
@@ -108,6 +110,11 @@ class TestRunner:
         # Filter by relative path if pattern provided
         if filter_pattern:
             test_files = [f for f in test_files if filter_pattern in str(f.relative_to(self.tests_dir))]
+
+        # --leaks-only: run just the tests carrying a leak assertion, so CI can gate on
+        # them without paying for the whole suite a second time.
+        if self.leaks_only:
+            test_files = [f for f in test_files if parse_test_metadata(f).expect_no_leaks]
 
         if not test_files:
             if not self.json_output:
@@ -609,7 +616,15 @@ def main():
         help="Enforce EXPECT_NO_LEAKS assertions (macOS: leaks --atExit)"
     )
 
+    parser.add_argument(
+        "--leaks-only",
+        action="store_true",
+        help="Run only the tests declaring EXPECT_NO_LEAKS (implies --leaks)"
+    )
+
     args = parser.parse_args()
+    if args.leaks_only:
+        args.leaks = True
 
     tests_dir = Path(__file__).parent
     project_root = tests_dir.parent
@@ -631,7 +646,7 @@ def main():
     libs_bin_dir = tests_dir / "libs" / "bin"
     os.environ["SUSHI_LIB_PATH"] = str(libs_bin_dir)
 
-    with TestRunner(tests_dir, args.mode, args.verbose, args.jobs, args.json, args.leaks) as runner:
+    with TestRunner(tests_dir, args.mode, args.verbose, args.jobs, args.json, args.leaks, args.leaks_only) as runner:
         results = runner.run_all_tests(filter_pattern=args.filter)
 
     # Exit with appropriate code
