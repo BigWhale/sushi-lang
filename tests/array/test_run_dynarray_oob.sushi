@@ -1,7 +1,9 @@
 # Guards PLAN.md T1.2: direct indexing of a DYNAMIC array has no bounds check.
 # Today this reads out of bounds, prints garbage and exits 0 - a silent heap read.
 # The fixed-array path (tests/array/test_err_array_bounds_*) already traps correctly.
+# The println must never run: the index traps first, so stdout stays empty.
 # EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
 # EXPECT_STDERR_CONTAINS: RE2020
 fn main() i32:
     let i32[] d = from([1, 2, 3])
