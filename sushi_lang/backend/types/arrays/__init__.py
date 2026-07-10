@@ -37,7 +37,6 @@ from .methods.core import (
     emit_dynamic_array_from,
     emit_dynamic_array_len,
     emit_dynamic_array_capacity,
-    emit_dynamic_array_get,
     emit_dynamic_array_push,
     emit_dynamic_array_pop,
     emit_dynamic_array_destroy,
@@ -59,7 +58,6 @@ __all__ = [
     # Methods
     'emit_dynamic_array_len',
     'emit_dynamic_array_capacity',
-    'emit_dynamic_array_get',
     'emit_dynamic_array_push',
     'emit_dynamic_array_pop',
     'emit_dynamic_array_destroy',
