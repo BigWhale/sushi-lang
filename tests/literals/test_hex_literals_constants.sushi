@@ -16,4 +16,5 @@ fn main() i32:
 
     if (check):
         println("Mostly Harmless")
-    return Result.Ok(result + d)
+    println(result + d)
+    return Result.Ok(0)

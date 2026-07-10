@@ -25,4 +25,5 @@ fn main() i32:
     let i32 sum = result1 + result2 + result3 + byte + (word as i32) + shift_bin + shift_hex
     if (all_equal):
         println("Mostly Harmless")
-    return Result.Ok(sum)
+    println(sum)
+    return Result.Ok(0)

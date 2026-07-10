@@ -169,62 +169,37 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
     except Exception as e:
         print(f"Warning: Failed to parse metadata from {test_file}: {e}")
 
-    # Auto-detect runtime requirements for known test patterns
-    _auto_detect_runtime_requirements(test_file, metadata, content if 'content' in locals() else '')
+    _apply_category_defaults(test_file, metadata)
 
     return metadata
 
 
-def _auto_detect_runtime_requirements(test_file: Path, metadata: TestMetadata, content: str) -> None:
+def _apply_category_defaults(test_file: Path, metadata: TestMetadata) -> None:
     """
-    Auto-detect if a test requires runtime validation based on filename and content patterns.
+    Fill in the runtime contract implied by a test's filename category.
+
+    A runnable test (anything that is not test_err_* / test_warn_*) is executed after
+    compilation and is expected to exit 0 unless it declares otherwise. Making that
+    default explicit here -- rather than inferring intent from the source text -- is
+    what lets the runner treat an undeclared non-zero exit as a failure.
 
     Args:
         test_file: Path to the test file
         metadata: TestMetadata object to update
-        content: Source file content
     """
     filename = test_file.name
 
-    # Auto-detect based on filename patterns
-    if filename.startswith('test_run_'):
-        metadata.requires_runtime = True
-        metadata.test_type = 'runtime'
-    elif filename.startswith('test_err_') or filename.startswith('test_warn_'):
+    if filename.startswith('test_err_') or filename.startswith('test_warn_'):
         metadata.test_type = 'compilation_only'
         metadata.requires_runtime = False
         return
 
-    # Auto-detect based on content patterns
-    if not metadata.requires_runtime:  # Only auto-detect if not explicitly set
+    if filename.startswith('test_run_'):
+        metadata.test_type = 'runtime'
 
-        # Look for conditional return statements (runtime validation logic)
-        conditional_return_patterns = [
-            r'if\s*\([^)]+\):\s*return\s+[0-9]+',  # if (condition): return N
-            r'return\s+[^0\s]\d*',  # return non-zero number
-        ]
-
-        for pattern in conditional_return_patterns:
-            if re.search(pattern, content):
-                metadata.requires_runtime = True
-                if metadata.expect_runtime_exit is None:
-                    # Try to extract expected success exit code (usually 0)
-                    success_match = re.search(r'return\s+0\s*#.*[Ss]uccess', content)
-                    if success_match:
-                        metadata.expect_runtime_exit = 0
-                break
-
-        # Look for specific expected values in comments
-        expected_patterns = [
-            r'#.*should be.*(\d+)',
-            r'#.*expected.*(\d+)',
-            r'#.*result.*(\d+)',
-        ]
-
-        for pattern in expected_patterns:
-            if re.search(pattern, content):
-                metadata.requires_runtime = True
-                break
+    metadata.requires_runtime = True
+    if metadata.expect_runtime_exit is None:
+        metadata.expect_runtime_exit = 0
 
 
 def get_test_category(test_file: Path) -> str:

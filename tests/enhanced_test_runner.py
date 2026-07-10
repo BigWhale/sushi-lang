@@ -387,11 +387,15 @@ class TestRunner:
                 messages.append(f"✗ Exit code: Expected {metadata.expect_runtime_exit}, got {result.returncode}")
                 success = False
         else:
-            # Default expectation: exit code 0 for success
+            # Default expectation: exit code 0 for success. parse_test_metadata sets
+            # expect_runtime_exit = 0 for every runnable test, so reaching this branch
+            # means the metadata was bypassed; treat a non-zero exit as a failure either
+            # way. A binary that aborts, double-frees or traps must never pass.
             if result.returncode == 0:
                 messages.append(f"✓ Exit code: {result.returncode}")
             else:
-                messages.append(f"⚠ Exit code: {result.returncode} (no expectation set)")
+                messages.append(f"✗ Exit code: Expected 0, got {result.returncode}")
+                success = False
 
         # Check stdout content
         if metadata.expect_stdout_exact is not None:

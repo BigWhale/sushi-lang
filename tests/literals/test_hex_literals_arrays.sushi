@@ -21,4 +21,5 @@ fn main() i32:
     let i32 dsum = darr[0] + darr[1]
 
     println("Mostly Harmless")
-    return Result.Ok(sum + dsum)
+    println(sum + dsum)
+    return Result.Ok(0)

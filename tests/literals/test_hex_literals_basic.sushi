@@ -36,4 +36,5 @@ fn main() i32:
     let i32 result2 = (small as i32) + (large as i32)
     if (equal):
         println("Mostly Harmless")
-    return Result.Ok(result + result2)
+    println(result + result2)
+    return Result.Ok(0)

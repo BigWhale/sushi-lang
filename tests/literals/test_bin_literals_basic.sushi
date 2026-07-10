@@ -31,4 +31,5 @@ fn main() i32:
     let i32 result = a + b + c + d + e + f + g + h + i + sum + product + mask + combined + shifted
     if (equal):
         println("Mostly Harmless")
-    return Result.Ok(result)
+    println(result)
+    return Result.Ok(0)

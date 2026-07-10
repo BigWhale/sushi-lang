@@ -31,4 +31,5 @@ fn main() i32:
     let i32 result = read_write + toggle_execute + clear_admin + byte_mask + nibble_high + nibble_low
     if (has_read and has_write):
         println("Mostly Harmless")
-    return Result.Ok(result)
+    println(result)
+    return Result.Ok(0)
