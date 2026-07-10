@@ -105,11 +105,16 @@ def populate_string_array_from_argv(
     # Get pointer to string struct slot in array
     string_slot = builder.gep(target_array_data, [counter_val], name="string_slot")
 
-    # Store fat pointer: {ptr, len}
+    # Store fat pointer: {i8* data, i32 size, i8 owned}
+    two_i32 = ir.Constant(codegen.i32, 2)
     ptr_field = builder.gep(string_slot, [zero_i32, zero_i32], name="ptr_field")
     len_field = builder.gep(string_slot, [zero_i32, one_i32], name="len_field")
+    owned_field = builder.gep(string_slot, [zero_i32, two_i32], name="owned_field")
     builder.store(argv_i, ptr_field)
     builder.store(strlen_result, len_field)
+    # argv strings alias C process memory - a borrowed view, never heap-owned.
+    # Leaving this byte as malloc garbage risks the RAII destructor free()ing argv.
+    builder.store(ir.Constant(codegen.i8, 0), owned_field)
 
     # Increment counter
     next_counter = builder.add(counter_val, one_i32, name="next_counter")
