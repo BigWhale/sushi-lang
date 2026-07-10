@@ -592,6 +592,10 @@ _add(ErrorMessage("CE0121", Severity.ERROR,
     "could not resolve the concrete enum type for match pattern '{pattern}' - pattern bindings cannot be extracted",
     Category.INTERNAL, "The backend could not determine the scrutinee's concrete enum type for a match arm with bindings. The type checker should have annotated Match.resolved_scrutinee_type; a miss here would otherwise silently drop the arm's binding locals."))
 
+_add(ErrorMessage("CE2410", Severity.ERROR,
+    "cannot move '{name}': it is a borrowed view of the process arguments (main's string[] args); borrow it instead with '&peek string[]'",
+    Category.TYPE, "main's `string[] args` aliases the process argv, which the runtime owns and frees. Moving it by value (passing it to a by-value parameter, rebinding, or storing it) would make the callee free argv and double-free. Take it by reference with `&peek string[]`."))
+
 _add(ErrorMessage("CE0122", Severity.ERROR,
     "generic type '{name}' is infinitely recursive - monomorphization exceeded the maximum depth",
     Category.TYPE, "A generic type instantiation nests without bound (e.g. a type parameter that grows on each self-reference), so monomorphization cannot terminate. A finite self-reference through an opaque pointer (Own<T>) is fine; an ever-growing type argument is not."))
