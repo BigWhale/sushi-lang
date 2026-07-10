@@ -79,10 +79,11 @@ def build_variadic_array(codegen: 'LLVMCodegen', trailing_exprs: List,
 def _bloom_move_array(codegen: 'LLVMCodegen', source) -> ir.Value:
     """Move an existing array (the bloom source) into the callee.
 
-    Loads the source's T[] struct by value and, when the source is a named local,
-    marks it moved so the caller's RAII skips the buffer the callee now owns. The
-    validator restricts a bloom source to an array variable (CE0120), so a named move
-    is the sound, covered case.
+    Loads the source's T[] struct by value and marks the source moved so the
+    caller's RAII skips the buffer the callee now owns. Soundness depends on the
+    source being a bare Name: validate_variadic_trailing_args rejects any other
+    spread source with CE0120, so the `isinstance(source, Name)` move below always
+    fires for a spread that reached codegen.
     """
     value = codegen.expressions.emit_expr(source)
     if isinstance(value.type, ir.PointerType):

@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, StructType
-from sushi_lang.semantics.ast import Call, Spread
+from sushi_lang.semantics.ast import Call, Name, Spread
 from ..compatibility import types_compatible
 from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
 
@@ -51,6 +51,14 @@ def validate_variadic_trailing_args(validator: 'TypeValidator', trailing: list,
             if offset != 0 or len(trailing) != 1:
                 er.emit(validator.reporter, er.ERR.CE0120, arg.loc,
                         message="bloom argument 'arr...' must be the sole, last trailing argument")
+            elif not isinstance(arg.value, Name):
+                # The backend only marks a bloomed source moved when it is a bare
+                # Name (variadic.py::_bloom_move_array). A struct field / call / index
+                # source would be consumed by the callee yet still freed by the
+                # caller's RAII -> double free. Confine the source to a plain variable.
+                er.emit(validator.reporter, er.ERR.CE0120, arg.loc,
+                        message="bloom source must be a bare array variable, "
+                                "not an arbitrary expression")
             validator.validate_expression(arg)
             if array_ty is not None:
                 arg_type = validator.infer_expression_type(arg)
