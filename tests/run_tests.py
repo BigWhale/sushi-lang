@@ -119,15 +119,8 @@ def get_expected_exit_code(test_file: Path) -> int:
     - test_*.sushi: expect 0 (success, no warnings)
     - test_warn_*.sushi: expect 1 (success with warnings)
     - test_err_*.sushi: expect 2 (compilation failed)
-
-    Special cases:
-    - test_err_dynamic_arrays_out_of_bounds.sushi: expects 0 (bounds checking not implemented yet)
     """
     test_name = test_file.name
-
-    # Special cases that don't follow the convention
-    if test_name == "test_err_dynamic_arrays_out_of_bounds.sushi":
-        return 0  # Bounds checking not implemented yet, compiles successfully
 
     if test_name.startswith("test_warn_"):
         return 1

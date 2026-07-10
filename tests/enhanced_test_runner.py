@@ -236,10 +236,6 @@ class TestRunner:
         expected_exit_code = expected_exit_codes.get(category, 0)
 
         try:
-            # Special case for dynamic array out of bounds test
-            if test_file.name == "test_err_dynamic_arrays_out_of_bounds.sushi":
-                expected_exit_code = 0  # Should compile successfully
-
             # Create unique output binary name
             binary_name = f"test_{test_file.stem}_{os.getpid()}"
             binary_path = Path(self.temp_dir) / binary_name
