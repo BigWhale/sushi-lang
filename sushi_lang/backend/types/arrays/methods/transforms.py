@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from llvmlite import ir
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.backend.llvm_constants import ZERO_I8, make_i32_const
+from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.internals.errors import raise_internal_error
 
@@ -51,28 +52,11 @@ def emit_byte_array_to_string(codegen: "LLVMCodegen", call: MethodCall, receiver
     data_ptr_ptr = codegen.builder.gep(receiver_value, [zero, make_i32_const(2)])
     data_ptr = codegen.builder.load(data_ptr_ptr)
 
-    # Allocate memory for string (byte_count + 1 for null terminator)
-    malloc_func = codegen.get_malloc_func()
+    # Allocate memory for string (byte_count + 1 for null terminator). emit_malloc
+    # null-checks and traps RE2021 on failure.
     string_size = codegen.builder.add(byte_count, ir.Constant(codegen.types.i32, 1))
     string_size_i64 = codegen.builder.zext(string_size, ir.IntType(INT64_BIT_WIDTH))
-    string_ptr = codegen.builder.call(malloc_func, [string_size_i64], name="to_string_ptr")
-
-    # Check if malloc failed
-    null_ptr = ir.Constant(ir.PointerType(ir.IntType(INT8_BIT_WIDTH)), None)
-    is_null = codegen.builder.icmp_unsigned('==', string_ptr, null_ptr)
-
-    malloc_fail_bb = codegen.builder.append_basic_block('to_string_malloc_fail')
-    malloc_success_bb = codegen.builder.append_basic_block('to_string_malloc_success')
-
-    codegen.builder.cbranch(is_null, malloc_fail_bb, malloc_success_bb)
-
-    # Malloc failed - emit runtime error
-    codegen.builder.position_at_end(malloc_fail_bb)
-    codegen.runtime.errors.emit_runtime_error("RE2021", "memory allocation failed")
-    codegen.builder.unreachable()
-
-    # Malloc succeeded - copy bytes from array to string
-    codegen.builder.position_at_end(malloc_success_bb)
+    string_ptr = emit_malloc(codegen, codegen.builder, string_size_i64)
 
     # PERFORMANCE: No UTF-8 validation for fast conversion
     # This method assumes byte arrays contain valid UTF-8 for zero-cost conversion.

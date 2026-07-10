@@ -11,6 +11,7 @@ import typing
 from llvmlite import ir
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.backend.llvm_constants import FALSE_I1
+from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.internals.errors import raise_internal_error
 
 if typing.TYPE_CHECKING:
@@ -174,9 +175,8 @@ class StringOperations:
         total_size = self.codegen.builder.add(size1, size2)
 
         # Allocate memory for the new string
-        malloc_func = self.codegen.get_malloc_func()
         total_size_i64 = self.codegen.builder.zext(total_size, ir.IntType(INT64_BIT_WIDTH))
-        new_data = self.codegen.builder.call(malloc_func, [total_size_i64])
+        new_data = emit_malloc(self.codegen, self.codegen.builder, total_size_i64)
         # If emitted inside a print/println argument, this concat buffer is a temporary
         # to free after output (#141). No-op elsewhere.
         self.codegen.register_string_temp(new_data)
@@ -233,9 +233,8 @@ class StringOperations:
 
         # Allocate size+1 bytes for null terminator
         size_plus_one = self.codegen.builder.add(size, ir.Constant(self.codegen.i32, 1))
-        malloc_func = self.codegen.get_malloc_func()
         size_i64 = self.codegen.builder.zext(size_plus_one, ir.IntType(INT64_BIT_WIDTH))
-        c_str = self.codegen.builder.call(malloc_func, [size_i64])
+        c_str = emit_malloc(self.codegen, self.codegen.builder, size_i64)
 
         # Copy string data using llvm.memcpy intrinsic. i64-length form + zero-extended
         # size so adjacent fat-pointer bytes cannot leak into the length register (#149).
@@ -313,8 +312,7 @@ class StringOperations:
         size = b.call(self.codegen.runtime.libc_strings.strlen, [c_str])  # i32 byte count
         size_i64 = b.zext(size, ir.IntType(INT64_BIT_WIDTH))
 
-        malloc_func = self.codegen.get_malloc_func()
-        new_data = b.call(malloc_func, [size_i64])
+        new_data = emit_malloc(self.codegen, b, size_i64)
 
         # i64-length memcpy with the zero-extended size (never the raw i32, see #149).
         memcpy_fn = self.codegen.module.declare_intrinsic(
@@ -375,13 +373,12 @@ class StringOperations:
             Pointer to allocated memory.
         """
         # Use the existing malloc infrastructure from the main codegen
-        malloc_func = self.codegen.get_malloc_func()
         # Convert i32 to i64 for size_t parameter if needed
         if isinstance(size.type, ir.IntType) and size.type.width == 32:
             size_i64 = self.codegen.builder.zext(size, ir.IntType(INT64_BIT_WIDTH))
         else:
             size_i64 = size
-        return self.codegen.builder.call(malloc_func, [size_i64])
+        return emit_malloc(self.codegen, self.codegen.builder, size_i64)
 
     def emit_string_char_count(self, string_ptr: ir.Value) -> ir.Value:
         """Generate call to utf8_char_count for Unicode-aware CHARACTER counting.

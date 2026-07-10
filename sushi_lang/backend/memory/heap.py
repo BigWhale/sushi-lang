@@ -28,7 +28,7 @@ def emit_malloc(codegen: 'LLVMCodegen', builder: ir.IRBuilder, size_bytes: ir.Va
         RuntimeError: Emits RE2021 runtime error if allocation fails.
     """
     # Get malloc function from centralized codegen
-    malloc_func = codegen.get_malloc_func()
+    malloc_func = codegen._get_malloc_func()
 
     # Convert size to i64 if needed (malloc expects size_t)
     if size_bytes.type == ir.IntType(INT32_BIT_WIDTH):

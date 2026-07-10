@@ -7,6 +7,7 @@ to Sushi's string[] dynamic array in the main() wrapper.
 from typing import TYPE_CHECKING
 import llvmlite.ir as ir
 from sushi_lang.semantics.typesys import DynamicArrayType, BuiltinType
+from sushi_lang.backend.memory.heap import emit_malloc
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -43,8 +44,7 @@ def allocate_string_array_data(codegen: 'LLVMCodegen', count: ir.Value) -> ir.Va
     total_bytes_64 = codegen.builder.zext(total_bytes, ir.IntType(64), name="total_bytes_64")
 
     # Allocate memory
-    malloc_func = codegen.get_malloc_func()
-    data_ptr = codegen.builder.call(malloc_func, [total_bytes_64], name="string_array_data")
+    data_ptr = emit_malloc(codegen, codegen.builder, total_bytes_64)
 
     # Cast void* to string struct array pointer
     string_struct_ptr_type = ir.PointerType(string_struct_type)

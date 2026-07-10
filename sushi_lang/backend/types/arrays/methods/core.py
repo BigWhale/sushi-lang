@@ -328,6 +328,7 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
         Void value (represented as i32 constant 0).
     """
     from sushi_lang.backend.expressions import memory
+    from sushi_lang.backend.memory.heap import emit_malloc
 
     # Constants
     zero = ir.Constant(codegen.types.i32, 0)
@@ -393,7 +394,7 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
     # Allocate new buffer with initial capacity
     element_size = memory.get_element_size_constant(codegen, element_type)
     new_total_size = codegen.builder.mul(initial_capacity, element_size, name="new_total_size")
-    new_data_ptr = memory.emit_malloc_call(codegen, new_total_size)
+    new_data_ptr = emit_malloc(codegen, codegen.builder, new_total_size)
 
     # Cast to typed pointer
     typed_new_data_ptr = codegen.builder.bitcast(new_data_ptr, ir.PointerType(element_type), name="typed_new_data_ptr")

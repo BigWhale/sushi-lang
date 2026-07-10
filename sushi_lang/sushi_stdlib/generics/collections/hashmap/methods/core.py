@@ -13,6 +13,7 @@ import llvmlite.ir as ir
 from ..types import get_entry_type, extract_key_value_types, ENTRY_EMPTY, ENTRY_OCCUPIED
 from ..utils import emit_key_equality_check
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.memory.heap import emit_malloc
 
 
 def emit_hashmap_new(codegen: Any, hashmap_type: StructType) -> ir.Value:
@@ -54,9 +55,8 @@ def emit_hashmap_new(codegen: Any, hashmap_type: StructType) -> ir.Value:
     total_bytes = codegen.builder.mul(entry_size, capacity_const, name="bucket_bytes")
 
     # Call malloc (extend i32 to i64 for malloc parameter)
-    malloc_fn = codegen.get_malloc_func()
     total_bytes_i64 = codegen.builder.zext(total_bytes, ir.IntType(64), name="total_bytes_i64")
-    bucket_ptr_i8 = codegen.builder.call(malloc_fn, [total_bytes_i64], name="buckets_raw")
+    bucket_ptr_i8 = emit_malloc(codegen, codegen.builder, total_bytes_i64)
     bucket_ptr = codegen.builder.bitcast(bucket_ptr_i8, ir.PointerType(entry_type), name="buckets_ptr")
 
     # Initialize all entries to Empty state

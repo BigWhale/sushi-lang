@@ -107,10 +107,6 @@ class RuntimeProtocol(Protocol):
         """Emit string comparison operation."""
         ...
 
-    def emit_malloc(self, size: ir.Value, name: str = "malloc_result") -> ir.Value:
-        """Emit malloc call with runtime error checking."""
-        ...
-
 
 class FunctionManagerProtocol(Protocol):
     """Protocol for function management operations."""

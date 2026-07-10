@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, List
 from llvmlite import ir
 
 from sushi_lang.semantics.typesys import FunctionType, ResultType
+from sushi_lang.backend.memory.heap import emit_malloc
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -195,8 +196,7 @@ def emit_lambda(codegen: "LLVMCodegen", lam, to_i1: bool) -> ir.Value:
     env_struct = lam.env_struct
     env_ll = codegen.types.ll_type(env_struct)
     size = codegen.types.get_type_size_bytes(env_struct)
-    malloc = codegen.get_malloc_func()
-    raw = codegen.builder.call(malloc, [ir.Constant(codegen.types.i64, size)], name="closure_env")
+    raw = emit_malloc(codegen, codegen.builder, ir.Constant(codegen.types.i64, size))
     env_ptr = codegen.builder.bitcast(raw, ir.PointerType(env_ll), name="closure_env_typed")
 
     i32 = codegen.types.i32

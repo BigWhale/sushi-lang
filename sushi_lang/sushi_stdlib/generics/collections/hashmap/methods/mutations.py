@@ -16,6 +16,7 @@ import llvmlite.ir as ir
 from ..types import get_entry_type, extract_key_value_types, ENTRY_EMPTY, ENTRY_OCCUPIED, ENTRY_TOMBSTONE
 from ..utils import emit_key_equality_check, emit_insert_entry
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.memory.heap import emit_malloc
 
 
 def emit_hashmap_insert(
@@ -575,9 +576,8 @@ def emit_hashmap_resize_to_capacity(
     total_bytes = builder.mul(entry_size, new_capacity, name="bucket_bytes")
 
     # Call malloc
-    malloc_fn = codegen.get_malloc_func()
     total_bytes_i64 = builder.zext(total_bytes, ir.IntType(64), name="total_bytes_i64")
-    new_bucket_ptr_i8 = builder.call(malloc_fn, [total_bytes_i64], name="new_buckets_raw")
+    new_bucket_ptr_i8 = emit_malloc(codegen, builder, total_bytes_i64)
     new_bucket_ptr = builder.bitcast(new_bucket_ptr_i8, ir.PointerType(entry_type), name="new_buckets_ptr")
 
     # Initialize all new entries to Empty
@@ -900,9 +900,8 @@ def emit_hashmap_free(
     total_bytes = builder.mul(entry_size, initial_capacity, name="bucket_bytes")
 
     # Call malloc
-    malloc_fn = codegen.get_malloc_func()
     total_bytes_i64 = builder.zext(total_bytes, ir.IntType(64), name="total_bytes_i64")
-    new_bucket_ptr_i8 = builder.call(malloc_fn, [total_bytes_i64], name="new_buckets_raw")
+    new_bucket_ptr_i8 = emit_malloc(codegen, builder, total_bytes_i64)
     new_bucket_ptr = builder.bitcast(new_bucket_ptr_i8, ir.PointerType(entry_type), name="new_buckets_ptr")
 
     # Initialize all new entries to Empty

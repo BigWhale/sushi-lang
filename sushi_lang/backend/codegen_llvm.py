@@ -191,8 +191,10 @@ class LLVMCodegen:
         """Access to f64 format string."""
         return self.runtime.formatting.fmt_f64
 
-    # Centralized memory management function declarations
-    def get_malloc_func(self) -> ir.Function:
+    # Centralized memory management function declarations.
+    # Private: allocate through backend.memory.heap.emit_malloc, which null-checks
+    # and traps RE2021. Emitting a bare malloc call must not recur.
+    def _get_malloc_func(self) -> ir.Function:
         """Get or declare malloc function."""
         if self._malloc_func is None:
             # Reuse an existing declaration (e.g. a matching FFI extern) to avoid
