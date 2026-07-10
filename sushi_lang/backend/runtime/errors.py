@@ -33,6 +33,21 @@ class RuntimeErrors:
         """
         self.codegen = codegen
 
+    def _get_pct_s_format_ptr(self, builder: ir.IRBuilder) -> ir.Value:
+        """Get an i8* to a shared, reusable "%s" format string constant."""
+        fmt_name = ".runtime_err_pct_s"
+        existing = self.codegen.module.globals.get(fmt_name)
+        if existing and isinstance(existing, ir.GlobalVariable):
+            fmt_const = existing
+        else:
+            data = bytearray(b"%s\x00")
+            arr_ty = ir.ArrayType(ir.IntType(INT8_BIT_WIDTH), len(data))
+            fmt_const = ir.GlobalVariable(self.codegen.module, arr_ty, name=fmt_name)
+            fmt_const.linkage = 'private'
+            fmt_const.global_constant = True
+            fmt_const.initializer = ir.Constant(arr_ty, data)
+        return builder.gep(fmt_const, [ZERO_I32, ZERO_I32], name="pct_s_ptr")
+
     def emit_runtime_error(self, error_code: str, message: str) -> None:
         """Emit runtime error message to stderr and exit program.
 
@@ -51,7 +66,7 @@ class RuntimeErrors:
         builder = self.codegen.builder
 
         # Format the error message: "Runtime Error RE2021: message\n"
-        full_message = f"Runtime Error {error_code}: {message}\\n"
+        full_message = f"Runtime Error {error_code}: {message}\n"
 
         # Create global string constant for error message (or reuse if exists)
         arr_ty = ir.ArrayType(ir.IntType(INT8_BIT_WIDTH), len(full_message) + 1)
@@ -80,8 +95,10 @@ class RuntimeErrors:
         # Load stderr handle
         stderr_ptr = builder.load(self.codegen.runtime.libc_stdio.stderr_handle, name="stderr")
 
-        # Call fprintf(stderr, message)
-        builder.call(self.codegen.runtime.libc_stdio.fprintf, [stderr_ptr, msg_ptr])
+        # Call fprintf(stderr, "%s", message) - passing the message through a "%s"
+        # format so any '%' inside it is not interpreted as a conversion specifier.
+        pct_s_ptr = self._get_pct_s_format_ptr(builder)
+        builder.call(self.codegen.runtime.libc_stdio.fprintf, [stderr_ptr, pct_s_ptr, msg_ptr])
 
         # Call exit(1) to terminate program
         builder.call(self.codegen.runtime.libc_process.exit, [ir.Constant(self.codegen.i32, 1)])
@@ -114,7 +131,7 @@ class RuntimeErrors:
         builder = self.codegen.builder
 
         # Create format string: "Runtime Error RE2020: <format_string>\n"
-        full_format = f"Runtime Error {error_code}: {format_string}\\n"
+        full_format = f"Runtime Error {error_code}: {format_string}\n"
 
         # Create global string constant for format string
         arr_ty = ir.ArrayType(ir.IntType(INT8_BIT_WIDTH), len(full_format) + 1)
