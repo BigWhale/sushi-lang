@@ -184,8 +184,8 @@ class TypeMapper:
                 return ir.PointerType(self.i8)
             case FunctionType():
                 # Map a first-class function value to the 3-word fat pointer
-                # {i8* fn_ptr, i8* env_ptr, i8* drop_ptr}. Capture is erased from the
-                # type: a non-capturing value carries null env/drop; a closure carries a
+                # {i8* fn_ptr, i8* env_ptr, i8* drop_ptr}. Capture is erased: a
+                # non-capturing value carries null env/drop; a closure carries a
                 # heap env and a type-erased destructor. The real callee signature
                 # (Result<T,E>(i8* env, params)) is recovered from the semantic
                 # FunctionType at the call site, not from this opaque LLVM type.
