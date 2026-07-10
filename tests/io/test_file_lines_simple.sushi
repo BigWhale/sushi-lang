@@ -1,6 +1,6 @@
 # Simple test for file.lines() type inference
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: Mostly Harmless
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
 use <io/files>
 
 fn main() i32:

@@ -1,6 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: hello
-# EXPECT_STDOUT_CONTAINS: world
-# EXPECT_STDOUT_CONTAINS: 你好
+# EXPECT_STDOUT_EXACT: "hello\nworld  \ntest  \n\n\nhello\n你好\n"
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0

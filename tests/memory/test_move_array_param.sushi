@@ -1,10 +1,7 @@
 # Move-by-value: a dynamic-array parameter is moved into the callee (issue #131).
 # The callee owns the array (methods, foreach, indexing all work) and frees it at
 # scope exit; the inline `from([...])` argument form no longer crashes with CE0017.
-# EXPECT_STDOUT_CONTAINS: len=2
-# EXPECT_STDOUT_CONTAINS: sum=209
-# EXPECT_STDOUT_CONTAINS: first=104
-# EXPECT_STDOUT_CONTAINS: ret=2
+# EXPECT_STDOUT_EXACT: "len=2\nsum=209\nfirst=104\nret=2\n"
 # EXPECT_RUNTIME_EXIT: 0
 
 fn describe(u8[] b) i32:

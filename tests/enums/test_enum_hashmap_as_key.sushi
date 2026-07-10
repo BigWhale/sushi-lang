@@ -1,7 +1,6 @@
 # Test enum used as HashMap key: unit-only enum keys with insert/get/remove
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: Monday: standup
-# EXPECT_STDOUT_CONTAINS: Weekday HashMap: all passed
+# EXPECT_STDOUT_EXACT: "Monday: standup\nTuesday: none\nWeekday HashMap: all passed\n"
 
 use <collections/hashmap>
 

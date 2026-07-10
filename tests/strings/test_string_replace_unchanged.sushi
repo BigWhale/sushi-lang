@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: All unchanged tests passed!
+# EXPECT_STDOUT_EXACT: "Babel: 'Babel Fish'\nGuide: 'Don't Panic'\nShort: 'Hi'\nAll unchanged tests passed!\n"
 # TEST_TYPE: runtime
 use <collections/strings>
 

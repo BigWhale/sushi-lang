@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Bounds checking test passed!
+# EXPECT_STDOUT_EXACT: "Negative index correctly rejected\nOut of bounds index correctly rejected\nInsert at len succeeded (append)\nBounds checking test passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<T> insert method - bounds checking returns Result.Err()

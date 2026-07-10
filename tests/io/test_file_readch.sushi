@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Reading character by character:
-# EXPECT_STDOUT_CONTAINS: Read 5 characters
+# EXPECT_STDOUT_EXACT: "Reading character by character:\nH\ne\nl\nl\no\nRead 5 characters\n"
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Reading character by character:

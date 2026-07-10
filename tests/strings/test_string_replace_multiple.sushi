@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: All multiple replacement tests passed!
+# EXPECT_STDOUT_EXACT: "Poetry: dolphin dolphin dolphin poetry\nAnswers: the answer is the answer and the answer\nTowels: towel towel towel\nAll multiple replacement tests passed!\n"
 # TEST_TYPE: runtime
 use <collections/strings>
 

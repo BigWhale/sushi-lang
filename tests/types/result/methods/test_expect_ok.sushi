@@ -1,5 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: PASS: expect on Ok returns value
+# EXPECT_STDOUT_EXACT: "PASS: expect on Ok returns value\n"
 # EXPECT_STDERR_EMPTY: true
 
 # Tests expect method on Ok variant

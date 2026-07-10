@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: "Point(10, 20).hash() = 14687699039417897699"
+# EXPECT_STDOUT_EXACT: "Point(10, 20).hash() = 14687699039417897699\n✓ Same struct values produce same hash\n✓ Different struct values produce different hashes\n✓ Field order matters (Point(10,20) != Point(20,10))\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Test hash method for simple structs
 

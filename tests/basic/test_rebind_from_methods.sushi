@@ -1,6 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Before rebind
-# EXPECT_STDOUT_CONTAINS: After rebind
-# EXPECT_STDOUT_CONTAINS: Byte count: 5
+# EXPECT_STDOUT_EXACT: "Before rebind\nAfter rebind\nByte count: 5\n"
 # Test rebinding from method calls that return dynamic arrays
 use <collections/strings>
 

@@ -1,8 +1,6 @@
 # Test matching Result.Err(CustomEnum.Variant) - nested result error patterns
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: Division by zero
-# EXPECT_STDOUT_CONTAINS: TooLong: 7
-# EXPECT_STDOUT_CONTAINS: Custom error enum: all passed
+# EXPECT_STDOUT_EXACT: "Division by zero\nTooLong: 7\nCustom error enum: all passed\n"
 
 enum CalcError:
     DivByZero

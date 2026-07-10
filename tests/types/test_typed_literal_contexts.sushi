@@ -1,7 +1,7 @@
 # Context-typed numeric literals in call args, returns, struct fields, Maybe.Some,
 # and array literals (Bug E / PR 2b).
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: "contexts ok"
+# EXPECT_STDOUT_EXACT: "contexts ok\n"
 
 struct P:
   u8 x

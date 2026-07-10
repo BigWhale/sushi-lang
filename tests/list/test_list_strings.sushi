@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Crew member 2: Zaphod Beeblebrox
-# EXPECT_STDOUT_CONTAINS: String list tests passed!
+# EXPECT_STDOUT_EXACT: "Crew member 2: Zaphod Beeblebrox\nRemoved: Trillian\nString list tests passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<string> with string elements

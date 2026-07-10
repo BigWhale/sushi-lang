@@ -1,7 +1,6 @@
 # Move-by-value escape hatch: passing `.clone()` moves the copy, leaving the source
 # usable afterward (explicit copy is the opt-in to keep an owned value).
-# EXPECT_STDOUT_CONTAINS: consumed=3
-# EXPECT_STDOUT_CONTAINS: original=3
+# EXPECT_STDOUT_EXACT: "consumed=3\noriginal=3\n"
 # EXPECT_RUNTIME_EXIT: 0
 
 fn consume(i32[] arr) i32:

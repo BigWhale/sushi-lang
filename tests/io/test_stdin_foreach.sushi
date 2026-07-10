@@ -1,9 +1,6 @@
 # TEST_TYPE: runtime
 # STDIN_INPUT: "Alpha\nBeta\nGamma\n"
-# EXPECT_STDOUT_CONTAINS: "Received lines:"
-# EXPECT_STDOUT_CONTAINS: "- Alpha"
-# EXPECT_STDOUT_CONTAINS: "- Beta"
-# EXPECT_STDOUT_CONTAINS: "- Gamma"
+# EXPECT_STDOUT_EXACT: "Received lines:\n  - Alpha\n  - Beta\n  - Gamma\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Test stdin.readln() in a foreach loop
 # Read multiple lines and process them

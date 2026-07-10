@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: System initialized
-# EXPECT_STDOUT_CONTAINS: Hello World
+# EXPECT_STDOUT_EXACT: "System initialized\nProcessing\nCleanup done\nHello World\n"
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # Test direct function calls as statements

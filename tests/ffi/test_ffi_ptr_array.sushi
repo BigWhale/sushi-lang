@@ -1,6 +1,6 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: freed 2
+# EXPECT_STDOUT_EXACT: "freed 2\n"
 
 # FFI: holding foreign handles in a plain dynamic array is allowed (holding is
 # the safe half of the contract; RAII frees the array, never the handles).

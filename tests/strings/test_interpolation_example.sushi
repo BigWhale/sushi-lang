@@ -1,7 +1,14 @@
-fn run_test(string[] args) i32:
-  print("Args: {args.get(0)??} - {args.get(1)??}")
-  return Result.Ok(0)
-
+# Interpolating values pulled out of main's argv.
+# CMD_ARGS: alpha beta
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Args: alpha - beta\n"
+#
+# args[0] is the binary path, so only args[1..] can be asserted. This test used to
+# pass `args` by value into a helper, which moves main's borrowed argv and traps; that
+# defect now has its own test (memory/test_run_argv_by_value_move.sushi) rather than
+# living here as an unasserted crash.
 fn main(string[] args) i32:
-  let i32 result = run_test(args).realise(99)
-  return Result.Ok(result)
+    let string a = args.get(1).realise("none")
+    let string b = args.get(2).realise("none")
+    println("Args: {a} - {b}")
+    return Result.Ok(0)

@@ -1,9 +1,7 @@
 # Regression guard: a &peek borrow does NOT move its argument. The array is still
 # owned by the caller after the borrowing call and can be used again (and accessed
 # directly).
-# EXPECT_STDOUT_CONTAINS: a=3
-# EXPECT_STDOUT_CONTAINS: b=3
-# EXPECT_STDOUT_CONTAINS: direct=3
+# EXPECT_STDOUT_EXACT: "a=3\nb=3\ndirect=3\n"
 # EXPECT_RUNTIME_EXIT: 0
 
 fn peek_len(&peek i32[] arr) i32:

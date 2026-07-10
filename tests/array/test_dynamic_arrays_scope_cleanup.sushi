@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 0050020022012
+# EXPECT_STDOUT_EXACT: "0050020022012"
 # Test dynamic array automatic cleanup in scopes
 fn run_test() i32:
   let i32 result = 0

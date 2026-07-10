@@ -1,6 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: PASS: realise returns Ok value for structs
-# EXPECT_STDOUT_CONTAINS: PASS: realise returns default for Err
+# EXPECT_STDOUT_EXACT: "PASS: realise returns Ok value for structs\nPASS: realise returns default for Err\n"
 # EXPECT_STDERR_EMPTY: true
 
 # Tests realise with struct default values

@@ -1,6 +1,6 @@
 # Test enum variants with 1, 2, and 3 i32 associated data fields
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: Multi-field variants: all passed
+# EXPECT_STDOUT_EXACT: "Multi-field variants: all passed\n"
 
 enum Coord:
     D1(i32)

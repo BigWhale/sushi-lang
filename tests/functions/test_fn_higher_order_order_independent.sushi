@@ -1,7 +1,7 @@
 # A higher-order fn that calls through its fn-typed parameter must compile
 # regardless of definition order (apply defined BEFORE double). Bug C / CE0055.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: "Result: 84"
+# EXPECT_STDOUT_EXACT: "Result: 84\n"
 
 fn apply(fn(i32) -> i32 f, i32 x) i32:
   let i32 r = f(x)??

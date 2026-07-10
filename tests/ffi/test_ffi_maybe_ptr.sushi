@@ -1,5 +1,5 @@
 # FFI: `ptr` inside Maybe<T> (issue #85 collateral - enum payload sizing).
-# EXPECT_STDOUT_CONTAINS: released
+# EXPECT_STDOUT_EXACT: "released\n"
 unsafe external "C" as libc because "allocate and free a raw buffer":
     fn malloc(i64 n) ptr = "malloc"
     fn free(ptr p) ~ = "free"

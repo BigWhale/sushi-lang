@@ -1,5 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: PASS: Err pattern match with binding works
+# EXPECT_STDOUT_EXACT: "PASS: Err pattern match with binding works\n"
 # EXPECT_STDERR_EMPTY: true
 
 # Tests pattern matching on Err variant with binding

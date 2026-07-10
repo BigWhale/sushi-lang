@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 7980449453299938079
+# EXPECT_STDOUT_EXACT: "7980449453299938079\n"
 # Test that structs with dynamic array fields CAN be hashed
 
 struct Container:

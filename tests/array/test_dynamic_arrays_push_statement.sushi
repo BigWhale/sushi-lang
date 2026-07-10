@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 01
+# EXPECT_STDOUT_EXACT: "01"
 fn main() i32:
   let i32[] numbers = new()
   print(numbers.push(10))

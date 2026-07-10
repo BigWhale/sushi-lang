@@ -1,5 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: PASS: Early return from error propagation works
+# EXPECT_STDOUT_EXACT: "PASS: Early return from error propagation works\n"
 # EXPECT_STDERR_EMPTY: true
 
 # Tests that error propagation performs early return

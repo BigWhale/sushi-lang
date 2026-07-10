@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 1020
+# EXPECT_STDOUT_EXACT: "1020"
 # Test pattern matching on List<Struct>.get() with parameter
 
 struct Node:

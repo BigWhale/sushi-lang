@@ -1,8 +1,6 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: made-1
-# EXPECT_STDOUT_CONTAINS: alias-9
-# EXPECT_STDOUT_CONTAINS: twice-2
+# EXPECT_STDOUT_EXACT: "made-1\nalias-9\nalias-9\ntwice-2\ntwice-2\nmade-1\n"
 # EXPECT_STDERR_EMPTY: true
 # Issue #147: a heap string in a struct field is freed at scope exit, and every struct
 # copy path (return-by-value, alias, constructor field, array get-out) clones the string

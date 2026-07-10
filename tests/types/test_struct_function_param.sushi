@@ -1,6 +1,6 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: 30
+# EXPECT_STDOUT_EXACT: "30\n"
 
 # Passing structs to functions
 

@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Life
-# EXPECT_STDOUT_CONTAINS: Interpolated: Life
+# EXPECT_STDOUT_EXACT: "Life\nInterpolated: Life\n"
 struct Pair<T, U>:
     T first
     U second

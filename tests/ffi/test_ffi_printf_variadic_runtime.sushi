@@ -1,10 +1,7 @@
 # FFI: a variadic libc function (printf) bound through an unsafe external block.
 # Safe Sushi wrappers fold the raw i32 return back into Sushi's Result world and
 # exercise several argument counts and types (int, string, multiple values).
-# EXPECT_STDOUT_CONTAINS: answer = 42
-# EXPECT_STDOUT_CONTAINS: pair: 1, 2
-# EXPECT_STDOUT_CONTAINS: just text
-# EXPECT_STDOUT_CONTAINS: wrappers ok
+# EXPECT_STDOUT_EXACT: "answer = 42\npair: 1, 2\njust text\nwrappers ok\n"
 unsafe external "C" as libc because "formatted output via libc printf":
     fn printf(string fmt, ...) i32 = "printf"
 

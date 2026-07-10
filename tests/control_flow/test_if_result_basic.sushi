@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Success!
+# EXPECT_STDOUT_EXACT: "Success!\n"
 fn get_success() i32:
     return Result.Ok(42)
 

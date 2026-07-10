@@ -1,6 +1,6 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: ok
+# EXPECT_STDOUT_EXACT: "ok\n"
 
 # Issue #89: u8/u16 unsigned div/mod above their signed midpoints, plus a
 # signed-regression guard. The signed cases use runtime variables so they

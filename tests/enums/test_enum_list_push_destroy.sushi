@@ -5,7 +5,7 @@
 # emit_value_destructor().
 #
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: List enum: passed
+# EXPECT_STDOUT_EXACT: "List enum: passed\n"
 
 enum Color:
     Red

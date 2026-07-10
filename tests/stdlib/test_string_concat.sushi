@@ -1,6 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Hello World
-# EXPECT_STDOUT_CONTAINS: café世界
-# EXPECT_STDOUT_CONTAINS: empty
+# EXPECT_STDOUT_EXACT: "Hello World\ncafé世界\ntest\ntest\nempty\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Test string.concat() method with runtime validation
 use <io/stdio>

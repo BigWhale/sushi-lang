@@ -1,6 +1,6 @@
 # Test logical operations in constant expressions
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: "All constant logical tests passed"
+# EXPECT_STDOUT_EXACT: "All constant logical tests passed\n"
 
 const bool TRUE_VAL = true
 const bool FALSE_VAL = false

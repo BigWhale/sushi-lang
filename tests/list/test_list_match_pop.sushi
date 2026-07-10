@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: OK: Empty list returns None
+# EXPECT_STDOUT_EXACT: "OK: Empty list returns None\n"
 fn main() i32:
     let List<i32> data = List.new()
     data.push(42)

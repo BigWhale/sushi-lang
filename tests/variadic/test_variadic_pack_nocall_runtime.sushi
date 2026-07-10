@@ -3,7 +3,7 @@
 # prefix it prints, plus a constrained pack tail. This proves pack-call argument
 # lowering (each trailing arg becomes a separate positional argument to the
 # monomorphized fan-out signature) + monomorphization + run.
-# EXPECT_STDOUT_CONTAINS: hi
+# EXPECT_STDOUT_EXACT: "hi\n"
 perk Display:
     fn display() string
 

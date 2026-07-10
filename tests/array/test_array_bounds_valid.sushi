@@ -1,6 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 10
-# EXPECT_STDOUT_CONTAINS: 30
-# EXPECT_STDOUT_CONTAINS: 50
+# EXPECT_STDOUT_EXACT: "10\n30\n50\n"
 # Test valid array bounds access
 # This test should compile and run successfully
 

@@ -1,7 +1,6 @@
 # Test enum as state machine: transition functions returning new enum values
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: Done: 110
-# EXPECT_STDOUT_CONTAINS: State machine: all passed
+# EXPECT_STDOUT_EXACT: "Done: 110\nState machine: all passed\n"
 
 enum State:
     Idle

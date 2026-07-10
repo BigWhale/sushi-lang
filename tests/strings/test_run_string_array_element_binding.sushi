@@ -1,0 +1,21 @@
+# Binding a heap-owned string element out of a string[] must not create a second
+# owner. `split()` returns an array of heap strings; `let string first = words[0]`
+# aliases one instead of cloning it, so the array's destructor and the binding's both
+# free it. Traps today (exit 133, SIGTRAP).
+#
+# `println(words[0])` inline is fine (no binding is registered), and an array of
+# string LITERALS is fine (owned = 0, so the second free is a no-op). It takes a
+# heap-owned element plus a `let`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly\nHarmless\n"
+
+use <collections/strings>
+
+fn main() i32:
+    let string corpus = "Mostly Harmless"
+    let string[] words = corpus.split(" ")
+    let string first = words[0]
+    let string second = words[1]
+    println(first)
+    println(second)
+    return Result.Ok(0)

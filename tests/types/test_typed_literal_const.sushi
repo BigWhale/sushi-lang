@@ -1,6 +1,6 @@
 # Context-typed numeric literals in const declarations (Bug E / PR 2a).
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: "const literals ok"
+# EXPECT_STDOUT_EXACT: "const literals ok\n"
 
 const u8 MAXB = 200
 const i64 BIG = 5

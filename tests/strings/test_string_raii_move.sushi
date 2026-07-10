@@ -1,7 +1,6 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: HELLO
-# EXPECT_STDOUT_CONTAINS: WORLD
+# EXPECT_STDOUT_EXACT: "HELLO\nWORLD\n"
 # EXPECT_STDERR_EMPTY: true
 # Issue #145: string move semantics -- return, alias, and container push each transfer
 # ownership so the buffer is freed exactly once (a double-free would SIGABRT this test).

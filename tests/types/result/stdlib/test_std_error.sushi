@@ -1,6 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: PASS: StdError with Ok works
-# EXPECT_STDOUT_CONTAINS: PASS: StdError.Error works
+# EXPECT_STDOUT_EXACT: "PASS: StdError with Ok works\nPASS: StdError.Error works\n"
 # EXPECT_STDERR_EMPTY: true
 
 # Tests StdError enum usage

@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Using default config (file not found)
-# EXPECT_STDOUT_CONTAINS: Config: default=true
+# EXPECT_STDOUT_EXACT: "Using default config (file not found)\nConfig: default=true\n"
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Using default config (file not found)
 # EXPECTED_OUTPUT: Config: default=true

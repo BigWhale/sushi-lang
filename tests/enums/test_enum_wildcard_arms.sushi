@@ -1,6 +1,6 @@
 # Test wildcard (_) arms in match expressions: named and unnamed patterns
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: Wildcard match: all passed
+# EXPECT_STDOUT_EXACT: "Wildcard match: all passed\n"
 
 enum Event:
     Click(i32, i32)

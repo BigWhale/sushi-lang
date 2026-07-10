@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 1
-# EXPECT_STDOUT_CONTAINS: 0
+# EXPECT_STDOUT_EXACT: "1\n0\n0\n0\n1\n0\n"
 fn main() i32:
     # Basic logical XOR tests
     let bool a = true

@@ -1,6 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: PASS: NetworkError matched
-# EXPECT_STDOUT_CONTAINS: PASS: AuthError matched
+# EXPECT_STDOUT_EXACT: "PASS: NetworkError matched\nPASS: AuthError matched\n"
 # EXPECT_STDERR_EMPTY: true
 
 # Tests pattern matching with enum variants containing data

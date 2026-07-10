@@ -1,9 +1,6 @@
 # Test enum with unit, struct, string, and multi-i32 variant types in one enum
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: quit
-# EXPECT_STDOUT_CONTAINS: move 3,7
-# EXPECT_STDOUT_CONTAINS: write: hello
-# EXPECT_STDOUT_CONTAINS: color 255,128,0
+# EXPECT_STDOUT_EXACT: "quit\nmove 3,7\nwrite: hello\ncolor 255,128,0\n"
 
 struct Vec2:
     i32 x

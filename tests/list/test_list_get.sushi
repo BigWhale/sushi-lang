@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Correctly returned None for out of bounds
-# EXPECT_STDOUT_CONTAINS: Get tests passed!
+# EXPECT_STDOUT_EXACT: "Correctly returned None for out of bounds\nCorrectly returned None for negative index\nGet tests passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<T> get method with bounds checking

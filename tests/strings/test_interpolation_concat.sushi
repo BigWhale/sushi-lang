@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: What is 6 * 9? 42
+# EXPECT_STDOUT_EXACT: "What is 6 * 9? 42\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 

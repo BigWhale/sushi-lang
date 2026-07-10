@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Response.Ok([42, 100]).hash() = 2882074176261740724
-# EXPECT_STDOUT_CONTAINS: Same enum with array data produce same hash
+# EXPECT_STDOUT_EXACT: "Response.Ok([42, 100]).hash() = 2882074176261740724\nSame enum with array data produce same hash\nDifferent array values in enum produce different hashes\nDifferent enum variants produce different hashes\n"
 # Test hash method for enums with fixed array variant data
 
 enum Response:

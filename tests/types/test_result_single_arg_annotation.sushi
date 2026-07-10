@@ -1,7 +1,7 @@
 # Single-arg Result<T> annotation defaults its error type to StdError
 # (equivalent to Result<T, StdError>). Bug B / CE2001.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: "Result single-arg: 42"
+# EXPECT_STDOUT_EXACT: "Result single-arg: 42\n"
 
 fn compute() Result<i32>:
   return Result.Ok(42)

@@ -1,8 +1,7 @@
 # Test RAII cleanup: enum variant holding a string is freed when leaving scope
 # Uses repeated allocation to detect heap corruption (would crash if not freed)
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: Received: Alice
-# EXPECT_STDOUT_CONTAINS: Received: Bob
+# EXPECT_STDOUT_EXACT: "Received: Alice\nReceived: Bob\nReceived: Carol\n"
 
 enum Message:
     Greeting(string)

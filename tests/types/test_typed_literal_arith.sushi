@@ -1,7 +1,7 @@
 # Operand-driven literal typing: a bare literal takes its concrete sibling's type
 # in arithmetic/bitwise/comparison (Bug E / PR 2c).
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: "arith ok"
+# EXPECT_STDOUT_EXACT: "arith ok\n"
 
 fn main() i32:
   let u8 a = 10

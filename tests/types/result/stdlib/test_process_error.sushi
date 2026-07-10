@@ -1,7 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: PASS: ProcessError.SpawnFailed works
-# EXPECT_STDOUT_CONTAINS: PASS: ProcessError.ExitFailure works
-# EXPECT_STDOUT_CONTAINS: PASS: ProcessError.SignalReceived works
+# EXPECT_STDOUT_EXACT: "PASS: ProcessError.SpawnFailed works\nPASS: ProcessError.ExitFailure works\nPASS: ProcessError.SignalReceived works\n"
 # EXPECT_STDERR_EMPTY: true
 
 # Tests ProcessError enum variants

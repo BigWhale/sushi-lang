@@ -1,6 +1,6 @@
 # Test nested enum pattern matching: matching enum-in-enum structures
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: Nested match: 42
+# EXPECT_STDOUT_EXACT: "Nested match: 42\n"
 
 enum Inner:
     Ok(i32)

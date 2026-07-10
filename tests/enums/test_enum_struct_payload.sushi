@@ -1,7 +1,6 @@
 # Test enum variant with struct associated data: construct and read via match
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: Circle area: 25
-# EXPECT_STDOUT_CONTAINS: Rect area: 12
+# EXPECT_STDOUT_EXACT: "Circle area: 25\nRect area: 12\n"
 
 struct Point:
     i32 x

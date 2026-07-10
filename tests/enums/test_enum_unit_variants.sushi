@@ -1,6 +1,6 @@
 # Test basic unit-variant enum: construction, match on each variant, printing
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: north east south west
+# EXPECT_STDOUT_EXACT: "north east south west\n"
 
 enum Direction:
     North

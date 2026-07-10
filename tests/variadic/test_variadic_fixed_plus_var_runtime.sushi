@@ -1,7 +1,5 @@
 # Fixed prefix parameter plus a trailing variadic: log_all(prefix, ...values).
-# EXPECT_STDOUT_CONTAINS: val: 10
-# EXPECT_STDOUT_CONTAINS: val: 20
-# EXPECT_STDOUT_CONTAINS: val: 30
+# EXPECT_STDOUT_EXACT: "val: 10\nval: 20\nval: 30\n"
 fn log_all(string prefix, ...i32 values) ~:
     foreach(v in values.iter()):
         println("{prefix}: {v}")

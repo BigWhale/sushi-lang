@@ -1,6 +1,6 @@
 # Test enum used as function parameter and return type
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: Enum param/return: all passed
+# EXPECT_STDOUT_EXACT: "Enum param/return: all passed\n"
 
 enum Token:
     Number(i32)

@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Array [10, 20, 30].hash() = 1369094724173641924
+# EXPECT_STDOUT_EXACT: "Array [10, 20, 30].hash() = 1369094724173641924\n"
 # Simple test for array hashing with integers only
 
 fn main() i32:

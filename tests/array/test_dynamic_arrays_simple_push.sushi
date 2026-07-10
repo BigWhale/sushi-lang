@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 0
+# EXPECT_STDOUT_EXACT: "0\n"
 fn main() i32:
   let i32[] numbers = new()
   let i32 len = numbers.len()
