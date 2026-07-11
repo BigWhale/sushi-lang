@@ -49,7 +49,16 @@ runs:
     - name: Install LLVM 20 (macOS)
       if: runner.os == 'macOS'
       shell: bash
-      run: brew install llvm@20
+      env:
+        # Skip the implicit `brew update`, whose tap scan surfaces an untrusted-tap
+        # warning for the runner image's preinstalled aws/tap. The bottle still installs.
+        HOMEBREW_NO_AUTO_UPDATE: "1"
+      run: |
+        brew install llvm@20
+        # The image ships llvm@18 linked, so `brew install` cannot symlink llvm@20's
+        # binaries. Put its keg bin ahead on PATH (no invasive `brew link --force`) so
+        # PATH-resolved clang/llvm-config are llvm@20 for later steps.
+        echo "$(brew --prefix llvm@20)/bin" >> "$GITHUB_PATH"
 
     - name: Install uv from Astral
       shell: bash
