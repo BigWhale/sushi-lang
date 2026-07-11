@@ -837,7 +837,7 @@ def _infer_call_return_type(codegen: 'LLVMCodegen', call_expr: 'Call') -> 'EnumT
     if not isinstance(call_expr.callee, Name):
         fn_ty = getattr(call_expr, 'callee_fn_type', None)
         if isinstance(fn_ty, FunctionType):
-            from sushi_lang.backend.generics.results import ensure_result_type_in_table
+            from sushi_lang.semantics.generics.results import ensure_result_type_in_table
             return ensure_result_type_in_table(codegen.enum_table, fn_ty.ok_type, fn_ty.err_type)
 
     func_name = call_expr.callee.id
@@ -868,7 +868,7 @@ def _infer_call_return_type(codegen: 'LLVMCodegen', call_expr: 'Call') -> 'EnumT
         resolver = TypeResolver(codegen.struct_table.by_name, codegen.enum_table.by_name)
         resolved = resolver.resolve(result_type_obj)
         if isinstance(resolved, ResultType):
-            from sushi_lang.backend.generics.results import ensure_result_type_in_table
+            from sushi_lang.semantics.generics.results import ensure_result_type_in_table
             result_enum = ensure_result_type_in_table(
                 codegen.enum_table,
                 resolved.ok_type,
@@ -882,7 +882,7 @@ def _infer_call_return_type(codegen: 'LLVMCodegen', call_expr: 'Call') -> 'EnumT
 
     # Handle ResultType (implicit Result wrapping)
     if isinstance(result_type_obj, ResultType):
-        from sushi_lang.backend.generics.results import ensure_result_type_in_table
+        from sushi_lang.semantics.generics.results import ensure_result_type_in_table
         result_enum = ensure_result_type_in_table(
             codegen.enum_table,
             result_type_obj.ok_type,
@@ -1078,7 +1078,7 @@ def _get_stdlib_function_return_type(codegen: 'LLVMCodegen', func_name: str) -> 
         EnumType for Result<T> or None if not a stdlib function
     """
     from sushi_lang.semantics.typesys import ResultType, UnknownType, EnumType
-    from sushi_lang.backend.generics.results import ensure_result_type_in_table
+    from sushi_lang.semantics.generics.results import ensure_result_type_in_table
     from sushi_lang.semantics.type_resolution import TypeResolver
 
     func_table = codegen.func_table
@@ -1118,7 +1118,7 @@ def _get_stdlib_function_return_type(codegen: 'LLVMCodegen', func_name: str) -> 
             if (isinstance(return_type, GenericTypeRef)
                     and return_type.base_name == "Maybe"
                     and len(return_type.type_args) == 1):
-                from sushi_lang.backend.generics.maybe import ensure_maybe_type_in_table
+                from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
                 element = return_type.type_args[0]
                 resolver = TypeResolver(codegen.struct_table.by_name, codegen.enum_table.by_name)
                 if isinstance(element, UnknownType):

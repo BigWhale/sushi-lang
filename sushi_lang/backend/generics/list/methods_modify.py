@@ -434,7 +434,7 @@ def emit_list_insert(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Str
     # Out of bounds: return Result.Err(StdError.Error)
     codegen.builder.position_at_end(out_of_bounds_block)
     from sushi_lang.semantics.typesys import BuiltinType
-    from sushi_lang.backend.generics.results import ensure_result_type_in_table
+    from sushi_lang.semantics.generics.results import ensure_result_type_in_table
     std_error = codegen.enum_table.by_name.get("StdError")
     result_type = ensure_result_type_in_table(codegen.enum_table, BuiltinType.BLANK, std_error)
     result_llvm_type = codegen.types.ll_type(result_type)
@@ -586,7 +586,7 @@ def emit_list_remove(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Str
     """
     from sushi_lang.backend.expressions import memory
     from sushi_lang.backend import gep_utils
-    from sushi_lang.backend.generics.maybe import ensure_maybe_type_in_table
+    from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
 
     # Extract element type
     element_type = extract_element_type(list_type, codegen)

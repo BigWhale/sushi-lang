@@ -38,11 +38,6 @@ from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType, Type
 import llvmlite.ir as ir
 
-# Public API - validation
-from .validation import (
-    is_builtin_list_method,
-    validate_list_method_with_validator
-)
 from sushi_lang.internals.errors import raise_internal_error
 
 # Public API - LLVM emission
@@ -154,77 +149,3 @@ def emit_list_method(
     return result
 
 
-def parse_list_types(list_type: StructType, validator: Any) -> Optional[Type]:
-    """Parse T type from List<T> type name.
-
-    Args:
-        list_type: The List<T> struct type.
-        validator: Type validator for looking up types.
-
-    Returns:
-        The element type T, or None if parsing fails.
-    """
-    from sushi_lang.semantics.typesys import BuiltinType
-
-    # Extract T from List<T>
-    if not list_type.name.startswith("List<"):
-        return None
-
-    # Parse the type parameter
-    type_param_str = list_type.name[5:-1]  # Remove "List<" and ">"
-
-    # First-class function element type (e.g. List<fn(i32) -> i32>).
-    if type_param_str.startswith("fn(") or type_param_str.startswith("fn ("):
-        from sushi_lang.sushi_stdlib.generics.collections.hashmap.types import resolve_type_from_string
-        try:
-            return resolve_type_from_string(type_param_str, validator)
-        except Exception:
-            return None
-
-    # Resolve type string to Type object
-    # Check for built-in types
-    builtin_map = {
-        'i8': BuiltinType.I8, 'i16': BuiltinType.I16, 'i32': BuiltinType.I32, 'i64': BuiltinType.I64,
-        'u8': BuiltinType.U8, 'u16': BuiltinType.U16, 'u32': BuiltinType.U32, 'u64': BuiltinType.U64,
-        'f32': BuiltinType.F32, 'f64': BuiltinType.F64,
-        'bool': BuiltinType.BOOL, 'string': BuiltinType.STRING,
-    }
-    if type_param_str in builtin_map:
-        return builtin_map[type_param_str]
-
-    # Check for enum types (including generic enums like Maybe<i32>)
-    if hasattr(validator, 'enum_table') and type_param_str in validator.enum_table.by_name:
-        return validator.enum_table.by_name[type_param_str]
-
-    # Check for struct types (including generic structs)
-    if hasattr(validator, 'struct_table') and type_param_str in validator.struct_table.by_name:
-        return validator.struct_table.by_name[type_param_str]
-
-    # Type not found
-    return None
-
-
-__all__ = [
-    # Validation
-    'is_builtin_list_method',
-    'validate_list_method_with_validator',
-    'parse_list_types',
-    # Emission entry point
-    'emit_list_method',
-    # Individual method emitters (for advanced use)
-    'emit_list_new',
-    'emit_list_with_capacity',
-    'emit_list_len',
-    'emit_list_capacity',
-    'emit_list_is_empty',
-    'emit_list_push',
-    'emit_list_pop',
-    'emit_list_get',
-    'emit_list_clear',
-    'emit_list_reserve',
-    'emit_list_shrink_to_fit',
-    'emit_list_destroy',
-    'emit_list_free',
-    'emit_list_debug',
-    'emit_list_iter',
-]

@@ -159,7 +159,7 @@ class TypeMapper:
             case ResultType():
                 # Map ResultType to Result<T, E> enum
                 # Create/get the corresponding enum via ensure_result_type_in_table
-                from sushi_lang.backend.generics.results import ensure_result_type_in_table
+                from sushi_lang.semantics.generics.results import ensure_result_type_in_table
                 result_enum = ensure_result_type_in_table(self.enum_table, t.ok_type, t.err_type)
                 if result_enum:
                     return self._get_enum_type(result_enum)

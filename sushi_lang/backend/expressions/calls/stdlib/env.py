@@ -80,7 +80,7 @@ def emit_env_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
 
         # Wrap in Result.Ok() enum (same as time functions)
         from sushi_lang.semantics.typesys import UnknownType
-        from sushi_lang.backend.generics.results import ensure_result_type_in_table
+        from sushi_lang.semantics.generics.results import ensure_result_type_in_table
 
         # Create Result<i32, EnvError> enum if it doesn't exist
         ok_type = BuiltinType.I32

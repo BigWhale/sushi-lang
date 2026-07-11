@@ -195,7 +195,7 @@ def _propagate_result_enum_type(validator: 'TypeValidator', node: Expr,
 
     if is_result_enum and isinstance(result_type, ResultType):
         # Create/get the corresponding Result enum from table
-        from sushi_lang.backend.generics.results import ensure_result_type_in_table
+        from sushi_lang.semantics.generics.results import ensure_result_type_in_table
         result_enum = ensure_result_type_in_table(
             validator.enum_table,
             result_type.ok_type,

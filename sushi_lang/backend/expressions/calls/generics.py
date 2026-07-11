@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 def try_emit_result_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as Result<T> method. Returns None if not a Result<T> method."""
-    from sushi_lang.backend.generics.results import is_builtin_result_method
+    from sushi_lang.semantics.generics.results import is_builtin_result_method
     from sushi_lang.backend.expressions.calls.utils import infer_semantic_type
 
     method = expr.method
@@ -47,7 +47,7 @@ def try_emit_result_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCa
 
 def try_emit_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as Maybe<T> method. Returns None if not a Maybe<T> method."""
-    from sushi_lang.backend.generics.maybe import is_builtin_maybe_method
+    from sushi_lang.semantics.generics.maybe import is_builtin_maybe_method
     from sushi_lang.backend.expressions.calls.utils import infer_semantic_type
 
     method = expr.method
@@ -74,7 +74,7 @@ def try_emit_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
 
 def try_emit_own_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as Own<T> method. Returns None if not an Own<T> method."""
-    from sushi_lang.backend.generics.own import is_builtin_own_method
+    from sushi_lang.semantics.generics.own import is_builtin_own_method
     from sushi_lang.backend.expressions.calls.utils import infer_semantic_type
 
     method = expr.method
@@ -154,7 +154,7 @@ def try_emit_hashmap_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
 
 def try_emit_list_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as List<T> method. Returns None if not a List<T> method."""
-    from sushi_lang.backend.generics.list import is_builtin_list_method
+    from sushi_lang.semantics.generics.list import is_builtin_list_method
     from sushi_lang.backend.expressions.calls.utils import infer_semantic_type, emit_receiver_as_pointer
 
     method = expr.method

@@ -239,7 +239,7 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
     if isinstance(field_type, GenericTypeRef) and field_type.base_name == "Result":
         # Convert GenericTypeRef("Result", [T, E]) to Result enum
         if len(field_type.type_args) >= 2:
-            from sushi_lang.backend.generics.results import ensure_result_type_in_table
+            from sushi_lang.semantics.generics.results import ensure_result_type_in_table
             ok_type = field_type.type_args[0]
             err_type = field_type.type_args[1]
             result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type)
@@ -247,7 +247,7 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
                 field_type = result_enum
     elif isinstance(field_type, ResultType):
         # Convert ResultType to Result enum
-        from sushi_lang.backend.generics.results import ensure_result_type_in_table
+        from sushi_lang.semantics.generics.results import ensure_result_type_in_table
         result_enum = ensure_result_type_in_table(codegen.enum_table, field_type.ok_type, field_type.err_type)
         if result_enum is not None:
             field_type = result_enum

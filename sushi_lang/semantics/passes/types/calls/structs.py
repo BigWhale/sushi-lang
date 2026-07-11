@@ -111,7 +111,7 @@ def _validate_named_struct_constructor(
         if isinstance(field_type, GenericTypeRef):
             # Special handling for Result<T, E>
             if field_type.base_name == "Result" and len(field_type.type_args) == 2:
-                from sushi_lang.backend.generics.results import ensure_result_type_in_table
+                from sushi_lang.semantics.generics.results import ensure_result_type_in_table
                 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
                 # Resolve type arguments
@@ -193,7 +193,7 @@ def _validate_positional_struct_constructor(
         if isinstance(field_type, GenericTypeRef):
             # Special handling for Result<T, E>
             if field_type.base_name == "Result" and len(field_type.type_args) == 2:
-                from sushi_lang.backend.generics.results import ensure_result_type_in_table
+                from sushi_lang.semantics.generics.results import ensure_result_type_in_table
                 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
                 # Resolve type arguments

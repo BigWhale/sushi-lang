@@ -107,7 +107,7 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
         from sushi_lang.semantics.generics.types import GenericTypeRef
         if isinstance(var_type, GenericTypeRef):
             if var_type.base_name == "Result" and len(var_type.type_args) == 2:
-                from sushi_lang.backend.generics.results import ensure_result_type_in_table
+                from sushi_lang.semantics.generics.results import ensure_result_type_in_table
                 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
                 # Resolve type arguments
@@ -138,7 +138,7 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
 
         # Handle ResultType - ensure it's in the enum table
         elif isinstance(var_type, ResultType):
-            from sushi_lang.backend.generics.results import ensure_result_type_in_table
+            from sushi_lang.semantics.generics.results import ensure_result_type_in_table
             result_enum = ensure_result_type_in_table(
                 codegen.enum_table,
                 var_type.ok_type,
@@ -159,7 +159,7 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
                         from sushi_lang.semantics.generics.types import GenericTypeRef
                         if isinstance(field_type, GenericTypeRef):
                             if field_type.base_name == "Result" and len(field_type.type_args) == 2:
-                                from sushi_lang.backend.generics.results import ensure_result_type_in_table
+                                from sushi_lang.semantics.generics.results import ensure_result_type_in_table
                                 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
                                 # Resolve type arguments
@@ -189,7 +189,7 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
                                     return codegen.enum_table.by_name[concrete_name]
                         # If field type is ResultType, ensure it's in the enum table
                         elif isinstance(field_type, ResultType):
-                            from sushi_lang.backend.generics.results import ensure_result_type_in_table
+                            from sushi_lang.semantics.generics.results import ensure_result_type_in_table
                             result_enum = ensure_result_type_in_table(
                                 codegen.enum_table,
                                 field_type.ok_type,
@@ -574,6 +574,7 @@ def _extract_own_pattern(codegen: 'LLVMCodegen', own_pattern: 'OwnPattern', own_
     from sushi_lang.semantics.ast import Pattern as PatternNode
     from sushi_lang.semantics.typesys import StructType
     from sushi_lang.backend.generics import own as own_module
+    from sushi_lang.semantics.generics.own import get_own_element_type
 
     # Verify this is actually an Own<T> type
     if not isinstance(own_type, StructType) or not own_type.name.startswith("Own<"):
@@ -581,7 +582,7 @@ def _extract_own_pattern(codegen: 'LLVMCodegen', own_pattern: 'OwnPattern', own_
         raise_internal_error("CE0022", type=str(own_type))
 
     # Get element type T from Own<T>
-    element_type = own_module.get_own_element_type(own_type)
+    element_type = get_own_element_type(own_type)
 
     # Unwrap Own<T> via .get() to get the owned value
     unwrapped_value = own_module.emit_own_get(codegen, own_value, element_type)

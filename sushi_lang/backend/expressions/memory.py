@@ -581,7 +581,7 @@ def _clone_own_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struct
     nested Own<Own<T>> descends), malloc a fresh pointee slot, and store the clone -- the
     returned Own owns an independent allocation that its destructor frees exactly once.
     """
-    from sushi_lang.backend.generics.own import get_own_element_type
+    from sushi_lang.semantics.generics.own import get_own_element_type
 
     b = codegen.builder
     elem_ty = get_own_element_type(value_type)

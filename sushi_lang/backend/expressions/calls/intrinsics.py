@@ -78,7 +78,8 @@ def try_emit_struct_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, 
     # Priority 1: Check if resolved_struct_type is set (for generic structs like Own<T>)
     resolved_type = get_resolved_type(expr, 'resolved_struct_type')
     if resolved_type is not None:
-        from sushi_lang.backend.generics.own import is_builtin_own_method, emit_builtin_own_method
+        from sushi_lang.semantics.generics.own import is_builtin_own_method
+        from sushi_lang.backend.generics.own import emit_builtin_own_method
 
         # Check if this is Own<T>
         if isinstance(resolved_type, StructType) and resolved_type.name.startswith("Own<"):
@@ -245,7 +246,7 @@ def try_emit_enum_hash(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
     if isinstance(semantic_type, GenericTypeRef) and semantic_type.base_name == "Result":
         # Convert GenericTypeRef("Result", [T, E]) to Result enum
         if len(semantic_type.type_args) >= 2:
-            from sushi_lang.backend.generics.results import ensure_result_type_in_table
+            from sushi_lang.semantics.generics.results import ensure_result_type_in_table
             ok_type = semantic_type.type_args[0]
             err_type = semantic_type.type_args[1]
             result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type)
@@ -256,7 +257,7 @@ def try_emit_enum_hash(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
     # Convert ResultType to EnumType if needed
     elif isinstance(semantic_type, ResultType):
         # Ensure Result<T, E> enum exists and get it
-        from sushi_lang.backend.generics.results import ensure_result_type_in_table
+        from sushi_lang.semantics.generics.results import ensure_result_type_in_table
         result_enum = ensure_result_type_in_table(codegen.enum_table, semantic_type.ok_type, semantic_type.err_type)
         if result_enum is None:
             return None

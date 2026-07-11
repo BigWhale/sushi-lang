@@ -105,7 +105,7 @@ def emit_byte_array_to_string_checked(codegen: "LLVMCodegen", call: MethodCall, 
         raise_internal_error("CE0023", method="to_string_checked", expected=0, got=len(call.args))
 
     from sushi_lang.semantics.typesys import BuiltinType
-    from sushi_lang.backend.generics.results import ensure_result_type_in_table
+    from sushi_lang.semantics.generics.results import ensure_result_type_in_table
     from sushi_lang.backend.types.arrays.methods.utf8_validate import get_or_emit_utf8_validate
 
     zero = make_i32_const(0)
