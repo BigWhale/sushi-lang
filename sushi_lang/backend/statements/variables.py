@@ -385,10 +385,10 @@ def _emit_dynamic_array_rebind(
             null_ptr = ir.Constant(ir.PointerType(element_type_llvm), None)
 
             # Get pointers to source array fields using helper
-            from sushi_lang.backend.statements import utils
-            len_ptr = utils.gep_struct_field(codegen, source_slot, 0, "len_ptr")
-            cap_ptr = utils.gep_struct_field(codegen, source_slot, 1, "cap_ptr")
-            data_ptr_ptr = utils.gep_struct_field(codegen, source_slot, 2, "data_ptr_ptr")
+            from sushi_lang.backend import gep_utils
+            len_ptr = gep_utils.gep_struct_field(codegen, source_slot, 0, "len_ptr")
+            cap_ptr = gep_utils.gep_struct_field(codegen, source_slot, 1, "cap_ptr")
+            data_ptr_ptr = gep_utils.gep_struct_field(codegen, source_slot, 2, "data_ptr_ptr")
 
             # Nullify source array
             codegen.builder.store(zero_i32, len_ptr)

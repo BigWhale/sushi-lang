@@ -208,7 +208,7 @@ def emit_stdlib_string_call(
         raise_internal_error("CE0077", method=method)
 
     # Declare the external function
-    from sushi_lang.backend.llvm_functions import declare_stdlib_function
+    from sushi_lang.backend.functions import declare_stdlib_function
     stdlib_func = declare_stdlib_function(
         codegen.module,
         func_name,

@@ -260,25 +260,3 @@ def gep_byte_offset(
         offset_ptr = gep_byte_offset(codegen, data_ptr, offset_const, "variant_ptr")
     """
     return codegen.builder.gep(ptr, [offset], name=name)
-
-
-# ============================================================================
-# Backward Compatibility Aliases
-# ============================================================================
-
-# These aliases maintain compatibility with existing code during migration.
-# They delegate to the new centralized functions.
-
-def get_dynamic_array_len_ptr(codegen: 'LLVMCodegen', array_ptr: 'ir.Value') -> 'ir.Value':
-    """Backward compatibility alias for gep_dynamic_array_len."""
-    return gep_dynamic_array_len(codegen, array_ptr)
-
-
-def get_dynamic_array_cap_ptr(codegen: 'LLVMCodegen', array_ptr: 'ir.Value') -> 'ir.Value':
-    """Backward compatibility alias for gep_dynamic_array_cap."""
-    return gep_dynamic_array_cap(codegen, array_ptr)
-
-
-def get_dynamic_array_data_ptr(codegen: 'LLVMCodegen', array_ptr: 'ir.Value') -> 'ir.Value':
-    """Backward compatibility alias for gep_dynamic_array_data."""
-    return gep_dynamic_array_data(codegen, array_ptr)

@@ -32,7 +32,7 @@ from sushi_lang.backend.memory.dynamic_arrays import DynamicArrayManager
 from sushi_lang.backend.memory.moves import MoveTracker
 from sushi_lang.backend.expressions import ExpressionEmitter
 from sushi_lang.backend.statements import StatementEmitter
-from sushi_lang.backend.llvm_functions import LLVMFunctionManager
+from sushi_lang.backend.functions import LLVMFunctionManager
 from sushi_lang.backend.llvm_optimization import LLVMOptimizer
 from sushi_lang.backend.string_constants import StringConstantManager
 from sushi_lang.backend.stdlib_linker import StdlibLinker

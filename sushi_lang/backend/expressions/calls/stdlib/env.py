@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.backend.constants import INT32_BIT_WIDTH, FAT_POINTER_SIZE_BYTES
-from sushi_lang.backend.llvm_constants import FALSE_I1
+from sushi_lang.backend.constants.llvm_values import FALSE_I1
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.backend.utils import require_builder
@@ -45,7 +45,7 @@ def emit_env_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
     # Map user function name to stdlib function name
     stdlib_func_name = f"sushi_{func_name}"
 
-    from sushi_lang.backend.llvm_functions import declare_stdlib_function
+    from sushi_lang.backend.functions import declare_stdlib_function
 
     # String type: {i8* data, i32 size}
     string_type = codegen.types.ll_type(BuiltinType.STRING)

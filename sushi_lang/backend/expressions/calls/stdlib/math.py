@@ -35,7 +35,7 @@ def emit_math_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
     """
     builder = require_builder(codegen)
 
-    from sushi_lang.backend.llvm_functions import declare_stdlib_function
+    from sushi_lang.backend.functions import declare_stdlib_function
 
     # Get argument values
     args = [codegen.expressions.emit_expr(arg) for arg in expr.args]

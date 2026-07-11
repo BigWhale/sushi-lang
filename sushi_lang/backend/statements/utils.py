@@ -247,40 +247,6 @@ def emit_scope_cleanup(codegen: 'LLVMCodegen', cleanup_type: str = 'all') -> Non
 
 
 # ============================================================================
-# GEP (GetElementPtr) Helpers
-# ============================================================================
-
-def gep_struct_field(codegen: 'LLVMCodegen', slot: 'ir.Value', field_index: int, name: str = None) -> 'ir.Value':
-    """Create a GEP instruction to access a struct field.
-
-    This function delegates to backend.gep_utils for centralized GEP logic.
-    Kept for backward compatibility with existing code.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        slot: The pointer to the struct.
-        field_index: The index of the field to access.
-        name: Optional name for the GEP instruction.
-
-    Returns:
-        The GEP instruction (pointer to the field).
-
-    Example:
-        # Before: 3 lines
-        zero = ir.Constant(codegen.i32, 0)
-        len_ptr = codegen.builder.gep(slot, [zero, ir.Constant(codegen.i32, 0)])
-
-        # After: 1 line
-        len_ptr = gep_struct_field(codegen, slot, 0, "len_ptr")
-
-    Note:
-        New code should use backend.gep_utils.gep_struct_field() directly.
-    """
-    from sushi_lang.backend import gep_utils
-    return gep_utils.gep_struct_field(codegen, slot, field_index, name or "")
-
-
-# ============================================================================
 # Basic Block Management Helpers
 # ============================================================================
 

@@ -53,7 +53,7 @@ def emit_stdlib_primitive_call(
     string_struct_type = codegen.types.string_struct
 
     # Declare the external function
-    from sushi_lang.backend.llvm_functions import declare_stdlib_function
+    from sushi_lang.backend.functions import declare_stdlib_function
     stdlib_func = declare_stdlib_function(
         codegen.module,
         func_name,

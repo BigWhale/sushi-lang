@@ -8,7 +8,7 @@ from typing import Any
 from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
 import llvmlite.ir as ir
 from .types import extract_element_type, get_list_len_ptr, get_list_capacity_ptr, get_list_data_ptr
-from sushi_lang.backend.llvm_constants import ZERO_I32, ONE_I32
+from sushi_lang.backend.constants.llvm_values import ZERO_I32, ONE_I32
 
 
 def emit_list_debug(

@@ -8,7 +8,7 @@ from typing import Any
 from sushi_lang.semantics.typesys import Type, StructType
 import llvmlite.ir as ir
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.backend.llvm_constants import LIST_LEN_INDICES, LIST_CAP_INDICES, LIST_DATA_INDICES
+from sushi_lang.backend.constants.llvm_values import LIST_LEN_INDICES, LIST_CAP_INDICES, LIST_DATA_INDICES
 
 
 def extract_element_type(list_type: StructType, codegen: Any) -> Type:

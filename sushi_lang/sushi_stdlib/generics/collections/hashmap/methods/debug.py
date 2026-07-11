@@ -9,7 +9,7 @@ from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
 import llvmlite.ir as ir
 from ..types import get_entry_type, extract_key_value_types, ENTRY_EMPTY, ENTRY_OCCUPIED, ENTRY_TOMBSTONE
-from sushi_lang.backend.llvm_constants import ZERO_I32, make_i32_const, make_i8_const
+from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i32_const, make_i8_const
 
 
 def emit_hashmap_debug(

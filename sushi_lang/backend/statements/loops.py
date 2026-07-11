@@ -155,10 +155,10 @@ def _emit_string_iterator_foreach(codegen: 'LLVMCodegen', node: 'Foreach', itera
         zero: Constant zero for GEP operations.
     """
     from llvmlite import ir
-    from sushi_lang.backend.statements import utils
+    from sushi_lang.backend import gep_utils
 
     # Runtime check: is this a stdin/file iterator (length == -1)?
-    length_ptr = utils.gep_struct_field(codegen, iterator_slot, 1, "length_ptr")
+    length_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 1, "length_ptr")
     length = codegen.builder.load(length_ptr, name="length")
     is_stdin_iter = codegen.builder.icmp_signed("==", length, ir.Constant(codegen.types.i32, -1))
 
@@ -201,7 +201,7 @@ def _emit_stdin_lines_foreach(
     from sushi_lang.sushi_stdlib.src.io.stdio.inline import _emit_readln as _emit_stdin_readln
     from sushi_lang.sushi_stdlib.src.io.files.inline import _emit_readln as _emit_file_readln
     from sushi_lang.sushi_stdlib.src.collections.strings_inline import emit_string_is_empty
-    from sushi_lang.backend.statements import utils
+    from sushi_lang.backend import gep_utils
 
     codegen.builder.position_at_end(stdin_loop_bb)
     stdin_cond_bb = codegen.func.append_basic_block(name="foreach.stdin_cond")
@@ -215,7 +215,7 @@ def _emit_stdin_lines_foreach(
     # Get the FILE* from iterator's data_ptr field
     # For file.lines(), data_ptr stores a pointer to the FILE* pointer
     # For stdin.lines(), data_ptr is NULL
-    data_ptr_ptr = utils.gep_struct_field(codegen, iterator_slot, 2, "file_ptr_ptr")
+    data_ptr_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 2, "file_ptr_ptr")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="file_ptr_ptr")
 
     # Check if data_ptr is NULL (indicates stdin.lines())
@@ -292,11 +292,11 @@ def _emit_array_foreach(codegen: 'LLVMCodegen', node: 'Foreach', iterator_slot: 
         zero: Constant zero for GEP operations.
     """
     from llvmlite import ir
-    from sushi_lang.backend.statements import utils
+    from sushi_lang.backend import gep_utils
 
     # For non-string iterators, skip stdin path entirely
     end_bb = codegen.func.append_basic_block(name="foreach.end")
-    length_ptr = utils.gep_struct_field(codegen, iterator_slot, 1, "length_ptr")
+    length_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 1, "length_ptr")
     _emit_array_foreach_body(codegen, node, iterator_slot, zero, length_ptr, end_bb)
 
 
@@ -319,7 +319,7 @@ def _emit_array_foreach_body(
         end_bb: The loop end block.
     """
     from llvmlite import ir
-    from sushi_lang.backend.statements import utils
+    from sushi_lang.backend import gep_utils
     from sushi_lang.semantics.typesys import BuiltinType
 
     cond_bb = codegen.func.append_basic_block(name="foreach.cond")
@@ -331,7 +331,7 @@ def _emit_array_foreach_body(
     codegen.builder.position_at_end(cond_bb)
 
     # Get current_index (field 0)
-    index_ptr = utils.gep_struct_field(codegen, iterator_slot, 0, "index_ptr")
+    index_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 0, "index_ptr")
     current_index = codegen.builder.load(index_ptr, name="current_index")
 
     # Reload length (field 1)
@@ -347,7 +347,7 @@ def _emit_array_foreach_body(
     codegen.memory.push_scope()
 
     # Get the current element: data_ptr[current_index]
-    data_ptr_ptr = utils.gep_struct_field(codegen, iterator_slot, 2, "data_ptr_ptr")
+    data_ptr_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 2, "data_ptr_ptr")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
     # Index into the array: data_ptr[current_index]
@@ -400,7 +400,7 @@ def _emit_hashmap_foreach(
         method: One of "keys", "values", or "entries".
     """
     from llvmlite import ir
-    from sushi_lang.backend.statements import utils
+    from sushi_lang.backend import gep_utils
     from sushi_lang.sushi_stdlib.generics.collections.hashmap.types import (
         extract_key_value_types, get_entry_type, get_user_entry_type,
         ensure_entry_type_in_struct_table, ENTRY_OCCUPIED,
@@ -431,10 +431,10 @@ def _emit_hashmap_foreach(
     # === Condition: current_index < capacity ===
     codegen.builder.position_at_end(cond_bb)
 
-    index_ptr = utils.gep_struct_field(codegen, iterator_slot, 0, "index_ptr")
+    index_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 0, "index_ptr")
     current_index = codegen.builder.load(index_ptr, name="current_index")
 
-    capacity_ptr = utils.gep_struct_field(codegen, iterator_slot, 1, "capacity_ptr")
+    capacity_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 1, "capacity_ptr")
     marked_capacity = codegen.builder.load(capacity_ptr, name="marked_capacity")
 
     # Extract actual capacity: marked_capacity & 0x1FFFFFFF (mask off bits 29-31)
@@ -449,7 +449,7 @@ def _emit_hashmap_foreach(
     codegen.builder.position_at_end(check_occupied_bb)
 
     # Get the data pointer (stored as element type pointer in iterator)
-    data_ptr_ptr = utils.gep_struct_field(codegen, iterator_slot, 2, "data_ptr_ptr")
+    data_ptr_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 2, "data_ptr_ptr")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="entries_ptr_as_element")
 
     # Cast to internal Entry<K,V,state>* to access the entry structure
@@ -460,7 +460,7 @@ def _emit_hashmap_foreach(
     current_entry_ptr = codegen.builder.gep(entries_ptr, [current_index], name="current_entry_ptr")
 
     # Access the state field (field 2) of internal Entry<K,V,state>
-    state_ptr = utils.gep_struct_field(codegen, current_entry_ptr, 2, "state_ptr")
+    state_ptr = gep_utils.gep_struct_field(codegen, current_entry_ptr, 2, "state_ptr")
     state = codegen.builder.load(state_ptr, name="entry_state")
 
     # Check if state == ENTRY_OCCUPIED (1)
@@ -476,10 +476,10 @@ def _emit_hashmap_foreach(
         # Construct user-facing Entry<K, V> struct {key, value} from internal {key, value, state}
         user_entry_llvm = get_user_entry_type(codegen, key_type, value_type)
 
-        key_ptr = utils.gep_struct_field(codegen, current_entry_ptr, 0, "entry_key_ptr")
+        key_ptr = gep_utils.gep_struct_field(codegen, current_entry_ptr, 0, "entry_key_ptr")
         key_val = codegen.builder.load(key_ptr, name="entry_key")
 
-        value_ptr = utils.gep_struct_field(codegen, current_entry_ptr, 1, "entry_value_ptr")
+        value_ptr = gep_utils.gep_struct_field(codegen, current_entry_ptr, 1, "entry_value_ptr")
         value_val = codegen.builder.load(value_ptr, name="entry_value")
 
         # Build the 2-field struct
@@ -493,7 +493,7 @@ def _emit_hashmap_foreach(
         codegen.variable_types[node.item_name] = element_type
     else:
         # Extract the key (field 0) or value (field 1) from the current entry
-        element_ptr = utils.gep_struct_field(codegen, current_entry_ptr, entry_field_index, "element_ptr")
+        element_ptr = gep_utils.gep_struct_field(codegen, current_entry_ptr, entry_field_index, "element_ptr")
         element_value = codegen.builder.load(element_ptr, name=node.item_name)
 
         element_ll_type = codegen.types.ll_type(element_type)

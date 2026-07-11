@@ -394,7 +394,7 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
 
     # Fallback: Declare stdlib string extension methods if not found
     if llvm_fn is None and lang_type == "string":
-        from sushi_lang.backend.llvm_functions import declare_stdlib_function
+        from sushi_lang.backend.functions import declare_stdlib_function
         from sushi_lang.sushi_stdlib.src.collections.strings import get_builtin_string_method_return_type
         from sushi_lang.semantics.typesys import BuiltinType
 

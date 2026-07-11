@@ -671,7 +671,7 @@ def _clone_enum_value(codegen: 'LLVMCodegen', value: ir.Value, value_type) -> ir
     have an address; the mutated value is reloaded as a single dominating SSA result.
     """
     from sushi_lang.backend.destructors import needs_cleanup
-    from sushi_lang.backend.llvm_constants import ZERO_I32, ONE_I32, make_i32_const
+    from sushi_lang.backend.constants.llvm_values import ZERO_I32, ONE_I32, make_i32_const
 
     b = codegen.builder
     variants_nc = [

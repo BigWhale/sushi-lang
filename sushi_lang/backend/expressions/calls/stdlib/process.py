@@ -45,7 +45,7 @@ def emit_process_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: b
     # Map user function name to stdlib function name
     stdlib_func_name = f"sushi_{func_name}"
 
-    from sushi_lang.backend.llvm_functions import declare_stdlib_function
+    from sushi_lang.backend.functions import declare_stdlib_function
 
     # String type: {i8* data, i32 size}
     string_type = codegen.types.ll_type(BuiltinType.STRING)

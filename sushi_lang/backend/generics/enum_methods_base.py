@@ -102,7 +102,7 @@ def emit_enum_realise(
     # Get the LLVM type for T
     value_llvm_type = codegen.types.ll_type(t_type)
 
-    # Extract (is_success, value) from enum using the helper from llvm_functions.py
+    # Extract (is_success, value) from enum using the helper on the function manager
     # This helper handles the complex unpacking of the enum's [N x i8] data field
     # Pass semantic type for accurate size calculation (critical for struct types)
     is_success, unpacked_value = codegen.functions._extract_value_from_result_enum(
