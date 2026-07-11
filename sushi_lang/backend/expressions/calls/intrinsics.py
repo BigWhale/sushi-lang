@@ -313,7 +313,7 @@ def try_emit_primitive_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, Do
     if str(semantic_type) not in ['i8', 'i16', 'i32', 'i64', 'u8', 'u16', 'u32', 'u64', 'f32', 'f64', 'bool', 'string']:
         return None
 
-    from sushi_lang.backend.types.primitives import is_builtin_primitive_method
+    from sushi_lang.semantics.generics.primitives import is_builtin_primitive_method
     if not is_builtin_primitive_method(expr.method):
         return None
 
