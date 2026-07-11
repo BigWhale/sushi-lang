@@ -5,9 +5,7 @@
 # "true", so asserting them guards the fix.
 #
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: PASS: contains method
-# EXPECT_STDOUT_CONTAINS: PASS: starts_with method
-# EXPECT_STDOUT_CONTAINS: PASS: ends_with method
+# EXPECT_STDOUT_EXACT: "PASS: Chained method calls\n\nPASS: contains method\n\nPASS: starts_with method\n\nPASS: ends_with method\n\nPASS: count method\n\n"
 
 use <collections/strings>
 

@@ -1,7 +1,7 @@
 # Top-down context typing flows the expected type into binary-op operands
 # (Bug E / PR 2c), so a const/let bitwise expression of bare literals is typed.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: "bitwise ok"
+# EXPECT_STDOUT_EXACT: "bitwise ok\n"
 
 const u32 FLAGS = 0x01 | 0x02 | 0x04
 

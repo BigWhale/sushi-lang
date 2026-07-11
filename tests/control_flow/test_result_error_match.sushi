@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Got error
+# EXPECT_STDOUT_EXACT: "Got error\n"
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Got error
 

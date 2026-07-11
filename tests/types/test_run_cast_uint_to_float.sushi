@@ -1,0 +1,9 @@
+# Guards PLAN.md T1.1: an unsigned-to-float cast must emit `uitofp`, not `sitofp`.
+# cast_int_to_float always emits sitofp, so a u64 above i64::MAX becomes negative.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1.8e+19\n"
+fn main() i32:
+    let u64 big = 18000000000000000000 as u64
+    let f64 f = big as f64
+    println(f)
+    return Result.Ok(0)

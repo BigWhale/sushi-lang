@@ -1,6 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 5
-# EXPECT_STDOUT_CONTAINS: 50
-# EXPECT_STDOUT_CONTAINS: 100
+# EXPECT_STDOUT_EXACT: "5\n10\n50\n2\n100\n200\n3\n9\n5\n"
 # Test move semantics for dynamic arrays
 # This test verifies that variable-to-variable rebinding transfers ownership
 # and prevents double-free crashes

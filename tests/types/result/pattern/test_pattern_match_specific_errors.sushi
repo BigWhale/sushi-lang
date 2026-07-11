@@ -1,7 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: PASS: NotFound pattern works
-# EXPECT_STDOUT_CONTAINS: PASS: PermissionDenied pattern works
-# EXPECT_STDOUT_CONTAINS: PASS: AlreadyExists pattern works
+# EXPECT_STDOUT_EXACT: "PASS: NotFound pattern works\nPASS: PermissionDenied pattern works\nPASS: AlreadyExists pattern works\n"
 # EXPECT_STDERR_EMPTY: true
 
 # Tests pattern matching on specific error variants

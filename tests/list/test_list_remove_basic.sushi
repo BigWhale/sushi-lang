@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Removed 30 successfully
-# EXPECT_STDOUT_CONTAINS: Basic remove test passed!
+# EXPECT_STDOUT_EXACT: "Removed 30 successfully\nBasic remove test passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<T> remove method - basic functionality

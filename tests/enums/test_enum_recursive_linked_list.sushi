@@ -1,7 +1,7 @@
 # Test recursive enum (string-keyed linked list) using Own<T> heap allocation
 # Validates length counting via recursion and RAII cleanup of Own<T> nodes
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: StrList length: 2
+# EXPECT_STDOUT_EXACT: "StrList length: 2\n"
 
 enum StrList:
     Nil

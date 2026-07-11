@@ -16,6 +16,7 @@ import llvmlite.ir as ir
 from ..types import get_entry_type, extract_key_value_types, ENTRY_EMPTY, ENTRY_OCCUPIED, ENTRY_TOMBSTONE
 from ..utils import emit_key_equality_check, emit_insert_entry
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.memory.heap import emit_malloc
 
 
 def emit_hashmap_insert(
@@ -422,6 +423,12 @@ def emit_hashmap_remove(
     entry_value_ptr = builder.gep(entry_ptr, [zero_i32, one_i32], name="entry_value_ptr")
     entry_value = builder.load(entry_value_ptr, name="entry_value")
 
+    # Destroy the removed key (the map owned it); the value is moved out into the
+    # returned Maybe.Some, so it must NOT be destroyed. Without this, a heap-owning
+    # key (e.g. a string) is leaked when its entry becomes a tombstone.
+    from sushi_lang.backend.destructors import emit_value_destructor
+    emit_value_destructor(codegen, builder, entry_key_ptr, key_type)
+
     # Mark entry as Tombstone
     builder.store(ir.Constant(codegen.types.i8, ENTRY_TOMBSTONE), state_ptr)
 
@@ -468,6 +475,9 @@ def emit_hashmap_remove(
     data_value = builder.load(data_ptr, name="some_data")
     maybe_some = builder.insert_value(maybe_some, data_value, 1, name="maybe_some_value")
 
+    # Capture the live block: destroying an owning key above may have inserted
+    # basic blocks, so the phi predecessor is no longer found_bb.
+    found_pred_bb = builder.block
     builder.branch(remove_done_bb)
 
     # Not found: return Maybe.None()
@@ -489,7 +499,7 @@ def emit_hashmap_remove(
     # Done: merge results
     builder.position_at_end(remove_done_bb)
     result_phi = builder.phi(maybe_llvm_type, name="remove_result")
-    result_phi.add_incoming(maybe_some, found_bb)
+    result_phi.add_incoming(maybe_some, found_pred_bb)
     result_phi.add_incoming(maybe_none, not_found_bb)
 
     return result_phi
@@ -566,9 +576,8 @@ def emit_hashmap_resize_to_capacity(
     total_bytes = builder.mul(entry_size, new_capacity, name="bucket_bytes")
 
     # Call malloc
-    malloc_fn = codegen.get_malloc_func()
     total_bytes_i64 = builder.zext(total_bytes, ir.IntType(64), name="total_bytes_i64")
-    new_bucket_ptr_i8 = builder.call(malloc_fn, [total_bytes_i64], name="new_buckets_raw")
+    new_bucket_ptr_i8 = emit_malloc(codegen, builder, total_bytes_i64)
     new_bucket_ptr = builder.bitcast(new_bucket_ptr_i8, ir.PointerType(entry_type), name="new_buckets_ptr")
 
     # Initialize all new entries to Empty
@@ -891,9 +900,8 @@ def emit_hashmap_free(
     total_bytes = builder.mul(entry_size, initial_capacity, name="bucket_bytes")
 
     # Call malloc
-    malloc_fn = codegen.get_malloc_func()
     total_bytes_i64 = builder.zext(total_bytes, ir.IntType(64), name="total_bytes_i64")
-    new_bucket_ptr_i8 = builder.call(malloc_fn, [total_bytes_i64], name="new_buckets_raw")
+    new_bucket_ptr_i8 = emit_malloc(codegen, builder, total_bytes_i64)
     new_bucket_ptr = builder.bitcast(new_bucket_ptr_i8, ir.PointerType(entry_type), name="new_buckets_ptr")
 
     # Initialize all new entries to Empty

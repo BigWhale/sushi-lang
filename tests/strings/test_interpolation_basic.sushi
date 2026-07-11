@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Number: 42, Name: Arthur
+# EXPECT_STDOUT_EXACT: "Number: 42, Name: Arthur"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 

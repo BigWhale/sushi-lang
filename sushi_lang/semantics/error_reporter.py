@@ -46,6 +46,10 @@ class PassErrorReporter:
             reporter: The Reporter instance to emit errors to.
         """
         self.reporter = reporter
+        # When True, emit() / emit_with() are no-ops. Used by a pass that needs a
+        # DRY analysis run whose diagnostics must not reach the user -- e.g. the borrow
+        # checker's first (fixed-point discovery) pass over a loop body.
+        self.suppressed = False
 
     def emit(self, error_msg: er.ErrorMessage, span: Optional[Span], **kwargs) -> None:
         """Emit an error or warning.
@@ -59,8 +63,25 @@ class PassErrorReporter:
             >>> self.err.emit(er.ERR.CE1001, span, name="undefined_var")
             >>> self.err.emit(er.ERR.CE2002, span, expected="i32", got="string")
         """
+        if self.suppressed:
+            return
         er.emit(self.reporter, error_msg, span, **kwargs)
 
     def emit_with(self, error_msg: er.ErrorMessage, span: Optional[Span], **kwargs) -> DiagnosticBuilder:
         """Emit an error or warning and return a builder for attaching notes/help."""
+        if self.suppressed:
+            return _NullDiagnosticBuilder()  # type: ignore[return-value]  # no-op stand-in
         return er.emit_with(self.reporter, error_msg, span, **kwargs)
+
+
+class _NullDiagnosticBuilder:
+    """No-op stand-in returned by a suppressed emit_with(); swallows .note()/.emit()."""
+
+    def note(self, *args, **kwargs) -> "_NullDiagnosticBuilder":
+        return self
+
+    def help(self, *args, **kwargs) -> "_NullDiagnosticBuilder":
+        return self
+
+    def emit(self, *args, **kwargs) -> None:
+        return None

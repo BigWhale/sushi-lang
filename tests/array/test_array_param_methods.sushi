@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 202120044
+# EXPECT_STDOUT_EXACT: "202120044"
 # Test method calls on array parameters. pop_last/chain_methods borrow &poke, so their
 # mutations are visible to the caller (flags.len()==2 after pop, test_arr.len()==4 after
 # two pushes) -- unlike a by-value array param, whose header copy would lose them.

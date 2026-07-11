@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Matrix[0][1] = 2
-# EXPECT_STDOUT_CONTAINS: Nested list tests passed!
+# EXPECT_STDOUT_EXACT: "Matrix[0][1] = 2\nNested list tests passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test nested List<List<T>>

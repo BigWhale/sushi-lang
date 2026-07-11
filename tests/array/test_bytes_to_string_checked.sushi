@@ -1,12 +1,6 @@
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
-# EXPECT_STDOUT_CONTAINS: "valid=hié"
-# EXPECT_STDOUT_CONTAINS: "overlong=ERR"
-# EXPECT_STDOUT_CONTAINS: "surrogate=ERR"
-# EXPECT_STDOUT_CONTAINS: "emoji=OK"
-# EXPECT_STDOUT_CONTAINS: "truncated=ERR"
-# EXPECT_STDOUT_CONTAINS: "maxvalid=OK"
-# EXPECT_STDOUT_CONTAINS: "toobig=ERR"
+# EXPECT_STDOUT_EXACT: "valid=hié\noverlong=ERR\nsurrogate=ERR\nemoji=OK\ntruncated=ERR\nmaxvalid=OK\ntoobig=ERR\n"
 #
 # u8[].to_string_checked() -> Result<string, StdError> validates UTF-8
 # (Unicode Table 3-7: rejects overlong, surrogates, and > U+10FFFF).

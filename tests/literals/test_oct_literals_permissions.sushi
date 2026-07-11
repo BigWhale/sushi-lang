@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Mostly Harmless
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n1808\n"
 # Test octal literals for Unix permissions
 
 fn main() i32:
@@ -26,4 +26,5 @@ fn main() i32:
     let i32 sum = PERM_0644 + PERM_0755 + PERM_0777 + PERM_0600
     if (owner_rwx and group_rx and other_rx):
         println("Mostly Harmless")
-    return Result.Ok(sum)
+    println(sum)
+    return Result.Ok(0)

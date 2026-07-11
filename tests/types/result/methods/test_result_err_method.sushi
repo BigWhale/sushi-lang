@@ -1,6 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: PASS: err returns None for Ok
-# EXPECT_STDOUT_CONTAINS: PASS: err returns Some(error) for Err
+# EXPECT_STDOUT_EXACT: "PASS: err returns None for Ok\nPASS: err returns Some(error) for Err\n"
 # EXPECT_STDERR_EMPTY: true
 
 # Tests err method that returns Maybe<E>

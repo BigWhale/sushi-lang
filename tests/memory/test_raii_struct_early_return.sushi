@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: "Result1: 1"
-# EXPECT_STDOUT_CONTAINS: "Result2: 2"
+# EXPECT_STDOUT_EXACT: "Early return - RAII should clean up\nResult1: 1\nNormal path\nResult2: 2\n"
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0

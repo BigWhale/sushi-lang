@@ -1,7 +1,6 @@
 # Test Maybe<CustomEnum>: functions returning Maybe<EnumType>, match on Some/None
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: Found red
-# EXPECT_STDOUT_CONTAINS: Maybe<Color>: all passed
+# EXPECT_STDOUT_EXACT: "Found red\nPurple not found\nMaybe<Color>: all passed\n"
 
 enum Color:
     Red

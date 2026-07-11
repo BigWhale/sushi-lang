@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: PASS: Single-quote string literal
-# EXPECT_STDOUT_CONTAINS: PASS: Single-quote equals double-quote
+# EXPECT_STDOUT_EXACT: "PASS: Single-quote string literal\n\nPASS: Single-quote equals double-quote\n\nPASS: Single-quote assignment\n\n"
 # Test basic single-quote string functionality
 
 fn test_literal() ~:

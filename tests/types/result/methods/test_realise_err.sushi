@@ -1,5 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: PASS: realise on Err returns default
+# EXPECT_STDOUT_EXACT: "PASS: realise on Err returns default\n"
 # EXPECT_STDERR_EMPTY: true
 
 # Tests realise method on Err variant

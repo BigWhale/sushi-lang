@@ -1,6 +1,5 @@
-# EXPECT_STDOUT_CONTAINS: Signed: -8 >> 2 = -2
-# EXPECT_STDOUT_CONTAINS: Unsigned: 248 >> 2 = 62
-# EXPECT_STDOUT_CONTAINS: All right shift tests passed!
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Signed: -8 >> 2 = -2\nUnsigned: 248 >> 2 = 62\nComplex signed: (-16 + 8) >> 2 = -2\nComplex unsigned: (240 + 8) >> 2 = 62\nAll right shift tests passed!\n"
 use <io/stdio>
 
 fn main() i32:
@@ -19,11 +18,15 @@ fn main() i32:
     let i32 complex_signed = (x + 8) >> 2  # (-16 + 8) >> 2 = -8 >> 2 = -2
     println("Complex signed: (-16 + 8) >> 2 = {complex_signed}")  # Expected: -2
 
-    # Note: Complex unsigned expression skipped due to compiler bug with u32 arithmetic
+    # Complex expression - unsigned. Previously omitted; the defect it avoided no
+    # longer exists.
+    let u32 y = 240 as u32
+    let u32 complex_unsigned = (y + (8 as u32)) >> 2  # (240 + 8) >> 2 = 248 >> 2 = 62
+    println("Complex unsigned: (240 + 8) >> 2 = {complex_unsigned}")  # Expected: 62
 
     # Verify correctness
     if (result_signed == -2 and result_unsigned == 62 as u32 and
-        complex_signed == -2):
+        complex_signed == -2 and complex_unsigned == 62 as u32):
         println("All right shift tests passed!")
         return Result.Ok(0)
 

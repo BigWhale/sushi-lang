@@ -1,5 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: PASS: Wildcard error pattern works
+# EXPECT_STDOUT_EXACT: "PASS: Wildcard error pattern works\n"
 # EXPECT_STDERR_EMPTY: true
 
 # Tests pattern matching with wildcard for any error

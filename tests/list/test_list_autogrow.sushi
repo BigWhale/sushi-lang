@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Autogrow tests passed!
+# EXPECT_STDOUT_EXACT: "Autogrow tests passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<T> automatic growth (2x exponential)

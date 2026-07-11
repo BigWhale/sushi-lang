@@ -16,6 +16,10 @@ BUILTIN_INTEGER_TYPES: Set[BuiltinType] = {
     BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64
 }
 
+BUILTIN_UNSIGNED_INTEGER_TYPES: Set[BuiltinType] = {
+    BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64
+}
+
 BUILTIN_FLOAT_TYPES: Set[BuiltinType] = {
     BuiltinType.F32, BuiltinType.F64
 }
@@ -87,6 +91,18 @@ def is_float_type(ty: Type) -> bool:
         False
     """
     return ty in BUILTIN_FLOAT_TYPES
+
+
+def is_unsigned_int(ty: Optional[Type]) -> bool:
+    """Check if a type is an unsigned integer type (u8/u16/u32/u64).
+
+    Args:
+        ty: The type to check (None-safe).
+
+    Returns:
+        True if the type is an unsigned integer type, False otherwise.
+    """
+    return ty in BUILTIN_UNSIGNED_INTEGER_TYPES
 
 
 def is_string_convertible(ty: Type) -> bool:

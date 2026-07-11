@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Push/pop tests passed!
+# EXPECT_STDOUT_EXACT: "Push/pop tests passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<T> push and pop operations

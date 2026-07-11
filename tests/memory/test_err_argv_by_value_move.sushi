@@ -1,0 +1,16 @@
+# main's `string[] args` is a BORROWED view of the process argv: its strings alias C
+# memory and the array buffer is owned and freed by the runtime, not by user_main.
+# Passing it by value to a function MOVES it, so the callee would free the argv wrapper
+# at scope exit and the runtime frees it again -- a double free (SIGTRAP, exit 133).
+#
+# Moving a borrowed view is unsound, so this must not compile: the borrow checker stamps
+# main's args as an argv view and rejects a by-value move with CE2410, directing the user
+# to borrow it with `&peek string[]` (which use_args would take as `&peek string[] a`).
+# EXPECT_ERROR_CODE: CE2410
+
+fn use_args(string[] a) i32:
+    return Result.Ok(a.len())
+
+fn main(string[] args) i32:
+    println(use_args(args).realise(-1))
+    return Result.Ok(0)

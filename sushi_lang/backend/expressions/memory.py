@@ -11,6 +11,7 @@ from llvmlite import ir
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.semantics.typesys import StructType, DynamicArrayType, EnumType, Type
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.memory.heap import emit_malloc
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -143,48 +144,6 @@ def get_type_size(llvm_type: ir.Type) -> int:
         return calculate_llvm_type_size(llvm_type)
 
 
-def emit_malloc_call(codegen: 'LLVMCodegen', size_bytes: ir.Value) -> ir.Value:
-    """Emit malloc() call with error checking.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        size_bytes: Number of bytes to allocate (i64).
-
-    Returns:
-        Allocated pointer (i8*).
-
-    Note:
-        Emits runtime error RE2021 and exits if malloc returns NULL.
-    """
-    malloc_func = codegen.get_malloc_func()
-
-    # Ensure size is i64
-    if size_bytes.type != ir.IntType(INT64_BIT_WIDTH):
-        size_bytes = codegen.builder.zext(size_bytes, ir.IntType(INT64_BIT_WIDTH))
-
-    # Call malloc
-    ptr = codegen.builder.call(malloc_func, [size_bytes])
-
-    # Check for NULL
-    null_ptr = ir.Constant(ir.PointerType(codegen.types.i8), None)
-    is_null = codegen.builder.icmp_unsigned('==', ptr, null_ptr, name="is_null")
-
-    malloc_failed_bb = codegen.builder.append_basic_block(name="malloc_failed")
-    malloc_success_bb = codegen.builder.append_basic_block(name="malloc_success")
-
-    codegen.builder.cbranch(is_null, malloc_failed_bb, malloc_success_bb)
-
-    # Failed block
-    codegen.builder.position_at_end(malloc_failed_bb)
-    codegen.runtime.errors.emit_runtime_error("RE2021", "memory allocation failed")
-    codegen.builder.unreachable()
-
-    # Success block
-    codegen.builder.position_at_end(malloc_success_bb)
-
-    return ptr
-
-
 def emit_realloc_call(codegen: 'LLVMCodegen', old_ptr: ir.Value, new_size: ir.Value) -> ir.Value:
     """Emit realloc() call with error checking.
 
@@ -303,7 +262,7 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     total_bytes = codegen.builder.mul(cap_i64, sizeof_element_i64)
 
     # Use our malloc wrapper with error checking
-    new_data_ptr_i8 = emit_malloc_call(codegen, total_bytes)
+    new_data_ptr_i8 = emit_malloc(codegen, codegen.builder, total_bytes)
     new_data_ptr = codegen.builder.bitcast(new_data_ptr_i8, ir.PointerType(element_llvm_type))
 
     # Copy elements (manual loop for portability)
@@ -416,7 +375,7 @@ def move_owning_arg_into_container(codegen: 'LLVMCodegen', arg_ast) -> None:
             or name in da.arrays
             or name in da.lists
             or name in da.owned_pointers):
-        codegen.moves.mark(name)
+        codegen.memory.mark_struct_as_moved(name)
 
 
 def deep_copy_struct(codegen: 'LLVMCodegen', struct_value: ir.Value, struct_type: StructType) -> ir.Value:
@@ -605,7 +564,7 @@ def _clone_string_value(codegen: 'LLVMCodegen', fat: ir.Value) -> ir.Value:
     is_owned = b.icmp_unsigned("!=", owned, ir.Constant(owned.type, 0))
     with b.if_then(is_owned):
         size_i64 = b.zext(size, ir.IntType(INT64_BIT_WIDTH))
-        new_data = emit_malloc_call(codegen, size_i64)  # i8*
+        new_data = emit_malloc(codegen, codegen.builder, size_i64)  # i8*
         b.call(_declare_memcpy(codegen),
                [new_data, data, size_i64, ir.Constant(ir.IntType(1), 0)])
         cloned = b.insert_value(fat, new_data, 0)
@@ -636,7 +595,7 @@ def _clone_own_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struct
     with b.if_then(is_not_null):
         pointee = b.load(ptr, name="own_pointee")
         cloned_pointee = emit_value_clone(codegen, pointee, elem_ty)
-        new_raw = emit_malloc_call(codegen, codegen.types.get_type_size_constant(elem_ty))
+        new_raw = emit_malloc(codegen, codegen.builder, codegen.types.get_type_size_constant(elem_ty))
         new_ptr = b.bitcast(new_raw, ir.PointerType(elem_llvm), name="own_new_ptr")
         b.store(cloned_pointee, new_ptr)
         b.store(b.insert_value(value, new_ptr, 0), slot)
@@ -670,7 +629,7 @@ def _clone_list_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struc
                                ir.IntType(INT64_BIT_WIDTH))
         cap_i64 = b.zext(cap, ir.IntType(INT64_BIT_WIDTH))
         total_bytes = b.mul(cap_i64, elem_size_i64)
-        new_raw = emit_malloc_call(codegen, total_bytes)
+        new_raw = emit_malloc(codegen, codegen.builder, total_bytes)
         new_data = b.bitcast(new_raw, ir.PointerType(elem_llvm), name="list_new_data")
 
         len_i64 = b.zext(length, ir.IntType(INT64_BIT_WIDTH))

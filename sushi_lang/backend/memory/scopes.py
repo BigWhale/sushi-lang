@@ -51,17 +51,21 @@ class ScopeManager:
         self._locals: Dict[str, List[tuple[int, ir.AllocaInstr]]] = {}
         self._types: Dict[str, List[tuple[int, 'Type']]] = {}
 
-        # Struct cleanup tracking: variable name -> (StructType, alloca)
-        # Only stores structs that need RAII cleanup (not duplicated per scope)
-        self._struct_cleanup: Dict[str, tuple['StructType', ir.AllocaInstr]] = {}
+        # Struct cleanup tracking: variable name -> stack of (scope_level, StructType, alloca).
+        # Stacked like _locals so a nested shadow of an owning struct does not overwrite the
+        # outer entry: the inner binding pushes and its pop drains only the top-at-depth,
+        # leaving the outer binding to be freed by the outer pop (a flat dict leaked it).
+        # Only stores structs that need RAII cleanup.
+        self._struct_cleanup: Dict[str, List[tuple[int, 'StructType', ir.AllocaInstr]]] = {}
 
-        # Closure (function-value) cleanup tracking: variable name -> alloca holding
-        # the {fn_ptr, env_ptr, drop_ptr} fat value. Every function-typed `let` local is
-        # registered; the free is runtime-guarded by drop_ptr, so a non-capturing value
-        # frees to a no-op (capture is erased from the `fn(...)` type). Function
-        # PARAMETERS are deliberately NOT registered -- a passed closure is owned by the
-        # caller's binding, not the callee (freeing it here would double-free).
-        self._closure_cleanup: Dict[str, ir.AllocaInstr] = {}
+        # Closure (function-value) cleanup tracking: variable name -> stack of
+        # (scope_level, alloca) holding the {fn_ptr, env_ptr, drop_ptr} fat value. Stacked
+        # like _locals for shadow-correctness (see _struct_cleanup). Every function-typed
+        # `let` local is registered; the free is runtime-guarded by drop_ptr, so a
+        # non-capturing value frees to a no-op (capture is erased from the `fn(...)` type).
+        # Function PARAMETERS are deliberately NOT registered -- a passed closure is owned by
+        # the caller's binding, not the callee (freeing it here would double-free).
+        self._closure_cleanup: Dict[str, List[tuple[int, ir.AllocaInstr]]] = {}
 
         # Struct move tracking is delegated to the unified codegen.moves MoveTracker.
 
@@ -91,10 +95,31 @@ class ScopeManager:
 
         # String-value RAII (#145): local `string` bindings whose heap buffer is freed at
         # scope exit via the owned bit (a literal/borrow carries owned=0 -> the free is a
-        # runtime no-op). Name-keyed like _closure_cleanup; move-tracked via MoveTracker so
-        # a returned/aliased owning string is skipped (its new owner frees it). Parameters
-        # are NOT registered -- a passed string is owned by the caller's binding.
-        self._string_cleanup: Dict[str, ir.AllocaInstr] = {}
+        # runtime no-op). Stacked like _closure_cleanup for shadow-correctness; move-tracked
+        # via MoveTracker so a returned/aliased owning string is skipped (its new owner frees
+        # it). Parameters are NOT registered -- a passed string is owned by the caller's binding.
+        self._string_cleanup: Dict[str, List[tuple[int, ir.AllocaInstr]]] = {}
+
+    @staticmethod
+    def _stack_peek_slot(reg: Dict[str, List], name: str) -> Optional[ir.AllocaInstr]:
+        """Return the innermost registered slot for `name` in a stacked cleanup registry.
+
+        The slot is the LAST element of each entry tuple ((depth, slot) or
+        (depth, type, slot)). Returns None if the name has no live registration.
+        """
+        entries = reg.get(name)
+        if entries:
+            return entries[-1][-1]
+        return None
+
+    @staticmethod
+    def _stack_pop_at_depth(reg: Dict[str, List], name: str, depth: int) -> None:
+        """Drop `name`'s top entry from a stacked cleanup registry if it is at `depth`."""
+        entries = reg.get(name)
+        if entries and entries[-1][0] == depth:
+            entries.pop()
+            if not entries:
+                del reg[name]
 
     def push_scope(self) -> None:
         """Push a new lexical scope onto the scope stack.
@@ -140,12 +165,13 @@ class ScopeManager:
             block = self.codegen.builder.block if self.codegen.builder is not None else None
             block_live = block is not None and not block.is_terminated
             for var_name in current_vars:
-                if var_name in self._struct_cleanup:
-                    if block_live and not self.is_struct_moved(var_name):
-                        struct_type, alloca = self._struct_cleanup[var_name]
+                struct_entries = self._struct_cleanup.get(var_name)
+                if struct_entries and struct_entries[-1][0] == self._scope_depth:
+                    _depth, struct_type, alloca = struct_entries[-1]
+                    if block_live and not self.codegen.moves.is_moved(alloca):
                         self.codegen.dynamic_arrays.emit_struct_field_cleanup(var_name, struct_type, alloca)
-                    # Remove from cleanup tracking when leaving scope
-                    del self._struct_cleanup[var_name]
+                    # Remove this binding's entry when leaving its scope
+                    self._stack_pop_at_depth(self._struct_cleanup, var_name, self._scope_depth)
 
         # Free function-value locals (closures) on the fall-through exit, runtime-guarded
         # by drop_ptr. Same mutual-exclusion discipline as structs (#59/#60): early-exit
@@ -155,10 +181,12 @@ class ScopeManager:
             block = self.codegen.builder.block if self.codegen.builder is not None else None
             block_live = block is not None and not block.is_terminated
             for var_name in current_vars:
-                if var_name in self._closure_cleanup:
-                    if block_live and not self.is_struct_moved(var_name):
-                        self._emit_closure_free(self._closure_cleanup[var_name])
-                    del self._closure_cleanup[var_name]
+                closure_entries = self._closure_cleanup.get(var_name)
+                if closure_entries and closure_entries[-1][0] == self._scope_depth:
+                    slot = closure_entries[-1][-1]
+                    if block_live and not self.codegen.moves.is_moved(slot):
+                        self._emit_closure_free(slot)
+                    self._stack_pop_at_depth(self._closure_cleanup, var_name, self._scope_depth)
 
         # Free string locals on the fall-through exit, runtime-guarded by the owned bit (#145).
         # Same mutual-exclusion discipline as structs/closures: early-exit paths emit their own
@@ -168,10 +196,12 @@ class ScopeManager:
             block = self.codegen.builder.block if self.codegen.builder is not None else None
             block_live = block is not None and not block.is_terminated
             for var_name in current_vars:
-                if var_name in self._string_cleanup:
-                    if block_live and not self.is_struct_moved(var_name):
-                        self._emit_string_free(self._string_cleanup[var_name])
-                    del self._string_cleanup[var_name]
+                string_entries = self._string_cleanup.get(var_name)
+                if string_entries and string_entries[-1][0] == self._scope_depth:
+                    slot = string_entries[-1][-1]
+                    if block_live and not self.codegen.moves.is_moved(slot):
+                        self._emit_string_free(slot)
+                    self._stack_pop_at_depth(self._string_cleanup, var_name, self._scope_depth)
 
         # Remove variables from flat caches
         for var_name in current_vars:
@@ -371,13 +401,13 @@ class ScopeManager:
                 # hold T[]) without wiring this owner, so such enum locals leaked (#139).
                 if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
                     if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
-                        self._struct_cleanup[name] = (semantic_ty, slot)
+                        self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
             # Track function-value locals for runtime-guarded env free at scope exit.
             elif isinstance(semantic_ty, FunctionType):
-                self._closure_cleanup[name] = slot
+                self._closure_cleanup.setdefault(name, []).append((self._scope_depth, slot))
             # Track string locals for owned-bit-guarded free at scope exit (#145).
             elif semantic_ty == BuiltinType.STRING:
-                self._string_cleanup[name] = slot
+                self._string_cleanup.setdefault(name, []).append((self._scope_depth, slot))
 
         if init is not None:
             if self.codegen.builder is None:
@@ -433,13 +463,13 @@ class ScopeManager:
                 # hold T[]) without wiring this owner, so such enum locals leaked (#139).
                 if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
                     if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
-                        self._struct_cleanup[name] = (semantic_ty, slot)
+                        self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
             # Track function-value locals for runtime-guarded env free at scope exit.
             elif isinstance(semantic_ty, FunctionType):
-                self._closure_cleanup[name] = slot
+                self._closure_cleanup.setdefault(name, []).append((self._scope_depth, slot))
             # Track string locals for owned-bit-guarded free at scope exit (#145).
             elif semantic_ty == BuiltinType.STRING:
-                self._string_cleanup[name] = slot
+                self._string_cleanup.setdefault(name, []).append((self._scope_depth, slot))
 
         return slot
 
@@ -482,7 +512,7 @@ class ScopeManager:
             struct_type: The resolved struct type whose array fields need freeing.
             slot: The alloca holding the struct value.
         """
-        self._struct_cleanup[name] = (struct_type, slot)
+        self._struct_cleanup.setdefault(name, []).append((self._scope_depth, struct_type, slot))
 
     def _emit_closure_free(self, slot: ir.AllocaInstr) -> None:
         """Emit the runtime-guarded env free for a function-value local (`if drop: drop(env)`)."""
@@ -506,9 +536,10 @@ class ScopeManager:
         builder = self.codegen.builder
         if builder is None or builder.block is None or builder.block.is_terminated:
             return
-        for var_name, slot in self._string_cleanup.items():
-            if not self.is_struct_moved(var_name):
-                self._emit_string_free(slot)
+        for var_name, entries in self._string_cleanup.items():
+            for _depth, slot in entries:
+                if not self.codegen.moves.is_moved(slot):
+                    self._emit_string_free(slot)
 
     def is_closure_registered(self, name: str) -> bool:
         """True if `name` is a registered function-value RAII owner in the current scope.
@@ -520,13 +551,14 @@ class ScopeManager:
         return name in self._closure_cleanup
 
     def unregister_closure_cleanup(self, name: str) -> None:
-        """Drop `name` from function-value RAII tracking (no-op if absent).
+        """Drop the innermost `name` entry from function-value RAII tracking (no-op if absent).
 
         Used when a function-value local is a NON-owning alias -- bound from a container
         get-out (`fns.get(i)??`) or a struct-field read (`s.handler`) whose env the
         container/struct still owns. Registering it as a second owner would double-free
-        the shared environment (mirrors the Own<T>.get() non-owning-borrow guard)."""
-        self._closure_cleanup.pop(name, None)
+        the shared environment (mirrors the Own<T>.get() non-owning-borrow guard). Only the
+        just-registered (innermost) binding is removed, so an outer shadowed owner survives."""
+        self._stack_pop_at_depth(self._closure_cleanup, name, self._scope_depth)
 
     def is_string_registered(self, name: str) -> bool:
         """True if `name` is a registered owning string local in the current scope (#145).
@@ -544,12 +576,13 @@ class ScopeManager:
         return name in self._struct_cleanup
 
     def unregister_string_cleanup(self, name: str) -> None:
-        """Drop `name` from string RAII tracking (no-op if absent) (#145).
+        """Drop the innermost `name` entry from string RAII tracking (no-op if absent) (#145).
 
         Used when a string local is a NON-owning alias -- bound from a struct-field read or
         a container get-out whose buffer the struct/container still owns. Registering it as a
-        second owner would double-free (mirrors the closure/Own<T> non-owning-borrow guard)."""
-        self._string_cleanup.pop(name, None)
+        second owner would double-free (mirrors the closure/Own<T> non-owning-borrow guard).
+        Only the just-registered (innermost) binding is removed, so an outer shadow survives."""
+        self._stack_pop_at_depth(self._string_cleanup, name, self._scope_depth)
 
     def mark_struct_as_moved(self, var_name: str) -> None:
         """Mark a struct variable as moved (ownership transferred).
@@ -560,18 +593,32 @@ class ScopeManager:
         Args:
             var_name: The variable name to mark as moved.
         """
-        self.codegen.moves.mark(var_name)
+        slot = self._slot_for_name(var_name)
+        if slot is not None:
+            self.codegen.moves.mark(slot)
+
+    def _slot_for_name(self, name: str) -> Optional[ir.AllocaInstr]:
+        """Resolve a name to its innermost binding slot, or None if it has no local slot."""
+        if name in self._locals and self._locals[name]:
+            return self._locals[name][-1][1]
+        return None
 
     def is_struct_moved(self, var_name: str) -> bool:
-        """Check if a struct variable has been moved.
+        """Check if the innermost binding named `var_name` has been moved.
+
+        Convenience for call sites that hold only a name and whose lookup is
+        unambiguous (the innermost binding is the intended one). Cleanup walkers that
+        hold the exact slot check `codegen.moves.is_moved(slot)` directly instead, so a
+        shadowed outer binding is never confused with its inner namesake.
 
         Args:
             var_name: The variable name to check.
 
         Returns:
-            True if the variable has been moved, False otherwise.
+            True if the variable's innermost binding has been moved, False otherwise.
         """
-        return self.codegen.moves.is_moved(var_name)
+        slot = self._slot_for_name(var_name)
+        return slot is not None and self.codegen.moves.is_moved(slot)
 
     def reset_scope_stack(self) -> None:
         """Reset the scope stack to empty state.
@@ -676,9 +723,18 @@ class ScopeManager:
 
     @property
     def struct_variables(self) -> List[Dict[str, tuple['StructType', ir.AllocaInstr]]]:
-        """Backward compatible access to struct variables (deprecated)."""
-        # For backward compatibility, return single-level view
-        result = [{}] * (self._scope_depth + 1) if self._scope_depth >= 0 else []
-        if result:
-            result[-1] = dict(self._struct_cleanup)
+        """Per-scope-level view of owning-struct locals (name -> (type, slot)).
+
+        Rebuilt from the stacked _struct_cleanup so the early-exit cleanup walker
+        (statements/utils.py) sees every live binding at its own scope level with its own
+        slot -- an outer struct and its inner shadow land in different levels and are
+        freed independently.
+        """
+        result: List[Dict[str, tuple['StructType', ir.AllocaInstr]]] = [
+            {} for _ in range(self._scope_depth + 1)
+        ]
+        for name, entries in self._struct_cleanup.items():
+            for depth, struct_type, slot in entries:
+                if 0 <= depth < len(result):
+                    result[depth][name] = (struct_type, slot)
         return result

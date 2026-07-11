@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: PI = 3.14159
-# EXPECT_STDOUT_CONTAINS: abs(-42) = 42
+# EXPECT_STDOUT_EXACT: "PI = 3.14159\nabs(-42) = 42\nsqrt(16.0) = 4\n"
 # Simple math module test
 use <math>
 

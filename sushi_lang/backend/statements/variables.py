@@ -78,7 +78,7 @@ def emit_let(codegen: 'CodegenProtocol', stmt: 'Let') -> None:
                 # payload. Binding it must not create a second RAII owner, or the
                 # container and the binding would both free the same pointer (#106).
                 if getattr(stmt.value, 'method', None) != 'get':
-                    codegen.dynamic_arrays.register_own(stmt.name, semantic_type)
+                    codegen.dynamic_arrays.register_own(stmt.name, semantic_type, slot)
             elif codegen.dynamic_arrays.is_list_type(semantic_type):
                 codegen.dynamic_arrays.register_list(stmt.name, semantic_type, slot)
 
@@ -101,6 +101,18 @@ def emit_let(codegen: 'CodegenProtocol', stmt: 'Let') -> None:
         # no-op; the real value is stored just below (#145).
         from sushi_lang.semantics.typesys import BuiltinType as _BT
         if semantic_type == _BT.STRING and codegen.memory.is_string_registered(stmt.name):
+            from llvmlite import ir as _ir
+            codegen.builder.store(_ir.Constant(ll_type, None), slot)
+
+        # Zero-initialise a closure (function-value) local's fat-pointer slot
+        # ({null fn, null env, null drop}) BEFORE emitting the RHS -- the same
+        # hazard as the string case above. The local is already registered for
+        # scope-exit env cleanup, so a `??` in the RHS (`let g = fallible()??`)
+        # whose early-exit path runs closure cleanup would load an unstored slot
+        # and call a garbage drop_ptr (SIGBUS). A null drop_ptr makes that
+        # premature cleanup a no-op; the real value is stored just below.
+        from sushi_lang.semantics.typesys import FunctionType as _FT
+        if isinstance(semantic_type, _FT) and codegen.memory.is_closure_registered(stmt.name):
             from llvmlite import ir as _ir
             codegen.builder.store(_ir.Constant(ll_type, None), slot)
 
@@ -185,7 +197,7 @@ def _reconcile_closure_ownership(codegen: 'CodegenProtocol', stmt: 'Let', semant
         source = value.id
         if codegen.memory.is_closure_registered(source):
             # MOVE: transfer ownership source -> g. g keeps its registration.
-            codegen.moves.mark(source)
+            codegen.memory.mark_struct_as_moved(source)
         else:
             # BORROW: source is a param or an alias whose env is owned elsewhere.
             codegen.memory.unregister_closure_cleanup(stmt.name)
@@ -228,7 +240,7 @@ def _reconcile_string_ownership(codegen: 'CodegenProtocol', stmt: 'Let', semanti
         source = value.id
         if codegen.memory.is_string_registered(source):
             # MOVE: transfer ownership source -> s2. s2 keeps its registration.
-            codegen.moves.mark(source)
+            codegen.memory.mark_struct_as_moved(source)
         else:
             # BORROW: source is a param or an alias whose buffer is owned elsewhere.
             codegen.memory.unregister_string_cleanup(stmt.name)
@@ -349,8 +361,8 @@ def _emit_dynamic_array_rebind(
     # Dynamic array rebind - need to clean up old array first to prevent memory leaks
     # Clean up the old array's memory before rebinding
     if hasattr(codegen, 'dynamic_arrays') and codegen.dynamic_arrays is not None:
-        if var_name in codegen.dynamic_arrays.arrays:
-            descriptor = codegen.dynamic_arrays.arrays[var_name]
+        descriptor = codegen.dynamic_arrays._array(var_name)
+        if descriptor is not None:
             if not descriptor.destroyed:
                 # Free the old array's memory
                 codegen.dynamic_arrays._emit_array_destructor(var_name)
@@ -384,7 +396,7 @@ def _emit_dynamic_array_rebind(
             codegen.builder.store(null_ptr, data_ptr_ptr)
 
             # Mark source as moved (prevents cleanup at scope exit)
-            codegen.moves.mark(source_name)
+            codegen.memory.mark_struct_as_moved(source_name)
 
 
 def _emit_struct_rebind(codegen: 'CodegenProtocol', stmt: 'Rebind', slot: 'ir.Value', val: 'ir.Value') -> None:

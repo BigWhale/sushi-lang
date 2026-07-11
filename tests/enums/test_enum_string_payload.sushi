@@ -1,7 +1,6 @@
 # Test enum variant with string associated data: construct and read via match
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: Hello, world!
-# EXPECT_STDOUT_CONTAINS: No message
+# EXPECT_STDOUT_EXACT: "Hello, world!\nNo message\nGoodbye, Alice!\n"
 
 enum Message:
     Hello(string)

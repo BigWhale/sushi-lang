@@ -1,6 +1,6 @@
 # Test recursive binary tree with string leaves; validates leaf count and depth
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: Tree leaves: 4, depth: 2
+# EXPECT_STDOUT_EXACT: "Tree leaves: 4, depth: 2\n"
 
 enum Tree:
     Leaf(string)

@@ -1,6 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Both found
-# EXPECT_STDOUT_CONTAINS: First not found
-# EXPECT_STDOUT_CONTAINS: Second not found
+# EXPECT_STDOUT_EXACT: "Trying first\nTrying second\nBoth found\nTrying first\nFirst not found\nTrying first\nTrying second\nSecond not found\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Test chaining ?? operators with Maybe<T>
 # Demonstrates early return on first None

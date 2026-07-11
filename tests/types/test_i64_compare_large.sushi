@@ -1,6 +1,6 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: different
+# EXPECT_STDOUT_EXACT: "different\nordered\n"
 
 # Two i64 values that are equal mod 2^32 must still compare unequal (issue #84):
 # comparisons may not truncate operands to 32 bits.

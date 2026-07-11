@@ -1,0 +1,14 @@
+# Guards PLAN.md T1.1: an unsigned widening cast must emit `zext`, not `sext`.
+# casts.py classifies via the LLVM type, which is signless, so it always sign-extends.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "200\n4000000000\n"
+fn main() i32:
+    let u8 c = 200
+    let u32 z = c as u32
+    println(z)
+
+    let u32 a = 4000000000
+    let u64 w = a as u64
+    println(w)
+
+    return Result.Ok(0)

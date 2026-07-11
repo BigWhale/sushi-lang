@@ -12,6 +12,7 @@ NOTE: This is ONLY for stdin.lines() - all other stdio methods require
 from typing import Any
 import llvmlite.ir as ir
 from sushi_lang.semantics.ast import MethodCall
+from sushi_lang.backend.memory.heap import emit_malloc
 
 
 def _emit_readln(codegen: Any, expr: MethodCall) -> ir.Value:
@@ -67,14 +68,16 @@ def _emit_readln(codegen: Any, expr: MethodCall) -> ir.Value:
     builder.branch(eof_ret_block)
 
     builder.position_at_end(eof_ret_block)
-    malloc_func = codegen.get_malloc_func()
-    empty_buf = builder.call(malloc_func, [ir.Constant(i64, 1)], name="empty_buf")
+    empty_buf = emit_malloc(codegen, builder, ir.Constant(i64, 1))
     builder.store(ir.Constant(codegen.i8, 0), empty_buf)
     from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer_with_len
     empty_fat = cstr_to_fat_pointer_with_len(builder, empty_buf, ir.Constant(codegen.i32, 0), owned=0)
 
-    # We need a merge block after all paths for the final return
+    # We need a merge block after all paths for the final return.
+    # emit_malloc splits the block, so the phi's real predecessor is the current
+    # block after the allocation, not eof_ret_block.
     merge_block = builder.append_basic_block(name="readln_merge")
+    eof_ret_pred = builder.block
     builder.branch(merge_block)
 
     # Success path: strip trailing \n and \r\n
@@ -141,7 +144,7 @@ def _emit_readln(codegen: Any, expr: MethodCall) -> ir.Value:
     i8_ptr_ty = codegen.i8.as_pointer()
     string_struct_ty = ir.LiteralStructType([i8_ptr_ty, codegen.i32, ir.IntType(8)])  # {data, size, owned} (#145)
     result_phi = builder.phi(string_struct_ty, name="readln_result")
-    result_phi.add_incoming(empty_fat, eof_ret_block)
+    result_phi.add_incoming(empty_fat, eof_ret_pred)
     result_phi.add_incoming(success_fat, to_merge_block)
 
     return result_phi

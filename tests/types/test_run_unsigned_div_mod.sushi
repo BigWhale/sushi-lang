@@ -1,7 +1,6 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: 2000000000
-# EXPECT_STDOUT_CONTAINS: 9000000000000000000
+# EXPECT_STDOUT_EXACT: "2000000000\n9000000000000000000\n"
 
 # Issue #89: unsigned / and % must lower to udiv/urem, not sdiv/srem.
 # u32 4000000000 exceeds i32 max (2147483647) and u64 1.8e19 exceeds i64 max,

@@ -1,0 +1,14 @@
+# Guards PLAN.md T2.2, leak variant: a nested shadow of an owning string. The inner
+# create_local overwrites the flat _string_cleanup entry and the inner pop_scope
+# deletes it, so the outer string is never freed. Compiles and exits 0 today - the
+# defect is only visible to the leak gate.
+# EXPECT_ERROR_CODE: CW1002
+# EXPECT_NO_LEAKS: true
+fn main() i32:
+    let i32 n = 7
+    let string buf = "Mostly {n}"
+    if (n == 7):
+        let string buf = "Harmless {n}"
+        println(buf)
+    println(buf)
+    return Result.Ok(0)

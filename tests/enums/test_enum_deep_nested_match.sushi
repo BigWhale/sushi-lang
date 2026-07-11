@@ -1,6 +1,6 @@
 # Test three-level nested enum pattern matching inline within match arms
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: Deep nested match: 5
+# EXPECT_STDOUT_EXACT: "Deep nested match: 5\n"
 
 enum Leaf:
     Good(i32)

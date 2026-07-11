@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Mostly Harmless
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n239\n"
 # Test hex literals in constants
 
 const i32 HEX_CONST = 0xDEADBEEF
@@ -16,4 +16,5 @@ fn main() i32:
 
     if (check):
         println("Mostly Harmless")
-    return Result.Ok(result + d)
+    println(result + d)
+    return Result.Ok(0)

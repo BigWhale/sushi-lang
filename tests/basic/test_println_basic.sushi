@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Hello World!
-# EXPECT_STDOUT_CONTAINS: This is a new line
+# EXPECT_STDOUT_EXACT: "Hello World!\nThis is a new line\n"
 fn main() i32:
     print("Hello")
     print(" ")

@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Life
+# EXPECT_STDOUT_EXACT: "Life\n\nLife\n"
 struct Pair<T, U>:
     T first
     U second

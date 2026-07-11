@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Signed: -42, Unsigned: 42
+# EXPECT_STDOUT_EXACT: "Signed: -42, Unsigned: 42\n"
 fn main() i32:
     let i32 signed = -42
     let u32 unsigned = 42 as u32

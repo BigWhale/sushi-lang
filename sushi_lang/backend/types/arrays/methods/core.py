@@ -148,79 +148,6 @@ def emit_dynamic_array_capacity(codegen: 'LLVMCodegen', array_value: ir.Value, t
     return codegen.utils.as_i1(cap_value) if to_i1 else cap_value
 
 
-def emit_dynamic_array_get(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
-                           index_value: ir.Value, to_i1: bool) -> ir.Value:
-    """Emit code for safe array element access with bounds checking.
-
-    Performs runtime bounds checking and emits error RE2020 if index is out of bounds.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        array_value: The dynamic array struct value.
-        array_type: The LLVM struct type.
-        index_value: The index to access (i32).
-        to_i1: Whether to convert result to i1.
-
-    Returns:
-        The element value at the specified index.
-
-    Note:
-        Emits runtime error RE2020 for out-of-bounds access.
-    """
-    from sushi_lang.backend import gep_utils
-
-    # Get current array length for bounds checking
-    len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
-    current_len = codegen.builder.load(len_ptr, name="array_len")
-
-    # Runtime bounds checking: index >= 0 && index < len
-    zero = ir.Constant(codegen.types.i32, 0)
-
-    # Check if index >= 0
-    index_not_negative = codegen.builder.icmp_signed(">=", index_value, zero, name="index_not_negative")
-
-    # Check if index < len
-    index_in_bounds = codegen.builder.icmp_unsigned("<", index_value, current_len, name="index_in_bounds")
-
-    # Both conditions must be true
-    bounds_ok = codegen.builder.and_(index_not_negative, index_in_bounds, name="bounds_ok")
-
-    # Create basic blocks for bounds check
-    bounds_ok_block = codegen.func.append_basic_block("bounds_ok")
-    bounds_fail_block = codegen.func.append_basic_block("bounds_fail")
-
-    # Branch based on bounds check
-    codegen.builder.cbranch(bounds_ok, bounds_ok_block, bounds_fail_block)
-
-    # Bounds failure block: emit runtime error and exit
-    codegen.builder.position_at_end(bounds_fail_block)
-    codegen.runtime.errors.emit_runtime_error_with_values(
-        "RE2020",
-        "array index %d out of bounds for array of size %d",
-        index_value,
-        current_len
-    )
-    # emit_runtime_error_with_values calls exit(), so this block is terminated
-    # Add unreachable to satisfy LLVM
-    codegen.builder.unreachable()
-
-    # Bounds OK block - normal array access
-    codegen.builder.position_at_end(bounds_ok_block)
-
-    # Get data pointer and access element
-    data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
-    data_ptr = codegen.builder.load(data_ptr_ptr, name="array_data")
-
-    # Use GEP to get element pointer
-    element_ptr = gep_utils.gep_array_element(codegen, data_ptr, index_value, "element_ptr")
-
-    # Load element value
-    element_type = array_type.elements[2].pointee
-    element_value = codegen.builder.load(element_ptr, name="element")
-
-    return codegen.utils.as_i1(element_value) if to_i1 else element_value
-
-
 def emit_dynamic_array_push(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
                             element_value: ir.Value) -> ir.Value:
     """Emit code to append an element to a dynamic array.
@@ -401,6 +328,7 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
         Void value (represented as i32 constant 0).
     """
     from sushi_lang.backend.expressions import memory
+    from sushi_lang.backend.memory.heap import emit_malloc
 
     # Constants
     zero = ir.Constant(codegen.types.i32, 0)
@@ -466,7 +394,7 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
     # Allocate new buffer with initial capacity
     element_size = memory.get_element_size_constant(codegen, element_type)
     new_total_size = codegen.builder.mul(initial_capacity, element_size, name="new_total_size")
-    new_data_ptr = memory.emit_malloc_call(codegen, new_total_size)
+    new_data_ptr = emit_malloc(codegen, codegen.builder, new_total_size)
 
     # Cast to typed pointer
     typed_new_data_ptr = codegen.builder.bitcast(new_data_ptr, ir.PointerType(element_type), name="typed_new_data_ptr")

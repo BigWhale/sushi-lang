@@ -1,0 +1,21 @@
+# Guards PLAN.md T2.3: a bloom source must be a bare array VARIABLE. The validator
+# checks the spread's position and type but never that the inner expression is a Name,
+# so blooming a struct field compiles clean and then double-frees (exit 133).
+# EXPECT_ERROR_CODE: CE0120
+
+struct Holder:
+    i32[] items
+
+fn total(...i32 nums) i32:
+    let i32 sum = 0
+    foreach(n in nums.iter()):
+        sum := sum + n
+    return Result.Ok(sum)
+
+fn run() i32:
+    let Holder h = Holder(from([1, 2, 3]))
+    return Result.Ok(total(h.items...)??)
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)

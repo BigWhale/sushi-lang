@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Mostly Harmless
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n5056\n"
 # Test basic octal literal support
 
 fn main() i32:
@@ -30,4 +30,5 @@ fn main() i32:
     let i32 result = a + b + c + d + e + f + g + h + sum + product + rwx + rw + rx
     if (equal):
         println("Mostly Harmless")
-    return Result.Ok(result)
+    println(result)
+    return Result.Ok(0)

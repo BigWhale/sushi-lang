@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Result: mostly harmless
-# EXPECT_STDOUT_CONTAINS: All basic replacement tests passed!
+# EXPECT_STDOUT_EXACT: "Result: mostly harmless\nGuide: The Guide is mostly harmless\nAll basic replacement tests passed!\n"
 # TEST_TYPE: runtime
 use <collections/strings>
 

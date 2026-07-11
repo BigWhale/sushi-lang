@@ -175,32 +175,26 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
                         string_values.append(codegen.runtime.formatting.emit_bool_to_string(expr_value))
                         fresh_flags.append(True)
                     elif width in [8, 16, 32, 64]:
-                        # Determine signedness from the expression's type
-                        is_signed = True  # default to signed
+                        from sushi_lang.semantics.typesys import BuiltinType
+                        from sushi_lang.backend.expressions.type_utils import (
+                            infer_expr_semantic_type, is_unsigned_type,
+                        )
+                        # bool-returning methods (contains/starts_with/ends_with)
+                        # lower to i8, not i1, so they fall through to the integer
+                        # path; format them as true/false. Gated on the type
+                        # checker's stamp so a plain bool value keeps its historical
+                        # 1/0 rendering.
+                        inferred = getattr(part, 'inferred_return_type', None)
+                        if inferred == BuiltinType.BOOL:
+                            string_values.append(codegen.runtime.formatting.emit_bool_to_string(expr_value))
+                            fresh_flags.append(True)
+                            continue
 
-                        # Try multiple methods to determine signedness
-                        # Method 1: Check inferred_return_type attribute (set by type checker)
-                        if hasattr(part, 'inferred_return_type'):
-                            from sushi_lang.semantics.typesys import BuiltinType
-                            inferred_type = part.inferred_return_type
-                            # bool-returning methods (contains/starts_with/ends_with)
-                            # lower to i8, not i1, so they fall through to the
-                            # integer path; format them as true/false explicitly.
-                            if inferred_type == BuiltinType.BOOL:
-                                string_values.append(codegen.runtime.formatting.emit_bool_to_string(expr_value))
-                                fresh_flags.append(True)
-                                continue
-                            if inferred_type in [BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64]:
-                                is_signed = False
-                        # Method 2: For Name nodes, look up variable type
-                        elif hasattr(part, 'id'):  # Name node
-                            from sushi_lang.semantics.ast import Name
-                            from sushi_lang.semantics.typesys import BuiltinType
-                            if isinstance(part, Name) and part.id in codegen.variable_types:
-                                var_type = codegen.variable_types[part.id]
-                                if var_type in [BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64]:
-                                    is_signed = False
-
+                        # Signedness from the part's semantic type: prefer the
+                        # checker's stamp, else reconstruct it (handles casts,
+                        # consts, and locals) - the source the print statements use.
+                        part_type = inferred if inferred is not None else infer_expr_semantic_type(codegen, part)
+                        is_signed = not is_unsigned_type(part_type)
                         string_values.append(codegen.runtime.formatting.emit_integer_to_string(expr_value, is_signed=is_signed, bit_width=width))
                         fresh_flags.append(True)
                     else:

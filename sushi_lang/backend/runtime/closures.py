@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, List
 from llvmlite import ir
 
 from sushi_lang.semantics.typesys import FunctionType, ResultType
+from sushi_lang.backend.memory.heap import emit_malloc
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -195,8 +196,7 @@ def emit_lambda(codegen: "LLVMCodegen", lam, to_i1: bool) -> ir.Value:
     env_struct = lam.env_struct
     env_ll = codegen.types.ll_type(env_struct)
     size = codegen.types.get_type_size_bytes(env_struct)
-    malloc = codegen.get_malloc_func()
-    raw = codegen.builder.call(malloc, [ir.Constant(codegen.types.i64, size)], name="closure_env")
+    raw = emit_malloc(codegen, codegen.builder, ir.Constant(codegen.types.i64, size))
     env_ptr = codegen.builder.bitcast(raw, ir.PointerType(env_ll), name="closure_env_typed")
 
     i32 = codegen.types.i32
@@ -209,7 +209,7 @@ def emit_lambda(codegen: "LLVMCodegen", lam, to_i1: bool) -> ir.Value:
         # is moved into the env, which now owns it and frees it in the env destructor.
         # Mark the outer binding moved so its own scope exit does not also free it.
         if is_owning_type(cap.ty):
-            codegen.moves.mark(cap.name)
+            codegen.memory.mark_struct_as_moved(cap.name)
 
     env_i8 = codegen.builder.bitcast(env_ptr, codegen.types.str_ptr)
     drop_fn = get_or_create_env_drop(codegen, env_struct)

@@ -1,6 +1,6 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: 42
+# EXPECT_STDOUT_EXACT: "42\n"
 
 # Test nested struct field rebinding
 struct Inner:

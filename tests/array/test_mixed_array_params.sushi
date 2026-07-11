@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 3
-# EXPECT_STDOUT_CONTAINS: 6
+# EXPECT_STDOUT_EXACT: "3\n4\n6\n"
 # Test mixing fixed and dynamic array parameters
 
 

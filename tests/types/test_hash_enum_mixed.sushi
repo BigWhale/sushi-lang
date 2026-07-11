@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: "Add(10, 20) hash: 12277209036195088681"
-# EXPECT_STDOUT_CONTAINS: "Negate(5) hash: 16766158569693197503"
+# EXPECT_STDOUT_EXACT: "Add(10, 20) hash: 12277209036195088681\nNegate(5) hash: 16766158569693197503\nIdentity hash: 12638155314718423877\nAll mixed enum variant hashes computed!\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Test hashing of enum with mixed unit and data variants
 

@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: reserve tests passed!
+# EXPECT_STDOUT_EXACT: "reserve tests passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<T> reserve method

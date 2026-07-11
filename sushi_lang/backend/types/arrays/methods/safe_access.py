@@ -104,22 +104,19 @@ def emit_fixed_array_get_maybe(
     array_size = ir.Constant(codegen.types.i32, array_type.count)
     zero = ir.Constant(codegen.types.i32, 0)
 
-    # Runtime bounds checking: index >= 0 && index < len
-    index_not_negative = codegen.builder.icmp_signed(">=", index_value, zero, name="index_not_negative")
-    index_in_bounds = codegen.builder.icmp_unsigned("<", index_value, array_size, name="index_in_bounds")
-    bounds_ok = codegen.builder.and_(index_not_negative, index_in_bounds, name="bounds_ok")
-
-    # Create basic blocks for bounds check
-    bounds_ok_block = codegen.func.append_basic_block("get_bounds_ok")
-    bounds_fail_block = codegen.func.append_basic_block("get_bounds_fail")
+    # Out-of-bounds returns Maybe.None() instead of trapping.
+    from sushi_lang.backend.types.arrays.bounds import emit_bounds_check
     merge_block = codegen.func.append_basic_block("get_merge")
+    none_state: dict = {}
 
-    # Branch based on bounds check
-    codegen.builder.cbranch(bounds_ok, bounds_ok_block, bounds_fail_block)
+    def on_fail() -> None:
+        none_state["result"] = emit_maybe_none(codegen, element_semantic_type)
+        none_state["pred"] = codegen.builder.block
+        codegen.builder.branch(merge_block)
+
+    emit_bounds_check(codegen, index_value, array_size, prefix="get", on_fail=on_fail)
 
     # Bounds OK block: return Maybe.Some(element)
-    codegen.builder.position_at_end(bounds_ok_block)
-
     # Need to get pointer to array for GEP
     # If array_value is already loaded, we need to store it temporarily
     array_temp = codegen.builder.alloca(array_type, name="array_temp")
@@ -137,21 +134,15 @@ def emit_fixed_array_get_maybe(
     # Wrap in Maybe.Some
     some_result = emit_maybe_some(codegen, element_semantic_type, element_value)
     # Capture the actual predecessor for the phi: the deep copy / Maybe.Some emission may
-    # have inserted basic blocks, so the live block is no longer bounds_ok_block.
+    # have inserted basic blocks, so the live block is no longer the ok-block.
     some_pred_block = codegen.builder.block
-    codegen.builder.branch(merge_block)
-
-    # Bounds fail block: return Maybe.None()
-    codegen.builder.position_at_end(bounds_fail_block)
-    none_result = emit_maybe_none(codegen, element_semantic_type)
-    none_pred_block = codegen.builder.block
     codegen.builder.branch(merge_block)
 
     # Merge block: phi node to select result
     codegen.builder.position_at_end(merge_block)
     result_phi = codegen.builder.phi(some_result.type, name="get_result")
     result_phi.add_incoming(some_result, some_pred_block)
-    result_phi.add_incoming(none_result, none_pred_block)
+    result_phi.add_incoming(none_state["result"], none_state["pred"])
 
     return result_phi
 
@@ -209,23 +200,19 @@ def emit_dynamic_array_get_maybe(
     len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
     current_len = codegen.builder.load(len_ptr, name="array_len")
 
-    # Runtime bounds checking: index >= 0 && index < len
-    zero = ir.Constant(codegen.types.i32, 0)
-    index_not_negative = codegen.builder.icmp_signed(">=", index_value, zero, name="index_not_negative")
-    index_in_bounds = codegen.builder.icmp_unsigned("<", index_value, current_len, name="index_in_bounds")
-    bounds_ok = codegen.builder.and_(index_not_negative, index_in_bounds, name="bounds_ok")
-
-    # Create basic blocks for bounds check
-    bounds_ok_block = codegen.func.append_basic_block("get_bounds_ok")
-    bounds_fail_block = codegen.func.append_basic_block("get_bounds_fail")
+    # Out-of-bounds returns Maybe.None() instead of trapping.
+    from sushi_lang.backend.types.arrays.bounds import emit_bounds_check
     merge_block = codegen.func.append_basic_block("get_merge")
+    none_state: dict = {}
 
-    # Branch based on bounds check
-    codegen.builder.cbranch(bounds_ok, bounds_ok_block, bounds_fail_block)
+    def on_fail() -> None:
+        none_state["result"] = emit_maybe_none(codegen, element_semantic_type)
+        none_state["pred"] = codegen.builder.block
+        codegen.builder.branch(merge_block)
+
+    emit_bounds_check(codegen, index_value, current_len, prefix="get", on_fail=on_fail)
 
     # Bounds OK block: return Maybe.Some(element)
-    codegen.builder.position_at_end(bounds_ok_block)
-
     # Get data pointer and access element
     data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
     data_ptr = codegen.builder.load(data_ptr_ptr, name="array_data")
@@ -244,20 +231,14 @@ def emit_dynamic_array_get_maybe(
     # Wrap in Maybe.Some
     some_result = emit_maybe_some(codegen, element_semantic_type, element_value)
     # Capture the actual predecessor for the phi: the deep copy / Maybe.Some emission may
-    # have inserted basic blocks, so the live block is no longer bounds_ok_block.
+    # have inserted basic blocks, so the live block is no longer the ok-block.
     some_pred_block = codegen.builder.block
-    codegen.builder.branch(merge_block)
-
-    # Bounds fail block: return Maybe.None()
-    codegen.builder.position_at_end(bounds_fail_block)
-    none_result = emit_maybe_none(codegen, element_semantic_type)
-    none_pred_block = codegen.builder.block
     codegen.builder.branch(merge_block)
 
     # Merge block: phi node to select result
     codegen.builder.position_at_end(merge_block)
     result_phi = codegen.builder.phi(some_result.type, name="get_result")
     result_phi.add_incoming(some_result, some_pred_block)
-    result_phi.add_incoming(none_result, none_pred_block)
+    result_phi.add_incoming(none_state["result"], none_state["pred"])
 
     return result_phi

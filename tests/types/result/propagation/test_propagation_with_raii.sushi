@@ -1,5 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: PASS: Error propagated with RAII cleanup
+# EXPECT_STDOUT_EXACT: "PASS: Error propagated with RAII cleanup\n"
 # EXPECT_STDERR_EMPTY: true
 
 # Tests RAII cleanup during error propagation

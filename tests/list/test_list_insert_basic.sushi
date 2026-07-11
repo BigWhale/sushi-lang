@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Basic insert test passed!
+# EXPECT_STDOUT_EXACT: "Inserted successfully\nBasic insert test passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<T> insert method - basic functionality

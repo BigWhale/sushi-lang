@@ -1,5 +1,9 @@
-# EXPECT_STDOUT_CONTAINS: All bitwise constant tests passed
-# Test bitwise operations in constant expressions
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4294967295\nAll bitwise constant tests passed\n"
+# Test bitwise operations in constant expressions.
+# The NOT_MASK line currently prints -1: a `const u32` referenced directly formats
+# as signed. The comparison against 4294967295 succeeds, so only an assertion on
+# the printed text can see the bug.
 
 const u32 FLAGS_A = 0x01 as u32
 const u32 FLAGS_B = 0x02 as u32
@@ -9,9 +13,7 @@ const u32 FLAGS_AND = (0xFF as u32) & (0x0F as u32)
 const u32 FLAGS_XOR = (0xFF as u32) ^ (0x0F as u32)
 const u32 SHIFT_LEFT = (1 as u32) << (8 as u32)
 const u32 SHIFT_RIGHT = (256 as u32) >> (2 as u32)
-# Bitwise NOT returns negative value which doesn't work well with u32
-# Skip this test for now
-# const u32 NOT_MASK = ~(0x00 as u32)
+const u32 NOT_MASK = ~(0x00 as u32)
 
 fn main() i32:
     # Verify bitwise results
@@ -30,6 +32,14 @@ fn main() i32:
     if (SHIFT_LEFT != 256 as u32):
         return Result.Err(StdError.Error)
     if (SHIFT_RIGHT != 64 as u32):
+        return Result.Err(StdError.Error)
+
+    # Bitwise NOT on a u32 constant. A `const u32` referenced directly formats as
+    # signed -- it prints -1 rather than 4294967295 -- while the same value read
+    # through a local is correct. The assertion below is expected to fail until that
+    # formatter defect is fixed.
+    println(NOT_MASK)
+    if (NOT_MASK != 4294967295 as u32):
         return Result.Err(StdError.Error)
 
     println("All bitwise constant tests passed")

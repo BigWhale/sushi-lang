@@ -1,7 +1,6 @@
 # Test enum variant with bool associated data: construct and read via match
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: on with true
-# EXPECT_STDOUT_CONTAINS: off
+# EXPECT_STDOUT_EXACT: "on with true\noff\n"
 
 enum Toggle:
     On(bool)

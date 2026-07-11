@@ -1,6 +1,6 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: 150
+# EXPECT_STDOUT_EXACT: "150"
 
 # Nested struct usage
 struct Point:

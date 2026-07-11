@@ -1,6 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: "string hash('Mostly Harmless') = 13309339697947974940"
-# EXPECT_STDOUT_CONTAINS: "string hash('') = 14695981039346656037"
-# EXPECT_STDOUT_CONTAINS: "string hash('12345') = 16534377278781491704"
+# EXPECT_STDOUT_EXACT: "string hash('Mostly Harmless') = 13309339697947974940\nstring hash('') = 14695981039346656037\nstring hash('a') = 12638187200555641996\n✓ Same strings produce same hash\n✓ Different strings produce different hashes\nstring hash('The Hitchhiker's Guide to the Galaxy') = 9796692887695164269\nstring hash('12345') = 16534377278781491704\nstring hash('!@#$%^&*()') = 5368136046923640743\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Test hash method for string type
 

@@ -1,9 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: "✓ HashMap has 4 entries"
-# EXPECT_STDOUT_CONTAINS: "Found red: red color"
-# EXPECT_STDOUT_CONTAINS: "Found custom: custom color"
-# EXPECT_STDOUT_CONTAINS: "Updated: updated red"
-# EXPECT_STDOUT_CONTAINS: "Removed: blue color"
-# EXPECT_STDOUT_CONTAINS: "✓ HashMap has 3 entries after removal"
+# EXPECT_STDOUT_EXACT: "✓ HashMap has 4 entries\nFound red: red color\nFound custom: custom color\n✓ Custom(128) not found as expected\n✓ Green exists\nUpdated: updated red\nRemoved: blue color\n✓ HashMap has 3 entries after removal\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Test HashMap with enum keys
 

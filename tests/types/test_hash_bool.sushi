@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: "bool hash(true) = 1"
-# EXPECT_STDOUT_CONTAINS: "bool hash(false) = 0"
+# EXPECT_STDOUT_EXACT: "bool hash(true) = 1\nbool hash(false) = 0\n✓ true and false produce different hashes\n✓ Same boolean values produce same hash\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Test hash method for boolean type
 

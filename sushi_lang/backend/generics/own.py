@@ -27,6 +27,7 @@ from sushi_lang.semantics.typesys import StructType, Type, PointerType
 import llvmlite.ir as ir
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.memory.heap import emit_malloc
 
 
 def is_builtin_own_method(method_name: str) -> bool:
@@ -156,9 +157,8 @@ def emit_own_alloc(codegen: Any, element_type: Type, value: ir.Value) -> ir.Valu
     size_bytes = codegen.types.get_type_size_bytes(element_type)
 
     # Call malloc(size)
-    malloc_func = codegen.get_malloc_func()
     size_i64 = ir.Constant(codegen.types.i64, size_bytes)
-    void_ptr = codegen.builder.call(malloc_func, [size_i64], name="own_alloc")
+    void_ptr = emit_malloc(codegen, codegen.builder, size_i64)
 
     # Cast void* (i8*) to T*
     typed_ptr = codegen.builder.bitcast(
@@ -272,7 +272,7 @@ def emit_builtin_own_method(
         if isinstance(arg, Name):
             arg_ty = codegen.memory.find_semantic_type(arg.id)
             if arg_ty is not None and _arg_type_is_owning(codegen, arg_ty):
-                codegen.moves.mark(arg.id)
+                codegen.memory.mark_struct_as_moved(arg.id)
         return emit_own_alloc(codegen, element_type, arg_value)
     elif call.method == "get":
         return emit_own_get(codegen, own_value, element_type)

@@ -1,8 +1,7 @@
 # Test enum hashing indirectly: unit-variant enum as HashMap key (exercises
 # internal .hash() path without calling it directly, which hits CE0019)
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: Suit hash via HashMap: 3
-# EXPECT_STDOUT_CONTAINS: Enum hashing (via HashMap): passed
+# EXPECT_STDOUT_EXACT: "Suit hash via HashMap: 3\nEnum hashing (via HashMap): passed\n"
 
 use <collections/hashmap>
 

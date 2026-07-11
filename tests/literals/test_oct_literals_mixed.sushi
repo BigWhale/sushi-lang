@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Mostly Harmless
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n278\n"
 # Test mixing octal literals with hex, binary, and decimal
 
 fn main() i32:
@@ -25,4 +25,5 @@ fn main() i32:
     let i32 sum = result1 + result2 + result3
     if (all_equal and check1 and check2 and check3):
         println("Mostly Harmless")
-    return Result.Ok(sum)
+    println(sum)
+    return Result.Ok(0)

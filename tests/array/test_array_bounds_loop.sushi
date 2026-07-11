@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 45
+# EXPECT_STDOUT_EXACT: "45\n0\n"
 # Test array bounds checking with loop iteration
 # This test demonstrates proper iteration within bounds
 

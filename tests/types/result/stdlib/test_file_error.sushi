@@ -1,9 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: PASS: FileError.NotFound works
-# EXPECT_STDOUT_CONTAINS: PASS: FileError.PermissionDenied works
-# EXPECT_STDOUT_CONTAINS: PASS: FileError.AlreadyExists works
-# EXPECT_STDOUT_CONTAINS: PASS: FileError.InvalidPath works
-# EXPECT_STDOUT_CONTAINS: PASS: FileError.IOError works
+# EXPECT_STDOUT_EXACT: "PASS: FileError.NotFound works\nPASS: FileError.PermissionDenied works\nPASS: FileError.AlreadyExists works\nPASS: FileError.InvalidPath works\nPASS: FileError.IOError works\n"
 # EXPECT_STDERR_EMPTY: true
 
 # Tests FileError enum variants

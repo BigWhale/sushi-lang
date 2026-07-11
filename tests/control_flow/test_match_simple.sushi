@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: String var: Life
+# EXPECT_STDOUT_EXACT: "String var: Life\n"
 struct Pair<T, U>:
     T first
     U second

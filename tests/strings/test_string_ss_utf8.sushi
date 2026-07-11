@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: PASS: ASCII ss(0, 5)
-# EXPECT_STDOUT_CONTAINS: PASS: ss full string
+# EXPECT_STDOUT_EXACT: "PASS: ASCII ss(0, 5)\nPASS: UTF-8 ss(0, 6) before emoji\nPASS: UTF-8 ss(6, 1) emoji extraction\nPASS: UTF-8 ss(7, 6) after emoji\nPASS: UTF-8 ss(0, 3) with é\nPASS: UTF-8 ss(3, 1) extract é\nPASS: UTF-8 ss(0, 3) Cyrillic\nPASS: ss with length 0\nPASS: ss full string\nPASS: ss length beyond string\n"
 use <collections/strings>
 
 fn test_ascii() ~:

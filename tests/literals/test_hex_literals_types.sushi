@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Mostly Harmless
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n2130849056\n"
 # Test hex literals with various integer types
 
 fn main() i32:
@@ -27,4 +27,5 @@ fn main() i32:
     let i32 result4 = u64_val as i32
 
     println("Mostly Harmless")
-    return Result.Ok(result + result2 + result3 + result4)
+    println(result + result2 + result3 + result4)
+    return Result.Ok(0)

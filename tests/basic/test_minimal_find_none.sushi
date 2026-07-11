@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Not found
+# EXPECT_STDOUT_EXACT: "Not found\n"
 # Minimal test for string.find() returning None
 use <collections/strings>
 

@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 4hello36033
+# EXPECT_STDOUT_EXACT: "4hello36033"
 # Test dynamic array function parameters. modify_array borrows &poke, so its push is
 # visible to the caller (mutable.len()==3 afterward).
 

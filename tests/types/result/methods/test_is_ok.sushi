@@ -1,6 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: PASS: is_ok returns true for Ok
-# EXPECT_STDOUT_CONTAINS: PASS: is_ok returns false for Err
+# EXPECT_STDOUT_EXACT: "PASS: is_ok returns true for Ok\nPASS: is_ok returns false for Err\n"
 # EXPECT_STDERR_EMPTY: true
 
 # Tests is_ok method

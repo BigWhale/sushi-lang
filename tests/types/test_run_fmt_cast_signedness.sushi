@@ -1,0 +1,14 @@
+# Guards PLAN.md T1.7: string interpolation of a cast expression must pick its
+# %d/%u conversion from the cast's target type, not from the operand's type.
+# Deliberately a SAME-WIDTH cast: no extension happens, so T1.1's casts.py fix
+# cannot mask this bug. Both lines must agree.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4294967295\n4294967295\n"
+fn main() i32:
+    let i32 n = -1
+    println("{n as u32}")
+
+    let u32 m = n as u32
+    println("{m}")
+
+    return Result.Ok(0)

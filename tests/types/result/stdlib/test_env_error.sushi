@@ -1,7 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: PASS: EnvError.NotFound works
-# EXPECT_STDOUT_CONTAINS: PASS: EnvError.InvalidValue works
-# EXPECT_STDOUT_CONTAINS: PASS: EnvError.PermissionDenied works
+# EXPECT_STDOUT_EXACT: "PASS: EnvError.NotFound works\nPASS: EnvError.InvalidValue works\nPASS: EnvError.PermissionDenied works\n"
 # EXPECT_STDERR_EMPTY: true
 
 # Tests EnvError enum variants

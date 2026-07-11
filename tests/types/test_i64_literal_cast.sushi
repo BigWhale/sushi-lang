@@ -1,6 +1,6 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: 40000000000
+# EXPECT_STDOUT_EXACT: "40000000000\n"
 
 # A literal above i32 range cast to i64 materializes at full precision (issue #84).
 fn main() i32:

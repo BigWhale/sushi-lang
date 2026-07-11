@@ -1,6 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: "Completed iteration 0/20"
-# EXPECT_STDOUT_CONTAINS: "Completed iteration 15/20"
-# EXPECT_STDOUT_CONTAINS: "Memory leak test completed!"
+# EXPECT_STDOUT_EXACT: "Starting memory leak test...\nAllocating 5MB per iteration, 20 iterations = 100MB total\nIf RAII works, memory usage stays constant after first allocation\nCompleted iteration 0/20\nCompleted iteration 5/20\nCompleted iteration 10/20\nCompleted iteration 15/20\nMemory leak test completed!\nIf you saw stable memory usage, RAII is working correctly!\n"
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0

@@ -1,9 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: echo ok 0 hello
-# EXPECT_STDOUT_CONTAINS: exit ok 3
-# EXPECT_STDOUT_CONTAINS: stderr ok 0 oops
-# EXPECT_STDOUT_CONTAINS: missing spawnfailed
-# EXPECT_STDOUT_CONTAINS: big ok 588895
+# EXPECT_STDOUT_EXACT: "echo ok 0 hello\nexit ok 3 \nstderr ok 0 oops\nmissing spawnfailed\nbig ok 588895\n"
 # Safe process-spawn primitive: run(cmd, args) -> Result<ProcessOutput, ProcessError>.
 # Verifies argv (no shell), stdout+stderr capture, exit code, spawn failure, and that
 # large output does not deadlock (tmpfile-redirect capture rather than pipes).

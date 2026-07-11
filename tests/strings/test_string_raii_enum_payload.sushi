@@ -1,8 +1,6 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: bare-1
-# EXPECT_STDOUT_CONTAINS: arr-2
-# EXPECT_STDOUT_CONTAINS: iter-3
+# EXPECT_STDOUT_EXACT: "bare-1\narr-2\niter-3\niter-4\n"
 # EXPECT_STDERR_EMPTY: true
 # Issue #147: enum string payloads and arrays of strings stay leak-free and double-free-free
 # after the needs_cleanup(STRING) flip. Covers: a matched bare enum local, an enum with a

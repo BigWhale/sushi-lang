@@ -34,16 +34,18 @@ def classify_type_for_cast(llvm_type: ir.Type) -> str:
         return 'unknown'
 
 
-def cast_int_to_int(codegen: 'LLVMCodegen', source: ir.Value, target_type: ir.IntType) -> ir.Value:
+def cast_int_to_int(codegen: 'LLVMCodegen', source: ir.Value, target_type: ir.IntType,
+                    source_unsigned: bool = False) -> ir.Value:
     """Cast between integer types with appropriate extension or truncation.
 
-    Uses width comparison to select operation: extend (sext) or truncate.
-    For explicit casting system where programmer controls the conversion.
+    Widening uses zero-extension for an unsigned source and sign-extension for a
+    signed source; narrowing always truncates.
 
     Args:
         codegen: The LLVM codegen instance.
         source: The source integer value.
         target_type: The target integer type.
+        source_unsigned: Whether the source semantic type is unsigned.
 
     Returns:
         The casted value.
@@ -54,38 +56,48 @@ def cast_int_to_int(codegen: 'LLVMCodegen', source: ir.Value, target_type: ir.In
     if source_width == target_width:
         return source
     elif source_width < target_width:
-        # Extend: use sign extension by default for explicit casts
+        # Zero-extend an unsigned source, sign-extend a signed source.
+        if source_unsigned:
+            return codegen.builder.zext(source, target_type)
         return codegen.builder.sext(source, target_type)
     else:
         # Truncate for larger to smaller widths
         return codegen.builder.trunc(source, target_type)
 
 
-def cast_int_to_float(codegen: 'LLVMCodegen', source: ir.Value, target_type: ir.Type) -> ir.Value:
-    """Cast integer to floating-point type (signed conversion).
+def cast_int_to_float(codegen: 'LLVMCodegen', source: ir.Value, target_type: ir.Type,
+                      source_unsigned: bool = False) -> ir.Value:
+    """Cast integer to floating-point type.
 
     Args:
         codegen: The LLVM codegen instance.
         source: The source integer value.
         target_type: The target float/double type.
+        source_unsigned: Whether the source semantic type is unsigned.
 
     Returns:
         The casted value.
     """
+    if source_unsigned:
+        return codegen.builder.uitofp(source, target_type)
     return codegen.builder.sitofp(source, target_type)
 
 
-def cast_float_to_int(codegen: 'LLVMCodegen', source: ir.Value, target_type: ir.IntType) -> ir.Value:
+def cast_float_to_int(codegen: 'LLVMCodegen', source: ir.Value, target_type: ir.IntType,
+                      target_unsigned: bool = False) -> ir.Value:
     """Cast floating-point to integer type (truncates toward zero).
 
     Args:
         codegen: The LLVM codegen instance.
         source: The source float/double value.
         target_type: The target integer type.
+        target_unsigned: Whether the target semantic type is unsigned.
 
     Returns:
         The casted value.
     """
+    if target_unsigned:
+        return codegen.builder.fptoui(source, target_type)
     return codegen.builder.fptosi(source, target_type)
 
 
@@ -158,11 +170,17 @@ def emit_cast_expression(codegen: 'LLVMCodegen', expr: CastExpr) -> ir.Value:
     src_category = classify_type_for_cast(source_llvm_type)
     dst_category = classify_type_for_cast(target_llvm_type)
 
+    # Signedness is invisible in the signless LLVM integer type, so recover it
+    # from the semantic types stamped in Pass 2 (source_type / target_type).
+    from sushi_lang.semantics.type_predicates import is_unsigned_int
+    source_unsigned = is_unsigned_int(expr.source_type)
+    target_unsigned = is_unsigned_int(expr.target_type)
+
     # Dispatch table for cast operations
     cast_ops = {
-        ('int', 'int'): lambda src, dst: cast_int_to_int(codegen, src, dst),
-        ('int', 'float'): lambda src, dst: cast_int_to_float(codegen, src, dst),
-        ('float', 'int'): lambda src, dst: cast_float_to_int(codegen, src, dst),
+        ('int', 'int'): lambda src, dst: cast_int_to_int(codegen, src, dst, source_unsigned),
+        ('int', 'float'): lambda src, dst: cast_int_to_float(codegen, src, dst, source_unsigned),
+        ('float', 'int'): lambda src, dst: cast_float_to_int(codegen, src, dst, target_unsigned),
         ('float', 'float'): lambda src, dst: cast_float_to_float(codegen, src, dst),
     }
 

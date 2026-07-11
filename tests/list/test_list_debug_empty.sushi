@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: len: 0, capacity: 0
-# EXPECT_STDOUT_CONTAINS: [0] 42
+# EXPECT_STDOUT_EXACT: "=== Empty List Debug ===\nList<i32> {\n  len: 0, capacity: 0\n}\n\n=== After pushing one element ===\nList<i32> {\n  len: 1, capacity: 1\n  [0] 42\n}\n"
 fn main() i32:
     let List<i32> empty = List.new()
 

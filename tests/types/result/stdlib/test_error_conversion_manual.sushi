@@ -1,5 +1,5 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: PASS: Manual error conversion works
+# EXPECT_STDOUT_EXACT: "PASS: Manual error conversion works\n"
 # EXPECT_STDERR_EMPTY: true
 
 # Tests manual error type conversion between different error types

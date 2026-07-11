@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: "Success(42) hash: 4165524350563243767"
-# EXPECT_STDOUT_CONTAINS: "Failure(404) hash: 791165380904324248"
+# EXPECT_STDOUT_EXACT: "Success(42) hash: 4165524350563243767\nSuccess(100) hash: 13674230862782512721\nFailure(404) hash: 791165380904324248\nAll enum data variant hashes computed!\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Test hashing of enum with associated data
 

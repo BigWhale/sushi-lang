@@ -1,8 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: "✓ HashMap has 3 entries"
-# EXPECT_STDOUT_CONTAINS: "Found origin: origin"
-# EXPECT_STDOUT_CONTAINS: "Updated label: updated origin"
-# EXPECT_STDOUT_CONTAINS: "Removed: point A"
-# EXPECT_STDOUT_CONTAINS: "✓ HashMap has 2 entries after removal"
+# EXPECT_STDOUT_EXACT: "✓ HashMap has 3 entries\nFound origin: origin\n✓ Point(100, 200) not found as expected\n✓ Point(10, 20) exists\nUpdated label: updated origin\nRemoved: point A\n✓ HashMap has 2 entries after removal\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Test HashMap with struct keys
 

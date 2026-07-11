@@ -7,7 +7,7 @@ to specify expected runtime behavior, exit codes, and output validation.
 
 import re
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Optional, List, Dict
 from pathlib import Path
 
 
@@ -26,11 +26,17 @@ class TestMetadata:
     # Enforced on the compilation path, not the runtime path.
     expect_error_code: Optional[List[str]] = None
 
+    # Opt-in leak assertion. Only honoured when the runner is invoked with --leaks;
+    # the default suite never pays the cost of a leak checker.
+    expect_no_leaks: bool = False
+
     # Test behavior flags
     requires_runtime: bool = False
     timeout_seconds: int = 10
     cmd_args: Optional[str] = None  # Command-line arguments for runtime test
     stdin_input: Optional[str] = None  # Standard input to provide to the test
+    test_env: Optional[Dict[str, str]] = None  # Env vars to set for the runtime binary
+    test_cwd: Optional[str] = None  # Working directory to run the runtime binary in
 
     # Test categorization
     test_type: str = "default"  # "default", "runtime", "compilation"
@@ -43,6 +49,8 @@ class TestMetadata:
             self.expect_stderr_contains = []
         if self.expect_error_code is None:
             self.expect_error_code = []
+        if self.test_env is None:
+            self.test_env = {}
 
         # If any runtime expectations are set, this test requires runtime validation
         if (self.expect_runtime_exit is not None or
@@ -62,11 +70,14 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
     # EXPECT_STDOUT_CONTAINS: "Result: 17"
     # EXPECT_STDOUT_EXACT: "Hello World\\nDone\\n"
     # EXPECT_STDERR_EMPTY: true
+    # EXPECT_NO_LEAKS: true
     # EXPECT_ERROR_CODE: CE2007
     # TIMEOUT_SECONDS: 10
     # TEST_TYPE: runtime
     # CMD_ARGS: arg1 arg2 arg3
     # STDIN_INPUT: "line1\\nline2\\nline3\\n"
+    # TEST_ENV: HOME=/home/trillian     (repeatable, one KEY=VALUE per line)
+    # TEST_CWD: /
 
     Args:
         test_file: Path to the .sushi test file
@@ -128,6 +139,10 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
                 value = directive.split(':', 1)[1].strip().lower()
                 metadata.expect_stderr_empty = value in ('true', 'yes', '1')
 
+            elif directive.startswith('EXPECT_NO_LEAKS:'):
+                value = directive.split(':', 1)[1].strip().lower()
+                metadata.expect_no_leaks = value in ('true', 'yes', '1')
+
             elif directive.startswith('EXPECT_ERROR_CODE:'):
                 value = directive.split(':', 1)[1].strip()
                 # Strip optional quotes; accept a comma/space separated list and
@@ -166,65 +181,56 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
                 value = value.replace('\\n', '\n').replace('\\t', '\t')
                 metadata.stdin_input = value
 
+            elif directive.startswith('TEST_ENV:'):
+                value = directive.split(':', 1)[1].strip()
+                # One KEY=VALUE per directive; the directive may be repeated to set
+                # several variables. Lets a test pin HOME/USER/etc. instead of baking
+                # the developer's host environment into an expected-stdout snapshot.
+                if '=' in value:
+                    key, val = value.split('=', 1)
+                    metadata.test_env[key.strip()] = val.strip()
+                else:
+                    print(f"Warning: Invalid TEST_ENV value in {test_file}: {value}")
+
+            elif directive.startswith('TEST_CWD:'):
+                # Working directory to run the binary in, so getcwd()-style output is
+                # host-independent (e.g. TEST_CWD: / yields a deterministic "/").
+                metadata.test_cwd = directive.split(':', 1)[1].strip()
+
     except Exception as e:
         print(f"Warning: Failed to parse metadata from {test_file}: {e}")
 
-    # Auto-detect runtime requirements for known test patterns
-    _auto_detect_runtime_requirements(test_file, metadata, content if 'content' in locals() else '')
+    _apply_category_defaults(test_file, metadata)
 
     return metadata
 
 
-def _auto_detect_runtime_requirements(test_file: Path, metadata: TestMetadata, content: str) -> None:
+def _apply_category_defaults(test_file: Path, metadata: TestMetadata) -> None:
     """
-    Auto-detect if a test requires runtime validation based on filename and content patterns.
+    Fill in the runtime contract implied by a test's filename category.
+
+    A runnable test (anything that is not test_err_* / test_warn_*) is executed after
+    compilation and is expected to exit 0 unless it declares otherwise. Making that
+    default explicit here -- rather than inferring intent from the source text -- is
+    what lets the runner treat an undeclared non-zero exit as a failure.
 
     Args:
         test_file: Path to the test file
         metadata: TestMetadata object to update
-        content: Source file content
     """
     filename = test_file.name
 
-    # Auto-detect based on filename patterns
-    if filename.startswith('test_run_'):
-        metadata.requires_runtime = True
-        metadata.test_type = 'runtime'
-    elif filename.startswith('test_err_') or filename.startswith('test_warn_'):
+    if filename.startswith('test_err_') or filename.startswith('test_warn_'):
         metadata.test_type = 'compilation_only'
         metadata.requires_runtime = False
         return
 
-    # Auto-detect based on content patterns
-    if not metadata.requires_runtime:  # Only auto-detect if not explicitly set
+    if filename.startswith('test_run_'):
+        metadata.test_type = 'runtime'
 
-        # Look for conditional return statements (runtime validation logic)
-        conditional_return_patterns = [
-            r'if\s*\([^)]+\):\s*return\s+[0-9]+',  # if (condition): return N
-            r'return\s+[^0\s]\d*',  # return non-zero number
-        ]
-
-        for pattern in conditional_return_patterns:
-            if re.search(pattern, content):
-                metadata.requires_runtime = True
-                if metadata.expect_runtime_exit is None:
-                    # Try to extract expected success exit code (usually 0)
-                    success_match = re.search(r'return\s+0\s*#.*[Ss]uccess', content)
-                    if success_match:
-                        metadata.expect_runtime_exit = 0
-                break
-
-        # Look for specific expected values in comments
-        expected_patterns = [
-            r'#.*should be.*(\d+)',
-            r'#.*expected.*(\d+)',
-            r'#.*result.*(\d+)',
-        ]
-
-        for pattern in expected_patterns:
-            if re.search(pattern, content):
-                metadata.requires_runtime = True
-                break
+    metadata.requires_runtime = True
+    if metadata.expect_runtime_exit is None:
+        metadata.expect_runtime_exit = 0
 
 
 def get_test_category(test_file: Path) -> str:
@@ -249,26 +255,33 @@ def get_test_category(test_file: Path) -> str:
         return 'success'
 
 
-def should_run_runtime_test(test_file: Path, metadata: TestMetadata) -> bool:
+def should_run_runtime_test(test_file: Path, metadata: TestMetadata,
+                            leaks_mode: bool = False) -> bool:
     """
     Determine if a test should have its compiled binary executed.
+
+    Reduces to "run everything that is not test_err_ / test_warn_", because
+    _apply_category_defaults marks every runnable test as requires_runtime.
+
+    The one exception is leaks_mode: a test_warn_ test compiles successfully and does
+    produce a binary, so a warning test that declares EXPECT_NO_LEAKS is executed
+    under --leaks. Shadowing is a warned-but-legal construct, so this is the only way
+    to leak-check it.
 
     Args:
         test_file: Path to the test file
         metadata: Parsed test metadata
+        leaks_mode: True when the runner was invoked with --leaks
 
     Returns:
         True if the test should be executed after compilation
     """
     category = get_test_category(test_file)
 
-    # Never run runtime tests for compilation-only categories
-    if category in ('error', 'warning'):
+    if category == 'error':
         return False
 
-    # Always run for explicit runtime tests
-    if category == 'runtime':
-        return True
+    if category == 'warning':
+        return leaks_mode and metadata.expect_no_leaks
 
-    # For regular tests, check metadata requirements
     return metadata.requires_runtime

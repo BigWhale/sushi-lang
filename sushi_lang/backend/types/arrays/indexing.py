@@ -67,51 +67,24 @@ def emit_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, to_i1: bool = F
             if const_index >= array_size:
                 raise_internal_error("CE2057", index=const_index, size=array_size)
 
-    # Add runtime bounds checking for fixed arrays
-    # Get the array type and size
+    # Add runtime bounds checking. Both fixed and dynamic arrays trap RE2020 on
+    # an out-of-bounds direct index; the difference is only where the size comes
+    # from (a compile-time count vs. a loaded length field).
+    from sushi_lang.backend import gep_utils
+    from sushi_lang.backend.types.arrays.bounds import emit_bounds_check
+
     array_type = array_slot.type.pointee
     if isinstance(array_type, ir.ArrayType):
-        # Fixed array - add bounds checking
-        array_size = array_type.count
-        size_const = ir.Constant(codegen.i32, array_size)
-        zero = ir.Constant(codegen.i32, 0)
-
-        # Check if index >= 0
-        index_not_negative = codegen.builder.icmp_signed(">=", index_value, zero, name="index_not_negative")
-
-        # Check if index < size
-        index_in_bounds = codegen.builder.icmp_unsigned("<", index_value, size_const, name="index_in_bounds")
-
-        # Both conditions must be true
-        bounds_ok = codegen.builder.and_(index_not_negative, index_in_bounds, name="bounds_ok")
-
-        # Create basic blocks for bounds check
-        bounds_ok_block = codegen.builder.append_basic_block(name="array_bounds_ok")
-        bounds_fail_block = codegen.builder.append_basic_block(name="array_bounds_fail")
-
-        # Branch based on bounds check
-        codegen.builder.cbranch(bounds_ok, bounds_ok_block, bounds_fail_block)
-
-        # Bounds failure block: emit runtime error and exit
-        codegen.builder.position_at_end(bounds_fail_block)
-        codegen.runtime.errors.emit_runtime_error_with_values(
-            "RE2020",
-            "array index %d out of bounds for array of size %d",
-            index_value,
-            size_const
-        )
-        # emit_runtime_error_with_values calls exit(), so this block is terminated
-        # Add unreachable to satisfy LLVM
-        codegen.builder.unreachable()
-
-        # Bounds OK block: continue with normal array access
-        codegen.builder.position_at_end(bounds_ok_block)
+        size_value = ir.Constant(codegen.i32, array_type.count)
+        emit_bounds_check(codegen, index_value, size_value, prefix="array")
+    elif isinstance(array_type, ir.LiteralStructType):
+        len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_slot, "len_ptr")
+        size_value = codegen.builder.load(len_ptr, name="array_len")
+        emit_bounds_check(codegen, index_value, size_value, prefix="dynarray")
 
     # Use GEP to get pointer to the array element
     # llvmlite's GEP validation requires constant indices for structs and arrays
     # Workaround: Convert to element pointer first, then use single-index GEP
-    from sushi_lang.backend import gep_utils
-
     zero = ir.Constant(codegen.i32, 0)
 
     if isinstance(array_type, ir.ArrayType):
@@ -132,16 +105,32 @@ def emit_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, to_i1: bool = F
     # Load the value from the pointer
     result = codegen.builder.load(element_ptr)
 
-    # Value semantics (#60): a struct element that owns heap memory must be deep-copied so
-    # the indexed copy does not shallow-share the array element's buffer. Only the
+    # Value semantics (#60, #145): an element that owns heap memory must be deep-copied so
+    # the indexed copy does not shallow-share the array element's buffer. Two owners of one
+    # buffer (the array's element destructor and the new binding / the container it is stored
+    # into) would otherwise double-free. Covers owning structs/enums AND heap-owned string
+    # elements (`let s = words[0]`, `m.insert(words[0], ...)` on a split() array, N1). Only the
     # Name-array case carries a resolvable element type; other forms are left unchanged.
     if not to_i1 and isinstance(expr.array, Name):
-        from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, ReferenceType
+        from sushi_lang.semantics.typesys import (
+            ArrayType, DynamicArrayType, ReferenceType, BuiltinType)
         array_sem = codegen.variable_types.get(expr.array.id) or codegen.memory.find_semantic_type(expr.array.id)
         if isinstance(array_sem, ReferenceType):
             array_sem = array_sem.referenced_type
         if isinstance(array_sem, (ArrayType, DynamicArrayType)):
             from sushi_lang.backend.expressions import memory
-            result = memory.deep_copy_if_owning_struct(codegen, result, array_sem.base_type)
+            if array_sem.base_type == BuiltinType.STRING:
+                # A string element clones its heap buffer (owned=1) so a `let` binding or a
+                # container the value is stored into becomes the sole owner of an independent
+                # buffer, while the array keeps and frees the original element. A literal
+                # element (owned=0) clones to another owned=0, whose free is a no-op.
+                result = memory.emit_value_clone(codegen, result, array_sem.base_type)
+                # A transient index-load with no binding (e.g. println(words[0])) would leak
+                # this clone; register it for an owned-bit-guarded free at the end of the
+                # print-arg frame. Outside a print frame (a `let`/container store) this is a
+                # no-op and the new owner frees the clone.
+                codegen.register_string_value_temp(result)
+            else:
+                result = memory.deep_copy_if_owning_struct(codegen, result, array_sem.base_type)
 
     return codegen.utils.as_i1(result) if to_i1 else result

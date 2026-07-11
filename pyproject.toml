@@ -63,3 +63,12 @@ exclude = [
   "frontend",
 ]
 
+
+[tool.mypy]
+# Deliberately minimal. mypy has never run on this tree: until the prose comment at
+# backend/types/core/mapping.py was reworded, it aborted on the first file, reading
+# "# type: ..." as a PEP 484 type comment. It now parses all 385 files and reports a
+# large error count by design -- that count is a baseline to burn down later, not a
+# gate. No strictness flags, and no CI job, until the backlog is paid down.
+python_version = "3.13"
+ignore_missing_imports = true

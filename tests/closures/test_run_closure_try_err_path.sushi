@@ -1,0 +1,17 @@
+# Guards PLAN.md T1.4: when `??` takes the error path, the propagation block emits
+# RAII cleanup for a closure variable whose fat-pointer alloca was never stored.
+# Cleanup loads garbage, extracts slot 2 (drop_ptr) and CALLS it -> SIGBUS (exit 138).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "-99\n"
+fn fallible(i32 n) fn(i32) -> i32:
+    if (n < 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(|i32 x| x + n)
+
+fn run(i32 n) i32:
+    let fn(i32) -> i32 g = fallible(n)??
+    return Result.Ok(g(10)??)
+
+fn main() i32:
+    println(run(-1).realise(-99))
+    return Result.Ok(0)

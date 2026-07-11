@@ -1,8 +1,7 @@
 # Test HashMap with enum-string values and .free(): verifies RAII cleanup of
 # string-carrying enum variants stored in the HashMap heap
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: Label 1: alpha
-# EXPECT_STDOUT_CONTAINS: HashMap free: done
+# EXPECT_STDOUT_EXACT: "Label 1: alpha\nHashMap free: done\n"
 
 use <collections/hashmap>
 

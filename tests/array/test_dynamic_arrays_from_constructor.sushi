@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 510503applecherry5011420
+# EXPECT_STDOUT_EXACT: "510503applecherry5011420"
 # Test dynamic array from() constructor with various element types
 fn run_test() i32:
   # Test from() with integers

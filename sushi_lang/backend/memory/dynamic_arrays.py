@@ -17,6 +17,7 @@ from sushi_lang.semantics.typesys import DynamicArrayType, Type, StructType
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH
 from sushi_lang.backend.llvm_constants import ZERO_I32, make_i32_const
 from sushi_lang.backend.memory.heap import emit_malloc, emit_free
+from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -43,6 +44,8 @@ class OwnDescriptor:
     """
     name: str                    # Variable name
     own_type: StructType         # Own<T> struct type
+    slot: ir.Instruction         # Alloca holding the Own<T> struct (move key + destructor target)
+    depth: int = -1              # Scope depth at registration (shadow disambiguation)
     destroyed: bool = False      # Track if explicitly destroyed via .destroy()
 
 
@@ -83,13 +86,30 @@ class DynamicArrayManager:
         self.codegen = codegen
         # Stack of scopes, each containing dynamic arrays in that scope
         self.scope_stack: List[Set[str]] = []
-        # Track all dynamic arrays by name
-        self.arrays: Dict[str, DynamicArrayDescriptor] = {}
-        # Track Own<T> variables for RAII cleanup
+        # Track dynamic arrays by name as a per-name STACK of descriptors (innermost last),
+        # so a nested shadow of an owning array does not overwrite the outer descriptor:
+        # the inner binding pushes, its scope pop frees it and pops it, and the outer
+        # binding's descriptor is restored as the top. A flat dict lost the outer descriptor
+        # and the outer pop then double-freed the inner array (CE0015 dominance ICE).
+        self.arrays: Dict[str, List[DynamicArrayDescriptor]] = {}
+        # Track Own<T> variables for RAII cleanup. Flat by name: Own cleanup is driven by a
+        # wholesale iteration (emit_own_cleanup) at function/scope exit, not scope-popped like
+        # arrays, so a per-name stack would never drain. The descriptor carries its slot for
+        # slot-keyed move checks.
         self.owned_pointers: Dict[str, OwnDescriptor] = {}
-        # Track local List<T> variables for RAII cleanup (parallel to dynamic arrays).
-        self.lists: Dict[str, ListDescriptor] = {}
+        # Track local List<T> variables for RAII cleanup (stacked, parallel to dynamic arrays).
+        self.lists: Dict[str, List[ListDescriptor]] = {}
         self.list_scope_stack: List[Set[str]] = []
+
+    def _array(self, name: str) -> Optional[DynamicArrayDescriptor]:
+        """Innermost live dynamic-array descriptor for `name`, or None."""
+        stack = self.arrays.get(name)
+        return stack[-1] if stack else None
+
+    def _list(self, name: str) -> Optional[ListDescriptor]:
+        """Innermost live List<T> descriptor for `name`, or None."""
+        stack = self.lists.get(name)
+        return stack[-1] if stack else None
 
     def push_scope(self) -> None:
         """Enter a new scope for dynamic array and List<T> tracking."""
@@ -113,25 +133,36 @@ class DynamicArrayManager:
         current_scope = self.scope_stack.pop()
         current_lists = self.list_scope_stack.pop() if self.list_scope_stack else set()
 
-        # Popping the scopes above is the drain: these arrays / lists are now out of
-        # scope and will not be seen by any later cleanup. If the current block already
-        # terminated, an early `return`/`??` inside this scope already emitted the
-        # destructors on this path -- emitting again would append a stray free after
-        # the terminator. Skip emission but still drain. (Mirrors the cstr cleanup
-        # discipline; see #59.)
+        # Popping the per-name descriptor stacks below is the drain: these arrays / lists are
+        # now out of scope and their outer namesake (if any) is restored as the top. If the
+        # current block already terminated, an early `return`/`??` inside this scope already
+        # emitted the destructors on this path -- emitting again would append a stray free
+        # after the terminator. Skip EMISSION but still drain the stacks so shadowing stays
+        # consistent. (Mirrors the cstr cleanup discipline; see #59.)
         block = self.builder.block
-        if block is not None and block.is_terminated:
-            return
+        emit = not (block is not None and block.is_terminated)
 
-        # Generate destructor calls for all arrays / lists in this scope on the
-        # fall-through path. The destructors are no-ops for moved / explicitly-destroyed
-        # values. Do NOT set `destroyed` here: it denotes an explicit .destroy(), a
-        # cross-path state, and each runtime exit path frees on its own block.
+        # Generate destructor calls for all arrays / lists in this scope on the fall-through
+        # path, then pop each binding's top descriptor. The destructors are no-ops for moved /
+        # explicitly-destroyed values. Do NOT set `destroyed` here: it denotes an explicit
+        # .destroy(), a cross-path state, and each runtime exit path frees on its own block.
         for array_name in current_scope:
-            if array_name in self.arrays:
+            if emit and array_name in self.arrays:
                 self._emit_array_destructor(array_name)
+            self._pop_descriptor(self.arrays, array_name)
         for list_name in current_lists:
-            self._emit_list_destructor(list_name)
+            if emit:
+                self._emit_list_destructor(list_name)
+            self._pop_descriptor(self.lists, list_name)
+
+    @staticmethod
+    def _pop_descriptor(reg: Dict[str, List], name: str) -> None:
+        """Pop `name`'s innermost descriptor from a stacked registry (no-op if absent)."""
+        stack = reg.get(name)
+        if stack:
+            stack.pop()
+            if not stack:
+                del reg[name]
 
     def declare_dynamic_array(self, name: str, array_type: DynamicArrayType) -> ir.Instruction:
         """Declare a new dynamic array variable and allocate its struct on stack.
@@ -189,7 +220,7 @@ class DynamicArrayManager:
             element_type=element_type,  # Use resolved type
             llvm_alloca=alloca
         )
-        self.arrays[name] = descriptor
+        self.arrays.setdefault(name, []).append(descriptor)
 
         # Add to current scope
         if self.scope_stack:
@@ -226,7 +257,7 @@ class DynamicArrayManager:
             element_type=element_type,
             llvm_alloca=slot,
         )
-        self.arrays[name] = descriptor
+        self.arrays.setdefault(name, []).append(descriptor)
         if self.scope_stack:
             self.scope_stack[-1].add(name)
 
@@ -246,10 +277,9 @@ class DynamicArrayManager:
             name: The array variable name.
             elements: The LLVM values for initial elements.
         """
-        if name not in self.arrays:
+        descriptor = self._array(name)
+        if descriptor is None:
             raise_internal_error("CE0057", name=name)
-
-        descriptor = self.arrays[name]
         if descriptor.destroyed:
             raise_internal_error("CE0058", name=name)
 
@@ -290,19 +320,23 @@ class DynamicArrayManager:
             name: The array variable name.
         """
         self._emit_array_destructor(name)
-        if name in self.arrays:
-            self.arrays[name].destroyed = True
+        descriptor = self._array(name)
+        if descriptor is not None:
+            descriptor.destroyed = True
 
     def mark_as_moved(self, name: str) -> None:
         """Mark a dynamic array as moved (ownership transferred).
 
-        Delegates to the unified MoveTracker. Moved arrays are excluded from RAII
-        cleanup, implementing move semantics for return values.
+        Delegates to the unified MoveTracker, keyed by the array's slot so a sibling or
+        shadowing binding of the same name is not poisoned. Moved arrays are excluded from
+        RAII cleanup, implementing move semantics for return values.
 
         Args:
             name: The variable name to mark as moved.
         """
-        self.codegen.moves.mark(name)
+        descriptor = self._array(name)
+        if descriptor is not None:
+            self.codegen.moves.mark(descriptor.llvm_alloca)
 
     def is_list_type(self, ty: Type) -> bool:
         """Check if a type is List<T>.
@@ -326,25 +360,29 @@ class DynamicArrayManager:
             list_type: The List<T> struct type.
             slot: The alloca holding the List<T> struct.
         """
-        self.lists[var_name] = ListDescriptor(name=var_name, list_type=list_type, llvm_alloca=slot)
+        self.lists.setdefault(var_name, []).append(
+            ListDescriptor(name=var_name, list_type=list_type, llvm_alloca=slot))
         if self.list_scope_stack:
             self.list_scope_stack[-1].add(var_name)
 
     def mark_list_moved(self, var_name: str) -> None:
         """Mark a List<T> as moved (ownership transferred to the caller); skip cleanup."""
-        self.codegen.moves.mark(var_name)
+        descriptor = self._list(var_name)
+        if descriptor is not None:
+            self.codegen.moves.mark(descriptor.llvm_alloca)
 
     def mark_list_destroyed(self, var_name: str) -> None:
         """Mark a List<T> as explicitly destroyed/freed; skip redundant RAII cleanup."""
-        if var_name in self.lists:
-            self.lists[var_name].destroyed = True
+        descriptor = self._list(var_name)
+        if descriptor is not None:
+            descriptor.destroyed = True
 
     def _emit_list_destructor(self, name: str) -> None:
         """Emit destructor code for a local List<T> (no-op if moved / already destroyed)."""
-        if name not in self.lists:
+        descriptor = self._list(name)
+        if descriptor is None:
             return
-        descriptor = self.lists[name]
-        if descriptor.destroyed or self.codegen.moves.is_moved(name):
+        if descriptor.destroyed or self.codegen.moves.is_moved(descriptor.llvm_alloca):
             return
         from sushi_lang.backend.generics.list.methods_destroy import emit_list_destroy
         emit_list_destroy(self.codegen, descriptor.llvm_alloca, descriptor.list_type)
@@ -363,20 +401,24 @@ class DynamicArrayManager:
             return ty.name.startswith("Own<")
         return False
 
-    def register_own(self, var_name: str, own_type: StructType) -> None:
+    def register_own(self, var_name: str, own_type: StructType, slot: ir.Instruction) -> None:
         """Register Own<T> variable for automatic RAII cleanup.
 
         Args:
             var_name: The name of the variable holding an Own<T> value.
             own_type: The Own<T> struct type (e.g., Own<i32>).
+            slot: The alloca holding the Own<T> struct (move key + destructor target).
         """
-        descriptor = OwnDescriptor(name=var_name, own_type=own_type, destroyed=False)
-        self.owned_pointers[var_name] = descriptor
+        depth = self.codegen.memory._scope_depth
+        self.owned_pointers[var_name] = OwnDescriptor(
+            name=var_name, own_type=own_type, slot=slot, depth=depth, destroyed=False)
 
     def mark_own_moved(self, var_name: str) -> None:
         """Mark an Own<T> as moved (ownership transferred, e.g. into another Own or a
         struct field); the unified MoveTracker excludes it from RAII cleanup."""
-        self.codegen.moves.mark(var_name)
+        descriptor = self.owned_pointers.get(var_name)
+        if descriptor is not None:
+            self.codegen.moves.mark(descriptor.slot)
 
     def mark_own_destroyed(self, var_name: str) -> None:
         """Mark an Own<T> variable as explicitly destroyed.
@@ -397,7 +439,7 @@ class DynamicArrayManager:
         This should be called at scope boundaries (function exit, before returns, etc.).
         """
         for var_name, descriptor in self.owned_pointers.items():
-            if not descriptor.destroyed and not self.codegen.moves.is_moved(var_name):
+            if not descriptor.destroyed and not self.codegen.moves.is_moved(descriptor.slot):
                 self._emit_own_destructor(var_name, descriptor.own_type)
 
     def _emit_own_destructor(self, var_name: str, own_type: StructType) -> None:
@@ -427,11 +469,10 @@ class DynamicArrayManager:
         Args:
             name: The array variable name.
         """
-        if name not in self.arrays:
+        descriptor = self._array(name)
+        if descriptor is None:
             return
-
-        descriptor = self.arrays[name]
-        if descriptor.destroyed or self.codegen.moves.is_moved(name):
+        if descriptor.destroyed or self.codegen.moves.is_moved(descriptor.llvm_alloca):
             return
 
         # Use the general destructor for the array struct
@@ -447,10 +488,9 @@ class DynamicArrayManager:
             capacity: The new capacity value.
             data_ptr: The new data pointer.
         """
-        if name not in self.arrays:
+        descriptor = self._array(name)
+        if descriptor is None:
             raise_internal_error("CE0057", name=name)
-
-        descriptor = self.arrays[name]
 
         # Get pointers to struct fields using helper methods
         len_ptr = self.codegen.types.get_dynamic_array_len_ptr(self.builder, descriptor.llvm_alloca)

@@ -65,9 +65,9 @@ def build_variadic_array(codegen: 'LLVMCodegen', trailing_exprs: List,
     if isinstance(array_type.base_type, DynamicArrayType):
         for arg in trailing_exprs:
             if isinstance(arg, Name):
-                codegen.moves.mark(arg.id)
+                codegen.memory.mark_struct_as_moved(arg.id)
 
-    descriptor = codegen.dynamic_arrays.arrays[temp_name]
+    descriptor = codegen.dynamic_arrays._array(temp_name)
     array_struct = codegen.builder.load(descriptor.llvm_alloca, name=f"{temp_name}_val")
 
     # Ownership moves into the callee: the caller must not free this temp.
@@ -79,14 +79,15 @@ def build_variadic_array(codegen: 'LLVMCodegen', trailing_exprs: List,
 def _bloom_move_array(codegen: 'LLVMCodegen', source) -> ir.Value:
     """Move an existing array (the bloom source) into the callee.
 
-    Loads the source's T[] struct by value and, when the source is a named local,
-    marks it moved so the caller's RAII skips the buffer the callee now owns. The
-    validator restricts a bloom source to an array variable (CE0120), so a named move
-    is the sound, covered case.
+    Loads the source's T[] struct by value and marks the source moved so the
+    caller's RAII skips the buffer the callee now owns. Soundness depends on the
+    source being a bare Name: validate_variadic_trailing_args rejects any other
+    spread source with CE0120, so the `isinstance(source, Name)` move below always
+    fires for a spread that reached codegen.
     """
     value = codegen.expressions.emit_expr(source)
     if isinstance(value.type, ir.PointerType):
         value = codegen.builder.load(value, name="bloom_src_val")
     if isinstance(source, Name):
-        codegen.moves.mark(source.id)
+        codegen.memory.mark_struct_as_moved(source.id)
     return value

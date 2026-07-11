@@ -1,6 +1,6 @@
 # FFI: a safe wrapper returning `ptr` through the implicit Result<ptr, E> (issue #85).
 # The wrapper pattern from docs/ffi.md: acquire a foreign handle, hand it out as a Result.
-# EXPECT_STDOUT_CONTAINS: got pointer
+# EXPECT_STDOUT_EXACT: "got pointer\n"
 unsafe external "C" as libc because "allocate and free a raw buffer":
     fn malloc(i64 n) ptr = "malloc"
     fn free(ptr p) ~ = "free"

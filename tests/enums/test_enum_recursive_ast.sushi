@@ -1,7 +1,7 @@
 # Test recursive expression AST enum with 5 variants: Num, Add, Sub, Mul, Neg
 # Validates correct arithmetic evaluation and RAII cleanup of Own<Expr> nodes
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: AST eval: 56
+# EXPECT_STDOUT_EXACT: "AST eval: 56\n"
 
 enum Expr:
     Num(i32)

@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Fixed array [10, 20, 30].hash() = 1369094724173641924
-# EXPECT_STDOUT_CONTAINS: Same fixed array values produce same hash
+# EXPECT_STDOUT_EXACT: "Fixed array [10, 20, 30].hash() = 1369094724173641924\n✓ Same fixed array values produce same hash\n✓ Different fixed array values produce different hashes\n✓ Element order matters ([10,20,30] != [30,20,10])\n✓ Array length affects hash ([10,20,30] != [10,20])\n"
 # Test hash method for fixed arrays
 
 fn main() i32:

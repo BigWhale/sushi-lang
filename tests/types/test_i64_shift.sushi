@@ -1,6 +1,6 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: 34359738368
+# EXPECT_STDOUT_EXACT: "34359738368\n"
 
 # Shift on an i64 operand stays 64-bit (issue #84): 1 << 35.
 fn main() i32:

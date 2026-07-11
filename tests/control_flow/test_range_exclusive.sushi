@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 0
-# EXPECT_STDOUT_CONTAINS: 4
+# EXPECT_STDOUT_EXACT: "0\n1\n2\n3\n4\n"
 fn main() i32:
     foreach(i in 0..5):
         println(i)

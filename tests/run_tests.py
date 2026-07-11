@@ -119,15 +119,8 @@ def get_expected_exit_code(test_file: Path) -> int:
     - test_*.sushi: expect 0 (success, no warnings)
     - test_warn_*.sushi: expect 1 (success with warnings)
     - test_err_*.sushi: expect 2 (compilation failed)
-
-    Special cases:
-    - test_err_dynamic_arrays_out_of_bounds.sushi: expects 0 (bounds checking not implemented yet)
     """
     test_name = test_file.name
-
-    # Special cases that don't follow the convention
-    if test_name == "test_err_dynamic_arrays_out_of_bounds.sushi":
-        return 0  # Bounds checking not implemented yet, compiles successfully
 
     if test_name.startswith("test_warn_"):
         return 1
@@ -193,8 +186,18 @@ def main():
                        help="Output results in JSON format")
     parser.add_argument("--skip-build", action="store_true",
                        help="Skip building stdlib and test helpers")
+    parser.add_argument("--leaks", action="store_true",
+                       help="Enforce EXPECT_NO_LEAKS assertions (implies --enhanced)")
+    parser.add_argument("--leaks-only", action="store_true",
+                       help="Run only the tests declaring EXPECT_NO_LEAKS (implies --leaks)")
 
     args = parser.parse_args()
+
+    # The leak gate lives in the enhanced runner; the basic one never executes binaries.
+    if args.leaks_only:
+        args.leaks = True
+    if args.leaks:
+        args.enhanced = True
 
     # Delegate to enhanced runner if requested
     if args.enhanced:
@@ -213,6 +216,10 @@ def main():
                 sys.argv.append("--json")
             if args.skip_build:
                 sys.argv.append("--skip-build")
+            if args.leaks:
+                sys.argv.append("--leaks")
+            if args.leaks_only:
+                sys.argv.append("--leaks-only")
             return enhanced_test_runner.main()
         except ImportError:
             if not args.json:

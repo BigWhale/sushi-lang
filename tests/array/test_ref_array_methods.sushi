@@ -1,6 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 3
-# EXPECT_STDOUT_CONTAINS: 10
-# EXPECT_STDOUT_CONTAINS: 30
+# EXPECT_STDOUT_EXACT: "3\n10\n30\n3\n20\n"
 # Test reference to dynamic array with method calls
 
 fn array_info(&poke i32[] arr) ~:

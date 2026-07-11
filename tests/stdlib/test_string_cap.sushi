@@ -1,6 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Hello world
-# EXPECT_STDOUT_CONTAINS: Hello123world!
-# EXPECT_STDOUT_CONTAINS: écafÉ
+# EXPECT_STDOUT_EXACT: "Hello world\nHello world\nHello world\nHello world\nA\nZ\n\nHello123world!\nécafÉ\n"
 # EXPECT_RUNTIME_EXIT: 0
 use <collections/strings>
 

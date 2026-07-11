@@ -1,10 +1,6 @@
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
-# EXPECT_STDOUT_CONTAINS: "f64_bits=4614253070214989087"
-# EXPECT_STDOUT_CONTAINS: "f32_bits=1069547520"
-# EXPECT_STDOUT_CONTAINS: "f64_val=3.14"
-# EXPECT_STDOUT_CONTAINS: "f32_val=1.5"
-# EXPECT_STDOUT_CONTAINS: "roundtrip=2.71828"
+# EXPECT_STDOUT_EXACT: "f64_bits=4614253070214989087\nf32_bits=1069547520\nf64_val=3.14\nf32_val=1.5\nroundtrip=2.71828\n"
 #
 # Float bit-reinterpret primitives: f64/f32 .to_bits() and .from_bits().
 # Byte-for-byte compatible with IEEE-754 (verified against Python struct).

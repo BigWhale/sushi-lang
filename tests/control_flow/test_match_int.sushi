@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Int: 42
+# EXPECT_STDOUT_EXACT: "Int: 42\n"
 struct Pair<T, U>:
     T first
     U second

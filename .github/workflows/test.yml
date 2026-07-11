@@ -35,36 +35,9 @@ jobs:
               - 'uv.lock'
               - 'sushic'
 
-      - name: Install system dependencies
+      - name: Set up Sushi toolchain
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
-        run: |
-          apt-get update
-          apt-get install -y wget ca-certificates gnupg lsb-release curl build-essential cmake git jq
-
-      - name: Install LLVM 20
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
-        run: |
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg allow-insecure=yes] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee /etc/apt/sources.list.d/llvm.list
-          echo "deb-src [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg allow-insecure=yes] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee -a /etc/apt/sources.list.d/llvm.list
-          apt-get update -o Acquire::AllowInsecureRepositories=true
-          apt-get install -y --allow-unauthenticated llvm-20 llvm-20-dev clang-20
-          # The IR-emission spike (tests/selfhost) shells out to a bare `clang` to
-          # compile text .ll; macOS ships one via Xcode, Linux does not. Symlink the
-          # versioned clang-20 onto PATH as `clang`.
-          ln -sf "$(command -v clang-20)" /usr/local/bin/clang
-
-      - name: Install uv from Astral
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Install Python dependencies with uv
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
-        run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          LLVM_CONFIG=/usr/bin/llvm-config-20 uv sync --extra dev
+        uses: ./.github/actions/setup-sushi
 
       - name: Run unit tests (pytest)
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
@@ -97,40 +70,9 @@ jobs:
               - 'uv.lock'
               - 'sushic'
 
-      - name: Install system dependencies
+      - name: Set up Sushi toolchain
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
-        run: |
-          apt-get update
-          apt-get install -y wget ca-certificates gnupg lsb-release curl build-essential cmake git jq
-
-      - name: Install LLVM 20
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
-        run: |
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg allow-insecure=yes] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee /etc/apt/sources.list.d/llvm.list
-          echo "deb-src [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg allow-insecure=yes] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee -a /etc/apt/sources.list.d/llvm.list
-          apt-get update -o Acquire::AllowInsecureRepositories=true
-          apt-get install -y --allow-unauthenticated llvm-20 llvm-20-dev clang-20
-          # The IR-emission spike (tests/selfhost) shells out to a bare `clang` to
-          # compile text .ll; macOS ships one via Xcode, Linux does not. Symlink the
-          # versioned clang-20 onto PATH as `clang`.
-          ln -sf "$(command -v clang-20)" /usr/local/bin/clang
-
-      - name: Install uv from Astral
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Install Python dependencies with uv
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
-        run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          LLVM_CONFIG=/usr/bin/llvm-config-20 uv sync --extra dev
-
-      - name: Make sushic executable
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
-        run: chmod +x sushic
+        uses: ./.github/actions/setup-sushi
 
       - name: Run tests
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
@@ -161,25 +103,11 @@ jobs:
               - 'uv.lock'
               - 'sushic'
 
-      - name: Install LLVM 20
+      - name: Set up Sushi toolchain
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
-        run: brew install llvm@20
-
-      - name: Install uv from Astral
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Install Python dependencies with uv
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
-        run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          LLVM_CONFIG="$(brew --prefix llvm@20)/bin/llvm-config" uv sync --extra dev --python 3.13
-
-      - name: Make sushic executable
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
-        run: chmod +x sushic
+        uses: ./.github/actions/setup-sushi
+        with:
+          python-version: '3.13'
 
       - name: Run tests
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
@@ -193,6 +121,11 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           uv run --python 3.13 python -m pytest tests/unit/test_docs_stdlib_smoke.py -q
 
+  # Leak assertions are a dev-mode gate, not a CI job: `leaks` cannot attach on the
+  # hosted macOS runner (no task_for_pid authorization), so it either is absent or
+  # stalls, and the gate can only ever report "skipped" there. Run it locally before
+  # pushing with `python tests/run_tests.py --leaks-only` (see PROGRESS.md / Tier 5).
+
   badges:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -203,35 +136,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Install system dependencies
-        run: |
-          apt-get update
-          apt-get install -y wget ca-certificates gnupg lsb-release curl build-essential cmake git jq
-
-      - name: Install LLVM 20
-        run: |
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg allow-insecure=yes] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee /etc/apt/sources.list.d/llvm.list
-          echo "deb-src [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg allow-insecure=yes] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" | tee -a /etc/apt/sources.list.d/llvm.list
-          apt-get update -o Acquire::AllowInsecureRepositories=true
-          apt-get install -y --allow-unauthenticated llvm-20 llvm-20-dev clang-20
-          # The IR-emission spike (tests/selfhost) shells out to a bare `clang` to
-          # compile text .ll; macOS ships one via Xcode, Linux does not. Symlink the
-          # versioned clang-20 onto PATH as `clang`.
-          ln -sf "$(command -v clang-20)" /usr/local/bin/clang
-
-      - name: Install uv from Astral
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Install Python dependencies with uv
-        run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          LLVM_CONFIG=/usr/bin/llvm-config-20 uv sync --extra dev
-
-      - name: Make sushic executable
-        run: chmod +x sushic
+      - name: Set up Sushi toolchain
+        uses: ./.github/actions/setup-sushi
 
       - name: Run tests
         id: run_tests

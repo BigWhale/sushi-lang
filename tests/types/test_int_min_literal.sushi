@@ -1,6 +1,6 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: -2147483648
+# EXPECT_STDOUT_EXACT: "-2147483648\n"
 
 # i32 minimum as a negated literal stays legal under the literal range check (issue #84).
 fn main() i32:

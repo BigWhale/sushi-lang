@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 3
-# EXPECT_STDOUT_CONTAINS: 100
+# EXPECT_STDOUT_EXACT: "3\n1\n4\n4\n3\n100\n"
 # Test: Multiple array modifications through references
 # Should compile and run successfully
 

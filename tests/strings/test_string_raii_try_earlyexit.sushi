@@ -1,7 +1,6 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: ok:good
-# EXPECT_STDOUT_CONTAINS: failed
+# EXPECT_STDOUT_EXACT: "ok:good\nfailed\n"
 # EXPECT_STDERR_EMPTY: true
 # Issue #145: an owned string local is live when a later `??` short-circuits. The early-exit
 # RAII must free it exactly once. The string local is registered BEFORE its `??`-containing

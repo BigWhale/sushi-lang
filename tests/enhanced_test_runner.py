@@ -9,7 +9,9 @@ Provides two-phase testing:
 Supports test metadata for specifying expected runtime behavior.
 """
 
+import re
 import subprocess
+import signal
 import sys
 import tempfile
 import shutil
@@ -31,6 +33,29 @@ from run_tests import build_stdlib, build_test_helpers, COMPILATION_QUARANTINE
 # checked; only execution of the compiled binary is skipped. Each entry notes the
 # tracking issue; re-enable once the bug is fixed.
 RUNTIME_QUARANTINE: set[str] = set()
+
+
+_NUMERIC = re.compile(r"-?\d+")
+
+
+def stdout_contains(stdout: str, expected: str) -> bool:
+    """
+    Substring match for EXPECT_STDOUT_CONTAINS, with one exception.
+
+    A bare number must match as a whole token. Plain `in` lets `42` be satisfied by
+    `420`, `-42` or `1425`, so an assertion can survive the very change it exists to
+    catch -- the Tier 1 cast fixes alter the width of printed integers on purpose.
+    Anchoring on digit/./- boundaries makes the 101 bare-numeric assertions in the
+    suite mean what they say. Non-numeric expectations keep plain substring semantics.
+    """
+    if not _NUMERIC.fullmatch(expected.strip()):
+        return expected in stdout
+
+    token = expected.strip()
+    # No digit or '.' may abut either side, and no '-' may precede (so `42` does not
+    # match inside `-42`, and `3.14` does not satisfy an assertion of `3`).
+    lookbehind = r"(?<![\d.])" if token.startswith("-") else r"(?<![-\d.])"
+    return re.search(lookbehind + re.escape(token) + r"(?![\d.])", stdout) is not None
 
 
 @dataclass
@@ -56,7 +81,7 @@ class TestResult:
 class TestRunner:
     """Enhanced test runner with compilation and runtime testing."""
 
-    def __init__(self, tests_dir: Path, mode: str = "full", verbose: bool = False, parallel_jobs: int = 4, json_output: bool = False):
+    def __init__(self, tests_dir: Path, mode: str = "full", verbose: bool = False, parallel_jobs: int = 4, json_output: bool = False, leaks: bool = False, leaks_only: bool = False):
         """
         Initialize the test runner.
 
@@ -66,12 +91,17 @@ class TestRunner:
             verbose: Enable verbose output
             parallel_jobs: Number of parallel test jobs
             json_output: Output results in JSON format
+            leaks: Enforce EXPECT_NO_LEAKS assertions (needs a platform leak checker)
+            leaks_only: Run only the tests that declare EXPECT_NO_LEAKS
         """
         self.tests_dir = tests_dir
         self.mode = mode
         self.verbose = verbose
         self.parallel_jobs = parallel_jobs
         self.json_output = json_output
+        self.leaks = leaks
+        self.leaks_only = leaks_only
+        self.leaks_skipped: List[str] = []
         self.temp_dir = None
 
     def __enter__(self):
@@ -104,6 +134,11 @@ class TestRunner:
         # Filter by relative path if pattern provided
         if filter_pattern:
             test_files = [f for f in test_files if filter_pattern in str(f.relative_to(self.tests_dir))]
+
+        # --leaks-only: run just the tests carrying a leak assertion, so CI can gate on
+        # them without paying for the whole suite a second time.
+        if self.leaks_only:
+            test_files = [f for f in test_files if parse_test_metadata(f).expect_no_leaks]
 
         if not test_files:
             if not self.json_output:
@@ -200,7 +235,7 @@ class TestRunner:
         if (self.mode in ("runtime", "full") and
             compilation_success and
             test_name not in RUNTIME_QUARANTINE and
-            should_run_runtime_test(test_file, metadata)):
+            should_run_runtime_test(test_file, metadata, leaks_mode=self.leaks)):
 
             runtime_success, runtime_message = self._run_runtime_test(test_file, metadata)
             result.runtime_success = runtime_success
@@ -236,10 +271,6 @@ class TestRunner:
         expected_exit_code = expected_exit_codes.get(category, 0)
 
         try:
-            # Special case for dynamic array out of bounds test
-            if test_file.name == "test_err_dynamic_arrays_out_of_bounds.sushi":
-                expected_exit_code = 0  # Should compile successfully
-
             # Create unique output binary name
             binary_name = f"test_{test_file.stem}_{os.getpid()}"
             binary_path = Path(self.temp_dir) / binary_name
@@ -344,17 +375,31 @@ class TestRunner:
             # Prepare stdin input if specified
             stdin_input = metadata.stdin_input if metadata.stdin_input else None
 
+            # A test may pin its environment (TEST_ENV) and working directory (TEST_CWD)
+            # so host-dependent output (getenv/getcwd) is deterministic across machines.
+            run_env = {**os.environ, **(metadata.test_env or {})}
+
             # Execute the binary
             result = subprocess.run(
                 cmd,
                 input=stdin_input,
                 capture_output=True,
                 text=True,
-                timeout=metadata.timeout_seconds
+                timeout=metadata.timeout_seconds,
+                env=run_env,
+                cwd=metadata.test_cwd or None,
             )
 
             # Validate runtime behavior
             success, message = self._validate_runtime_result(result, metadata)
+
+            # Leak assertion, opt-in per test and gated on --leaks. Runs the binary a
+            # second time under the platform leak checker.
+            if self.leaks and metadata.expect_no_leaks:
+                leak_ok, leak_message = self._check_leaks(binary_path, metadata)
+                message += "\n" + leak_message
+                if leak_ok is False:
+                    success = False
 
             # Clean up binary after execution
             try:
@@ -368,6 +413,72 @@ class TestRunner:
             return False, f"✗ Runtime: Timeout ({metadata.timeout_seconds}s)"
         except Exception as e:
             return False, f"✗ Runtime: Exception: {e}"
+
+    def _check_leaks(self, binary_path: Path, metadata: TestMetadata) -> Tuple[Optional[bool], str]:
+        """
+        Re-run a binary under the platform leak checker and assert it leaks nothing.
+
+        Returns:
+            (True, msg)  no leaks
+            (False, msg) leaks found -- the test fails
+            (None, msg)  no leak checker on this platform -- the assertion is SKIPPED,
+                         recorded, and reported in the summary. It is never silently
+                         treated as a pass.
+        """
+        if sys.platform != "darwin" or not shutil.which("leaks"):
+            self.leaks_skipped.append(binary_path.name)
+            return None, f"- Leak check skipped: no leak checker on {sys.platform}"
+
+        cmd = ["leaks", "--atExit", "--", str(binary_path)]
+        if metadata.cmd_args:
+            cmd.extend(metadata.cmd_args.split())
+
+        run_env = {**os.environ, **(metadata.test_env or {})}
+
+        # `leaks --atExit -- <bin>` runs the target as a child. start_new_session makes
+        # proc the leader of a fresh process group (pgid == proc.pid), so a timeout can
+        # SIGKILL the whole group -- not just the `leaks` launcher, which may exit early
+        # while a helper keeps a pipe open and the wall clock running (a ~25 min hang on
+        # hosted macOS CI). We kill by proc.pid directly rather than os.getpgid(): by
+        # timeout the launcher can already be gone, and getpgid() would then raise
+        # ProcessLookupError.
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE if metadata.stdin_input else None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=run_env,
+            cwd=metadata.test_cwd or None,
+            start_new_session=True,
+        )
+        try:
+            stdout, _stderr = proc.communicate(
+                input=metadata.stdin_input if metadata.stdin_input else None,
+                timeout=metadata.timeout_seconds + 30,
+            )
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+            proc.communicate()
+            # A leak-checker timeout is a tool/environment stall, not a leak and not a
+            # program hang: the binary already ran to completion in the runtime phase
+            # above, so `leaks` itself is what stalled (it hangs on restricted macOS
+            # setups and hosted CI runners that lack task_for_pid authorization). Treat
+            # it like an absent checker -- SKIP, not fail -- so the gate stays honest
+            # where `leaks` works and does not go permanently red where it cannot run.
+            self.leaks_skipped.append(binary_path.name)
+            return None, "- Leak check skipped: leaks timed out (unavailable in this environment)"
+
+        # The summary line is singular for one leak ("1 leak for 16 total leaked bytes")
+        # and plural otherwise, and it is not the last line of output.
+        match = re.search(r"\d+ leaks? for \d+ total leaked bytes", stdout)
+        summary = match.group(0) if match else ""
+        if proc.returncode == 0:
+            return True, f"✓ Leak check: {summary or 'no leaks'}"
+        return False, f"✗ Leak check: {summary or stdout.strip()[-200:]}"
 
     def _validate_runtime_result(self, result: subprocess.CompletedProcess, metadata: TestMetadata) -> Tuple[bool, str]:
         """
@@ -391,11 +502,15 @@ class TestRunner:
                 messages.append(f"✗ Exit code: Expected {metadata.expect_runtime_exit}, got {result.returncode}")
                 success = False
         else:
-            # Default expectation: exit code 0 for success
+            # Default expectation: exit code 0 for success. parse_test_metadata sets
+            # expect_runtime_exit = 0 for every runnable test, so reaching this branch
+            # means the metadata was bypassed; treat a non-zero exit as a failure either
+            # way. A binary that aborts, double-frees or traps must never pass.
             if result.returncode == 0:
                 messages.append(f"✓ Exit code: {result.returncode}")
             else:
-                messages.append(f"⚠ Exit code: {result.returncode} (no expectation set)")
+                messages.append(f"✗ Exit code: Expected 0, got {result.returncode}")
+                success = False
 
         # Check stdout content
         if metadata.expect_stdout_exact is not None:
@@ -406,7 +521,7 @@ class TestRunner:
                 success = False
 
         for expected_content in metadata.expect_stdout_contains:
-            if expected_content in result.stdout:
+            if stdout_contains(result.stdout, expected_content):
                 messages.append(f"✓ Stdout contains: {repr(expected_content)}")
             else:
                 messages.append(f"✗ Stdout missing: {repr(expected_content)}\nActual stdout: {repr(result.stdout)}")
@@ -481,7 +596,8 @@ class TestRunner:
                 "passed": passed_tests,
                 "failed": failed_tests,
                 "duration_seconds": round(duration, 2),
-                "failed_tests": failed_test_list
+                "failed_tests": failed_test_list,
+                "leak_checks_skipped": len(self.leaks_skipped),
             }
             print(json.dumps(json_output, indent=2))
         else:
@@ -491,6 +607,9 @@ class TestRunner:
             print(f"  Runtime tests: {runtime_tests}")
             print(f"  Passed: {passed_tests}")
             print(f"  Failed: {failed_tests}")
+            if self.leaks_skipped:
+                print(f"  Leak checks SKIPPED: {len(self.leaks_skipped)} "
+                      f"(no leak checker on {sys.platform})")
 
             if failed_tests == 0:
                 print("\nAll tests passed! ✓")
@@ -549,7 +668,21 @@ def main():
         help="Skip building stdlib and test helpers"
     )
 
+    parser.add_argument(
+        "--leaks",
+        action="store_true",
+        help="Enforce EXPECT_NO_LEAKS assertions (macOS: leaks --atExit)"
+    )
+
+    parser.add_argument(
+        "--leaks-only",
+        action="store_true",
+        help="Run only the tests declaring EXPECT_NO_LEAKS (implies --leaks)"
+    )
+
     args = parser.parse_args()
+    if args.leaks_only:
+        args.leaks = True
 
     tests_dir = Path(__file__).parent
     project_root = tests_dir.parent
@@ -571,7 +704,7 @@ def main():
     libs_bin_dir = tests_dir / "libs" / "bin"
     os.environ["SUSHI_LIB_PATH"] = str(libs_bin_dir)
 
-    with TestRunner(tests_dir, args.mode, args.verbose, args.jobs, args.json) as runner:
+    with TestRunner(tests_dir, args.mode, args.verbose, args.jobs, args.json, args.leaks, args.leaks_only) as runner:
         results = runner.run_all_tests(filter_pattern=args.filter)
 
     # Exit with appropriate code

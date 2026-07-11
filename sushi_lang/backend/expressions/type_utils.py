@@ -143,9 +143,19 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
     from sushi_lang.semantics.ast import Name, IntLit, FloatLit, BinaryOp, StringLit, BoolLit, UnaryOp, CastExpr
     from sushi_lang.semantics.typesys import BuiltinType
 
-    # Variable: look up in scope manager (supports nested scopes)
+    # Variable: look up in scope manager (supports nested scopes). Constants are
+    # not registered in the scope tables, so fall back to the constant table -
+    # otherwise a `const u32` reference loses its type and formats as signed.
     if isinstance(expr, Name):
-        return codegen.memory.find_semantic_type(expr.id)
+        local_type = codegen.memory.find_semantic_type(expr.id)
+        if local_type is not None:
+            return local_type
+        const_table = getattr(codegen, 'const_table', None)
+        if const_table is not None:
+            sig = const_table.by_name.get(expr.id)
+            if sig is not None and sig.const_type is not None:
+                return sig.const_type
+        return None
 
     # Explicit cast: the target type IS the semantic type
     elif isinstance(expr, CastExpr):
@@ -206,7 +216,5 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
 
 def is_unsigned_type(semantic_type: Optional[Type]) -> bool:
     """Check whether a semantic type is an unsigned integer type."""
-    from sushi_lang.semantics.typesys import BuiltinType
-    return semantic_type in (
-        BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-    )
+    from sushi_lang.semantics.type_predicates import is_unsigned_int
+    return is_unsigned_int(semantic_type)

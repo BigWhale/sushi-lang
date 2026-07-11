@@ -1,6 +1,6 @@
 # Test comparison operators in constant expressions
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: "All constant comparison tests passed"
+# EXPECT_STDOUT_EXACT: "All constant comparison tests passed\n"
 
 const bool EQ_TRUE = 10 == 10
 const bool EQ_FALSE = 10 == 20

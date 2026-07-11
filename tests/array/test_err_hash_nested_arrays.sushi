@@ -1,12 +1,18 @@
 # TEST_TYPE: error
-# Test that nested arrays (arrays of arrays) cannot be hashed
+# EXPECT_ERROR_CODE: CE0052
+# An array whose elements transitively contain a dynamic array cannot be hashed.
+#
+# This test used to declare `i32[2][2] data`. A true nested array type is not
+# expressible, so the PARSER rejected it and the compiler never reached the hash
+# check -- the test passed on an unrelated syntax error and CE0052 went untested.
+# It now uses the shape the restriction is actually about: Row[] where Row has an
+# i32[] field. A lone Row, or a plain i32[], hashes fine.
 
-struct Matrix:
-    i32[2][2] data
+struct Row:
+    i32[] cells
 
 fn main() i32:
-    # This should fail compilation: nested arrays not supported
-    let Matrix m = Matrix([[1, 2], [3, 4]])
-    let u64 hash = m.hash()  # Error: cannot hash struct with nested array field
+    let Row[] rows = from([Row(from([1, 2]))])
+    let u64 hash = rows.hash()
     println("{hash}")
     return Result.Ok(0)

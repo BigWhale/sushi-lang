@@ -1,6 +1,6 @@
 # Test constants referencing other constants
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: "All constant reference tests passed"
+# EXPECT_STDOUT_EXACT: "All constant reference tests passed\n"
 
 const i32 WIDTH = 100
 const i32 HEIGHT = 50

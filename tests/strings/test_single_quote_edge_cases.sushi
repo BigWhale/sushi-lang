@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: PASS: Empty single-quote string
-# EXPECT_STDOUT_CONTAINS: PASS: Special characters
+# EXPECT_STDOUT_EXACT: "PASS: Empty single-quote string\n\nPASS: Single character\n\nPASS: Very long string\n\nPASS: All whitespace\n\nPASS: Special characters\n\n"
 # Test edge cases for single-quote strings
 
 use <collections/strings>

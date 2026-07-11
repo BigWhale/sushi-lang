@@ -1,0 +1,36 @@
+# Guards PLAN.md T1.3: emit_enum_equality compares only the variant tag and sets
+# data_equal = TRUE for a struct payload, so two distinct Key.Loc(...) keys collapse
+# into one. Expected len = 2 with independent values; today len = 1.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "len = 2\na = 10\nb = 20\n"
+
+use <collections/hashmap>
+
+struct Point:
+    i32 x
+    i32 y
+
+enum Key:
+    Loc(Point)
+
+fn main() i32:
+    let HashMap<Key, i32> m = HashMap.new()
+    m.insert(Key.Loc(Point(1, 2)), 10)
+    m.insert(Key.Loc(Point(3, 4)), 20)
+
+    println("len = {m.len()}")
+
+    match m.get(Key.Loc(Point(1, 2))):
+        Maybe.Some(v) ->
+            println("a = {v}")
+        Maybe.None() ->
+            println("FAIL: (1,2) not found")
+
+    match m.get(Key.Loc(Point(3, 4))):
+        Maybe.Some(v) ->
+            println("b = {v}")
+        Maybe.None() ->
+            println("FAIL: (3,4) not found")
+
+    m.free()
+    return Result.Ok(0)

@@ -32,14 +32,16 @@ def improve_parse_error(e: UnexpectedInput) -> str:
     """Improve parsing error messages for common cases."""
     error_text = str(e)
 
-    if "Expected one of:" in error_text and "LPAR" in error_text:
-        lines = error_text.split('\n')
-        location_line = lines[0] if lines else ""
-
-        import re
-        line_match = re.search(r'at line (\d+)', location_line)
-        if line_match:
-            return f"{location_line}\nParsing error: Missing parentheses around if/elif condition.\nHint: Use 'if (condition):' instead of 'if condition:'"
+    # The if/elif grammar (`IF "(" expr ")" ...`) is the only place that fails
+    # with LPAR as the SOLE expected token: after the keyword the parser demands
+    # `(`. Gate the parentheses hint on that, so an unrelated error that merely
+    # lists LPAR among several alternatives no longer gets a misleading
+    # "missing parentheses around if" message.
+    expected = getattr(e, "expected", None)
+    if expected is not None and set(expected) == {"LPAR"}:
+        location_line = error_text.split('\n', 1)[0]
+        return (f"{location_line}\nParsing error: Missing parentheses around if/elif condition.\n"
+                "Hint: Use 'if (condition):' instead of 'if condition:'")
 
     return error_text
 

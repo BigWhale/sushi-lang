@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: test_multiple_maybe_structs: 1
-# EXPECT_STDOUT_CONTAINS: All tests passed: 5
+# EXPECT_STDOUT_EXACT: "test_struct_in_maybe: 1\ntest_struct_in_control_flow: 1\ntest_nested_struct_in_maybe: 1\ntest_struct_pattern_matching: 1\ntest_multiple_maybe_structs: 1\nAll tests passed: 5\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Regression test for Maybe<StructType> support
 # Issues #2 and #3 from ISSUES.md claimed this didn't work - this test proves it does

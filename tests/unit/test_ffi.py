@@ -307,7 +307,7 @@ def test_reserved_externs_are_declared():
     cg.runtime.declare_externs()
     # malloc/free/realloc/exit are declared lazily; force them so the manifest is
     # checked against the full built-in extern surface.
-    cg.get_malloc_func()
+    cg._get_malloc_func()
     cg.get_free_func()
     cg.get_realloc_func()
     # exit is declared by libc_process.declare_all (already run via declare_externs).

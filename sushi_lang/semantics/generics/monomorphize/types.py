@@ -21,6 +21,17 @@ if TYPE_CHECKING:
     from sushi_lang.internals.report import Reporter
 
 
+class MonomorphizationDepthExceeded(Exception):
+    """Raised when a generic type nests without bound during monomorphization.
+
+    Tie-the-knot (see monomorphize_enum/monomorphize_struct) terminates a *finite*
+    self-reference through an opaque pointer, but an ever-growing type argument
+    (each self-reference adds a level) has no fixpoint. This sentinel unwinds the
+    recursive substitution cleanly after CE0122 is reported, instead of surfacing a
+    raw Python RecursionError.
+    """
+
+
 class TypeMonomorphizer:
     """Handles monomorphization of generic enum and struct types.
 
@@ -68,7 +79,12 @@ class TypeMonomorphizer:
             generic = generic_enums[base_name]
 
             # Generate concrete enum type
-            concrete = self.monomorphize_enum(generic, type_args)
+            try:
+                concrete = self.monomorphize_enum(generic, type_args)
+            except MonomorphizationDepthExceeded:
+                # CE0122 already reported; the instantiation is infinitely
+                # recursive. Skip it and let the reporter's error abort the build.
+                continue
 
             # Store by concrete name (e.g., "Result<i32>")
             concrete_enums[concrete.name] = concrete
@@ -115,36 +131,45 @@ class TypeMonomorphizer:
         for param, arg in zip(generic.type_params, type_args):
             substitution[param.name] = arg
 
-        # Substitute type parameters in all variants
-        concrete_variants = []
-        for variant in generic.variants:
-            # Substitute in associated types
-            concrete_associated_types = []
-            for assoc_type in variant.associated_types:
-                concrete_type = self.monomorphizer.substitutor.substitute_type(
-                    assoc_type, substitution
-                )
-                concrete_associated_types.append(concrete_type)
-
-            concrete_variants.append(EnumVariantInfo(
-                name=variant.name,
-                associated_types=tuple(concrete_associated_types)
-            ))
-
         # Generate unique name for concrete type
         # Example: "Result<i32>", "Result<string>", "Result<MyStruct>"
         concrete_name = self._generate_concrete_name(generic.name, type_args)
 
-        # Create concrete EnumType with generic metadata
+        # Tie-the-knot: publish an empty shell into the cache BEFORE substituting
+        # variant types. A self-referential field (e.g. `Node(Own<Tree<T>>)`)
+        # re-enters monomorphize_enum with this same cache_key; it now resolves to
+        # the shell by identity instead of recursing forever. The shell is patched
+        # in place below, so every self-reference sees the final variants once
+        # substitution completes. Sound because the recursion passes through an
+        # opaque pointer (Own<T>) — the backend never needs the pointee's layout
+        # to size the field.
         concrete = EnumType(
             name=concrete_name,
-            variants=tuple(concrete_variants),
+            variants=(),
             generic_base=generic.name,
             generic_args=type_args
         )
-
-        # Cache the result
         self.monomorphizer.cache[cache_key] = concrete
+
+        # Substitute type parameters in all variants
+        with self.monomorphizer._monomorphize_depth_guard(generic.name):
+            concrete_variants = []
+            for variant in generic.variants:
+                # Substitute in associated types
+                concrete_associated_types = []
+                for assoc_type in variant.associated_types:
+                    concrete_type = self.monomorphizer.substitutor.substitute_type(
+                        assoc_type, substitution
+                    )
+                    concrete_associated_types.append(concrete_type)
+
+                concrete_variants.append(EnumVariantInfo(
+                    name=variant.name,
+                    associated_types=tuple(concrete_associated_types)
+                ))
+
+        # Patch the shell in place (EnumType is a frozen dataclass).
+        object.__setattr__(concrete, "variants", tuple(concrete_variants))
 
         return concrete
 
@@ -176,7 +201,11 @@ class TypeMonomorphizer:
             generic = generic_structs[base_name]
 
             # Generate concrete struct type
-            concrete = self.monomorphize_struct(generic, type_args)
+            try:
+                concrete = self.monomorphize_struct(generic, type_args)
+            except MonomorphizationDepthExceeded:
+                # CE0122 already reported; skip the infinitely recursive type.
+                continue
 
             # Store by concrete name (e.g., "Pair<i32, string>")
             concrete_structs[concrete.name] = concrete
@@ -222,27 +251,31 @@ class TypeMonomorphizer:
         for param, arg in zip(generic.type_params, type_args):
             substitution[param.name] = arg
 
-        # Substitute type parameters in all fields
-        concrete_fields = []
-        for field_name, field_type in generic.fields:
-            concrete_type = self.monomorphizer.substitutor.substitute_type(
-                field_type, substitution
-            )
-            concrete_fields.append((field_name, concrete_type))
-
         # Generate unique name for concrete type
         concrete_name = self._generate_concrete_name(generic.name, type_args)
 
-        # Create concrete StructType with generic metadata
+        # Tie-the-knot: publish an empty shell before substituting fields so a
+        # self-referential field resolves to this same object by identity rather
+        # than recursing forever (see monomorphize_enum for the full rationale).
         concrete = StructType(
             name=concrete_name,
-            fields=tuple(concrete_fields),
+            fields=(),
             generic_base=generic.name,
             generic_args=type_args
         )
-
-        # Cache the result
         self.monomorphizer.struct_cache[cache_key] = concrete
+
+        # Substitute type parameters in all fields
+        with self.monomorphizer._monomorphize_depth_guard(generic.name):
+            concrete_fields = []
+            for field_name, field_type in generic.fields:
+                concrete_type = self.monomorphizer.substitutor.substitute_type(
+                    field_type, substitution
+                )
+                concrete_fields.append((field_name, concrete_type))
+
+        # Patch the shell in place (StructType is a frozen dataclass).
+        object.__setattr__(concrete, "fields", tuple(concrete_fields))
 
         return concrete
 

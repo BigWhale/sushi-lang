@@ -1,6 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: clean
-# EXPECT_STDOUT_CONTAINS: café
-# EXPECT_STDOUT_CONTAINS: world
+# EXPECT_STDOUT_EXACT: "hello\nworld\ntest\nclean\n\n\nhello\ncafé\n"
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0

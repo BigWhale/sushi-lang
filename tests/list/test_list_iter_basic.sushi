@@ -1,6 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: === Iterating over List<i32> ===
-# EXPECT_STDOUT_CONTAINS: 10
-# EXPECT_STDOUT_CONTAINS: 30
+# EXPECT_STDOUT_EXACT: "=== Iterating over List<i32> ===\n10\n20\n30\n"
 fn main() i32:
     let List<i32> numbers = List.new()
 

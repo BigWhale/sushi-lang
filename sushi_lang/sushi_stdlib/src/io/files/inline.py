@@ -12,6 +12,7 @@ NOTE: This is ONLY for file.lines() - all other file methods require
 from typing import Any
 import llvmlite.ir as ir
 from sushi_lang.semantics.ast import MethodCall
+from sushi_lang.backend.memory.heap import emit_malloc
 
 
 def _emit_readln(codegen: Any, expr: MethodCall, file_ptr: ir.Value) -> ir.Value:
@@ -32,8 +33,7 @@ def _emit_readln(codegen: Any, expr: MethodCall, file_ptr: ir.Value) -> ir.Value
 
     # Allocate buffer for the line (1024 bytes should be enough for most lines)
     buffer_size = ir.Constant(ir.IntType(64), 1024)
-    malloc_func = codegen.get_malloc_func()
-    buffer = codegen.builder.call(malloc_func, [buffer_size])
+    buffer = emit_malloc(codegen, codegen.builder, buffer_size)
 
     # Call fgets(buffer, 1024, file)
     size_i32 = ir.Constant(codegen.i32, 1024)

@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Test 1: numbers.len() = 3
-# EXPECT_STDOUT_CONTAINS: All tests passed!
+# EXPECT_STDOUT_EXACT: "Test 1: numbers.len() = 3\nTest 2: empty.len() = 0\nTest 3: sequence.len() = 5\nTest 4: bytes.len() = 15\nTest 5: RAII cleanup successful\nAll tests passed!\n"
 # Test direct initialization of dynamic arrays from function calls
 # This test verifies that the limitation "Cannot directly initialize dynamic arrays
 # with function call results" has been removed.

@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Empty range (5..5):
-# EXPECT_STDOUT_CONTAINS: Done
+# EXPECT_STDOUT_EXACT: "Empty range (5..5):\nEmpty range (5..=4):\n5\nShould not print\n4\nShould not print\nDone\n"
 fn main() i32:
     println("Empty range (5..5):")
     foreach(i in 5..5):

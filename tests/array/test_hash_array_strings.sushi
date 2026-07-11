@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: String array.hash() = 13172293929808456072
+# EXPECT_STDOUT_EXACT: "String array.hash() = 13172293929808456072\n"
 # Test array hashing with strings
 
 fn main() i32:

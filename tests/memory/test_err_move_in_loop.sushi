@@ -1,0 +1,18 @@
+# Guards PLAN.md T2.1: the borrow checker walks a loop body exactly once and ignores
+# the back edge, so a move whose source is declared OUTSIDE the loop is never reported.
+# Today this compiles with no diagnostic and double-frees at runtime (exit 133).
+# EXPECT_ERROR_CODE: CE2405
+
+fn consume(i32[] arr) i32:
+    return Result.Ok(arr.len())
+
+fn run() i32:
+    let i32[] xs = from([1, 2, 3])
+    let i32 total = 0
+    foreach(i in 0..3):
+        total := total + consume(xs)?? + i
+    return Result.Ok(total)
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)

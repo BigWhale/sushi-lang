@@ -1,6 +1,6 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: count: 3
+# EXPECT_STDOUT_EXACT: "count: 3\n"
 # Regression for #61: a local List<T> is freed automatically by RAII at scope exit,
 # without an explicit .free()/.destroy(). Before the fix the heap buffer leaked
 # (the issue reported 16 bytes via `leaks`). This exercises the RAII path end-to-end;

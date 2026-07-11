@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Point at index 1: (30, 40)
-# EXPECT_STDOUT_CONTAINS: Struct list tests passed!
+# EXPECT_STDOUT_EXACT: "Point at index 1: (30, 40)\nStruct list tests passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<T> with custom struct elements

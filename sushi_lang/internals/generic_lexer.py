@@ -42,21 +42,42 @@ class GenericTypeLexer:
         Process token stream and split RSHIFT (>>) into two GT (>) tokens when inside generics.
 
         Strategy:
-        - Track nesting depth of < brackets
-        - When depth > 0 and we see RSHIFT, split it into two GT tokens
-        - This allows Result<Maybe<i32>> to parse correctly
-        - Preserves RSHIFT for shift operators outside generic contexts (e.g., x >> 2)
+        - Track nesting depth of < brackets, but only count a `<` that opens a
+          generic: one written immediately after a type-name token (`List<`),
+          not a spaced comparison operator (`a < b`).
+        - Reset the depth at every statement boundary (_NEWLINE); a generic type
+          never spans a newline, so a stray comparison `<` cannot leak into a
+          later line's `>>`.
+        - When depth > 0 and we see RSHIFT, split it into two GT tokens so
+          Result<Maybe<i32>> parses; otherwise RSHIFT stays a shift operator.
         """
+        prev_token = None
         for token in stream:
+            # Statement boundary: no generic straddles it, so reset the counter.
+            if token.type == '_NEWLINE':
+                self.angle_bracket_depth = 0
+                prev_token = token
+                yield token
+                continue
+
             # Track angle bracket nesting
             if token.type == 'LT':  # <
-                self.angle_bracket_depth += 1
+                # Only a type-name-adjacent `<` opens a generic (no gap between
+                # the name and the bracket). A spaced `a < b` is a comparison.
+                if (prev_token is not None and prev_token.type == 'NAME'
+                        and prev_token.end_pos == token.start_pos):
+                    self.angle_bracket_depth += 1
+                prev_token = token
                 yield token
+                continue
             elif token.type == 'GT':  # >
                 if self.angle_bracket_depth > 0:
                     self.angle_bracket_depth -= 1
+                prev_token = token
                 yield token
+                continue
             elif token.type == 'RSHIFT' and self.angle_bracket_depth > 0:  # >>
+                prev_token = token
                 # Split RSHIFT into two GT tokens when inside generic type
                 # First >
                 yield Token('GT', '>', token.start_pos, token.line, token.column, token.end_line, token.end_column, token.end_pos)
@@ -67,4 +88,5 @@ class GenericTypeLexer:
                 # Decrease depth by 2 since we're closing two generic levels
                 self.angle_bracket_depth = max(0, self.angle_bracket_depth - 2)
             else:
+                prev_token = token
                 yield token

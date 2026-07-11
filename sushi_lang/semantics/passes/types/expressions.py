@@ -106,6 +106,11 @@ def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None
     source_type = validator.infer_expression_type(expr.expr)
     target_type = expr.target_type
 
+    # Stamp the operand's semantic type for the backend (signedness of the cast
+    # opcode is unrecoverable from the signless LLVM type). Follows the
+    # resolved_* annotation pattern.
+    expr.source_type = source_type
+
     # If we can't infer the source type, skip validation
     if source_type is None:
         return

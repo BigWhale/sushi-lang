@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Created array with 5 elements
-# EXPECT_STDOUT_CONTAINS: Array.destroy() completed successfully!
+# EXPECT_STDOUT_EXACT: "Created array with 5 elements\nArray.destroy() completed successfully!\n"
 fn main() i32:
     # Test Array.destroy() - simple test for now
     let i32[] arr = from([1, 2, 3, 4, 5])

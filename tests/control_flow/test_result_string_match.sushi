@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Got hello
+# EXPECT_STDOUT_EXACT: "Got hello\n"
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Got hello
 

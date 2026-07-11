@@ -1,0 +1,16 @@
+# Guards PLAN.md T1.6: the generic lexer keeps one angle_bracket_depth counter and
+# increments it on every LT, so an unbalanced comparison `a < b` leaves depth at 1
+# and a later `>>` is split into `> >`, breaking the parse.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "lt\n4\n"
+fn main() i32:
+    let i32 a = 1
+    let i32 b = 8
+
+    if (a < b):
+        println("lt")
+
+    let i32 c = b >> 1
+    println(c)
+
+    return Result.Ok(0)

@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: Mostly Harmless
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n-1117939656\n"
 # Test basic hexadecimal literal support
 
 fn main() i32:
@@ -36,4 +36,5 @@ fn main() i32:
     let i32 result2 = (small as i32) + (large as i32)
     if (equal):
         println("Mostly Harmless")
-    return Result.Ok(result + result2)
+    println(result + result2)
+    return Result.Ok(0)

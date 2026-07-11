@@ -1,0 +1,25 @@
+# Control for the leak gate itself. Exercises every owning type RAII must free --
+# a dynamic array, an owned string, a List and an Own -- with no shadowing and no
+# moves, so it must report zero leaks. If this test ever fails, the leak gate is
+# broken; if it can never fail, the gate is not wired up.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n3\n2\n42\n"
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let i32 n = 3
+    let string greeting = "Mostly {'Harmless'}"
+    println(greeting)
+
+    let i32[] arr = from([1, 2, n])
+    println(arr.len())
+
+    let List<string> names = List.new()
+    names.push("Ford")
+    names.push("Arthur")
+    println(names.len())
+
+    let Own<i32> boxed = Own.alloc(42)
+    println(boxed.get())
+
+    return Result.Ok(0)

@@ -1,6 +1,6 @@
 # Bloom (spread/forwarding): move an existing i32[] into a variadic ...i32 slot
 # with the postfix `arr...` form. The array is consumed (moved) into the callee.
-# EXPECT_STDOUT_CONTAINS: sum = 6
+# EXPECT_STDOUT_EXACT: "sum = 6\n"
 fn sum(...i32 nums) i32:
     let i32 total = 0
     foreach(n in nums.iter()):

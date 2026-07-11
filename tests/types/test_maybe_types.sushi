@@ -1,6 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: "test_numeric_types: 1"
-# EXPECT_STDOUT_CONTAINS: "test_nested_maybe: 1"
-# EXPECT_STDOUT_CONTAINS: "test_multiple_types: 1"
+# EXPECT_STDOUT_EXACT: "test_numeric_types: 1\ntest_string_type: 1\ntest_dynamic_arrays: 1\ntest_struct_type: 1\ntest_nested_maybe: 1\ntest_none_variants: 1\ntest_method_chaining: 1\ntest_multiple_types: 1\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Comprehensive Maybe<T> type testing
 # Tests: primitives, arrays, structs, nested generics

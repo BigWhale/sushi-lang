@@ -1,7 +1,6 @@
 # Test enum used as HashMap value: insert enum variants, retrieve and match
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: Deploy priority score: 100
-# EXPECT_STDOUT_CONTAINS: HashMap enum values: all passed
+# EXPECT_STDOUT_EXACT: "Deploy priority score: 100\nHashMap enum values: all passed\n"
 
 use <collections/hashmap>
 

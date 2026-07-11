@@ -84,11 +84,11 @@ def emit_return(codegen: 'LLVMCodegen', stmt: 'Return') -> None:
                 # A returned string escapes: mark it moved so scope-exit cleanup skips its
                 # owned-bit free (the caller's binding now owns and frees the buffer). Freeing
                 # here would return a dangling pointer (use-after-free) (#145).
-                codegen.moves.mark(var_name)
+                codegen.memory.mark_struct_as_moved(var_name)
             elif isinstance(semantic_type, FunctionType):
                 # A returned closure escapes: mark it moved so the local scope skips its
                 # env free (the caller's binding now owns and frees the environment).
-                codegen.moves.mark(var_name)
+                codegen.memory.mark_struct_as_moved(var_name)
             elif codegen.dynamic_arrays.is_list_type(semantic_type):
                 # List<T> is a StructType; mark moved so RAII does not free the buffer
                 # the caller now owns (#61).

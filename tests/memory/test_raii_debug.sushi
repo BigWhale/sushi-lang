@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: "=== Test 1 ==="
-# EXPECT_STDOUT_CONTAINS: "After test() returned again"
+# EXPECT_STDOUT_EXACT: "=== Test 1 ===\nBefore allocation\nAfter allocation, before return\nAfter test() returned\n=== Test 2 ===\nBefore allocation\nAfter allocation, before return\nAfter test() returned again\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Debug test to see if cleanup is happening
 

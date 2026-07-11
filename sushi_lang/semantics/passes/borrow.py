@@ -52,6 +52,8 @@ class BorrowState:
                                      # is erased from the fn(...) type, so ownership is
                                      # tracked by binding provenance, not var_type)
     is_destroyed: bool = False  # Variable has been explicitly destroyed (via .destroy())
+    is_argv_view: bool = False  # main's `string[] args`: a borrowed view of process argv;
+                                # moving it by value would free argv, so it is a hard error
     first_borrow_span: Optional[Span] = None  # Location of the first active borrow
 
     @property
@@ -106,10 +108,22 @@ class BorrowChecker:
 
         # Initialize parameters as unborrowed, unmoved
         for param in func.params:
-            self.borrow_state[param.name] = BorrowState(name=param.name, var_type=param.ty)
+            state = BorrowState(name=param.name, var_type=param.ty)
+            # main's `string[] args` is a borrowed view of process argv (the runtime owns and
+            # frees it). Stamp it so a by-value move is a hard error (CE2410), not a silent
+            # move that makes the callee free argv (N2).
+            if func.name == "main" and self._is_argv_view_param(param.ty):
+                state.is_argv_view = True
+            self.borrow_state[param.name] = state
 
         # Check function body
         self._check_block(func.body)
+
+    @staticmethod
+    def _is_argv_view_param(ty: Optional[Type]) -> bool:
+        """True if `ty` is `string[]` -- the shape of main's borrowed argv parameter."""
+        from sushi_lang.semantics.typesys import BuiltinType
+        return isinstance(ty, DynamicArrayType) and ty.base_type == BuiltinType.STRING
 
     def _check_extension(self, ext: ExtendDef) -> None:
         """Check borrow safety for an extension method."""
@@ -208,25 +222,38 @@ class BorrowChecker:
             self._clear_borrows()
 
         elif isinstance(stmt, If):
-            # Check condition and all arms
+            # Evaluate every arm from a common pre-if move-state and JOIN the results: a
+            # variable is moved after the `if` iff it is moved on ANY path (Rust semantics).
+            # Without the per-arm snapshot/restore, a move in one arm leaked into its sibling
+            # arms and past the `if`, producing a SPURIOUS CE2405 (test_move_in_branch_arms).
+            entry = self._snapshot_moves()
+            moved_after: Set[str] = set()
             for cond_expr, arm_block in stmt.arms:
+                self._restore_moves(entry)
                 self._check_expr(cond_expr)
                 self._clear_borrows()
                 self._check_block(arm_block)
+                moved_after |= self._snapshot_moves()
             if stmt.else_block:
+                self._restore_moves(entry)
                 self._check_block(stmt.else_block)
+                moved_after |= self._snapshot_moves()
+            else:
+                # No else arm: the fall-through path (no arm taken) moves nothing beyond entry.
+                moved_after |= entry
+            self._restore_moves(moved_after)
 
         elif isinstance(stmt, While):
             self._check_expr(stmt.cond)
             self._clear_borrows()
-            self._check_block(stmt.body)
+            self._check_loop_body(stmt.body)
 
         elif isinstance(stmt, Foreach):
             self._check_expr(stmt.iterable)
             self._clear_borrows()
             # Declare loop variable
             self.borrow_state[stmt.item_name] = BorrowState(name=stmt.item_name, var_type=stmt.item_type)
-            self._check_block(stmt.body)
+            self._check_loop_body(stmt.body)
 
         elif isinstance(stmt, Match):
             self._check_expr(stmt.scrutinee)
@@ -244,6 +271,42 @@ class BorrowChecker:
 
         elif isinstance(stmt, Break) or isinstance(stmt, Continue):
             pass  # No borrow checking needed
+
+    def _snapshot_moves(self) -> Set[str]:
+        """Names whose binding is currently moved (for branch/loop control-flow joins)."""
+        return {name for name, state in self.borrow_state.items() if state.is_moved}
+
+    def _restore_moves(self, moved_names: Set[str]) -> None:
+        """Set each variable's is_moved to exactly `name in moved_names`.
+
+        Used to reset to a snapshot before checking an alternative path (an `if` arm) and to
+        install a join / loop fixed-point state afterwards. Only the move flag is restored;
+        borrow counts are cleared per statement by _clear_borrows.
+        """
+        for name, state in self.borrow_state.items():
+            state.is_moved = name in moved_names
+
+    def _check_loop_body(self, body: Block) -> None:
+        """Borrow-check a loop body to a fixed point so the back edge is honoured.
+
+        A single forward pass misses a use-after-move across iterations: a value moved in
+        the body is moved at the TOP of every iteration after the first, but a one-shot walk
+        checks the use before the move marks it (test_err_move_in_loop). `is_moved` only ever
+        goes false->true, so two passes reach the fixed point: a silent discovery pass finds
+        everything the body moves, then a real pass re-checks from that post-move state and
+        reports a use of an already-moved variable exactly once. Suppression is saved/restored
+        so a nested loop's own discovery pass does not un-suppress this one.
+        """
+        entry = self._snapshot_moves()
+        prev_suppressed = self.err.suppressed
+        self.err.suppressed = True
+        self._check_block(body)
+        self.err.suppressed = prev_suppressed
+        fixed_point = entry | self._snapshot_moves()
+        self._restore_moves(fixed_point)
+        self._check_block(body)
+        # A variable moved anywhere in the loop is moved after it (conservative join).
+        self._restore_moves(fixed_point)
 
     def _register_pattern_bindings(self, pattern: Pattern) -> None:
         """Recursively register pattern bindings in borrow state."""
@@ -543,7 +606,10 @@ class BorrowChecker:
         if isinstance(expr, Name):
             if expr.id in self.borrow_state:
                 state = self.borrow_state[expr.id]
-                if self._type_is_owning(state.var_type):
+                if state.is_argv_view:
+                    # Moving main's borrowed argv view would double-free process argv (N2).
+                    self.err.emit(er.ERR.CE2410, expr.loc, name=expr.id)
+                elif self._type_is_owning(state.var_type):
                     state.is_moved = True
 
     def _clear_borrows(self) -> None:

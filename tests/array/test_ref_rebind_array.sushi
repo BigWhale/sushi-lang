@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 3
-# EXPECT_STDOUT_CONTAINS: 1
+# EXPECT_STDOUT_EXACT: "3\n1\n"
 fn replace_array(&poke i32[] arr) ~:
     arr := from([1, 2, 3])
     return Result.Ok(~)
