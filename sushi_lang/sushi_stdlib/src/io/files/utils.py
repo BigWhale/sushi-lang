@@ -6,6 +6,15 @@ from sushi_lang.backend.platform_detect import get_current_platform
 from sushi_lang.sushi_stdlib.src.string_helpers import fat_pointer_to_cstr
 
 
+def _declare_malloc(module: ir.Module, i8_ptr: ir.Type, i64: ir.Type) -> ir.Function:
+    """Get-or-declare the libc ``malloc`` prototype in this module."""
+    malloc_func = module.globals.get('malloc')
+    if malloc_func is None:
+        malloc_type = ir.FunctionType(i8_ptr, [i64])
+        malloc_func = ir.Function(module, malloc_type, name="malloc")
+    return malloc_func
+
+
 def generate_ir(module: ir.Module) -> None:
     """Generate LLVM IR for file utility functions."""
     generate_exists(module)
@@ -32,10 +41,7 @@ def generate_exists(module: ir.Module) -> None:
     access_func = platform_files.declare_access(module)
 
     # Declare malloc and memcpy
-    malloc_func = module.globals.get('malloc')
-    if malloc_func is None:
-        malloc_type = ir.FunctionType(i8_ptr, [i64])
-        malloc_func = ir.Function(module, malloc_type, name="malloc")
+    malloc_func = _declare_malloc(module, i8_ptr, i64)
 
     memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
@@ -71,11 +77,11 @@ def generate_exists(module: ir.Module) -> None:
     builder.ret(result_i8)
 
 
-def generate_is_file(module: ir.Module) -> None:
-    """Generate sushi_io_files_is_file(string path) -> i8.
+def _generate_stat_mode_check(module: ir.Module, sushi_name: str, s_iftype: int) -> None:
+    """Emit a `stat`-based predicate testing st_mode's file-type bits.
 
-    Uses POSIX stat() and checks S_ISREG(st_mode).
-    Returns: 1 if regular file, 0 otherwise
+    Shared by is_file (S_IFREG) and is_dir (S_IFDIR): stat the path, and on
+    success compare ``st_mode & S_IFMT`` against ``s_iftype``. Returns i8 (0/1).
     """
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
@@ -83,16 +89,11 @@ def generate_is_file(module: ir.Module) -> None:
     platform_files = get_platform_module('files')
     stat_func = platform_files.declare_stat(module)
 
-    # Declare malloc and memcpy
-    malloc_func = module.globals.get('malloc')
-    if malloc_func is None:
-        malloc_type = ir.FunctionType(i8_ptr, [i64])
-        malloc_func = ir.Function(module, malloc_type, name="malloc")
-
+    malloc_func = _declare_malloc(module, i8_ptr, i64)
     memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
     func_type = ir.FunctionType(i8, [string_type])
-    func = ir.Function(module, func_type, name="sushi_io_files_is_file")
+    func = ir.Function(module, func_type, name=sushi_name)
     block = func.append_basic_block(name="entry")
     builder = ir.IRBuilder(block)
 
@@ -144,95 +145,23 @@ def generate_is_file(module: ir.Module) -> None:
     st_mode = builder.zext(st_mode_i16, i32, name="st_mode")
 
     S_IFMT = ir.Constant(i32, 0o170000)
-    S_IFREG = ir.Constant(i32, 0o100000)
+    expected = ir.Constant(i32, s_iftype)
 
     file_type = builder.and_(st_mode, S_IFMT, name="file_type")
-    is_regular = builder.icmp_signed("==", file_type, S_IFREG, name="is_regular")
+    matches = builder.icmp_signed("==", file_type, expected, name="matches")
 
-    result_i8 = builder.zext(is_regular, i8, name="result")
+    result_i8 = builder.zext(matches, i8, name="result")
     builder.ret(result_i8)
+
+
+def generate_is_file(module: ir.Module) -> None:
+    """Generate sushi_io_files_is_file(string path) -> i8 (S_ISREG)."""
+    _generate_stat_mode_check(module, "sushi_io_files_is_file", 0o100000)
 
 
 def generate_is_dir(module: ir.Module) -> None:
-    """Generate sushi_io_files_is_dir(string path) -> i8.
-
-    Identical to is_file() but checks S_ISDIR(st_mode).
-    Returns: 1 if directory, 0 otherwise
-    """
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    string_type = get_string_type()
-
-    platform_files = get_platform_module('files')
-    stat_func = platform_files.declare_stat(module)
-
-    # Declare malloc and memcpy
-    malloc_func = module.globals.get('malloc')
-    if malloc_func is None:
-        malloc_type = ir.FunctionType(i8_ptr, [i64])
-        malloc_func = ir.Function(module, malloc_type, name="malloc")
-
-    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
-
-    func_type = ir.FunctionType(i8, [string_type])
-    func = ir.Function(module, func_type, name="sushi_io_files_is_dir")
-    block = func.append_basic_block(name="entry")
-    builder = ir.IRBuilder(block)
-
-    path_arg = func.args[0]
-    path_ptr = builder.extract_value(path_arg, 0, name="path_ptr")
-    path_len = builder.extract_value(path_arg, 1, name="path_len")
-
-    # Allocate buffer for null-terminated string
-    len_plus_one = builder.add(path_len, ir.Constant(i32, 1), name="len_plus_one")
-    buffer_size = builder.zext(len_plus_one, i64, name="buffer_size")
-    null_term_path = builder.call(malloc_func, [buffer_size], name="null_term_path")
-
-    # Copy string data and add null terminator
-    is_volatile = ir.Constant(ir.IntType(1), 0)
-    builder.call(memcpy_fn, [null_term_path, path_ptr, builder.zext(path_len, ir.IntType(64)), is_volatile])
-    null_pos = builder.gep(null_term_path, [path_len], name="null_pos")
-    builder.store(ir.Constant(i8, 0), null_pos)
-
-    stat_buffer_type = ir.ArrayType(i8, 144)
-    stat_buffer = builder.alloca(stat_buffer_type, name="stat_buffer")
-    stat_buffer_ptr = builder.bitcast(stat_buffer, i8_ptr, name="stat_ptr")
-
-    result = builder.call(stat_func, [null_term_path, stat_buffer_ptr], name="stat_result")
-
-    zero = ir.Constant(i32, 0)
-    success = builder.icmp_signed("==", result, zero, name="stat_success")
-
-    success_bb = func.append_basic_block(name="success")
-    failure_bb = func.append_basic_block(name="failure")
-    builder.cbranch(success, success_bb, failure_bb)
-
-    builder.position_at_end(failure_bb)
-    false_val = ir.Constant(i8, 0)
-    builder.ret(false_val)
-
-    builder.position_at_end(success_bb)
-
-    platform = get_current_platform()
-    mode_offset = 4 if platform.is_darwin else 24
-
-    i16 = ir.IntType(16)
-    i16_ptr = i16.as_pointer()
-
-    i16_buffer_ptr = builder.bitcast(stat_buffer, i16_ptr)
-    mode_idx = mode_offset // 2
-    mode_ptr = builder.gep(i16_buffer_ptr, [ir.Constant(i32, mode_idx)], name="mode_ptr")
-    st_mode_i16 = builder.load(mode_ptr, name="st_mode_i16")
-
-    st_mode = builder.zext(st_mode_i16, i32, name="st_mode")
-
-    S_IFMT = ir.Constant(i32, 0o170000)
-    S_IFDIR = ir.Constant(i32, 0o040000)
-
-    file_type = builder.and_(st_mode, S_IFMT, name="file_type")
-    is_directory = builder.icmp_signed("==", file_type, S_IFDIR, name="is_directory")
-
-    result_i8 = builder.zext(is_directory, i8, name="result")
-    builder.ret(result_i8)
+    """Generate sushi_io_files_is_dir(string path) -> i8 (S_ISDIR)."""
+    _generate_stat_mode_check(module, "sushi_io_files_is_dir", 0o040000)
 
 
 def generate_file_size(module: ir.Module) -> None:
@@ -250,10 +179,7 @@ def generate_file_size(module: ir.Module) -> None:
     stat_func = platform_files.declare_stat(module)
 
     # Declare malloc and memcpy
-    malloc_func = module.globals.get('malloc')
-    if malloc_func is None:
-        malloc_type = ir.FunctionType(i8_ptr, [i64])
-        malloc_func = ir.Function(module, malloc_type, name="malloc")
+    malloc_func = _declare_malloc(module, i8_ptr, i64)
 
     memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
