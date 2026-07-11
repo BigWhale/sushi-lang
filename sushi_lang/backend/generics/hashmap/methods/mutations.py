@@ -13,7 +13,13 @@ from typing import Any
 from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.typesys import StructType, BuiltinType
 import llvmlite.ir as ir
-from ..types import get_entry_type, ENTRY_EMPTY, ENTRY_OCCUPIED, ENTRY_TOMBSTONE
+from ..types import get_entry_type, get_hashmap_field_ptrs, ENTRY_EMPTY, ENTRY_OCCUPIED, ENTRY_TOMBSTONE
+from sushi_lang.backend.constants import (
+    HASHMAP_CAPACITY_INDICES,
+    ENTRY_KEY_INDICES,
+    ENTRY_VALUE_INDICES,
+    ENTRY_STATE_INDICES,
+)
 from sushi_lang.semantics.generics.hashmap import extract_key_value_types
 from ..utils import emit_key_equality_check, emit_insert_entry
 from sushi_lang.internals.errors import raise_internal_error
@@ -78,9 +84,9 @@ def emit_hashmap_insert(
     # Get pointers to HashMap fields
     # hashmap_value should be a POINTER to the HashMap struct (like array_value for arrays)
     # HashMap struct: {buckets, size, capacity, tombstones}
-    size_ptr = builder.gep(hashmap_value, [zero_i32, one_i32], name="size_ptr")
-    capacity_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="capacity_ptr")
-    tombstones_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 3)], name="tombstones_ptr")
+    fields = get_hashmap_field_ptrs(codegen, hashmap_value)
+    size_ptr, capacity_ptr = fields.size, fields.capacity
+    tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
 
     # Load current values
     size = builder.load(size_ptr, name="size")
@@ -88,8 +94,6 @@ def emit_hashmap_insert(
     tombstones = builder.load(tombstones_ptr, name="tombstones")
 
     # Get buckets array pointer
-    buckets_ptr = builder.gep(hashmap_value, [zero_i32, zero_i32], name="buckets_ptr")
-    buckets_data_ptr = builder.gep(buckets_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="buckets_data_ptr")
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
 
     # Check load factor and resize if needed
@@ -171,7 +175,7 @@ def emit_hashmap_insert(
     entry_ptr = builder.gep(buckets_data, [index], name="entry_ptr")
 
     # Load entry state
-    state_ptr = builder.gep(entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="state_ptr")
+    state_ptr = builder.gep(entry_ptr, ENTRY_STATE_INDICES, name="state_ptr")
     state = builder.load(state_ptr, name="state")
 
     # Branch based on state
@@ -191,7 +195,7 @@ def emit_hashmap_insert(
 
     # Occupied case: check if keys match
     builder.position_at_end(probe_occupied_bb)
-    entry_key_ptr = builder.gep(entry_ptr, [zero_i32, zero_i32], name="entry_key_ptr")
+    entry_key_ptr = builder.gep(entry_ptr, ENTRY_KEY_INDICES, name="entry_key_ptr")
     entry_key = builder.load(entry_key_ptr, name="entry_key")
 
     # Compare keys using ==
@@ -202,7 +206,7 @@ def emit_hashmap_insert(
 
     # Update existing value
     builder.position_at_end(update_value_bb)
-    entry_value_ptr = builder.gep(entry_ptr, [zero_i32, one_i32], name="entry_value_ptr")
+    entry_value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="entry_value_ptr")
     builder.store(value_value, entry_value_ptr)
     builder.branch(insert_done_bb)
 
@@ -327,9 +331,9 @@ def emit_hashmap_remove(
     key_value = codegen.expressions.emit_expr(expr.args[0])
 
     # Get HashMap field pointers
-    size_ptr = builder.gep(hashmap_value, [zero_i32, one_i32], name="size_ptr")
-    capacity_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="capacity_ptr")
-    tombstones_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 3)], name="tombstones_ptr")
+    fields = get_hashmap_field_ptrs(codegen, hashmap_value)
+    size_ptr, capacity_ptr = fields.size, fields.capacity
+    tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
 
     # Load values
     size = builder.load(size_ptr, name="size")
@@ -337,8 +341,6 @@ def emit_hashmap_remove(
     tombstones = builder.load(tombstones_ptr, name="tombstones")
 
     # Get buckets array pointer
-    buckets_ptr = builder.gep(hashmap_value, [zero_i32, zero_i32], name="buckets_ptr")
-    buckets_data_ptr = builder.gep(buckets_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="buckets_data_ptr")
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
 
     # Hash the key (register on-demand if needed for array types)
@@ -386,7 +388,7 @@ def emit_hashmap_remove(
     entry_ptr = builder.gep(buckets_data, [index], name="entry_ptr")
 
     # Load entry state
-    state_ptr = builder.gep(entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="state_ptr")
+    state_ptr = builder.gep(entry_ptr, ENTRY_STATE_INDICES, name="state_ptr")
     state = builder.load(state_ptr, name="state")
 
     # Branch based on state
@@ -409,7 +411,7 @@ def emit_hashmap_remove(
 
     # Occupied case: check if keys match
     builder.position_at_end(probe_occupied_bb)
-    entry_key_ptr = builder.gep(entry_ptr, [zero_i32, zero_i32], name="entry_key_ptr")
+    entry_key_ptr = builder.gep(entry_ptr, ENTRY_KEY_INDICES, name="entry_key_ptr")
     entry_key = builder.load(entry_key_ptr, name="entry_key")
 
     # Compare keys
@@ -420,7 +422,7 @@ def emit_hashmap_remove(
     builder.position_at_end(found_bb)
 
     # Save the value before marking as tombstone
-    entry_value_ptr = builder.gep(entry_ptr, [zero_i32, one_i32], name="entry_value_ptr")
+    entry_value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="entry_value_ptr")
     entry_value = builder.load(entry_value_ptr, name="entry_value")
 
     # Destroy the removed key (the map owned it); the value is moved out into the
@@ -553,17 +555,15 @@ def emit_hashmap_resize_to_capacity(
     one_i32 = ir.Constant(codegen.types.i32, 1)
 
     # Get HashMap field pointers
-    size_ptr = builder.gep(hashmap_value, [zero_i32, one_i32], name="size_ptr")
-    capacity_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="capacity_ptr")
-    tombstones_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 3)], name="tombstones_ptr")
+    fields = get_hashmap_field_ptrs(codegen, hashmap_value)
+    size_ptr, capacity_ptr = fields.size, fields.capacity
+    tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
 
     # Load current values
     size = builder.load(size_ptr, name="size")
     old_capacity = builder.load(capacity_ptr, name="old_capacity")
 
     # Get old buckets pointer
-    buckets_ptr = builder.gep(hashmap_value, [zero_i32, zero_i32], name="buckets_ptr")
-    buckets_data_ptr = builder.gep(buckets_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="buckets_data_ptr")
     old_buckets_data = builder.load(buckets_data_ptr, name="old_buckets_data")
 
     # Allocate new buckets array with new_capacity
@@ -595,7 +595,7 @@ def emit_hashmap_resize_to_capacity(
     builder.position_at_end(init_loop_body_bb)
     init_i_val = builder.load(init_i, name="init_i_val")
     new_entry_ptr = builder.gep(new_bucket_ptr, [init_i_val], name="new_entry_ptr")
-    new_state_ptr = builder.gep(new_entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="new_state_ptr")
+    new_state_ptr = builder.gep(new_entry_ptr, ENTRY_STATE_INDICES, name="new_state_ptr")
     builder.store(ir.Constant(codegen.types.i8, ENTRY_EMPTY), new_state_ptr)
 
     init_i_next = builder.add(init_i_val, one_i32, name="init_i_next")
@@ -634,7 +634,7 @@ def emit_hashmap_resize_to_capacity(
     builder.position_at_end(rehash_loop_body_bb)
     old_i_val = builder.load(old_i, name="old_i_val")
     old_entry_ptr = builder.gep(old_buckets_data, [old_i_val], name="old_entry_ptr")
-    old_state_ptr = builder.gep(old_entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="old_state_ptr")
+    old_state_ptr = builder.gep(old_entry_ptr, ENTRY_STATE_INDICES, name="old_state_ptr")
     old_state = builder.load(old_state_ptr, name="old_state")
 
     builder.branch(rehash_check_occupied_bb)
@@ -647,9 +647,9 @@ def emit_hashmap_resize_to_capacity(
     builder.position_at_end(rehash_reinsert_bb)
 
     # Load key and value from old entry
-    old_key_ptr = builder.gep(old_entry_ptr, [zero_i32, zero_i32], name="old_key_ptr")
+    old_key_ptr = builder.gep(old_entry_ptr, ENTRY_KEY_INDICES, name="old_key_ptr")
     old_key = builder.load(old_key_ptr, name="old_key")
-    old_value_ptr = builder.gep(old_entry_ptr, [zero_i32, one_i32], name="old_value_ptr")
+    old_value_ptr = builder.gep(old_entry_ptr, ENTRY_VALUE_INDICES, name="old_value_ptr")
     old_value = builder.load(old_value_ptr, name="old_value")
 
     # Hash the key
@@ -683,7 +683,7 @@ def emit_hashmap_resize_to_capacity(
     new_index = builder.and_(hash_plus_offset, new_capacity_minus_1, name="new_index")
 
     new_probe_entry_ptr = builder.gep(new_bucket_ptr, [new_index], name="new_probe_entry_ptr")
-    new_probe_state_ptr = builder.gep(new_probe_entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="new_probe_state_ptr")
+    new_probe_state_ptr = builder.gep(new_probe_entry_ptr, ENTRY_STATE_INDICES, name="new_probe_state_ptr")
     new_probe_state = builder.load(new_probe_state_ptr, name="new_probe_state")
 
     builder.branch(probe_check_bb)
@@ -750,7 +750,7 @@ def emit_hashmap_rehash(
     zero_i32 = ir.Constant(codegen.types.i32, 0)
 
     # Load current capacity
-    capacity_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="capacity_ptr")
+    capacity_ptr = builder.gep(hashmap_value, HASHMAP_CAPACITY_INDICES, name="capacity_ptr")
     capacity = builder.load(capacity_ptr, name="capacity")
 
     # Resize to same capacity (removes tombstones)
@@ -815,16 +815,14 @@ def emit_hashmap_free(
     initial_capacity = ir.Constant(codegen.types.i32, 16)
 
     # Get HashMap field pointers
-    size_ptr = builder.gep(hashmap_value, [zero_i32, one_i32], name="size_ptr")
-    capacity_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="capacity_ptr")
-    tombstones_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 3)], name="tombstones_ptr")
+    fields = get_hashmap_field_ptrs(codegen, hashmap_value)
+    size_ptr, capacity_ptr = fields.size, fields.capacity
+    tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
 
     # Load old values
     old_capacity = builder.load(capacity_ptr, name="old_capacity")
 
     # Get old buckets pointer
-    buckets_ptr = builder.gep(hashmap_value, [zero_i32, zero_i32], name="buckets_ptr")
-    buckets_data_ptr = builder.gep(buckets_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="buckets_data_ptr")
     old_buckets_data = builder.load(buckets_data_ptr, name="old_buckets_data")
 
     # Iterate through old buckets and destroy occupied entries
@@ -850,7 +848,7 @@ def emit_hashmap_free(
     builder.position_at_end(destroy_loop_body_bb)
     i_val = builder.load(loop_i, name="i_val")
     entry_ptr = builder.gep(old_buckets_data, [i_val], name="entry_ptr")
-    state_ptr = builder.gep(entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="state_ptr")
+    state_ptr = builder.gep(entry_ptr, ENTRY_STATE_INDICES, name="state_ptr")
     state = builder.load(state_ptr, name="state")
 
     builder.branch(destroy_check_occupied_bb)
@@ -863,8 +861,8 @@ def emit_hashmap_free(
     builder.position_at_end(destroy_entry_bb)
 
     # Get pointers to key and value
-    key_ptr = builder.gep(entry_ptr, [zero_i32, zero_i32], name="key_ptr")
-    value_ptr = builder.gep(entry_ptr, [zero_i32, one_i32], name="value_ptr")
+    key_ptr = builder.gep(entry_ptr, ENTRY_KEY_INDICES, name="key_ptr")
+    value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="value_ptr")
 
     # Recursively destroy key and value using the general destructor
     from sushi_lang.backend.destructors import emit_value_destructor
@@ -916,7 +914,7 @@ def emit_hashmap_free(
     builder.position_at_end(init_loop_body_bb)
     init_i_val = builder.load(init_i, name="init_i_val")
     new_entry_ptr = builder.gep(new_bucket_ptr, [init_i_val], name="new_entry_ptr")
-    new_state_ptr = builder.gep(new_entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="new_state_ptr")
+    new_state_ptr = builder.gep(new_entry_ptr, ENTRY_STATE_INDICES, name="new_state_ptr")
     builder.store(ir.Constant(codegen.types.i8, ENTRY_EMPTY), new_state_ptr)
 
     init_i_next = builder.add(init_i_val, one_i32, name="init_i_next")
@@ -984,16 +982,14 @@ def emit_hashmap_destroy(
     one_i32 = ir.Constant(codegen.types.i32, 1)
 
     # Get HashMap field pointers
-    size_ptr = builder.gep(hashmap_value, [zero_i32, one_i32], name="size_ptr")
-    capacity_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="capacity_ptr")
-    tombstones_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 3)], name="tombstones_ptr")
+    fields = get_hashmap_field_ptrs(codegen, hashmap_value)
+    size_ptr, capacity_ptr = fields.size, fields.capacity
+    tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
 
     # Load old values
     old_capacity = builder.load(capacity_ptr, name="old_capacity")
 
     # Get old buckets pointer
-    buckets_ptr = builder.gep(hashmap_value, [zero_i32, zero_i32], name="buckets_ptr")
-    buckets_data_ptr = builder.gep(buckets_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="buckets_data_ptr")
     old_buckets_data = builder.load(buckets_data_ptr, name="old_buckets_data")
 
     # Check if buckets pointer is not null (avoid double-free)
@@ -1024,7 +1020,7 @@ def emit_hashmap_destroy(
         builder.position_at_end(destroy_loop_body_bb)
         i_val = builder.load(loop_i, name="i_val")
         entry_ptr = builder.gep(old_buckets_data, [i_val], name="entry_ptr")
-        state_ptr = builder.gep(entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="state_ptr")
+        state_ptr = builder.gep(entry_ptr, ENTRY_STATE_INDICES, name="state_ptr")
         state = builder.load(state_ptr, name="state")
 
         builder.branch(destroy_check_occupied_bb)
@@ -1037,8 +1033,8 @@ def emit_hashmap_destroy(
         builder.position_at_end(destroy_entry_bb)
 
         # Get pointers to key and value
-        key_ptr = builder.gep(entry_ptr, [zero_i32, zero_i32], name="key_ptr")
-        value_ptr = builder.gep(entry_ptr, [zero_i32, one_i32], name="value_ptr")
+        key_ptr = builder.gep(entry_ptr, ENTRY_KEY_INDICES, name="key_ptr")
+        value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="value_ptr")
 
         # Recursively destroy key and value using the general destructor
         from sushi_lang.backend.destructors import emit_value_destructor

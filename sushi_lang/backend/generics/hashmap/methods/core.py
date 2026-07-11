@@ -11,6 +11,16 @@ from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.typesys import StructType, BuiltinType
 import llvmlite.ir as ir
 from ..types import get_entry_type, ENTRY_EMPTY, ENTRY_OCCUPIED
+from sushi_lang.backend.constants import (
+    HASHMAP_BUCKETS_INDICES,
+    HASHMAP_SIZE_INDICES,
+    HASHMAP_CAPACITY_INDICES,
+    HASHMAP_TOMBSTONES_INDICES,
+    BUCKETS_DATA_INDICES,
+    ENTRY_KEY_INDICES,
+    ENTRY_VALUE_INDICES,
+    ENTRY_STATE_INDICES,
+)
 from sushi_lang.semantics.generics.hashmap import extract_key_value_types
 from ..utils import emit_key_equality_check
 from sushi_lang.internals.errors import raise_internal_error
@@ -78,7 +88,7 @@ def emit_hashmap_new(codegen: Any, hashmap_type: StructType) -> ir.Value:
     codegen.builder.position_at_end(loop_body_bb)
     i_val = codegen.builder.load(i, name="i_val")
     entry_ptr = codegen.builder.gep(bucket_ptr, [i_val], name="entry_ptr")
-    state_ptr = codegen.builder.gep(entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="state_ptr")  # state is field 2 in Entry
+    state_ptr = codegen.builder.gep(entry_ptr, ENTRY_STATE_INDICES, name="state_ptr")  # state is field 2 in Entry
     codegen.builder.store(ir.Constant(codegen.types.i8, ENTRY_EMPTY), state_ptr)
 
     # i++
@@ -125,7 +135,7 @@ def emit_hashmap_len(codegen: Any, hashmap_value: ir.Value) -> ir.Value:
     builder = codegen.builder
     zero_i32 = ir.Constant(codegen.types.i32, 0)
     one_i32 = ir.Constant(codegen.types.i32, 1)
-    size_ptr = builder.gep(hashmap_value, [zero_i32, one_i32], name="size_ptr")
+    size_ptr = builder.gep(hashmap_value, HASHMAP_SIZE_INDICES, name="size_ptr")
     return builder.load(size_ptr, name="hashmap_size")
 
 
@@ -169,7 +179,7 @@ def emit_hashmap_tombstone_count(codegen: Any, hashmap_value: ir.Value) -> ir.Va
     builder = codegen.builder
     zero_i32 = ir.Constant(codegen.types.i32, 0)
     three_i32 = ir.Constant(codegen.types.i32, 3)
-    tombstones_ptr = builder.gep(hashmap_value, [zero_i32, three_i32], name="tombstones_ptr")
+    tombstones_ptr = builder.gep(hashmap_value, HASHMAP_TOMBSTONES_INDICES, name="tombstones_ptr")
     return builder.load(tombstones_ptr, name="hashmap_tombstones")
 
 
@@ -223,12 +233,12 @@ def emit_hashmap_get(
     key_value = codegen.expressions.emit_expr(expr.args[0])
 
     # Get HashMap fields
-    capacity_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="capacity_ptr")
+    capacity_ptr = builder.gep(hashmap_value, HASHMAP_CAPACITY_INDICES, name="capacity_ptr")
     capacity = builder.load(capacity_ptr, name="capacity")
 
     # Get buckets array pointer
-    buckets_ptr = builder.gep(hashmap_value, [zero_i32, zero_i32], name="buckets_ptr")
-    buckets_data_ptr = builder.gep(buckets_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="buckets_data_ptr")
+    buckets_ptr = builder.gep(hashmap_value, HASHMAP_BUCKETS_INDICES, name="buckets_ptr")
+    buckets_data_ptr = builder.gep(buckets_ptr, BUCKETS_DATA_INDICES, name="buckets_data_ptr")
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
 
     # Hash the key (register on-demand if needed for array types)
@@ -284,7 +294,7 @@ def emit_hashmap_get(
     entry_ptr = builder.gep(buckets_data, [index], name="entry_ptr")
 
     # Load entry state
-    state_ptr = builder.gep(entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="state_ptr")
+    state_ptr = builder.gep(entry_ptr, ENTRY_STATE_INDICES, name="state_ptr")
     state = builder.load(state_ptr, name="state")
 
     # Branch based on state
@@ -308,7 +318,7 @@ def emit_hashmap_get(
 
     # Occupied case: check if keys match
     builder.position_at_end(probe_occupied_bb)
-    entry_key_ptr = builder.gep(entry_ptr, [zero_i32, zero_i32], name="entry_key_ptr")
+    entry_key_ptr = builder.gep(entry_ptr, ENTRY_KEY_INDICES, name="entry_key_ptr")
     entry_key = builder.load(entry_key_ptr, name="entry_key")
 
     # Compare keys
@@ -317,7 +327,7 @@ def emit_hashmap_get(
 
     # Found: return Maybe.Some(value)
     builder.position_at_end(found_bb)
-    entry_value_ptr = builder.gep(entry_ptr, [zero_i32, one_i32], name="entry_value_ptr")
+    entry_value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="entry_value_ptr")
     entry_value = builder.load(entry_value_ptr, name="entry_value")
 
     # Deep-copy an owning value out so the returned Some(V) owns independent heap buffers.
@@ -449,12 +459,12 @@ def emit_hashmap_contains_key(
     key_value = codegen.expressions.emit_expr(expr.args[0])
 
     # Get HashMap fields
-    capacity_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="capacity_ptr")
+    capacity_ptr = builder.gep(hashmap_value, HASHMAP_CAPACITY_INDICES, name="capacity_ptr")
     capacity = builder.load(capacity_ptr, name="capacity")
 
     # Get buckets array pointer
-    buckets_ptr = builder.gep(hashmap_value, [zero_i32, zero_i32], name="buckets_ptr")
-    buckets_data_ptr = builder.gep(buckets_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="buckets_data_ptr")
+    buckets_ptr = builder.gep(hashmap_value, HASHMAP_BUCKETS_INDICES, name="buckets_ptr")
+    buckets_data_ptr = builder.gep(buckets_ptr, BUCKETS_DATA_INDICES, name="buckets_data_ptr")
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
 
     # Hash the key (register on-demand if needed for array types)
@@ -510,7 +520,7 @@ def emit_hashmap_contains_key(
     entry_ptr = builder.gep(buckets_data, [index], name="entry_ptr")
 
     # Load entry state
-    state_ptr = builder.gep(entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="state_ptr")
+    state_ptr = builder.gep(entry_ptr, ENTRY_STATE_INDICES, name="state_ptr")
     state = builder.load(state_ptr, name="state")
 
     # Branch based on state
@@ -534,7 +544,7 @@ def emit_hashmap_contains_key(
 
     # Occupied case: check if keys match
     builder.position_at_end(probe_occupied_bb)
-    entry_key_ptr = builder.gep(entry_ptr, [zero_i32, zero_i32], name="entry_key_ptr")
+    entry_key_ptr = builder.gep(entry_ptr, ENTRY_KEY_INDICES, name="entry_key_ptr")
     entry_key = builder.load(entry_key_ptr, name="entry_key")
 
     # Compare keys

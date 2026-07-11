@@ -8,9 +8,17 @@ The ir-free half -- method validation, and resolving K/V out of a monomorphized
 "HashMap<K, V>" name -- lives in `semantics/generics/hashmap.py`.
 """
 
-from typing import Any, Optional
+from typing import Any, NamedTuple, Optional
 from sushi_lang.semantics.typesys import Type, ArrayType, DynamicArrayType
 import llvmlite.ir as ir
+
+from sushi_lang.backend.constants import (
+    HASHMAP_BUCKETS_INDICES,
+    HASHMAP_SIZE_INDICES,
+    HASHMAP_CAPACITY_INDICES,
+    HASHMAP_TOMBSTONES_INDICES,
+    BUCKETS_DATA_INDICES,
+)
 
 
 # ==============================================================================
@@ -118,6 +126,46 @@ def get_hashmap_llvm_type(codegen: Any, key_type: Type, value_type: Type) -> ir.
         codegen.types.i32,    # i32 capacity
         codegen.types.i32,    # i32 tombstones
     ])
+
+
+# ==============================================================================
+# Field Access
+# ==============================================================================
+
+
+class HashMapFields(NamedTuple):
+    """Pointers to the fields of a HashMap<K, V> struct.
+
+    `buckets_data` points at the dynamic array's data *field*, not at the bucket
+    storage -- load it to get the Entry<K, V>* itself.
+    """
+    buckets_data: ir.Value
+    size: ir.Value
+    capacity: ir.Value
+    tombstones: ir.Value
+
+
+def get_hashmap_field_ptrs(codegen: Any, hashmap_ptr: ir.Value) -> HashMapFields:
+    """GEP the four HashMap<K, V> fields at once.
+
+    Every HashMap method opens by reaching for some subset of these, so they are
+    computed together rather than re-deriving the struct layout at each use.
+
+    Args:
+        codegen: LLVM codegen instance.
+        hashmap_ptr: Pointer to the HashMap struct.
+
+    Returns:
+        Pointers to buckets.data, size, capacity and tombstones.
+    """
+    builder = codegen.builder
+    buckets_ptr = builder.gep(hashmap_ptr, HASHMAP_BUCKETS_INDICES, name="buckets_ptr")
+    return HashMapFields(
+        buckets_data=builder.gep(buckets_ptr, BUCKETS_DATA_INDICES, name="buckets_data_ptr"),
+        size=builder.gep(hashmap_ptr, HASHMAP_SIZE_INDICES, name="size_ptr"),
+        capacity=builder.gep(hashmap_ptr, HASHMAP_CAPACITY_INDICES, name="capacity_ptr"),
+        tombstones=builder.gep(hashmap_ptr, HASHMAP_TOMBSTONES_INDICES, name="tombstones_ptr"),
+    )
 
 
 # ==============================================================================

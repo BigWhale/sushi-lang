@@ -7,9 +7,10 @@ This module contains the debug method for printing HashMap internal state.
 from typing import Any
 from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
 import llvmlite.ir as ir
-from ..types import get_entry_type, ENTRY_EMPTY, ENTRY_OCCUPIED, ENTRY_TOMBSTONE
+from ..types import get_entry_type, get_hashmap_field_ptrs, ENTRY_EMPTY, ENTRY_OCCUPIED, ENTRY_TOMBSTONE
 from sushi_lang.semantics.generics.hashmap import extract_key_value_types
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i32_const, make_i8_const
+from sushi_lang.backend.constants import ENTRY_KEY_INDICES, ENTRY_VALUE_INDICES, ENTRY_STATE_INDICES
 
 
 def emit_hashmap_debug(
@@ -51,17 +52,15 @@ def emit_hashmap_debug(
     one_i32 = make_i32_const(1)
 
     # Get HashMap fields
-    size_ptr = builder.gep(hashmap_value, [zero_i32, one_i32], name="size_ptr")
-    capacity_ptr = builder.gep(hashmap_value, [zero_i32, make_i32_const(2)], name="capacity_ptr")
-    tombstones_ptr = builder.gep(hashmap_value, [zero_i32, make_i32_const(3)], name="tombstones_ptr")
+    fields = get_hashmap_field_ptrs(codegen, hashmap_value)
+    size_ptr, capacity_ptr = fields.size, fields.capacity
+    tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
 
     size = builder.load(size_ptr, name="size")
     capacity = builder.load(capacity_ptr, name="capacity")
     tombstones = builder.load(tombstones_ptr, name="tombstones")
 
     # Get buckets pointer
-    buckets_ptr = builder.gep(hashmap_value, [zero_i32, zero_i32], name="buckets_ptr")
-    buckets_data_ptr = builder.gep(buckets_ptr, [zero_i32, make_i32_const(2)], name="buckets_data_ptr")
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
 
     # Print header: "HashMap<K, V> {"
@@ -108,7 +107,7 @@ def emit_hashmap_debug(
 
     # Get entry
     entry_ptr = builder.gep(buckets_data, [i_val], name="entry_ptr")
-    state_ptr = builder.gep(entry_ptr, [zero_i32, make_i32_const(2)], name="state_ptr")
+    state_ptr = builder.gep(entry_ptr, ENTRY_STATE_INDICES, name="state_ptr")
     state = builder.load(state_ptr, name="state")
 
     builder.branch(check_state_bb)
@@ -146,14 +145,14 @@ def emit_hashmap_debug(
     emit_printf_string(codegen, builder, "] Occupied: ")
 
     # Load and print key
-    key_ptr = builder.gep(entry_ptr, [zero_i32, zero_i32], name="key_ptr")
+    key_ptr = builder.gep(entry_ptr, ENTRY_KEY_INDICES, name="key_ptr")
     key = builder.load(key_ptr, name="key")
     emit_debug_print_value(codegen, builder, key, key_type)
 
     emit_printf_string(codegen, builder, " -> ")
 
     # Load and print value
-    value_ptr = builder.gep(entry_ptr, [zero_i32, one_i32], name="value_ptr")
+    value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="value_ptr")
     value = builder.load(value_ptr, name="value")
     emit_debug_print_value(codegen, builder, value, value_type)
 

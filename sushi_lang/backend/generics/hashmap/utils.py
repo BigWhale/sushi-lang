@@ -11,6 +11,7 @@ import llvmlite.ir as ir
 from .types import ENTRY_OCCUPIED
 from sushi_lang.backend import enum_utils
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, TRUE_I1, make_i32_const
+from sushi_lang.backend.constants import ENTRY_KEY_INDICES, ENTRY_VALUE_INDICES, ENTRY_STATE_INDICES
 
 
 def emit_key_equality_check(codegen: Any, key_type: Type, key1: ir.Value, key2: ir.Value) -> ir.Value:
@@ -216,15 +217,15 @@ def emit_insert_entry(codegen: Any, entry_ptr: ir.Value, key: ir.Value, value: i
     two_i32 = make_i32_const(2)
 
     # Set key
-    key_ptr = builder.gep(entry_ptr, [zero_i32, zero_i32], name="entry_key_ptr")
+    key_ptr = builder.gep(entry_ptr, ENTRY_KEY_INDICES, name="entry_key_ptr")
     builder.store(key, key_ptr)
 
     # Set value
-    value_ptr = builder.gep(entry_ptr, [zero_i32, one_i32], name="entry_value_ptr")
+    value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="entry_value_ptr")
     builder.store(value, value_ptr)
 
     # Set state = OCCUPIED
-    state_ptr = builder.gep(entry_ptr, [zero_i32, two_i32], name="entry_state_ptr")
+    state_ptr = builder.gep(entry_ptr, ENTRY_STATE_INDICES, name="entry_state_ptr")
     builder.store(ir.Constant(codegen.types.i8, ENTRY_OCCUPIED), state_ptr)
 
 
