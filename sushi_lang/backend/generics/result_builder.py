@@ -24,7 +24,7 @@ from sushi_lang.semantics.typesys import EnumType, EnumVariantInfo, BuiltinType,
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
-    from sushi_lang.backend.interfaces import CodegenProtocol
+    from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
 class ResultBuilder:
@@ -128,7 +128,7 @@ class ResultBuilder:
 
     def build_ok_variant(
         self,
-        codegen: 'CodegenProtocol',
+        codegen: 'LLVMCodegen',
         result_type: EnumType,
         value: ir.Value
     ) -> ir.Value:
@@ -177,7 +177,7 @@ class ResultBuilder:
 
     def build_err_variant(
         self,
-        codegen: 'CodegenProtocol',
+        codegen: 'LLVMCodegen',
         result_type: EnumType,
         error_value: Optional[ir.Value] = None
     ) -> ir.Value:
@@ -226,7 +226,7 @@ class ResultBuilder:
 
     def build_err_from_return_type(
         self,
-        codegen: 'CodegenProtocol',
+        codegen: 'LLVMCodegen',
         return_type: Type,
         error_value: Optional[ir.Value] = None
     ) -> ir.Value:

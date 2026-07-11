@@ -206,15 +206,13 @@ def test_collector_discovers_pack_instantiation():
 
     reporter = Reporter()
     collector = CollectorPass(reporter)
-    (constants, structs, enums, generic_enums, generic_structs, perks,
-     perk_impls, funcs, extensions, generic_extensions,
-     generic_funcs) = collector.run(program)
+    tables = collector.run(program)
 
     inst = InstantiationCollector(
-        struct_table=structs.by_name,
-        enum_table=enums.by_name,
-        generic_structs=generic_structs.by_name,
-        generic_funcs=generic_funcs.by_name,
+        struct_table=tables.structs.by_name,
+        enum_table=tables.enums.by_name,
+        generic_structs=tables.generic_structs.by_name,
+        generic_funcs=tables.generic_funcs.by_name,
     )
     _type_inst, func_inst = inst.run(program)
 

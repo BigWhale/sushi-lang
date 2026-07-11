@@ -56,8 +56,7 @@ def _collect_generic(program, name: str):
     """Run the collector and return the named GenericFuncDef."""
     reporter = Reporter(source="", filename="lib")
     tables = CollectorPass(reporter).run(program, unit_name="lib")
-    generic_funcs = tables[-1]  # GenericFunctionTable is the last element
-    return generic_funcs.by_name[name]
+    return tables.generic_funcs.by_name[name]
 
 
 def test_serialize_record_shape():

@@ -5,7 +5,10 @@ This module maintains backward compatibility while delegating to specialized col
 """
 
 from __future__ import annotations
-from typing import Optional, Set, Tuple
+from typing import Optional, Set, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.tables import SymbolTables
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.ast import Program
@@ -166,19 +169,7 @@ class CollectorPass:
         self._register_predefined_enums()
         self._register_predefined_generics()
 
-    def run(self, root: Program, unit_name: Optional[str] = None) -> Tuple[
-        ConstantTable,
-        StructTable,
-        EnumTable,
-        GenericEnumTable,
-        GenericStructTable,
-        PerkTable,
-        PerkImplementationTable,
-        FunctionTable,
-        ExtensionTable,
-        GenericExtensionTable,
-        GenericFunctionTable
-    ]:
+    def run(self, root: Program, unit_name: Optional[str] = None) -> 'SymbolTables':
         """Run all collection passes in dependency order.
 
         Args:
@@ -186,7 +177,7 @@ class CollectorPass:
             unit_name: Optional unit name for multi-file compilation
 
         Returns:
-            Tuple of all collected tables (for backward compatibility)
+            The collected symbol tables for this unit.
         """
         # Collect in dependency order
         self.constant_collector.collect(root)
@@ -200,18 +191,20 @@ class CollectorPass:
         self.function_collector.register_stdlib_functions(root)
         self.external_collector.collect(root)
 
-        return (
-            self.constants,
-            self.structs,
-            self.enums,
-            self.generic_enums,
-            self.generic_structs,
-            self.perks,
-            self.perk_impls,
-            self.funcs,
-            self.extensions,
-            self.generic_extensions,
-            self.generic_funcs
+        from sushi_lang.semantics.tables import SymbolTables
+        return SymbolTables(
+            constants=self.constants,
+            structs=self.structs,
+            enums=self.enums,
+            generic_enums=self.generic_enums,
+            generic_structs=self.generic_structs,
+            perks=self.perks,
+            perk_impls=self.perk_impls,
+            funcs=self.funcs,
+            extensions=self.extensions,
+            generic_extensions=self.generic_extensions,
+            generic_funcs=self.generic_funcs,
+            externals=self.externals,
         )
 
     def _register_predefined_structs(self) -> None:

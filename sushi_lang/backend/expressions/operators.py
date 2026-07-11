@@ -15,10 +15,10 @@ from sushi_lang.backend import enum_utils
 from sushi_lang.backend.utils import require_both_initialized
 
 if TYPE_CHECKING:
-    from sushi_lang.backend.interfaces import CodegenProtocol
+    from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
-def emit_operator(codegen: 'CodegenProtocol', expr: Expr, to_i1: bool) -> ir.Value:
+def emit_operator(codegen: 'LLVMCodegen', expr: Expr, to_i1: bool) -> ir.Value:
     """Dispatch operator emission to appropriate handler.
 
     Args:
@@ -41,7 +41,7 @@ def emit_operator(codegen: 'CodegenProtocol', expr: Expr, to_i1: bool) -> ir.Val
             raise_internal_error("CE0099", type=type(expr).__name__)
 
 
-def emit_float_negation(codegen: 'CodegenProtocol', val: ir.Value) -> ir.Value:
+def emit_float_negation(codegen: 'LLVMCodegen', val: ir.Value) -> ir.Value:
     """Emit floating-point negation using fsub.
 
     Args:
@@ -54,7 +54,7 @@ def emit_float_negation(codegen: 'CodegenProtocol', val: ir.Value) -> ir.Value:
     return codegen.builder.fsub(ir.Constant(val.type, 0.0), val)
 
 
-def emit_unary_op(codegen: 'CodegenProtocol', expr: UnaryOp, to_i1: bool) -> ir.Value:
+def emit_unary_op(codegen: 'LLVMCodegen', expr: UnaryOp, to_i1: bool) -> ir.Value:
     """Emit unary operation (negation, logical not).
 
     Args:
@@ -93,7 +93,7 @@ def emit_unary_op(codegen: 'CodegenProtocol', expr: UnaryOp, to_i1: bool) -> ir.
     raise NotImplementedError(f"unknown UnaryOp: {expr.op!r}")
 
 
-def _ensure_i32(codegen: 'CodegenProtocol', val: ir.Value) -> ir.Value:
+def _ensure_i32(codegen: 'LLVMCodegen', val: ir.Value) -> ir.Value:
     """Efficiently convert value to i32, avoiding redundant conversions.
 
     Checks if value is already i32 before calling conversion function,
@@ -113,7 +113,7 @@ def _ensure_i32(codegen: 'CodegenProtocol', val: ir.Value) -> ir.Value:
     return codegen.utils.as_i32(val)
 
 
-def emit_binary_op(codegen: 'CodegenProtocol', expr: BinaryOp, to_i1: bool) -> ir.Value:
+def emit_binary_op(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.Value:
     """Emit binary operation with proper type handling.
 
     Args:
@@ -152,7 +152,7 @@ def emit_binary_op(codegen: 'CodegenProtocol', expr: BinaryOp, to_i1: bool) -> i
     return emit_arithmetic(codegen, op, left, right, left_type)
 
 
-def emit_comparison(codegen: 'CodegenProtocol', expr: BinaryOp, to_i1: bool) -> ir.Value:
+def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.Value:
     """Emit comparison operations with string support.
 
     Args:
@@ -208,7 +208,7 @@ def emit_comparison(codegen: 'CodegenProtocol', expr: BinaryOp, to_i1: bool) -> 
     return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
 
 
-def emit_arithmetic(codegen: 'CodegenProtocol', op: str, left: ir.Value, right: ir.Value, left_type: 'Optional[Type]' = None) -> ir.Value:
+def emit_arithmetic(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value, left_type: 'Optional[Type]' = None) -> ir.Value:
     """Emit arithmetic operations on integer or floating-point values.
 
     Performs compile-time constant folding when both operands are constants.
@@ -323,7 +323,7 @@ def _fold_arithmetic_constants(op: str, left: ir.Constant, right: ir.Constant) -
     return ir.Constant(left.type, result)
 
 
-def emit_bitwise(codegen: 'CodegenProtocol', op: str, left: ir.Value, right: ir.Value, left_type: 'Optional[Type]' = None) -> ir.Value:
+def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value, left_type: 'Optional[Type]' = None) -> ir.Value:
     """Emit bitwise operations on integer values.
 
     Performs compile-time constant folding when both operands are constants.
@@ -446,7 +446,7 @@ def _fold_bitwise_constants(op: str, left: ir.Constant, right: ir.Constant) -> '
     return ir.Constant(left.type, result)
 
 
-def emit_logic(codegen: 'CodegenProtocol', op: str, left_expr: Expr, right_expr: Expr, to_i1: bool = False) -> ir.Value:
+def emit_logic(codegen: 'LLVMCodegen', op: str, left_expr: Expr, right_expr: Expr, to_i1: bool = False) -> ir.Value:
     """Emit short-circuit boolean logic for 'and', 'or', and 'xor' operations.
 
     Creates proper basic block structure for short-circuiting with phi nodes
@@ -503,7 +503,7 @@ def emit_logic(codegen: 'CodegenProtocol', op: str, left_expr: Expr, right_expr:
     return phi if to_i1 else codegen.builder.zext(phi, codegen.i8)
 
 
-def emit_name(codegen: 'CodegenProtocol', expr: Name, to_i1: bool) -> ir.Value:
+def emit_name(codegen: 'LLVMCodegen', expr: Name, to_i1: bool) -> ir.Value:
     """Emit variable or constant reference.
 
     First checks for global constants, then string constants, then local variables.
@@ -549,7 +549,7 @@ def emit_name(codegen: 'CodegenProtocol', expr: Name, to_i1: bool) -> ir.Value:
         raise_internal_error("CE0055", name=expr.id)
 
 
-def emit_borrow(codegen: 'CodegenProtocol', expr: Borrow) -> ir.Value:
+def emit_borrow(codegen: 'LLVMCodegen', expr: Borrow) -> ir.Value:
     """Emit borrow expression (&peek expr or &poke expr) as pointer to expression.
 
     Supports:
@@ -611,7 +611,7 @@ def emit_borrow(codegen: 'CodegenProtocol', expr: Borrow) -> ir.Value:
         raise_internal_error("CE0100", expr=type(expr.expr).__name__)
 
 
-def emit_member_access_borrow(codegen: 'CodegenProtocol', expr) -> ir.Value:
+def emit_member_access_borrow(codegen: 'LLVMCodegen', expr) -> ir.Value:
     """Emit borrow of struct field access using GEP.
 
     Returns a pointer to the field within the struct.
@@ -664,7 +664,7 @@ def emit_member_access_borrow(codegen: 'CodegenProtocol', expr) -> ir.Value:
     return field_ptr
 
 
-def emit_try_expr(codegen: 'CodegenProtocol', expr: 'TryExpr') -> ir.Value:
+def emit_try_expr(codegen: 'LLVMCodegen', expr: 'TryExpr') -> ir.Value:
     """Emit try operator (??) for error propagation with Result<T> or Maybe<T>.
 
     Uses AST annotations set during semantic analysis (Pass 2) when available.
@@ -775,7 +775,7 @@ def emit_try_expr(codegen: 'CodegenProtocol', expr: 'TryExpr') -> ir.Value:
     return unwrapped_value
 
 
-def _extract_variant_from_result(codegen: 'CodegenProtocol', result_value: ir.Value, variant_type: 'Type') -> ir.Value:
+def _extract_variant_from_result(codegen: 'LLVMCodegen', result_value: ir.Value, variant_type: 'Type') -> ir.Value:
     """Extract variant data from Result/Maybe enum value.
 
     Args:
@@ -795,7 +795,7 @@ def _extract_variant_from_result(codegen: 'CodegenProtocol', result_value: ir.Va
     return extracted_value
 
 
-def _construct_result_err_variant(codegen: 'CodegenProtocol', return_type, error_value: ir.Value) -> ir.Value:
+def _construct_result_err_variant(codegen: 'LLVMCodegen', return_type, error_value: ir.Value) -> ir.Value:
     """Construct an Err variant enum value for Result<T, E> with actual error data.
 
     Delegates to ResultBuilder for centralized Result construction.
@@ -813,7 +813,7 @@ def _construct_result_err_variant(codegen: 'CodegenProtocol', return_type, error
     return builder.build_err_from_return_type(codegen, return_type, error_value)
 
 
-def _infer_call_return_type(codegen: 'CodegenProtocol', call_expr: 'Call') -> 'EnumType':
+def _infer_call_return_type(codegen: 'LLVMCodegen', call_expr: 'Call') -> 'EnumType':
     """Infer the return type of a Call expression (function call).
 
     Used by pattern matching to determine the enum type when matching on function
@@ -900,7 +900,7 @@ def _infer_call_return_type(codegen: 'CodegenProtocol', call_expr: 'Call') -> 'E
     return codegen.enum_table.by_name[result_enum_name]
 
 
-def _infer_try_expr_type(codegen: 'CodegenProtocol', expr: 'Expr') -> 'EnumType':
+def _infer_try_expr_type(codegen: 'LLVMCodegen', expr: 'Expr') -> 'EnumType':
     """Infer the enum type of an expression for the try operator (??).
 
     Handles Call (function calls), DotCall (method calls), and Name (variables).
@@ -932,7 +932,7 @@ def _infer_try_expr_type(codegen: 'CodegenProtocol', expr: 'Expr') -> 'EnumType'
         raise_internal_error("CE0100", expr=type(expr).__name__)
 
 
-def _infer_dotcall_return_type(codegen: 'CodegenProtocol', dotcall_expr: 'DotCall') -> 'EnumType':
+def _infer_dotcall_return_type(codegen: 'LLVMCodegen', dotcall_expr: 'DotCall') -> 'EnumType':
     """Infer the return type of a DotCall expression (method call).
 
     This is used by emit_try_expr to determine the enum type returned by
@@ -1065,7 +1065,7 @@ def _extract_error_variant_info(inner_type: 'EnumType') -> tuple[int, 'Type']:
     return error_tag, error_type
 
 
-def _get_stdlib_function_return_type(codegen: 'CodegenProtocol', func_name: str) -> 'EnumType | None':
+def _get_stdlib_function_return_type(codegen: 'LLVMCodegen', func_name: str) -> 'EnumType | None':
     """Get the return type for a stdlib function.
 
     Uses the function table registry to determine return type.

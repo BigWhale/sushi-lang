@@ -2,9 +2,10 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, Optional
 from lark import Tree, Token
-from sushi_lang.semantics.ast import FuncDef, Param, BoundedTypeParam
+from sushi_lang.semantics.ast import FuncDef, Param
 from sushi_lang.semantics.typesys import Type, TYPE_NODE_NAMES
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree, find_tree_recursive
+from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -169,10 +170,3 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> 
     return out
 
 
-def parse_bounded_type_params(type_params_node: Optional[Tree]) -> Optional[List[BoundedTypeParam]]:
-    """Parse type_params node and extract bounded type parameters with constraints.
-
-    Delegates to generics module for parsing.
-    """
-    from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params as _parse_bounded
-    return _parse_bounded(type_params_node)

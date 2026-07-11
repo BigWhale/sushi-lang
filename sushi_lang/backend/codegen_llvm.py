@@ -20,7 +20,7 @@ from typing import Dict, List, Optional
 
 from llvmlite import ir, binding as llvm
 
-from sushi_lang.semantics.ast import ConstDef
+from sushi_lang.semantics.ast import ConstDef, ExtendDef
 from sushi_lang.semantics.units import Unit
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT64_BIT_WIDTH
@@ -36,6 +36,24 @@ from sushi_lang.backend.functions import LLVMFunctionManager
 from sushi_lang.backend.llvm_optimization import LLVMOptimizer
 from sushi_lang.backend.string_constants import StringConstantManager
 from sushi_lang.backend.stdlib_linker import StdlibLinker
+
+
+def _perk_method_to_extend_def(perk_impl, method) -> ExtendDef:
+    """Wrap a perk-impl method as a synthetic ExtendDef.
+
+    Perk methods are declared and emitted as extension methods, so both the
+    declaration and definition passes need the same wrapper.
+    """
+    return ExtendDef(
+        target_type=perk_impl.target_type,
+        name=method.name,
+        params=method.params,
+        ret=method.ret,
+        body=method.body,
+        loc=method.loc,
+        name_span=method.name_span,
+        ret_span=method.ret_span,
+    )
 
 
 class LLVMCodegen:
@@ -663,15 +681,12 @@ class LLVMCodegen:
             for const in unit.ast.constants:
                 self.ast_constants[const.name] = const
 
-        # Emit constants: own unit gets full definitions, others get external declarations
+        # Emit constants from every unit as full definitions.
         for unit in all_units:
             if unit.ast is None:
                 continue
             for const in unit.ast.constants:
-                if unit.name == target_unit.name:
-                    self._emit_global_constant(const)
-                else:
-                    self._emit_global_constant(const)
+                self._emit_global_constant(const)
 
         # Pass 1: Declare function prototypes
         # For the target unit: declare ALL functions (public + private, they'll get bodies)
@@ -691,17 +706,7 @@ class LLVMCodegen:
 
             for perk_impl in unit.ast.perk_impls:
                 for method in perk_impl.methods:
-                    from sushi_lang.semantics.ast import ExtendDef
-                    synthetic_ext = ExtendDef(
-                        target_type=perk_impl.target_type,
-                        name=method.name,
-                        params=method.params,
-                        ret=method.ret,
-                        body=method.body,
-                        loc=method.loc,
-                        name_span=method.name_span,
-                        ret_span=method.ret_span
-                    )
+                    synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
                     self.functions.emit_extension_method_decl(synthetic_ext)
 
         # Declare monomorphized generic extension methods
@@ -725,17 +730,7 @@ class LLVMCodegen:
 
             for perk_impl in target_unit.ast.perk_impls:
                 for method in perk_impl.methods:
-                    from sushi_lang.semantics.ast import ExtendDef
-                    synthetic_ext = ExtendDef(
-                        target_type=perk_impl.target_type,
-                        name=method.name,
-                        params=method.params,
-                        ret=method.ret,
-                        body=method.body,
-                        loc=method.loc,
-                        name_span=method.name_span,
-                        ret_span=method.ret_span
-                    )
+                    synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
                     self.functions.emit_extension_method_def(synthetic_ext)
 
         # Emit monomorphized generic extension method bodies for all units
@@ -942,17 +937,7 @@ class LLVMCodegen:
             for perk_impl in unit.ast.perk_impls:
                 for method in perk_impl.methods:
                     # Create synthetic ExtendDef for declaration
-                    from sushi_lang.semantics.ast import ExtendDef
-                    synthetic_ext = ExtendDef(
-                        target_type=perk_impl.target_type,
-                        name=method.name,
-                        params=method.params,
-                        ret=method.ret,
-                        body=method.body,
-                        loc=method.loc,
-                        name_span=method.name_span,
-                        ret_span=method.ret_span
-                    )
+                    synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
                     self.functions.emit_extension_method_decl(synthetic_ext)
 
         # Declare monomorphized generic extension methods
@@ -987,17 +972,7 @@ class LLVMCodegen:
                 for method in perk_impl.methods:
                     # Convert perk method to extension-like structure for emission
                     # Create a synthetic ExtendDef with the perk method
-                    from sushi_lang.semantics.ast import ExtendDef
-                    synthetic_ext = ExtendDef(
-                        target_type=perk_impl.target_type,
-                        name=method.name,
-                        params=method.params,
-                        ret=method.ret,
-                        body=method.body,
-                        loc=method.loc,
-                        name_span=method.name_span,
-                        ret_span=method.ret_span
-                    )
+                    synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
                     self.functions.emit_extension_method_def(synthetic_ext)
 
         # Emit monomorphized generic extension method bodies

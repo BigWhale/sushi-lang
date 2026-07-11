@@ -9,11 +9,11 @@ from typing import TYPE_CHECKING
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
-    from sushi_lang.backend.interfaces import CodegenProtocol
+    from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.semantics.ast import Let, Rebind
 
 
-def emit_let(codegen: 'CodegenProtocol', stmt: 'Let') -> None:
+def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
     """Emit variable declaration with initialization.
 
     Creates a local variable slot and initializes it with the provided expression.
@@ -132,7 +132,7 @@ def emit_let(codegen: 'CodegenProtocol', stmt: 'Let') -> None:
             codegen.builder.store(casted_rhs, slot)
 
 
-def _clone_owning_struct_alias(codegen: 'CodegenProtocol', stmt: 'Let', rhs: 'ir.Value', semantic_type) -> 'ir.Value':
+def _clone_owning_struct_alias(codegen: 'LLVMCodegen', stmt: 'Let', rhs: 'ir.Value', semantic_type) -> 'ir.Value':
     """Deep-copy an owning-struct RHS when the binding aliases an existing owner.
 
     Structs are copy types (#60/#134): `let p2 = p` and `let inner = outer.field` must give
@@ -163,7 +163,7 @@ def _clone_owning_struct_alias(codegen: 'CodegenProtocol', stmt: 'Let', rhs: 'ir
     return rhs
 
 
-def _reconcile_closure_ownership(codegen: 'CodegenProtocol', stmt: 'Let', semantic_type) -> None:
+def _reconcile_closure_ownership(codegen: 'LLVMCodegen', stmt: 'Let', semantic_type) -> None:
     """Keep exactly one RAII owner for a function-value (closure) binding.
 
     `create_local_nostore` registered `stmt.name` as an env owner. That is correct only
@@ -210,7 +210,7 @@ def _reconcile_closure_ownership(codegen: 'CodegenProtocol', stmt: 'Let', semant
     # else: lambda literal / call / fn ref -> g owns a fresh env; keep registration.
 
 
-def _reconcile_string_ownership(codegen: 'CodegenProtocol', stmt: 'Let', semantic_type) -> None:
+def _reconcile_string_ownership(codegen: 'LLVMCodegen', stmt: 'Let', semantic_type) -> None:
     """Keep exactly one RAII owner for a string binding (#145).
 
     `create_local_nostore` registered `stmt.name` for owned-bit-guarded free. That is correct
@@ -253,7 +253,7 @@ def _reconcile_string_ownership(codegen: 'CodegenProtocol', stmt: 'Let', semanti
     # else: literal / string method / interpolation / call -> s2 owns a fresh string; keep it.
 
 
-def emit_rebind(codegen: 'CodegenProtocol', stmt: 'Rebind') -> None:
+def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
     """Emit variable or field rebinding (assignment to existing variable or struct field).
 
     Supports two forms:
@@ -335,7 +335,7 @@ def emit_rebind(codegen: 'CodegenProtocol', stmt: 'Rebind') -> None:
 
 
 def _emit_dynamic_array_rebind(
-    codegen: 'CodegenProtocol',
+    codegen: 'LLVMCodegen',
     stmt: 'Rebind',
     slot: 'ir.Value',
     val: 'ir.Value',
@@ -399,7 +399,7 @@ def _emit_dynamic_array_rebind(
             codegen.memory.mark_struct_as_moved(source_name)
 
 
-def _emit_struct_rebind(codegen: 'CodegenProtocol', stmt: 'Rebind', slot: 'ir.Value', val: 'ir.Value') -> None:
+def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value', val: 'ir.Value') -> None:
     """Emit rebinding for user-defined structs with cleanup.
 
     Args:
@@ -439,7 +439,7 @@ def _emit_struct_rebind(codegen: 'CodegenProtocol', stmt: 'Rebind', slot: 'ir.Va
     codegen.builder.store(val, slot)
 
 
-def _emit_field_rebind(codegen: 'CodegenProtocol', stmt: 'Rebind') -> None:
+def _emit_field_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
     """Emit field rebinding (obj.field := value).
 
     Gets a pointer to the struct field and stores the new value directly.
