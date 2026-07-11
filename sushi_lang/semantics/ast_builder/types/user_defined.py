@@ -1,6 +1,5 @@
 """Parser for user-defined types (structs, enums)."""
 from __future__ import annotations
-from typing import Optional
 from lark import Tree
 from sushi_lang.semantics.typesys import UnknownType, ForeignPtrType
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name

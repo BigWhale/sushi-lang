@@ -8,7 +8,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from llvmlite import ir
-from sushi_lang.backend.constants import INT32_BIT_WIDTH
 from sushi_lang.backend.constants.llvm_values import make_i32_const
 from sushi_lang.backend import enum_utils
 

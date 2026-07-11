@@ -20,10 +20,10 @@ from typing import Dict, List, Optional
 
 from llvmlite import ir, binding as llvm
 
-from sushi_lang.semantics.ast import Program, ConstDef
+from sushi_lang.semantics.ast import ConstDef
 from sushi_lang.semantics.units import Unit
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
-from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
+from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.backend.llvm_types import LLVMTypeSystem
 from sushi_lang.backend.llvm_utils import LLVMUtils
 from sushi_lang.backend.runtime import LLVMRuntime

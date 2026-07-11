@@ -21,7 +21,6 @@ def is_builtin_files_function(name: str) -> bool:
 
 def get_builtin_files_function_return_type(func_name: str) -> Type:
     """Get the return type of a built-in files utility function."""
-    from sushi_lang.semantics.typesys import EnumType
 
     if func_name in ["exists", "is_file", "is_dir"]:
         return BuiltinType.BOOL

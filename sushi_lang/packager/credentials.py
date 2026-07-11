@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import os
 import tomllib
-from pathlib import Path
 
 from sushi_lang.packager.constants import SUSHI_HOME
 

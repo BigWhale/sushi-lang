@@ -1,7 +1,6 @@
 """Nori package archive (.nori) creation and extraction."""
 from __future__ import annotations
 
-import io
 import tarfile
 from pathlib import Path
 

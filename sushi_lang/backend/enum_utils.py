@@ -13,13 +13,13 @@ These utilities abstract the repetitive patterns of:
   - Constructing enum values
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING, Union, List, Tuple
+from typing import TYPE_CHECKING, List, Tuple
 
 from llvmlite import ir
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-    from sushi_lang.semantics.typesys import EnumType, EnumVariantInfo, Type
+    from sushi_lang.semantics.typesys import Type
 
 
 def extract_enum_tag(

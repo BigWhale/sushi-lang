@@ -15,7 +15,7 @@ from __future__ import annotations
 import typing
 
 from llvmlite import ir
-from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
+from sushi_lang.backend.constants import INT64_BIT_WIDTH
 from sushi_lang.backend.platform_detect import get_current_platform
 
 if typing.TYPE_CHECKING:

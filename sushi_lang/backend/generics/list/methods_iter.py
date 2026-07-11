@@ -6,14 +6,14 @@ This module contains the iter() method for creating iterators from List<T>.
 
 from typing import Any, TYPE_CHECKING
 import llvmlite.ir as ir
-from sushi_lang.semantics.ast import MethodCall, Name
+from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType
 from sushi_lang.backend import gep_utils
 from .types import get_list_len_ptr, get_list_data_ptr, extract_element_type
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
-    from sushi_lang.backend.codegen_llvm import LLVMCodegen
+    pass
 
 
 def emit_list_iter(

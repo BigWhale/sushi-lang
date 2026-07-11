@@ -1,6 +1,5 @@
 """File utility functions for <io/files> module."""
 from llvmlite import ir
-from sushi_lang.sushi_stdlib.src.ir_common import create_stdlib_module
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types, get_string_type
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.backend.platform_detect import get_current_platform

@@ -10,10 +10,9 @@ These patterns were previously duplicated across results.py and maybe.py.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Tuple
+from typing import TYPE_CHECKING
 import llvmlite.ir as ir
 
-from sushi_lang.backend.constants import INT32_BIT_WIDTH
 from sushi_lang.semantics.typesys import EnumType, Type
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend import enum_utils

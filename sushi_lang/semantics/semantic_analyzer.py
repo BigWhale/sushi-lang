@@ -1,6 +1,6 @@
 # semantics/semantic_analyzer.py
 from __future__ import annotations
-from typing import Optional, Any, List
+from typing import Optional
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.ast import Program
@@ -882,7 +882,7 @@ class SemanticAnalyzer:
         Args:
             main_func: The main function AST node, or None if not found.
         """
-        from sushi_lang.semantics.typesys import DynamicArrayType, BuiltinType
+        from sushi_lang.semantics.typesys import DynamicArrayType
 
         if main_func is None:
             # No main function found, no args processing needed

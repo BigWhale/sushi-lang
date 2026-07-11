@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import typing
 
-from llvmlite import ir
 
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
 

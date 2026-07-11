@@ -279,7 +279,7 @@ def emit_rebind(codegen: 'CodegenProtocol', stmt: 'Rebind') -> None:
     """
     from llvmlite import ir
     from sushi_lang.semantics.ast import Name, MemberAccess
-    from sushi_lang.semantics.typesys import StructType, ReferenceType
+    from sushi_lang.semantics.typesys import ReferenceType
 
     # Handle field rebinding (obj.field := value)
     if isinstance(stmt.target, MemberAccess):
@@ -449,8 +449,7 @@ def _emit_field_rebind(codegen: 'CodegenProtocol', stmt: 'Rebind') -> None:
         stmt: The rebind statement with MemberAccess target.
     """
     from llvmlite import ir
-    from sushi_lang.semantics.ast import MemberAccess, Name
-    from sushi_lang.semantics.typesys import StructType
+    from sushi_lang.semantics.ast import MemberAccess
 
     target = stmt.target
     if not isinstance(target, MemberAccess):

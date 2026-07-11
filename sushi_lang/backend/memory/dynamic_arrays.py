@@ -10,13 +10,13 @@ This module handles:
 """
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set, Tuple, TYPE_CHECKING
+from typing import Dict, List, Optional, Set, TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.semantics.typesys import DynamicArrayType, Type, StructType
-from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH
+from sushi_lang.backend.constants import INT32_BIT_WIDTH
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i32_const
-from sushi_lang.backend.memory.heap import emit_malloc, emit_free
+from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -564,7 +564,6 @@ class DynamicArrayManager:
         if isinstance(struct_type, EnumType):
             return self._enum_needs_cleanup(struct_type)
 
-        from sushi_lang.semantics.typesys import UnknownType, FunctionType, BuiltinType
         for field_name, field_type in struct_type.fields:
             if self._payload_needs_cleanup(field_type):
                 return True

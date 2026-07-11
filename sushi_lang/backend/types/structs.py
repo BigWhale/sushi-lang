@@ -20,7 +20,7 @@ from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType, Type, ArrayType, DynamicArrayType, BuiltinType, EnumType, ForeignPtrType
 from sushi_lang.semantics.generics.types import GenericStructType
 import llvmlite.ir as ir
-from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
+from sushi_lang.backend.constants import INT64_BIT_WIDTH
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder

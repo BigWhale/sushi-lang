@@ -4,7 +4,6 @@ from typing import List, Union, Tuple, Optional, TYPE_CHECKING
 from lark import Tree, Token
 from sushi_lang.semantics.ast import Expr, Call, MethodCall, Name, Spread
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, find_tree_recursive, first_name
-from sushi_lang.semantics.ast_builder.utils.expression_discovery import _EXPR_NODES
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:

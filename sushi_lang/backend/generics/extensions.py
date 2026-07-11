@@ -15,14 +15,12 @@ This integrates with the existing monomorphization infrastructure
 (Pass 1.6) and generates ExtendDef AST nodes for the backend to compile.
 """
 from __future__ import annotations
-from typing import Dict, Tuple, Set, Optional
-from dataclasses import dataclass
+from typing import Dict, Tuple, Set
 
-from sushi_lang.semantics.ast import ExtendDef, Block, Param
+from sushi_lang.semantics.ast import ExtendDef, Param
 from sushi_lang.semantics.typesys import Type, StructType
 from sushi_lang.semantics.generics.types import TypeParameter, GenericTypeRef
-from sushi_lang.semantics.passes.collect import GenericExtensionMethod, ExtensionMethod
-from sushi_lang.internals.report import Reporter
+from sushi_lang.semantics.passes.collect import GenericExtensionMethod
 from sushi_lang.internals.errors import raise_internal_error
 
 

@@ -33,11 +33,9 @@ u8[] Specific Methods:
 """
 
 from typing import Any
-from sushi_lang.semantics.ast import MethodCall, Name, IntLit
+from sushi_lang.semantics.ast import MethodCall, IntLit
 from sushi_lang.semantics.typesys import Type, ArrayType, DynamicArrayType, BuiltinType, IteratorType
-import llvmlite.ir as ir
 from sushi_lang.internals import errors as er
-from sushi_lang.sushi_stdlib.src.common import register_builtin_method, BuiltinMethod
 
 
 def _is_integer_type(type_: Type) -> bool:

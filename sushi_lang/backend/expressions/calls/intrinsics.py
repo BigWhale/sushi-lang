@@ -240,7 +240,7 @@ def try_emit_enum_hash(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
 
     # Handle GenericTypeRef for Result<T, E>
     from sushi_lang.semantics.generics.types import GenericTypeRef
-    from sushi_lang.semantics.typesys import ResultType, EnumType
+    from sushi_lang.semantics.typesys import ResultType
 
     if isinstance(semantic_type, GenericTypeRef) and semantic_type.base_name == "Result":
         # Convert GenericTypeRef("Result", [T, E]) to Result enum

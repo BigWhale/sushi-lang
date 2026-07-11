@@ -17,3 +17,17 @@ O_RDONLY = 0
 O_WRONLY = 1
 O_CREAT = 0x40
 O_TRUNC = 0x200
+
+# Re-exported for the platform dispatcher (get_platform_module); referenced dynamically.
+__all__ = [
+    "declare_stat",
+    "declare_access",
+    "declare_unlink",
+    "declare_rename",
+    "declare_open",
+    "declare_read",
+    "declare_write",
+    "declare_close",
+    "declare_mkdir",
+    "declare_rmdir",
+]

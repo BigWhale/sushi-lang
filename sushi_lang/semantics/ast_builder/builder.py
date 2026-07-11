@@ -36,33 +36,13 @@ from sushi_lang.internals.report import span_of
 
 # Tree navigation utilities
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
-    first as _first,
-    first_name as _first_name,
-    first_method_name as _first_method_name,
     first_tree as _first_tree,
     find_tree_recursive as _find_tree_recursive,
-    first_tree_child as _first_tree_child,
 )
 
 # Expression discovery utilities
-from sushi_lang.semantics.ast_builder.utils.expression_discovery import (
-    contains_expr_like as _contains_expr_like,
-    contains_op as _contains_op,
-    token_count as _token_count,
-    find_outer_expr_structural as _find_outer_expr_structural,
-    expr_and_block as _expr_and_block,
-    _EXPR_NODES,
-)
 
 # String processing utilities
-from sushi_lang.semantics.ast_builder.utils.string_processing import (
-    process_string_escapes as _process_string_escapes,
-    parse_interpolated_string as _parse_interpolated_string,
-    get_interpolation_parser as _get_interpolation_parser,
-    apply_location_offset as _apply_location_offset,
-    parse_interpolation_expr as _parse_interpolation_expr,
-    parse_string_token as _parse_string_token,
-)
 
 
 

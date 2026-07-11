@@ -4,7 +4,6 @@ from pathlib import Path
 
 from sushi_lang.packager.constants import BIN_DIR, ARCHIVE_EXT, MANIFEST_NAME
 from sushi_lang.packager.installer import PackageInstaller
-from sushi_lang.packager.manifest import NoriManifest
 from sushi_lang.packager.paths import find_project_root, project_deps_dir
 from sushi_lang.packager.repository import resolve_repository
 

@@ -30,7 +30,6 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
         codegen: The main LLVMCodegen instance.
         stmt: The match statement node to emit.
     """
-    from llvmlite import ir
 
     builder, func = require_both_initialized(codegen)
     codegen.utils.ensure_open_block()
@@ -379,7 +378,7 @@ def _emit_match_arms(
         scrutinee_type: The EnumType of the scrutinee (monomorphized for generics).
         end_bb: The end block to branch to.
     """
-    from sushi_lang.semantics.ast import Pattern, Block, WildcardPattern
+    from sushi_lang.semantics.ast import Pattern, Block
 
     for i, (arm, arm_bb) in enumerate(zip(stmt.arms, arm_blocks)):
         codegen.builder.position_at_end(arm_bb)
@@ -503,7 +502,6 @@ def _extract_nested_pattern(codegen: 'LLVMCodegen', nested_pattern: 'Pattern', e
         enum_type: The semantic type of the enum.
         next_arm_bb: The next arm block to branch to on mismatch (for fallthrough support).
     """
-    from llvmlite import ir
     from sushi_lang.semantics.typesys import EnumType
 
     # Resolve the enum type (handle generics)

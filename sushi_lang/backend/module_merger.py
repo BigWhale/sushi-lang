@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import llvmlite.binding as llvm
 
 if TYPE_CHECKING:
-    from sushi_lang.backend.symbol_table import SymbolInfo, SymbolType
+    from sushi_lang.backend.symbol_table import SymbolInfo
 
 
 class ModuleMerger:

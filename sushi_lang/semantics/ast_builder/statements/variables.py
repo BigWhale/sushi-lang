@@ -1,6 +1,6 @@
 """Variable statement parsing (let, rebind)."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 from lark import Tree
 from sushi_lang.semantics.ast import Let, Rebind
 from sushi_lang.semantics.typesys import TYPE_NODE_NAMES

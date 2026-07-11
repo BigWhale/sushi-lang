@@ -10,11 +10,11 @@ multi-file system.
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Dict, Set, Optional, Tuple
+from typing import List, Dict, Optional
 from enum import Enum
 
-from sushi_lang.semantics.ast import Program, FuncDef, ConstDef, ExtendDef
-from sushi_lang.internals.report import Reporter, Span
+from sushi_lang.semantics.ast import Program, FuncDef, ConstDef
+from sushi_lang.internals.report import Reporter
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 

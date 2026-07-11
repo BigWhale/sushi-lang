@@ -60,8 +60,7 @@ import dataclasses
 from typing import Dict, List
 
 from sushi_lang.semantics.ast import (
-    Block, Expand, Name, Let, Foreach, Stmt, Node,
-    Match, MatchArm, Pattern, OwnPattern,
+    Block, Expand, Name, Let, Foreach, Stmt, Match, MatchArm, Pattern, OwnPattern,
 )
 
 

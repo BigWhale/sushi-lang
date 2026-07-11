@@ -19,12 +19,11 @@ without runtime overhead.
 
 from __future__ import annotations
 from typing import Dict, Set, Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from sushi_lang.semantics.ast import *
 from sushi_lang.semantics.ast import Lambda
 from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, Type, is_owning_type
-from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.error_reporter import PassErrorReporter

@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import CastExpr, IntLit, UnaryOp
-from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
 
 if TYPE_CHECKING:

@@ -77,7 +77,7 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
     # We need to wrap the result in a Result.Ok() enum
     # Result<i32, StdError> enum layout: {i32 tag, [N x i8] data}
 
-    from sushi_lang.semantics.typesys import BuiltinType, UnknownType
+    from sushi_lang.semantics.typesys import UnknownType
     from sushi_lang.backend.generics.results import ensure_result_type_in_table
 
     # Create Result<i32, StdError> enum if it doesn't exist

@@ -10,7 +10,7 @@ Design Principles:
 - DRY: Eliminates repeated boilerplate across stdlib modules
 """
 
-from typing import Callable, Optional, List, Tuple, Any
+from typing import Callable, Optional, Tuple, Any
 import llvmlite.ir as ir
 
 

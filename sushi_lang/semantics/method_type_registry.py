@@ -338,7 +338,6 @@ class ListMethodInferrer:
                     return BuiltinType.BOOL
                 elif self.method_name == "insert":
                     from sushi_lang.backend.generics.results import ensure_result_type_in_table
-                    from sushi_lang.semantics.typesys import EnumType
                     std_error = self.validator.enum_table.by_name.get("StdError")
                     if std_error is None:
                         return None

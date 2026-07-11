@@ -12,16 +12,10 @@ from sushi_lang.semantics.typesys import (
     StructType,
     EnumType,
     ResultType,
-    BuiltinType,
-    ArrayType,
-    DynamicArrayType,
-    ReferenceType,
-    IteratorType,
-    PointerType,
 )
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.passes.collect import StructTable, EnumTable
+    pass
 
 
 def resolve_unknown_type(

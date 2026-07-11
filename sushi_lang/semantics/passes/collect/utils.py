@@ -6,7 +6,6 @@ from typing import Any, List, Optional
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics.ast import BoundedTypeParam
-from sushi_lang.semantics.generics.types import TypeParameter
 from sushi_lang.semantics.typesys import Type
 
 

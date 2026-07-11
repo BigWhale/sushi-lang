@@ -6,9 +6,8 @@ different hash implementations (primitives, structs, etc.).
 """
 
 import llvmlite.ir as ir
-from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
+from sushi_lang.backend.constants import INT64_BIT_WIDTH
 from typing import TYPE_CHECKING
-from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
 
 if TYPE_CHECKING:

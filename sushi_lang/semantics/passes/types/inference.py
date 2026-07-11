@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType, IteratorType
-from sushi_lang.semantics.ast import IntLit, FloatLit, ArrayLiteral, IndexAccess, DynamicArrayFrom, Expr, RangeExpr
+from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, DynamicArrayFrom, Expr, RangeExpr
 
 if TYPE_CHECKING:
     from . import TypeValidator

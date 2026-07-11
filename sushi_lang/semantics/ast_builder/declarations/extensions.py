@@ -1,6 +1,6 @@
 """Extension method parsing."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 from lark import Tree
 from sushi_lang.semantics.ast import ExtendDef
 from sushi_lang.semantics.typesys import TYPE_NODE_NAMES

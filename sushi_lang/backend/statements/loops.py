@@ -7,7 +7,7 @@ foreach loops, break, and continue statements.
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.backend.utils import require_builder, require_both_initialized
+from sushi_lang.backend.utils import require_both_initialized
 
 if TYPE_CHECKING:
     from llvmlite import ir
@@ -291,7 +291,6 @@ def _emit_array_foreach(codegen: 'LLVMCodegen', node: 'Foreach', iterator_slot: 
         iterator_slot: The iterator slot allocation.
         zero: Constant zero for GEP operations.
     """
-    from llvmlite import ir
     from sushi_lang.backend import gep_utils
 
     # For non-string iterators, skip stdin path entirely
@@ -320,7 +319,6 @@ def _emit_array_foreach_body(
     """
     from llvmlite import ir
     from sushi_lang.backend import gep_utils
-    from sushi_lang.semantics.typesys import BuiltinType
 
     cond_bb = codegen.func.append_basic_block(name="foreach.cond")
     body_bb = codegen.func.append_basic_block(name="foreach.body")
@@ -551,7 +549,6 @@ def _emit_range_foreach(codegen: 'LLVMCodegen', node: 'Foreach', range_expr: 'Ra
         node: The foreach statement node.
         range_expr: The range expression from node.iterable.
     """
-    from llvmlite import ir
 
     builder, func = require_both_initialized(codegen)
     codegen.utils.ensure_open_block()

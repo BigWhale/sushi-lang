@@ -13,7 +13,7 @@ This pass is critical for hash registration because:
 - Generic structs need their type parameters substituted before resolution
 """
 
-from typing import Dict, Set
+from typing import Dict
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 from sushi_lang.semantics.typesys import StructType, EnumType, UnknownType, Type, BuiltinType
 

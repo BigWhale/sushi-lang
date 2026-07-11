@@ -203,9 +203,7 @@ def emit_hashmap_get(
     Returns:
         Maybe<V> struct value.
     """
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-    from sushi_lang.semantics.ast import MethodCall, Name
-    from sushi_lang.semantics.typesys import BuiltinType
+    from sushi_lang.semantics.ast import MethodCall
     import sushi_lang.backend.types.primitives.hashing  # noqa: F401
 
     builder = codegen.builder
@@ -334,8 +332,6 @@ def emit_hashmap_get(
 
     # Create Maybe<V> enum for return
     # Get the Maybe<V> enum type from the generic enum table
-    from sushi_lang.semantics.generics.types import GenericEnumType
-    from sushi_lang.semantics.typesys import BuiltinType
 
     # Get the Maybe<V> monomorphized enum type
     # We need to look it up in the codegen.enum_table
@@ -432,8 +428,7 @@ def emit_hashmap_contains_key(
     Returns:
         bool value (i32 0 or 1).
     """
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-    from sushi_lang.semantics.ast import MethodCall, Name
+    from sushi_lang.semantics.ast import MethodCall
     import sushi_lang.backend.types.primitives.hashing  # noqa: F401
 
     builder = codegen.builder

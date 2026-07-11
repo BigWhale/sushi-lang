@@ -10,7 +10,7 @@ import typing
 
 from llvmlite import ir
 
-from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
+from sushi_lang.backend.constants import INT8_BIT_WIDTH
 from sushi_lang.backend.constants.llvm_values import ZERO_I32
 from sushi_lang.backend.runtime.constants import (
     ERRNO_TO_FILE_ERROR,

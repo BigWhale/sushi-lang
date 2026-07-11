@@ -182,7 +182,6 @@ def emit_debug_print_value(codegen: Any, builder: Any, value: ir.Value, value_ty
         value: The value to print.
         value_type: The semantic type of the value.
     """
-    from sushi_lang.semantics.typesys import BuiltinType
 
     # Print based on type
     if value_type == BuiltinType.I32:

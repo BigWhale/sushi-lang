@@ -33,7 +33,6 @@ def validate_generic_function_call(
         call: Call AST node
         function_name: Generic function name
     """
-    from sushi_lang.semantics.generics.types import TypeParameter
 
     # Get generic function definition
     generic_func = validator.generic_func_table.by_name[function_name]

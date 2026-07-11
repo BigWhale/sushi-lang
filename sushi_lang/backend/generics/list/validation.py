@@ -5,7 +5,7 @@ This module provides validation functions to check if method calls on List<T>
 are valid and have the correct number/types of arguments.
 """
 
-from typing import Any, Callable
+from typing import Any
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType
 import sushi_lang.internals.errors as er

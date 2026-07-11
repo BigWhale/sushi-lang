@@ -35,10 +35,6 @@ extend_stmt: EXTEND type extend_suffix
 extend_suffix: WITH NAME ":" _NEWLINE _INDENT function_def+ _DEDENT  -> extend_with_def
              | NAME "(" [parameters] ")" type ":" block               -> extend_def
 
-// Keep old definitions for reference (not used in parsing)
-// extend_with_def: EXTEND type WITH NAME ":" _NEWLINE _INDENT function_def+ _DEDENT
-// extend_def: EXTEND type NAME "(" [parameters] ")" type ":" block
-
 block: _NEWLINE _INDENT (_NEWLINE | statement)+ _DEDENT
 
 

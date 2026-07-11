@@ -12,7 +12,7 @@ from sushi_lang.backend.utils import require_builder
 if TYPE_CHECKING:
     from llvmlite import ir
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-    from sushi_lang.semantics.ast import ArrayLiteral, DynamicArrayNew, DynamicArrayFrom
+    from sushi_lang.semantics.ast import ArrayLiteral
     from sushi_lang.semantics.typesys import DynamicArrayType
 
 

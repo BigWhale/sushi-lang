@@ -72,7 +72,7 @@ class FunctionDeclarations:
             ll_param_tys = [self.codegen.types.ll_type(ty) for _, ty in params]
             # Use ll_type with ResultType to get the monomorphized enum type
             # If fn.ret is already a Result type, use it; otherwise wrap it
-            from sushi_lang.semantics.typesys import GenericTypeRef, EnumType
+            from sushi_lang.semantics.typesys import GenericTypeRef
 
             # Check if return type is already explicit Result<T, E>
             is_explicit_result = (

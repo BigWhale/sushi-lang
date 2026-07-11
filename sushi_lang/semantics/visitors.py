@@ -21,12 +21,12 @@ Example:
 """
 from __future__ import annotations
 from abc import ABC
-from typing import Any, Optional, TypeVar, Generic, TYPE_CHECKING
+from typing import TypeVar, Generic, TYPE_CHECKING
 
-from sushi_lang.semantics.ast import Node, Stmt, Block
+from sushi_lang.semantics.ast import Node, Block
 from sushi_lang.semantics.ast import (
     # Statements
-    Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, MatchArm, Break, Continue,
+    Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, Break, Continue,
     # Expressions
     Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
     UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor,
@@ -34,7 +34,7 @@ from sushi_lang.semantics.ast import (
 )
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import Program, FuncDef, ExtendDef
+    pass
 
 T = TypeVar('T')
 

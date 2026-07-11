@@ -8,11 +8,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from llvmlite import ir
-from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
+from sushi_lang.backend.constants import INT8_BIT_WIDTH
 from sushi_lang.semantics.ast import Expr, Name, UnaryOp, BinaryOp, Borrow
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend import enum_utils
-from sushi_lang.backend.utils import require_builder, require_both_initialized
+from sushi_lang.backend.utils import require_both_initialized
 
 if TYPE_CHECKING:
     from sushi_lang.backend.interfaces import CodegenProtocol
@@ -829,7 +829,7 @@ def _infer_call_return_type(codegen: 'CodegenProtocol', call_expr: 'Call') -> 'E
     Raises:
         RuntimeError: If function or return type cannot be determined.
     """
-    from sushi_lang.semantics.ast import Call, Name
+    from sushi_lang.semantics.ast import Name
     from sushi_lang.semantics.typesys import ResultType, FunctionType
 
     # Indirect call through a function value (non-Name callee: env.f(x), arr[0](), (e)()):
@@ -916,7 +916,7 @@ def _infer_try_expr_type(codegen: 'CodegenProtocol', expr: 'Expr') -> 'EnumType'
         RuntimeError: If type cannot be inferred.
     """
     from sushi_lang.semantics.ast import Call, DotCall, Name
-    from sushi_lang.semantics.typesys import EnumType, ResultType
+    from sushi_lang.semantics.typesys import EnumType
 
     if isinstance(expr, Call):
         return _infer_call_return_type(codegen, expr)
@@ -948,8 +948,8 @@ def _infer_dotcall_return_type(codegen: 'CodegenProtocol', dotcall_expr: 'DotCal
     Raises:
         RuntimeError: If the method or its return type cannot be determined.
     """
-    from sushi_lang.semantics.ast import DotCall, Name
-    from sushi_lang.semantics.typesys import EnumType, DynamicArrayType, ArrayType, ReferenceType, BuiltinType
+    from sushi_lang.semantics.ast import Name
+    from sushi_lang.semantics.typesys import DynamicArrayType, ArrayType, ReferenceType
 
     # Check if the type checker already inferred the return type
     if hasattr(dotcall_expr, 'inferred_return_type') and dotcall_expr.inferred_return_type is not None:

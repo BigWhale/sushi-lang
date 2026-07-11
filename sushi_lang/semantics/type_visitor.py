@@ -8,14 +8,13 @@ approach to AST type analysis.
 from __future__ import annotations
 from typing import Optional
 
-from sushi_lang.internals.report import Reporter
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.visitors import NodeVisitor, RecursiveVisitor
 from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType, StructType, ForeignPtrType
 from sushi_lang.semantics.type_predicates import is_string_convertible
 from sushi_lang.semantics.ast import (
     # Statements
-    Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, MatchArm, Pattern, Break, Continue,
+    Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, Break, Continue,
     # Expressions
     Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
     UnaryOp, BinaryOp, Call, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom, CastExpr, EnumConstructor, TryExpr, RangeExpr, Borrow, Spread, Lambda
@@ -388,7 +387,7 @@ class ExpressionValidator(RecursiveVisitor):
 
         # CE2094: capturing a &peek/&poke borrow is deferred to Tier 2. A captured
         # name whose enclosing type is a reference is a borrow capture.
-        from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, FunctionType, is_owning_type
+        from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, is_owning_type
         for cap in (node.captures or []):
             if isinstance(cap.ty, ReferenceType):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,

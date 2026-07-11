@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from llvmlite import ir
-from sushi_lang.semantics.ast import MethodCall, IndexAccess
+from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import DynamicArrayType, Type
 from sushi_lang.internals.errors import raise_internal_error
 

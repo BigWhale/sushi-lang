@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Union
 
 from llvmlite import ir
-from sushi_lang.semantics.ast import DotCall, MethodCall, Name, Expr
+from sushi_lang.semantics.ast import DotCall, MethodCall
 from sushi_lang.semantics.typesys import EnumType, StructType
 
 if TYPE_CHECKING:

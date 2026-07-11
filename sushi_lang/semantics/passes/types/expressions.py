@@ -281,7 +281,6 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
 
     # If function uses implicit Result syntax (not explicitly Result<T, E>),
     # construct the ResultType for validation
-    from sushi_lang.semantics.generics.types import GenericTypeRef
     from sushi_lang.semantics.type_resolution import TypeResolver
     if not isinstance(func_return_type, ResultType) and not (isinstance(func_return_type, GenericTypeRef) and func_return_type.base_name == "Result"):
         # Implicit syntax: fn foo() i32 | MyError or fn foo() i32 (defaults to StdError)

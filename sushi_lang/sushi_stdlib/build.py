@@ -8,7 +8,6 @@ Organizes output by target platform for multiplatform support.
 
 import argparse
 import sys
-import os
 from pathlib import Path
 import llvmlite.ir as ir
 import llvmlite.binding as llvm
@@ -53,7 +52,6 @@ def build_collections_strings(platform_dir: Path):
     print("Building collections/strings...")
 
     # Use the new standalone IR generator
-    from sushi_lang.sushi_stdlib.src.collections import strings
     module = strings.generate_module_ir()
 
     output = platform_dir / "collections" / "strings.bc"
@@ -80,7 +78,6 @@ def build_io_stdio(platform_dir: Path, platform: TargetPlatform):
 
     # Use the new standalone IR generator
     # The module will use platform-specific handles via common.py
-    from sushi_lang.sushi_stdlib.src.io import stdio
     module = stdio.generate_module_ir()
 
     output = platform_dir / "io" / "stdio.bc"

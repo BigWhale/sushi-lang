@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals.report import Span
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, EnumType, ReferenceType, BorrowMode
-from sushi_lang.semantics.ast import Expr, ArrayLiteral, DynamicArrayNew, DynamicArrayFrom, IntLit
+from sushi_lang.semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, ReferenceType, BorrowMode
+from sushi_lang.semantics.ast import Expr, ArrayLiteral, DynamicArrayNew, DynamicArrayFrom
 from sushi_lang.semantics.type_resolution import resolve_unknown_type, TypeResolver
 from .inference import infer_dynamic_array_from_type
 
@@ -124,7 +124,7 @@ def compare_resolved_types(validator: 'TypeValidator', actual: Type, expected: T
     Returns:
         True if types are compatible, False otherwise.
     """
-    from sushi_lang.semantics.typesys import UnknownType, DynamicArrayType, ArrayType
+    from sushi_lang.semantics.typesys import DynamicArrayType, ArrayType
 
     # Direct equality check
     if actual == expected:

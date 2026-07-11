@@ -1,10 +1,10 @@
 from __future__ import annotations
 from enum import Enum
-from typing import Optional, Mapping, Union, Literal
+from typing import Optional, Mapping, Union
 from dataclasses import dataclass
 
 # Import generic types
-from sushi_lang.semantics.generics.types import TypeParameter, GenericEnumType, GenericTypeRef
+from sushi_lang.semantics.generics.types import TypeParameter, GenericTypeRef
 
 
 class BorrowMode(Enum):
