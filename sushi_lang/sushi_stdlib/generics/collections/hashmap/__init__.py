@@ -41,10 +41,11 @@ from sushi_lang.semantics.generics.types import GenericStructType, TypeParameter
 # Import directly from interface module to avoid circular imports
 from sushi_lang.semantics.generics.providers.interface import MethodSpec
 
-# Public API - validation
-from .validation import (
+# Validation lives in semantics (semantics/generics/hashmap.py); re-exported here so the
+# backend dispatcher can gate on it without reaching across packages twice.
+from sushi_lang.semantics.generics.hashmap import (
     is_builtin_hashmap_method,
-    validate_hashmap_method_with_validator
+    validate_hashmap_method_with_validator,
 )
 
 # Public API - LLVM emission

@@ -400,8 +400,10 @@ def _emit_hashmap_foreach(
     from llvmlite import ir
     from sushi_lang.backend import gep_utils
     from sushi_lang.sushi_stdlib.generics.collections.hashmap.types import (
-        extract_key_value_types, get_entry_type, get_user_entry_type,
-        ensure_entry_type_in_struct_table, ENTRY_OCCUPIED,
+        get_entry_type, get_user_entry_type, ENTRY_OCCUPIED,
+    )
+    from sushi_lang.semantics.generics.hashmap import (
+        extract_key_value_types, ensure_entry_type_in_struct_table,
     )
 
     # Extract K and V types from HashMap<K, V>

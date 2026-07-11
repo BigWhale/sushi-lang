@@ -2,14 +2,15 @@
 LLVM type helpers and constants for HashMap<K, V>.
 
 This module provides functions to create LLVM struct types for HashMap<K, V>
-and Entry<K, V>, along with constants for entry states and prime capacity tables.
+and Entry<K, V>, along with constants for entry states and capacity tables.
+
+The ir-free half -- method validation, and resolving K/V out of a monomorphized
+"HashMap<K, V>" name -- lives in `semantics/generics/hashmap.py`.
 """
 
 from typing import Any, Optional
-from sushi_lang.semantics.typesys import Type, StructType, BuiltinType, ArrayType, DynamicArrayType
+from sushi_lang.semantics.typesys import Type, ArrayType, DynamicArrayType
 import llvmlite.ir as ir
-from sushi_lang.internals.errors import raise_internal_error
-import re
 
 
 # ==============================================================================
@@ -120,7 +121,7 @@ def get_hashmap_llvm_type(codegen: Any, key_type: Type, value_type: Type) -> ir.
 
 
 # ==============================================================================
-# Type String Parsing
+# Key Hashing
 # ==============================================================================
 
 
@@ -153,276 +154,6 @@ def get_key_hash_method(key_type: Type) -> Optional[Any]:
             return get_builtin_method(key_type, "hash")
 
     return None
-
-
-def split_type_arguments(type_args_str: str) -> list[str]:
-    """Split comma-separated type arguments while respecting angle brackets.
-
-    Handles nested generics like "Box<i32>, string" -> ["Box<i32>", "string"]
-
-    Args:
-        type_args_str: Comma-separated type arguments string.
-
-    Returns:
-        List of type argument strings.
-    """
-    parts = []
-    current = []
-    depth = 0
-
-    for char in type_args_str:
-        if char == '<':
-            depth += 1
-            current.append(char)
-        elif char == '>':
-            depth -= 1
-            current.append(char)
-        elif char == ',' and depth == 0:
-            # Top-level comma - split here
-            parts.append(''.join(current).strip())
-            current = []
-        else:
-            current.append(char)
-
-    # Add the last part
-    if current:
-        parts.append(''.join(current).strip())
-
-    return parts
-
-
-def _split_top_level(s: str, sep: str) -> list[str]:
-    """Split `s` on `sep`, ignoring separators nested inside <>, (), or []."""
-    parts = []
-    current = []
-    depth = 0
-    for char in s:
-        if char in '<([':
-            depth += 1
-        elif char in '>)]':
-            depth -= 1
-        if char == sep and depth == 0:
-            parts.append(''.join(current).strip())
-            current = []
-        else:
-            current.append(char)
-    if current:
-        parts.append(''.join(current).strip())
-    return parts
-
-
-def _resolve_function_type_from_string(type_str: str, codegen: Any) -> Type:
-    """Resolve a first-class function type string: "fn(P0, P1, ...) -> T [| E]"."""
-    from sushi_lang.semantics.typesys import FunctionType
-
-    open_idx = type_str.index("(")
-    depth = 0
-    close_idx = -1
-    for i in range(open_idx, len(type_str)):
-        if type_str[i] == "(":
-            depth += 1
-        elif type_str[i] == ")":
-            depth -= 1
-            if depth == 0:
-                close_idx = i
-                break
-
-    params_str = type_str[open_idx + 1:close_idx].strip()
-    rest = type_str[close_idx + 1:].strip()
-    if rest.startswith("->"):
-        rest = rest[2:].strip()
-
-    pipe_parts = _split_top_level(rest, "|")
-    ret_str = pipe_parts[0].strip()
-    err_str = pipe_parts[1].strip() if len(pipe_parts) > 1 else "StdError"
-
-    param_types = tuple(
-        resolve_type_from_string(p, codegen)
-        for p in _split_top_level(params_str, ",") if p
-    )
-    ok_type = resolve_type_from_string(ret_str, codegen)
-    err_type = resolve_type_from_string(err_str, codegen)
-    return FunctionType(param_types=param_types, ok_type=ok_type, err_type=err_type)
-
-
-def resolve_type_from_string(type_str: str, codegen: Any) -> Type:
-    """Resolve a type from its string representation.
-
-    Handles:
-    - Builtin types (i32, string, bool, etc.)
-    - Struct types (Point, Person, etc.)
-    - Enum types (Color, FileError, etc.)
-    - Generic types (Maybe<i32>, Box<string>, etc.)
-    - Function types (fn(i32) -> i32, fn(i32) -> i32 | MathError)
-    - Fixed arrays (i32[10], string[3], etc.)
-    - Dynamic arrays (i32[], string[], etc.)
-
-    Args:
-        type_str: Type name string (e.g., "i32", "Point", "Maybe<i32>", "string[3]").
-        codegen: LLVM codegen instance with struct_table and enum_table.
-
-    Returns:
-        Resolved Type object.
-
-    Raises:
-        ValueError: If type cannot be resolved.
-    """
-    type_str = type_str.strip()
-
-    # First-class function type: must be handled before the array branch (its return
-    # type may legitimately end with "[]", which the array regex would misparse).
-    if type_str.startswith("fn(") or type_str.startswith("fn ("):
-        return _resolve_function_type_from_string(type_str, codegen)
-
-    # Check for array types first (fixed: "type[N]" or dynamic: "type[]")
-    if '[' in type_str and type_str.endswith(']'):
-        # Extract base type and size
-        match = re.match(r'^(.+)\[(\d*)\]$', type_str)
-        if match:
-            base_type_str = match.group(1)
-            size_str = match.group(2)
-
-            # Recursively resolve base type
-            base_type = resolve_type_from_string(base_type_str, codegen)
-
-            if size_str:
-                # Fixed array: "type[N]"
-                size = int(size_str)
-                return ArrayType(base_type=base_type, size=size)
-            else:
-                # Dynamic array: "type[]"
-                return DynamicArrayType(base_type=base_type)
-
-    # Builtin type mapping
-    builtin_map = {
-        "i8": BuiltinType.I8,
-        "i16": BuiltinType.I16,
-        "i32": BuiltinType.I32,
-        "i64": BuiltinType.I64,
-        "u8": BuiltinType.U8,
-        "u16": BuiltinType.U16,
-        "u32": BuiltinType.U32,
-        "u64": BuiltinType.U64,
-        "f32": BuiltinType.F32,
-        "f64": BuiltinType.F64,
-        "bool": BuiltinType.BOOL,
-        "string": BuiltinType.STRING,
-    }
-
-    # Try builtin type first
-    if type_str in builtin_map:
-        return builtin_map[type_str]
-
-    # Check for generic type (contains angle brackets)
-    if '<' in type_str and type_str.endswith('>'):
-        # This is a generic type like "Maybe<i32>" or "Box<Point>"
-        # For HashMap purposes, we need to look it up in the tables
-        # The monomorphized type should already exist in struct_table or enum_table
-
-        # Try to find it in enum_table first (Maybe, Result, etc.)
-        if type_str in codegen.enum_table.by_name:
-            return codegen.enum_table.by_name[type_str]
-
-        # Try struct_table (Box, Own, etc.)
-        if type_str in codegen.struct_table.by_name:
-            return codegen.struct_table.by_name[type_str]
-
-        raise_internal_error("CE0045", type=type_str)
-
-    # Try to find it in struct_table (user-defined struct)
-    if type_str in codegen.struct_table.by_name:
-        return codegen.struct_table.by_name[type_str]
-
-    # Try to find it in enum_table (user-defined enum)
-    if type_str in codegen.enum_table.by_name:
-        return codegen.enum_table.by_name[type_str]
-
-    raise_internal_error("CE0022", type=type_str)
-
-
-def extract_key_value_types(hashmap_type: StructType, codegen: Any) -> tuple[Type, Type]:
-    """Extract K and V types from HashMap<K, V>.
-
-    Parses the struct name "HashMap<K, V>" to extract the concrete key and value types.
-    This works because monomorphized generic structs have names like "HashMap<string, i32>".
-
-    Now supports:
-    - Builtin types (i32, string, bool, etc.)
-    - User-defined structs (Point, Person, etc.)
-    - User-defined enums (Color, FileError, etc.)
-    - Nested generics (HashMap<Maybe<i32>, Box<string>>)
-
-    Args:
-        hashmap_type: The HashMap<K, V> struct type (after monomorphization).
-        codegen: LLVM codegen instance with struct_table and enum_table.
-
-    Returns:
-        Tuple of (key_type, value_type).
-
-    Raises:
-        ValueError: If cannot parse HashMap type name.
-    """
-    name = hashmap_type.name
-
-    # Expected format: "HashMap<K, V>" where K and V are type names
-    if not name.startswith("HashMap<") or not name.endswith(">"):
-        raise_internal_error("CE0087", type=name)
-
-    # Extract the type arguments string: "K, V"
-    type_args_str = name[len("HashMap<"):-1]
-
-    # Split by comma while respecting nested angle brackets
-    parts = split_type_arguments(type_args_str)
-    if len(parts) != 2:
-        raise_internal_error("CE0050", generic="HashMap", expected=2, got=len(parts))
-
-    key_type_str, value_type_str = parts[0].strip(), parts[1].strip()
-
-    # Resolve each type using the codegen tables
-    key_type = resolve_type_from_string(key_type_str, codegen)
-    value_type = resolve_type_from_string(value_type_str, codegen)
-
-    return (key_type, value_type)
-
-
-def get_entry_type_name(key_type: Type, value_type: Type) -> str:
-    """Get the name for a user-facing Entry<K, V> struct type."""
-    key_str = str(key_type).lower() if isinstance(key_type, BuiltinType) else str(key_type)
-    val_str = str(value_type).lower() if isinstance(value_type, BuiltinType) else str(value_type)
-    return f"Entry<{key_str}, {val_str}>"
-
-
-def ensure_entry_type_in_struct_table(struct_table: Any, key_type: Type, value_type: Type) -> StructType:
-    """Ensure that a user-facing Entry<K, V> struct exists in the struct table.
-
-    The user-facing Entry<K, V> has two fields: key (K) and value (V).
-    This is distinct from the internal 3-field Entry used by HashMap buckets.
-
-    Args:
-        struct_table: The struct table with by_name dict.
-        key_type: The key type K.
-        value_type: The value type V.
-
-    Returns:
-        The StructType for Entry<K, V>.
-    """
-    entry_name = get_entry_type_name(key_type, value_type)
-
-    if entry_name in struct_table.by_name:
-        return struct_table.by_name[entry_name]
-
-    entry_struct = StructType(
-        name=entry_name,
-        fields=(("key", key_type), ("value", value_type)),
-        generic_base="Entry",
-        generic_args=(key_type, value_type),
-    )
-
-    struct_table.by_name[entry_name] = entry_struct
-    if hasattr(struct_table, 'order'):
-        struct_table.order.append(entry_name)
-
-    return entry_struct
 
 
 def get_user_entry_type(codegen: Any, key_type: Type, value_type: Type) -> 'ir.Type':

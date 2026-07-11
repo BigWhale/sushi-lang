@@ -64,7 +64,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
         elif type_name == "HashMap" and call.method == "new":
             # HashMap.new() expects 0 arguments
             if len(call.args) != 0:
-                from sushi_lang.sushi_stdlib.generics.collections.hashmap import is_builtin_hashmap_method
+                from sushi_lang.semantics.generics.hashmap import is_builtin_hashmap_method
                 if is_builtin_hashmap_method(call.method):
                     er.emit(validator.reporter, er.ERR.CE2016, call.loc,
                             method=call.method, expected=0, got=len(call.args))
@@ -164,7 +164,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
 
     # Check for built-in HashMap<K, V> methods (generic struct after monomorphization)
     if isinstance(receiver_type, StructType) and receiver_type.name.startswith("HashMap<"):
-        from sushi_lang.sushi_stdlib.generics.collections.hashmap import is_builtin_hashmap_method, validate_hashmap_method_with_validator
+        from sushi_lang.semantics.generics.hashmap import is_builtin_hashmap_method, validate_hashmap_method_with_validator
         if is_builtin_hashmap_method(call.method):
             validate_hashmap_method_with_validator(call, receiver_type, validator.reporter, validator)
             return

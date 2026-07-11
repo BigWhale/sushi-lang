@@ -986,7 +986,7 @@ def _infer_dotcall_return_type(codegen: 'LLVMCodegen', dotcall_expr: 'DotCall') 
             match = re.match(r'List<(.+)>', receiver_type.name)
             if match:
                 type_str = match.group(1)
-                from sushi_lang.sushi_stdlib.generics.collections.hashmap.types import resolve_type_from_string
+                from sushi_lang.semantics.generics.type_strings import resolve_type_from_string
                 try:
                     element_type = resolve_type_from_string(type_str, codegen)
                 except Exception:

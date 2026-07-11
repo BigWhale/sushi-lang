@@ -10,7 +10,8 @@ from typing import Any
 from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.typesys import StructType, BuiltinType
 import llvmlite.ir as ir
-from ..types import get_entry_type, extract_key_value_types, ENTRY_EMPTY, ENTRY_OCCUPIED
+from ..types import get_entry_type, ENTRY_EMPTY, ENTRY_OCCUPIED
+from sushi_lang.semantics.generics.hashmap import extract_key_value_types
 from ..utils import emit_key_equality_check
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc

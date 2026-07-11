@@ -115,7 +115,7 @@ def parse_list_types(list_type: StructType, validator: Any) -> Optional[Type]:
 
     # First-class function element type (e.g. List<fn(i32) -> i32>).
     if type_param_str.startswith("fn(") or type_param_str.startswith("fn ("):
-        from sushi_lang.sushi_stdlib.generics.collections.hashmap.types import resolve_type_from_string
+        from sushi_lang.semantics.generics.type_strings import resolve_type_from_string
         try:
             return resolve_type_from_string(type_param_str, validator)
         except Exception:
