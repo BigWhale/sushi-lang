@@ -7,7 +7,7 @@ The emission half lives in `backend/generics/hashmap/`, mirroring the split
 between `semantics/generics/list.py` and `backend/generics/list/`.
 """
 
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 from sushi_lang.semantics.ast import MethodCall, Call
 from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
 from sushi_lang.semantics.generics.type_strings import (
@@ -16,6 +16,9 @@ from sushi_lang.semantics.generics.type_strings import (
 )
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.generics.types import GenericStructType
 
 
 def is_builtin_hashmap_method(method_name: str) -> bool:
@@ -638,6 +641,31 @@ def _validate_hashmap_entries(
 # ==============================================================================
 # Type-table plumbing
 # ==============================================================================
+
+
+def hashmap_generic_struct() -> 'GenericStructType':
+    """The HashMap<K, V> generic struct, as Pass 0 registers it.
+
+    Only registered when `use <collections/hashmap>` activated it -- see
+    `semantics/generics/active_generics.py`.
+
+    `buckets` is declared as i32[] purely as a placeholder: the real element is the
+    internal 3-field Entry<K, V> (key, value, state), which has no semantic type and
+    is built directly in LLVM by `backend/generics/hashmap/types.py`.
+    """
+    from sushi_lang.semantics.generics.types import GenericStructType, TypeParameter
+    from sushi_lang.semantics.typesys import DynamicArrayType
+
+    return GenericStructType(
+        name="HashMap",
+        type_params=(TypeParameter(name="K"), TypeParameter(name="V")),
+        fields=(
+            ("buckets", DynamicArrayType(base_type=BuiltinType.I32)),
+            ("size", BuiltinType.I32),
+            ("capacity", BuiltinType.I32),
+            ("tombstones", BuiltinType.I32),
+        ),
+    )
 
 
 def extract_key_value_types(hashmap_type: StructType, tables: Any) -> tuple[Type, Type]:

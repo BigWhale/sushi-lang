@@ -17,7 +17,6 @@ from sushi_lang.semantics.typesys import (
     BuiltinType,
     EnumVariantInfo,
     PointerType,
-    DynamicArrayType,
 )
 from sushi_lang.semantics.generics.types import (
     TypeParameter,
@@ -320,36 +319,12 @@ class CollectorPass:
         self.generic_structs.by_name["Own"] = own_generic
         self.generic_structs.order.append("Own")
 
-        # HashMap<K, V> generic struct - hash table with open addressing
-        # Only registered if activated via `use <collections/hashmap>`
-        from sushi_lang.semantics.generics.providers.registry import GenericTypeRegistry
-        if GenericTypeRegistry.is_available("HashMap"):
-            # Type parameters: K (key type), V (value type)
-            # Fields:
-            #   buckets: Entry<K, V>[] (dynamic array of hash table entries)
-            #   size: i32 (number of occupied entries, excludes tombstones)
-            #   capacity: i32 (total bucket count, always prime for better distribution)
-            #   tombstones: i32 (number of deleted entries marked as tombstones)
-            #
-            # Internal Entry<K, V> structure (not exposed to users):
-            #   K key
-            #   V value
-            #   u8 state (0=Empty, 1=Occupied, 2=Tombstone)
-            #
-            # Note: Entry<K, V> is managed internally during emission, not defined as a separate type
-            hashmap_generic = GenericStructType(
-                name="HashMap",
-                type_params=(TypeParameter(name="K"), TypeParameter(name="V")),
-                # Fields represent the HashMap structure
-                # buckets is a placeholder (i32[]) - actual LLVM type is Entry<K,V>[]
-                fields=(
-                    ("buckets", DynamicArrayType(base_type=BuiltinType.I32)),  # Placeholder for Entry<K,V>[]
-                    ("size", BuiltinType.I32),
-                    ("capacity", BuiltinType.I32),
-                    ("tombstones", BuiltinType.I32),
-                )
-            )
-            self.generic_structs.by_name["HashMap"] = hashmap_generic
+        # HashMap<K, V> generic struct - hash table with open addressing.
+        # Only registered if activated via `use <collections/hashmap>`.
+        from sushi_lang.semantics.generics.active_generics import is_generic_active
+        from sushi_lang.semantics.generics.hashmap import hashmap_generic_struct
+        if is_generic_active("HashMap"):
+            self.generic_structs.by_name["HashMap"] = hashmap_generic_struct()
             self.generic_structs.order.append("HashMap")
 
         # List<T> generic struct - dynamic array with automatic growth
