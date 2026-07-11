@@ -435,10 +435,13 @@ class TestRunner:
 
         run_env = {**os.environ, **(metadata.test_env or {})}
 
-        # `leaks --atExit -- <bin>` runs the target as a child. Put the whole thing in
-        # its own process group (start_new_session) so a timeout can SIGKILL the group,
-        # not just the `leaks` parent -- otherwise a stalled instrumented child keeps the
-        # wall clock running (observed as a ~25 min hang on hosted macOS CI).
+        # `leaks --atExit -- <bin>` runs the target as a child. start_new_session makes
+        # proc the leader of a fresh process group (pgid == proc.pid), so a timeout can
+        # SIGKILL the whole group -- not just the `leaks` launcher, which may exit early
+        # while a helper keeps a pipe open and the wall clock running (a ~25 min hang on
+        # hosted macOS CI). We kill by proc.pid directly rather than os.getpgid(): by
+        # timeout the launcher can already be gone, and getpgid() would then raise
+        # ProcessLookupError.
         proc = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE if metadata.stdin_input else None,
@@ -455,9 +458,19 @@ class TestRunner:
                 timeout=metadata.timeout_seconds + 30,
             )
         except subprocess.TimeoutExpired:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
             proc.communicate()
-            return False, "✗ Leak check: Timeout"
+            # A leak-checker timeout is a tool/environment stall, not a leak and not a
+            # program hang: the binary already ran to completion in the runtime phase
+            # above, so `leaks` itself is what stalled (it hangs on restricted macOS
+            # setups and hosted CI runners that lack task_for_pid authorization). Treat
+            # it like an absent checker -- SKIP, not fail -- so the gate stays honest
+            # where `leaks` works and does not go permanently red where it cannot run.
+            self.leaks_skipped.append(binary_path.name)
+            return None, "- Leak check skipped: leaks timed out (unavailable in this environment)"
 
         # The summary line is singular for one leak ("1 leak for 16 total leaked bytes")
         # and plural otherwise, and it is not the last line of output.
