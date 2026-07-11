@@ -260,23 +260,3 @@ class ResultBuilder:
             raise_internal_error("CE0091", type=str(return_type))
 
         return self.build_err_variant(codegen, enum_type, error_value)
-
-
-# Module-level convenience function for backward compatibility during migration
-def ensure_result_type_in_table(enum_table, ok_type: Type, err_type: Type) -> Optional[EnumType]:
-    """Ensure Result<T, E> exists in the enum table.
-
-    This is a convenience wrapper around ResultBuilder for call sites
-    that don't need the full builder API. Creates a temporary builder
-    instance.
-
-    Args:
-        enum_table: The enum table for type registration.
-        ok_type: The T type parameter for Result<T, E>.
-        err_type: The E type parameter for Result<T, E>.
-
-    Returns:
-        The EnumType for Result<T, E>, or None if creation failed.
-    """
-    builder = ResultBuilder(enum_table)
-    return builder.ensure_type(ok_type, err_type)
