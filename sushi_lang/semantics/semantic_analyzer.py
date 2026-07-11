@@ -15,6 +15,8 @@ from sushi_lang.semantics.units import UnitManager, Unit
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.symbol_merger import SymbolTableMerger
 from sushi_lang.semantics.generics.extensions import monomorphize_all_extension_methods
+from sushi_lang.semantics.library_registry import LibraryRegistry
+from sushi_lang.semantics.library_templates import deserialize_perk_impl
 
 
 class SemanticAnalyzer:
@@ -323,7 +325,6 @@ class SemanticAnalyzer:
         if self.library_linker is None:
             return
 
-        from sushi_lang.backend.library_registry import LibraryRegistry
         from pathlib import Path
 
         self.library_registry = LibraryRegistry()
@@ -565,8 +566,6 @@ class SemanticAnalyzer:
         """
         if self.perk_impls is None or self.perks is None or self.library_linker is None:
             return
-
-        from sushi_lang.backend.library_templates import deserialize_perk_impl
 
         for lib_name, manifest in self.library_linker.loaded_libraries.items():
             templates = manifest.get("templates") or {}

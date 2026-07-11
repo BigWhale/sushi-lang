@@ -452,7 +452,7 @@ class LibraryManifestGenerator:
           needed for compile-time evaluation). `closure_summary` records what
           shipped, by kind, for observability. See _compute_export_closure.
         """
-        from sushi_lang.backend.library_templates import (
+        from sushi_lang.semantics.library_templates import (
             serialize_generic_function, serialize_generic_struct,
             serialize_generic_enum, serialize_perk, serialize_perk_impl,
             slice_decl_source,

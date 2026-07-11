@@ -15,7 +15,7 @@ from sushi_lang.internals.parser import parse_to_ast
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.units import Unit
 from sushi_lang.semantics.passes.collect import CollectorPass, StructTable, EnumTable
-from sushi_lang.backend.library_templates import (
+from sushi_lang.semantics.library_templates import (
     serialize_generic_function,
     deserialize_generic_function,
     serialize_perk,
@@ -525,7 +525,7 @@ def test_seed_library_perks_guards_missing_templates():
 # P2-5 Phase 1 (C3): generic STRUCT / ENUM templates.
 # ---------------------------------------------------------------------------
 
-from sushi_lang.backend.library_templates import (
+from sushi_lang.semantics.library_templates import (
     serialize_generic_struct,
     deserialize_generic_struct,
     serialize_generic_enum,
@@ -732,7 +732,7 @@ def test_register_library_generic_struct_respects_local_definition():
 # C4a: concrete perk-impl shipping (templates.perk_impls)
 # ---------------------------------------------------------------------------
 
-from sushi_lang.backend.library_templates import (
+from sushi_lang.semantics.library_templates import (
     serialize_perk_impl,
     deserialize_perk_impl,
     impl_method_symbol,

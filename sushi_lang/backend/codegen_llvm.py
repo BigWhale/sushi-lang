@@ -23,6 +23,7 @@ from llvmlite import ir, binding as llvm
 from sushi_lang.semantics.ast import ConstDef, ExtendDef
 from sushi_lang.semantics.units import Unit
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
+from sushi_lang.semantics.library_registry import LibraryRegistry
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.backend.llvm_types import LLVMTypeSystem
 from sushi_lang.backend.llvm_utils import LLVMUtils
@@ -159,7 +160,7 @@ class LLVMCodegen:
         self.library_linker: Optional['LibraryLinker'] = None
 
         # Library registry for pre-parsed library metadata
-        self.library_registry: Optional['LibraryRegistry'] = None
+        self.library_registry: Optional[LibraryRegistry] = None
 
         # Monomorphized generic extension methods (for codegen)
         self.monomorphized_extensions: list['ExtendDef'] = []
@@ -376,7 +377,7 @@ class LLVMCodegen:
         main_expects_args: bool = False,
         monomorphized_extensions: list['ExtendDef'] = None,
         library_linker: 'LibraryLinker' = None,
-        library_registry: 'LibraryRegistry' = None,
+        library_registry: Optional[LibraryRegistry] = None,
     ) -> Path:
         """Complete multi-unit compilation pipeline from multiple ASTs to native executable.
 
@@ -1253,7 +1254,7 @@ def _set_weak_odr_on_perk_impls(module: ir.Module, units: list[Unit]) -> None:
     definition survives library-module optimization even when nothing inside
     the library references it.
     """
-    from sushi_lang.backend.library_templates import impl_method_symbol
+    from sushi_lang.semantics.library_templates import impl_method_symbol
     from sushi_lang.semantics.passes.collect.perks import _get_type_name
 
     for unit in units:
