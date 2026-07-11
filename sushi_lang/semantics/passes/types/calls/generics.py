@@ -284,122 +284,12 @@ def _unify_types_for_inference(
     arg_type: Type,
     type_param_map: Dict[str, Type]
 ) -> bool:
-    """Unify parameter type with argument type for type inference.
+    """Unify parameter type with argument type for type inference (Pass 2).
 
-    Args:
-        param_type: Parameter type (may contain TypeParameter or UnknownType representing type param)
-        arg_type: Argument type (concrete)
-        type_param_map: Accumulator for type parameter assignments
-
-    Returns:
-        True if unification succeeds
+    Thin wrapper over the shared ``unify_types`` engine.
     """
-    from sushi_lang.semantics.generics.types import TypeParameter
-
-    # Case 1: param_type is a type parameter
-    if isinstance(param_type, TypeParameter):
-        param_name = param_type.name
-
-        if param_name in type_param_map:
-            # Must match existing assignment
-            return type_param_map[param_name] == arg_type
-        else:
-            # New assignment
-            type_param_map[param_name] = arg_type
-            return True
-
-    # Case 2: param_type is UnknownType (might be a type parameter name)
-    # This happens when the generic function parameter type is parsed as UnknownType("T")
-    if isinstance(param_type, UnknownType):
-        param_name = str(param_type)
-
-        if param_name in type_param_map:
-            # Must match existing assignment
-            return type_param_map[param_name] == arg_type
-        else:
-            # New assignment
-            type_param_map[param_name] = arg_type
-            return True
-
-    # Case 3: Both are concrete types - must match
-    if param_type == arg_type:
-        return True
-
-    # Case 4: Nested generic types (e.g., Container<T>)
-    # Handle GenericTypeRef unified with concrete monomorphized type
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-
-    if isinstance(param_type, GenericTypeRef):
-        param_base = param_type.base_name
-        param_type_args = param_type.type_args
-
-        # Check if arg_type is a monomorphized generic with metadata
-        if isinstance(arg_type, (StructType, EnumType)):
-            # Use generic metadata if available
-            if arg_type.generic_base is not None and arg_type.generic_args is not None:
-                # Check base names match
-                if param_base != arg_type.generic_base:
-                    return False
-
-                # Check type argument counts match
-                if len(param_type_args) != len(arg_type.generic_args):
-                    return False
-
-                # Recursively unify each type argument
-                for param_arg, concrete_arg in zip(param_type_args, arg_type.generic_args):
-                    if not _unify_types_for_inference(param_arg, concrete_arg, type_param_map):
-                        return False
-
-                return True
-
-        # If arg_type is also a GenericTypeRef, unify them directly
-        elif isinstance(arg_type, GenericTypeRef):
-            arg_base = arg_type.base_name
-            arg_type_args = arg_type.type_args
-
-            # Base names must match
-            if param_base != arg_base:
-                return False
-
-            # Type argument counts must match
-            if len(param_type_args) != len(arg_type_args):
-                return False
-
-            # Recursively unify each type argument pair
-            for param_arg, arg_arg in zip(param_type_args, arg_type_args):
-                if not _unify_types_for_inference(param_arg, arg_arg, type_param_map):
-                    return False
-
-            return True
-
-    # Case 5: Function types (e.g., fn(T) -> U). Unify each parameter type and the
-    # return type so type params nested inside a function-typed argument (a fn ref,
-    # lambda, or fn-value) can be inferred -- the enabler for generic higher-order
-    # functions like map<T, U>(List<T>, fn(T) -> U).
-    from sushi_lang.semantics.typesys import FunctionType
-
-    if isinstance(param_type, FunctionType) and isinstance(arg_type, FunctionType):
-        if len(param_type.param_types) != len(arg_type.param_types):
-            return False
-        for p_param, a_param in zip(param_type.param_types, arg_type.param_types):
-            if not _unify_types_for_inference(p_param, a_param, type_param_map):
-                return False
-        return _unify_types_for_inference(param_type.ok_type, arg_type.ok_type, type_param_map)
-
-    # Case 6: Array types. Unify the element type so a T[] parameter position binds the
-    # element type parameter from a concrete i32[]/string[] argument (issue #137: T[] -> T
-    # inference). Fixed-size arrays additionally require equal size.
-    from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
-
-    if isinstance(param_type, DynamicArrayType) and isinstance(arg_type, DynamicArrayType):
-        return _unify_types_for_inference(param_type.base_type, arg_type.base_type, type_param_map)
-
-    if isinstance(param_type, ArrayType) and isinstance(arg_type, ArrayType):
-        if param_type.size != arg_type.size:
-            return False
-        return _unify_types_for_inference(param_type.base_type, arg_type.base_type, type_param_map)
-
-    return False
+    from sushi_lang.semantics.generics.unify import unify_types
+    return unify_types(param_type, arg_type, type_param_map)
 
 
 def validate_call_arguments(
