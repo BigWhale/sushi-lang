@@ -376,13 +376,6 @@ class BorrowChecker:
         elif isinstance(expr, MemberAccess):
             self._check_expr(expr.receiver)
 
-        elif isinstance(expr, StructConstructor):
-            # Check arguments and mark moved for dynamic arrays
-            for arg in expr.args:
-                self._check_expr(arg)
-                # Mark dynamic arrays as moved when passed to struct constructors
-                self._mark_moved_if_applicable(arg)
-
         elif isinstance(expr, EnumConstructor):
             for arg in expr.args:
                 self._check_expr(arg)

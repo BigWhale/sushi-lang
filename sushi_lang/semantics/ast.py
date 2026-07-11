@@ -496,13 +496,6 @@ class MemberAccess(Node):
     member: str         # Member name (x, y, etc.)
 
 @dataclass
-class StructConstructor(Node):
-    """Struct constructor call: Point(10, 20) or Point(x: 10, y: 20)"""
-    struct_name: str                     # Name of the struct type
-    args: List["Expr"]                   # Constructor arguments (in source order for named, field order after reordering)
-    field_names: Optional[List[str]] = None     # Field names for named construction (None for positional)
-
-@dataclass
 class EnumConstructor(Node):
     """Enum variant constructor: Option.Some(42) or Color.Red"""
     enum_name: str      # Enum type name (e.g., "Option", "Color")
@@ -597,7 +590,7 @@ class RangeExpr(Node):
     end: "Expr"             # End expression (must evaluate to integer)
     inclusive: bool         # True for ..=, False for ..
 
-Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, StructConstructor, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread, Lambda]
+Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread, Lambda]
 
 def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
     """
@@ -645,6 +638,6 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
 __all__ = [
     "Node", "Program", "UseStatement", "FuncDef", "ConstDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "Block", "Param",
     "Let", "ExprStmt", "Return", "Print", "PrintLn", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "WildcardPattern", "Break", "Continue",
-    "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "StructConstructor", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr",
+    "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",
 ]
