@@ -14,6 +14,7 @@ from sushi_lang.semantics.passes.borrow import BorrowChecker
 from sushi_lang.semantics.units import UnitManager, Unit
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.symbol_merger import SymbolTableMerger
+from sushi_lang.semantics.generics.extensions import monomorphize_all_extension_methods
 
 
 class SemanticAnalyzer:
@@ -250,7 +251,6 @@ class SemanticAnalyzer:
         register_all_array_hashes(self.structs, self.enums)
 
         # Monomorphize generic extension methods
-        from sushi_lang.backend.generics.extensions import monomorphize_all_extension_methods
         concrete_extension_defs = monomorphize_all_extension_methods(
             self.generic_extensions.by_type,
             struct_instantiations,
