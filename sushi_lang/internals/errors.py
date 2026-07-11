@@ -600,6 +600,10 @@ _add(ErrorMessage("CE0122", Severity.ERROR,
     "generic type '{name}' is infinitely recursive - monomorphization exceeded the maximum depth",
     Category.TYPE, "A generic type instantiation nests without bound (e.g. a type parameter that grows on each self-reference), so monomorphization cannot terminate. A finite self-reference through an opaque pointer (Own<T>) is fine; an ever-growing type argument is not."))
 
+_add(ErrorMessage("CE0123", Severity.ERROR,
+    "no hash emitter registered for kind '{kind}'",
+    Category.INTERNAL, "Pass 1.8 registered a hash() method whose LLVM emitter the backend never supplied. The backend types modules register their emitter factories at import; one of them failed to load."))
+
 # Struct errors
 _add(ErrorMessage("CE0004", Severity.ERROR,
     "duplicate struct '{name}'",

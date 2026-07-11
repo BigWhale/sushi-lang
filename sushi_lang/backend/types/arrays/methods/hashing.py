@@ -1,19 +1,17 @@
 """
-Extension methods for array hashing.
+LLVM emission for the auto-derived array hash() method.
 
-Implemented methods:
-- hash() -> u64: Auto-derived hash function for arrays with hashable element types
-
-Hash is computed using FNV-1a algorithm by combining element hashes with array length:
+Hash is computed using FNV-1a by combining element hashes with the array length:
     hash = FNV_OFFSET_BASIS
     for each element in array:
         hash = (hash XOR element.hash()) * FNV_PRIME
     # Mix in array length for collision resistance
     hash = (hash XOR length) * FNV_PRIME
 
-Known limitations:
-- Nested arrays (arrays of arrays) cannot be hashed
-- Arrays with unhashable element types cannot be hashed
+Whether an array *may* be hashed, and the registration of the method itself, are
+semantic concerns and live in semantics/generics/hashing.py. This module only
+supplies the emitter, which it deposits in the shared factory registry at import
+time.
 """
 
 from typing import Any
@@ -22,88 +20,10 @@ from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, Type, Buil
 import llvmlite.ir as ir
 from sushi_lang.backend.constants import INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i32_const
-from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
-from sushi_lang.sushi_stdlib.src.common import register_builtin_method, BuiltinMethod, get_builtin_method
+from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory, get_builtin_method
 from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
-
-
-def _validate_array_hash(call: MethodCall, target_type: Type, reporter: Any) -> None:
-    """Validate hash() method call on array types.
-
-    Checks:
-    - No arguments to hash()
-    - Array element type is hashable
-    - No nested arrays (arrays of arrays)
-    """
-    if call.args:
-        er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{target_type}.hash", expected=0, got=len(call.args))
-
-    # Check if array has nested arrays or unhashable elements
-    if isinstance(target_type, (ArrayType, DynamicArrayType)):
-        element_type = target_type.base_type
-
-        # Check for nested arrays
-        if isinstance(element_type, (ArrayType, DynamicArrayType)):
-            er.emit(reporter, er.ERR.CE2051, call.loc,
-                   message=f"cannot hash array of arrays (nested arrays not supported)")
-            return
-
-
-def can_array_be_hashed(array_type: Type, visited: set = None, path: list = None) -> tuple[bool, str]:
-    """Check if an array type can have an auto-derived hash method.
-
-    An array can be hashed if:
-    - It's not a nested array (array of arrays)
-    - Its element type is hashable (primitives, structs, enums with hash methods)
-
-    Args:
-        array_type: The array type to check (ArrayType or DynamicArrayType)
-        visited: Set of type names already visited (for cycle detection)
-        path: List of type names in current path (for error messages)
-
-    Returns:
-        Tuple of (can_hash, reason) where reason explains why if False
-    """
-    if not isinstance(array_type, (ArrayType, DynamicArrayType)):
-        return False, f"not an array type: {type(array_type).__name__}"
-
-    element_type = array_type.base_type
-
-    # Initialize tracking for recursive calls
-    if visited is None:
-        visited = set()
-    if path is None:
-        path = []
-
-    # Check for nested arrays
-    if isinstance(element_type, (ArrayType, DynamicArrayType)):
-        return False, f"nested array type (arrays of arrays not supported)"
-
-    # Check if element type is hashable
-    # Primitives are always hashable
-    if isinstance(element_type, BuiltinType):
-        return True, "element type is primitive"
-
-    # Structs need to be checked recursively
-    if isinstance(element_type, StructType):
-        from sushi_lang.backend.types.structs import can_struct_be_hashed
-        can_hash, reason = can_struct_be_hashed(element_type, visited.copy(), path.copy())
-        if not can_hash:
-            return False, f"element struct type cannot be hashed: {reason}"
-        return True, "element struct type is hashable"
-
-    # Enums need to be checked recursively
-    if isinstance(element_type, EnumType):
-        from sushi_lang.backend.types.enums import can_enum_be_hashed
-        can_hash, reason = can_enum_be_hashed(element_type, visited.copy(), path.copy())
-        if not can_hash:
-            return False, f"element enum type cannot be hashed: {reason}"
-        return True, "element enum type is hashable"
-
-    return False, f"element type {element_type} is not hashable"
 
 
 def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
@@ -426,41 +346,17 @@ def emit_dynamic_array_hash_direct(codegen: Any, expr: Any, receiver_value: ir.V
     return emitter(codegen, expr, receiver_value, receiver_type, to_i1)
 
 
-def register_array_hash_method(array_type: Type) -> None:
-    """Register the auto-derived hash() method for an array type.
 
-    This should be called during semantic analysis (Pass 1.8) for each array type
-    that can be hashed (i.e., has hashable element type and is not nested).
 
-    Args:
-        array_type: The array type to register hash() for (ArrayType or DynamicArrayType)
-    """
-    can_hash, reason = can_array_be_hashed(array_type)
-    if not can_hash:
-        return  # Don't register hash for unsupported arrays
-
-    # Check if hash is already registered
-    existing_hash = get_builtin_method(array_type, "hash")
-    if existing_hash is not None:
-        # Skip duplicate registration
-        return
-
-    # Choose emitter based on array type
+def _make_array_hash_emitter(array_type: Type) -> Any:
+    """Build the hash() emitter for an array type, fixed or dynamic."""
     if isinstance(array_type, ArrayType):
-        emitter = _emit_fixed_array_hash(array_type)
-    elif isinstance(array_type, DynamicArrayType):
-        emitter = _emit_dynamic_array_hash(array_type)
-    else:
-        raise_internal_error("CE0041", type=type(array_type).__name__)
+        return _emit_fixed_array_hash(array_type)
+    if isinstance(array_type, DynamicArrayType):
+        return _emit_dynamic_array_hash(array_type)
+    raise_internal_error("CE0041", type=type(array_type).__name__)
 
-    register_builtin_method(
-        array_type,
-        BuiltinMethod(
-            name="hash",
-            parameter_types=[],
-            return_type=BuiltinType.U64,
-            description=f"Auto-derived hash for array {array_type}",
-            semantic_validator=_validate_array_hash,
-            llvm_emitter=emitter,
-        )
-    )
+
+# Supply the array hash() emitter to semantics/generics/hashing.py, which owns
+# hashability analysis and the registration itself.
+register_hash_emitter_factory("array", _make_array_hash_emitter)

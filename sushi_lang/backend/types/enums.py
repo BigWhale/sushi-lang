@@ -1,121 +1,30 @@
 """
-Extension methods for enum types.
+LLVM emission for the auto-derived enum hash() method.
 
-Implemented methods:
-- hash() -> u64: Auto-derived hash function for enums with hashable variant data
-
-Hash is computed using FNV-1a algorithm by combining tag with variant data hashes:
+Hash is computed using FNV-1a by combining the variant tag with the hashes of
+its associated values:
     hash = FNV_OFFSET_BASIS
     hash = (hash XOR tag) * FNV_PRIME
     for each associated value in variant:
         hash = (hash XOR value.hash()) * FNV_PRIME
 
-Known limitations:
-- Generic enums cannot be hashed (must be monomorphized first)
-- Nested enums work if all variant types are hashable
-- Arrays in variant data are supported (both fixed and dynamic arrays)
+Whether an enum *may* be hashed, and the registration of the method itself, are
+semantic concerns and live in semantics/generics/hashing.py. This module only
+supplies the emitter, which it deposits in the shared factory registry at import
+time.
 """
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.semantics.typesys import EnumType, Type, ArrayType, DynamicArrayType, BuiltinType, StructType, ForeignPtrType
-from sushi_lang.semantics.generics.types import GenericEnumType
+from sushi_lang.semantics.typesys import EnumType, Type, ArrayType, DynamicArrayType, BuiltinType, StructType
 import llvmlite.ir as ir
 from sushi_lang.backend.constants import INT64_BIT_WIDTH
-from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
-from sushi_lang.sushi_stdlib.src.common import register_builtin_method, BuiltinMethod
+from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory
 from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
 from sushi_lang.backend import enum_utils
 
-
-def _validate_enum_hash(call: MethodCall, target_type: Type, reporter: Any) -> None:
-    """Validate hash() method call on enum types.
-
-    Checks:
-    - No arguments to hash()
-    - Enum doesn't contain array-typed variant data
-    - Enum is not generic
-    """
-    if call.args:
-        er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{target_type}.hash", expected=0, got=len(call.args))
-
-    # Validation is done in can_enum_be_hashed() - no need to check here
-    # Arrays are now supported if they have hashable element types
-    pass
-
-
-def can_enum_be_hashed(enum_type: EnumType, visited: set = None, path: list = None) -> tuple[bool, str]:
-    """Check if an enum type can have an auto-derived hash method.
-
-    An enum can be hashed if:
-    - It's not a generic enum (GenericEnumType)
-    - All variant associated types are hashable
-    - It has no UnknownType fields (types not yet resolved)
-    - All array fields have hashable element types (recursive check)
-    - All nested enum/struct fields can also be hashed (recursive check)
-
-    Args:
-        enum_type: The enum type to check
-        visited: Set of enum names already visited (for cycle detection)
-        path: List of enum names in current path (for error messages)
-
-    Returns:
-        Tuple of (can_hash, reason) where reason explains why if False
-    """
-    from sushi_lang.semantics.typesys import UnknownType
-
-    # Initialize tracking for recursive calls
-    if visited is None:
-        visited = set()
-    if path is None:
-        path = []
-
-    # Detect cycles (shouldn't happen with Sushi's type system, but be defensive)
-    if enum_type.name in visited:
-        return False, f"recursive enum type: {' -> '.join(path + [enum_type.name])}"
-
-    visited.add(enum_type.name)
-    path.append(enum_type.name)
-
-    # Generic enums cannot be hashed (should be monomorphized first)
-    if isinstance(enum_type, GenericEnumType):
-        return False, f"generic enum {enum_type.name} (should be monomorphized first)"
-
-    # Check each variant's associated types
-    for variant in enum_type.variants:
-        for assoc_idx, assoc_type in enumerate(variant.associated_types):
-            # Skip enums with unresolved types (will be registered later)
-            if isinstance(assoc_type, UnknownType):
-                return False, f"variant {variant.name} has unresolved type '{assoc_type.name}'"
-
-            # Foreign pointers are opaque handles with no stable identity to hash
-            if isinstance(assoc_type, ForeignPtrType):
-                return False, f"variant {variant.name} carries a foreign ptr (unhashable)"
-
-            # Arrays must have hashable element types (recursive check)
-            if isinstance(assoc_type, (ArrayType, DynamicArrayType)):
-                from sushi_lang.backend.types.arrays.methods.hashing import can_array_be_hashed
-                can_hash, reason = can_array_be_hashed(assoc_type, visited.copy(), path.copy())
-                if not can_hash:
-                    return False, f"variant {variant.name} -> {reason}"
-
-            # Nested enums must also be hashable (recursive check)
-            if isinstance(assoc_type, EnumType):
-                can_hash, reason = can_enum_be_hashed(assoc_type, visited.copy(), path.copy())
-                if not can_hash:
-                    return False, f"variant {variant.name} -> {reason}"
-
-            # Nested structs must also be hashable (recursive check)
-            if isinstance(assoc_type, StructType):
-                from sushi_lang.backend.types.structs import can_struct_be_hashed
-                can_hash, reason = can_struct_be_hashed(assoc_type, visited.copy(), path.copy())
-                if not can_hash:
-                    return False, f"variant {variant.name} -> {reason}"
-
-    return True, "all variant types are hashable"
 
 
 def _emit_enum_hash(enum_type: Type) -> Any:
@@ -384,38 +293,8 @@ def _emit_associated_value_hash(codegen: Any, value: ir.Value, value_type: Type)
         raise_internal_error("CE0052", type=str(value_type))
 
 
-def register_enum_hash_method(enum_type: EnumType) -> None:
-    """Register the auto-derived hash() method for an enum type.
 
-    This should be called during semantic analysis for each enum that
-    can be hashed (i.e., has no array-typed variant data and is not generic).
 
-    After monomorphization, this should only be called from Pass 1.8 (hash_registration.py).
-    If duplicate registration is detected, it indicates a bug in the compiler.
-
-    Args:
-        enum_type: The enum type to register hash() for
-    """
-    can_hash, reason = can_enum_be_hashed(enum_type)
-    if not can_hash:
-        return  # Don't register hash for unsupported enums
-
-    # Check if hash is already registered (shouldn't happen after monomorphization)
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-    existing_hash = get_builtin_method(enum_type, "hash")
-    if existing_hash is not None:
-        # This is a compiler bug - hash should only be registered once in Pass 1.8
-        print(f"WARNING: hash() already registered for {enum_type.name} (duplicate registration)")
-        return  # Skip duplicate registration
-
-    register_builtin_method(
-        enum_type,
-        BuiltinMethod(
-            name="hash",
-            parameter_types=[],
-            return_type=BuiltinType.U64,
-            description=f"Auto-derived hash for enum {enum_type}",
-            semantic_validator=_validate_enum_hash,
-            llvm_emitter=_emit_enum_hash(enum_type),
-        )
-    )
+# Supply the enum hash() emitter to semantics/generics/hashing.py, which owns
+# hashability analysis and the registration itself.
+register_hash_emitter_factory("enum", _emit_enum_hash)

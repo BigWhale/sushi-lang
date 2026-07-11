@@ -105,7 +105,7 @@ class ResultBuilder:
         self.enum_table.order.append(result_enum_name)
 
         # Register hash method if hashable (after Pass 1.8)
-        from sushi_lang.backend.types.enums import can_enum_be_hashed, register_enum_hash_method
+        from sushi_lang.semantics.generics.hashing import can_enum_be_hashed, register_enum_hash_method
         can_hash, _ = can_enum_be_hashed(result_enum)
         if can_hash:
             register_enum_hash_method(result_enum)

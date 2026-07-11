@@ -23,6 +23,7 @@ from llvmlite import ir, binding as llvm
 from sushi_lang.semantics.ast import ConstDef, ExtendDef
 from sushi_lang.semantics.units import Unit
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
+from sushi_lang.semantics.library_registry import LibraryRegistry
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.backend.llvm_types import LLVMTypeSystem
 from sushi_lang.backend.llvm_utils import LLVMUtils
@@ -36,6 +37,10 @@ from sushi_lang.backend.functions import LLVMFunctionManager
 from sushi_lang.backend.llvm_optimization import LLVMOptimizer
 from sushi_lang.backend.string_constants import StringConstantManager
 from sushi_lang.backend.stdlib_linker import StdlibLinker
+# Registers the hash() emitter factories that semantics/generics/hashing.py
+# resolves when it emits an auto-derived hash(). Pass 1.8 registers the method
+# itself without knowing anything about LLVM.
+import sushi_lang.backend.types  # noqa: F401
 
 
 def _perk_method_to_extend_def(perk_impl, method) -> ExtendDef:
@@ -159,7 +164,7 @@ class LLVMCodegen:
         self.library_linker: Optional['LibraryLinker'] = None
 
         # Library registry for pre-parsed library metadata
-        self.library_registry: Optional['LibraryRegistry'] = None
+        self.library_registry: Optional[LibraryRegistry] = None
 
         # Monomorphized generic extension methods (for codegen)
         self.monomorphized_extensions: list['ExtendDef'] = []
@@ -376,7 +381,7 @@ class LLVMCodegen:
         main_expects_args: bool = False,
         monomorphized_extensions: list['ExtendDef'] = None,
         library_linker: 'LibraryLinker' = None,
-        library_registry: 'LibraryRegistry' = None,
+        library_registry: Optional[LibraryRegistry] = None,
     ) -> Path:
         """Complete multi-unit compilation pipeline from multiple ASTs to native executable.
 
@@ -1253,7 +1258,7 @@ def _set_weak_odr_on_perk_impls(module: ir.Module, units: list[Unit]) -> None:
     definition survives library-module optimization even when nothing inside
     the library references it.
     """
-    from sushi_lang.backend.library_templates import impl_method_symbol
+    from sushi_lang.semantics.library_templates import impl_method_symbol
     from sushi_lang.semantics.passes.collect.perks import _get_type_name
 
     for unit in units:

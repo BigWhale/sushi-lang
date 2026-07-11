@@ -97,23 +97,6 @@ primitive_types = [
 # Generate emitters dynamically using the factory function
 emitters = {prim_type: _emit_generic_to_str(prim_type) for prim_type in primitive_types}
 
-# Helper function for semantic analysis integration
-def validate_builtin_primitive_method_with_validator(call: MethodCall, target_type: Type, reporter: Any, validator: Any) -> None:
-    """Validate builtin primitive method calls using the registered validators.
-
-    This function looks up the registered BuiltinMethod and calls its semantic validator.
-    It handles both to_str and hash methods.
-    """
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-
-    method = get_builtin_method(target_type, call.method)
-    if method is None:
-        raise_internal_error("CE0074", type=target_type, method=call.method)
-
-    # Call the method's registered semantic validator
-    method.semantic_validator(call, target_type, reporter)
-
-
 for prim_type in primitive_types:
     register_builtin_method(
         prim_type,

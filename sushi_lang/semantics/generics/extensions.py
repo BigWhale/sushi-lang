@@ -1,4 +1,4 @@
-# backend/generics/extensions.py
+# semantics/generics/extensions.py
 """
 Generic Extension Method Monomorphization
 

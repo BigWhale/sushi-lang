@@ -146,7 +146,7 @@ def get_key_hash_method(key_type: Type) -> Optional[Any]:
 
     # For array types, try to register on-demand
     if isinstance(key_type, (ArrayType, DynamicArrayType)):
-        from sushi_lang.backend.types.arrays.methods.hashing import register_array_hash_method, can_array_be_hashed
+        from sushi_lang.semantics.generics.hashing import register_array_hash_method, can_array_be_hashed
         can_hash, reason = can_array_be_hashed(key_type)
         if can_hash:
             register_array_hash_method(key_type)
