@@ -21,6 +21,27 @@ from __future__ import annotations
 from llvmlite import ir
 
 
+def _generate_f64_intrinsic_wrapper(module: ir.Module, llvm_name: str, sushi_name: str, arg_names: tuple) -> None:
+    """Emit a `sushi_<name>` wrapper that forwards to an f64 LLVM intrinsic.
+
+    Covers the single-intrinsic float functions (sqrt, pow, trig, log, exp, ...).
+    The intrinsic is get-or-declared so wrappers that share one (e.g. llvm.exp.f64
+    used by exp and the hyperbolic helpers) do not redeclare it.
+    """
+    f64 = ir.DoubleType()
+    sig = ir.FunctionType(f64, [f64] * len(arg_names))
+    intrinsic = module.globals.get(llvm_name)
+    if intrinsic is None:
+        intrinsic = ir.Function(module, sig, name=llvm_name)
+
+    func = ir.Function(module, ir.FunctionType(f64, [f64] * len(arg_names)), name=sushi_name)
+    for arg, name in zip(func.args, arg_names):
+        arg.name = name
+
+    builder = ir.IRBuilder(func.append_basic_block("entry"))
+    builder.ret(builder.call(intrinsic, func.args))
+
+
 def generate_abs_functions(module: ir.Module) -> None:
     """Generate abs() functions for all signed numeric types.
 
@@ -220,167 +241,33 @@ def generate_min_max_functions(module: ir.Module) -> None:
 
 
 def generate_sqrt(module: ir.Module) -> None:
-    """Generate sqrt function: sqrt(f64) -> f64
-
-    Uses LLVM's sqrt intrinsic for optimal performance.
-    """
-    f64 = ir.DoubleType()
-
-    # Declare LLVM sqrt intrinsic
-    intrinsic_name = "llvm.sqrt.f64"
-    intrinsic_type = ir.FunctionType(f64, [f64])
-    intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
-
-    # Create our wrapper function
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_sqrt")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    # Call LLVM intrinsic
-    result = builder.call(intrinsic, [x_param])
-    builder.ret(result)
+    """Generate sushi_sqrt(f64 x) -> f64 via the llvm.sqrt.f64 intrinsic."""
+    _generate_f64_intrinsic_wrapper(module, "llvm.sqrt.f64", "sushi_sqrt", ('x',))
 
 
 def generate_pow(module: ir.Module) -> None:
-    """Generate pow function: pow(f64, f64) -> f64
-
-    Uses LLVM's pow intrinsic for optimal performance.
-    """
-    f64 = ir.DoubleType()
-
-    # Declare LLVM pow intrinsic
-    intrinsic_name = "llvm.pow.f64"
-    intrinsic_type = ir.FunctionType(f64, [f64, f64])
-    intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
-
-    # Create our wrapper function
-    func_type = ir.FunctionType(f64, [f64, f64])
-    func = ir.Function(module, func_type, name="sushi_pow")
-
-    base_param = func.args[0]
-    exp_param = func.args[1]
-    base_param.name = "base"
-    exp_param.name = "exponent"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    # Call LLVM intrinsic
-    result = builder.call(intrinsic, [base_param, exp_param])
-    builder.ret(result)
+    """Generate sushi_pow(f64 base, f64 exponent) -> f64 via the llvm.pow.f64 intrinsic."""
+    _generate_f64_intrinsic_wrapper(module, "llvm.pow.f64", "sushi_pow", ('base', 'exponent'))
 
 
 def generate_floor(module: ir.Module) -> None:
-    """Generate floor function: floor(f64) -> f64
-
-    Uses LLVM's floor intrinsic.
-    """
-    f64 = ir.DoubleType()
-
-    # Declare LLVM floor intrinsic
-    intrinsic_name = "llvm.floor.f64"
-    intrinsic_type = ir.FunctionType(f64, [f64])
-    intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
-
-    # Create our wrapper function
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_floor")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    # Call LLVM intrinsic
-    result = builder.call(intrinsic, [x_param])
-    builder.ret(result)
+    """Generate sushi_floor(f64 x) -> f64 via the llvm.floor.f64 intrinsic."""
+    _generate_f64_intrinsic_wrapper(module, "llvm.floor.f64", "sushi_floor", ('x',))
 
 
 def generate_ceil(module: ir.Module) -> None:
-    """Generate ceil function: ceil(f64) -> f64
-
-    Uses LLVM's ceil intrinsic.
-    """
-    f64 = ir.DoubleType()
-
-    # Declare LLVM ceil intrinsic
-    intrinsic_name = "llvm.ceil.f64"
-    intrinsic_type = ir.FunctionType(f64, [f64])
-    intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
-
-    # Create our wrapper function
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_ceil")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    # Call LLVM intrinsic
-    result = builder.call(intrinsic, [x_param])
-    builder.ret(result)
+    """Generate sushi_ceil(f64 x) -> f64 via the llvm.ceil.f64 intrinsic."""
+    _generate_f64_intrinsic_wrapper(module, "llvm.ceil.f64", "sushi_ceil", ('x',))
 
 
 def generate_round(module: ir.Module) -> None:
-    """Generate round function: round(f64) -> f64
-
-    Uses LLVM's round intrinsic (rounds to nearest integer, ties away from zero).
-    """
-    f64 = ir.DoubleType()
-
-    # Declare LLVM round intrinsic
-    intrinsic_name = "llvm.round.f64"
-    intrinsic_type = ir.FunctionType(f64, [f64])
-    intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
-
-    # Create our wrapper function
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_round")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    # Call LLVM intrinsic
-    result = builder.call(intrinsic, [x_param])
-    builder.ret(result)
+    """Generate sushi_round(f64 x) -> f64 via the llvm.round.f64 intrinsic."""
+    _generate_f64_intrinsic_wrapper(module, "llvm.round.f64", "sushi_round", ('x',))
 
 
 def generate_trunc(module: ir.Module) -> None:
-    """Generate trunc function: trunc(f64) -> f64
-
-    Uses LLVM's trunc intrinsic (removes fractional part, rounds toward zero).
-    """
-    f64 = ir.DoubleType()
-
-    # Declare LLVM trunc intrinsic
-    intrinsic_name = "llvm.trunc.f64"
-    intrinsic_type = ir.FunctionType(f64, [f64])
-    intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
-
-    # Create our wrapper function
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_trunc")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    # Call LLVM intrinsic
-    result = builder.call(intrinsic, [x_param])
-    builder.ret(result)
+    """Generate sushi_trunc(f64 x) -> f64 via the llvm.trunc.f64 intrinsic."""
+    _generate_f64_intrinsic_wrapper(module, "llvm.trunc.f64", "sushi_trunc", ('x',))
 
 
 # =============================================================================
@@ -388,51 +275,13 @@ def generate_trunc(module: ir.Module) -> None:
 # =============================================================================
 
 def generate_sin(module: ir.Module) -> None:
-    """Generate sin function: sin(f64) -> f64
-
-    Uses LLVM's sin intrinsic.
-    """
-    f64 = ir.DoubleType()
-
-    intrinsic_name = "llvm.sin.f64"
-    intrinsic_type = ir.FunctionType(f64, [f64])
-    intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
-
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_sin")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    result = builder.call(intrinsic, [x_param])
-    builder.ret(result)
+    """Generate sushi_sin(f64 x) -> f64 via the llvm.sin.f64 intrinsic."""
+    _generate_f64_intrinsic_wrapper(module, "llvm.sin.f64", "sushi_sin", ('x',))
 
 
 def generate_cos(module: ir.Module) -> None:
-    """Generate cos function: cos(f64) -> f64
-
-    Uses LLVM's cos intrinsic.
-    """
-    f64 = ir.DoubleType()
-
-    intrinsic_name = "llvm.cos.f64"
-    intrinsic_type = ir.FunctionType(f64, [f64])
-    intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
-
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_cos")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    result = builder.call(intrinsic, [x_param])
-    builder.ret(result)
+    """Generate sushi_cos(f64 x) -> f64 via the llvm.cos.f64 intrinsic."""
+    _generate_f64_intrinsic_wrapper(module, "llvm.cos.f64", "sushi_cos", ('x',))
 
 
 def generate_tan(module: ir.Module) -> None:
@@ -684,75 +533,18 @@ def generate_tanh(module: ir.Module) -> None:
 # =============================================================================
 
 def generate_log(module: ir.Module) -> None:
-    """Generate log function: log(f64) -> f64 (natural logarithm)
-
-    Uses LLVM's log intrinsic.
-    """
-    f64 = ir.DoubleType()
-
-    intrinsic_name = "llvm.log.f64"
-    intrinsic_type = ir.FunctionType(f64, [f64])
-    intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
-
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_log")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    result = builder.call(intrinsic, [x_param])
-    builder.ret(result)
+    """Generate sushi_log(f64 x) -> f64 via the llvm.log.f64 intrinsic."""
+    _generate_f64_intrinsic_wrapper(module, "llvm.log.f64", "sushi_log", ('x',))
 
 
 def generate_log2(module: ir.Module) -> None:
-    """Generate log2 function: log2(f64) -> f64
-
-    Uses LLVM's log2 intrinsic.
-    """
-    f64 = ir.DoubleType()
-
-    intrinsic_name = "llvm.log2.f64"
-    intrinsic_type = ir.FunctionType(f64, [f64])
-    intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
-
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_log2")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    result = builder.call(intrinsic, [x_param])
-    builder.ret(result)
+    """Generate sushi_log2(f64 x) -> f64 via the llvm.log2.f64 intrinsic."""
+    _generate_f64_intrinsic_wrapper(module, "llvm.log2.f64", "sushi_log2", ('x',))
 
 
 def generate_log10(module: ir.Module) -> None:
-    """Generate log10 function: log10(f64) -> f64
-
-    Uses LLVM's log10 intrinsic.
-    """
-    f64 = ir.DoubleType()
-
-    intrinsic_name = "llvm.log10.f64"
-    intrinsic_type = ir.FunctionType(f64, [f64])
-    intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
-
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_log10")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    result = builder.call(intrinsic, [x_param])
-    builder.ret(result)
+    """Generate sushi_log10(f64 x) -> f64 via the llvm.log10.f64 intrinsic."""
+    _generate_f64_intrinsic_wrapper(module, "llvm.log10.f64", "sushi_log10", ('x',))
 
 
 # =============================================================================
@@ -760,55 +552,13 @@ def generate_log10(module: ir.Module) -> None:
 # =============================================================================
 
 def generate_exp(module: ir.Module) -> None:
-    """Generate exp function: exp(f64) -> f64
-
-    Uses LLVM's exp intrinsic.
-    """
-    f64 = ir.DoubleType()
-
-    # Get or declare exp intrinsic (may already exist from hyperbolic functions)
-    intrinsic = module.globals.get("llvm.exp.f64")
-    if intrinsic is None:
-        intrinsic_type = ir.FunctionType(f64, [f64])
-        intrinsic = ir.Function(module, intrinsic_type, name="llvm.exp.f64")
-
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_exp")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    result = builder.call(intrinsic, [x_param])
-    builder.ret(result)
+    """Generate sushi_exp(f64 x) -> f64 via the llvm.exp.f64 intrinsic."""
+    _generate_f64_intrinsic_wrapper(module, "llvm.exp.f64", "sushi_exp", ('x',))
 
 
 def generate_exp2(module: ir.Module) -> None:
-    """Generate exp2 function: exp2(f64) -> f64
-
-    Uses LLVM's exp2 intrinsic.
-    """
-    f64 = ir.DoubleType()
-
-    # Get or declare exp2 intrinsic
-    intrinsic = module.globals.get("llvm.exp2.f64")
-    if intrinsic is None:
-        intrinsic_type = ir.FunctionType(f64, [f64])
-        intrinsic = ir.Function(module, intrinsic_type, name="llvm.exp2.f64")
-
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_exp2")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    result = builder.call(intrinsic, [x_param])
-    builder.ret(result)
+    """Generate sushi_exp2(f64 x) -> f64 via the llvm.exp2.f64 intrinsic."""
+    _generate_f64_intrinsic_wrapper(module, "llvm.exp2.f64", "sushi_exp2", ('x',))
 
 
 # =============================================================================
