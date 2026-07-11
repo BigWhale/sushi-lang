@@ -19,7 +19,7 @@ from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
 if TYPE_CHECKING:
     from . import TypeValidator
-    from sushi_lang.semantics.enums.variants import EnumVariant
+    from sushi_lang.semantics.ast import EnumVariant
 
 
 def validate_match_statement(validator: 'TypeValidator', stmt: Match) -> None:

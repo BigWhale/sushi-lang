@@ -17,7 +17,7 @@ from ..compatibility import types_compatible
 
 if TYPE_CHECKING:
     from .. import TypeValidator
-    from sushi_lang.semantics.enums.variants import EnumVariant
+    from sushi_lang.semantics.ast import EnumVariant
 
 
 def validate_enum_constructor(validator: 'TypeValidator', constructor: EnumConstructor) -> None:
