@@ -11,6 +11,7 @@ from ..types import get_entry_type, get_hashmap_field_ptrs, ENTRY_EMPTY, ENTRY_O
 from sushi_lang.semantics.generics.hashmap import extract_key_value_types
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i32_const, make_i8_const
 from sushi_lang.backend.constants import ENTRY_KEY_INDICES, ENTRY_VALUE_INDICES, ENTRY_STATE_INDICES
+from sushi_lang.backend.generics.container_walk import emit_container_walk
 
 
 def emit_hashmap_debug(
@@ -81,100 +82,61 @@ def emit_hashmap_debug(
     emit_printf_string(codegen, builder, "\n")
 
     # Iterate through buckets and print each entry
-    i = builder.alloca(codegen.types.i32, name="i")
-    builder.store(zero_i32, i)
+    def print_entry(entry_ptr: ir.Value, index: ir.Value) -> None:
+        state_ptr = builder.gep(entry_ptr, ENTRY_STATE_INDICES, name="state_ptr")
+        state = builder.load(state_ptr, name="state")
 
-    loop_cond_bb = builder.append_basic_block(name="debug_loop_cond")
-    loop_body_bb = builder.append_basic_block(name="debug_loop_body")
-    check_state_bb = builder.append_basic_block(name="debug_check_state")
-    empty_bb = builder.append_basic_block(name="debug_empty")
-    occupied_bb = builder.append_basic_block(name="debug_occupied")
-    tombstone_bb = builder.append_basic_block(name="debug_tombstone")
-    loop_continue_bb = builder.append_basic_block(name="debug_loop_continue")
-    loop_end_bb = builder.append_basic_block(name="debug_loop_end")
+        empty_bb = builder.append_basic_block(name="debug_empty")
+        occupied_bb = builder.append_basic_block(name="debug_occupied")
+        tombstone_bb = builder.append_basic_block(name="debug_tombstone")
+        check_occupied_bb = builder.append_basic_block(name="debug_check_occupied")
+        check_tombstone_bb = builder.append_basic_block(name="debug_check_tombstone")
+        join_bb = builder.append_basic_block(name="debug_entry_done")
 
-    builder.branch(loop_cond_bb)
+        is_empty = builder.icmp_unsigned("==", state, make_i8_const(ENTRY_EMPTY), name="is_empty")
+        builder.cbranch(is_empty, empty_bb, check_occupied_bb)
 
-    # Loop condition: i < capacity
-    builder.position_at_end(loop_cond_bb)
-    i_val = builder.load(i, name="i_val")
-    cond = builder.icmp_unsigned("<", i_val, capacity, name="loop_cond")
-    builder.cbranch(cond, loop_body_bb, loop_end_bb)
+        builder.position_at_end(check_occupied_bb)
+        is_occupied = builder.icmp_unsigned("==", state, make_i8_const(ENTRY_OCCUPIED), name="is_occupied")
+        builder.cbranch(is_occupied, occupied_bb, check_tombstone_bb)
 
-    # Loop body: print entry
-    builder.position_at_end(loop_body_bb)
-    i_val = builder.load(i, name="i_val")
+        builder.position_at_end(check_tombstone_bb)
+        is_tombstone = builder.icmp_unsigned("==", state, make_i8_const(ENTRY_TOMBSTONE), name="is_tombstone")
+        builder.cbranch(is_tombstone, tombstone_bb, join_bb)
 
-    # Get entry
-    entry_ptr = builder.gep(buckets_data, [i_val], name="entry_ptr")
-    state_ptr = builder.gep(entry_ptr, ENTRY_STATE_INDICES, name="state_ptr")
-    state = builder.load(state_ptr, name="state")
+        builder.position_at_end(empty_bb)
+        emit_printf_string(codegen, builder, "  [")
+        emit_printf_i32(codegen, builder, index)
+        emit_printf_string(codegen, builder, "] Empty\n")
+        builder.branch(join_bb)
 
-    builder.branch(check_state_bb)
+        builder.position_at_end(occupied_bb)
+        emit_printf_string(codegen, builder, "  [")
+        emit_printf_i32(codegen, builder, index)
+        emit_printf_string(codegen, builder, "] Occupied: ")
 
-    # Check state
-    builder.position_at_end(check_state_bb)
-    is_empty = builder.icmp_unsigned("==", state, make_i8_const(ENTRY_EMPTY), name="is_empty")
-    is_occupied = builder.icmp_unsigned("==", state, make_i8_const(ENTRY_OCCUPIED), name="is_occupied")
-    is_tombstone = builder.icmp_unsigned("==", state, make_i8_const(ENTRY_TOMBSTONE), name="is_tombstone")
+        key_ptr = builder.gep(entry_ptr, ENTRY_KEY_INDICES, name="key_ptr")
+        key = builder.load(key_ptr, name="key")
+        emit_debug_print_value(codegen, builder, key, key_type)
 
-    # Branch: if empty
-    check_occupied_bb = builder.append_basic_block(name="check_occupied")
-    builder.cbranch(is_empty, empty_bb, check_occupied_bb)
+        emit_printf_string(codegen, builder, " -> ")
 
-    # Check if occupied
-    builder.position_at_end(check_occupied_bb)
-    check_tombstone_bb = builder.append_basic_block(name="check_tombstone")
-    builder.cbranch(is_occupied, occupied_bb, check_tombstone_bb)
+        value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="value_ptr")
+        value = builder.load(value_ptr, name="value")
+        emit_debug_print_value(codegen, builder, value, value_type)
 
-    # Check if tombstone
-    builder.position_at_end(check_tombstone_bb)
-    builder.cbranch(is_tombstone, tombstone_bb, loop_continue_bb)
+        emit_printf_string(codegen, builder, "\n")
+        builder.branch(join_bb)
 
-    # Empty case
-    builder.position_at_end(empty_bb)
-    emit_printf_string(codegen, builder, "  [")
-    emit_printf_i32(codegen, builder, i_val)
-    emit_printf_string(codegen, builder, "] Empty\n")
-    builder.branch(loop_continue_bb)
+        builder.position_at_end(tombstone_bb)
+        emit_printf_string(codegen, builder, "  [")
+        emit_printf_i32(codegen, builder, index)
+        emit_printf_string(codegen, builder, "] Tombstone\n")
+        builder.branch(join_bb)
 
-    # Occupied case - print key and value
-    builder.position_at_end(occupied_bb)
-    emit_printf_string(codegen, builder, "  [")
-    emit_printf_i32(codegen, builder, i_val)
-    emit_printf_string(codegen, builder, "] Occupied: ")
+        builder.position_at_end(join_bb)
 
-    # Load and print key
-    key_ptr = builder.gep(entry_ptr, ENTRY_KEY_INDICES, name="key_ptr")
-    key = builder.load(key_ptr, name="key")
-    emit_debug_print_value(codegen, builder, key, key_type)
-
-    emit_printf_string(codegen, builder, " -> ")
-
-    # Load and print value
-    value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="value_ptr")
-    value = builder.load(value_ptr, name="value")
-    emit_debug_print_value(codegen, builder, value, value_type)
-
-    emit_printf_string(codegen, builder, "\n")
-    builder.branch(loop_continue_bb)
-
-    # Tombstone case
-    builder.position_at_end(tombstone_bb)
-    emit_printf_string(codegen, builder, "  [")
-    emit_printf_i32(codegen, builder, i_val)
-    emit_printf_string(codegen, builder, "] Tombstone\n")
-    builder.branch(loop_continue_bb)
-
-    # Continue loop
-    builder.position_at_end(loop_continue_bb)
-    i_val = builder.load(i, name="i_val")
-    i_next = builder.add(i_val, one_i32, name="i_next")
-    builder.store(i_next, i)
-    builder.branch(loop_cond_bb)
-
-    # End loop
-    builder.position_at_end(loop_end_bb)
+    emit_container_walk(codegen, buckets_data, capacity, print_entry, prefix="debug")
 
     # Print closing brace
     emit_printf_string(codegen, builder, "}\n")

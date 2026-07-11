@@ -22,7 +22,7 @@ from sushi_lang.backend.constants import (
     ENTRY_STATE_INDICES,
 )
 from sushi_lang.semantics.generics.hashmap import extract_key_value_types
-from ..utils import emit_key_equality_check
+from ..utils import emit_key_equality_check, emit_init_buckets_empty
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.expressions.memory import get_element_size_constant
@@ -66,38 +66,9 @@ def emit_hashmap_new(codegen: Any, hashmap_type: StructType) -> ir.Value:
     bucket_ptr_i8 = emit_malloc(codegen, codegen.builder, total_bytes_i64)
     bucket_ptr = codegen.builder.bitcast(bucket_ptr_i8, ir.PointerType(entry_type), name="buckets_ptr")
 
-    # Initialize all entries to Empty state
-    # Loop through buckets and set state = ENTRY_EMPTY (0)
+    # Fresh malloc'd storage holds garbage, so every slot must be marked EMPTY.
     zero_i32 = ir.Constant(codegen.types.i32, 0)
-    i = codegen.builder.alloca(codegen.types.i32, name="i")
-    codegen.builder.store(zero_i32, i)
-
-    loop_cond_bb = codegen.builder.append_basic_block(name="init_loop_cond")
-    loop_body_bb = codegen.builder.append_basic_block(name="init_loop_body")
-    loop_end_bb = codegen.builder.append_basic_block(name="init_loop_end")
-
-    codegen.builder.branch(loop_cond_bb)
-
-    # Loop condition: i < capacity
-    codegen.builder.position_at_end(loop_cond_bb)
-    i_val = codegen.builder.load(i, name="i_val")
-    cond = codegen.builder.icmp_unsigned("<", i_val, capacity_const, name="loop_cond")
-    codegen.builder.cbranch(cond, loop_body_bb, loop_end_bb)
-
-    # Loop body: set entry[i].state = ENTRY_EMPTY
-    codegen.builder.position_at_end(loop_body_bb)
-    i_val = codegen.builder.load(i, name="i_val")
-    entry_ptr = codegen.builder.gep(bucket_ptr, [i_val], name="entry_ptr")
-    state_ptr = codegen.builder.gep(entry_ptr, ENTRY_STATE_INDICES, name="state_ptr")  # state is field 2 in Entry
-    codegen.builder.store(ir.Constant(codegen.types.i8, ENTRY_EMPTY), state_ptr)
-
-    # i++
-    i_next = codegen.builder.add(i_val, ir.Constant(codegen.types.i32, 1), name="i_next")
-    codegen.builder.store(i_next, i)
-    codegen.builder.branch(loop_cond_bb)
-
-    # After loop
-    codegen.builder.position_at_end(loop_end_bb)
+    emit_init_buckets_empty(codegen, bucket_ptr, capacity_const)
 
     # Create dynamic array struct for buckets: {len, cap, data}
     buckets_array_type = ir.LiteralStructType([codegen.types.i32, codegen.types.i32, ir.PointerType(entry_type)])

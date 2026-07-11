@@ -21,7 +21,12 @@ from sushi_lang.backend.constants import (
     ENTRY_STATE_INDICES,
 )
 from sushi_lang.semantics.generics.hashmap import extract_key_value_types
-from ..utils import emit_key_equality_check, emit_insert_entry
+from ..utils import (
+    emit_key_equality_check,
+    emit_insert_entry,
+    emit_destroy_all_entries,
+    emit_init_buckets_empty,
+)
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.expressions.memory import get_element_size_constant
@@ -575,35 +580,9 @@ def emit_hashmap_resize_to_capacity(
     new_bucket_ptr_i8 = emit_malloc(codegen, builder, total_bytes_i64)
     new_bucket_ptr = builder.bitcast(new_bucket_ptr_i8, ir.PointerType(entry_type), name="new_buckets_ptr")
 
-    # Initialize all new entries to Empty
-    init_i = builder.alloca(codegen.types.i32, name="init_i")
-    builder.store(zero_i32, init_i)
-
-    init_loop_cond_bb = builder.append_basic_block(name="init_loop_cond")
-    init_loop_body_bb = builder.append_basic_block(name="init_loop_body")
-    init_loop_end_bb = builder.append_basic_block(name="init_loop_end")
-
-    builder.branch(init_loop_cond_bb)
-
-    # Init loop condition: i < new_capacity
-    builder.position_at_end(init_loop_cond_bb)
-    init_i_val = builder.load(init_i, name="init_i_val")
-    init_cond = builder.icmp_unsigned("<", init_i_val, new_capacity, name="init_cond")
-    builder.cbranch(init_cond, init_loop_body_bb, init_loop_end_bb)
-
-    # Init loop body: set entry[i].state = ENTRY_EMPTY
-    builder.position_at_end(init_loop_body_bb)
-    init_i_val = builder.load(init_i, name="init_i_val")
-    new_entry_ptr = builder.gep(new_bucket_ptr, [init_i_val], name="new_entry_ptr")
-    new_state_ptr = builder.gep(new_entry_ptr, ENTRY_STATE_INDICES, name="new_state_ptr")
-    builder.store(ir.Constant(codegen.types.i8, ENTRY_EMPTY), new_state_ptr)
-
-    init_i_next = builder.add(init_i_val, one_i32, name="init_i_next")
-    builder.store(init_i_next, init_i)
-    builder.branch(init_loop_cond_bb)
+    emit_init_buckets_empty(codegen, new_bucket_ptr, new_capacity)
 
     # After init loop: iterate through old buckets and reinsert Occupied entries
-    builder.position_at_end(init_loop_end_bb)
 
     # Get hash method for keys (register on-demand if not already registered)
     from ..types import get_key_hash_method
@@ -825,60 +804,8 @@ def emit_hashmap_free(
     # Get old buckets pointer
     old_buckets_data = builder.load(buckets_data_ptr, name="old_buckets_data")
 
-    # Iterate through old buckets and destroy occupied entries
-    loop_i = builder.alloca(codegen.types.i32, name="loop_i")
-    builder.store(zero_i32, loop_i)
-
-    destroy_loop_cond_bb = builder.append_basic_block(name="destroy_loop_cond")
-    destroy_loop_body_bb = builder.append_basic_block(name="destroy_loop_body")
-    destroy_check_occupied_bb = builder.append_basic_block(name="destroy_check_occupied")
-    destroy_entry_bb = builder.append_basic_block(name="destroy_entry")
-    destroy_skip_bb = builder.append_basic_block(name="destroy_skip")
-    destroy_loop_end_bb = builder.append_basic_block(name="destroy_loop_end")
-
-    builder.branch(destroy_loop_cond_bb)
-
-    # Loop condition: i < old_capacity
-    builder.position_at_end(destroy_loop_cond_bb)
-    i_val = builder.load(loop_i, name="i_val")
-    loop_cond = builder.icmp_unsigned("<", i_val, old_capacity, name="loop_cond")
-    builder.cbranch(loop_cond, destroy_loop_body_bb, destroy_loop_end_bb)
-
-    # Loop body: check if entry is occupied
-    builder.position_at_end(destroy_loop_body_bb)
-    i_val = builder.load(loop_i, name="i_val")
-    entry_ptr = builder.gep(old_buckets_data, [i_val], name="entry_ptr")
-    state_ptr = builder.gep(entry_ptr, ENTRY_STATE_INDICES, name="state_ptr")
-    state = builder.load(state_ptr, name="state")
-
-    builder.branch(destroy_check_occupied_bb)
-
-    builder.position_at_end(destroy_check_occupied_bb)
-    is_occupied = builder.icmp_unsigned("==", state, ir.Constant(codegen.types.i8, ENTRY_OCCUPIED), name="is_occupied")
-    builder.cbranch(is_occupied, destroy_entry_bb, destroy_skip_bb)
-
-    # Destroy occupied entry: recursively destroy key and value
-    builder.position_at_end(destroy_entry_bb)
-
-    # Get pointers to key and value
-    key_ptr = builder.gep(entry_ptr, ENTRY_KEY_INDICES, name="key_ptr")
-    value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="value_ptr")
-
-    # Recursively destroy key and value using the general destructor
-    from sushi_lang.backend.destructors import emit_value_destructor
-    emit_value_destructor(codegen, builder, key_ptr, key_type)
-    emit_value_destructor(codegen, builder, value_ptr, value_type)
-
-    builder.branch(destroy_skip_bb)
-
-    # Skip non-occupied entries
-    builder.position_at_end(destroy_skip_bb)
-    i_next = builder.add(i_val, one_i32, name="i_next")
-    builder.store(i_next, loop_i)
-    builder.branch(destroy_loop_cond_bb)
-
-    # After destroying all entries, free old buckets
-    builder.position_at_end(destroy_loop_end_bb)
+    # Destroy every occupied entry, then release the bucket storage
+    emit_destroy_all_entries(codegen, old_buckets_data, old_capacity, key_type, value_type)
 
     # Free old buckets array
     old_buckets_void_ptr = builder.bitcast(old_buckets_data, ir.PointerType(codegen.types.i8), name="old_buckets_void_ptr")
@@ -894,35 +821,9 @@ def emit_hashmap_free(
     new_bucket_ptr_i8 = emit_malloc(codegen, builder, total_bytes_i64)
     new_bucket_ptr = builder.bitcast(new_bucket_ptr_i8, ir.PointerType(entry_type), name="new_buckets_ptr")
 
-    # Initialize all new entries to Empty
-    init_i = builder.alloca(codegen.types.i32, name="init_i")
-    builder.store(zero_i32, init_i)
-
-    init_loop_cond_bb = builder.append_basic_block(name="init_loop_cond")
-    init_loop_body_bb = builder.append_basic_block(name="init_loop_body")
-    init_loop_end_bb = builder.append_basic_block(name="init_loop_end")
-
-    builder.branch(init_loop_cond_bb)
-
-    # Init loop condition: i < initial_capacity (16)
-    builder.position_at_end(init_loop_cond_bb)
-    init_i_val = builder.load(init_i, name="init_i_val")
-    init_cond = builder.icmp_unsigned("<", init_i_val, initial_capacity, name="init_cond")
-    builder.cbranch(init_cond, init_loop_body_bb, init_loop_end_bb)
-
-    # Init loop body: set entry[i].state = ENTRY_EMPTY
-    builder.position_at_end(init_loop_body_bb)
-    init_i_val = builder.load(init_i, name="init_i_val")
-    new_entry_ptr = builder.gep(new_bucket_ptr, [init_i_val], name="new_entry_ptr")
-    new_state_ptr = builder.gep(new_entry_ptr, ENTRY_STATE_INDICES, name="new_state_ptr")
-    builder.store(ir.Constant(codegen.types.i8, ENTRY_EMPTY), new_state_ptr)
-
-    init_i_next = builder.add(init_i_val, one_i32, name="init_i_next")
-    builder.store(init_i_next, init_i)
-    builder.branch(init_loop_cond_bb)
+    emit_init_buckets_empty(codegen, new_bucket_ptr, initial_capacity)
 
     # After initialization: update HashMap fields
-    builder.position_at_end(init_loop_end_bb)
 
     # Store new values: size=0, capacity=16, tombstones=0
     builder.store(zero_i32, size_ptr)
@@ -992,66 +893,15 @@ def emit_hashmap_destroy(
     # Get old buckets pointer
     old_buckets_data = builder.load(buckets_data_ptr, name="old_buckets_data")
 
-    # Check if buckets pointer is not null (avoid double-free)
+    # destroy() is idempotent: the buckets may already be gone, so both the walk
+    # and the free are guarded against a null bucket pointer.
     null_entry_ptr = ir.Constant(ir.PointerType(entry_type), None)
+
+    emit_destroy_all_entries(codegen, old_buckets_data, old_capacity, key_type,
+                             value_type, null_guard=True)
+
     is_not_null = builder.icmp_unsigned("!=", old_buckets_data, null_entry_ptr)
-
     with builder.if_then(is_not_null):
-        # Iterate through old buckets and destroy occupied entries
-        loop_i = builder.alloca(codegen.types.i32, name="loop_i")
-        builder.store(zero_i32, loop_i)
-
-        destroy_loop_cond_bb = builder.append_basic_block(name="destroy_loop_cond")
-        destroy_loop_body_bb = builder.append_basic_block(name="destroy_loop_body")
-        destroy_check_occupied_bb = builder.append_basic_block(name="destroy_check_occupied")
-        destroy_entry_bb = builder.append_basic_block(name="destroy_entry")
-        destroy_skip_bb = builder.append_basic_block(name="destroy_skip")
-        destroy_loop_end_bb = builder.append_basic_block(name="destroy_loop_end")
-
-        builder.branch(destroy_loop_cond_bb)
-
-        # Loop condition: i < old_capacity
-        builder.position_at_end(destroy_loop_cond_bb)
-        i_val = builder.load(loop_i, name="i_val")
-        loop_cond = builder.icmp_unsigned("<", i_val, old_capacity, name="loop_cond")
-        builder.cbranch(loop_cond, destroy_loop_body_bb, destroy_loop_end_bb)
-
-        # Loop body: check if entry is occupied
-        builder.position_at_end(destroy_loop_body_bb)
-        i_val = builder.load(loop_i, name="i_val")
-        entry_ptr = builder.gep(old_buckets_data, [i_val], name="entry_ptr")
-        state_ptr = builder.gep(entry_ptr, ENTRY_STATE_INDICES, name="state_ptr")
-        state = builder.load(state_ptr, name="state")
-
-        builder.branch(destroy_check_occupied_bb)
-
-        builder.position_at_end(destroy_check_occupied_bb)
-        is_occupied = builder.icmp_unsigned("==", state, ir.Constant(codegen.types.i8, ENTRY_OCCUPIED), name="is_occupied")
-        builder.cbranch(is_occupied, destroy_entry_bb, destroy_skip_bb)
-
-        # Destroy occupied entry: recursively destroy key and value
-        builder.position_at_end(destroy_entry_bb)
-
-        # Get pointers to key and value
-        key_ptr = builder.gep(entry_ptr, ENTRY_KEY_INDICES, name="key_ptr")
-        value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="value_ptr")
-
-        # Recursively destroy key and value using the general destructor
-        from sushi_lang.backend.destructors import emit_value_destructor
-        emit_value_destructor(codegen, builder, key_ptr, key_type)
-        emit_value_destructor(codegen, builder, value_ptr, value_type)
-
-        builder.branch(destroy_skip_bb)
-
-        # Skip non-occupied entries
-        builder.position_at_end(destroy_skip_bb)
-        i_next = builder.add(i_val, one_i32, name="i_next")
-        builder.store(i_next, loop_i)
-        builder.branch(destroy_loop_cond_bb)
-
-        # After destroying all entries, free old buckets
-        builder.position_at_end(destroy_loop_end_bb)
-
         # Free old buckets array
         old_buckets_void_ptr = builder.bitcast(old_buckets_data, ir.PointerType(codegen.types.i8), name="old_buckets_void_ptr")
         free_func = codegen.get_free_func()
