@@ -24,7 +24,10 @@ The TypeValidator class coordinates type validation by delegating to specialized
 - statements: Statement validation
 """
 from __future__ import annotations
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.tables import SymbolTables
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
@@ -33,7 +36,6 @@ from sushi_lang.semantics.ast import (
     If, Expr
 )
 from sushi_lang.semantics.typesys import Type, BuiltinType
-from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, EnumTable, FunctionTable, ExtensionTable, PerkTable, PerkImplementationTable
 from sushi_lang.semantics.type_visitor import StatementValidator, ExpressionValidator, TypeInferenceVisitor
 
 # Import validation functions from specialized modules
@@ -83,28 +85,23 @@ class TypeValidator:
     This is the main coordinator class that delegates validation logic to specialized modules.
     """
 
-    def __init__(self, reporter: Reporter, const_table: ConstantTable, struct_table: StructTable, enum_table: EnumTable, func_table: FunctionTable, extension_table: Optional[ExtensionTable] = None, generic_enum_table: Optional['GenericEnumTable'] = None, generic_struct_table: Optional['GenericStructTable'] = None, perk_table: Optional[PerkTable] = None, perk_impl_table: Optional[PerkImplementationTable] = None, generic_extension_table: Optional['GenericExtensionTable'] = None, generic_func_table: Optional['GenericFunctionTable'] = None, current_unit_name: Optional[str] = None, monomorphized_functions: Optional[Dict[str, tuple]] = None, external_table: Optional['ExternalTable'] = None) -> None:
+    def __init__(self, reporter: Reporter, tables: 'SymbolTables', current_unit_name: Optional[str] = None, monomorphized_functions: Optional[Dict[str, tuple]] = None) -> None:
         self.reporter = reporter
         self.err = PassErrorReporter(reporter)
-        self.const_table = const_table
-        self.struct_table = struct_table
-        self.enum_table = enum_table
-        self.func_table = func_table
-        from sushi_lang.semantics.passes.collect import ExternalTable
-        self.external_table = external_table or ExternalTable()
-        self.extension_table = extension_table or ExtensionTable()
-        # Store generic enum table for checking generic enum names (e.g., Result)
-        from sushi_lang.semantics.passes.collect import GenericEnumTable, GenericStructTable, GenericExtensionTable, GenericFunctionTable
-        self.generic_enum_table = generic_enum_table or GenericEnumTable()
-        # Store generic struct table for checking generic struct names (e.g., Box, Pair)
-        self.generic_struct_table = generic_struct_table or GenericStructTable()
-        # Store generic extension table for generic extension methods (e.g., extend Box<T> unwrap() T)
-        self.generic_extension_table = generic_extension_table or GenericExtensionTable()
-        # Store generic function table for generic functions (e.g., fn identity<T>(T x) T)
-        self.generic_func_table = generic_func_table or GenericFunctionTable()
-        # Store perk tables for validation
-        self.perk_table = perk_table or PerkTable()
-        self.perk_impl_table = perk_impl_table or PerkImplementationTable()
+        self.const_table = tables.constants
+        self.struct_table = tables.structs
+        self.enum_table = tables.enums
+        self.func_table = tables.funcs
+        self.external_table = tables.externals
+        self.extension_table = tables.extensions
+        # Generic tables for checking generic type/function names (Result, Box, Pair, identity, ...)
+        self.generic_enum_table = tables.generic_enums
+        self.generic_struct_table = tables.generic_structs
+        self.generic_extension_table = tables.generic_extensions
+        self.generic_func_table = tables.generic_funcs
+        # Perk tables for validation
+        self.perk_table = tables.perks
+        self.perk_impl_table = tables.perk_impls
         self.current_unit_name = current_unit_name  # Track which unit is being validated (for visibility checking)
         # Store monomorphized functions map (mangled_name -> (generic_name, type_args))
         self.monomorphized_functions = monomorphized_functions or {}

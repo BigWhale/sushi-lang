@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.units import Unit
+    from sushi_lang.semantics.tables import SymbolTables
     from sushi_lang.semantics.passes.collect import (
         ConstantTable,
         StructTable,
@@ -34,41 +35,25 @@ class SymbolTableMerger:
     def merge_all(
         self,
         unit: 'Unit',
-        unit_constants: 'ConstantTable',
-        unit_structs: 'StructTable',
-        unit_enums: 'EnumTable',
-        unit_generic_enums: 'GenericEnumTable',
-        unit_generic_structs: 'GenericStructTable',
-        unit_perks: 'PerkTable',
-        unit_perk_impls: 'PerkImplementationTable',
-        unit_funcs: 'FunctionTable',
-        unit_extensions: 'ExtensionTable',
-        unit_generic_extensions: 'GenericExtensionTable',
-        unit_generic_funcs: 'GenericFunctionTable',
-        global_constants: 'ConstantTable',
-        global_structs: 'StructTable',
-        global_enums: 'EnumTable',
-        global_generic_enums: 'GenericEnumTable',
-        global_generic_structs: 'GenericStructTable',
-        global_perks: 'PerkTable',
-        global_perk_impls: 'PerkImplementationTable',
-        global_funcs: 'FunctionTable',
-        global_extensions: 'ExtensionTable',
-        global_generic_extensions: 'GenericExtensionTable',
-        global_generic_funcs: 'GenericFunctionTable',
+        unit_tables: 'SymbolTables',
+        global_tables: 'SymbolTables',
     ) -> None:
-        """Merge all symbols from a unit into global tables."""
-        self._merge_constants(unit_constants, global_constants)
-        self._merge_structs(unit_structs, global_structs)
-        self._merge_enums(unit_enums, global_enums)
-        self._merge_generic_enums(unit_generic_enums, global_generic_enums)
-        self._merge_generic_structs(unit_generic_structs, global_generic_structs)
-        self._merge_perks(unit_perks, global_perks)
-        self._merge_perk_impls(unit_perk_impls, global_perk_impls)
-        self._merge_functions(unit_funcs, global_funcs)
-        self._merge_extensions(unit_extensions, global_extensions)
-        self._merge_generic_extensions(unit_generic_extensions, global_generic_extensions)
-        self._merge_generic_funcs(unit_generic_funcs, global_generic_funcs)
+        """Merge all symbols from a unit into the global tables.
+
+        Externals are not merged here: they accumulate in the shared collector
+        table rather than per unit.
+        """
+        self._merge_constants(unit_tables.constants, global_tables.constants)
+        self._merge_structs(unit_tables.structs, global_tables.structs)
+        self._merge_enums(unit_tables.enums, global_tables.enums)
+        self._merge_generic_enums(unit_tables.generic_enums, global_tables.generic_enums)
+        self._merge_generic_structs(unit_tables.generic_structs, global_tables.generic_structs)
+        self._merge_perks(unit_tables.perks, global_tables.perks)
+        self._merge_perk_impls(unit_tables.perk_impls, global_tables.perk_impls)
+        self._merge_functions(unit_tables.funcs, global_tables.funcs)
+        self._merge_extensions(unit_tables.extensions, global_tables.extensions)
+        self._merge_generic_extensions(unit_tables.generic_extensions, global_tables.generic_extensions)
+        self._merge_generic_funcs(unit_tables.generic_funcs, global_tables.generic_funcs)
 
     def _merge_constants(
         self,

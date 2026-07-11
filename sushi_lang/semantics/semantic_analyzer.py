@@ -1,10 +1,13 @@
 # semantics/semantic_analyzer.py
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.ast import Program
-from sushi_lang.semantics.passes.collect import CollectorPass, ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, PerkTable, PerkImplementationTable, FunctionTable, ExtensionTable, GenericFunctionTable
+from sushi_lang.semantics.passes.collect import CollectorPass, ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, PerkTable, PerkImplementationTable, FunctionTable, ExtensionTable, GenericExtensionTable, GenericFunctionTable
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.tables import SymbolTables
 from sushi_lang.semantics.passes.scope import ScopeAnalyzer
 from sushi_lang.semantics.passes.types import TypeValidator
 from sushi_lang.semantics.passes.borrow import BorrowChecker
@@ -47,6 +50,7 @@ class SemanticAnalyzer:
         self.extensions: Optional[ExtensionTable] = None
         self.generic_extensions: Optional['GenericExtensionTable'] = None
         self.generic_funcs: Optional[GenericFunctionTable] = None
+        self.tables: Optional['SymbolTables'] = None  # Aggregate of the above, threaded to Pass 2 and backend
         self.monomorphized_extensions: list['ExtendDef'] = []  # Concrete ExtendDef nodes for codegen
         self.library_perk_impls: list['ExtendWithDef'] = []  # Library-shipped impls registered here (declare-only at codegen)
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
@@ -72,18 +76,8 @@ class SemanticAnalyzer:
 
         # Phase 0: Collect symbols from all units
         collector = CollectorPass(self.reporter)
-        global_constants = ConstantTable()
-        global_structs = StructTable()
-        global_enums = EnumTable()
-        global_generic_enums = GenericEnumTable()
-        global_generic_structs = GenericStructTable()
-        global_perks = PerkTable()
-        global_perk_impls = PerkImplementationTable()
-        global_funcs = FunctionTable()
-        global_extensions = ExtensionTable()
-        from sushi_lang.semantics.passes.collect import GenericExtensionTable
-        global_generic_extensions = GenericExtensionTable()
-        global_generic_funcs = GenericFunctionTable()
+        from sushi_lang.semantics.tables import SymbolTables
+        global_tables = SymbolTables()
 
         symbol_merger = SymbolTableMerger()
 
@@ -100,31 +94,28 @@ class SemanticAnalyzer:
                 continue
 
             # Collect symbols from this unit, passing unit name for visibility tracking
-            unit_constants, unit_structs, unit_enums, unit_generic_enums, unit_generic_structs, unit_perks, unit_perk_impls, unit_funcs, unit_extensions, unit_generic_extensions, unit_generic_funcs = collector.run(unit.ast, unit_name=unit.name)
+            unit_tables = collector.run(unit.ast, unit_name=unit.name)
 
             # Merge unit symbols into global tables, considering visibility
-            symbol_merger.merge_all(
-                unit, unit_constants, unit_structs, unit_enums, unit_generic_enums,
-                unit_generic_structs, unit_perks, unit_perk_impls, unit_funcs,
-                unit_extensions, unit_generic_extensions, unit_generic_funcs,
-                global_constants, global_structs, global_enums, global_generic_enums,
-                global_generic_structs, global_perks, global_perk_impls, global_funcs,
-                global_extensions, global_generic_extensions, global_generic_funcs
-            )
+            symbol_merger.merge_all(unit, unit_tables, global_tables)
 
-        self.constants = global_constants
-        self.structs = global_structs
-        self.enums = global_enums
-        self.generic_enums = global_generic_enums
-        self.generic_structs = global_generic_structs
-        self.perks = global_perks
-        self.perk_impls = global_perk_impls
-        self.funcs = global_funcs
-        self.extensions = global_extensions
-        self.generic_extensions = global_generic_extensions
-        self.generic_funcs = global_generic_funcs
+        self.tables = global_tables
+        # Individual attributes are views onto the same table objects; the
+        # pipeline and backend read analyzer.structs / .enums / ... directly.
+        self.constants = global_tables.constants
+        self.structs = global_tables.structs
+        self.enums = global_tables.enums
+        self.generic_enums = global_tables.generic_enums
+        self.generic_structs = global_tables.generic_structs
+        self.perks = global_tables.perks
+        self.perk_impls = global_tables.perk_impls
+        self.funcs = global_tables.funcs
+        self.extensions = global_tables.extensions
+        self.generic_extensions = global_tables.generic_extensions
+        self.generic_funcs = global_tables.generic_funcs
         # FFI externals accumulate across all units in the shared collector table.
         self.externals = collector.externals
+        global_tables.externals = collector.externals
 
         # FFI: validate external signatures (CE5003), emit CW5001, and enforce
         # the ptr unit gate (CE5009) per unit.
@@ -195,7 +186,13 @@ class SemanticAnalyzer:
 
         monomorphizer = Monomorphizer(
             reporter=self.reporter,
-            constraint_validator=constraint_validator
+            constraint_validator=constraint_validator,
+            generic_funcs=self.generic_funcs.by_name,
+            generic_enums=self.generic_enums.by_name,
+            generic_structs=self.generic_structs.by_name,
+            func_table=self.funcs,
+            enum_table=self.enums,
+            struct_table=self.structs,
         )
 
         # Separate enum and struct instantiations
@@ -211,13 +208,6 @@ class SemanticAnalyzer:
                 struct_instantiations.add((base_name, type_args))
 
         # Phase 3: Monomorphize generic functions
-        # Set up function monomorphization
-        monomorphizer.generic_funcs = self.generic_funcs.by_name
-        monomorphizer.generic_enums = self.generic_enums.by_name
-        monomorphizer.generic_structs = self.generic_structs.by_name
-        monomorphizer.func_table = self.funcs
-        monomorphizer.enum_table = self.enums
-        monomorphizer.struct_table = self.structs
         # Monomorphize all detected function instantiations (multi-file mode)
         monomorphizer.monomorphize_all_functions(func_instantiations, compilation_order)
 
@@ -301,7 +291,7 @@ class SemanticAnalyzer:
             scope_analyzer.run(unit.ast)
 
             # Pass 2: type validation with global symbols (unit-specific reporter)
-            type_validator = TypeValidator(unit_reporter, self.constants, self.structs, self.enums, self.funcs, self.extensions, self.generic_enums, self.generic_structs, self.perks, self.perk_impls, self.generic_extensions, self.generic_funcs, current_unit_name=unit.name, monomorphized_functions=monomorphizer.monomorphized_functions, external_table=self.externals)
+            type_validator = TypeValidator(unit_reporter, self.tables, current_unit_name=unit.name, monomorphized_functions=monomorphizer.monomorphized_functions)
             type_validator.run(unit.ast)
 
             # Pass 2.5: lambda-lifting (between type and borrow, per unit).
@@ -319,7 +309,7 @@ class SemanticAnalyzer:
         # Validate monomorphized generic extension methods (use main reporter for now)
         if self.monomorphized_extensions:
             # Create a type validator with global context
-            type_validator = TypeValidator(self.reporter, self.constants, self.structs, self.enums, self.funcs, self.extensions, self.generic_enums, self.generic_structs, self.perks, self.perk_impls, self.generic_extensions)
+            type_validator = TypeValidator(self.reporter, self.tables)
             for extend_def in self.monomorphized_extensions:
                 type_validator._validate_extension_method(extend_def)
 
@@ -483,7 +473,7 @@ class SemanticAnalyzer:
                 throwaway = Reporter(
                     source=source, filename=f"<const:{lib_name}:{const_name}>")
                 collected = CollectorPass(throwaway).run(program, unit_name=lib_name)
-                const_table = collected[0]  # ConstantTable
+                const_table = collected.constants
 
                 sig = const_table.by_name.get(const_name)
                 const_defs = program.constants or []
@@ -539,7 +529,7 @@ class SemanticAnalyzer:
                 program, _tree = parse_to_ast(source)
                 throwaway = Reporter(source=source, filename=f"<perk:{lib_name}:{perk_name}>")
                 collected = CollectorPass(throwaway).run(program, unit_name=lib_name)
-                template_perks = collected[5]  # PerkTable
+                template_perks = collected.perks
 
                 perk_def = template_perks.by_name.get(perk_name)
                 if perk_def is None:
@@ -663,7 +653,7 @@ class SemanticAnalyzer:
                 program, _tree = parse_to_ast(source)
                 throwaway = Reporter(source=source, filename=f"<template:{lib_name}:{func_name}>")
                 collected = CollectorPass(throwaway).run(program, unit_name=lib_name)
-                template_generic_funcs = collected[-1]  # GenericFunctionTable
+                template_generic_funcs = collected.generic_funcs
 
                 gfd = template_generic_funcs.by_name.get(func_name)
                 if gfd is None:
@@ -689,7 +679,7 @@ class SemanticAnalyzer:
                 self.generic_funcs.order.append(func_name)
 
     def _register_library_generic_types(
-        self, manifest_key: str, table, collected_index: int
+        self, manifest_key: str, table, collected_attr: str
     ) -> None:
         """Register generic struct/enum templates from loaded libraries.
 
@@ -710,8 +700,8 @@ class SemanticAnalyzer:
         Args:
             manifest_key: ``"generic_structs"`` or ``"generic_enums"``.
             table: the consumer's ``GenericStructTable`` / ``GenericEnumTable``.
-            collected_index: index of the matching table in the ``CollectorPass``
-                result tuple (4 = generic structs, 3 = generic enums).
+            collected_attr: attribute of the ``SymbolTables`` result holding the
+                matching table (``"generic_structs"`` or ``"generic_enums"``).
         """
         if table is None or self.library_linker is None:
             return
@@ -733,7 +723,7 @@ class SemanticAnalyzer:
                 program, _tree = parse_to_ast(source)
                 throwaway = Reporter(source=source, filename=f"<template:{lib_name}:{type_name}>")
                 collected = CollectorPass(throwaway).run(program, unit_name=lib_name)
-                template_table = collected[collected_index]
+                template_table = getattr(collected, collected_attr)
 
                 generic_type = template_table.by_name.get(type_name)
                 if generic_type is None:
@@ -747,12 +737,12 @@ class SemanticAnalyzer:
     def _register_library_generic_structs(self) -> None:
         """Register generic struct templates from loaded libraries (index 4)."""
         self._register_library_generic_types(
-            "generic_structs", self.generic_structs, 4)
+            "generic_structs", self.generic_structs, "generic_structs")
 
     def _register_library_generic_enums(self) -> None:
         """Register generic enum templates from loaded libraries (index 3)."""
         self._register_library_generic_types(
-            "generic_enums", self.generic_enums, 3)
+            "generic_enums", self.generic_enums, "generic_enums")
 
     def _register_library_structs(self) -> None:
         """Register struct definitions from loaded libraries.
