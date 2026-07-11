@@ -37,6 +37,10 @@ from sushi_lang.backend.functions import LLVMFunctionManager
 from sushi_lang.backend.llvm_optimization import LLVMOptimizer
 from sushi_lang.backend.string_constants import StringConstantManager
 from sushi_lang.backend.stdlib_linker import StdlibLinker
+# Registers the hash() emitter factories that semantics/generics/hashing.py
+# resolves when it emits an auto-derived hash(). Pass 1.8 registers the method
+# itself without knowing anything about LLVM.
+import sushi_lang.backend.types  # noqa: F401
 
 
 def _perk_method_to_extend_def(perk_impl, method) -> ExtendDef:

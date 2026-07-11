@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import EnumType, Type
+from sushi_lang.semantics.generics.hashing import can_enum_be_hashed, register_enum_hash_method
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 
@@ -263,10 +264,6 @@ def ensure_result_type_in_table(enum_table: Any, ok_type: Type, err_type: Type) 
     enum_table.order.append(result_enum_name)
 
     # Register the auto-derived hash() for the on-demand type (mirrors Pass 1.8).
-    # The hash-registration helpers are ir-free semantic operations that still live
-    # under backend/types/ (see the hash-infrastructure layering note); import them
-    # lazily here so this stays the single coupling point.
-    from sushi_lang.backend.types.enums import can_enum_be_hashed, register_enum_hash_method
     can_hash, _ = can_enum_be_hashed(result_enum)
     if can_hash:
         register_enum_hash_method(result_enum)

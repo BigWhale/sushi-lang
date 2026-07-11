@@ -73,6 +73,32 @@ def has_builtin_method(target_type: Type, method_name: str) -> bool:
     return builtin_registry.has_method(target_type, method_name)
 
 
+# Hash emitter factories, keyed by type kind ("struct" / "enum" / "array").
+#
+# Hashability is a semantic property, so Pass 1.8 decides it and registers the
+# hash() BuiltinMethod (semantics/generics/hashing.py). The matching LLVM emitter
+# is backend code, and semantics must not import the backend -- so the backend
+# types modules deposit their emitter *factories* here at import time and
+# semantics looks them up. A factory takes the concrete type and returns the
+# emitter closure for it.
+#
+# The lookup is deferred to emission time (see _lazy_hash_emitter in
+# semantics/generics/hashing.py), which is inside codegen and therefore after the
+# backend has certainly been imported. That keeps registration independent of
+# module import order.
+_hash_emitter_factories: Dict[str, Callable[[Type], Callable]] = {}
+
+
+def register_hash_emitter_factory(kind: str, factory: Callable[[Type], Callable]) -> None:
+    """Register the backend factory that builds hash() emitters for a type kind."""
+    _hash_emitter_factories[kind] = factory
+
+
+def get_hash_emitter_factory(kind: str) -> Optional[Callable[[Type], Callable]]:
+    """Get the hash() emitter factory for a type kind, or None if unregistered."""
+    return _hash_emitter_factories.get(kind)
+
+
 # Type matching utilities
 def matches_fixed_array_type(target_type: Type) -> bool:
     """Check if type is a fixed array type."""

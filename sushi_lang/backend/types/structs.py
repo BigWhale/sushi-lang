@@ -1,118 +1,26 @@
 """
-Extension methods for struct types.
+LLVM emission for the auto-derived struct hash() method.
 
-Implemented methods:
-- hash() -> u64: Auto-derived hash function for structs with primitive fields
-
-Hash is computed using FNV-1a algorithm by combining field hashes:
+Hash is computed using FNV-1a by combining field hashes:
     hash = FNV_OFFSET_BASIS
     for each field:
         hash = (hash XOR field.hash()) * FNV_PRIME
 
-Known limitations:
-- Structs with array fields (fixed or dynamic) cannot be hashed
-- Generic structs cannot be hashed
-- Nested structs work if all nested fields are hashable
+Whether a struct *may* be hashed, and the registration of the method itself,
+are semantic concerns and live in semantics/generics/hashing.py. This module
+only supplies the emitter, which it deposits in the shared factory registry at
+import time.
 """
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.semantics.typesys import StructType, Type, ArrayType, DynamicArrayType, BuiltinType, EnumType, ForeignPtrType
-from sushi_lang.semantics.generics.types import GenericStructType
+from sushi_lang.semantics.typesys import StructType, Type, ArrayType, DynamicArrayType, EnumType
 import llvmlite.ir as ir
 from sushi_lang.backend.constants import INT64_BIT_WIDTH
-from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
-from sushi_lang.sushi_stdlib.src.common import register_builtin_method, BuiltinMethod
+from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory
 from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
-
-
-def _validate_struct_hash(call: MethodCall, target_type: Type, reporter: Any) -> None:
-    """Validate hash() method call on struct types.
-
-    Checks:
-    - No arguments to hash()
-    - Struct doesn't contain array fields
-    - Struct is not generic
-    """
-    if call.args:
-        er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{target_type}.hash", expected=0, got=len(call.args))
-
-    # Validation is done in can_struct_be_hashed() - no need to check here
-    # Arrays are now supported if they have hashable element types
-    pass
-
-
-def can_struct_be_hashed(struct_type: StructType, visited: set = None, path: list = None) -> tuple[bool, str]:
-    """Check if a struct type can have an auto-derived hash method.
-
-    A struct can be hashed if:
-    - It's not a generic struct (GenericStructType)
-    - It has no UnknownType fields (types not yet resolved)
-    - All array fields have hashable element types (recursive check)
-    - All enum fields are hashable (recursive check)
-    - All nested struct fields can also be hashed (recursive check)
-
-    Args:
-        struct_type: The struct type to check
-        visited: Set of struct names already visited (for cycle detection)
-        path: List of struct names in current path (for error messages)
-
-    Returns:
-        Tuple of (can_hash, reason) where reason explains why if False
-    """
-    from sushi_lang.semantics.typesys import UnknownType
-
-    # Initialize tracking for recursive calls
-    if visited is None:
-        visited = set()
-    if path is None:
-        path = []
-
-    # Detect cycles (shouldn't happen with Sushi's type system, but be defensive)
-    if struct_type.name in visited:
-        return False, f"recursive struct type: {' -> '.join(path + [struct_type.name])}"
-
-    visited.add(struct_type.name)
-    path.append(struct_type.name)
-
-    # Generic structs cannot be hashed (should be monomorphized first)
-    if isinstance(struct_type, GenericStructType):
-        return False, f"generic struct {struct_type.name} (should be monomorphized first)"
-
-    # Check each field (fields is a tuple of (name, type) tuples)
-    for field_name, field_type in struct_type.fields:
-        # Skip structs with unresolved types (will be registered later)
-        if isinstance(field_type, UnknownType):
-            return False, f"field '{field_name}' has unresolved type '{field_type.name}'"
-
-        # Foreign pointers are opaque handles with no stable identity to hash
-        if isinstance(field_type, ForeignPtrType):
-            return False, f"field '{field_name}' is a foreign ptr (unhashable)"
-
-        # Arrays must have hashable element types (recursive check)
-        if isinstance(field_type, (ArrayType, DynamicArrayType)):
-            from sushi_lang.backend.types.arrays.methods.hashing import can_array_be_hashed
-            can_hash, reason = can_array_be_hashed(field_type, visited.copy(), path.copy())
-            if not can_hash:
-                return False, f"field '{field_name}' -> {reason}"
-
-        # Enums must also be hashable (recursive check)
-        if isinstance(field_type, EnumType):
-            from sushi_lang.backend.types.enums import can_enum_be_hashed
-            can_hash, reason = can_enum_be_hashed(field_type, visited.copy(), path.copy())
-            if not can_hash:
-                return False, f"field '{field_name}' -> {reason}"
-
-        # Nested structs must also be hashable (recursive check)
-        if isinstance(field_type, StructType):
-            can_hash, reason = can_struct_be_hashed(field_type, visited.copy(), path.copy())
-            if not can_hash:
-                return False, f"field '{field_name}' -> {reason}"
-
-    return True, "all fields are hashable"
 
 
 def _emit_struct_hash(prim_type: Type) -> Any:
@@ -302,38 +210,8 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
         raise_internal_error("CE0052", type=str(field_type))
 
 
-def register_struct_hash_method(struct_type: StructType) -> None:
-    """Register the auto-derived hash() method for a struct type.
 
-    This should be called during semantic analysis for each struct that
-    can be hashed (i.e., has no array fields and is not generic).
 
-    After Phase 3, this should only be called from Pass 1.8 (hash_registration.py).
-    If duplicate registration is detected, it indicates a bug in the compiler.
-
-    Args:
-        struct_type: The struct type to register hash() for
-    """
-    can_hash, reason = can_struct_be_hashed(struct_type)
-    if not can_hash:
-        return  # Don't register hash for unsupported structs
-
-    # Check if hash is already registered (shouldn't happen after Phase 3)
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-    existing_hash = get_builtin_method(struct_type, "hash")
-    if existing_hash is not None:
-        # This is a compiler bug - hash should only be registered once in Pass 1.8
-        print(f"WARNING: hash() already registered for {struct_type.name} (duplicate registration)")
-        return  # Skip duplicate registration
-
-    register_builtin_method(
-        struct_type,
-        BuiltinMethod(
-            name="hash",
-            parameter_types=[],
-            return_type=BuiltinType.U64,
-            description=f"Auto-derived hash for struct {struct_type}",
-            semantic_validator=_validate_struct_hash,
-            llvm_emitter=_emit_struct_hash(struct_type),
-        )
-    )
+# Supply the struct hash() emitter to semantics/generics/hashing.py, which owns
+# hashability analysis and the registration itself.
+register_hash_emitter_factory("struct", _emit_struct_hash)

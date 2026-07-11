@@ -14,9 +14,9 @@ This pass runs BEFORE type validation (Pass 2) because:
 """
 
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
-from sushi_lang.backend.types.structs import can_struct_be_hashed, register_struct_hash_method
-from sushi_lang.backend.types.enums import can_enum_be_hashed, register_enum_hash_method
-from sushi_lang.backend.types.arrays.methods.hashing import can_array_be_hashed, register_array_hash_method
+from sushi_lang.semantics.generics.hashing import can_struct_be_hashed, register_struct_hash_method
+from sushi_lang.semantics.generics.hashing import can_enum_be_hashed, register_enum_hash_method
+from sushi_lang.semantics.generics.hashing import can_array_be_hashed, register_array_hash_method
 from sushi_lang.semantics.typesys import StructType, EnumType, ArrayType, DynamicArrayType, Type
 from collections import defaultdict, deque
 from typing import List, Set, Dict
