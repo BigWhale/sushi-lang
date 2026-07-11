@@ -45,8 +45,82 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           uv run pytest -q
 
-  test-linux:
+  # Stage 2: leak gate on both platforms, after pytest and before the full suites.
+  # Uses the malloc-interposer (tests/leakcheck), which runs in hosted CI on both
+  # Linux and macOS (unlike `leaks`, which cannot attach on the hosted macOS runner).
+  leaks-linux:
     needs: pytest
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie-slim
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Check for code changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v4
+        id: changes
+        with:
+          filters: |
+            code:
+              - 'sushi_lang/**'
+              - 'tests/**'
+              - '.github/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'sushic'
+
+      - name: Set up Sushi toolchain
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        uses: ./.github/actions/setup-sushi
+
+      - name: Run leak gate
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run python tests/run_tests.py --leaks-only
+
+  leaks-macos:
+    needs: pytest
+    if: github.event_name != 'push'
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Check for code changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v4
+        id: changes
+        with:
+          filters: |
+            code:
+              - 'sushi_lang/**'
+              - 'tests/**'
+              - '.github/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'sushic'
+
+      - name: Set up Sushi toolchain
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        uses: ./.github/actions/setup-sushi
+        with:
+          python-version: '3.13'
+
+      - name: Run leak gate
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run --python 3.13 python tests/run_tests.py --leaks-only
+
+  # Stage 3: the full suites, only after the leak gate passes on both platforms.
+  test-linux:
+    needs: [leaks-linux, leaks-macos]
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
     container:
@@ -81,7 +155,7 @@ jobs:
           uv run python tests/run_tests.py --enhanced
 
   test-macos:
-    needs: pytest
+    needs: [leaks-linux, leaks-macos]
     if: github.event_name != 'push'
     runs-on: macos-15
 
@@ -120,11 +194,6 @@ jobs:
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           uv run --python 3.13 python -m pytest tests/unit/test_docs_stdlib_smoke.py -q
-
-  # Leak assertions are a dev-mode gate, not a CI job: `leaks` cannot attach on the
-  # hosted macOS runner (no task_for_pid authorization), so it either is absent or
-  # stalls, and the gate can only ever report "skipped" there. Run it locally before
-  # pushing with `python tests/run_tests.py --leaks-only` (see PROGRESS.md / Tier 5).
 
   badges:
     if: github.event_name == 'push'

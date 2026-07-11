@@ -139,9 +139,14 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
                 value = directive.split(':', 1)[1].strip().lower()
                 metadata.expect_stderr_empty = value in ('true', 'yes', '1')
 
-            elif directive.startswith('EXPECT_NO_LEAKS:'):
-                value = directive.split(':', 1)[1].strip().lower()
-                metadata.expect_no_leaks = value in ('true', 'yes', '1')
+            elif directive.startswith('EXPECT_NO_LEAKS'):
+                rest = directive[len('EXPECT_NO_LEAKS'):].lstrip()
+                if rest.startswith(':'):
+                    value = rest[1:].strip().lower()
+                    metadata.expect_no_leaks = value in ('true', 'yes', '1')
+                elif rest == '':
+                    # Bare `# EXPECT_NO_LEAKS` (no colon) means true.
+                    metadata.expect_no_leaks = True
 
             elif directive.startswith('EXPECT_ERROR_CODE:'):
                 value = directive.split(':', 1)[1].strip()

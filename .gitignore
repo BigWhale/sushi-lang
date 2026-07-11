@@ -40,3 +40,6 @@ omakase-api/
 
 # MkDocs build output
 /site/
+
+# Leak-check interposer build output (compiled from source at test setup)
+tests/leakcheck/bin/

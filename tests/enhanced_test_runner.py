@@ -26,7 +26,8 @@ import os
 from tqdm import tqdm
 
 from test_metadata import parse_test_metadata, get_test_category, should_run_runtime_test, TestMetadata
-from run_tests import build_stdlib, build_test_helpers, COMPILATION_QUARANTINE
+from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
+                       leakcheck_lib_path, COMPILATION_QUARANTINE)
 
 
 # Tests whose runtime validation is temporarily quarantined. Compilation is still
@@ -416,32 +417,40 @@ class TestRunner:
 
     def _check_leaks(self, binary_path: Path, metadata: TestMetadata) -> Tuple[Optional[bool], str]:
         """
-        Re-run a binary under the platform leak checker and assert it leaks nothing.
+        Re-run a binary under the malloc-interposer and assert it leaks nothing.
+
+        The interposer (tests/leakcheck/leakcheck.c) is preloaded via LD_PRELOAD
+        (Linux) / DYLD_INSERT_LIBRARIES (macOS). At exit it prints
+        `SUSHI_LEAKCHECK: leaked=<bytes> blocks=<n>` to stderr, counting only
+        allocations made by the program's own code (backend + merged stdlib), so it
+        works identically on both platforms and in hosted CI.
 
         Returns:
             (True, msg)  no leaks
             (False, msg) leaks found -- the test fails
-            (None, msg)  no leak checker on this platform -- the assertion is SKIPPED,
-                         recorded, and reported in the summary. It is never silently
-                         treated as a pass.
+            (None, msg)  interposer unavailable / no report -- the assertion is
+                         SKIPPED, recorded, and reported. Never a silent pass.
         """
-        if sys.platform != "darwin" or not shutil.which("leaks"):
+        shim = leakcheck_lib_path(self.tests_dir.parent)
+        if not shim.exists():
             self.leaks_skipped.append(binary_path.name)
-            return None, f"- Leak check skipped: no leak checker on {sys.platform}"
+            return None, f"- Leak check skipped: interposer not built ({shim.name})"
 
-        cmd = ["leaks", "--atExit", "--", str(binary_path)]
+        if sys.platform == "darwin":
+            preload = {"DYLD_INSERT_LIBRARIES": str(shim)}
+        else:
+            preload = {"LD_PRELOAD": str(shim)}
+
+        cmd = [str(binary_path)]
         if metadata.cmd_args:
             cmd.extend(metadata.cmd_args.split())
 
-        run_env = {**os.environ, **(metadata.test_env or {})}
+        run_env = {**os.environ, **(metadata.test_env or {}), **preload}
 
-        # `leaks --atExit -- <bin>` runs the target as a child. start_new_session makes
-        # proc the leader of a fresh process group (pgid == proc.pid), so a timeout can
-        # SIGKILL the whole group -- not just the `leaks` launcher, which may exit early
-        # while a helper keeps a pipe open and the wall clock running (a ~25 min hang on
-        # hosted macOS CI). We kill by proc.pid directly rather than os.getpgid(): by
-        # timeout the launcher can already be gone, and getpgid() would then raise
-        # ProcessLookupError.
+        # start_new_session makes proc the leader of a fresh process group so a
+        # timeout can SIGKILL the whole group. Kill by proc.pid directly (the group
+        # leader) rather than os.getpgid(), which would raise ProcessLookupError if
+        # the child already exited.
         proc = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE if metadata.stdin_input else None,
@@ -453,7 +462,7 @@ class TestRunner:
             start_new_session=True,
         )
         try:
-            stdout, _stderr = proc.communicate(
+            _stdout, stderr = proc.communicate(
                 input=metadata.stdin_input if metadata.stdin_input else None,
                 timeout=metadata.timeout_seconds + 30,
             )
@@ -463,22 +472,21 @@ class TestRunner:
             except (ProcessLookupError, PermissionError):
                 pass
             proc.communicate()
-            # A leak-checker timeout is a tool/environment stall, not a leak and not a
-            # program hang: the binary already ran to completion in the runtime phase
-            # above, so `leaks` itself is what stalled (it hangs on restricted macOS
-            # setups and hosted CI runners that lack task_for_pid authorization). Treat
-            # it like an absent checker -- SKIP, not fail -- so the gate stays honest
-            # where `leaks` works and does not go permanently red where it cannot run.
             self.leaks_skipped.append(binary_path.name)
-            return None, "- Leak check skipped: leaks timed out (unavailable in this environment)"
+            return None, "- Leak check skipped: interposer run timed out"
 
-        # The summary line is singular for one leak ("1 leak for 16 total leaked bytes")
-        # and plural otherwise, and it is not the last line of output.
-        match = re.search(r"\d+ leaks? for \d+ total leaked bytes", stdout)
-        summary = match.group(0) if match else ""
-        if proc.returncode == 0:
-            return True, f"✓ Leak check: {summary or 'no leaks'}"
-        return False, f"✗ Leak check: {summary or stdout.strip()[-200:]}"
+        match = re.search(r"SUSHI_LEAKCHECK: leaked=(\d+) blocks=(\d+)", stderr or "")
+        if not match:
+            # No report: the interposer failed to load or the program bypassed its
+            # destructor (e.g. _exit). Skip rather than silently pass.
+            self.leaks_skipped.append(binary_path.name)
+            return None, "- Leak check skipped: no interposer report"
+
+        leaked = int(match.group(1))
+        blocks = int(match.group(2))
+        if leaked == 0:
+            return True, "✓ Leak check: no leaks"
+        return False, f"✗ Leak check: leaked {leaked} bytes in {blocks} blocks"
 
     def _validate_runtime_result(self, result: subprocess.CompletedProcess, metadata: TestMetadata) -> Tuple[bool, str]:
         """
@@ -698,6 +706,10 @@ def main():
         if not build_test_helpers(project_root, args.verbose):
             if not args.json:
                 print("Failed to build test helpers, aborting tests")
+            return 1
+        if args.leaks and not build_leakcheck(project_root, args.verbose):
+            if not args.json:
+                print("Failed to build leak-check interposer, aborting tests")
             return 1
 
     # Set SUSHI_LIB_PATH for library tests
