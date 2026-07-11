@@ -9,8 +9,6 @@ from __future__ import annotations
 import typing
 
 
-from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
-
 from sushi_lang.backend.runtime.externs.libc_strings import LibCStrings
 from sushi_lang.backend.runtime.externs.libc_ctype import LibCCType
 from sushi_lang.backend.runtime.externs.libc_process import LibCProcess
@@ -21,26 +19,6 @@ from sushi_lang.backend.runtime.errors import RuntimeErrors
 
 if typing.TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-
-
-# Reserved built-in extern symbols and their canonical C-ABI signatures, expressed
-# in the FFI type allowlist (BuiltinType / ForeignPtrType). An external whose
-# link-name matches one of these but whose signature differs triggers CE5001.
-# An identical signature is allowed (LLVM deduplicates declarations).
-#
-# Each entry maps a C link-name to (param_types_tuple, return_type). This manifest
-# is colocated with declare_externs (below) and kept in sync by a test that asserts
-# every reserved name is actually declared.
-RESERVED_EXTERNS: dict[str, tuple] = {
-    "strlen":  ((BuiltinType.STRING,), BuiltinType.I64),
-    "strcmp":  ((ForeignPtrType(), ForeignPtrType()), BuiltinType.I32),
-    "memcmp":  ((ForeignPtrType(), ForeignPtrType(), BuiltinType.I64), BuiltinType.I32),
-    "sprintf": ((ForeignPtrType(), ForeignPtrType()), BuiltinType.I32),
-    "printf":  ((ForeignPtrType(),), BuiltinType.I32),
-    "malloc":  ((BuiltinType.I64,), ForeignPtrType()),
-    "free":    ((ForeignPtrType(),), BuiltinType.BLANK),
-    "exit":    ((BuiltinType.I32,), BuiltinType.BLANK),
-}
 
 
 class LLVMRuntime:
@@ -73,6 +51,10 @@ class LLVMRuntime:
 
         Orchestrates the declaration of all external C library functions
         and global constants needed for runtime support.
+
+        The symbols declared here are mirrored by RESERVED_EXTERNS in
+        semantics/externs_manifest.py, which Pass 0 uses for CE5001 clash
+        detection. tests/unit/test_ffi.py keeps the two in sync.
         """
         # Declare external C library functions
         self.libc_strings.declare_all()

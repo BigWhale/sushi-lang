@@ -14,6 +14,7 @@ from typing import Dict, Optional, Tuple, TYPE_CHECKING
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import Type
+from sushi_lang.semantics.externs_manifest import RESERVED_EXTERNS
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Program, ExternalBlock, ExternalDecl
@@ -99,7 +100,6 @@ class ExternalCollector:
         self.externals.add(sig)
 
     def _check_reserved_clash(self, decl: 'ExternalDecl', sig: ExternalSig) -> None:
-        from sushi_lang.backend.runtime.core import RESERVED_EXTERNS
         reserved = RESERVED_EXTERNS.get(decl.link_name)
         if reserved is None:
             return

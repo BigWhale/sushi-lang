@@ -301,7 +301,7 @@ def test_reserved_externs_are_declared():
     """Every RESERVED_EXTERNS name must actually be declared by the backend."""
     from llvmlite import ir
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-    from sushi_lang.backend.runtime.core import RESERVED_EXTERNS
+    from sushi_lang.semantics.externs_manifest import RESERVED_EXTERNS
 
     cg = LLVMCodegen(module_name="reserved_sync")
     cg.runtime.declare_externs()
