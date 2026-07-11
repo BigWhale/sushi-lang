@@ -371,7 +371,7 @@ def _emit_struct_destructor(
             # leak the payload of a nested Own<Own<T>>. Use the pointee element type so
             # the recursion actually descends (owned_ptr already IS the T* address).
             if value_type.fields:
-                from sushi_lang.backend.generics.own import get_own_element_type
+                from sushi_lang.semantics.generics.own import get_own_element_type
                 owned_type = get_own_element_type(value_type)
                 # Recursively destroy the owned value
                 emit_value_destructor(codegen, builder, owned_ptr, owned_type)

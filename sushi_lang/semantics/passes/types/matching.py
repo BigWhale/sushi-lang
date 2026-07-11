@@ -94,7 +94,7 @@ def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optiona
             )
 
         # Create/get the corresponding Result<T, E> enum
-        from sushi_lang.backend.generics.results import ensure_result_type_in_table
+        from sushi_lang.semantics.generics.results import ensure_result_type_in_table
         result_enum = ensure_result_type_in_table(
             validator.enum_table,
             ok_type,
@@ -329,7 +329,7 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
                         return False
                 elif isinstance(resolved_type, StructType):
                     # After monomorphization: extract from fields
-                    from sushi_lang.backend.generics import own as own_module
+                    from sushi_lang.semantics.generics import own as own_module
                     try:
                         element_type = own_module.get_own_element_type(resolved_type)
                     except (TypeError, IndexError):
@@ -410,7 +410,7 @@ def register_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
                     element_type = resolved_type.type_args[0]
             elif isinstance(resolved_type, StructType) and resolved_type.name.startswith("Own<"):
                 # After monomorphization: extract from fields
-                from sushi_lang.backend.generics import own as own_module
+                from sushi_lang.semantics.generics import own as own_module
                 try:
                     element_type = own_module.get_own_element_type(resolved_type)
                 except (TypeError, IndexError):

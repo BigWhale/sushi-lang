@@ -109,7 +109,7 @@ class TypeSizing:
                 return CLOSURE_FAT_POINTER_SIZE_BYTES
             case ResultType():
                 # Result<T, E> - ensure the corresponding enum exists and calculate its size
-                from sushi_lang.backend.generics.results import ensure_result_type_in_table
+                from sushi_lang.semantics.generics.results import ensure_result_type_in_table
                 result_enum = ensure_result_type_in_table(
                     self.enum_table,
                     semantic_type.ok_type,

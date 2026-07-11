@@ -1,18 +1,18 @@
-"""
-Validation for List<T> methods.
+"""Validation and element-type parsing for the built-in List<T> methods.
 
-This module provides validation functions to check if method calls on List<T>
-are valid and have the correct number/types of arguments.
+The ir-free half of ``backend/generics/list/``: method recognition, Pass-2
+argument validation, and List<T> element-type resolution. LLVM emission stays in
+``backend/generics/list/``.
 """
+from typing import Any, Optional
 
-from typing import Any
 from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.semantics.typesys import StructType
+from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
 import sushi_lang.internals.errors as er
 from sushi_lang.internals.errors import raise_internal_error
 
 
-# List of all supported List<T> methods
+# All supported List<T> methods
 BUILTIN_LIST_METHODS = {
     "new",           # List.new() -> List<T>
     "with_capacity", # List.with_capacity(i32) -> List<T>
@@ -35,14 +35,7 @@ BUILTIN_LIST_METHODS = {
 
 
 def is_builtin_list_method(method_name: str) -> bool:
-    """Check if a method name is a built-in List<T> method.
-
-    Args:
-        method_name: The method name to check.
-
-    Returns:
-        True if this is a List<T> method, False otherwise.
-    """
+    """Return True if ``method_name`` is a built-in List<T> method."""
     return method_name in BUILTIN_LIST_METHODS
 
 
@@ -50,22 +43,12 @@ def validate_list_method_with_validator(
     call: MethodCall,
     list_type: StructType,
     reporter: Any,
-    validator: Any
+    validator: Any,
 ) -> None:
-    """Validate List<T> method calls.
-
-    Routes to specific validation based on method name and checks argument counts.
-
-    Args:
-        call: The method call AST node.
-        list_type: The List<T> struct type (after monomorphization).
-        reporter: Error reporter for emitting validation errors.
-        validator: Type validator for inferring expression types.
-    """
+    """Validate a List<T> method call: arity, then element-type where relevant."""
     method = call.method
     num_args = len(call.args)
 
-    # Define expected argument counts for each method
     expected_args = {
         # 0 arguments
         "new": 0, "len": 0, "capacity": 0, "is_empty": 0,
@@ -85,12 +68,8 @@ def validate_list_method_with_validator(
                 method=method, expected=expected, got=num_args)
         return
 
-    # Element-type validation for methods that take a T argument:
-    #   push(T)        -> element is args[0]
-    #   insert(i32, T) -> element is args[1]
-    # Without this the wrong-type value escapes to LLVM codegen and fails with a
-    # raw "mismatching types" error and no diagnostic code (issue #47). Mirrors
-    # the dynamic-array and HashMap.insert element checks.
+    # Element-type validation for methods taking a T argument:
+    #   push(T) -> args[0], insert(i32, T) -> args[1] (issue #47).
     element_arg_index = {"push": 0, "insert": 1}.get(method)
     if element_arg_index is not None:
         _validate_list_element_type(call, list_type, element_arg_index, reporter, validator)
@@ -104,8 +83,6 @@ def _validate_list_element_type(
     validator: Any,
 ) -> None:
     """Check that args[arg_index] is compatible with the List's element type T."""
-    from sushi_lang.backend.generics.list import parse_list_types
-
     arg = call.args[arg_index]
     element_type = parse_list_types(list_type, validator)
     if element_type is None:
@@ -129,3 +106,34 @@ def _validate_list_element_type(
                 index=arg_index + 1, expected=str(element_type), got=str(arg_type))
 
 
+def parse_list_types(list_type: StructType, validator: Any) -> Optional[Type]:
+    """Resolve the element type T from a List<T> struct type, or None."""
+    if not list_type.name.startswith("List<"):
+        return None
+
+    type_param_str = list_type.name[5:-1]  # strip "List<" and ">"
+
+    # First-class function element type (e.g. List<fn(i32) -> i32>).
+    if type_param_str.startswith("fn(") or type_param_str.startswith("fn ("):
+        from sushi_lang.sushi_stdlib.generics.collections.hashmap.types import resolve_type_from_string
+        try:
+            return resolve_type_from_string(type_param_str, validator)
+        except Exception:
+            return None
+
+    builtin_map = {
+        'i8': BuiltinType.I8, 'i16': BuiltinType.I16, 'i32': BuiltinType.I32, 'i64': BuiltinType.I64,
+        'u8': BuiltinType.U8, 'u16': BuiltinType.U16, 'u32': BuiltinType.U32, 'u64': BuiltinType.U64,
+        'f32': BuiltinType.F32, 'f64': BuiltinType.F64,
+        'bool': BuiltinType.BOOL, 'string': BuiltinType.STRING,
+    }
+    if type_param_str in builtin_map:
+        return builtin_map[type_param_str]
+
+    if hasattr(validator, 'enum_table') and type_param_str in validator.enum_table.by_name:
+        return validator.enum_table.by_name[type_param_str]
+
+    if hasattr(validator, 'struct_table') and type_param_str in validator.struct_table.by_name:
+        return validator.struct_table.by_name[type_param_str]
+
+    return None

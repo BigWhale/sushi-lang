@@ -196,7 +196,7 @@ def get_builtin_string_method_return_type(method_name: str, string_type: Builtin
     because type checking happens before code generation.
     """
     from sushi_lang.semantics.typesys import DynamicArrayType, EnumType
-    from sushi_lang.backend.generics.maybe import ensure_maybe_type_in_table
+    from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
     # Methods returning int
     if method_name in {"len", "size"}:
         return BuiltinType.I32

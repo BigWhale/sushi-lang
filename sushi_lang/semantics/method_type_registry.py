@@ -108,7 +108,7 @@ class ArrayMethodInferrer:
 
     def infer_return_type(self) -> Optional['Type']:
         from sushi_lang.semantics.validate_arrays import is_builtin_array_method, get_builtin_array_method_return_type
-        from sushi_lang.backend.generics.maybe import ensure_maybe_type_in_table
+        from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
         from sushi_lang.semantics.typesys import ReferenceType
 
         # Handle references to arrays (e.g., &i32[])
@@ -123,7 +123,7 @@ class ArrayMethodInferrer:
 
             # u8[].to_string_checked() returns Result<string, StdError>
             if self.method_name == "to_string_checked":
-                from sushi_lang.backend.generics.results import ensure_result_type_in_table
+                from sushi_lang.semantics.generics.results import ensure_result_type_in_table
                 std_error = self.validator.enum_table.by_name.get("StdError")
                 return ensure_result_type_in_table(self.validator.enum_table, BuiltinType.STRING, std_error)
 
@@ -139,7 +139,7 @@ class StringMethodInferrer:
 
     def infer_return_type(self) -> Optional['Type']:
         from sushi_lang.sushi_stdlib.src.collections.strings import is_builtin_string_method, get_builtin_string_method_return_type
-        from sushi_lang.backend.generics.maybe import ensure_maybe_type_in_table
+        from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
         if is_builtin_string_method(self.method_name):
             # Special handling for methods returning Maybe<T>
             if self.method_name in ("find", "find_last"):
@@ -218,8 +218,8 @@ class ResultMethodInferrer:
     validator: 'TypeValidator'
 
     def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.backend.generics.results import is_builtin_result_method
-        from sushi_lang.backend.generics.maybe import ensure_maybe_type_in_table
+        from sushi_lang.semantics.generics.results import is_builtin_result_method
+        from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
         if is_builtin_result_method(self.method_name):
             ok_variant = self.receiver_type.get_variant("Ok")
             err_variant = self.receiver_type.get_variant("Err")
@@ -247,7 +247,7 @@ class MaybeMethodInferrer:
     validator: 'TypeValidator'
 
     def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.backend.generics.maybe import is_builtin_maybe_method
+        from sushi_lang.semantics.generics.maybe import is_builtin_maybe_method
         if is_builtin_maybe_method(self.method_name):
             some_variant = self.receiver_type.get_variant("Some")
             if some_variant and some_variant.associated_types:
@@ -272,7 +272,7 @@ class HashMapMethodInferrer:
             key_type, value_type = parse_hashmap_types(self.receiver_type, self.validator)
             if key_type is not None and value_type is not None:
                 if self.method_name in ("get", "remove"):
-                    from sushi_lang.backend.generics.maybe import ensure_maybe_type_in_table
+                    from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
                     return ensure_maybe_type_in_table(self.validator.enum_table, value_type)
                 elif self.method_name in ("contains_key", "is_empty"):
                     return BuiltinType.BOOL
@@ -308,8 +308,8 @@ class ListMethodInferrer:
     call: Optional['MethodCall'] = None
 
     def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.backend.generics.list.validation import is_builtin_list_method
-        from sushi_lang.backend.generics.list import parse_list_types
+        from sushi_lang.semantics.generics.list import is_builtin_list_method
+        from sushi_lang.semantics.generics.list import parse_list_types
         import sushi_lang.internals.errors as er
 
         if is_builtin_list_method(self.method_name):
@@ -330,14 +330,14 @@ class ListMethodInferrer:
             element_type = parse_list_types(self.receiver_type, self.validator)
             if element_type is not None:
                 if self.method_name in ("get", "pop", "remove"):
-                    from sushi_lang.backend.generics.maybe import ensure_maybe_type_in_table
+                    from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
                     return ensure_maybe_type_in_table(self.validator.enum_table, element_type)
                 elif self.method_name in ("len", "capacity"):
                     return BuiltinType.I32
                 elif self.method_name == "is_empty":
                     return BuiltinType.BOOL
                 elif self.method_name == "insert":
-                    from sushi_lang.backend.generics.results import ensure_result_type_in_table
+                    from sushi_lang.semantics.generics.results import ensure_result_type_in_table
                     std_error = self.validator.enum_table.by_name.get("StdError")
                     if std_error is None:
                         return None

@@ -52,7 +52,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
         type_name = call.receiver.id
         # Check if this is a List or HashMap constructor call
         if type_name == "List" and call.method in ("new", "with_capacity"):
-            from sushi_lang.backend.generics.list.validation import is_builtin_list_method
+            from sushi_lang.semantics.generics.list import is_builtin_list_method
             if is_builtin_list_method(call.method):
                 expected_args = {"new": 0, "with_capacity": 1}
                 expected = expected_args.get(call.method, 0)
@@ -126,7 +126,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     from sushi_lang.semantics.typesys import ResultType
     if isinstance(receiver_type, ResultType):
         # Convert ResultType to EnumType for method validation
-        from sushi_lang.backend.generics.results import is_builtin_result_method, validate_result_method_with_validator, ensure_result_type_in_table
+        from sushi_lang.semantics.generics.results import is_builtin_result_method, validate_result_method_with_validator, ensure_result_type_in_table
 
         # ALWAYS ensure Result<T, E> enum exists in the table (for hash, builtin methods, etc.)
         result_enum = ensure_result_type_in_table(validator.enum_table, receiver_type.ok_type, receiver_type.err_type)
@@ -143,21 +143,21 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
                 receiver_type = result_enum
             # Fall through to generic method lookup
     elif isinstance(receiver_type, EnumType) and receiver_type.name.startswith("Result<"):
-        from sushi_lang.backend.generics.results import is_builtin_result_method, validate_result_method_with_validator
+        from sushi_lang.semantics.generics.results import is_builtin_result_method, validate_result_method_with_validator
         if is_builtin_result_method(call.method):
             validate_result_method_with_validator(call, receiver_type, validator.reporter, validator)
             return
 
     # Check for built-in Maybe<T> methods (generic enum after monomorphization)
     if isinstance(receiver_type, EnumType) and receiver_type.name.startswith("Maybe<"):
-        from sushi_lang.backend.generics.maybe import is_builtin_maybe_method, validate_maybe_method_with_validator
+        from sushi_lang.semantics.generics.maybe import is_builtin_maybe_method, validate_maybe_method_with_validator
         if is_builtin_maybe_method(call.method):
             validate_maybe_method_with_validator(call, receiver_type, validator.reporter, validator)
             return
 
     # Check for built-in Own<T> methods (generic struct after monomorphization)
     if isinstance(receiver_type, StructType) and receiver_type.name.startswith("Own<"):
-        from sushi_lang.backend.generics.own import is_builtin_own_method, validate_own_method_with_validator
+        from sushi_lang.semantics.generics.own import is_builtin_own_method, validate_own_method_with_validator
         if is_builtin_own_method(call.method):
             validate_own_method_with_validator(call, receiver_type, validator.reporter, validator)
             return
@@ -171,7 +171,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
 
     # Check for built-in List<T> methods (generic struct after monomorphization)
     if isinstance(receiver_type, StructType) and receiver_type.name.startswith("List<"):
-        from sushi_lang.backend.generics.list import is_builtin_list_method, validate_list_method_with_validator
+        from sushi_lang.semantics.generics.list import is_builtin_list_method, validate_list_method_with_validator
         if is_builtin_list_method(call.method):
             validate_list_method_with_validator(call, receiver_type, validator.reporter, validator)
             return
