@@ -29,8 +29,7 @@ from typing import Any, Optional
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import EnumType, Type, BuiltinType
 import llvmlite.ir as ir
-from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
-from sushi_lang.backend.llvm_constants import ONE_I64, ONE_I32
+from sushi_lang.backend.constants.llvm_values import ONE_I64, ONE_I32
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 
@@ -462,7 +461,6 @@ def emit_maybe_some(codegen: 'LLVMCodegen', value_type: Type, value: ir.Value) -
     Returns:
         The constructed Maybe<T> enum value with Some variant.
     """
-    from sushi_lang.backend.expressions import memory
 
     # Ensure Maybe<T> type exists
     maybe_enum = ensure_maybe_type_exists(codegen, value_type)

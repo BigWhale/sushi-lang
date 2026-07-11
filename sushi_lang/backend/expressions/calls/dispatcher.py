@@ -394,7 +394,7 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
 
     # Fallback: Declare stdlib string extension methods if not found
     if llvm_fn is None and lang_type == "string":
-        from sushi_lang.backend.llvm_functions import declare_stdlib_function
+        from sushi_lang.backend.functions import declare_stdlib_function
         from sushi_lang.sushi_stdlib.src.collections.strings import get_builtin_string_method_return_type
         from sushi_lang.semantics.typesys import BuiltinType
 
@@ -447,7 +447,7 @@ def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     (no leak). A `string` return is converted back to a fat pointer. A `~` (void)
     return yields an i32 blank value so the expression layer can discard it.
     """
-    from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
+    from sushi_lang.semantics.typesys import BuiltinType
 
     external_ref = getattr(expr, 'external_ref', None)
     if external_ref is None:

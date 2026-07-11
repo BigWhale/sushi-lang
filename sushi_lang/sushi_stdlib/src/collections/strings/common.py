@@ -8,8 +8,6 @@ REFACTORED: Type definitions have been moved to stdlib.src.type_definitions
 """
 
 import llvmlite.ir as ir
-from typing import Tuple, Callable
-from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 
 
 # ==============================================================================

@@ -97,7 +97,6 @@ def parse_hashmap_types(hashmap_type: StructType, validator: Any) -> tuple[Optio
     Returns:
         Tuple of (key_type, value_type) or (None, None) if parsing fails.
     """
-    from sushi_lang.semantics.typesys import BuiltinType, EnumType
 
     # Extract K and V types from HashMap<K, V>
     if not hashmap_type.name.startswith("HashMap<"):
@@ -141,7 +140,7 @@ def _resolve_type_string(type_str: str, validator: Any) -> Optional[Type]:
     Returns:
         The resolved Type object or None if not found.
     """
-    from sushi_lang.semantics.typesys import BuiltinType, EnumType
+    from sushi_lang.semantics.typesys import BuiltinType
 
     # Check for built-in types
     builtin_map = {
@@ -188,7 +187,6 @@ def _validate_hashmap_new(
         validator: Type validator for inferring expression types.
     """
     from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-    from .utils import emit_key_equality_check
 
     # Validate argument count
     if len(call.args) != 0:
@@ -238,7 +236,6 @@ def _validate_hashmap_new(
         return
 
     # For non-array types, validate using existing type resolution
-    from .types import resolve_type_from_string
 
     key_type = _resolve_type_string(key_type_str, validator)
     if key_type is None:

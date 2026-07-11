@@ -19,7 +19,7 @@ from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
 if TYPE_CHECKING:
     from . import TypeValidator
-    from sushi_lang.semantics.enums.variants import EnumVariant
+    from sushi_lang.semantics.ast import EnumVariant
 
 
 def validate_match_statement(validator: 'TypeValidator', stmt: Match) -> None:
@@ -62,7 +62,7 @@ def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optiona
     # array, or a method returning Maybe<T>) infers to a GenericTypeRef/UnknownType.
     # Resolve it to its concrete monomorphized enum (or a ResultType, handled below)
     # so pattern matching sees a real EnumType instead of rejecting it (CE2048).
-    from sushi_lang.semantics.typesys import ResultType, UnknownType
+    from sushi_lang.semantics.typesys import ResultType
     from sushi_lang.semantics.generics.types import GenericTypeRef
     if isinstance(scrutinee_type, (GenericTypeRef, UnknownType)):
         from sushi_lang.semantics.type_resolution import resolve_unknown_type

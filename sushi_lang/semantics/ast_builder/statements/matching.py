@@ -2,8 +2,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, Union
 from lark import Tree, Token
-from sushi_lang.semantics.ast import Match, MatchArm, Pattern, WildcardPattern, OwnPattern, Block, Expr, ExprStmt
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, first_name
+from sushi_lang.semantics.ast import Match, MatchArm, Pattern, WildcardPattern, OwnPattern, Block, Expr
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree
 from sushi_lang.semantics.ast_builder.utils.expression_discovery import _EXPR_NODES, contains_expr_like
 from sushi_lang.internals.report import span_of
 

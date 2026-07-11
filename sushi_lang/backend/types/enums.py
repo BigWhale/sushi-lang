@@ -21,7 +21,7 @@ from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import EnumType, Type, ArrayType, DynamicArrayType, BuiltinType, StructType, ForeignPtrType
 from sushi_lang.semantics.generics.types import GenericEnumType
 import llvmlite.ir as ir
-from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
+from sushi_lang.backend.constants import INT64_BIT_WIDTH
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
@@ -231,7 +231,6 @@ def _emit_variant_data_hash(codegen: Any, enum_value: ir.Value, variant: Any, in
     Returns:
         Combined hash value as u64
     """
-    from sushi_lang.semantics.ast import MethodCall, Name
 
     builder = require_builder(codegen)
     builder = codegen.builder

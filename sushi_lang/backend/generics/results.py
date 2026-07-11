@@ -325,7 +325,7 @@ def _emit_result_expect(
     Raises:
         ValueError: If argument count is not exactly 1.
     """
-    from sushi_lang.backend.llvm_constants import ONE_I64, ONE_I32
+    from sushi_lang.backend.constants.llvm_values import ONE_I64, ONE_I32
 
     if len(call.args) != 1:
         raise_internal_error("CE0095", got=len(call.args))

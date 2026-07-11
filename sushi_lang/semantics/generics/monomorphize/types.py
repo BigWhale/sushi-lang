@@ -18,7 +18,7 @@ from sushi_lang.semantics.typesys import Type, EnumType, EnumVariantInfo, Struct
 from sushi_lang.internals import errors as er
 
 if TYPE_CHECKING:
-    from sushi_lang.internals.report import Reporter
+    pass
 
 
 class MonomorphizationDepthExceeded(Exception):

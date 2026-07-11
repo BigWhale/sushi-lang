@@ -22,7 +22,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.sushi_stdlib.src.common import register_builtin_method, BuiltinMethod
-from sushi_lang.backend.types.hash_utils import FNV1A_OFFSET_BASIS, FNV1A_PRIME, emit_fnv1a_combine
+from sushi_lang.backend.types.hash_utils import FNV1A_OFFSET_BASIS, emit_fnv1a_combine
 
 
 # Hash algorithm constants

@@ -17,7 +17,7 @@ import llvmlite.ir as ir
 
 from sushi_lang.semantics.typesys import Type, BuiltinType, DynamicArrayType, StructType, EnumType, FunctionType
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, DA_DATA_INDEX
-from sushi_lang.backend.llvm_constants import ZERO_I32, ONE_I32, make_i32_const
+from sushi_lang.backend.constants.llvm_values import ZERO_I32, ONE_I32, make_i32_const
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen

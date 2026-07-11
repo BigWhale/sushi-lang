@@ -21,20 +21,20 @@ Example:
 """
 from __future__ import annotations
 from abc import ABC
-from typing import Any, Optional, TypeVar, Generic, TYPE_CHECKING
+from typing import TypeVar, Generic, TYPE_CHECKING
 
-from sushi_lang.semantics.ast import Node, Stmt, Block
+from sushi_lang.semantics.ast import Node, Block
 from sushi_lang.semantics.ast import (
     # Statements
-    Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, MatchArm, Break, Continue,
+    Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, Break, Continue,
     # Expressions
     Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
-    UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, StructConstructor, EnumConstructor,
+    UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor,
     DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread
 )
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import Program, FuncDef, ExtendDef
+    pass
 
 T = TypeVar('T')
 
@@ -245,11 +245,6 @@ class RecursiveVisitor(NodeVisitor[None]):
         """Visit a member access (obj.field). Default: visit the receiver."""
         self.visit(node.receiver)
 
-    def visit_structconstructor(self, node: StructConstructor) -> None:
-        """Visit a struct constructor. Default: visit all field values."""
-        for value in node.values:
-            self.visit(value)
-
     def visit_enumconstructor(self, node: EnumConstructor) -> None:
         """Visit an enum constructor. Default: visit all arguments."""
         for arg in node.args:
@@ -275,50 +270,3 @@ class RecursiveVisitor(NodeVisitor[None]):
     def visit_spread(self, node: Spread) -> None:
         """Visit a spread argument (arr...). Default: visit the bloomed expression."""
         self.visit(node.value)
-
-
-class ASTPassRunner:
-    """
-    Utility class for running visitor passes over entire programs.
-
-    Handles the common pattern of iterating over all top-level definitions
-    (functions, extensions, constants) and applying a visitor to each.
-
-    Usage:
-        class MyPass(RecursiveVisitor):
-            def visit_let(self, node):
-                # handle let statements
-
-        runner = ASTPassRunner(MyPass())
-        runner.run(program)
-    """
-
-    def __init__(self, visitor: RecursiveVisitor) -> None:
-        """Initialize with a visitor instance."""
-        self.visitor = visitor
-
-    def run(self, program: 'Program') -> None:
-        """Run the visitor over all top-level definitions."""
-        self.run_functions(program)
-        self.run_extensions(program)
-
-    def run_functions(self, program: 'Program') -> None:
-        """Run visitor over all function bodies."""
-        for func in program.functions:
-            if hasattr(func, 'body') and func.body:
-                self.visitor.visit(func.body)
-
-    def run_extensions(self, program: 'Program') -> None:
-        """Run visitor over all extension method bodies."""
-        for ext in program.extensions:
-            if hasattr(ext, 'body') and ext.body:
-                self.visitor.visit(ext.body)
-
-    def run_function(self, func: 'FuncDef') -> None:
-        """Run visitor over a single function body."""
-        if hasattr(func, 'body') and func.body:
-            self.visitor.visit(func.body)
-
-    def run_block(self, block: Block) -> None:
-        """Run visitor over a single block."""
-        self.visitor.visit(block)

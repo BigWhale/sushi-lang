@@ -45,7 +45,7 @@ def emit_random_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bo
     # Map user function name to stdlib function name
     stdlib_func_name = f"sushi_{func_name}"
 
-    from sushi_lang.backend.llvm_functions import declare_stdlib_function
+    from sushi_lang.backend.functions import declare_stdlib_function
 
     # Random functions return bare types (not Result<T>)
     # Result wrapping happens at semantic level

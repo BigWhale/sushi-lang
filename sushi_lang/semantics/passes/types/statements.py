@@ -74,7 +74,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, ArrayType, StructType, EnumType, UnknownType, IteratorType, ResultType
+from sushi_lang.semantics.typesys import BuiltinType, EnumType, IteratorType, ResultType
 from sushi_lang.semantics.ast import Let, Return, Rebind, If, While, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .utils import validate_type_name
@@ -239,7 +239,7 @@ def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:
 
 def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
     """Validate rebind statement type compatibility (CE2002)."""
-    from sushi_lang.semantics.ast import Name, MemberAccess
+    from sushi_lang.semantics.ast import Name
 
     # Determine the target type based on whether we're rebinding a variable or a field
     actual_type = None

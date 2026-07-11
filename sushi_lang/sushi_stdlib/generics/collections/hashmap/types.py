@@ -6,7 +6,7 @@ and Entry<K, V>, along with constants for entry states and prime capacity tables
 """
 
 from typing import Any, Optional
-from sushi_lang.semantics.typesys import Type, StructType, BuiltinType, EnumType, ArrayType, DynamicArrayType, IteratorType
+from sushi_lang.semantics.typesys import Type, StructType, BuiltinType, ArrayType, DynamicArrayType
 import llvmlite.ir as ir
 from sushi_lang.internals.errors import raise_internal_error
 import re

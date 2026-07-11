@@ -52,7 +52,7 @@ def emit_stdlib_stdio_call(
     # Build function name: sushi_{stream}_{method}
     func_name = f"sushi_{stream_name}_{method}"
 
-    from sushi_lang.backend.llvm_functions import declare_stdlib_function
+    from sushi_lang.backend.functions import declare_stdlib_function
 
     # Handle each method type
     if stream_name == "stdin":
@@ -149,7 +149,7 @@ def emit_stdlib_file_call(
     # Build function name: sushi_file_{method}
     func_name = f"sushi_file_{method}"
 
-    from sushi_lang.backend.llvm_functions import declare_stdlib_function
+    from sushi_lang.backend.functions import declare_stdlib_function
 
     # Handle each method type
     if method in ("read", "readln", "readch"):
@@ -270,7 +270,7 @@ def emit_files_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: boo
     # Map user function name to stdlib function name
     stdlib_func_name = f"sushi_io_files_{func_name}"
 
-    from sushi_lang.backend.llvm_functions import declare_stdlib_function
+    from sushi_lang.backend.functions import declare_stdlib_function
 
     # String type: {i8* data, i32 size}
     string_type = codegen.types.ll_type(BuiltinType.STRING)

@@ -23,8 +23,7 @@ from typing import TYPE_CHECKING, Callable, Optional, Dict, Tuple, List
 import importlib
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.typesys import Type
-    from sushi_lang.semantics.symbols import Signature
+    pass
 
 
 # Bundled Sushi-SOURCE stdlib modules: `use <path>` maps to a .sushi file that is
@@ -198,7 +197,7 @@ class StdlibRegistry:
         for module_path, python_path in self.KNOWN_MODULES.items():
             try:
                 self._discover_module(module_path, python_path)
-            except ImportError as e:
+            except ImportError:
                 # Module not available (e.g., platform-specific)
                 # This is not an error - some modules may be platform-specific
                 pass

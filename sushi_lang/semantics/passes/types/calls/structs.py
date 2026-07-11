@@ -36,7 +36,6 @@ def validate_struct_constructor(validator: 'TypeValidator', call: Call) -> None:
 
     # Check if struct exists in the struct table
     if struct_name not in validator.struct_table.by_name:
-        from sushi_lang.semantics.generics.types import GenericTypeRef
         er.emit(validator.reporter, er.ERR.CE2001, call.callee.loc, name=struct_name)
         # Still validate arguments to propagate type information
         for arg in call.args:
@@ -107,7 +106,7 @@ def _validate_named_struct_constructor(
     for i, (arg, (field_name, field_type)) in enumerate(zip(reordered_args, expected_fields)):
         # Resolve GenericTypeRef to concrete type if needed
         from sushi_lang.semantics.generics.types import GenericTypeRef
-        from sushi_lang.semantics.typesys import StructType as StructTypeClass, ResultType
+        from sushi_lang.semantics.typesys import StructType as StructTypeClass
         resolved_field_type = field_type
         if isinstance(field_type, GenericTypeRef):
             # Special handling for Result<T, E>
@@ -189,7 +188,7 @@ def _validate_positional_struct_constructor(
     for i, (arg, (field_name, field_type)) in enumerate(zip(actual_args, expected_fields)):
         # Resolve GenericTypeRef to concrete type if needed
         from sushi_lang.semantics.generics.types import GenericTypeRef
-        from sushi_lang.semantics.typesys import StructType as StructTypeClass, ResultType
+        from sushi_lang.semantics.typesys import StructType as StructTypeClass
         resolved_field_type = field_type
         if isinstance(field_type, GenericTypeRef):
             # Special handling for Result<T, E>

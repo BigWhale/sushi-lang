@@ -9,7 +9,7 @@ from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
 
 from .types import get_list_len_ptr, get_list_capacity_ptr, extract_element_type
-from sushi_lang.backend.llvm_constants import LIST_DATA_INDICES
+from sushi_lang.backend.constants.llvm_values import LIST_DATA_INDICES
 
 
 def emit_list_destroy(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:

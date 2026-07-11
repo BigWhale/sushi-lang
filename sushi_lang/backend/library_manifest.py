@@ -249,8 +249,6 @@ class LibraryManifestGenerator:
             callee = node.callee
             if isinstance(callee, A.Name):
                 acc.add(callee.id)
-        elif isinstance(node, A.StructConstructor):
-            acc.add(node.struct_name)
         elif isinstance(node, A.EnumConstructor):
             acc.add(node.enum_name)
 

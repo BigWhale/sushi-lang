@@ -7,7 +7,7 @@ from pathlib import Path
 
 from sushi_lang.packager.archive import PackageArchive
 from sushi_lang.packager.constants import (
-    BIN_DIR, CACHE_DIR, BENTO_DIR, STORE_DIR, MANIFEST_NAME, LOCAL_DEPS_DIR,
+    BIN_DIR, CACHE_DIR, BENTO_DIR, STORE_DIR, MANIFEST_NAME,
 )
 from sushi_lang.packager.manifest import NoriManifest, load_manifest
 from sushi_lang.packager.paths import (

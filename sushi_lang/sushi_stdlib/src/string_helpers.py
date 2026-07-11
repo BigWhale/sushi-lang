@@ -169,7 +169,7 @@ def fat_pointer_to_cstr(
         Null-terminated i8* suitable for passing to C functions.
         Caller is responsible for freeing the memory.
     """
-    from .libc_declarations import declare_malloc, declare_memcpy
+    from .libc_declarations import declare_memcpy
 
     i8 = ir.IntType(8)
     i32 = ir.IntType(32)

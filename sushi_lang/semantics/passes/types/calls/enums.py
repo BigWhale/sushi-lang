@@ -12,12 +12,12 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, EnumType
-from sushi_lang.semantics.ast import EnumConstructor, Call, DotCall, Name
+from sushi_lang.semantics.ast import EnumConstructor, DotCall, Name
 from ..compatibility import types_compatible
 
 if TYPE_CHECKING:
     from .. import TypeValidator
-    from sushi_lang.semantics.enums.variants import EnumVariant
+    from sushi_lang.semantics.ast import EnumVariant
 
 
 def validate_enum_constructor(validator: 'TypeValidator', constructor: EnumConstructor) -> None:

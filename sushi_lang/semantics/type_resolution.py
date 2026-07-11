@@ -278,7 +278,7 @@ def resolve_type_recursively(
         >>> isinstance(resolved.base_type, StructType)  # True
     """
     from sushi_lang.semantics.typesys import (
-        UnknownType, ArrayType, DynamicArrayType, StructType, EnumType, FunctionType
+        ArrayType, DynamicArrayType, StructType, EnumType, FunctionType
     )
     from sushi_lang.semantics.generics.types import GenericTypeRef
 

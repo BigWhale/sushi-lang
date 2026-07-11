@@ -5,11 +5,10 @@ This module contains the debug method for printing HashMap internal state.
 """
 
 from typing import Any
-from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
 import llvmlite.ir as ir
 from ..types import get_entry_type, extract_key_value_types, ENTRY_EMPTY, ENTRY_OCCUPIED, ENTRY_TOMBSTONE
-from sushi_lang.backend.llvm_constants import ZERO_I32, make_i32_const, make_i8_const
+from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i32_const, make_i8_const
 
 
 def emit_hashmap_debug(
@@ -255,7 +254,6 @@ def emit_debug_print_value(codegen: Any, builder: Any, value: ir.Value, value_ty
         value: The value to print.
         value_type: The semantic type of the value.
     """
-    from sushi_lang.semantics.typesys import BuiltinType
 
     # Print based on type
     if value_type == BuiltinType.I32:

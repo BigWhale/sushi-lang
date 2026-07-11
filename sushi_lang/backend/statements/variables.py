@@ -279,7 +279,7 @@ def emit_rebind(codegen: 'CodegenProtocol', stmt: 'Rebind') -> None:
     """
     from llvmlite import ir
     from sushi_lang.semantics.ast import Name, MemberAccess
-    from sushi_lang.semantics.typesys import StructType, ReferenceType
+    from sushi_lang.semantics.typesys import ReferenceType
 
     # Handle field rebinding (obj.field := value)
     if isinstance(stmt.target, MemberAccess):
@@ -385,10 +385,10 @@ def _emit_dynamic_array_rebind(
             null_ptr = ir.Constant(ir.PointerType(element_type_llvm), None)
 
             # Get pointers to source array fields using helper
-            from sushi_lang.backend.statements import utils
-            len_ptr = utils.gep_struct_field(codegen, source_slot, 0, "len_ptr")
-            cap_ptr = utils.gep_struct_field(codegen, source_slot, 1, "cap_ptr")
-            data_ptr_ptr = utils.gep_struct_field(codegen, source_slot, 2, "data_ptr_ptr")
+            from sushi_lang.backend import gep_utils
+            len_ptr = gep_utils.gep_struct_field(codegen, source_slot, 0, "len_ptr")
+            cap_ptr = gep_utils.gep_struct_field(codegen, source_slot, 1, "cap_ptr")
+            data_ptr_ptr = gep_utils.gep_struct_field(codegen, source_slot, 2, "data_ptr_ptr")
 
             # Nullify source array
             codegen.builder.store(zero_i32, len_ptr)
@@ -449,8 +449,7 @@ def _emit_field_rebind(codegen: 'CodegenProtocol', stmt: 'Rebind') -> None:
         stmt: The rebind statement with MemberAccess target.
     """
     from llvmlite import ir
-    from sushi_lang.semantics.ast import MemberAccess, Name
-    from sushi_lang.semantics.typesys import StructType
+    from sushi_lang.semantics.ast import MemberAccess
 
     target = stmt.target
     if not isinstance(target, MemberAccess):

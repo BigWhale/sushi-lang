@@ -9,11 +9,11 @@ import llvmlite.ir as ir
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType
 from sushi_lang.backend import gep_utils
-from ..types import extract_key_value_types, get_user_entry_type, ensure_entry_type_in_struct_table, ENTRY_OCCUPIED
+from ..types import extract_key_value_types, get_user_entry_type, ensure_entry_type_in_struct_table
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
-    from sushi_lang.backend.codegen_llvm import LLVMCodegen
+    pass
 
 
 def emit_hashmap_keys(

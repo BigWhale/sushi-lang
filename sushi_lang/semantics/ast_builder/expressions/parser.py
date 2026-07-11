@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 from lark import Tree, Token
 from sushi_lang.semantics.ast import Expr, Name
 from sushi_lang.semantics.ast_builder.expressions import literals, operators, chains, calls
-from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder

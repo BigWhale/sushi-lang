@@ -10,7 +10,7 @@ import typing
 
 from llvmlite import ir
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
-from sushi_lang.backend.llvm_constants import FALSE_I1
+from sushi_lang.backend.constants.llvm_values import FALSE_I1
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.internals.errors import raise_internal_error
 

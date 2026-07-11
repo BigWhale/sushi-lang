@@ -10,7 +10,7 @@ from sushi_lang.semantics.typesys import Type, StructType, EnumType, BuiltinType
 import llvmlite.ir as ir
 from .types import ENTRY_OCCUPIED
 from sushi_lang.backend import enum_utils
-from sushi_lang.backend.llvm_constants import ZERO_I32, TRUE_I1, make_i32_const
+from sushi_lang.backend.constants.llvm_values import ZERO_I32, TRUE_I1, make_i32_const
 
 
 def emit_key_equality_check(codegen: Any, key_type: Type, key1: ir.Value, key2: ir.Value) -> ir.Value:

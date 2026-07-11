@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.backend.constants import INT32_BIT_WIDTH, INT64_BIT_WIDTH
-from sushi_lang.backend.llvm_constants import FALSE_I1
+from sushi_lang.backend.constants.llvm_values import FALSE_I1
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.backend.utils import require_builder
@@ -45,7 +45,7 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
     # Map user function name to stdlib function name
     stdlib_func_name = f"sushi_{func_name}"
 
-    from sushi_lang.backend.llvm_functions import declare_stdlib_function
+    from sushi_lang.backend.functions import declare_stdlib_function
 
     # All time functions return i32 (0 on success, remaining microseconds if interrupted)
     # But they're wrapped in Result<i32> at the semantic level
@@ -77,7 +77,7 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
     # We need to wrap the result in a Result.Ok() enum
     # Result<i32, StdError> enum layout: {i32 tag, [N x i8] data}
 
-    from sushi_lang.semantics.typesys import BuiltinType, UnknownType
+    from sushi_lang.semantics.typesys import UnknownType
     from sushi_lang.backend.generics.results import ensure_result_type_in_table
 
     # Create Result<i32, StdError> enum if it doesn't exist

@@ -1,4 +1,3 @@
-from lark import Lark
 from lark.indenter import Indenter
 
 class LangIndenter(Indenter):

@@ -1,6 +1,6 @@
 """Atom and call chain expression parsing."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 from lark import Tree, Token
 from sushi_lang.semantics.ast import Expr, Name, BlankLit, MemberAccess, DotCall, TryExpr, Call
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, first_method_name

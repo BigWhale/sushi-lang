@@ -20,8 +20,8 @@ from typing import Any
 from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, Type, BuiltinType, StructType, EnumType
 import llvmlite.ir as ir
-from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
-from sushi_lang.backend.llvm_constants import ZERO_I32, make_i32_const
+from sushi_lang.backend.constants import INT32_BIT_WIDTH, INT64_BIT_WIDTH
+from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i32_const
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder

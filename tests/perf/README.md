@@ -84,8 +84,7 @@ whole-program, so the per-unit `.o` cache only saves codegen. Consequently:
 - A moderate single-pass regression can hide inside the fixed-cost floor.
 
 Phase 1 still catches **gross** regressions (a metric blowing past 25%). The
-precise layer — per-pass `duration_ms`, which `SemanticPipeline` already computes
-but only prints to stderr under an unwired `verbose` flag — is **deferred to a
+precise layer — per-pass `duration_ms` — is **deferred to a
 follow-up**: expose it via a `sushic --timing-json` flag, record per-pass numbers
 here, and gate those (they exclude startup, so they're both sensitive and
 stable). That is the natural P1-5 phase 2.

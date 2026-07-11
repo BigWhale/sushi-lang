@@ -9,7 +9,7 @@ This module contains HashMap methods that modify the map:
 - destroy (destroy all entries, set to unusable state)
 """
 
-from typing import Any, Optional
+from typing import Any
 from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.typesys import StructType, BuiltinType
 import llvmlite.ir as ir
@@ -49,7 +49,6 @@ def emit_hashmap_insert(
     Returns:
         Unit value (~).
     """
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
     import sushi_lang.backend.types.primitives.hashing  # noqa: F401 - Ensure hash methods are registered
 
     builder = codegen.builder
@@ -303,7 +302,6 @@ def emit_hashmap_remove(
     Returns:
         Maybe<V> enum value.
     """
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
     from sushi_lang.semantics.ast import MethodCall, Name
     import sushi_lang.backend.types.primitives.hashing  # noqa: F401
 
@@ -440,7 +438,6 @@ def emit_hashmap_remove(
 
     # Get Maybe<V> enum type
     # Format the type name properly
-    from sushi_lang.semantics.typesys import BuiltinType
     if isinstance(value_type, BuiltinType):
         type_str = str(value_type).lower()
     else:
@@ -538,7 +535,6 @@ def emit_hashmap_resize_to_capacity(
         hashmap_type: The HashMap<K, V> struct type.
         new_capacity: The new capacity (must be power-of-two).
     """
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
     from sushi_lang.semantics.ast import MethodCall, Name
     import sushi_lang.backend.types.primitives.hashing  # noqa: F401
 

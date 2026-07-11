@@ -22,7 +22,7 @@ in Sushi (used for dynamic array creation).
 """
 
 from typing import Any
-from sushi_lang.semantics.ast import MethodCall, Call
+from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType, Type, PointerType
 import llvmlite.ir as ir
 from sushi_lang.internals import errors as er

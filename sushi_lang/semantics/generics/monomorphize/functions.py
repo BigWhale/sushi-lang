@@ -237,7 +237,6 @@ class FunctionMonomorphizer:
             function_instantiations: Set of (function_name, type_args) tuples
             program_or_units: Either a Program AST (single-file) or list of Units (multi-file)
         """
-        from sushi_lang.semantics.passes.collect import FuncSig
         from sushi_lang.semantics.ast import Program
 
         if not self.monomorphizer.func_table:

@@ -9,7 +9,7 @@ collection-time checks that do not require full type information:
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Dict, Optional, Tuple, TYPE_CHECKING
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er

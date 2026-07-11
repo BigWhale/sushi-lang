@@ -8,11 +8,9 @@ including helper functions for string operations and file pointer management.
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.libc_declarations import (
     declare_malloc, declare_strlen, declare_fgetc,
-    declare_fgets, declare_fread, declare_fwrite,
-    declare_fclose, declare_realloc
+    declare_fgets, declare_realloc
 )
 from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer
-from sushi_lang.sushi_stdlib.src.error_emission import emit_runtime_error
 
 
 def allocate_and_read_line(

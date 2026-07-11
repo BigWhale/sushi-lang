@@ -87,7 +87,6 @@ def emit_enum_constructor_from_method_call(
     Raises:
         ValueError: If variant not found or argument count mismatch.
     """
-    from sushi_lang.semantics.typesys import EnumType
 
     # Find the variant and get its index (discriminant/tag)
     variant_index = enum_type.get_variant_index(variant_name)
