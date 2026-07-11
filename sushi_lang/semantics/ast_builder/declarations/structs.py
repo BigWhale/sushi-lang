@@ -1,10 +1,11 @@
 """Struct definition and field parsing."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List
 from lark import Tree
-from sushi_lang.semantics.ast import StructDef, StructField, BoundedTypeParam
+from sushi_lang.semantics.ast import StructDef, StructField
 from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree
+from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -68,7 +69,3 @@ def parse_structfield(t: Tree, ast_builder: 'ASTBuilder') -> StructField:
     )
 
 
-def parse_bounded_type_params(type_params_node: Optional[Tree]) -> Optional[List[BoundedTypeParam]]:
-    """Parse type_params node - delegates to generics module."""
-    from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params as _parse_bounded
-    return _parse_bounded(type_params_node)
