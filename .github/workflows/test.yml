@@ -80,6 +80,16 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           uv run python tests/run_tests.py --enhanced
 
+      # Leak gate via the malloc-interposer (tests/leakcheck). Non-blocking for now
+      # while the new mechanism proves out on both runners; flip off continue-on-error
+      # once it is reliably green.
+      - name: Run leak gate
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        continue-on-error: true
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run python tests/run_tests.py --leaks-only
+
   test-macos:
     needs: pytest
     if: github.event_name != 'push'
@@ -121,10 +131,14 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           uv run --python 3.13 python -m pytest tests/unit/test_docs_stdlib_smoke.py -q
 
-  # Leak assertions are a dev-mode gate, not a CI job: `leaks` cannot attach on the
-  # hosted macOS runner (no task_for_pid authorization), so it either is absent or
-  # stalls, and the gate can only ever report "skipped" there. Run it locally before
-  # pushing with `python tests/run_tests.py --leaks-only` (see PROGRESS.md / Tier 5).
+      # Leak gate via the malloc-interposer (works on the hosted macOS runner, unlike
+      # `leaks`, which cannot attach). Non-blocking for now; flip off once proven.
+      - name: Run leak gate
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        continue-on-error: true
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run --python 3.13 python tests/run_tests.py --leaks-only
 
   badges:
     if: github.event_name == 'push'

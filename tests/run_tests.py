@@ -104,6 +104,54 @@ def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:
 
     return True
 
+
+def leakcheck_lib_path(project_root: Path) -> Path:
+    """Path to the precompiled malloc-interposer for the current platform."""
+    plat = "darwin" if sys.platform == "darwin" else "linux"
+    ext = "dylib" if plat == "darwin" else "so"
+    return project_root / "tests" / "leakcheck" / "bin" / plat / f"leakcheck.{ext}"
+
+
+def build_leakcheck(project_root: Path, verbose: bool = False) -> bool:
+    """Compile the malloc-interposer the leak gate preloads (macOS + Linux).
+
+    Built from committed C source at setup so it matches the host arch/libc;
+    skipped when the output is already newer than the source.
+    """
+    src = project_root / "tests" / "leakcheck" / "leakcheck.c"
+    if not src.exists():
+        print(f"Leak-check source not found: {src}")
+        return False
+
+    out = leakcheck_lib_path(project_root)
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    if out.exists() and out.stat().st_mtime >= src.stat().st_mtime:
+        return True
+
+    if sys.platform == "darwin":
+        cmd = ["cc", "-dynamiclib", "-O1", "-o", str(out), str(src)]
+    else:
+        cmd = ["cc", "-shared", "-fPIC", "-O1", "-o", str(out), str(src), "-ldl"]
+
+    if verbose:
+        print(f"Building leak-check interposer: {' '.join(cmd)}")
+
+    try:
+        result = subprocess.run(cmd, cwd=project_root, capture_output=True,
+                                text=True, timeout=60)
+        if result.returncode != 0:
+            print(f"Failed to build leak-check interposer: {result.stderr}")
+            return False
+        return True
+    except subprocess.TimeoutExpired:
+        print("Leak-check interposer build timed out")
+        return False
+    except Exception as e:
+        print(f"Error building leak-check interposer: {e}")
+        return False
+
+
 # Tests that expose a known compiler crash (ICE / assertion failure in the
 # backend) rather than a user-visible compilation error. These fail compilation
 # with exit 2 despite being named test_*.sushi, so they cannot satisfy the
