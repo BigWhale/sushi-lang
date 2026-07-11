@@ -121,44 +121,10 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           uv run --python 3.13 python -m pytest tests/unit/test_docs_stdlib_smoke.py -q
 
-  # Leak assertions run on macOS only. `leaks` ships with the OS; Linux has neither
-  # valgrind nor an ASan link path (the link step hardcodes cc). On a platform with
-  # no checker the runner reports skipped leak checks rather than passing them, so a
-  # Linux job here would be green regardless of the truth and is not worth running.
-  leaks-macos:
-    needs: pytest
-    if: github.event_name != 'push'
-    runs-on: macos-15
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Check for code changes
-        if: github.event_name == 'pull_request'
-        uses: dorny/paths-filter@v4
-        id: changes
-        with:
-          filters: |
-            code:
-              - 'sushi_lang/**'
-              - 'tests/**'
-              - '.github/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - 'sushic'
-
-      - name: Set up Sushi toolchain
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
-        uses: ./.github/actions/setup-sushi
-        with:
-          python-version: '3.13'
-
-      - name: Run leak-gated tests
-        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
-        run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          uv run --python 3.13 python tests/run_tests.py --leaks-only
+  # Leak assertions are a dev-mode gate, not a CI job: `leaks` cannot attach on the
+  # hosted macOS runner (no task_for_pid authorization), so it either is absent or
+  # stalls, and the gate can only ever report "skipped" there. Run it locally before
+  # pushing with `python tests/run_tests.py --leaks-only` (see PROGRESS.md / Tier 5).
 
   badges:
     if: github.event_name == 'push'
