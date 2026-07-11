@@ -399,7 +399,7 @@ def _emit_hashmap_foreach(
     """
     from llvmlite import ir
     from sushi_lang.backend import gep_utils
-    from sushi_lang.sushi_stdlib.generics.collections.hashmap.types import (
+    from sushi_lang.backend.generics.hashmap.types import (
         get_entry_type, get_user_entry_type, ENTRY_OCCUPIED,
     )
     from sushi_lang.semantics.generics.hashmap import (

@@ -107,7 +107,7 @@ def try_emit_own_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]
 def try_emit_hashmap_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as HashMap<K, V> method. Returns None if not a HashMap<K, V> method."""
     # Import from stdlib location
-    from sushi_lang.sushi_stdlib.generics.collections.hashmap import is_builtin_hashmap_method, emit_hashmap_method
+    from sushi_lang.backend.generics.hashmap import is_builtin_hashmap_method, emit_hashmap_method
     from sushi_lang.backend.expressions.calls.utils import infer_semantic_type, emit_receiver_as_pointer
 
     method = expr.method

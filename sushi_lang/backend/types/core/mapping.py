@@ -267,7 +267,7 @@ class TypeMapper:
 
     def _create_hashmap_struct_type(self, struct_type: StructType) -> ir.LiteralStructType:
         """Create LLVM struct type for HashMap<K, V>."""
-        from sushi_lang.sushi_stdlib.generics.collections.hashmap.types import get_entry_type
+        from sushi_lang.backend.generics.hashmap.types import get_entry_type
         from sushi_lang.semantics.generics.hashmap import extract_key_value_types
 
         # Need TypeSystemWrapper for generic helpers
