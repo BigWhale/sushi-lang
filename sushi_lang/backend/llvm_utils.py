@@ -14,13 +14,13 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend import enum_utils
 
 if TYPE_CHECKING:
-    from sushi_lang.backend.interfaces import CodegenProtocol
+    from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
 class LLVMUtils:
     """Utility class providing casting and helper operations for LLVM code generation."""
 
-    def __init__(self, codegen: 'CodegenProtocol') -> None:
+    def __init__(self, codegen: 'LLVMCodegen') -> None:
         """Initialize utility class with reference to main codegen instance.
 
         Args:

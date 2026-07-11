@@ -18,12 +18,12 @@ from llvmlite import ir
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
-    from sushi_lang.backend.interfaces import CodegenProtocol
+    from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 T = TypeVar('T')
 
 
-def require_builder(codegen: 'CodegenProtocol') -> ir.IRBuilder:
+def require_builder(codegen: 'LLVMCodegen') -> ir.IRBuilder:
     """Validate builder is initialized or raise CE0009.
 
     This is the most common validation in the backend, appearing in nearly
@@ -48,7 +48,7 @@ def require_builder(codegen: 'CodegenProtocol') -> ir.IRBuilder:
     return codegen.builder
 
 
-def require_function(codegen: 'CodegenProtocol') -> ir.Function:
+def require_function(codegen: 'LLVMCodegen') -> ir.Function:
     """Validate current function is set or raise CE0010.
 
     Some operations require access to the current function being generated,
@@ -98,7 +98,7 @@ def require_non_empty(items: list[T], error_code: str) -> list[T]:
     return items
 
 
-def require_both_initialized(codegen: 'CodegenProtocol') -> tuple[ir.IRBuilder, ir.Function]:
+def require_both_initialized(codegen: 'LLVMCodegen') -> tuple[ir.IRBuilder, ir.Function]:
     """Validate both builder and function are initialized.
 
     Convenience function for code paths that require both the builder
