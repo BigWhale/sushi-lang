@@ -7,7 +7,7 @@ to specify expected runtime behavior, exit codes, and output validation.
 
 import re
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Optional, List, Dict
 from pathlib import Path
 
 
@@ -35,6 +35,8 @@ class TestMetadata:
     timeout_seconds: int = 10
     cmd_args: Optional[str] = None  # Command-line arguments for runtime test
     stdin_input: Optional[str] = None  # Standard input to provide to the test
+    test_env: Optional[Dict[str, str]] = None  # Env vars to set for the runtime binary
+    test_cwd: Optional[str] = None  # Working directory to run the runtime binary in
 
     # Test categorization
     test_type: str = "default"  # "default", "runtime", "compilation"
@@ -47,6 +49,8 @@ class TestMetadata:
             self.expect_stderr_contains = []
         if self.expect_error_code is None:
             self.expect_error_code = []
+        if self.test_env is None:
+            self.test_env = {}
 
         # If any runtime expectations are set, this test requires runtime validation
         if (self.expect_runtime_exit is not None or
@@ -72,6 +76,8 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
     # TEST_TYPE: runtime
     # CMD_ARGS: arg1 arg2 arg3
     # STDIN_INPUT: "line1\\nline2\\nline3\\n"
+    # TEST_ENV: HOME=/home/trillian     (repeatable, one KEY=VALUE per line)
+    # TEST_CWD: /
 
     Args:
         test_file: Path to the .sushi test file
@@ -174,6 +180,22 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
                 # Handle escape sequences
                 value = value.replace('\\n', '\n').replace('\\t', '\t')
                 metadata.stdin_input = value
+
+            elif directive.startswith('TEST_ENV:'):
+                value = directive.split(':', 1)[1].strip()
+                # One KEY=VALUE per directive; the directive may be repeated to set
+                # several variables. Lets a test pin HOME/USER/etc. instead of baking
+                # the developer's host environment into an expected-stdout snapshot.
+                if '=' in value:
+                    key, val = value.split('=', 1)
+                    metadata.test_env[key.strip()] = val.strip()
+                else:
+                    print(f"Warning: Invalid TEST_ENV value in {test_file}: {value}")
+
+            elif directive.startswith('TEST_CWD:'):
+                # Working directory to run the binary in, so getcwd()-style output is
+                # host-independent (e.g. TEST_CWD: / yields a deterministic "/").
+                metadata.test_cwd = directive.split(':', 1)[1].strip()
 
     except Exception as e:
         print(f"Warning: Failed to parse metadata from {test_file}: {e}")

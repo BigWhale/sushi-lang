@@ -1,7 +1,8 @@
 # Inline match / ?? directly on a stdlib builtin returning Result/Maybe (Bug A).
 # Previously these failed with CE0055 / 'undefined name' unless bound to a let first.
+# TEST_CWD: /
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_EXACT: "cwd branch: /Users/bigwhale/Projects/sushi\nenv none branch\nlast l at 3\nread: /Users/bigwhale/Projects/sushi\ninline builtins ok\n"
+# EXPECT_STDOUT_EXACT: "cwd branch: /\nenv none branch\nlast l at 3\nread: /\ninline builtins ok\n"
 
 use <sys/process>
 use <sys/env>

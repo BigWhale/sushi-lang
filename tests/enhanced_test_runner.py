@@ -11,6 +11,7 @@ Supports test metadata for specifying expected runtime behavior.
 
 import re
 import subprocess
+import signal
 import sys
 import tempfile
 import shutil
@@ -374,13 +375,19 @@ class TestRunner:
             # Prepare stdin input if specified
             stdin_input = metadata.stdin_input if metadata.stdin_input else None
 
+            # A test may pin its environment (TEST_ENV) and working directory (TEST_CWD)
+            # so host-dependent output (getenv/getcwd) is deterministic across machines.
+            run_env = {**os.environ, **(metadata.test_env or {})}
+
             # Execute the binary
             result = subprocess.run(
                 cmd,
                 input=stdin_input,
                 capture_output=True,
                 text=True,
-                timeout=metadata.timeout_seconds
+                timeout=metadata.timeout_seconds,
+                env=run_env,
+                cwd=metadata.test_cwd or None,
             )
 
             # Validate runtime behavior
@@ -426,24 +433,39 @@ class TestRunner:
         if metadata.cmd_args:
             cmd.extend(metadata.cmd_args.split())
 
+        run_env = {**os.environ, **(metadata.test_env or {})}
+
+        # `leaks --atExit -- <bin>` runs the target as a child. Put the whole thing in
+        # its own process group (start_new_session) so a timeout can SIGKILL the group,
+        # not just the `leaks` parent -- otherwise a stalled instrumented child keeps the
+        # wall clock running (observed as a ~25 min hang on hosted macOS CI).
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE if metadata.stdin_input else None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=run_env,
+            cwd=metadata.test_cwd or None,
+            start_new_session=True,
+        )
         try:
-            result = subprocess.run(
-                cmd,
+            stdout, _stderr = proc.communicate(
                 input=metadata.stdin_input if metadata.stdin_input else None,
-                capture_output=True,
-                text=True,
                 timeout=metadata.timeout_seconds + 30,
             )
         except subprocess.TimeoutExpired:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            proc.communicate()
             return False, "✗ Leak check: Timeout"
 
         # The summary line is singular for one leak ("1 leak for 16 total leaked bytes")
         # and plural otherwise, and it is not the last line of output.
-        match = re.search(r"\d+ leaks? for \d+ total leaked bytes", result.stdout)
+        match = re.search(r"\d+ leaks? for \d+ total leaked bytes", stdout)
         summary = match.group(0) if match else ""
-        if result.returncode == 0:
+        if proc.returncode == 0:
             return True, f"✓ Leak check: {summary or 'no leaks'}"
-        return False, f"✗ Leak check: {summary or result.stdout.strip()[-200:]}"
+        return False, f"✗ Leak check: {summary or stdout.strip()[-200:]}"
 
     def _validate_runtime_result(self, result: subprocess.CompletedProcess, metadata: TestMetadata) -> Tuple[bool, str]:
         """
