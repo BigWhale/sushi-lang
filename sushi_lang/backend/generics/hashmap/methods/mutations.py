@@ -18,6 +18,7 @@ from sushi_lang.semantics.generics.hashmap import extract_key_value_types
 from ..utils import emit_key_equality_check, emit_insert_entry
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc
+from sushi_lang.backend.expressions.memory import get_element_size_constant
 
 
 def emit_hashmap_insert(
@@ -566,10 +567,7 @@ def emit_hashmap_resize_to_capacity(
     old_buckets_data = builder.load(buckets_data_ptr, name="old_buckets_data")
 
     # Allocate new buckets array with new_capacity
-    null_ptr = ir.Constant(ir.PointerType(entry_type), None)
-    one = ir.Constant(codegen.types.i32, 1)
-    gep = builder.gep(null_ptr, [one], name="sizeof_gep")
-    entry_size = builder.ptrtoint(gep, codegen.types.i32, name="entry_size")
+    entry_size = get_element_size_constant(codegen, entry_type)
     total_bytes = builder.mul(entry_size, new_capacity, name="bucket_bytes")
 
     # Call malloc
@@ -890,10 +888,7 @@ def emit_hashmap_free(
     builder.call(free_func, [old_buckets_void_ptr])
 
     # Allocate new buckets with initial capacity (16)
-    null_ptr = ir.Constant(ir.PointerType(entry_type), None)
-    one = ir.Constant(codegen.types.i32, 1)
-    gep = builder.gep(null_ptr, [one], name="sizeof_gep")
-    entry_size = builder.ptrtoint(gep, codegen.types.i32, name="entry_size")
+    entry_size = get_element_size_constant(codegen, entry_type)
     total_bytes = builder.mul(entry_size, initial_capacity, name="bucket_bytes")
 
     # Call malloc

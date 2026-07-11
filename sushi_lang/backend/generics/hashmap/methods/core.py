@@ -15,6 +15,7 @@ from sushi_lang.semantics.generics.hashmap import extract_key_value_types
 from ..utils import emit_key_equality_check
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc
+from sushi_lang.backend.expressions.memory import get_element_size_constant
 
 
 def emit_hashmap_new(codegen: Any, hashmap_type: StructType) -> ir.Value:
@@ -47,12 +48,7 @@ def emit_hashmap_new(codegen: Any, hashmap_type: StructType) -> ir.Value:
     capacity_const = ir.Constant(codegen.types.i32, initial_capacity)
 
     # Allocate buckets array: malloc(sizeof(Entry<K,V>) * capacity)
-    # Get size of Entry type using LLVM's size_of intrinsic pattern
-    # sizeof(T) = ptrtoint (T* getelementptr (T* null, 1))
-    null_ptr = ir.Constant(ir.PointerType(entry_type), None)
-    one = ir.Constant(codegen.types.i32, 1)
-    gep = codegen.builder.gep(null_ptr, [one], name="sizeof_gep")
-    entry_size = codegen.builder.ptrtoint(gep, codegen.types.i32, name="entry_size")
+    entry_size = get_element_size_constant(codegen, entry_type)
     total_bytes = codegen.builder.mul(entry_size, capacity_const, name="bucket_bytes")
 
     # Call malloc (extend i32 to i64 for malloc parameter)
