@@ -1,0 +1,27 @@
+# The remove() half of the same hole (see test_err_hashmap_insert_after_destroy).
+#
+# HISTORY: remove() on a map destroyed through a &poke parameter probed a null bucket
+# array and segfaulted. Tier 4.2's bounded probe gave it an honest answer instead --
+# the key is not there, so it returns Maybe.None -- and this test pinned that.
+#
+# #168 is now FIXED: the destroy through `wreck`'s &poke parameter is propagated to the
+# call site, so this program is rejected at compile time and never reaches remove().
+# EXPECT_ERROR_CODE: CE2406
+use <collections/hashmap>
+
+fn wreck(&poke HashMap<string, i32> m) ~:
+    m.destroy()
+    return Result.Ok(~)
+
+fn main() i32:
+    let HashMap<string, i32> map = HashMap.new()
+    map.insert("a", 1)
+    wreck(&poke map)
+
+    let Maybe<i32> gone = map.remove("a")
+    if (gone.is_some()):
+        println("found {gone.realise(0)}")
+    else:
+        println("not found")
+
+    return Result.Ok(0)

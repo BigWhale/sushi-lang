@@ -18,7 +18,7 @@ without runtime overhead.
 """
 
 from __future__ import annotations
-from typing import Dict, Set, Optional
+from typing import Dict, FrozenSet, Iterable, Iterator, Set, Optional
 from dataclasses import dataclass
 
 from sushi_lang.semantics.ast import *
@@ -71,6 +71,140 @@ class BorrowState:
         return self.poke_borrow_count > 0 or self.peek_borrow_count > 0
 
 
+@dataclass(frozen=True)
+class FlowFacts:
+    """The per-variable facts that must survive a branch join or a loop back edge.
+
+    Both flags are MONOTONE (they only ever go false -> true within a path), so a join
+    is a union and a loop reaches its fixed point in two passes.
+
+    `destroyed` used to be absent from this snapshot, which was harmless only because a
+    destroy could not be reached through a call: the sole way to set it was a literal
+    `x.destroy()` in the same function. Once a call can destroy its `&poke` argument
+    (#168), a destroy inside one `if` arm would leak into its sibling arms and past the
+    `if` -- a false CE2406, exactly the bug that per-arm snapshotting was introduced in
+    Tier 2 to kill for moves (test_move_in_branch_arms).
+    """
+    moved: frozenset[str] = frozenset()
+    destroyed: frozenset[str] = frozenset()
+
+    def __or__(self, other: "FlowFacts") -> "FlowFacts":
+        return FlowFacts(self.moved | other.moved, self.destroyed | other.destroyed)
+
+
+def _iter_stmts(block: Block) -> Iterator[Stmt]:
+    """Every statement in a body, descending into nested blocks."""
+    for stmt in block.statements:
+        yield stmt
+        if isinstance(stmt, If):
+            for _cond, arm in stmt.arms:
+                yield from _iter_stmts(arm)
+            if stmt.else_block:
+                yield from _iter_stmts(stmt.else_block)
+        elif isinstance(stmt, (While, Foreach)):
+            yield from _iter_stmts(stmt.body)
+        elif isinstance(stmt, Match):
+            for arm in stmt.arms:
+                if isinstance(arm.body, Block):
+                    yield from _iter_stmts(arm.body)
+
+
+def _leading_call(expr: Optional[Expr]) -> Optional[Call]:
+    """The Call an expression evaluates to, unwrapping `??` -- None if it is not a call."""
+    while isinstance(expr, TryExpr):
+        expr = expr.expr
+    return expr if isinstance(expr, Call) else None
+
+
+def _statement_call(stmt: Stmt) -> Optional[Call]:
+    """The call a statement makes, for the shapes a `&poke` argument can appear in."""
+    if isinstance(stmt, ExprStmt):
+        return _leading_call(stmt.expr)
+    if isinstance(stmt, (Let, Rebind)):
+        return _leading_call(stmt.value)
+    return None
+
+
+def _poke_param_indices(func: FuncDef) -> Dict[str, int]:
+    """`&poke` parameters of `func`, by name -> positional index.
+
+    Only `&poke` counts: destroying through a `&peek` is already rejected (it is a
+    read-only borrow), so a `&peek` param cannot carry a destroy effect out.
+    """
+    return {
+        param.name: i
+        for i, param in enumerate(func.params)
+        if isinstance(param.ty, ReferenceType) and param.ty.is_poke()
+    }
+
+
+def compute_destroy_effects(programs: Iterable[Program]) -> Dict[str, FrozenSet[int]]:
+    """Which `&poke` parameters does each function destroy? (#168)
+
+    The borrow checker is otherwise strictly intra-procedural: `borrow_state` is reset per
+    function, so a callee that calls `.destroy()` on its `&poke` parameter had no effect on
+    the caller's binding and use-after-destroy compiled clean. This is the first
+    inter-procedural analysis in the semantics layer.
+
+    Returns `fn name -> the set of parameter indices it destroys`, transitively: if `f`
+    forwards its own `&poke` param to a `g` that destroys it, `f` destroys it too. The
+    lattice is a finite set of indices that only grows, so the fixed point converges.
+
+    Deliberately an UNDER-approximation -- it can miss a destroy, it can never invent one,
+    so it cannot produce a false CE2406 on code that compiles today. Known misses:
+      - a generic callee (monomorphized fns are not in `program.functions`)
+      - an extension/perk method destroying its implicit `self` (not in `func.params`)
+      - a call nested somewhere other than a statement's leading expression
+    """
+    funcs: Dict[str, FuncDef] = {}
+    for program in programs:
+        for func in program.functions:
+            funcs.setdefault(func.name, func)
+
+    effects: Dict[str, Set[int]] = {}
+
+    # Round 1: a literal `p.destroy()` where `p` is one of this function's &poke params.
+    # Mirrors the receiver shape the intra-procedural check already recognises.
+    for name, func in funcs.items():
+        poke = _poke_param_indices(func)
+        destroyed: Set[int] = set()
+        for stmt in _iter_stmts(func.body):
+            if not isinstance(stmt, ExprStmt):
+                continue
+            call = stmt.expr
+            if isinstance(call, (MethodCall, DotCall)) and call.method == "destroy":
+                if isinstance(call.receiver, Name) and call.receiver.id in poke:
+                    destroyed.add(poke[call.receiver.id])
+        effects[name] = destroyed
+
+    # Round 2..n: propagate through calls until nothing changes. `f` destroys its param i
+    # if it hands that param to a `g` that destroys the slot it lands in.
+    changed = True
+    while changed:
+        changed = False
+        for name, func in funcs.items():
+            poke = _poke_param_indices(func)
+            if not poke:
+                continue
+            for stmt in _iter_stmts(func.body):
+                call = _statement_call(stmt)
+                if call is None or not isinstance(call.callee, Name):
+                    continue
+                for index in effects.get(call.callee.id, ()):
+                    if index >= len(call.args):
+                        continue
+                    arg = call.args[index]
+                    if isinstance(arg, Borrow):
+                        arg = arg.expr
+                    if isinstance(arg, Name) and arg.id in poke:
+                        own_index = poke[arg.id]
+                        if own_index not in effects[name]:
+                            effects[name].add(own_index)
+                            changed = True
+
+    return {name: frozenset(indices) for name, indices in effects.items() if indices}
+
+
 class BorrowChecker:
     """
     Analyzes borrowing safety for a program.
@@ -86,10 +220,14 @@ class BorrowChecker:
     - Nested borrow analysis
     """
 
-    def __init__(self, reporter: Reporter, struct_names = None):
+    def __init__(self, reporter: Reporter,
+                 destroy_effects: Optional[Dict[str, FrozenSet[int]]] = None):
         self.reporter = reporter
         self.err = PassErrorReporter(reporter)
-        self.struct_names = struct_names  # Dict of struct names for identifying struct constructors
+        # fn name -> the &poke param indices it destroys (#168). Computed once over EVERY
+        # unit by compute_destroy_effects(), so a cross-unit callee is not a blind spot.
+        # Empty means "no call destroys anything", i.e. the old intra-procedural behaviour.
+        self.destroy_effects: Dict[str, FrozenSet[int]] = destroy_effects or {}
         # Track borrow state per variable in current scope
         self.borrow_state: Dict[str, BorrowState] = {}
         # Track variables currently borrowed (for clearing after expressions)
@@ -243,22 +381,22 @@ class BorrowChecker:
             # variable is moved after the `if` iff it is moved on ANY path (Rust semantics).
             # Without the per-arm snapshot/restore, a move in one arm leaked into its sibling
             # arms and past the `if`, producing a SPURIOUS CE2405 (test_move_in_branch_arms).
-            entry = self._snapshot_moves()
-            moved_after: Set[str] = set()
+            entry = self._snapshot_flow()
+            after = FlowFacts()
             for cond_expr, arm_block in stmt.arms:
-                self._restore_moves(entry)
+                self._restore_flow(entry)
                 self._check_expr(cond_expr)
                 self._clear_borrows()
                 self._check_block(arm_block)
-                moved_after |= self._snapshot_moves()
+                after |= self._snapshot_flow()
             if stmt.else_block:
-                self._restore_moves(entry)
+                self._restore_flow(entry)
                 self._check_block(stmt.else_block)
-                moved_after |= self._snapshot_moves()
+                after |= self._snapshot_flow()
             else:
-                # No else arm: the fall-through path (no arm taken) moves nothing beyond entry.
-                moved_after |= entry
-            self._restore_moves(moved_after)
+                # No else arm: the fall-through path (no arm taken) changes nothing beyond entry.
+                after |= entry
+            self._restore_flow(after)
 
         elif isinstance(stmt, While):
             self._check_expr(stmt.cond)
@@ -289,19 +427,23 @@ class BorrowChecker:
         elif isinstance(stmt, Break) or isinstance(stmt, Continue):
             pass  # No borrow checking needed
 
-    def _snapshot_moves(self) -> Set[str]:
-        """Names whose binding is currently moved (for branch/loop control-flow joins)."""
-        return {name for name, state in self.borrow_state.items() if state.is_moved}
+    def _snapshot_flow(self) -> FlowFacts:
+        """The moved / destroyed facts (for branch and loop control-flow joins)."""
+        return FlowFacts(
+            moved=frozenset(n for n, s in self.borrow_state.items() if s.is_moved),
+            destroyed=frozenset(n for n, s in self.borrow_state.items() if s.is_destroyed),
+        )
 
-    def _restore_moves(self, moved_names: Set[str]) -> None:
-        """Set each variable's is_moved to exactly `name in moved_names`.
+    def _restore_flow(self, facts: FlowFacts) -> None:
+        """Set each variable's moved/destroyed flags to exactly what `facts` says.
 
         Used to reset to a snapshot before checking an alternative path (an `if` arm) and to
-        install a join / loop fixed-point state afterwards. Only the move flag is restored;
-        borrow counts are cleared per statement by _clear_borrows.
+        install a join / loop fixed-point state afterwards. Only these two flags are
+        restored; borrow counts are cleared per statement by _clear_borrows.
         """
         for name, state in self.borrow_state.items():
-            state.is_moved = name in moved_names
+            state.is_moved = name in facts.moved
+            state.is_destroyed = name in facts.destroyed
 
     def _check_loop_body(self, body: Block) -> None:
         """Borrow-check a loop body to a fixed point so the back edge is honoured.
@@ -314,16 +456,16 @@ class BorrowChecker:
         reports a use of an already-moved variable exactly once. Suppression is saved/restored
         so a nested loop's own discovery pass does not un-suppress this one.
         """
-        entry = self._snapshot_moves()
+        entry = self._snapshot_flow()
         prev_suppressed = self.err.suppressed
         self.err.suppressed = True
         self._check_block(body)
         self.err.suppressed = prev_suppressed
-        fixed_point = entry | self._snapshot_moves()
-        self._restore_moves(fixed_point)
+        fixed_point = entry | self._snapshot_flow()
+        self._restore_flow(fixed_point)
         self._check_block(body)
-        # A variable moved anywhere in the loop is moved after it (conservative join).
-        self._restore_moves(fixed_point)
+        # A variable moved (or destroyed) anywhere in the loop is so after it (conservative join).
+        self._restore_flow(fixed_point)
 
     def _register_pattern_bindings(self, pattern: Pattern) -> None:
         """Recursively register pattern bindings in borrow state."""
@@ -364,6 +506,13 @@ class BorrowChecker:
             # calls, indirect closure calls, and struct constructors.
             for arg in expr.args:
                 self._mark_moved_if_applicable(arg)
+
+            # A callee that destroys its `&poke` parameter destroys the CALLER's value
+            # (#168). Without this the borrow checker only ever saw a literal
+            # `x.destroy()` in the same function, so `wreck(&poke map)` left `map` looking
+            # live and the next `map.insert(...)` was a use-after-destroy that compiled.
+            # CE2406 still fires from the Name arm above -- no new emit site.
+            self._apply_destroy_effects(expr)
 
         elif isinstance(expr, MethodCall):
             self._check_expr(expr.receiver)
@@ -637,6 +786,19 @@ class BorrowChecker:
         if state.moved_at_span is not None:
             diag.note(f"'{name}' was moved here", state.moved_at_span)
         diag.emit()
+
+    def _apply_destroy_effects(self, call: Call) -> None:
+        """Mark each argument the callee destroys through a `&poke` parameter (#168)."""
+        if not isinstance(call.callee, Name):
+            return
+        for index in self.destroy_effects.get(call.callee.id, ()):
+            if index >= len(call.args):
+                continue
+            arg = call.args[index]
+            if isinstance(arg, Borrow):
+                arg = arg.expr           # `&poke map` -> `map`
+            if isinstance(arg, Name) and arg.id in self.borrow_state:
+                self.borrow_state[arg.id].is_destroyed = True
 
     def _mark_moved_if_applicable(self, expr: Expr) -> None:
         """Mark a variable as moved if the expression is a bare reference to an owning value.

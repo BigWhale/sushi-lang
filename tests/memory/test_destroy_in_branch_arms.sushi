@@ -1,0 +1,19 @@
+# Guards issue #180: a .destroy() in one `if` arm leaked into its SIBLING arms and past the
+# `if`, because the control-flow snapshot carried only is_moved and never is_destroyed. The
+# two arms here are mutually exclusive -- on the path where insert runs, destroy did not --
+# so this correct program was rejected with a spurious CE2406.
+#
+# The exact twin of the Tier-2 move bug (test_move_in_branch_arms); the fix simply never
+# covered the destroy flag. MUST COMPILE.
+# EXPECT_STDOUT_EXACT: "done\n"
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap<string, i32> map = HashMap.new()
+    map.insert("a", 1)
+    if (map.len() > 5):
+        map.destroy()
+    else:
+        map.insert("b", 2)
+    println("done")
+    return Result.Ok(0)
