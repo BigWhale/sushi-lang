@@ -1,0 +1,13 @@
+# Error: a duplicate declaration points at the original. A redeclaration is only
+# an error BECAUSE of the first one, so the diagnostic carries both locations.
+# EXPECT_ERROR_CODE: CE0004
+# EXPECT_STDERR_CONTAINS: first defined here
+
+struct Point:
+    i32 x
+
+struct Point:
+    i32 y
+
+fn main() i32:
+    return Result.Ok(0)

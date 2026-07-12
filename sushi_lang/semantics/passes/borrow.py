@@ -54,6 +54,10 @@ class BorrowState:
     is_argv_view: bool = False  # main's `string[] args`: a borrowed view of process argv;
                                 # moving it by value would free argv, so it is a hard error
     first_borrow_span: Optional[Span] = None  # Location of the first active borrow
+    moved_at_span: Optional[Span] = None  # Where ownership was transferred away.
+                                          # Use-after-move is a RELATIONAL error: the
+                                          # use is only wrong BECAUSE of the move, so
+                                          # CE2405 points at both.
 
     @property
     def is_borrowed(self) -> bool:
@@ -328,7 +332,7 @@ class BorrowChecker:
             if expr.id in self.borrow_state:
                 state = self.borrow_state[expr.id]
                 if state.is_moved:
-                    self.err.emit(er.ERR.CE2405, expr.loc, name=expr.id)
+                    self._emit_use_after_move(expr.id, expr.loc, state)
                 elif state.is_destroyed:
                     self.err.emit(er.ERR.CE2406, expr.loc, name=expr.id)
 
@@ -408,6 +412,7 @@ class BorrowChecker:
                     state = self.borrow_state[cap.name]
                     if self._type_is_owning(cap.ty):
                         state.is_moved = True
+                        state.moved_at_span = state.moved_at_span or expr.loc
 
         # Literals and other leaf expressions don't need checking
 
@@ -438,7 +443,7 @@ class BorrowChecker:
 
             # Check if variable has been moved
             if state.is_moved:
-                self.err.emit(er.ERR.CE2405, borrow.loc, name=var_name)
+                self._emit_use_after_move(var_name, borrow.loc, state)
                 return
 
             # Check borrow compatibility based on mode
@@ -487,7 +492,7 @@ class BorrowChecker:
 
             state = self.borrow_state[base_var]
             if state.is_moved:
-                self.err.emit(er.ERR.CE2405, borrow.loc, name=base_var)
+                self._emit_use_after_move(base_var, borrow.loc, state)
                 return
 
             # Check borrow compatibility based on mode
@@ -552,6 +557,7 @@ class BorrowChecker:
                 state = self.borrow_state[arg.id]
                 if self._type_is_owning(state.var_type):
                     state.is_moved = True
+                    state.moved_at_span = state.moved_at_span or arg.loc
 
     def _type_is_owning(self, vt: Optional[Type]) -> bool:
         """True if a value of this type carries heap ownership (so Own.alloc moves it).
@@ -583,7 +589,20 @@ class BorrowChecker:
             src = self.borrow_state.get(value.id)
             if src is not None and src.is_owning_closure:
                 src.is_moved = True
+                src.moved_at_span = src.moved_at_span or value.loc
                 dest.is_owning_closure = True
+
+    def _emit_use_after_move(self, name: str, use_span: Optional[Span],
+                             state: BorrowState) -> None:
+        """Report a use-after-move, pointing at the MOVE as well as the use.
+
+        Where the value was used is the half the user already knows -- they are
+        looking at it. Where it was moved is the half they need.
+        """
+        diag = self.err.emit_with(er.ERR.CE2405, use_span, name=name)
+        if state.moved_at_span is not None:
+            diag.note(f"'{name}' was moved here", state.moved_at_span)
+        diag.emit()
 
     def _mark_moved_if_applicable(self, expr: Expr) -> None:
         """Mark a variable as moved if the expression is a bare reference to an owning value.
@@ -603,6 +622,7 @@ class BorrowChecker:
                     self.err.emit(er.ERR.CE2410, expr.loc, name=expr.id)
                 elif self._type_is_owning(state.var_type):
                     state.is_moved = True
+                    state.moved_at_span = state.moved_at_span or expr.loc
 
     def _clear_borrows(self) -> None:
         """Clear all active borrows (called after expression evaluation)."""

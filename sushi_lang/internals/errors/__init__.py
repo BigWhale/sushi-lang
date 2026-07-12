@@ -72,19 +72,27 @@ def message_for(code: str, **kwargs) -> str:
     return _fmt(code, **kwargs)
 
 
-def emit(r: Reporter, em: ErrorMessage, span: Optional[Span], **kwargs) -> None:
+def emit(r: Reporter, em: ErrorMessage, span: Optional[Span],
+         filename: Optional[str] = None, **kwargs) -> None:
+    """Emit a diagnostic. `filename` overrides the reporter's file.
+
+    Pass it when the span belongs to a DIFFERENT file than the one the reporter is
+    reporting against -- e.g. a symbol collected from a dependency unit. No registry
+    text uses {filename}, so this cannot collide with a format parameter.
+    """
     text = _fmt(em.code, **kwargs)
     if em.severity == Severity.ERROR:
-        r.error(em.code, text, span)
+        r.error(em.code, text, span, filename=filename)
     else:
-        r.warn(em.code, text, span)
+        r.warn(em.code, text, span, filename=filename)
 
 
-def emit_with(r: Reporter, em: ErrorMessage, span: Optional[Span], **kwargs) -> DiagnosticBuilder:
+def emit_with(r: Reporter, em: ErrorMessage, span: Optional[Span],
+              filename: Optional[str] = None, **kwargs) -> DiagnosticBuilder:
     text = _fmt(em.code, **kwargs)
     if em.severity == Severity.ERROR:
-        return r.error_with(em.code, text, span)
-    return r.warn_with(em.code, text, span)
+        return r.error_with(em.code, text, span, filename=filename)
+    return r.warn_with(em.code, text, span, filename=filename)
 
 
 def emit_exception(r: Reporter, exc: SushiError) -> None:

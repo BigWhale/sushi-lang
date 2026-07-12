@@ -11,7 +11,6 @@ from sushi_lang.internals.errors import ERR
 from sushi_lang.semantics.ast import PerkDef, ExtendWithDef, FuncDef, Program
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
 
-from .utils import format_location
 
 
 @dataclass
@@ -283,8 +282,11 @@ class PerkCollector:
         # Check for duplicate perk names
         if not self.perks.register(perk):
             prev = self.perks.get(name)
-            prev_loc = format_location(self.r, getattr(prev, "name_span", None)) if prev else "unknown"
-            er.emit(self.r, ERR.CE4001, name_span, name=name)
+            prev_span = getattr(prev, "name_span", None) if prev else None
+            diag = er.emit_with(self.r, ERR.CE4001, name_span, name=name)
+            if prev_span is not None:
+                diag.note("first defined here", prev_span)
+            diag.emit()
             return
 
     def _collect_perk_impl(self, impl: ExtendWithDef) -> None:

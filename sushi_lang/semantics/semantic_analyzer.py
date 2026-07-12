@@ -97,7 +97,8 @@ class SemanticAnalyzer:
                 continue
 
             # Collect symbols from this unit, passing unit name for visibility tracking
-            unit_tables = collector.run(unit.ast, unit_name=unit.name)
+            unit_tables = collector.run(unit.ast, unit_name=unit.name,
+                                        unit_file=str(unit.file_path))
 
             # Merge unit symbols into global tables, considering visibility
             symbol_merger.merge_all(unit, unit_tables, global_tables)

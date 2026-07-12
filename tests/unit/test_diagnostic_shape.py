@@ -107,6 +107,47 @@ def test_tier3_two_locations(tmp_path):
     assert body[note_idx + 2].lstrip().startswith("|"), "the note must show its own snippet"
 
 
+def test_tier3_secondary_location_can_live_in_another_file(tmp_path):
+    """A note carries its OWN filename, so a conflict can span two files.
+
+    Reporter._get_source_lines() re-reads the other file from disk to draw its
+    snippet. This capability was built and unused before 4.7.
+    """
+    import os
+
+    (tmp_path / "helper.sushi").write_text(
+        "public fn twice(i32 n) i32:\n    return Result.Ok(n * 2)\n", encoding="utf-8"
+    )
+    (tmp_path / "main.sushi").write_text(
+        'use "helper"\n'
+        "\n"
+        "fn twice(i32 n) i32:\n"
+        "    return Result.Ok(n + n)\n"
+        "\n"
+        "fn main() i32:\n"
+        "    return Result.Ok(0)\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["sushic", "main.sushi"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        env={"NO_COLOR": "1", "PATH": os.environ.get("PATH", ""), "HOME": str(tmp_path)},
+    )
+
+    assert result.returncode == 2, result.stdout + result.stderr
+    stderr = result.stderr
+
+    # The primary location is in main.sushi; the diagnostic must also name the
+    # OTHER file, with a line:col of its own.
+    assert "main.sushi" in stderr
+    assert re.search(r"helper\.sushi:\d+:\d+", stderr), (
+        f"the secondary location must point into helper.sushi:\n{stderr}"
+    )
+
+
 def test_help_carries_no_location(tmp_path):
     """A help is advice, never a location -- the bottom rung of the same skeleton."""
     stderr = _compile(tmp_path, "fn main() i32:\n    if true:\n        println(\"a\")\n    return Result.Ok(0)\n")

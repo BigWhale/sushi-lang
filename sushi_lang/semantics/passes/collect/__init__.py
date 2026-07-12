@@ -168,12 +168,15 @@ class CollectorPass:
         self._register_predefined_enums()
         self._register_predefined_generics()
 
-    def run(self, root: Program, unit_name: Optional[str] = None) -> 'SymbolTables':
+    def run(self, root: Program, unit_name: Optional[str] = None,
+            unit_file: Optional[str] = None) -> 'SymbolTables':
         """Run all collection passes in dependency order.
 
         Args:
             root: Program AST node
             unit_name: Optional unit name for multi-file compilation
+            unit_file: Path of the unit's source file, so a cross-unit duplicate
+                can name the file it collides with
 
         Returns:
             The collected symbol tables for this unit.
@@ -185,7 +188,7 @@ class CollectorPass:
         self.perk_collector.collect_definitions(root)
         self.perk_collector.collect_implementations(root)
         self.perk_collector.register_synthetic_impls()
-        self.function_collector.collect_functions(root, unit_name)
+        self.function_collector.collect_functions(root, unit_name, unit_file)
         self.function_collector.collect_extensions(root)
         self.function_collector.register_stdlib_functions(root)
         self.external_collector.collect(root)

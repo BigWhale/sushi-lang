@@ -4,7 +4,7 @@
 from __future__ import annotations
 from typing import Any, List, Optional
 
-from sushi_lang.internals.report import Reporter, Span
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import BoundedTypeParam
 from sushi_lang.semantics.typesys import Type
 
@@ -41,21 +41,6 @@ def extract_type_param_names(type_params_raw: Optional[List]) -> Optional[List[s
     return names if names else None
 
 
-def format_location(reporter: Reporter, span: Optional[Span]) -> str:
-    """Format span information for error messages.
-
-    Args:
-        reporter: Reporter instance with filename
-        span: Optional span information
-
-    Returns:
-        Formatted location string (e.g., "file.sushi:10:5")
-    """
-    if not span:
-        return reporter.filename
-    return f"{reporter.filename}:{span.line}:{span.col}"
-
-
 def param_from_node(p: Any, idx: int) -> 'Param':
     """Convert AST parameter node to Param dataclass.
 
@@ -87,6 +72,20 @@ def param_from_node(p: Any, idx: int) -> 'Param':
         is_variadic=bool(getattr(p, "is_variadic", False)),
         is_pack=bool(getattr(p, "is_pack", False)),
     )
+
+
+def note_first_declaration(builder: Any, spans: dict, name: str,
+                           what: str = "first defined here") -> Any:
+    """Attach the ORIGINAL declaration's location to a duplicate-declaration error.
+
+    A redeclaration is relational: it is only an error because of the first one, and
+    the first one is the half the user cannot see. If the name was predefined by the
+    compiler there is no span to point at, so say that instead.
+    """
+    prev = spans.get(name)
+    if prev is not None:
+        return builder.note(what, prev)
+    return builder.note("defined by the compiler")
 
 
 def get_span(node: Any, *attrs: str) -> Optional[Span]:

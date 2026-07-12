@@ -192,6 +192,11 @@ class FuncSig:
     params: List[Param] = field(default_factory=list)
     is_public: bool = False              # True if declared with 'public' keyword
     unit_name: Optional[str] = None      # Which unit this function belongs to (for multi-file)
+    filename: Optional[str] = None       # The file it was declared in. Phase 0 collects every
+                                         # unit through ONE reporter (unlike passes 1-3, which
+                                         # build a per-unit one), so a cross-unit duplicate has
+                                         # to name its file explicitly or it renders against
+                                         # whichever file the reporter happens to be pointing at.
     err_type: Optional[Type] = None      # Error type for Result<T, E> (None = StdError default)
 
 
@@ -399,6 +404,7 @@ class FunctionCollector:
             generic_enums: Generic enum table (for validation)
         """
         self.r = reporter
+        self.current_unit_file: Optional[str] = None  # File of the unit being collected
         self.funcs = funcs
         self.generic_funcs = generic_funcs
         self.extensions = extensions
@@ -408,7 +414,8 @@ class FunctionCollector:
         self.generic_structs = generic_structs
         self.generic_enums = generic_enums
 
-    def collect_functions(self, root: Program, unit_name: Optional[str] = None) -> None:
+    def collect_functions(self, root: Program, unit_name: Optional[str] = None,
+                          unit_file: Optional[str] = None) -> None:
         """Collect all function definitions from program AST.
 
         Args:
@@ -419,6 +426,7 @@ class FunctionCollector:
         if isinstance(funcs, list):
             for fn in funcs:
                 if isinstance(fn, FuncDef):
+                    self.current_unit_file = unit_file
                     self._collect_function_def(fn, unit_name=unit_name)
 
     def collect_extensions(self, root: Program) -> None:
@@ -482,6 +490,18 @@ class FunctionCollector:
             # Register all constants from this module (e.g., PI, E, TAU)
             for const_name, stdlib_const in module.constants.items():
                 self.funcs.register_stdlib_function(module_path, stdlib_const)
+
+    def _emit_duplicate_function(self, name: str, name_span: Optional[Span],
+                                 prev: 'FuncSig') -> None:
+        """Report a duplicate function, pointing at the first definition.
+
+        The first definition may live in ANOTHER unit, and Phase 0 collects every
+        unit through one reporter -- so both halves name their file explicitly.
+        Reporter._get_source_lines() re-reads the other file to draw its snippet.
+        """
+        er.emit_with(self.r, ERR.CE0101, name_span,
+                     filename=self.current_unit_file, name=name) \
+            .note("first defined here", prev.name_span, prev.filename).emit()
 
     def _collect_function_def(self, fn: FuncDef, unit_name: Optional[str] = None) -> None:
         """Dispatch function collection based on whether it's generic.
@@ -559,19 +579,17 @@ class FunctionCollector:
 
         # Check for duplicates in ALL function tables
         if name in self.funcs.by_name:
-            prev = self.funcs.by_name[name]
-            er.emit_with(self.r, ERR.CE0101, name_span, name=name) \
-                .note("first defined here", prev.name_span).emit()
+            self._emit_duplicate_function(name, name_span, self.funcs.by_name[name])
             return
 
+
         if name in self.generic_funcs.by_name:
-            prev = self.generic_funcs.by_name[name]
-            er.emit_with(self.r, ERR.CE0101, name_span, name=name) \
-                .note("first defined here", prev.name_span).emit()
+            self._emit_duplicate_function(name, name_span, self.generic_funcs.by_name[name])
             return
 
         sig = FuncSig(
             name=name,
+            filename=self.current_unit_file,
             name_span=name_span,
             ret_type=ret_ty,
             ret_span=ret_span,
