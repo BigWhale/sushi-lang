@@ -33,7 +33,7 @@ REFERENCE_PATTERNS = [
 
 # The number of registered codes. Bumping this is a deliberate act: it is the
 # tripwire for silent loss when errors.py is split into a package.
-REGISTRY_SIZE = 276
+REGISTRY_SIZE = 277
 
 # Codes whose numeric range does not match their category. SHRINK-ONLY: never add.
 # Renumbering would break EXPECT_ERROR_CODE headers and the docs, so these stay

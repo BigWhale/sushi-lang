@@ -6,7 +6,8 @@ from lark import Lark, Token
 
 if TYPE_CHECKING:
     from sushi_lang.internals.report import Span
-    from sushi_lang.semantics.ast import Expr
+    from sushi_lang.semantics.ast import Expr, InterpolatedString, StringLit
+    from sushi_lang.semantics.ast_builder.builder import ASTBuilder
 
 
 def process_string_escapes(raw_string: str) -> str:

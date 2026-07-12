@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 from lark import Token
 from sushi_lang.semantics.ast import Expr, IntLit, FloatLit, BoolLit, Name
 from sushi_lang.semantics.ast_builder.utils.string_processing import parse_string_token
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import unhandled
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.internals.report import span_of
 
@@ -55,4 +56,4 @@ def expr_from_token(tok: Token, ast_builder: 'ASTBuilder') -> Expr:
     if t == "NAME":
         return Name(id=str(tok.value), loc=span_of(tok))
 
-    raise NotImplementedError(f"unexpected token in atom: {t}")
+    unhandled(tok)

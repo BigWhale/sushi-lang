@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from lark import Tree
 from sushi_lang.semantics.ast import Let, Rebind
 from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree, ice
 from sushi_lang.semantics.ast_builder.utils.expression_discovery import find_outer_expr_structural, _EXPR_NODES
 from sushi_lang.internals.report import span_of
 
@@ -16,7 +16,7 @@ def parse_let_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Let:
     """Parse let_stmt: LET [type] NAME "=" expr"""
     nm = first_name(node.children)
     if nm is None:
-        raise NotImplementedError("let: NAME missing")
+        ice(node, "NAME missing")
 
     # Extract type annotation
     type_node = None
@@ -36,7 +36,7 @@ def parse_let_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Let:
     else:
         expr_node = find_outer_expr_structural(node)
         if expr_node is None:
-            raise NotImplementedError("let: expression missing")
+            ice(node, "expression missing")
         value = ast_builder._expr(expr_node)
 
     return Let(
@@ -54,7 +54,7 @@ def parse_rebind_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Rebind:
     # Find the target (postfix expression - can be Name or MemberAccess)
     target_node = first_tree(node.children, "maybe_call")
     if target_node is None:
-        raise NotImplementedError("rebind: target missing")
+        ice(node, "target missing")
 
     # Find the value expression (the second expression child, after the target)
     # The grammar is: rebind_stmt: postfix ASSIGN_REBIND expr
@@ -66,6 +66,6 @@ def parse_rebind_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Rebind:
             break
 
     if expr_node is None:
-        raise NotImplementedError("rebind: value expression missing")
+        ice(node, "value expression missing")
 
     return Rebind(target=ast_builder._expr(target_node), value=ast_builder._expr(expr_node), loc=span_of(node))

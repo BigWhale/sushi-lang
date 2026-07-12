@@ -7,7 +7,7 @@ from lark import Tree, Token
 from sushi_lang.semantics.ast import ExternalBlock, ExternalDecl
 from sushi_lang.semantics.typesys import Type, TYPE_NODE_NAMES
 from sushi_lang.semantics.ast_builder.declarations.functions import parse_params
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, ice
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -81,9 +81,9 @@ def parse_extern_decl(t: Tree, ast_builder: 'ASTBuilder') -> ExternalDecl:
                 link_tok = child
 
     if name_tok is None:
-        raise NotImplementedError("extern_decl: missing NAME")
+        ice(t, "missing NAME")
     if link_tok is None:
-        raise NotImplementedError("extern_decl: missing link-name STRING")
+        ice(t, "missing link-name STRING")
 
     # The trailing `...` (untyped C varargs) lives inside the extern_params node.
     params_node = first_tree(t.children, "extern_params")

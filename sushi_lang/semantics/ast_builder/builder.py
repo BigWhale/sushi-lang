@@ -38,6 +38,7 @@ from sushi_lang.internals.report import span_of
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     first_tree as _first_tree,
     find_tree_recursive as _find_tree_recursive,
+    expect,
 )
 
 # Expression discovery utilities
@@ -89,7 +90,7 @@ class ASTBuilder:
         """
         from sushi_lang.semantics.ast_builder.declarations import imports, functions, constants, structs, enums, perks, extensions, externals
 
-        assert isinstance(tree, Tree) and tree.data == "program"
+        tree = expect(tree, "program")
         uses: List[UseStatement] = []
         constants_list: List[ConstDef] = []
         structs_list: List[StructDef] = []

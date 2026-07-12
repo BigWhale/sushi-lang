@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from lark import Tree
 from sushi_lang.semantics.ast import ConstDef
 from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, ice
 from sushi_lang.semantics.ast_builder.utils.expression_discovery import _EXPR_NODES
 from sushi_lang.internals.report import span_of
 
@@ -26,7 +26,7 @@ def parse_constdef(t: Tree, ast_builder: 'ASTBuilder') -> ConstDef:
     # Extract constant name
     name_tok = first_name(t.children)
     if name_tok is None:
-        raise NotImplementedError("const_def: missing constant NAME")
+        ice(t, "missing constant NAME")
 
     # Extract value expression
     value_expr = None
@@ -36,7 +36,7 @@ def parse_constdef(t: Tree, ast_builder: 'ASTBuilder') -> ConstDef:
             break
 
     if value_expr is None:
-        raise NotImplementedError("const_def: missing value expression")
+        ice(t, "missing value expression")
 
     # Parse components
     const_type = ast_builder._parse_type(type_node) if type_node else None

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from lark import Tree
 from sushi_lang.semantics.ast import ExtendDef
 from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree, find_tree_recursive
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree, find_tree_recursive, ice
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ def parse_extenddef(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDef:
     # Extract method name
     name_tok = first_name(t.children)
     if name_tok is None:
-        raise NotImplementedError("extend_def: missing method NAME")
+        ice(t, "missing method NAME")
 
     # Extract parameters (excluding implicit self)
     params_node = first_tree(t.children, "parameters")
@@ -36,12 +36,12 @@ def parse_extenddef(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDef:
         return_type_node = type_nodes[1]
     elif len(type_nodes) == 1:
         # Only one type node found, this might be malformed
-        raise NotImplementedError("extend_def: missing return type")
+        ice(t, "missing return type")
 
     # Extract body
     body_node = first_tree(t.children, "block") or find_tree_recursive(t, "block")
     if body_node is None:
-        raise NotImplementedError("extend_def: missing body block")
+        ice(t, "missing body block")
 
     # Parse components
     from sushi_lang.semantics.ast_builder.declarations.functions import parse_params
@@ -82,12 +82,12 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
             break
 
     if not suffix:
-        raise NotImplementedError("extend_stmt: missing extend_def suffix")
+        ice(t, "missing extend_def suffix")
 
     # Extract method name from suffix
     name_tok = first_name(suffix.children)
     if name_tok is None:
-        raise NotImplementedError("extend_stmt (def): missing method NAME")
+        ice(suffix, "missing method NAME")
 
     # Extract parameters
     params_node = first_tree(suffix.children, "parameters")
@@ -102,7 +102,7 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
     # Extract body
     body_node = first_tree(suffix.children, "block") or find_tree_recursive(suffix, "block")
     if body_node is None:
-        raise NotImplementedError("extend_stmt (def): missing body block")
+        ice(suffix, "missing body block")
 
     # Parse components
     from sushi_lang.semantics.ast_builder.declarations.functions import parse_params

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List, Union
 from lark import Tree, Token
 from sushi_lang.semantics.ast import Match, MatchArm, Pattern, WildcardPattern, OwnPattern, Block, Expr
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, ice, expect, unhandled
 from sushi_lang.semantics.ast_builder.utils.expression_discovery import _EXPR_NODES, contains_expr_like
 from sushi_lang.internals.report import span_of
 
@@ -26,10 +26,10 @@ def parse_match_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Match:
                 scrutinee_tree = child
 
     if scrutinee_tree is None:
-        raise NotImplementedError("match_stmt: missing scrutinee expression")
+        ice(node, "missing scrutinee expression")
 
     if not arms:
-        raise NotImplementedError("match_stmt: must have at least one match arm")
+        ice(node, "must have at least one match arm")
 
     scrutinee = ast_builder._expr(scrutinee_tree)
     return Match(scrutinee=scrutinee, arms=arms, loc=span_of(node))
@@ -37,7 +37,7 @@ def parse_match_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Match:
 
 def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
     """Parse match_arm: (pattern | wildcard_pattern) "->" (expr _NEWLINE | block)"""
-    assert t.data == "match_arm"
+    t = expect(t, "match_arm")
 
     # Extract pattern (can be pattern or wildcard_pattern)
     pattern: Union[Pattern, WildcardPattern]
@@ -49,7 +49,7 @@ def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
     elif wildcard_tree is not None:
         pattern = WildcardPattern(loc=span_of(wildcard_tree))
     else:
-        raise NotImplementedError("match_arm: missing pattern")
+        ice(t, "missing pattern")
 
     # Extract body (either expression or block)
     body: Union[Expr, Block] = None  # type: ignore
@@ -71,17 +71,17 @@ def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
                         # It's an expression - keep as expression
                         body = ast_builder._expr(inline_child)
                     else:
-                        raise NotImplementedError(f"unhandled match_arm_inline child: {inline_child.data}")
+                        unhandled(inline_child)
                 else:
                     # Token - shouldn't happen
-                    raise NotImplementedError(f"unexpected token in match_arm_inline: {inline_child}")
+                    unhandled(inline_child)
                 break
             elif child.data in _EXPR_NODES or contains_expr_like(child):
                 body = ast_builder._expr(child)
                 break
 
     if body is None:
-        raise NotImplementedError("match_arm: missing body")
+        ice(t, "missing body")
 
     return MatchArm(pattern=pattern, body=body, loc=span_of(t))
 
@@ -94,12 +94,12 @@ def parse_pattern(t: Tree, ast_builder: 'ASTBuilder') -> Pattern:
     - FileResult.Err(FileError.NotFound()) - nested pattern
     - FileResult.Err(_) - wildcard
     """
-    assert t.data == "pattern"
+    t = expect(t, "pattern")
 
     # Extract enum and variant names (two NAME tokens)
     names = [ch for ch in t.children if isinstance(ch, Token) and ch.type == "NAME"]
     if len(names) < 2:
-        raise NotImplementedError("pattern: expected EnumName.VariantName format")
+        ice(t, "expected EnumName.VariantName format")
 
     enum_name_tok = names[0]
     variant_name_tok = names[1]
@@ -154,17 +154,17 @@ def parse_own_pattern(t: Tree, ast_builder: 'ASTBuilder') -> 'OwnPattern':
     The NAME should be "Own", but we verify it at runtime.
     Returns an OwnPattern node with the inner pattern.
     """
-    assert t.data == "own_pattern_call"
+    t = expect(t, "own_pattern_call")
 
     # Verify the NAME is "Own"
     name_token = next((c for c in t.children if isinstance(c, Token) and c.type == "NAME"), None)
     if name_token is None or str(name_token.value) != "Own":
-        raise ValueError(f"Expected 'Own' in pattern, got {name_token.value if name_token else 'nothing'}")
+        ice(t, f"expected 'Own' in pattern, got {name_token.value if name_token else 'nothing'}")
 
     # Find the pattern_item inside
     pattern_item_tree = first_tree(t.children, "pattern_item")
     if pattern_item_tree is None:
-        raise ValueError("own_pattern must contain a pattern_item")
+        ice(t, "own_pattern must contain a pattern_item")
 
     # Parse the inner pattern_item
     # It can be: pattern | NAME | wildcard_pattern | own_pattern (nested)
@@ -187,7 +187,7 @@ def parse_own_pattern(t: Tree, ast_builder: 'ASTBuilder') -> 'OwnPattern':
         if token and token.type == "NAME":
             inner = str(token.value)
         else:
-            raise ValueError("Invalid own_pattern inner item")
+            ice(t, "invalid own_pattern inner item")
 
     return OwnPattern(
         inner_pattern=inner,

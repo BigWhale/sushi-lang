@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 from lark import Tree, Token
 from sushi_lang.semantics.ast import Expr, UnaryOp, BinaryOp, CastExpr, Borrow, UnOp, normalize_bin_op
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree_child
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree_child, ice, unhandled
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -35,7 +35,7 @@ def expr_unary(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
             return UnaryOp(op="not", expr=rhs, loc=span_of(t))
         return ast_builder._expr(t.children[0])
 
-    raise NotImplementedError(f"unexpected unary node: {tag}")
+    unhandled(t)
 
 
 def bin_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
@@ -48,7 +48,7 @@ def bin_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
             items.append(c.value)
 
     if not items:
-        raise NotImplementedError("empty binary chain")
+        ice(t, "empty binary chain")
 
     lhs = items[0]
     i = 1
@@ -99,7 +99,7 @@ def expr_borrow(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
 
     if mutability is None:
         # This should not happen with the new grammar
-        raise ValueError("Borrow expression missing borrow mode (peek/poke)")
+        ice(t, "borrow expression missing borrow mode (peek/poke)")
 
     sub = first_tree_child(t)
     borrowed_expr = ast_builder._expr(sub)
@@ -142,4 +142,4 @@ def parse_range_expr(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
         )
 
     # Unexpected structure
-    raise NotImplementedError(f"unexpected range node structure: {len(children)} children")
+    ice(t, f"unexpected range structure: {len(children)} children")

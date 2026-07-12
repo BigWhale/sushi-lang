@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import List, Union, Tuple, Optional, TYPE_CHECKING
 from lark import Tree, Token
 from sushi_lang.semantics.ast import Expr, Call, MethodCall, Name, Spread
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, find_tree_recursive, first_name
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, find_tree_recursive, first_name, ice, expect
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -48,7 +48,7 @@ def extract_call_args(call_node: Tree, ast_builder: 'ASTBuilder') -> Tuple[List[
                     field_names = []
                     for named_arg in named.children:
                         # named_arg: NAME ":" expr
-                        assert named_arg.data == "named_arg"
+                        named_arg = expect(named_arg, "named_arg")
                         name_token = first_name(named_arg.children)
 
                         # Find the expression node (it's the first Tree child after the NAME)
@@ -59,7 +59,7 @@ def extract_call_args(call_node: Tree, ast_builder: 'ASTBuilder') -> Tuple[List[
                                 break
 
                         if name_token is None or expr_node is None:
-                            raise NotImplementedError("Malformed named_arg")
+                            ice(named_arg, "malformed named_arg")
 
                         field_names.append(str(name_token))
                         args.append(ast_builder._expr(expr_node))
@@ -79,7 +79,7 @@ def call_from_parts(name_tok_or_str: Union[Token, str], call_tail: Tree, ast_bui
     elif isinstance(name_tok_or_str, str):
         callee = Name(id=name_tok_or_str, loc=None)
     else:
-        raise AssertionError("invalid callee in call")
+        ice(call_tail, "invalid callee in call")
 
     args, field_names = extract_call_args(call_tail, ast_builder)
     return Call(callee=callee, args=args, field_names=field_names, loc=span_of(call_tail))
@@ -87,11 +87,11 @@ def call_from_parts(name_tok_or_str: Union[Token, str], call_tail: Tree, ast_bui
 
 def method_call_from_parts(receiver: Expr, method_call_node: Tree, ast_builder: 'ASTBuilder') -> MethodCall:
     """Parse method_call: \".\" NAME \"(\" [args] \")\" """
-    assert method_call_node.data == "method_call"
+    method_call_node = expect(method_call_node, "method_call")
 
     method_name_tok = first_name(method_call_node.children)
     if method_name_tok is None:
-        raise NotImplementedError("method_call: missing method NAME")
+        ice(method_call_node, "missing method NAME")
 
     # Extract arguments (named arguments not supported for methods yet)
     args, field_names = extract_call_args(method_call_node, ast_builder)

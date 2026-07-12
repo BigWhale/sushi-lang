@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, List, Optional
 from lark import Tree, Token
 from sushi_lang.semantics.ast import FuncDef, Param
 from sushi_lang.semantics.typesys import Type, TYPE_NODE_NAMES
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree, find_tree_recursive
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree, find_tree_recursive, ice, expect
 from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
 from sushi_lang.internals.report import span_of
 
@@ -17,7 +17,7 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
     name_tok = first_name(t.children)
 
     if name_tok is None:
-        raise NotImplementedError("function_def: missing NAME")
+        ice(t, "missing NAME")
 
     # Check for PUBLIC token
     is_public = False
@@ -45,7 +45,7 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
 
     body_node = first_tree(t.children, "block") or find_tree_recursive(t, "block")
     if body_node is None:
-        raise NotImplementedError("function_def: missing body block")
+        ice(t, "missing body block")
 
     # Type-pack names declared by this function. A `variadic_param` whose element
     # type names one of these is a v2 type-pack value-param (...Ts args), not a v1
@@ -95,7 +95,7 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> 
     untyped C varargs); the ELLIPSIS token is ignored here and handled by the
     extern declaration parser.
     """
-    assert t.data in ("parameters", "extern_params")
+    t = expect(t, "parameters", "extern_params")
 
     from sushi_lang.semantics.typesys import DynamicArrayType
     from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name as _first_name
@@ -124,13 +124,13 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> 
                 None,
             )
             if ty_node is None:
-                raise NotImplementedError(f"{node.data}: missing type")
+                ice(node, "missing type")
 
             ty = ast_builder._parse_type(ty_node)
 
             nm_tok = first_name(node.children)
             if nm_tok is None:
-                raise NotImplementedError(f"{node.data}: missing NAME")
+                ice(node, "missing NAME")
 
             is_variadic = node.data == "variadic_param"
             is_pack = False

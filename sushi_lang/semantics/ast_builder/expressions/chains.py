@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from lark import Tree, Token
 from sushi_lang.semantics.ast import Expr, Name, BlankLit, MemberAccess, DotCall, TryExpr, Call
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, first_method_name
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, first_method_name, ice, unhandled
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -66,7 +66,7 @@ def expr_atom(atom: Tree | Token, ast_builder: 'ASTBuilder') -> Expr:
     if lone_tok is not None:
         return literals.expr_from_token(lone_tok, ast_builder)
 
-    raise NotImplementedError("malformed atom")
+    unhandled(atom)
 
 
 def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
@@ -122,7 +122,7 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
                         loc=span_of(t)
                     )
                 else:
-                    raise NotImplementedError("method_call: missing method NAME")
+                    ice(call_node, "missing method NAME")
 
             elif call_node.data == "member_access":
                 result_expr = members.member_access_from_parts(result_expr, call_node)
@@ -134,6 +134,6 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
                 result_expr = TryExpr(expr=result_expr, loc=span_of(call_node))
 
             else:
-                raise NotImplementedError(f"unexpected call type: {call_node.data}")
+                unhandled(call_node)
 
     return result_expr

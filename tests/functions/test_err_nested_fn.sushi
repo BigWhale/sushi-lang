@@ -1,0 +1,10 @@
+# Error: a function may only be defined at the top level.
+#
+# This program PARSES -- the grammar allows a `fn` inside a body -- so it is a
+# real user error, not a builder bug. It used to escape as a raw traceback.
+# EXPECT_ERROR_CODE: CE6101
+
+fn main() i32:
+    fn inner() i32:
+        return Result.Ok(1)
+    return Result.Ok(0)

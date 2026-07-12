@@ -149,6 +149,11 @@ _add(ErrorMessage("CE0002", Severity.ERROR,
     Category.INTERNAL, "The grammar produced a node shape the compiler cannot build. "
                        "No accepted source can reach this: it is a compiler bug."))
 
+_add(ErrorMessage("CE0003", Severity.ERROR,
+    "internal error: unhandled parse-tree node '{node}'",
+    Category.INTERNAL, "The grammar produces this node but the AST builder does not "
+                       "dispatch on it -- grammar/builder drift. This is a compiler bug."))
+
 _add(ErrorMessage("CE0007", Severity.ERROR,
     "standard library build failed: {detail}",
     Category.INTERNAL, "A generator under sushi_stdlib/src failed to produce the "
