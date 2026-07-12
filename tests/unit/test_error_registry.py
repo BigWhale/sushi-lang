@@ -184,6 +184,33 @@ def test_unreferenced_codes_match_the_allowlist():
     )
 
 
+def test_runtime_texts_use_printf_or_braces_but_never_both():
+    """An RE text is baked into the binary as a C string.
+
+    For emit_runtime_error_with_values the registry text IS the printf format, so
+    its % conversions must match the values the call site passes. For
+    emit_runtime_error it may carry {} placeholders, formatted at codegen time.
+    Mixing the two would either eat a conversion or print a literal brace.
+    """
+    for code, msg in REGISTRY.items():
+        if not code.startswith("RE"):
+            continue
+        conversions = re.findall(r"%[-#0 +]*\d*(?:\.\d+)?[diouxXeEfgGcsp]", msg.text)
+        placeholders = re.findall(r"\{(\w+)\}", msg.text)
+        assert not (conversions and placeholders), (
+            f"{code} mixes printf conversions {conversions} with placeholders "
+            f"{placeholders}: {msg.text!r}"
+        )
+
+
+def test_re2020_format_matches_its_call_site():
+    """RE2020's text is the format string the bounds check feeds two i32s to."""
+    text = REGISTRY["RE2020"].text
+    assert re.findall(r"%[a-zA-Z]", text) == ["%d", "%d"], (
+        f"RE2020's text must take exactly two %d (index, size): {text!r}"
+    )
+
+
 def test_every_registered_code_has_a_severity_and_category():
     for code, msg in REGISTRY.items():
         assert isinstance(msg.severity, Severity), code

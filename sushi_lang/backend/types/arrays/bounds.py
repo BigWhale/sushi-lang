@@ -52,7 +52,6 @@ def emit_bounds_check(
     if on_fail is None:
         codegen.runtime.errors.emit_runtime_error_with_values(
             "RE2020",
-            "array index %d out of bounds for array of size %d",
             index_value,
             size_value,
         )

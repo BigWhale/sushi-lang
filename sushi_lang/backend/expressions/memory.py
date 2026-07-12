@@ -184,7 +184,7 @@ def emit_realloc_call(codegen: 'LLVMCodegen', old_ptr: ir.Value, new_size: ir.Va
 
     # Null block: emit runtime error and exit
     codegen.builder.position_at_end(null_block)
-    codegen.runtime.errors.emit_runtime_error("RE2021", "memory reallocation failed")
+    codegen.runtime.errors.emit_runtime_error("RE2021")
     codegen.builder.unreachable()
 
     # Success block: continue normal execution

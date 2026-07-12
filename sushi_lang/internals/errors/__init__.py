@@ -58,8 +58,18 @@ __all__ = [
     "emit",
     "emit_exception",
     "emit_with",
+    "message_for",
     "raise_internal_error",
 ]
+
+
+def message_for(code: str, **kwargs) -> str:
+    """The registry text for a code, formatted.
+
+    The runtime-error emitters use this instead of carrying their own hand-written
+    strings, so a code says the same thing wherever it fires.
+    """
+    return _fmt(code, **kwargs)
 
 
 def emit(r: Reporter, em: ErrorMessage, span: Optional[Span], **kwargs) -> None:

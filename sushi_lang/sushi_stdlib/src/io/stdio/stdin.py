@@ -312,7 +312,7 @@ def generate_stdin_read_bytes(module: ir.Module) -> None:
 
     # Allocation failed
     builder.position_at_end(fail_block)
-    emit_runtime_error(module, builder, "RE2021", "Memory allocation failed")
+    emit_runtime_error(module, builder, "RE2021")
 
     # Allocation succeeded - read bytes
     builder.position_at_end(continue_block)
