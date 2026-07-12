@@ -1,0 +1,30 @@
+# Guards Tier 4.6: `match` on a call inside an extension method body.
+#
+# Monomorphized extension bodies are validated by a *fresh* TypeValidator
+# (semantic_analyzer.py, "Validate monomorphized generic extension methods"), built
+# without the unit context the per-unit validators get. Since the backend no longer
+# re-infers a match scrutinee's type -- it reads resolved_scrutinee_type, which Pass 2
+# stamps -- an extension body is the place that annotation is most likely to go missing.
+# A miss silently drops the pattern bindings.
+#
+# Covers both scrutinee kinds: a plain user call and a stdlib call.
+# EXPECT_STDOUT_EXACT: "42\n"
+use <time>
+
+fn plain(i32 n) i32:
+    return Result.Ok(n * 2)
+
+extend i32 boosted() i32:
+    match plain(self):
+        Result.Ok(v) ->
+            match msleep(1 as i64):
+                Result.Ok(_) ->
+                    return v
+                Result.Err(_) ->
+                    return -1
+        Result.Err(_) ->
+            return 0
+
+fn main() i32:
+    println(21.boosted())
+    return Result.Ok(0)

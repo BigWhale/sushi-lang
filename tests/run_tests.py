@@ -19,6 +19,7 @@ import subprocess
 import sys
 import json
 import os
+import shutil
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
@@ -103,6 +104,21 @@ def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:
         print(f"  Libraries compiled to {bin_dir}")
 
     return True
+
+
+def purge_unit_caches(project_root: Path, verbose: bool = False) -> None:
+    """Delete every tests/**/__sushi_cache__ before a run.
+
+    Multi-unit tests reuse per-unit .o files keyed by a semantic fingerprint of the
+    source. The fingerprint does not cover the compiler's own source, so a warm cache
+    survives a change to codegen and the multifile tests would then pass against
+    stale objects emitted by the previous compiler.
+    """
+    for cache in (project_root / "tests").rglob("__sushi_cache__"):
+        if cache.is_dir():
+            if verbose:
+                print(f"  Removing stale cache: {cache}")
+            shutil.rmtree(cache, ignore_errors=True)
 
 
 def leakcheck_lib_path(project_root: Path) -> Path:
@@ -246,6 +262,9 @@ def main():
         args.leaks = True
     if args.leaks:
         args.enhanced = True
+
+    # Before either runner: a warm cache can outlive a codegen change (see purge_unit_caches).
+    purge_unit_caches(Path(__file__).parent.parent, verbose=args.verbose)
 
     # Delegate to enhanced runner if requested
     if args.enhanced:

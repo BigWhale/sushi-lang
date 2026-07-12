@@ -109,7 +109,11 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
     # call; otherwise the expression is not callable.
     from sushi_lang.semantics.typesys import FunctionType
     if not isinstance(call.callee, Name):
-        callee_ty = validator.infer_expression_type(call.callee)
+        # validate_expression, not infer_expression_type: the callee is a full expression
+        # and needs validating in its own right, which is also what annotates it. Inferring
+        # alone left a `??` callee (`fns.get(0)??(10)`) unannotated, so the backend fell
+        # back to re-deriving its type.
+        callee_ty = validator.validate_expression(call.callee)
         if isinstance(callee_ty, FunctionType):
             call.callee_fn_type = callee_ty  # backend reads this for the indirect call
             validate_indirect_call(validator, call, callee_ty)

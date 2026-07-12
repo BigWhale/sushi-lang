@@ -92,7 +92,7 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
     Returns:
         The monomorphized EnumType of the scrutinee, or None if not found.
     """
-    from sushi_lang.semantics.ast import Name, DotCall, MethodCall, Call, MemberAccess
+    from sushi_lang.semantics.ast import Name, DotCall, MethodCall, MemberAccess
     from sushi_lang.semantics.typesys import EnumType, ResultType, StructType
 
     # Try to get type from variable table if it's a Name
@@ -200,15 +200,10 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
                             return field_type
         return None
 
-    # For Call nodes (function calls like simple_result()), infer the return type
-    # which is Result<T> for most user functions
-    if isinstance(scrutinee, Call):
-        try:
-            from sushi_lang.backend.expressions.operators import _infer_call_return_type
-            return _infer_call_return_type(codegen, scrutinee)
-        except Exception:
-            # If inference fails, fall through to other methods
-            pass
+    # A Call scrutinee (`match simple_result():`) needs no branch here: Pass 2 types the
+    # call and stamps resolved_scrutinee_type, which emit_match reads before ever calling
+    # this function. The backend used to re-infer it behind a bare `except Exception: pass`
+    # that silently swallowed a miss and dropped the pattern bindings.
 
     # For DotCall or MethodCall (method calls like "hello".find()), check if the type
     # checker already inferred and annotated the return type (Phase 2)

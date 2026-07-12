@@ -15,6 +15,10 @@ a.out
 /tests/*.bin
 /tests/*.txt
 
+# Regenerated at the repo root by the test suite
+/sushi_spike.ll
+/sushi_spike_bin
+
 # Standard library build artifacts (precompiled .bc are built on the fly /
 # in CI, not tracked in git)
 /sushi_lang/sushi_stdlib/dist/
