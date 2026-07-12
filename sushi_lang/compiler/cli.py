@@ -337,13 +337,8 @@ def main(argv: list[str] | None = None) -> int:
         session.crash = exc
         rc = _report(session, exc)
     except Exception as exc:
-        # Legacy Lark path; replaced by the CE6xxx syntax diagnostics.
-        from sushi_lang.internals.parse_errors import handle_parse_exception
         session.crash = exc
-        if handle_parse_exception(exc, session.reporter):
-            rc = 2
-        else:
-            rc = _report(session, _as_ice(exc))
+        rc = _report(session, _as_ice(exc))
 
     _flush(session)
     return rc

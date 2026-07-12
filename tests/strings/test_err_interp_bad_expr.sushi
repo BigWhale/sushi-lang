@@ -1,0 +1,10 @@
+# Error: the text inside {braces} is not a valid expression.
+#
+# This used to escape as a raw `KeyError: '$END'` plus a 24-line dump of Lark's
+# internal terminal names: the interpolation parser caught a perfectly renderable
+# UnexpectedToken and relaunched it as a bare Exception.
+# EXPECT_ERROR_CODE: CE6010
+
+fn main() i32:
+    println("val {1 +}")
+    return Result.Ok(0)
