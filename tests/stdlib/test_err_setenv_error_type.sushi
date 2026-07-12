@@ -1,0 +1,17 @@
+# Guards Tier 4.6: setenv() returns Result<i32, EnvError>, and Sushi matches error types
+# strictly, so propagating it with ?? out of a function that returns the default StdError
+# is a type error.
+#
+# This used to compile: Pass 2 could not type a sys/env call at all (it looked up a
+# one-arg "Result<i32>" enum that is never registered), so it never ran the CE2511 check,
+# and the backend went on to emit an EnvError payload into a StdError error slot.
+# EXPECT_ERROR_CODE: CE2511
+use <sys/env>
+
+fn set_it() i32:
+    let i32 rc = setenv("SUSHI_TEST_STRICT", "x")??
+    return Result.Ok(rc)
+
+fn main() i32:
+    println(set_it().realise(-1))
+    return Result.Ok(0)

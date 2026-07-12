@@ -21,6 +21,13 @@ from sushi_lang.semantics.ast import (
 )
 
 
+# Stdlib modules whose registry entries declare a return type outright, i.e. their
+# get_return_type() takes no arguments. `math` is deliberately absent: its return type
+# depends on the argument types, so its resolver takes params and visit_call handles it
+# separately. Keyed by `use <path>`, so a function only resolves if its module is imported.
+_REGISTRY_TYPED_STDLIB_MODULES = ("time", "sys/env", "sys/process", "random", "io/files")
+
+
 def function_value_type_of(type_validator, name: str) -> Optional[Type]:
     """Build the FunctionType for a bare reference to a plain top-level function.
 
@@ -895,6 +902,40 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
         return None
 
+    def _materialize_stdlib_return_type(self, ret_type: Optional[Type]) -> Optional[Type]:
+        """Resolve a registry-declared stdlib return type into a concrete type.
+
+        The registry declares return types structurally, because it has no access to the
+        enum table: a Result comes back as ResultType with an UnknownType error (e.g.
+        UnknownType("FileError")), and getenv's Maybe as GenericTypeRef("Maybe", (string,)).
+        Materialize both into real enums here, so `??` and `match` see a concrete EnumType
+        rather than a forward reference. Non-generic returns (i32, bool, ~) pass through.
+        """
+        from sushi_lang.semantics.typesys import ResultType
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
+        from sushi_lang.semantics.generics.results import ensure_result_type_in_table
+        from sushi_lang.semantics.type_resolution import resolve_unknown_type
+
+        structs = self.type_validator.struct_table.by_name
+        enums = self.type_validator.enum_table.by_name
+
+        if isinstance(ret_type, ResultType):
+            ok_type = resolve_unknown_type(ret_type.ok_type, structs, enums)
+            err_type = resolve_unknown_type(ret_type.err_type, structs, enums)
+            return ensure_result_type_in_table(
+                self.type_validator.enum_table, ok_type, err_type
+            ) or ret_type
+
+        if (isinstance(ret_type, GenericTypeRef) and ret_type.base_name == "Maybe"
+                and len(ret_type.type_args) == 1):
+            value_type = resolve_unknown_type(ret_type.type_args[0], structs, enums)
+            return ensure_maybe_type_in_table(
+                self.type_validator.enum_table, value_type
+            ) or ret_type
+
+        return ret_type
+
     def visit_call(self, node: Call) -> Optional[Type]:
         """Infer function call type."""
         from sushi_lang.semantics.typesys import FunctionType, ResultType
@@ -926,66 +967,21 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             # open() returns FileResult enum
             return self.type_validator.enum_table.by_name.get("FileResult")
 
-        # Check for time module functions
-        if function_name in {'sleep', 'msleep', 'usleep', 'nanosleep'}:
-            # All time functions return Result<i32>
-            result_i32_name = "Result<i32>"
-            if result_i32_name in self.type_validator.enum_table.by_name:
-                return self.type_validator.enum_table.by_name[result_i32_name]
-            return None
-
-        # Check for sys/env module functions
-        if function_name == 'getenv':
-            # getenv() returns Maybe<string>
-            maybe_string_name = "Maybe<string>"
-            if maybe_string_name in self.type_validator.enum_table.by_name:
-                return self.type_validator.enum_table.by_name[maybe_string_name]
-            return None
-        if function_name == 'setenv':
-            # setenv() returns Result<i32>
-            result_i32_name = "Result<i32>"
-            if result_i32_name in self.type_validator.enum_table.by_name:
-                return self.type_validator.enum_table.by_name[result_i32_name]
-            return None
-
-        # Check for sys/process module functions (getcwd -> Result<string>,
-        # chdir -> Result<i32>, getpid/getuid -> i32). Reuse the stdlib registry's
-        # declared return type so inline `match getcwd()` / `getcwd()??` type-check
-        # (the registry is the single source of truth the backend also consults).
-        process_func = self.type_validator.func_table.lookup_stdlib_function("sys/process", function_name)
-        if process_func is not None and not process_func.is_constant:
-            return process_func.get_return_type()
-
-        # Check for io/files module functions
-        if function_name in {'exists', 'is_file', 'is_dir'}:
-            # These functions return bool (i8)
-            return BuiltinType.BOOL
-        if function_name == 'file_size':
-            # file_size() returns Result<i64, FileError>
-            from sushi_lang.semantics.typesys import ResultType, UnknownType
-            from sushi_lang.semantics.type_resolution import resolve_unknown_type
-
-            # Get FileError enum type
-            file_error = self.type_validator.enum_table.by_name.get("FileError")
-            if file_error is None:
-                # Fallback to UnknownType if FileError not registered yet
-                file_error = UnknownType("FileError")
-
-            # Return ResultType - it will be resolved to EnumType when needed
-            return ResultType(ok_type=BuiltinType.I64, err_type=file_error)
-        if function_name in {'remove', 'rename', 'copy', 'mkdir', 'rmdir'}:
-            # These functions return Result<i32, FileError>
-            from sushi_lang.semantics.typesys import ResultType, UnknownType
-            from sushi_lang.semantics.type_resolution import resolve_unknown_type
-
-            # Get FileError enum type
-            file_error = self.type_validator.enum_table.by_name.get("FileError")
-            if file_error is None:
-                # Fallback to UnknownType if FileError not registered yet
-                file_error = UnknownType("FileError")
-
-            # Return ResultType - it will be resolved to EnumType when needed
-            return ResultType(ok_type=BuiltinType.I32, err_type=file_error)
+        # Stdlib functions whose return type the registry declares outright. The registry
+        # is the single source of truth the backend consults too, so reading it here keeps
+        # the two from drifting. Hardcoded copies used to live here and had already gone
+        # stale: they looked up a one-arg "Result<i32>" enum that is never registered (the
+        # canonical name is two-arg, Result<T, E>), so every time/sys-env call silently
+        # returned None and fell through to backend re-inference.
+        #
+        # math is excluded on purpose: its return type depends on the argument types, so
+        # its get_return_type() takes params and it keeps its own branch below.
+        for module_path in _REGISTRY_TYPED_STDLIB_MODULES:
+            stdlib_func = self.type_validator.func_table.lookup_stdlib_function(
+                module_path, function_name
+            )
+            if stdlib_func is not None and not stdlib_func.is_constant:
+                return self._materialize_stdlib_return_type(stdlib_func.get_return_type())
 
         # Check for math module functions
         if function_name in {'abs', 'min', 'max', 'sqrt', 'pow', 'floor', 'ceil', 'round', 'trunc'}:
