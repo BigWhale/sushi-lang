@@ -70,16 +70,16 @@ class ExpressionEmitter:
                 return operators.emit_operator(self.codegen, expr, to_i1)
 
             case Name():
-                from sushi_lang.backend.expressions import operators
-                return operators.emit_name(self.codegen, expr, to_i1)
+                from sushi_lang.backend.expressions import names
+                return names.emit_name(self.codegen, expr, to_i1)
 
             case Borrow():
-                from sushi_lang.backend.expressions import operators
-                return operators.emit_borrow(self.codegen, expr)
+                from sushi_lang.backend.expressions import borrow
+                return borrow.emit_borrow(self.codegen, expr)
 
             case TryExpr():
-                from sushi_lang.backend.expressions import operators
-                return operators.emit_try_expr(self.codegen, expr)
+                from sushi_lang.backend.expressions import try_expr
+                return try_expr.emit_try_expr(self.codegen, expr)
 
             # Arrays
             case ArrayLiteral():
