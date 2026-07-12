@@ -81,3 +81,19 @@ def gep_indices_struct(field_index: int) -> list[ir.Constant]:
 LIST_LEN_INDICES = [ZERO_I32, ZERO_I32]     # List.len field (index 0)
 LIST_CAP_INDICES = [ZERO_I32, ONE_I32]      # List.cap field (index 1)
 LIST_DATA_INDICES = [ZERO_I32, TWO_I32]     # List.data field (index 2)
+
+# For HashMap<K, V> fields: {buckets, size, capacity, tombstones}.
+# `buckets` is itself a dynamic array {len, cap, data}, so reaching the bucket
+# storage is a second GEP through BUCKETS_DATA_INDICES.
+HASHMAP_BUCKETS_INDICES = [ZERO_I32, ZERO_I32]              # HashMap.buckets (index 0)
+HASHMAP_SIZE_INDICES = [ZERO_I32, ONE_I32]                  # HashMap.size (index 1)
+HASHMAP_CAPACITY_INDICES = [ZERO_I32, TWO_I32]              # HashMap.capacity (index 2)
+HASHMAP_TOMBSTONES_INDICES = [ZERO_I32, make_i32_const(3)]  # HashMap.tombstones (index 3)
+BUCKETS_DATA_INDICES = [ZERO_I32, TWO_I32]                  # buckets.data (index 2)
+
+# For the INTERNAL Entry<K, V>: {key, value, state}.
+# Do NOT use ENTRY_STATE_INDICES on the user-facing Entry<K, V> returned by
+# .entries() -- that one has only {key, value}, and index 2 is out of bounds.
+ENTRY_KEY_INDICES = [ZERO_I32, ZERO_I32]    # Entry.key (index 0)
+ENTRY_VALUE_INDICES = [ZERO_I32, ONE_I32]   # Entry.value (index 1)
+ENTRY_STATE_INDICES = [ZERO_I32, TWO_I32]   # Entry.state (index 2, internal only)

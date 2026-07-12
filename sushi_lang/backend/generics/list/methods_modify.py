@@ -8,8 +8,8 @@ from typing import Any
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
 
-from .types import get_list_len_ptr, get_list_capacity_ptr, get_list_element_type, extract_element_type
-from sushi_lang.backend.constants.llvm_values import LIST_DATA_INDICES, FALSE_I1
+from .types import get_list_len_ptr, get_list_capacity_ptr, get_list_element_type, extract_element_type, get_list_data_ptr
+from sushi_lang.backend.constants.llvm_values import FALSE_I1
 
 
 def emit_list_push(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
@@ -45,11 +45,7 @@ def emit_list_push(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Struc
     # Get pointers to fields
     len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
     capacity_ptr = get_list_capacity_ptr(codegen.builder, list_alloca)
-    data_ptr_ptr = codegen.builder.gep(
-        list_alloca,
-        LIST_DATA_INDICES,
-        name="list_data_ptr"
-    )
+    data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
 
     # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")
@@ -140,11 +136,7 @@ def emit_list_pop(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir
 
     # Get pointers to fields
     len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
-    data_ptr_ptr = codegen.builder.gep(
-        list_alloca,
-        LIST_DATA_INDICES,
-        name="list_data_ptr"
-    )
+    data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
 
     # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")
@@ -224,11 +216,7 @@ def emit_list_get(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Struct
 
     # Get pointers to fields
     len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
-    data_ptr_ptr = codegen.builder.gep(
-        list_alloca,
-        LIST_DATA_INDICES,
-        name="list_data_ptr"
-    )
+    data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
 
     # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")
@@ -296,11 +284,7 @@ def emit_list_clear(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> 
 
     # Get len and data pointers
     len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
-    data_ptr_ptr = codegen.builder.gep(
-        list_alloca,
-        LIST_DATA_INDICES,
-        name="list_data_ptr"
-    )
+    data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
 
     # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")
@@ -318,7 +302,12 @@ def emit_list_clear(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> 
 
 
 def _emit_destroy_elements_loop(codegen: Any, data_ptr: ir.Value, count: ir.Value, element_type: Any) -> None:
-    """Helper to destroy elements in a loop using RAII cleanup.
+    """Destroy every element in data[0..count) with the recursive destructor.
+
+    emit_value_destructor expects a POINTER to the element (it GEPs into
+    structs/enums/arrays); the loaded value made the enum destructor GEP an
+    IntType. Primitive/string elements no-op, which is why the loaded-value form
+    happened to work for them.
 
     Args:
         codegen: LLVM codegen instance.
@@ -326,44 +315,13 @@ def _emit_destroy_elements_loop(codegen: Any, data_ptr: ir.Value, count: ir.Valu
         count: Number of elements to destroy.
         element_type: The semantic element type.
     """
-    from sushi_lang.backend import gep_utils
-
-    # Create loop blocks
-    loop_cond = codegen.func.append_basic_block("destroy_loop_cond")
-    loop_body = codegen.func.append_basic_block("destroy_loop_body")
-    loop_end = codegen.func.append_basic_block("destroy_loop_end")
-
-    # Initialize loop counter
-    zero = ir.Constant(codegen.types.i32, 0)
-    counter_alloca = codegen.builder.alloca(codegen.types.i32, name="counter")
-    codegen.builder.store(zero, counter_alloca)
-    codegen.builder.branch(loop_cond)
-
-    # Loop condition: counter < count
-    codegen.builder.position_at_end(loop_cond)
-    counter = codegen.builder.load(counter_alloca, name="counter")
-    should_continue = codegen.builder.icmp_unsigned("<", counter, count)
-    codegen.builder.cbranch(should_continue, loop_body, loop_end)
-
-    # Loop body: destroy element at data[counter]
-    codegen.builder.position_at_end(loop_body)
-    element_ptr = gep_utils.gep_array_element(codegen, data_ptr, counter, "element_ptr")
-
-    # Use recursive destructor. emit_value_destructor expects a POINTER to the
-    # element (it GEPs into structs/enums/arrays); passing the loaded value made
-    # the enum destructor GEP an IntType. Primitive/string elements no-op, which
-    # is why the loaded-value form happened to work for them.
     from sushi_lang.backend.destructors import emit_value_destructor
-    emit_value_destructor(codegen, codegen.builder, element_ptr, element_type)
+    from sushi_lang.backend.generics.container_walk import emit_container_walk
 
-    # Increment counter
-    one = ir.Constant(codegen.types.i32, 1)
-    new_counter = codegen.builder.add(counter, one, name="new_counter")
-    codegen.builder.store(new_counter, counter_alloca)
-    codegen.builder.branch(loop_cond)
+    def destroy(element_ptr: ir.Value, _index: ir.Value) -> None:
+        emit_value_destructor(codegen, codegen.builder, element_ptr, element_type)
 
-    # Continue after loop
-    codegen.builder.position_at_end(loop_end)
+    emit_container_walk(codegen, data_ptr, count, destroy, prefix="destroy")
 
 
 def emit_list_insert(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
@@ -403,11 +361,7 @@ def emit_list_insert(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Str
     # Get pointers to fields
     len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
     capacity_ptr = get_list_capacity_ptr(codegen.builder, list_alloca)
-    data_ptr_ptr = codegen.builder.gep(
-        list_alloca,
-        LIST_DATA_INDICES,
-        name="list_data_ptr"
-    )
+    data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
 
     # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")
@@ -598,11 +552,7 @@ def emit_list_remove(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Str
 
     # Get pointers to fields
     len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
-    data_ptr_ptr = codegen.builder.gep(
-        list_alloca,
-        LIST_DATA_INDICES,
-        name="list_data_ptr"
-    )
+    data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
 
     # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")

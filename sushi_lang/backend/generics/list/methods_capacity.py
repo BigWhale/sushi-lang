@@ -8,8 +8,8 @@ from typing import Any
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
 
-from .types import get_list_len_ptr, get_list_capacity_ptr, get_list_element_type
-from sushi_lang.backend.constants.llvm_values import LIST_DATA_INDICES
+from .types import get_list_len_ptr, get_list_capacity_ptr, get_list_element_type, get_list_data_ptr
+
 
 
 def emit_list_reserve(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
@@ -38,11 +38,7 @@ def emit_list_reserve(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: St
     # Get pointers
     len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
     capacity_ptr = get_list_capacity_ptr(codegen.builder, list_alloca)
-    data_ptr_ptr = codegen.builder.gep(
-        list_alloca,
-        LIST_DATA_INDICES,
-        name="list_data_ptr"
-    )
+    data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
 
     # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")
@@ -113,11 +109,7 @@ def emit_list_shrink_to_fit(codegen: Any, list_ptr: ir.Value, list_type: StructT
     # Get pointers
     len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
     capacity_ptr = get_list_capacity_ptr(codegen.builder, list_alloca)
-    data_ptr_ptr = codegen.builder.gep(
-        list_alloca,
-        LIST_DATA_INDICES,
-        name="list_data_ptr"
-    )
+    data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
 
     # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")

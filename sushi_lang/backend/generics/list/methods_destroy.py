@@ -8,8 +8,8 @@ from typing import Any
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
 
-from .types import get_list_len_ptr, get_list_capacity_ptr, extract_element_type
-from sushi_lang.backend.constants.llvm_values import LIST_DATA_INDICES
+from .types import get_list_len_ptr, get_list_capacity_ptr, extract_element_type, get_list_data_ptr
+
 
 
 def emit_list_destroy(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
@@ -34,11 +34,7 @@ def emit_list_destroy(codegen: Any, list_ptr: ir.Value, list_type: StructType) -
     # Get pointers
     len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
     capacity_ptr = get_list_capacity_ptr(codegen.builder, list_alloca)
-    data_ptr_ptr = codegen.builder.gep(
-        list_alloca,
-        LIST_DATA_INDICES,
-        name="list_data_ptr"
-    )
+    data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
 
     # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")
@@ -87,11 +83,7 @@ def emit_list_free(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> i
     # Get pointers
     len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
     capacity_ptr = get_list_capacity_ptr(codegen.builder, list_alloca)
-    data_ptr_ptr = codegen.builder.gep(
-        list_alloca,
-        LIST_DATA_INDICES,
-        name="list_data_ptr"
-    )
+    data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
 
     # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")

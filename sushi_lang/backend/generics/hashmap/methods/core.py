@@ -10,10 +10,22 @@ from typing import Any
 from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.typesys import StructType, BuiltinType
 import llvmlite.ir as ir
-from ..types import get_entry_type, extract_key_value_types, ENTRY_EMPTY, ENTRY_OCCUPIED
-from ..utils import emit_key_equality_check
+from ..types import get_entry_type
+from sushi_lang.backend.constants import (
+    HASHMAP_BUCKETS_INDICES,
+    HASHMAP_SIZE_INDICES,
+    HASHMAP_CAPACITY_INDICES,
+    HASHMAP_TOMBSTONES_INDICES,
+    BUCKETS_DATA_INDICES,
+    ENTRY_KEY_INDICES,
+    ENTRY_VALUE_INDICES,
+)
+from sushi_lang.semantics.generics.hashmap import extract_key_value_types
+from ..utils import emit_key_equality_check, emit_init_buckets_empty
+from ..probe import emit_probe_loop, ProbeSlot
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc
+from sushi_lang.backend.expressions.memory import get_element_size_constant
 
 
 def emit_hashmap_new(codegen: Any, hashmap_type: StructType) -> ir.Value:
@@ -46,12 +58,7 @@ def emit_hashmap_new(codegen: Any, hashmap_type: StructType) -> ir.Value:
     capacity_const = ir.Constant(codegen.types.i32, initial_capacity)
 
     # Allocate buckets array: malloc(sizeof(Entry<K,V>) * capacity)
-    # Get size of Entry type using LLVM's size_of intrinsic pattern
-    # sizeof(T) = ptrtoint (T* getelementptr (T* null, 1))
-    null_ptr = ir.Constant(ir.PointerType(entry_type), None)
-    one = ir.Constant(codegen.types.i32, 1)
-    gep = codegen.builder.gep(null_ptr, [one], name="sizeof_gep")
-    entry_size = codegen.builder.ptrtoint(gep, codegen.types.i32, name="entry_size")
+    entry_size = get_element_size_constant(codegen, entry_type)
     total_bytes = codegen.builder.mul(entry_size, capacity_const, name="bucket_bytes")
 
     # Call malloc (extend i32 to i64 for malloc parameter)
@@ -59,38 +66,9 @@ def emit_hashmap_new(codegen: Any, hashmap_type: StructType) -> ir.Value:
     bucket_ptr_i8 = emit_malloc(codegen, codegen.builder, total_bytes_i64)
     bucket_ptr = codegen.builder.bitcast(bucket_ptr_i8, ir.PointerType(entry_type), name="buckets_ptr")
 
-    # Initialize all entries to Empty state
-    # Loop through buckets and set state = ENTRY_EMPTY (0)
+    # Fresh malloc'd storage holds garbage, so every slot must be marked EMPTY.
     zero_i32 = ir.Constant(codegen.types.i32, 0)
-    i = codegen.builder.alloca(codegen.types.i32, name="i")
-    codegen.builder.store(zero_i32, i)
-
-    loop_cond_bb = codegen.builder.append_basic_block(name="init_loop_cond")
-    loop_body_bb = codegen.builder.append_basic_block(name="init_loop_body")
-    loop_end_bb = codegen.builder.append_basic_block(name="init_loop_end")
-
-    codegen.builder.branch(loop_cond_bb)
-
-    # Loop condition: i < capacity
-    codegen.builder.position_at_end(loop_cond_bb)
-    i_val = codegen.builder.load(i, name="i_val")
-    cond = codegen.builder.icmp_unsigned("<", i_val, capacity_const, name="loop_cond")
-    codegen.builder.cbranch(cond, loop_body_bb, loop_end_bb)
-
-    # Loop body: set entry[i].state = ENTRY_EMPTY
-    codegen.builder.position_at_end(loop_body_bb)
-    i_val = codegen.builder.load(i, name="i_val")
-    entry_ptr = codegen.builder.gep(bucket_ptr, [i_val], name="entry_ptr")
-    state_ptr = codegen.builder.gep(entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="state_ptr")  # state is field 2 in Entry
-    codegen.builder.store(ir.Constant(codegen.types.i8, ENTRY_EMPTY), state_ptr)
-
-    # i++
-    i_next = codegen.builder.add(i_val, ir.Constant(codegen.types.i32, 1), name="i_next")
-    codegen.builder.store(i_next, i)
-    codegen.builder.branch(loop_cond_bb)
-
-    # After loop
-    codegen.builder.position_at_end(loop_end_bb)
+    emit_init_buckets_empty(codegen, bucket_ptr, capacity_const)
 
     # Create dynamic array struct for buckets: {len, cap, data}
     buckets_array_type = ir.LiteralStructType([codegen.types.i32, codegen.types.i32, ir.PointerType(entry_type)])
@@ -128,7 +106,7 @@ def emit_hashmap_len(codegen: Any, hashmap_value: ir.Value) -> ir.Value:
     builder = codegen.builder
     zero_i32 = ir.Constant(codegen.types.i32, 0)
     one_i32 = ir.Constant(codegen.types.i32, 1)
-    size_ptr = builder.gep(hashmap_value, [zero_i32, one_i32], name="size_ptr")
+    size_ptr = builder.gep(hashmap_value, HASHMAP_SIZE_INDICES, name="size_ptr")
     return builder.load(size_ptr, name="hashmap_size")
 
 
@@ -172,7 +150,7 @@ def emit_hashmap_tombstone_count(codegen: Any, hashmap_value: ir.Value) -> ir.Va
     builder = codegen.builder
     zero_i32 = ir.Constant(codegen.types.i32, 0)
     three_i32 = ir.Constant(codegen.types.i32, 3)
-    tombstones_ptr = builder.gep(hashmap_value, [zero_i32, three_i32], name="tombstones_ptr")
+    tombstones_ptr = builder.gep(hashmap_value, HASHMAP_TOMBSTONES_INDICES, name="tombstones_ptr")
     return builder.load(tombstones_ptr, name="hashmap_tombstones")
 
 
@@ -226,12 +204,12 @@ def emit_hashmap_get(
     key_value = codegen.expressions.emit_expr(expr.args[0])
 
     # Get HashMap fields
-    capacity_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="capacity_ptr")
+    capacity_ptr = builder.gep(hashmap_value, HASHMAP_CAPACITY_INDICES, name="capacity_ptr")
     capacity = builder.load(capacity_ptr, name="capacity")
 
     # Get buckets array pointer
-    buckets_ptr = builder.gep(hashmap_value, [zero_i32, zero_i32], name="buckets_ptr")
-    buckets_data_ptr = builder.gep(buckets_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="buckets_data_ptr")
+    buckets_ptr = builder.gep(hashmap_value, HASHMAP_BUCKETS_INDICES, name="buckets_ptr")
+    buckets_data_ptr = builder.gep(buckets_ptr, BUCKETS_DATA_INDICES, name="buckets_data_ptr")
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
 
     # Hash the key (register on-demand if needed for array types)
@@ -251,76 +229,35 @@ def emit_hashmap_get(
     hash_i32 = builder.trunc(hash_value, codegen.types.i32, name="hash_i32")
 
     # Linear probing loop
-    probe_offset = builder.alloca(codegen.types.i32, name="probe_offset")
-    builder.store(zero_i32, probe_offset)
-
-    probe_loop_bb = builder.append_basic_block(name="get_probe_loop")
-    probe_body_bb = builder.append_basic_block(name="get_probe_body")
-    probe_occupied_bb = builder.append_basic_block(name="get_probe_occupied")
-    probe_empty_bb = builder.append_basic_block(name="get_probe_empty")
-    probe_continue_bb = builder.append_basic_block(name="get_probe_continue")
     found_bb = builder.append_basic_block(name="get_found")
     not_found_bb = builder.append_basic_block(name="get_not_found")
     get_done_bb = builder.append_basic_block(name="get_done")
 
-    builder.branch(probe_loop_bb)
+    # The matching slot, captured out of the probe for the found path below. It
+    # dominates found_bb -- that block is only reachable from the probe.
+    matched: dict[str, ir.Value] = {}
 
-    # Probe loop
-    builder.position_at_end(probe_loop_bb)
-    probe_offset_val = builder.load(probe_offset, name="probe_offset_val")
+    def on_empty(slot: ProbeSlot) -> None:
+        # A never-used slot ends the chain: the key was never here.
+        builder.branch(not_found_bb)
 
-    # Check if we've probed all slots (probe_offset >= capacity)
-    probe_limit_reached = builder.icmp_signed(">=", probe_offset_val, capacity, name="probe_limit_reached")
-    probe_within_limit_bb = builder.append_basic_block(name="probe_within_limit")
-    builder.cbranch(probe_limit_reached, not_found_bb, probe_within_limit_bb)
+    def on_occupied(slot: ProbeSlot) -> None:
+        matched["entry_ptr"] = slot.entry_ptr
+        entry_key_ptr = builder.gep(slot.entry_ptr, ENTRY_KEY_INDICES, name="entry_key_ptr")
+        entry_key = builder.load(entry_key_ptr, name="entry_key")
+        keys_equal = emit_key_equality_check(codegen, key_type, key_value, entry_key)
+        builder.cbranch(keys_equal, found_bb, slot.continue_bb)
 
-    # Continue probing within limit
-    builder.position_at_end(probe_within_limit_bb)
-
-    # Calculate index: (hash + probe_offset) & (capacity - 1)
-    # Fast bitwise AND works because capacity is power-of-two
-    hash_plus_offset = builder.add(hash_i32, probe_offset_val, name="hash_plus_offset")
-    capacity_minus_1 = builder.sub(capacity, one_i32, name="capacity_minus_1")
-    index = builder.and_(hash_plus_offset, capacity_minus_1, name="index")
-
-    # Get entry pointer
-    entry_ptr = builder.gep(buckets_data, [index], name="entry_ptr")
-
-    # Load entry state
-    state_ptr = builder.gep(entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="state_ptr")
-    state = builder.load(state_ptr, name="state")
-
-    # Branch based on state
-    builder.branch(probe_body_bb)
-
-    builder.position_at_end(probe_body_bb)
-    is_empty = builder.icmp_unsigned("==", state, ir.Constant(codegen.types.i8, ENTRY_EMPTY), name="is_empty")
-    is_occupied = builder.icmp_unsigned("==", state, ir.Constant(codegen.types.i8, ENTRY_OCCUPIED), name="is_occupied")
-
-    # If empty, not found
-    check_occupied_bb = builder.append_basic_block(name="check_occupied")
-    builder.cbranch(is_empty, probe_empty_bb, check_occupied_bb)
-
-    # Check if occupied
-    builder.position_at_end(check_occupied_bb)
-    builder.cbranch(is_occupied, probe_occupied_bb, probe_continue_bb)
-
-    # Empty case: not found
-    builder.position_at_end(probe_empty_bb)
-    builder.branch(not_found_bb)
-
-    # Occupied case: check if keys match
-    builder.position_at_end(probe_occupied_bb)
-    entry_key_ptr = builder.gep(entry_ptr, [zero_i32, zero_i32], name="entry_key_ptr")
-    entry_key = builder.load(entry_key_ptr, name="entry_key")
-
-    # Compare keys
-    keys_equal = emit_key_equality_check(codegen, key_type, key_value, entry_key)
-    builder.cbranch(keys_equal, found_bb, probe_continue_bb)
+    emit_probe_loop(
+        codegen, buckets_data, capacity, hash_i32,
+        on_occupied=on_occupied, on_empty=on_empty,
+        exhausted_bb=not_found_bb, prefix="get_probe",
+    )
 
     # Found: return Maybe.Some(value)
     builder.position_at_end(found_bb)
-    entry_value_ptr = builder.gep(entry_ptr, [zero_i32, one_i32], name="entry_value_ptr")
+    entry_ptr = matched["entry_ptr"]
+    entry_value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="entry_value_ptr")
     entry_value = builder.load(entry_value_ptr, name="entry_value")
 
     # Deep-copy an owning value out so the returned Some(V) owns independent heap buffers.
@@ -386,12 +323,6 @@ def emit_hashmap_get(
     maybe_none = builder.insert_value(maybe_none, undef_data, 1, name="maybe_none_data")
     builder.branch(get_done_bb)
 
-    # Continue probing (tombstone or different key)
-    builder.position_at_end(probe_continue_bb)
-    probe_offset_next = builder.add(probe_offset_val, one_i32, name="probe_offset_next")
-    builder.store(probe_offset_next, probe_offset)
-    builder.branch(probe_loop_bb)
-
     # Done: merge results
     builder.position_at_end(get_done_bb)
     result_phi = builder.phi(maybe_llvm_type, name="get_result")
@@ -452,12 +383,12 @@ def emit_hashmap_contains_key(
     key_value = codegen.expressions.emit_expr(expr.args[0])
 
     # Get HashMap fields
-    capacity_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="capacity_ptr")
+    capacity_ptr = builder.gep(hashmap_value, HASHMAP_CAPACITY_INDICES, name="capacity_ptr")
     capacity = builder.load(capacity_ptr, name="capacity")
 
     # Get buckets array pointer
-    buckets_ptr = builder.gep(hashmap_value, [zero_i32, zero_i32], name="buckets_ptr")
-    buckets_data_ptr = builder.gep(buckets_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="buckets_data_ptr")
+    buckets_ptr = builder.gep(hashmap_value, HASHMAP_BUCKETS_INDICES, name="buckets_ptr")
+    buckets_data_ptr = builder.gep(buckets_ptr, BUCKETS_DATA_INDICES, name="buckets_data_ptr")
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
 
     # Hash the key (register on-demand if needed for array types)
@@ -477,72 +408,24 @@ def emit_hashmap_contains_key(
     hash_i32 = builder.trunc(hash_value, codegen.types.i32, name="hash_i32")
 
     # Linear probing loop
-    probe_offset = builder.alloca(codegen.types.i32, name="probe_offset")
-    builder.store(zero_i32, probe_offset)
-
-    probe_loop_bb = builder.append_basic_block(name="contains_probe_loop")
-    probe_body_bb = builder.append_basic_block(name="contains_probe_body")
-    probe_occupied_bb = builder.append_basic_block(name="contains_probe_occupied")
-    probe_empty_bb = builder.append_basic_block(name="contains_probe_empty")
-    probe_continue_bb = builder.append_basic_block(name="contains_probe_continue")
     found_bb = builder.append_basic_block(name="contains_found")
     not_found_bb = builder.append_basic_block(name="contains_not_found")
     contains_done_bb = builder.append_basic_block(name="contains_done")
 
-    builder.branch(probe_loop_bb)
+    def on_empty(slot: ProbeSlot) -> None:
+        builder.branch(not_found_bb)
 
-    # Probe loop
-    builder.position_at_end(probe_loop_bb)
-    probe_offset_val = builder.load(probe_offset, name="probe_offset_val")
+    def on_occupied(slot: ProbeSlot) -> None:
+        entry_key_ptr = builder.gep(slot.entry_ptr, ENTRY_KEY_INDICES, name="entry_key_ptr")
+        entry_key = builder.load(entry_key_ptr, name="entry_key")
+        keys_equal = emit_key_equality_check(codegen, key_type, key_value, entry_key)
+        builder.cbranch(keys_equal, found_bb, slot.continue_bb)
 
-    # Check if we've probed all slots (probe_offset >= capacity)
-    probe_limit_reached = builder.icmp_signed(">=", probe_offset_val, capacity, name="probe_limit_reached")
-    probe_within_limit_bb = builder.append_basic_block(name="probe_within_limit")
-    builder.cbranch(probe_limit_reached, not_found_bb, probe_within_limit_bb)
-
-    # Continue probing within limit
-    builder.position_at_end(probe_within_limit_bb)
-
-    # Calculate index: (hash + probe_offset) & (capacity - 1)
-    # Fast bitwise AND works because capacity is power-of-two
-    hash_plus_offset = builder.add(hash_i32, probe_offset_val, name="hash_plus_offset")
-    capacity_minus_1 = builder.sub(capacity, one_i32, name="capacity_minus_1")
-    index = builder.and_(hash_plus_offset, capacity_minus_1, name="index")
-
-    # Get entry pointer
-    entry_ptr = builder.gep(buckets_data, [index], name="entry_ptr")
-
-    # Load entry state
-    state_ptr = builder.gep(entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="state_ptr")
-    state = builder.load(state_ptr, name="state")
-
-    # Branch based on state
-    builder.branch(probe_body_bb)
-
-    builder.position_at_end(probe_body_bb)
-    is_empty = builder.icmp_unsigned("==", state, ir.Constant(codegen.types.i8, ENTRY_EMPTY), name="is_empty")
-    is_occupied = builder.icmp_unsigned("==", state, ir.Constant(codegen.types.i8, ENTRY_OCCUPIED), name="is_occupied")
-
-    # If empty, not found
-    check_occupied_bb = builder.append_basic_block(name="check_occupied")
-    builder.cbranch(is_empty, probe_empty_bb, check_occupied_bb)
-
-    # Check if occupied
-    builder.position_at_end(check_occupied_bb)
-    builder.cbranch(is_occupied, probe_occupied_bb, probe_continue_bb)
-
-    # Empty case: not found
-    builder.position_at_end(probe_empty_bb)
-    builder.branch(not_found_bb)
-
-    # Occupied case: check if keys match
-    builder.position_at_end(probe_occupied_bb)
-    entry_key_ptr = builder.gep(entry_ptr, [zero_i32, zero_i32], name="entry_key_ptr")
-    entry_key = builder.load(entry_key_ptr, name="entry_key")
-
-    # Compare keys
-    keys_equal = emit_key_equality_check(codegen, key_type, key_value, entry_key)
-    builder.cbranch(keys_equal, found_bb, probe_continue_bb)
+    emit_probe_loop(
+        codegen, buckets_data, capacity, hash_i32,
+        on_occupied=on_occupied, on_empty=on_empty,
+        exhausted_bb=not_found_bb, prefix="contains_probe",
+    )
 
     # Found: return true
     builder.position_at_end(found_bb)
@@ -551,12 +434,6 @@ def emit_hashmap_contains_key(
     # Not found: return false
     builder.position_at_end(not_found_bb)
     builder.branch(contains_done_bb)
-
-    # Continue probing (tombstone or different key)
-    builder.position_at_end(probe_continue_bb)
-    probe_offset_next = builder.add(probe_offset_val, one_i32, name="probe_offset_next")
-    builder.store(probe_offset_next, probe_offset)
-    builder.branch(probe_loop_bb)
 
     # Done: merge results
     builder.position_at_end(contains_done_bb)

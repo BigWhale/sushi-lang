@@ -13,10 +13,29 @@ from typing import Any
 from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.typesys import StructType, BuiltinType
 import llvmlite.ir as ir
-from ..types import get_entry_type, extract_key_value_types, ENTRY_EMPTY, ENTRY_OCCUPIED, ENTRY_TOMBSTONE
-from ..utils import emit_key_equality_check, emit_insert_entry
+from ..types import get_entry_type, get_hashmap_field_ptrs, ENTRY_OCCUPIED, ENTRY_TOMBSTONE
+from sushi_lang.backend.constants import (
+    HASHMAP_CAPACITY_INDICES,
+    ENTRY_KEY_INDICES,
+    ENTRY_VALUE_INDICES,
+    ENTRY_STATE_INDICES,
+)
+from sushi_lang.semantics.generics.hashmap import extract_key_value_types
+from ..probe import emit_probe_loop, ProbeSlot
+from ..utils import (
+    emit_key_equality_check,
+    emit_insert_entry,
+    emit_destroy_all_entries,
+    emit_init_buckets_empty,
+)
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc
+from sushi_lang.backend.expressions.memory import get_element_size_constant
+
+
+# emit_runtime_error interns one message global per error code, so every RE2022 site
+# must use this exact string -- two different texts would silently share the first.
+_NO_FREE_BUCKET = "HashMap.insert() probed every bucket without finding a free slot (map destroyed?)"
 
 
 def emit_hashmap_insert(
@@ -76,9 +95,9 @@ def emit_hashmap_insert(
     # Get pointers to HashMap fields
     # hashmap_value should be a POINTER to the HashMap struct (like array_value for arrays)
     # HashMap struct: {buckets, size, capacity, tombstones}
-    size_ptr = builder.gep(hashmap_value, [zero_i32, one_i32], name="size_ptr")
-    capacity_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="capacity_ptr")
-    tombstones_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 3)], name="tombstones_ptr")
+    fields = get_hashmap_field_ptrs(codegen, hashmap_value)
+    size_ptr, capacity_ptr = fields.size, fields.capacity
+    tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
 
     # Load current values
     size = builder.load(size_ptr, name="size")
@@ -86,8 +105,6 @@ def emit_hashmap_insert(
     tombstones = builder.load(tombstones_ptr, name="tombstones")
 
     # Get buckets array pointer
-    buckets_ptr = builder.gep(hashmap_value, [zero_i32, zero_i32], name="buckets_ptr")
-    buckets_data_ptr = builder.gep(buckets_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="buckets_data_ptr")
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
 
     # Check load factor and resize if needed
@@ -139,129 +156,77 @@ def emit_hashmap_insert(
     hash_i32 = builder.trunc(hash_value, codegen.types.i32, name="hash_i32")
 
     # Linear probing loop
-    # Variables for probing
-    probe_offset = builder.alloca(codegen.types.i32, name="probe_offset")
-    builder.store(zero_i32, probe_offset)
-
-    first_tombstone_idx = builder.alloca(codegen.types.i32, name="first_tombstone_idx")
-    builder.store(ir.Constant(codegen.types.i32, -1), first_tombstone_idx)  # -1 means no tombstone found
-
-    probe_loop_bb = builder.append_basic_block(name="probe_loop")
-    probe_body_bb = builder.append_basic_block(name="probe_body")
-    probe_occupied_bb = builder.append_basic_block(name="probe_occupied")
-    probe_empty_bb = builder.append_basic_block(name="probe_empty")
-    probe_tombstone_bb = builder.append_basic_block(name="probe_tombstone")
-    probe_continue_bb = builder.append_basic_block(name="probe_continue")
-
-    builder.branch(probe_loop_bb)
-
-    # Probe loop
-    builder.position_at_end(probe_loop_bb)
-    probe_offset_val = builder.load(probe_offset, name="probe_offset_val")
-
-    # Calculate index: (hash + probe_offset) & (capacity - 1)
-    # Fast bitwise AND works because capacity is power-of-two
-    hash_plus_offset = builder.add(hash_i32, probe_offset_val, name="hash_plus_offset")
-    capacity_minus_1 = builder.sub(capacity, ir.Constant(codegen.types.i32, 1), name="capacity_minus_1")
-    index = builder.and_(hash_plus_offset, capacity_minus_1, name="index")
-
-    # Get entry pointer
-    entry_ptr = builder.gep(buckets_data, [index], name="entry_ptr")
-
-    # Load entry state
-    state_ptr = builder.gep(entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="state_ptr")
-    state = builder.load(state_ptr, name="state")
-
-    # Branch based on state
-    builder.branch(probe_body_bb)
-
-    builder.position_at_end(probe_body_bb)
-    is_empty = builder.icmp_unsigned("==", state, ir.Constant(codegen.types.i8, ENTRY_EMPTY), name="is_empty")
-    is_occupied = builder.icmp_unsigned("==", state, ir.Constant(codegen.types.i8, ENTRY_OCCUPIED), name="is_occupied")
-    is_tombstone = builder.icmp_unsigned("==", state, ir.Constant(codegen.types.i8, ENTRY_TOMBSTONE), name="is_tombstone")
-
-    # Create branch for state check
     insert_done_bb = builder.append_basic_block(name="insert_done")
 
-    # Check if occupied
-    check_tombstone_bb = builder.append_basic_block(name="check_tombstone")
-    builder.cbranch(is_occupied, probe_occupied_bb, check_tombstone_bb)
+    # Loop-carried across probe steps: the first tombstone this chain passed, or
+    # -1. The key may still be live further along the chain, so a tombstone cannot
+    # end the probe -- but if the chain runs out, that slot is where the key goes.
+    first_tombstone_idx = builder.alloca(codegen.types.i32, name="first_tombstone_idx")
+    no_tombstone = ir.Constant(codegen.types.i32, -1)
+    builder.store(no_tombstone, first_tombstone_idx)
 
-    # Occupied case: check if keys match
-    builder.position_at_end(probe_occupied_bb)
-    entry_key_ptr = builder.gep(entry_ptr, [zero_i32, zero_i32], name="entry_key_ptr")
-    entry_key = builder.load(entry_key_ptr, name="entry_key")
+    def on_occupied(slot: ProbeSlot) -> None:
+        entry_key_ptr = builder.gep(slot.entry_ptr, ENTRY_KEY_INDICES, name="entry_key_ptr")
+        entry_key = builder.load(entry_key_ptr, name="entry_key")
+        keys_equal = emit_key_equality_check(codegen, key_type, key_value, entry_key)
 
-    # Compare keys using ==
-    keys_equal = emit_key_equality_check(codegen, key_type, key_value, entry_key)
+        update_value_bb = builder.append_basic_block(name="update_value")
+        builder.cbranch(keys_equal, update_value_bb, slot.continue_bb)
 
-    update_value_bb = builder.append_basic_block(name="update_value")
-    builder.cbranch(keys_equal, update_value_bb, probe_continue_bb)
+        # Same key: overwrite in place, size unchanged.
+        builder.position_at_end(update_value_bb)
+        entry_value_ptr = builder.gep(slot.entry_ptr, ENTRY_VALUE_INDICES, name="entry_value_ptr")
+        builder.store(value_value, entry_value_ptr)
+        builder.branch(insert_done_bb)
 
-    # Update existing value
-    builder.position_at_end(update_value_bb)
-    entry_value_ptr = builder.gep(entry_ptr, [zero_i32, one_i32], name="entry_value_ptr")
-    builder.store(value_value, entry_value_ptr)
-    builder.branch(insert_done_bb)
+    def on_tombstone(slot: ProbeSlot) -> None:
+        first_tombstone = builder.load(first_tombstone_idx, name="first_tombstone")
+        is_first = builder.icmp_signed("==", first_tombstone, no_tombstone, name="is_first_tombstone")
 
-    # Check if tombstone
-    builder.position_at_end(check_tombstone_bb)
-    check_empty_bb = builder.append_basic_block(name="check_empty")
-    builder.cbranch(is_tombstone, probe_tombstone_bb, check_empty_bb)
+        record_tombstone_bb = builder.append_basic_block(name="record_tombstone")
+        builder.cbranch(is_first, record_tombstone_bb, slot.continue_bb)
 
-    # Tombstone case: remember first tombstone, keep probing
-    builder.position_at_end(probe_tombstone_bb)
-    first_tombstone = builder.load(first_tombstone_idx, name="first_tombstone")
-    is_first = builder.icmp_signed("==", first_tombstone, ir.Constant(codegen.types.i32, -1), name="is_first_tombstone")
+        builder.position_at_end(record_tombstone_bb)
+        builder.store(slot.index, first_tombstone_idx)
+        builder.branch(slot.continue_bb)
 
-    record_tombstone_bb = builder.append_basic_block(name="record_tombstone")
-    builder.cbranch(is_first, record_tombstone_bb, probe_continue_bb)
+    def on_empty(slot: ProbeSlot) -> None:
+        # End of the chain, so the key is not in the map. Reuse the first tombstone
+        # we passed if there was one -- that keeps the table from filling with them.
+        first_tombstone = builder.load(first_tombstone_idx, name="first_tombstone_final")
+        has_tombstone = builder.icmp_signed("!=", first_tombstone, no_tombstone, name="has_tombstone")
 
-    builder.position_at_end(record_tombstone_bb)
-    builder.store(index, first_tombstone_idx)
-    builder.branch(probe_continue_bb)
+        use_tombstone_bb = builder.append_basic_block(name="use_tombstone")
+        use_empty_bb = builder.append_basic_block(name="use_empty")
+        builder.cbranch(has_tombstone, use_tombstone_bb, use_empty_bb)
 
-    # Empty case: insert here (or at first tombstone if we found one)
-    builder.position_at_end(check_empty_bb)
-    builder.cbranch(is_empty, probe_empty_bb, probe_continue_bb)
+        builder.position_at_end(use_tombstone_bb)
+        tombstone_entry_ptr = builder.gep(buckets_data, [first_tombstone], name="tombstone_entry_ptr")
+        emit_insert_entry(codegen, tombstone_entry_ptr, key_value, value_value, entry_type)
+        builder.store(builder.add(size, one_i32, name="new_size"), size_ptr)
+        builder.store(builder.sub(tombstones, one_i32, name="new_tombstones"), tombstones_ptr)
+        builder.branch(insert_done_bb)
 
-    builder.position_at_end(probe_empty_bb)
+        builder.position_at_end(use_empty_bb)
+        emit_insert_entry(codegen, slot.entry_ptr, key_value, value_value, entry_type)
+        builder.store(builder.add(size, one_i32, name="new_size"), size_ptr)
+        builder.branch(insert_done_bb)
 
-    # Check if we have a tombstone to reuse
-    first_tombstone = builder.load(first_tombstone_idx, name="first_tombstone_final")
-    has_tombstone = builder.icmp_signed("!=", first_tombstone, ir.Constant(codegen.types.i32, -1), name="has_tombstone")
+    # A live map always resizes below a 0.75 load factor, so there is always an
+    # empty slot and the probe always ends. A DESTROYED map has capacity 0 and null
+    # buckets, and reaches here: without the guard the probe masks the hash with
+    # -1 and GEPs off the null pointer. Trap instead of corrupting memory.
+    no_slot_bb = builder.append_basic_block(name="insert_no_slot")
 
-    use_tombstone_bb = builder.append_basic_block(name="use_tombstone")
-    use_empty_bb = builder.append_basic_block(name="use_empty")
+    emit_probe_loop(
+        codegen, buckets_data, capacity, hash_i32,
+        on_occupied=on_occupied, on_empty=on_empty, on_tombstone=on_tombstone,
+        exhausted_bb=no_slot_bb, prefix="probe",
+    )
 
-    builder.cbranch(has_tombstone, use_tombstone_bb, use_empty_bb)
-
-    # Insert at tombstone location
-    builder.position_at_end(use_tombstone_bb)
-    tombstone_entry_ptr = builder.gep(buckets_data, [first_tombstone], name="tombstone_entry_ptr")
-    emit_insert_entry(codegen, tombstone_entry_ptr, key_value, value_value, entry_type)
-
-    # Update size++, tombstones--
-    new_size = builder.add(size, one_i32, name="new_size")
-    builder.store(new_size, size_ptr)
-    new_tombstones = builder.sub(tombstones, one_i32, name="new_tombstones")
-    builder.store(new_tombstones, tombstones_ptr)
-    builder.branch(insert_done_bb)
-
-    # Insert at empty location
-    builder.position_at_end(use_empty_bb)
-    emit_insert_entry(codegen, entry_ptr, key_value, value_value, entry_type)
-
-    # Update size++
-    new_size = builder.add(size, one_i32, name="new_size")
-    builder.store(new_size, size_ptr)
-    builder.branch(insert_done_bb)
-
-    # Continue probing
-    builder.position_at_end(probe_continue_bb)
-    probe_offset_next = builder.add(probe_offset_val, one_i32, name="probe_offset_next")
-    builder.store(probe_offset_next, probe_offset)
-    builder.branch(probe_loop_bb)
+    builder.position_at_end(no_slot_bb)
+    codegen.runtime.errors.emit_runtime_error("RE2022", _NO_FREE_BUCKET)
+    builder.unreachable()
 
     # Done
     builder.position_at_end(insert_done_bb)
@@ -325,9 +290,9 @@ def emit_hashmap_remove(
     key_value = codegen.expressions.emit_expr(expr.args[0])
 
     # Get HashMap field pointers
-    size_ptr = builder.gep(hashmap_value, [zero_i32, one_i32], name="size_ptr")
-    capacity_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="capacity_ptr")
-    tombstones_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 3)], name="tombstones_ptr")
+    fields = get_hashmap_field_ptrs(codegen, hashmap_value)
+    size_ptr, capacity_ptr = fields.size, fields.capacity
+    tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
 
     # Load values
     size = builder.load(size_ptr, name="size")
@@ -335,8 +300,6 @@ def emit_hashmap_remove(
     tombstones = builder.load(tombstones_ptr, name="tombstones")
 
     # Get buckets array pointer
-    buckets_ptr = builder.gep(hashmap_value, [zero_i32, zero_i32], name="buckets_ptr")
-    buckets_data_ptr = builder.gep(buckets_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="buckets_data_ptr")
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
 
     # Hash the key (register on-demand if needed for array types)
@@ -356,69 +319,39 @@ def emit_hashmap_remove(
     hash_i32 = builder.trunc(hash_value, codegen.types.i32, name="hash_i32")
 
     # Linear probing loop
-    probe_offset = builder.alloca(codegen.types.i32, name="probe_offset")
-    builder.store(zero_i32, probe_offset)
-
-    probe_loop_bb = builder.append_basic_block(name="remove_probe_loop")
-    probe_body_bb = builder.append_basic_block(name="remove_probe_body")
-    probe_occupied_bb = builder.append_basic_block(name="remove_probe_occupied")
-    probe_empty_bb = builder.append_basic_block(name="remove_probe_empty")
-    probe_continue_bb = builder.append_basic_block(name="remove_probe_continue")
     found_bb = builder.append_basic_block(name="remove_found")
     not_found_bb = builder.append_basic_block(name="remove_not_found")
     remove_done_bb = builder.append_basic_block(name="remove_done")
 
-    builder.branch(probe_loop_bb)
+    # The matching slot, captured out of the probe for the found path below. It
+    # dominates found_bb -- that block is only reachable from the probe.
+    matched: dict[str, ir.Value] = {}
 
-    # Probe loop
-    builder.position_at_end(probe_loop_bb)
-    probe_offset_val = builder.load(probe_offset, name="probe_offset_val")
+    def on_empty(slot: ProbeSlot) -> None:
+        builder.branch(not_found_bb)
 
-    # Calculate index: (hash + probe_offset) & (capacity - 1)
-    # Fast bitwise AND works because capacity is power-of-two
-    hash_plus_offset = builder.add(hash_i32, probe_offset_val, name="hash_plus_offset")
-    capacity_minus_1 = builder.sub(capacity, one_i32, name="capacity_minus_1")
-    index = builder.and_(hash_plus_offset, capacity_minus_1, name="index")
+    def on_occupied(slot: ProbeSlot) -> None:
+        entry_key_ptr = builder.gep(slot.entry_ptr, ENTRY_KEY_INDICES, name="entry_key_ptr")
+        entry_key = builder.load(entry_key_ptr, name="entry_key")
+        keys_equal = emit_key_equality_check(codegen, key_type, key_value, entry_key)
+        matched["entry_ptr"] = slot.entry_ptr
+        matched["entry_key_ptr"] = entry_key_ptr
+        builder.cbranch(keys_equal, found_bb, slot.continue_bb)
 
-    # Get entry pointer
-    entry_ptr = builder.gep(buckets_data, [index], name="entry_ptr")
-
-    # Load entry state
-    state_ptr = builder.gep(entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="state_ptr")
-    state = builder.load(state_ptr, name="state")
-
-    # Branch based on state
-    builder.branch(probe_body_bb)
-
-    builder.position_at_end(probe_body_bb)
-    is_empty = builder.icmp_unsigned("==", state, ir.Constant(codegen.types.i8, ENTRY_EMPTY), name="is_empty")
-    is_occupied = builder.icmp_unsigned("==", state, ir.Constant(codegen.types.i8, ENTRY_OCCUPIED), name="is_occupied")
-
-    # If empty, not found
-    builder.cbranch(is_empty, probe_empty_bb, builder.append_basic_block(name="check_occupied"))
-
-    # Check if occupied
-    builder.position_at_end(builder.function.basic_blocks[-1])
-    builder.cbranch(is_occupied, probe_occupied_bb, probe_continue_bb)
-
-    # Empty case: not found
-    builder.position_at_end(probe_empty_bb)
-    builder.branch(not_found_bb)
-
-    # Occupied case: check if keys match
-    builder.position_at_end(probe_occupied_bb)
-    entry_key_ptr = builder.gep(entry_ptr, [zero_i32, zero_i32], name="entry_key_ptr")
-    entry_key = builder.load(entry_key_ptr, name="entry_key")
-
-    # Compare keys
-    keys_equal = emit_key_equality_check(codegen, key_type, key_value, entry_key)
-    builder.cbranch(keys_equal, found_bb, probe_continue_bb)
+    emit_probe_loop(
+        codegen, buckets_data, capacity, hash_i32,
+        on_occupied=on_occupied, on_empty=on_empty,
+        exhausted_bb=not_found_bb, prefix="remove_probe",
+    )
 
     # Found: remove entry and return Maybe.Some(value)
     builder.position_at_end(found_bb)
+    entry_ptr = matched["entry_ptr"]
+    entry_key_ptr = matched["entry_key_ptr"]
+    state_ptr = builder.gep(entry_ptr, ENTRY_STATE_INDICES, name="state_ptr")
 
     # Save the value before marking as tombstone
-    entry_value_ptr = builder.gep(entry_ptr, [zero_i32, one_i32], name="entry_value_ptr")
+    entry_value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="entry_value_ptr")
     entry_value = builder.load(entry_value_ptr, name="entry_value")
 
     # Destroy the removed key (the map owned it); the value is moved out into the
@@ -487,12 +420,6 @@ def emit_hashmap_remove(
     maybe_none = builder.insert_value(maybe_none, undef_data, 1, name="maybe_none_data")
     builder.branch(remove_done_bb)
 
-    # Continue probing (tombstone or different key)
-    builder.position_at_end(probe_continue_bb)
-    probe_offset_next = builder.add(probe_offset_val, one_i32, name="probe_offset_next")
-    builder.store(probe_offset_next, probe_offset)
-    builder.branch(probe_loop_bb)
-
     # Done: merge results
     builder.position_at_end(remove_done_bb)
     result_phi = builder.phi(maybe_llvm_type, name="remove_result")
@@ -551,24 +478,19 @@ def emit_hashmap_resize_to_capacity(
     one_i32 = ir.Constant(codegen.types.i32, 1)
 
     # Get HashMap field pointers
-    size_ptr = builder.gep(hashmap_value, [zero_i32, one_i32], name="size_ptr")
-    capacity_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="capacity_ptr")
-    tombstones_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 3)], name="tombstones_ptr")
+    fields = get_hashmap_field_ptrs(codegen, hashmap_value)
+    size_ptr, capacity_ptr = fields.size, fields.capacity
+    tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
 
     # Load current values
     size = builder.load(size_ptr, name="size")
     old_capacity = builder.load(capacity_ptr, name="old_capacity")
 
     # Get old buckets pointer
-    buckets_ptr = builder.gep(hashmap_value, [zero_i32, zero_i32], name="buckets_ptr")
-    buckets_data_ptr = builder.gep(buckets_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="buckets_data_ptr")
     old_buckets_data = builder.load(buckets_data_ptr, name="old_buckets_data")
 
     # Allocate new buckets array with new_capacity
-    null_ptr = ir.Constant(ir.PointerType(entry_type), None)
-    one = ir.Constant(codegen.types.i32, 1)
-    gep = builder.gep(null_ptr, [one], name="sizeof_gep")
-    entry_size = builder.ptrtoint(gep, codegen.types.i32, name="entry_size")
+    entry_size = get_element_size_constant(codegen, entry_type)
     total_bytes = builder.mul(entry_size, new_capacity, name="bucket_bytes")
 
     # Call malloc
@@ -576,35 +498,9 @@ def emit_hashmap_resize_to_capacity(
     new_bucket_ptr_i8 = emit_malloc(codegen, builder, total_bytes_i64)
     new_bucket_ptr = builder.bitcast(new_bucket_ptr_i8, ir.PointerType(entry_type), name="new_buckets_ptr")
 
-    # Initialize all new entries to Empty
-    init_i = builder.alloca(codegen.types.i32, name="init_i")
-    builder.store(zero_i32, init_i)
-
-    init_loop_cond_bb = builder.append_basic_block(name="init_loop_cond")
-    init_loop_body_bb = builder.append_basic_block(name="init_loop_body")
-    init_loop_end_bb = builder.append_basic_block(name="init_loop_end")
-
-    builder.branch(init_loop_cond_bb)
-
-    # Init loop condition: i < new_capacity
-    builder.position_at_end(init_loop_cond_bb)
-    init_i_val = builder.load(init_i, name="init_i_val")
-    init_cond = builder.icmp_unsigned("<", init_i_val, new_capacity, name="init_cond")
-    builder.cbranch(init_cond, init_loop_body_bb, init_loop_end_bb)
-
-    # Init loop body: set entry[i].state = ENTRY_EMPTY
-    builder.position_at_end(init_loop_body_bb)
-    init_i_val = builder.load(init_i, name="init_i_val")
-    new_entry_ptr = builder.gep(new_bucket_ptr, [init_i_val], name="new_entry_ptr")
-    new_state_ptr = builder.gep(new_entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="new_state_ptr")
-    builder.store(ir.Constant(codegen.types.i8, ENTRY_EMPTY), new_state_ptr)
-
-    init_i_next = builder.add(init_i_val, one_i32, name="init_i_next")
-    builder.store(init_i_next, init_i)
-    builder.branch(init_loop_cond_bb)
+    emit_init_buckets_empty(codegen, new_bucket_ptr, new_capacity)
 
     # After init loop: iterate through old buckets and reinsert Occupied entries
-    builder.position_at_end(init_loop_end_bb)
 
     # Get hash method for keys (register on-demand if not already registered)
     from ..types import get_key_hash_method
@@ -635,7 +531,7 @@ def emit_hashmap_resize_to_capacity(
     builder.position_at_end(rehash_loop_body_bb)
     old_i_val = builder.load(old_i, name="old_i_val")
     old_entry_ptr = builder.gep(old_buckets_data, [old_i_val], name="old_entry_ptr")
-    old_state_ptr = builder.gep(old_entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="old_state_ptr")
+    old_state_ptr = builder.gep(old_entry_ptr, ENTRY_STATE_INDICES, name="old_state_ptr")
     old_state = builder.load(old_state_ptr, name="old_state")
 
     builder.branch(rehash_check_occupied_bb)
@@ -648,9 +544,9 @@ def emit_hashmap_resize_to_capacity(
     builder.position_at_end(rehash_reinsert_bb)
 
     # Load key and value from old entry
-    old_key_ptr = builder.gep(old_entry_ptr, [zero_i32, zero_i32], name="old_key_ptr")
+    old_key_ptr = builder.gep(old_entry_ptr, ENTRY_KEY_INDICES, name="old_key_ptr")
     old_key = builder.load(old_key_ptr, name="old_key")
-    old_value_ptr = builder.gep(old_entry_ptr, [zero_i32, one_i32], name="old_value_ptr")
+    old_value_ptr = builder.gep(old_entry_ptr, ENTRY_VALUE_INDICES, name="old_value_ptr")
     old_value = builder.load(old_value_ptr, name="old_value")
 
     # Hash the key
@@ -663,46 +559,31 @@ def emit_hashmap_resize_to_capacity(
     hash_value = hash_method.llvm_emitter(codegen, fake_call, old_key, codegen.types.ll_type(key_type), False)
     hash_i32 = builder.trunc(hash_value, codegen.types.i32, name="hash_i32")
 
-    # Linear probe to find empty slot in new buckets
-    probe_offset = builder.alloca(codegen.types.i32, name="probe_offset")
-    builder.store(zero_i32, probe_offset)
+    # Linear probe for an empty slot in the NEW buckets. A rehash never collides
+    # with an equal key (the old table had none) and the new table has no
+    # tombstones, so only the empty case does anything -- and it exits into the
+    # enclosing rehash loop's continue block rather than out of the function.
+    def on_empty(slot: ProbeSlot) -> None:
+        emit_insert_entry(codegen, slot.entry_ptr, old_key, old_value, entry_type)
+        builder.branch(rehash_skip_bb)
 
-    probe_loop_bb = builder.append_basic_block(name="rehash_probe_loop")
-    probe_check_bb = builder.append_basic_block(name="rehash_probe_check")
-    probe_found_empty_bb = builder.append_basic_block(name="rehash_probe_found_empty")
-    probe_continue_bb = builder.append_basic_block(name="rehash_probe_continue")
+    def keep_probing(slot: ProbeSlot) -> None:
+        pass
 
-    builder.branch(probe_loop_bb)
+    rehash_no_slot_bb = builder.append_basic_block(name="rehash_no_slot")
 
-    # Probe loop for new buckets
-    builder.position_at_end(probe_loop_bb)
-    probe_offset_val = builder.load(probe_offset, name="probe_offset_val")
-    hash_plus_offset = builder.add(hash_i32, probe_offset_val, name="hash_plus_offset")
-    # Calculate index: (hash + probe_offset) & (new_capacity - 1)
-    # Fast bitwise AND works because capacity is power-of-two
-    new_capacity_minus_1 = builder.sub(new_capacity, one_i32, name="new_capacity_minus_1")
-    new_index = builder.and_(hash_plus_offset, new_capacity_minus_1, name="new_index")
+    emit_probe_loop(
+        codegen, new_bucket_ptr, new_capacity, hash_i32,
+        on_occupied=keep_probing, on_empty=on_empty,
+        exhausted_bb=rehash_no_slot_bb, prefix="rehash_probe",
+    )
 
-    new_probe_entry_ptr = builder.gep(new_bucket_ptr, [new_index], name="new_probe_entry_ptr")
-    new_probe_state_ptr = builder.gep(new_probe_entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="new_probe_state_ptr")
-    new_probe_state = builder.load(new_probe_state_ptr, name="new_probe_state")
-
-    builder.branch(probe_check_bb)
-
-    builder.position_at_end(probe_check_bb)
-    is_empty = builder.icmp_unsigned("==", new_probe_state, ir.Constant(codegen.types.i8, ENTRY_EMPTY), name="is_empty")
-    builder.cbranch(is_empty, probe_found_empty_bb, probe_continue_bb)
-
-    # Found empty slot: insert entry
-    builder.position_at_end(probe_found_empty_bb)
-    emit_insert_entry(codegen, new_probe_entry_ptr, old_key, old_value, entry_type)
-    builder.branch(rehash_skip_bb)
-
-    # Continue probing
-    builder.position_at_end(probe_continue_bb)
-    probe_offset_next = builder.add(probe_offset_val, one_i32, name="probe_offset_next")
-    builder.store(probe_offset_next, probe_offset)
-    builder.branch(probe_loop_bb)
+    # The new table is freshly allocated and strictly larger than the live entry
+    # count, so it always has room. Unreachable in a correct compiler; guarded so a
+    # bug here cannot become an unbounded loop.
+    builder.position_at_end(rehash_no_slot_bb)
+    codegen.runtime.errors.emit_runtime_error("RE2022", _NO_FREE_BUCKET)
+    builder.unreachable()
 
     # Skip non-occupied entries
     builder.position_at_end(rehash_skip_bb)
@@ -751,7 +632,7 @@ def emit_hashmap_rehash(
     zero_i32 = ir.Constant(codegen.types.i32, 0)
 
     # Load current capacity
-    capacity_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="capacity_ptr")
+    capacity_ptr = builder.gep(hashmap_value, HASHMAP_CAPACITY_INDICES, name="capacity_ptr")
     capacity = builder.load(capacity_ptr, name="capacity")
 
     # Resize to same capacity (removes tombstones)
@@ -816,72 +697,18 @@ def emit_hashmap_free(
     initial_capacity = ir.Constant(codegen.types.i32, 16)
 
     # Get HashMap field pointers
-    size_ptr = builder.gep(hashmap_value, [zero_i32, one_i32], name="size_ptr")
-    capacity_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="capacity_ptr")
-    tombstones_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 3)], name="tombstones_ptr")
+    fields = get_hashmap_field_ptrs(codegen, hashmap_value)
+    size_ptr, capacity_ptr = fields.size, fields.capacity
+    tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
 
     # Load old values
     old_capacity = builder.load(capacity_ptr, name="old_capacity")
 
     # Get old buckets pointer
-    buckets_ptr = builder.gep(hashmap_value, [zero_i32, zero_i32], name="buckets_ptr")
-    buckets_data_ptr = builder.gep(buckets_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="buckets_data_ptr")
     old_buckets_data = builder.load(buckets_data_ptr, name="old_buckets_data")
 
-    # Iterate through old buckets and destroy occupied entries
-    loop_i = builder.alloca(codegen.types.i32, name="loop_i")
-    builder.store(zero_i32, loop_i)
-
-    destroy_loop_cond_bb = builder.append_basic_block(name="destroy_loop_cond")
-    destroy_loop_body_bb = builder.append_basic_block(name="destroy_loop_body")
-    destroy_check_occupied_bb = builder.append_basic_block(name="destroy_check_occupied")
-    destroy_entry_bb = builder.append_basic_block(name="destroy_entry")
-    destroy_skip_bb = builder.append_basic_block(name="destroy_skip")
-    destroy_loop_end_bb = builder.append_basic_block(name="destroy_loop_end")
-
-    builder.branch(destroy_loop_cond_bb)
-
-    # Loop condition: i < old_capacity
-    builder.position_at_end(destroy_loop_cond_bb)
-    i_val = builder.load(loop_i, name="i_val")
-    loop_cond = builder.icmp_unsigned("<", i_val, old_capacity, name="loop_cond")
-    builder.cbranch(loop_cond, destroy_loop_body_bb, destroy_loop_end_bb)
-
-    # Loop body: check if entry is occupied
-    builder.position_at_end(destroy_loop_body_bb)
-    i_val = builder.load(loop_i, name="i_val")
-    entry_ptr = builder.gep(old_buckets_data, [i_val], name="entry_ptr")
-    state_ptr = builder.gep(entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="state_ptr")
-    state = builder.load(state_ptr, name="state")
-
-    builder.branch(destroy_check_occupied_bb)
-
-    builder.position_at_end(destroy_check_occupied_bb)
-    is_occupied = builder.icmp_unsigned("==", state, ir.Constant(codegen.types.i8, ENTRY_OCCUPIED), name="is_occupied")
-    builder.cbranch(is_occupied, destroy_entry_bb, destroy_skip_bb)
-
-    # Destroy occupied entry: recursively destroy key and value
-    builder.position_at_end(destroy_entry_bb)
-
-    # Get pointers to key and value
-    key_ptr = builder.gep(entry_ptr, [zero_i32, zero_i32], name="key_ptr")
-    value_ptr = builder.gep(entry_ptr, [zero_i32, one_i32], name="value_ptr")
-
-    # Recursively destroy key and value using the general destructor
-    from sushi_lang.backend.destructors import emit_value_destructor
-    emit_value_destructor(codegen, builder, key_ptr, key_type)
-    emit_value_destructor(codegen, builder, value_ptr, value_type)
-
-    builder.branch(destroy_skip_bb)
-
-    # Skip non-occupied entries
-    builder.position_at_end(destroy_skip_bb)
-    i_next = builder.add(i_val, one_i32, name="i_next")
-    builder.store(i_next, loop_i)
-    builder.branch(destroy_loop_cond_bb)
-
-    # After destroying all entries, free old buckets
-    builder.position_at_end(destroy_loop_end_bb)
+    # Destroy every occupied entry, then release the bucket storage
+    emit_destroy_all_entries(codegen, old_buckets_data, old_capacity, key_type, value_type)
 
     # Free old buckets array
     old_buckets_void_ptr = builder.bitcast(old_buckets_data, ir.PointerType(codegen.types.i8), name="old_buckets_void_ptr")
@@ -889,10 +716,7 @@ def emit_hashmap_free(
     builder.call(free_func, [old_buckets_void_ptr])
 
     # Allocate new buckets with initial capacity (16)
-    null_ptr = ir.Constant(ir.PointerType(entry_type), None)
-    one = ir.Constant(codegen.types.i32, 1)
-    gep = builder.gep(null_ptr, [one], name="sizeof_gep")
-    entry_size = builder.ptrtoint(gep, codegen.types.i32, name="entry_size")
+    entry_size = get_element_size_constant(codegen, entry_type)
     total_bytes = builder.mul(entry_size, initial_capacity, name="bucket_bytes")
 
     # Call malloc
@@ -900,35 +724,9 @@ def emit_hashmap_free(
     new_bucket_ptr_i8 = emit_malloc(codegen, builder, total_bytes_i64)
     new_bucket_ptr = builder.bitcast(new_bucket_ptr_i8, ir.PointerType(entry_type), name="new_buckets_ptr")
 
-    # Initialize all new entries to Empty
-    init_i = builder.alloca(codegen.types.i32, name="init_i")
-    builder.store(zero_i32, init_i)
-
-    init_loop_cond_bb = builder.append_basic_block(name="init_loop_cond")
-    init_loop_body_bb = builder.append_basic_block(name="init_loop_body")
-    init_loop_end_bb = builder.append_basic_block(name="init_loop_end")
-
-    builder.branch(init_loop_cond_bb)
-
-    # Init loop condition: i < initial_capacity (16)
-    builder.position_at_end(init_loop_cond_bb)
-    init_i_val = builder.load(init_i, name="init_i_val")
-    init_cond = builder.icmp_unsigned("<", init_i_val, initial_capacity, name="init_cond")
-    builder.cbranch(init_cond, init_loop_body_bb, init_loop_end_bb)
-
-    # Init loop body: set entry[i].state = ENTRY_EMPTY
-    builder.position_at_end(init_loop_body_bb)
-    init_i_val = builder.load(init_i, name="init_i_val")
-    new_entry_ptr = builder.gep(new_bucket_ptr, [init_i_val], name="new_entry_ptr")
-    new_state_ptr = builder.gep(new_entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="new_state_ptr")
-    builder.store(ir.Constant(codegen.types.i8, ENTRY_EMPTY), new_state_ptr)
-
-    init_i_next = builder.add(init_i_val, one_i32, name="init_i_next")
-    builder.store(init_i_next, init_i)
-    builder.branch(init_loop_cond_bb)
+    emit_init_buckets_empty(codegen, new_bucket_ptr, initial_capacity)
 
     # After initialization: update HashMap fields
-    builder.position_at_end(init_loop_end_bb)
 
     # Store new values: size=0, capacity=16, tombstones=0
     builder.store(zero_i32, size_ptr)
@@ -988,78 +786,25 @@ def emit_hashmap_destroy(
     one_i32 = ir.Constant(codegen.types.i32, 1)
 
     # Get HashMap field pointers
-    size_ptr = builder.gep(hashmap_value, [zero_i32, one_i32], name="size_ptr")
-    capacity_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="capacity_ptr")
-    tombstones_ptr = builder.gep(hashmap_value, [zero_i32, ir.Constant(codegen.types.i32, 3)], name="tombstones_ptr")
+    fields = get_hashmap_field_ptrs(codegen, hashmap_value)
+    size_ptr, capacity_ptr = fields.size, fields.capacity
+    tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
 
     # Load old values
     old_capacity = builder.load(capacity_ptr, name="old_capacity")
 
     # Get old buckets pointer
-    buckets_ptr = builder.gep(hashmap_value, [zero_i32, zero_i32], name="buckets_ptr")
-    buckets_data_ptr = builder.gep(buckets_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="buckets_data_ptr")
     old_buckets_data = builder.load(buckets_data_ptr, name="old_buckets_data")
 
-    # Check if buckets pointer is not null (avoid double-free)
+    # destroy() is idempotent: the buckets may already be gone, so both the walk
+    # and the free are guarded against a null bucket pointer.
     null_entry_ptr = ir.Constant(ir.PointerType(entry_type), None)
+
+    emit_destroy_all_entries(codegen, old_buckets_data, old_capacity, key_type,
+                             value_type, null_guard=True)
+
     is_not_null = builder.icmp_unsigned("!=", old_buckets_data, null_entry_ptr)
-
     with builder.if_then(is_not_null):
-        # Iterate through old buckets and destroy occupied entries
-        loop_i = builder.alloca(codegen.types.i32, name="loop_i")
-        builder.store(zero_i32, loop_i)
-
-        destroy_loop_cond_bb = builder.append_basic_block(name="destroy_loop_cond")
-        destroy_loop_body_bb = builder.append_basic_block(name="destroy_loop_body")
-        destroy_check_occupied_bb = builder.append_basic_block(name="destroy_check_occupied")
-        destroy_entry_bb = builder.append_basic_block(name="destroy_entry")
-        destroy_skip_bb = builder.append_basic_block(name="destroy_skip")
-        destroy_loop_end_bb = builder.append_basic_block(name="destroy_loop_end")
-
-        builder.branch(destroy_loop_cond_bb)
-
-        # Loop condition: i < old_capacity
-        builder.position_at_end(destroy_loop_cond_bb)
-        i_val = builder.load(loop_i, name="i_val")
-        loop_cond = builder.icmp_unsigned("<", i_val, old_capacity, name="loop_cond")
-        builder.cbranch(loop_cond, destroy_loop_body_bb, destroy_loop_end_bb)
-
-        # Loop body: check if entry is occupied
-        builder.position_at_end(destroy_loop_body_bb)
-        i_val = builder.load(loop_i, name="i_val")
-        entry_ptr = builder.gep(old_buckets_data, [i_val], name="entry_ptr")
-        state_ptr = builder.gep(entry_ptr, [zero_i32, ir.Constant(codegen.types.i32, 2)], name="state_ptr")
-        state = builder.load(state_ptr, name="state")
-
-        builder.branch(destroy_check_occupied_bb)
-
-        builder.position_at_end(destroy_check_occupied_bb)
-        is_occupied = builder.icmp_unsigned("==", state, ir.Constant(codegen.types.i8, ENTRY_OCCUPIED), name="is_occupied")
-        builder.cbranch(is_occupied, destroy_entry_bb, destroy_skip_bb)
-
-        # Destroy occupied entry: recursively destroy key and value
-        builder.position_at_end(destroy_entry_bb)
-
-        # Get pointers to key and value
-        key_ptr = builder.gep(entry_ptr, [zero_i32, zero_i32], name="key_ptr")
-        value_ptr = builder.gep(entry_ptr, [zero_i32, one_i32], name="value_ptr")
-
-        # Recursively destroy key and value using the general destructor
-        from sushi_lang.backend.destructors import emit_value_destructor
-        emit_value_destructor(codegen, builder, key_ptr, key_type)
-        emit_value_destructor(codegen, builder, value_ptr, value_type)
-
-        builder.branch(destroy_skip_bb)
-
-        # Skip non-occupied entries
-        builder.position_at_end(destroy_skip_bb)
-        i_next = builder.add(i_val, one_i32, name="i_next")
-        builder.store(i_next, loop_i)
-        builder.branch(destroy_loop_cond_bb)
-
-        # After destroying all entries, free old buckets
-        builder.position_at_end(destroy_loop_end_bb)
-
         # Free old buckets array
         old_buckets_void_ptr = builder.bitcast(old_buckets_data, ir.PointerType(codegen.types.i8), name="old_buckets_void_ptr")
         free_func = codegen.get_free_func()

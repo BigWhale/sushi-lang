@@ -423,30 +423,16 @@ def _emit_list_value_destructor(
     is_not_null = builder.icmp_unsigned("!=", data_ptr, ir.Constant(data_ptr.type, None))
     with builder.if_then(is_not_null):
         if needs_cleanup(element_type):
+            from sushi_lang.backend.generics.container_walk import emit_container_walk
+
             len_ptr = builder.gep(value_ptr, [ZERO_I32, ZERO_I32], name="list_len_field")
             list_len = builder.load(len_ptr, name="list_len")
 
-            loop_i = builder.alloca(ZERO_I32.type, name="list_cleanup_i")
-            builder.store(ZERO_I32, loop_i)
+            def destroy_element(element_ptr: ir.Value, _index: ir.Value) -> None:
+                emit_value_destructor(codegen, builder, element_ptr, element_type)
 
-            cond_bb = builder.append_basic_block(name="list_cleanup_cond")
-            body_bb = builder.append_basic_block(name="list_cleanup_body")
-            done_bb = builder.append_basic_block(name="list_cleanup_done")
-
-            builder.branch(cond_bb)
-            builder.position_at_end(cond_bb)
-            i_val = builder.load(loop_i, name="list_i")
-            cond = builder.icmp_unsigned("<", i_val, list_len, name="list_cleanup_cond_v")
-            builder.cbranch(cond, body_bb, done_bb)
-
-            builder.position_at_end(body_bb)
-            i_val = builder.load(loop_i, name="list_i")
-            element_ptr = builder.gep(data_ptr, [i_val], name="list_element_ptr")
-            emit_value_destructor(codegen, builder, element_ptr, element_type)
-            builder.store(builder.add(i_val, ONE_I32), loop_i)
-            builder.branch(cond_bb)
-
-            builder.position_at_end(done_bb)
+            emit_container_walk(codegen, data_ptr, list_len, destroy_element,
+                                prefix="list_cleanup")
 
         void_ptr = builder.bitcast(data_ptr, ir.PointerType(ir.IntType(INT8_BIT_WIDTH)))
         free_func = codegen.get_free_func()

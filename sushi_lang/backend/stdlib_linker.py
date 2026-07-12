@@ -8,6 +8,8 @@ from pathlib import Path
 
 import llvmlite.binding as llvm
 
+from sushi_lang.semantics.generics.active_generics import activate_generic_unit
+
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.semantics.ast import Program
@@ -73,31 +75,8 @@ class StdlibLinker:
                 for i in range(1, len(parts)):
                     stdlib_units.add('/'.join(parts[:i]))
 
-                # Activate generic type providers for stdlib generics
-                self._activate_generic_provider(use_stmt.path)
-
-    def _activate_generic_provider(self, unit_path: str) -> None:
-        """Activate generic type provider for a stdlib unit if applicable.
-
-        Maps stdlib unit paths to generic type providers and activates them
-        in the GenericTypeRegistry.
-
-        Args:
-            unit_path: Stdlib unit path like "collections/hashmap"
-        """
-        from sushi_lang.semantics.generics.providers.registry import GenericTypeRegistry
-
-        # Map stdlib unit paths to generic type names
-        generic_type_map = {
-            "collections/hashmap": "HashMap",
-            # Future: "collections/list": "List",
-            #         "collections/set": "Set",
-        }
-
-        # Check if this unit path corresponds to a generic type
-        generic_name = generic_type_map.get(unit_path)
-        if generic_name is not None:
-            GenericTypeRegistry.activate(generic_name)
+                # A stdlib unit may be what defines a generic type (HashMap<K, V>)
+                activate_generic_unit(use_stmt.path)
 
     def has_stdlib_unit(self, unit_path: str) -> bool:
         """Check if a stdlib unit has been imported.

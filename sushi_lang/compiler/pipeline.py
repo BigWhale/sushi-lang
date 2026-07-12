@@ -63,23 +63,6 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -
             )
 
 
-def _activate_generic_provider(unit_path: str) -> None:
-    """Activate generic type provider for a stdlib unit if applicable.
-
-    Maps stdlib unit paths to generic type providers and activates them
-    in the GenericTypeRegistry. Must be called BEFORE semantic analysis.
-    """
-    from sushi_lang.semantics.generics.providers.registry import GenericTypeRegistry
-
-    generic_type_map = {
-        "collections/hashmap": "HashMap",
-    }
-
-    generic_name = generic_type_map.get(unit_path)
-    if generic_name is not None:
-        GenericTypeRegistry.activate(generic_name)
-
-
 def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
                        args, is_library: bool = False) -> int:
     """Handle multi-file compilation when use statements are present.
@@ -94,11 +77,12 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     Returns:
         Exit code (0=success, 1=warnings, 2=errors).
     """
-    # Initialize generic type provider registry
-    from sushi_lang.semantics.generics.providers import register_all_providers
-    from sushi_lang.semantics.generics.providers.registry import GenericTypeRegistry
-    register_all_providers()
-    GenericTypeRegistry.deactivate_all()
+    # `use <collections/hashmap>` is what makes HashMap<K, V> exist; start clean.
+    from sushi_lang.semantics.generics.active_generics import (
+        activate_generic_unit,
+        reset_active_generics,
+    )
+    reset_active_generics()
 
     main_unit_name = src_path.stem
     unit_manager = UnitManager(root_path=src_path.parent, reporter=reporter)
@@ -141,7 +125,7 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
             for use_stmt in unit.ast.uses:
                 if use_stmt.is_stdlib:
                     stdlib_units.add(use_stmt.path)
-                    _activate_generic_provider(use_stmt.path)
+                    activate_generic_unit(use_stmt.path)
                 elif use_stmt.is_library:
                     library_imports.add(use_stmt.path)
 

@@ -9,7 +9,8 @@ import llvmlite.ir as ir
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType
 from sushi_lang.backend import gep_utils
-from ..types import extract_key_value_types, get_user_entry_type, ensure_entry_type_in_struct_table
+from ..types import get_user_entry_type
+from sushi_lang.semantics.generics.hashmap import extract_key_value_types, ensure_entry_type_in_struct_table
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:

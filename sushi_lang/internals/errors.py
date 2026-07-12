@@ -1218,3 +1218,11 @@ _add(ErrorMessage("RE2020", Severity.ERROR,
 _add(ErrorMessage("RE2021", Severity.ERROR,
     "memory allocation failed",
     Category.RUNTIME, "System could not allocate memory (malloc/realloc returned NULL)."))
+
+# HashMap probe exhaustion
+_add(ErrorMessage("RE2022", Severity.ERROR,
+    "insert into an unusable HashMap",
+    Category.RUNTIME, "HashMap.insert() probed every bucket without finding a slot. A live map "
+    "always resizes below a 0.75 load factor, so this means the map has no buckets at all -- it "
+    "was destroyed. Using a destroyed map is CE2406, but the borrow checker only sees a literal "
+    "`m.destroy()`, so a destroy through a `&poke` parameter reaches here instead."))

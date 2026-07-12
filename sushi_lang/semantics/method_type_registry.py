@@ -267,7 +267,7 @@ class HashMapMethodInferrer:
     validator: 'TypeValidator'
 
     def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.sushi_stdlib.generics.collections.hashmap.validation import is_builtin_hashmap_method, parse_hashmap_types
+        from sushi_lang.semantics.generics.hashmap import is_builtin_hashmap_method, parse_hashmap_types
         if is_builtin_hashmap_method(self.method_name):
             key_type, value_type = parse_hashmap_types(self.receiver_type, self.validator)
             if key_type is not None and value_type is not None:
@@ -291,7 +291,7 @@ class HashMapMethodInferrer:
                 elif self.method_name == "entries":
                     # Return Iterator<Entry<K, V>>
                     from sushi_lang.semantics.typesys import IteratorType
-                    from sushi_lang.sushi_stdlib.generics.collections.hashmap.types import ensure_entry_type_in_struct_table
+                    from sushi_lang.semantics.generics.hashmap import ensure_entry_type_in_struct_table
                     entry_type = ensure_entry_type_in_struct_table(
                         self.validator.struct_table, key_type, value_type
                     )

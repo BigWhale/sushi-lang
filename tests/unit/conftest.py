@@ -50,8 +50,7 @@ def analyze(tmp_path):
     the production pipeline.) Assert on `reporter.items[*].code`,
     `reporter.has_errors`, and `reporter.has_warnings`.
     """
-    from sushi_lang.semantics.generics.providers import register_all_providers
-    from sushi_lang.semantics.generics.providers.registry import GenericTypeRegistry
+    from sushi_lang.semantics.generics.active_generics import reset_active_generics
     from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
 
     def _analyze(src: str, name: str = "main") -> Reporter:
@@ -64,8 +63,7 @@ def analyze(tmp_path):
         reporter = Reporter(source=text, filename=name)
 
         # Match compile_multi_file's pre-analysis setup.
-        register_all_providers()
-        GenericTypeRegistry.deactivate_all()
+        reset_active_generics()
         get_stdlib_registry()
 
         unit_manager = UnitManager(root_path=tmp_path, reporter=reporter)

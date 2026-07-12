@@ -1,16 +1,24 @@
 """
-Validation logic for HashMap<K, V> method calls.
+The ir-free half of HashMap<K, V>: method validation and type-table plumbing.
 
-This module provides semantic validation for all HashMap<K, V> methods during
-compilation. It ensures correct argument counts, types, and expressions before
-LLVM IR emission.
+Pass 2 validates HashMap method calls (argument counts, key/value types) and
+resolves the K and V of a monomorphized `HashMap<K, V>`; neither needs LLVM.
+The emission half lives in `backend/generics/hashmap/`, mirroring the split
+between `semantics/generics/list.py` and `backend/generics/list/`.
 """
 
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 from sushi_lang.semantics.ast import MethodCall, Call
 from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
+from sushi_lang.semantics.generics.type_strings import (
+    resolve_type_from_string,
+    split_type_arguments,
+)
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.generics.types import GenericStructType
 
 
 def is_builtin_hashmap_method(method_name: str) -> bool:
@@ -628,3 +636,109 @@ def _validate_hashmap_entries(
     # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="entries", expected=0, got=len(call.args))
+
+
+# ==============================================================================
+# Type-table plumbing
+# ==============================================================================
+
+
+def hashmap_generic_struct() -> 'GenericStructType':
+    """The HashMap<K, V> generic struct, as Pass 0 registers it.
+
+    Only registered when `use <collections/hashmap>` activated it -- see
+    `semantics/generics/active_generics.py`.
+
+    `buckets` is declared as i32[] purely as a placeholder: the real element is the
+    internal 3-field Entry<K, V> (key, value, state), which has no semantic type and
+    is built directly in LLVM by `backend/generics/hashmap/types.py`.
+    """
+    from sushi_lang.semantics.generics.types import GenericStructType, TypeParameter
+    from sushi_lang.semantics.typesys import DynamicArrayType
+
+    return GenericStructType(
+        name="HashMap",
+        type_params=(TypeParameter(name="K"), TypeParameter(name="V")),
+        fields=(
+            ("buckets", DynamicArrayType(base_type=BuiltinType.I32)),
+            ("size", BuiltinType.I32),
+            ("capacity", BuiltinType.I32),
+            ("tombstones", BuiltinType.I32),
+        ),
+    )
+
+
+def extract_key_value_types(hashmap_type: StructType, tables: Any) -> tuple[Type, Type]:
+    """Extract K and V types from HashMap<K, V>.
+
+    Parses the struct name "HashMap<K, V>" to extract the concrete key and value
+    types. This works because monomorphized generic structs have names like
+    "HashMap<string, i32>". Handles builtins, user structs/enums, and nested
+    generics (HashMap<Maybe<i32>, Box<string>>).
+
+    Args:
+        hashmap_type: The HashMap<K, V> struct type (after monomorphization).
+        tables: Anything exposing `struct_table.by_name` and `enum_table.by_name`.
+
+    Returns:
+        Tuple of (key_type, value_type).
+    """
+    name = hashmap_type.name
+
+    if not name.startswith("HashMap<") or not name.endswith(">"):
+        raise_internal_error("CE0087", type=name)
+
+    # Extract the type arguments string: "K, V"
+    type_args_str = name[len("HashMap<"):-1]
+
+    parts = split_type_arguments(type_args_str)
+    if len(parts) != 2:
+        raise_internal_error("CE0050", generic="HashMap", expected=2, got=len(parts))
+
+    key_type_str, value_type_str = parts[0].strip(), parts[1].strip()
+
+    key_type = resolve_type_from_string(key_type_str, tables)
+    value_type = resolve_type_from_string(value_type_str, tables)
+
+    return (key_type, value_type)
+
+
+def get_entry_type_name(key_type: Type, value_type: Type) -> str:
+    """Get the name for a user-facing Entry<K, V> struct type."""
+    key_str = str(key_type).lower() if isinstance(key_type, BuiltinType) else str(key_type)
+    val_str = str(value_type).lower() if isinstance(value_type, BuiltinType) else str(value_type)
+    return f"Entry<{key_str}, {val_str}>"
+
+
+def ensure_entry_type_in_struct_table(struct_table: Any, key_type: Type, value_type: Type) -> StructType:
+    """Ensure that a user-facing Entry<K, V> struct exists in the struct table.
+
+    The user-facing Entry<K, V> has two fields: key (K) and value (V). This is
+    distinct from the internal 3-field Entry (key, value, state) used by the
+    HashMap buckets -- see `backend/generics/hashmap/types.py`.
+
+    Args:
+        struct_table: The struct table with by_name dict.
+        key_type: The key type K.
+        value_type: The value type V.
+
+    Returns:
+        The StructType for Entry<K, V>.
+    """
+    entry_name = get_entry_type_name(key_type, value_type)
+
+    if entry_name in struct_table.by_name:
+        return struct_table.by_name[entry_name]
+
+    entry_struct = StructType(
+        name=entry_name,
+        fields=(("key", key_type), ("value", value_type)),
+        generic_base="Entry",
+        generic_args=(key_type, value_type),
+    )
+
+    struct_table.by_name[entry_name] = entry_struct
+    if hasattr(struct_table, 'order'):
+        struct_table.order.append(entry_name)
+
+    return entry_struct
