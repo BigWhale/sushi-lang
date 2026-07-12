@@ -85,7 +85,7 @@ def parse_interpolated_string(raw_string: str, span: 'Span') -> Tuple[List[Union
     Raises:
         Exception with CE2026 error code for unterminated braces
     """
-    from sushi_lang.semantics.ast_builder.exceptions import UnterminatedInterpolationError, EmptyInterpolationError
+    from sushi_lang.internals.diagnostics import SyntaxDiagnostic
     from sushi_lang.internals.report import Span
 
     parts = []
@@ -113,17 +113,11 @@ def parse_interpolated_string(raw_string: str, span: 'Span') -> Tuple[List[Union
                 i += 1
 
             if brace_count > 0:
-                raise UnterminatedInterpolationError(
-                    "unterminated interpolation in string literal",
-                    span
-                )
+                raise SyntaxDiagnostic("CE2026", span=span)
 
             expr_content = raw_string[expr_start:i-1]
             if not expr_content.strip():
-                raise EmptyInterpolationError(
-                    "empty interpolation in string literal",
-                    span
-                )
+                raise SyntaxDiagnostic("CE2038", span=span)
 
             parts.append(expr_content)
             expr_col_offset = span.col + 1 + brace_start + 1

@@ -78,19 +78,21 @@ class Reporter:
         self.filename = filename
         self.items: List[Diagnostic] = []
 
-    def error(self, code: str, msg: str, span: Optional[Span]):
-        self.items.append(Diagnostic("error", code, msg, span, filename=self.filename))
+    def error(self, code: str, msg: str, span: Optional[Span], filename: Optional[str] = None):
+        self.items.append(Diagnostic("error", code, msg, span, filename=filename or self.filename))
 
-    def warn(self, code: str, msg: str, span: Optional[Span]):
-        self.items.append(Diagnostic("warning", code, msg, span, filename=self.filename))
+    def warn(self, code: str, msg: str, span: Optional[Span], filename: Optional[str] = None):
+        self.items.append(Diagnostic("warning", code, msg, span, filename=filename or self.filename))
 
-    def error_with(self, code: str, msg: str, span: Optional[Span]) -> DiagnosticBuilder:
-        d = Diagnostic("error", code, msg, span, filename=self.filename)
+    def error_with(self, code: str, msg: str, span: Optional[Span],
+                   filename: Optional[str] = None) -> DiagnosticBuilder:
+        d = Diagnostic("error", code, msg, span, filename=filename or self.filename)
         self.items.append(d)
         return DiagnosticBuilder(self, d)
 
-    def warn_with(self, code: str, msg: str, span: Optional[Span]) -> DiagnosticBuilder:
-        d = Diagnostic("warning", code, msg, span, filename=self.filename)
+    def warn_with(self, code: str, msg: str, span: Optional[Span],
+                  filename: Optional[str] = None) -> DiagnosticBuilder:
+        d = Diagnostic("warning", code, msg, span, filename=filename or self.filename)
         self.items.append(d)
         return DiagnosticBuilder(self, d)
 

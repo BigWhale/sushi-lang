@@ -5,12 +5,7 @@ import sys
 
 from lark import UnexpectedInput
 
-from sushi_lang.semantics.ast_builder import (
-    BlankReturnSyntaxError,
-    UnterminatedInterpolationError,
-    EmptyInterpolationError,
-    CStyleOctalError,
-)
+from sushi_lang.internals.diagnostics import SushiError
 
 
 def handle_parse_exception(exc: Exception, reporter, source_path=None) -> bool:
@@ -27,21 +22,8 @@ def handle_parse_exception(exc: Exception, reporter, source_path=None) -> bool:
     from sushi_lang.internals import errors as er
     from sushi_lang.internals.parser import improve_parse_error
 
-    if isinstance(exc, BlankReturnSyntaxError):
-        er.emit(reporter, er.ERR.CE2036, exc.span)
-        return True
-
-    if isinstance(exc, UnterminatedInterpolationError):
-        er.emit(reporter, er.ERR.CE2026, exc.span)
-        return True
-
-    if isinstance(exc, EmptyInterpolationError):
-        er.emit(reporter, er.ERR.CE2038, exc.span)
-        return True
-
-    if isinstance(exc, CStyleOctalError):
-        octal_value = exc.literal.lstrip('0') or '0'
-        er.emit(reporter, er.ERR.CE2071, exc.span, literal=exc.literal, octal=octal_value)
+    if isinstance(exc, SushiError):
+        er.emit_exception(reporter, exc)
         return True
 
     if isinstance(exc, UnexpectedInput):

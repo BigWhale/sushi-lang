@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from lark import Token
 from sushi_lang.semantics.ast import Expr, IntLit, FloatLit, BoolLit, Name
-from sushi_lang.semantics.ast_builder.exceptions import CStyleOctalError
 from sushi_lang.semantics.ast_builder.utils.string_processing import parse_string_token
+from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -21,7 +21,8 @@ def expr_from_token(tok: Token, ast_builder: 'ASTBuilder') -> Expr:
     if t == "INT":
         # Check for C-style octal literals (leading zero) and reject them
         if len(tok.value) > 1 and tok.value[0] == '0' and tok.value[1].isdigit():
-            raise CStyleOctalError(tok.value, span=span_of(tok))
+            raise SyntaxDiagnostic("CE2071", span=span_of(tok), literal=tok.value,
+                                   octal=tok.value.lstrip('0') or '0')
         return IntLit(value=int(tok.value), radix=10, loc=span_of(tok))
 
     if t == "HEX_INT":

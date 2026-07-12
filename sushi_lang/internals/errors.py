@@ -4,6 +4,13 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Optional
 
+from sushi_lang.internals.diagnostics import (
+    AstBuilderICE,
+    InternalCompilerError,
+    StdlibBuildError,
+    SushiError,
+    SyntaxDiagnostic,
+)
 from sushi_lang.internals.report import Span, Reporter, DiagnosticBuilder
 
 
@@ -65,22 +72,38 @@ def emit_with(r: Reporter, em: ErrorMessage, span: Optional[Span], **kwargs) -> 
     else:
         return r.warn_with(em.code, text, span)
 
-def raise_internal_error(code: str, **kwargs) -> None:
-    """Raise a RuntimeError for internal compiler errors.
+def emit_exception(r: Reporter, exc: SushiError) -> None:
+    """Render a diagnostic that arrived as an exception.
 
-    Internal errors (IE codes) indicate compiler bugs, not user code issues.
-    These are raised as Python exceptions during code generation.
+    The single choke point where an exception-borne diagnostic joins the reporter,
+    so it lands at the same tier -- text, one location, or one location plus located
+    notes -- as an equivalent `emit_with(...)`.
+    """
+    em = _get(exc.code)
+    text = _fmt(exc.code, **exc.params)
+    if em.severity == Severity.ERROR:
+        builder = r.error_with(exc.code, text, exc.span, filename=exc.filename)
+    else:
+        builder = r.warn_with(exc.code, text, exc.span, filename=exc.filename)
+
+    for message, span, filename in exc.notes:
+        builder.note(message, span, filename)
+    for message in exc.helps:
+        builder.help(message)
+
+
+def raise_internal_error(code: str, **kwargs) -> None:
+    """Raise an InternalCompilerError -- a compiler bug, not a user code issue.
 
     Args:
-        code: Error code (e.g., "IE0001")
+        code: Error code (e.g., "CE0013")
         **kwargs: Format parameters for the error message
 
     Raises:
-        RuntimeError: Always raises with formatted error message
+        InternalCompilerError: always. It subclasses RuntimeError, which is what
+            this used to raise.
     """
-    msg = _get(code)
-    text = _fmt(code, **kwargs)
-    raise RuntimeError(f"{code}: {text}")
+    raise InternalCompilerError(code, **kwargs)
 
 
 #
