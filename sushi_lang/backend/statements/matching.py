@@ -537,7 +537,7 @@ def _extract_nested_pattern(codegen: 'LLVMCodegen', nested_pattern: 'Pattern', e
     else:
         # No fallthrough available - this is a runtime error
         error_msg = f"nested pattern mismatch: expected {nested_pattern.enum_name}.{nested_pattern.variant_name}"
-        codegen.runtime.errors.emit_runtime_error("RE9999", error_msg)
+        codegen.runtime.errors.emit_runtime_error("RE2023", error_msg)
         codegen.builder.unreachable()
 
     # Match block: Extract bindings from nested pattern

@@ -41,13 +41,10 @@ class _ErrorCatalog:
         self._registry = backing
 
     def __getattr__(self, name: str) -> ErrorMessage:
-        try:
-            return self._registry[name]
-        except KeyError as e:
-            raise AttributeError(name) from e
+        return _get(name)
 
     def __getitem__(self, code: str) -> ErrorMessage:
-        return self._registry[code]
+        return _get(code)
 
 
 ERR = _ErrorCatalog(REGISTRY)
@@ -110,19 +107,27 @@ def _add(msg: ErrorMessage) -> None:
     REGISTRY[msg.code] = msg
 
 def _get(code: str) -> ErrorMessage:
-    try:
-        return REGISTRY[code]
-    except KeyError:
-        raise KeyError(f"unknown error code: {code}")
+    """Look up a code, degrading rather than raising.
+
+    The error machinery must not crash *while reporting an error*. An unregistered
+    code is a compiler bug, so it renders as one -- it does not replace the user's
+    diagnostic with a traceback. test_error_registry.py is what keeps this honest.
+    """
+    msg = REGISTRY.get(code)
+    if msg is not None:
+        return msg
+    return ErrorMessage(code, Severity.ERROR,
+                        f"unregistered diagnostic '{code}' (this is a compiler bug)",
+                        Category.INTERNAL)
+
+class _SafeParams(dict):
+    """Renders a missing format key as <missing:key> instead of raising."""
+
+    def __missing__(self, key: str) -> str:
+        return f"<missing:{key}>"
 
 def _fmt(code: str, **kwargs) -> str:
-    msg = _get(code)
-    try:
-        return msg.text.format(**kwargs)
-    except KeyError as key_error:
-        missing = key_error.args[0]
-        raise KeyError(f"missing text key '{missing}' for {code} "
-                       f"(needed by: {msg.text!r})") from None
+    return _get(code).text.format_map(_SafeParams(kwargs))
 
 #
 # --- Registry population
@@ -137,6 +142,11 @@ _add(ErrorMessage("CE0000", Severity.ERROR,
 _add(ErrorMessage("CE0001", Severity.ERROR,
     "unknown type node '{node}'",
     Category.INTERNAL, "Found an unexpected type (bug or unsupported feature)."))
+
+_add(ErrorMessage("CE0002", Severity.ERROR,
+    "internal error: malformed parse tree at '{node}': {detail}",
+    Category.INTERNAL, "The grammar produced a node shape the compiler cannot build. "
+                       "No accepted source can reach this: it is a compiler bug."))
 
 _add(ErrorMessage("CE0007", Severity.ERROR,
     "standard library build failed: {detail}",
@@ -728,6 +738,10 @@ _add(ErrorMessage("CE2015", Severity.ERROR,
     "constant '{name}' cannot use dynamic array type",
     Category.TYPE, "Constants must use compile-time types. Dynamic arrays are not allowed."))
 
+_add(ErrorMessage("CE2016", Severity.ERROR,
+    "method '{method}' expects {expected} argument(s), got {got}",
+    Category.TYPE, "Built-in Result<T, E> and Maybe<T> methods take a fixed number of arguments."))
+
 # Dynamic array-specific errors (compile-time only)
 
 _add(ErrorMessage("CE2022", Severity.ERROR,
@@ -1039,27 +1053,27 @@ _add(ErrorMessage("CE2094", Severity.ERROR,
 # Unit Management Errors (CE3xxx)
 _add(ErrorMessage("CE3001", Severity.ERROR,
     "circular dependency detected: {cycle}",
-    Category.SCOPE, "Units have circular dependencies that prevent compilation ordering."))
+    Category.UNIT, "Units have circular dependencies that prevent compilation ordering."))
 
 _add(ErrorMessage("CE3002", Severity.ERROR,
     "unit '{name}' not found (expected: {path})",
-    Category.SCOPE, "A required unit file could not be found at the expected location."))
+    Category.UNIT, "A required unit file could not be found at the expected location."))
 
 _add(ErrorMessage("CE3003", Severity.ERROR,
     "duplicate public symbol '{symbol}' found in units: {units}",
-    Category.SCOPE, "Multiple units export the same public symbol name, creating an ambiguity."))
+    Category.UNIT, "Multiple units export the same public symbol name, creating an ambiguity."))
 
 _add(ErrorMessage("CE3004", Severity.ERROR,
     "invalid unit path '{path}': {reason}",
-    Category.SCOPE, "Unit path contains invalid characters or structure."))
+    Category.UNIT, "Unit path contains invalid characters or structure."))
 
 _add(ErrorMessage("CE3005", Severity.ERROR,
     "cannot call private function '{name}' from unit '{current_unit}' (function is defined in '{func_unit}')",
-    Category.SCOPE, "Private functions can only be called from within the same unit. Use 'public fn' to make the function accessible across units."))
+    Category.UNIT, "Private functions can only be called from within the same unit. Use 'public fn' to make the function accessible across units."))
 
 _add(ErrorMessage("CE3006", Severity.ERROR,
     "unknown stdlib module <{module}>",
-    Category.SCOPE, "The imported standard-library module does not exist. Check the spelling against the available modules."))
+    Category.UNIT, "The imported standard-library module does not exist. Check the spelling against the available modules."))
 
 # Perk-related errors (CE4xxx)
 _add(ErrorMessage("CE4001", Severity.ERROR,
@@ -1257,3 +1271,9 @@ _add(ErrorMessage("RE2022", Severity.ERROR,
     "always resizes below a 0.75 load factor, so this means the map has no buckets at all -- it "
     "was destroyed. Using a destroyed map is CE2406, but the borrow checker only sees a literal "
     "`m.destroy()`, so a destroy through a `&poke` parameter reaches here instead."))
+
+# Pattern match exhaustion
+_add(ErrorMessage("RE2023", Severity.ERROR,
+    "no match arm matched the value",
+    Category.RUNTIME, "A nested pattern reached the end of its arms without matching. "
+    "Exhaustiveness checking should make this unreachable."))

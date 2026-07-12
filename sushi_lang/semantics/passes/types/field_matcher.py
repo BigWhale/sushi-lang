@@ -40,7 +40,8 @@ def validate_and_reorder_named_args(
     """
     if len(arg_exprs) != len(field_names):
         # Internal error - should never happen from AST builder
-        er.raise_internal_error("CE0999", msg="arg_exprs and field_names length mismatch")
+        er.raise_internal_error("CE0002", node="named struct constructor",
+                                detail="arg_exprs and field_names length mismatch")
 
     # Get expected fields from struct definition
     expected_fields = list(struct_type.fields)  # List of (field_name, field_type) tuples
