@@ -12,7 +12,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
 
 from sushi_lang.internals.errors import REGISTRY, Category, Severity, _fmt
 

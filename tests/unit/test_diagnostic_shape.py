@@ -20,7 +20,6 @@ import re
 import subprocess
 from pathlib import Path
 
-import pytest
 
 
 HEAD_RE = re.compile(r"^(?P<loc>\S*?):?\s*(?P<severity>error|warning) \[(?P<code>[A-Z]{2}\d{4})\]: (?P<message>.+)$")
