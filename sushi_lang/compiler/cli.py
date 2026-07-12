@@ -3,8 +3,16 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
+from sushi_lang.internals.diagnostics import (
+    InternalCompilerError,
+    StdlibBuildError,
+    SushiError,
+)
+from sushi_lang.internals.report import Reporter
 from sushi_lang.internals.version import print_banner
 
 
@@ -121,10 +129,20 @@ def print_library_info(library_path: Path) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Main compiler entry point."""
-    print_banner()
+@dataclass
+class Session:
+    """Everything the top-level guard needs to render whatever went wrong.
 
+    The reporter is the one `_run` has been filling in, so diagnostics collected
+    before a crash still print, with the crash appended.
+    """
+    args: argparse.Namespace
+    reporter: Reporter = field(default_factory=Reporter)
+    src_path: Optional[Path] = None
+    crash: Optional[BaseException] = None
+
+
+def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(prog="compiler", description="Language compiler")
 
     ap.add_argument("source", nargs='?', help="Path to source file (.sushi)")
@@ -188,13 +206,17 @@ def main(argv: list[str] | None = None) -> int:
         metavar="PATH",
         help="Custom cache directory location (default: __sushi_cache__/)",
     )
-    args = ap.parse_args(argv)
+    return ap.parse_args(argv)
 
-    if args.version:
-        return 0
 
-    if args.lib_info:
-        return print_library_info(Path(args.lib_info))
+def _run(session: Session) -> int:
+    """Everything the compiler does. Raises; never reports."""
+    from sushi_lang.compiler.loader import get_effective_cwd, check_duplicate_uses
+    from sushi_lang.compiler.pipeline import compile_multi_file
+    from sushi_lang.internals import errors as er
+    from sushi_lang.internals.parser import parse_to_ast
+
+    args = session.args
 
     if args.clean_cache:
         from sushi_lang.compiler.cache import CacheManager
@@ -209,24 +231,21 @@ def main(argv: list[str] | None = None) -> int:
         if not args.source:
             return 0
 
-    if args.lib:
-        if args.out and not args.out.endswith('.slib'):
-            from sushi_lang.internals.errors import ERR
-            msg = ERR["CE3500"]
-            print(f"{msg.code}: {msg.text.format(path=args.out)}", file=sys.stderr)
-            return 2
+    if args.lib and args.out and not args.out.endswith('.slib'):
+        er.emit(session.reporter, er.ERR.CE3500, None, path=args.out)
+        return 2
 
-    # Handle --build-stdlib flag
     if args.build_stdlib:
         print("Building standard library...")
+        from sushi_lang.backend.stdlib_builder import detect_platform
+        from sushi_lang.sushi_stdlib.build import build_all
         try:
-            from sushi_lang.sushi_stdlib.build import build_all
-            from sushi_lang.backend.stdlib_builder import detect_platform
             build_all(detect_platform())
-            print()
+        except SushiError:
+            raise
         except Exception as e:
-            print(f"Error: Stdlib build failed: {e}", file=sys.stderr)
-            return 2
+            raise StdlibBuildError("CE0007", detail=str(e)) from e
+        print()
 
         if not args.source:
             return 0
@@ -235,55 +254,99 @@ def main(argv: list[str] | None = None) -> int:
         print("error: source file required (unless using --build-stdlib)", file=sys.stderr)
         return 2
 
-    # Resolve source file path
-    from sushi_lang.compiler.loader import get_effective_cwd, check_duplicate_uses
-    from sushi_lang.compiler.pipeline import compile_multi_file
-    from sushi_lang.internals.parser import parse_to_ast
-    from sushi_lang.internals.parse_errors import handle_parse_exception
-    from sushi_lang.internals.report import Reporter
-
-    effective_cwd = get_effective_cwd()
     src_path = Path(args.source)
-
     if not src_path.is_absolute():
-        src_path = effective_cwd / src_path
-
+        src_path = get_effective_cwd() / src_path
     src_path = src_path.resolve()
+    session.src_path = src_path
 
     try:
         src = src_path.read_text(encoding="utf-8")
-    except Exception as e:
+    except OSError as e:
         print(f"error: cannot read {src_path}: {e}", file=sys.stderr)
         return 2
 
-    reporter = Reporter(source=src, filename=str(src_path))
+    session.reporter.source = src
+    session.reporter.filename = str(src_path)
+
+    ast, _tree = parse_to_ast(src, dump_parse=args.dump_parse)
+
+    if args.dump_ast:
+        print(ast)
+        print()
+
+    if src and not src.endswith('\n'):
+        er.emit(session.reporter, er.ERR.CW0001, None)
+
+    check_duplicate_uses(ast, session.reporter)
+
+    return compile_multi_file(ast, src_path, session.reporter, args, is_library=args.lib)
+
+
+def _as_ice(exc: Exception) -> InternalCompilerError:
+    """Wrap an unexpected exception as a reportable internal compiler error."""
+    detail = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+    ice = InternalCompilerError("CE0000", detail=detail)
+    ice.__cause__ = exc
+    return ice
+
+
+def _report(session: Session, exc: SushiError) -> int:
+    """Turn a raised diagnostic into a reported one. Always an error: exit 2."""
+    from sushi_lang.internals import errors as er
+
+    if isinstance(exc, InternalCompilerError):
+        exc.note("this is a bug in the Sushi compiler, not in your program")
+        if not session.args.traceback:
+            exc.help("re-run with --traceback for the full Python traceback, "
+                     "then please report it")
+
+    er.emit_exception(session.reporter, exc)
+    return 2
+
+
+def _flush(session: Session) -> None:
+    """Print the collected diagnostics, then the Python traceback if asked for."""
+    session.reporter.print()
+    print()
+
+    if session.crash is not None and session.args.traceback:
+        import traceback
+        traceback.print_exception(session.crash)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Main compiler entry point."""
+    print_banner()
+
+    args = _parse_args(argv)
+
+    if args.version:
+        return 0
+
+    if args.lib_info:
+        return print_library_info(Path(args.lib_info))
+
+    session = Session(args=args)
 
     try:
-        ast, tree = parse_to_ast(src, dump_parse=args.dump_parse)
-
-        if args.dump_ast:
-            print(ast)
-            print()
-
-        # Check for missing trailing newline
-        if src and not src.endswith('\n'):
-            from sushi_lang.internals import errors as er
-            er.emit(reporter, er.ERR.CW0001, None)
-
-        check_duplicate_uses(ast, reporter)
-
-        result = compile_multi_file(ast, src_path, reporter, args, is_library=args.lib)
-        if result is not None:
-            reporter.print()
-            print()
-            return result
-
+        rc = _run(session)
+    except KeyboardInterrupt:
+        return 130
+    except SushiError as exc:
+        session.crash = exc
+        rc = _report(session, exc)
     except Exception as exc:
-        if handle_parse_exception(exc, reporter):
-            reporter.print()
-            print()
-            return 2
-        raise
+        # Legacy Lark path; replaced by the CE6xxx syntax diagnostics.
+        from sushi_lang.internals.parse_errors import handle_parse_exception
+        session.crash = exc
+        if handle_parse_exception(exc, session.reporter):
+            rc = 2
+        else:
+            rc = _report(session, _as_ice(exc))
+
+    _flush(session)
+    return rc
 
 
 if __name__ == "__main__":

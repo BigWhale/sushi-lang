@@ -4,13 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Optional
 
-from sushi_lang.internals.diagnostics import (
-    AstBuilderICE,
-    InternalCompilerError,
-    StdlibBuildError,
-    SushiError,
-    SyntaxDiagnostic,
-)
+from sushi_lang.internals.diagnostics import InternalCompilerError, SushiError
 from sushi_lang.internals.report import Span, Reporter, DiagnosticBuilder
 
 
@@ -135,9 +129,19 @@ def _fmt(code: str, **kwargs) -> str:
 #
 
 # Internal errors (compiler bugs) - CE0xxx range
+_add(ErrorMessage("CE0000", Severity.ERROR,
+    "internal compiler error: {detail}",
+    Category.INTERNAL, "The compiler crashed. This is a compiler bug, not a problem "
+                       "with the program being compiled."))
+
 _add(ErrorMessage("CE0001", Severity.ERROR,
     "unknown type node '{node}'",
     Category.INTERNAL, "Found an unexpected type (bug or unsupported feature)."))
+
+_add(ErrorMessage("CE0007", Severity.ERROR,
+    "standard library build failed: {detail}",
+    Category.INTERNAL, "A generator under sushi_stdlib/src failed to produce the "
+                       "standard library bitcode."))
 
 _add(ErrorMessage("CE0009", Severity.ERROR,
     "builder not initialized",

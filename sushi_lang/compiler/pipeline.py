@@ -9,6 +9,7 @@ from sushi_lang.compiler.loader import (
     get_effective_cwd,
     load_unit_recursively,
 )
+from sushi_lang.internals.diagnostics import StdlibBuildError, SushiError
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.ast import Program
 from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
@@ -23,7 +24,8 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -
     are collected + monomorphized whole-program exactly like a user unit (no .bc).
     The worklist follows a source module's own source-stdlib imports transitively.
 
-    Returns True on success, False on a read/parse error (already reported).
+    Returns True on success, False if a bundled module is missing. A parse failure
+    inside a bundled module is a compiler bug, and propagates as one.
     """
     from sushi_lang.internals.parser import parse_to_ast
     from sushi_lang.semantics.stdlib_registry import (
@@ -50,13 +52,12 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -
                 print(f"error: bundled stdlib module '{module_path}' not found "
                       f"at {src_path}", file=sys.stderr)
                 return False
+            module_src = src_path.read_text(encoding="utf-8")
             try:
-                module_src = src_path.read_text(encoding="utf-8")
                 module_ast, _ = parse_to_ast(module_src, dump_parse=False)
-            except Exception as e:
-                print(f"error: failed to parse bundled stdlib module "
-                      f"'{module_path}': {e}", file=sys.stderr)
-                return False
+            except SushiError as e:
+                e.filename = e.filename or str(src_path)
+                raise
             unit_manager.units[module_path] = Unit(
                 name=module_path, file_path=src_path, ast=module_ast,
                 dependencies=[], public_symbols={},
@@ -141,7 +142,12 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
         # Auto-build the current platform's stdlib bitcode if missing or if a
         # generator source changed, so we never link stale/absent .bc.
         from sushi_lang.backend.stdlib_builder import ensure_stdlib_built
-        ensure_stdlib_built()
+        try:
+            ensure_stdlib_built()
+        except SushiError:
+            raise
+        except Exception as e:
+            raise StdlibBuildError("CE0007", detail=str(e)) from e
 
         from sushi_lang.backend.codegen_llvm import LLVMCodegen
         temp_cg = LLVMCodegen()
@@ -188,11 +194,7 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     multi_file_analyzer = SemanticAnalyzer(reporter, filename=main_unit_name,
                                            unit_manager=unit_manager,
                                            library_linker=library_linker)
-    try:
-        multi_file_analyzer.check(main_ast)
-    except ValueError as e:
-        print(f"Compilation failed: {e}", file=sys.stderr)
-        return 2
+    multi_file_analyzer.check(main_ast)
 
     if reporter.has_errors:
         return 2
@@ -206,23 +208,15 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     )
 
     # Code generation
-    try:
-        if use_incremental:
-            return _compile_incremental(
-                compilation_order, multi_file_analyzer, src_path, reporter, args,
-                stdlib_units, library_imports, library_linker, unit_manager,
-            )
-        else:
-            return _compile_monolithic(
-                compilation_order, multi_file_analyzer, src_path, reporter, args,
-                is_library, stdlib_units, library_imports, library_linker,
-            )
-    except Exception as e:
-        print(f"Compilation failed: {e}", file=sys.stderr)
-        if args.traceback:
-            import traceback
-            traceback.print_exc()
-        return 2
+    if use_incremental:
+        return _compile_incremental(
+            compilation_order, multi_file_analyzer, src_path, reporter, args,
+            stdlib_units, library_imports, library_linker, unit_manager,
+        )
+    return _compile_monolithic(
+        compilation_order, multi_file_analyzer, src_path, reporter, args,
+        is_library, stdlib_units, library_imports, library_linker,
+    )
 
 
 def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
