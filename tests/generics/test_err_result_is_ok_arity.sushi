@@ -1,0 +1,8 @@
+# Test: a built-in Result method called with the wrong arity
+# EXPECT_ERROR_CODE: CE2016
+
+fn main() i32:
+    let Result<i32, StdError> r = Result.Ok(1)
+    # Error: is_ok() takes no arguments
+    let bool ok = r.is_ok(1)
+    return Result.Ok(0)

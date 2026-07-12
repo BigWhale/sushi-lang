@@ -17,7 +17,7 @@ from sushi_lang.semantics.typesys import (
 )
 from sushi_lang.semantics.generics.types import GenericEnumType, TypeParameter
 
-from .utils import extract_type_param_names
+from .utils import extract_type_param_names, note_first_declaration
 
 
 @dataclass
@@ -25,6 +25,9 @@ class EnumTable:
     """Table of enum types collected in Phase 0."""
     by_name: Dict[str, EnumType] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
+    # Where each name was declared; see StructTable.spans. A name present in by_name
+    # but absent here was predefined by the compiler.
+    spans: Dict[str, Optional[Span]] = field(default_factory=dict)
 
 
 @dataclass
@@ -37,6 +40,7 @@ class GenericEnumTable:
     """
     by_name: Dict[str, GenericEnumType] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
+    spans: Dict[str, Optional[Span]] = field(default_factory=dict)
 
 
 class EnumCollector:
@@ -262,21 +266,34 @@ class EnumCollector:
 
         # Check for duplicate enum names (both regular and generic namespaces)
         if name in self.enums.by_name:
-            er.emit(self.r, ERR.CE2046, name_span, name=name)
+            note_first_declaration(
+                er.emit_with(self.r, ERR.CE2046, name_span, name=name),
+                self.enums.spans, name,
+            ).emit()
             return
 
         if name in self.structs.by_name:
-            er.emit(self.r, ERR.CE0006, name_span, name=name)
+            note_first_declaration(
+                er.emit_with(self.r, ERR.CE0006, name_span, name=name),
+                self.structs.spans, name,
+                what="already defined as a struct here",
+            ).emit()
             return
 
         if name in self.generic_structs.by_name:
-            er.emit_with(self.r, ERR.CE0006, name_span, name=name) \
-                .note("predefined as generic struct").emit()
+            note_first_declaration(
+                er.emit_with(self.r, ERR.CE0006, name_span, name=name),
+                self.generic_structs.spans, name,
+                what="already defined as a generic struct here",
+            ).emit()
             return
 
         if name in self.generic_enums.by_name:
-            er.emit_with(self.r, ERR.CE2046, name_span, name=name) \
-                .note("predefined as generic enum").emit()
+            note_first_declaration(
+                er.emit_with(self.r, ERR.CE2046, name_span, name=name),
+                self.generic_enums.spans, name,
+                what="first defined here, as a generic enum",
+            ).emit()
             return
 
         # Collect enum variants
@@ -327,6 +344,7 @@ class EnumCollector:
 
             self.generic_enums.order.append(name)
             self.generic_enums.by_name[name] = generic_enum
+            self.generic_enums.spans[name] = name_span
 
             # Note: Generic enums are not added to known_types until instantiated
         else:
@@ -338,6 +356,7 @@ class EnumCollector:
 
             self.enums.order.append(name)
             self.enums.by_name[name] = enum_type
+            self.enums.spans[name] = name_span
 
             # Register enum type as known type for future lookups
             self.known_types.add(enum_type)

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from lark import Tree, Token
 from sushi_lang.semantics.ast import UseStatement
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import ice, expect
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -11,7 +12,7 @@ if TYPE_CHECKING:
 
 def parse_usestatement(t: Tree, ast_builder: 'ASTBuilder') -> UseStatement:
     """Parse use_stmt: USE (stdlib_import | lib_import | user_import) _NEWLINE"""
-    assert t.data == "use_stmt"
+    t = expect(t, "use_stmt")
 
     # Find the import node (stdlib_import, lib_import, or user_import)
     import_node = None
@@ -21,7 +22,7 @@ def parse_usestatement(t: Tree, ast_builder: 'ASTBuilder') -> UseStatement:
             break
 
     if import_node is None:
-        raise NotImplementedError("use_stmt: missing import node")
+        ice(t, "missing import node")
 
     is_stdlib = False
     is_library = False
@@ -36,7 +37,7 @@ def parse_usestatement(t: Tree, ast_builder: 'ASTBuilder') -> UseStatement:
                 break
 
         if use_path is None:
-            raise NotImplementedError("stdlib_import: missing use_path")
+            ice(import_node, "missing use_path")
 
         # Extract NAME tokens and join with "/"
         parts = []
@@ -57,7 +58,7 @@ def parse_usestatement(t: Tree, ast_builder: 'ASTBuilder') -> UseStatement:
                 break
 
         if use_path is None:
-            raise NotImplementedError("lib_import: missing use_path")
+            ice(import_node, "missing use_path")
 
         # Extract NAME tokens and join with "/"
         parts = []
@@ -79,7 +80,7 @@ def parse_usestatement(t: Tree, ast_builder: 'ASTBuilder') -> UseStatement:
                 break
 
         if string_tok is None:
-            raise NotImplementedError("user_import: missing STRING path")
+            ice(import_node, "missing STRING path")
 
         # Remove quotes from the string literal
         path = str(string_tok.value)

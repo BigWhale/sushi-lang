@@ -2,8 +2,11 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from lark import Tree
+from sushi_lang.internals.diagnostics import SyntaxDiagnostic
+from sushi_lang.internals.report import span_of
 from sushi_lang.semantics.ast import Stmt
 from sushi_lang.semantics.ast_builder.statements import io, returns, variables, control_flow, loops, flow, calls, matching
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import unhandled
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
@@ -38,13 +41,15 @@ class StatementParser:
             "continue_stmt": flow.parse_continue_stmt,
         }
 
-        # Handle nested function definitions (error case)
+        # A nested `fn` PARSES -- the grammar allows it inside a body -- so this is a
+        # real user error, not a builder bug.
         if node.data == "function_def":
-            raise NotImplementedError("Nested function definitions not supported yet")
+            raise SyntaxDiagnostic("CE6101", span=span_of(node)) \
+                .help("move the function to the top level, or use a lambda")
 
         # Dispatch to appropriate handler
         handler = stmt_handlers.get(node.data)
         if handler:
             return handler(node, self.ast_builder)
 
-        raise NotImplementedError(f"unhandled statement node: {node.data}")
+        unhandled(node)

@@ -6,6 +6,7 @@ mapping system errors (errno) to Sushi FileError enum variants.
 """
 from __future__ import annotations
 
+import hashlib
 import typing
 
 from llvmlite import ir
@@ -16,10 +17,22 @@ from sushi_lang.backend.runtime.constants import (
     ERRNO_TO_FILE_ERROR,
     ERRNO_DEFAULT_FILE_ERROR,
 )
-from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.internals.errors import message_for, raise_internal_error
 
 if typing.TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
+
+
+def _message_global_name(error_code: str, message: str, kind: str = "msg") -> str:
+    """Name a runtime-message global by its CONTENT, not just its code.
+
+    Naming it by the code alone interned ONE global per code, so two sites sharing
+    a code silently shared whichever text was emitted first -- RE2021 had three
+    different messages and printed one of them. Hashing the message means identical
+    texts still dedupe and different texts get distinct globals.
+    """
+    digest = hashlib.sha1(message.encode("utf-8")).hexdigest()[:8]
+    return f".runtime_err_{kind}_{error_code}_{digest}"
 
 
 class RuntimeErrors:
@@ -48,7 +61,7 @@ class RuntimeErrors:
             fmt_const.initializer = ir.Constant(arr_ty, data)
         return builder.gep(fmt_const, [ZERO_I32, ZERO_I32], name="pct_s_ptr")
 
-    def emit_runtime_error(self, error_code: str, message: str) -> None:
+    def emit_runtime_error(self, error_code: str, **params) -> None:
         """Emit runtime error message to stderr and exit program.
 
         Generates LLVM IR to:
@@ -57,7 +70,7 @@ class RuntimeErrors:
 
         Args:
             error_code: Runtime error code (e.g., "RE2021")
-            message: Human-readable error message
+            **params: Format parameters for the registry text, if it has any
 
         Note:
             This function does NOT return - it emits an exit call.
@@ -65,12 +78,12 @@ class RuntimeErrors:
         """
         builder = self.codegen.builder
 
-        # Format the error message: "Runtime Error RE2021: message\n"
-        full_message = f"Runtime Error {error_code}: {message}\n"
+        # The registry owns the text. A code says the same thing wherever it fires.
+        full_message = f"Runtime Error {error_code}: {message_for(error_code, **params)}\n"
 
         # Create global string constant for error message (or reuse if exists)
         arr_ty = ir.ArrayType(ir.IntType(INT8_BIT_WIDTH), len(full_message) + 1)
-        msg_name = f".runtime_err_{error_code}"
+        msg_name = _message_global_name(error_code, full_message)
 
         # Check if global already exists
         existing = self.codegen.module.globals.get(msg_name)
@@ -104,11 +117,12 @@ class RuntimeErrors:
         builder.call(self.codegen.runtime.libc_process.exit, [ir.Constant(self.codegen.i32, 1)])
 
     def emit_runtime_error_with_values(
-        self, error_code: str, format_string: str, *values: ir.Value
+        self, error_code: str, *values: ir.Value
     ) -> None:
         """Emit runtime error message with formatted values to stderr and exit program.
 
-        Similar to emit_runtime_error but allows including runtime values in the error message.
+        Similar to emit_runtime_error, but the registry text IS the printf format:
+        its %d / %s conversions must match the values passed here.
 
         Generates LLVM IR to:
         1. Print formatted error message to stderr using fprintf
@@ -116,13 +130,11 @@ class RuntimeErrors:
 
         Args:
             error_code: Runtime error code (e.g., "RE2020")
-            format_string: Printf-style format string with %d, %s, etc.
-            *values: LLVM values to interpolate into the format string
+            *values: LLVM values to interpolate into the registry's format string
 
         Example:
-            emit_runtime_error_with_values(
-                "RE2020", "index %d out of bounds for array of size %d", index, size
-            )
+            RE2020's text is "array index %d out of bounds for array of size %d", so:
+            emit_runtime_error_with_values("RE2020", index, size)
 
         Note:
             This function does NOT return - it emits an exit call.
@@ -130,12 +142,12 @@ class RuntimeErrors:
         """
         builder = self.codegen.builder
 
-        # Create format string: "Runtime Error RE2020: <format_string>\n"
-        full_format = f"Runtime Error {error_code}: {format_string}\n"
+        # Create format string: "Runtime Error RE2020: <registry text>\n"
+        full_format = f"Runtime Error {error_code}: {message_for(error_code)}\n"
 
         # Create global string constant for format string
         arr_ty = ir.ArrayType(ir.IntType(INT8_BIT_WIDTH), len(full_format) + 1)
-        fmt_name = f".runtime_err_fmt_{error_code}"
+        fmt_name = _message_global_name(error_code, full_format, kind="fmt")
 
         # Check if global already exists
         existing = self.codegen.module.globals.get(fmt_name)

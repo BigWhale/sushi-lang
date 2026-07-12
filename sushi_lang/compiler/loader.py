@@ -5,8 +5,8 @@ import os
 import sys
 from pathlib import Path
 
+from sushi_lang.internals.diagnostics import SushiError
 from sushi_lang.internals.parser import parse_to_ast
-from sushi_lang.internals.parse_errors import handle_parse_exception
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.ast import Program
 from sushi_lang.semantics.units import UnitManager
@@ -98,11 +98,11 @@ def load_unit_recursively(unit_manager: UnitManager, unit_name: str,
                 reporter.items.extend(unit_reporter.items)
                 return False
 
-    except Exception as exc:
-        if handle_parse_exception(exc, unit_reporter, source_path=unit_path):
-            reporter.items.extend(unit_reporter.items)
-            unit_reporter.print()
-            return False
+    except SushiError as exc:
+        # Whatever this unit already had to say still gets printed; the diagnostic
+        # itself renders against THIS unit's source, not the main file's.
+        exc.filename = exc.filename or str(unit_path)
+        reporter.items.extend(unit_reporter.items)
         raise
 
     # Merge unit reporter into main reporter

@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Optional
 from lark import Tree, Token
 from sushi_lang.semantics.ast import Foreach, Expand
 from sushi_lang.semantics.typesys import Type, TYPE_NODE_NAMES
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import ice
 from sushi_lang.internals.report import span_of, Span
 
 if TYPE_CHECKING:
@@ -30,7 +31,7 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
 
     # Next is NAME
     if idx >= len(children) or not isinstance(children[idx], Token) or children[idx].type != "NAME":
-        raise ValueError(f"foreach_stmt expects NAME at index {idx}, got {children[idx] if idx < len(children) else 'nothing'}")
+        ice(node, f"foreach_stmt expects NAME at index {idx}, got {children[idx] if idx < len(children) else 'nothing'}")
     name_tok = children[idx]
     item_name = name_tok.value
     item_name_span = span_of(name_tok)
@@ -75,7 +76,7 @@ def parse_expand_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Expand:
 
     # Next is the binding NAME
     if idx >= len(children) or not isinstance(children[idx], Token) or children[idx].type != "NAME":
-        raise ValueError(f"expand_stmt expects NAME at index {idx}, got {children[idx] if idx < len(children) else 'nothing'}")
+        ice(node, f"expand_stmt expects NAME at index {idx}, got {children[idx] if idx < len(children) else 'nothing'}")
     name_tok = children[idx]
     var = name_tok.value
     var_span = span_of(name_tok)

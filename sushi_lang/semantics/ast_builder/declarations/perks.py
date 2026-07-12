@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, List
 from lark import Tree, Token
 from sushi_lang.semantics.ast import PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef
 from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree, ice, expect
 from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
 from sushi_lang.internals.report import span_of
 
@@ -14,12 +14,12 @@ if TYPE_CHECKING:
 
 def parse_perkdef(t: Tree, ast_builder: 'ASTBuilder') -> PerkDef:
     """Parse perk_def: PERK NAME [type_params] ":" _NEWLINE _INDENT perk_method+ _DEDENT"""
-    assert t.data == "perk_def"
+    t = expect(t, "perk_def")
 
     # Extract perk name
     name_tok = first_name(t.children)
     if name_tok is None:
-        raise NotImplementedError("perk_def: missing perk NAME")
+        ice(t, "missing perk NAME")
 
     # Extract type parameters if present
     type_params_node = first_tree(t.children, "type_params")
@@ -32,7 +32,7 @@ def parse_perkdef(t: Tree, ast_builder: 'ASTBuilder') -> PerkDef:
             methods.append(parse_perk_method_signature(child, ast_builder))
 
     if not methods:
-        raise NotImplementedError("perk_def: perk must have at least one method")
+        ice(t, "perk must have at least one method")
 
     return PerkDef(
         name=str(name_tok),
@@ -45,12 +45,12 @@ def parse_perkdef(t: Tree, ast_builder: 'ASTBuilder') -> PerkDef:
 
 def parse_perk_method_signature(t: Tree, ast_builder: 'ASTBuilder') -> PerkMethodSignature:
     """Parse perk_method: FN NAME "(" [parameters] ")" type _NEWLINE"""
-    assert t.data == "perk_method"
+    t = expect(t, "perk_method")
 
     # Extract method name
     name_tok = first_name(t.children)
     if name_tok is None:
-        raise NotImplementedError("perk_method: missing method NAME")
+        ice(t, "missing method NAME")
 
     # Extract parameters
     from sushi_lang.semantics.ast_builder.declarations.functions import parse_params
@@ -65,7 +65,7 @@ def parse_perk_method_signature(t: Tree, ast_builder: 'ASTBuilder') -> PerkMetho
             break
 
     if return_type_node is None:
-        raise NotImplementedError("perk_method: missing return type")
+        ice(t, "missing return type")
 
     return_type = ast_builder._parse_type(return_type_node)
 
@@ -81,7 +81,7 @@ def parse_perk_method_signature(t: Tree, ast_builder: 'ASTBuilder') -> PerkMetho
 
 def parse_extendwithdef(t: Tree, ast_builder: 'ASTBuilder') -> ExtendWithDef:
     """Parse extend_with_def: EXTEND type WITH NAME ":" _NEWLINE _INDENT function_def+ _DEDENT"""
-    assert t.data == "extend_with_def"
+    t = expect(t, "extend_with_def")
 
     # Extract target type (first type node)
     target_type_node = None
@@ -102,7 +102,7 @@ def parse_extendwithdef(t: Tree, ast_builder: 'ASTBuilder') -> ExtendWithDef:
             break
 
     if perk_name_tok is None:
-        raise NotImplementedError("extend_with_def: missing perk NAME")
+        ice(t, "missing perk NAME")
 
     # Extract method implementations (function_def nodes)
     from sushi_lang.semantics.ast_builder.declarations.functions import parse_funcdef
@@ -112,7 +112,7 @@ def parse_extendwithdef(t: Tree, ast_builder: 'ASTBuilder') -> ExtendWithDef:
             methods.append(parse_funcdef(child, ast_builder))
 
     if not methods:
-        raise NotImplementedError("extend_with_def: must have at least one method implementation")
+        ice(t, "must have at least one method implementation")
 
     target_type = ast_builder._parse_type(target_type_node) if target_type_node else None
 
@@ -146,12 +146,12 @@ def parse_handle_extend_stmt_with(t: Tree, ast_builder: 'ASTBuilder') -> ExtendW
             break
 
     if not suffix:
-        raise NotImplementedError("extend_stmt: missing extend_with_def suffix")
+        ice(t, "missing extend_with_def suffix")
 
     # Extract perk name (the NAME after WITH in suffix)
     perk_name_tok = first_name(suffix.children)
     if perk_name_tok is None:
-        raise NotImplementedError("extend_stmt (with): missing perk NAME")
+        ice(suffix, "missing perk NAME")
 
     # Extract method implementations (function_def nodes)
     from sushi_lang.semantics.ast_builder.declarations.functions import parse_funcdef
@@ -161,7 +161,7 @@ def parse_handle_extend_stmt_with(t: Tree, ast_builder: 'ASTBuilder') -> ExtendW
             methods.append(parse_funcdef(child, ast_builder))
 
     if not methods:
-        raise NotImplementedError("extend_stmt (with): must have at least one method implementation")
+        ice(suffix, "must have at least one method implementation")
 
     # Parse target type
     target_type = ast_builder._parse_type(target_type_node) if target_type_node else None

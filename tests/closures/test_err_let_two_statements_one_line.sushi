@@ -3,10 +3,8 @@
 # plain expression still requires a terminating newline, so `let x = 5 let y = 6`
 # is a syntax error (exit 2), preserving Sushi's newline-delimited statement model.
 #
-# A raw parse error carries no CE code, so the message itself is the assertion --
-# otherwise this test would pass on any compile failure, including a typo.
-# EXPECT_STDERR_CONTAINS: Unexpected token Token('LET', 'let')
-# EXPECT_STDERR_CONTAINS: _NEWLINE
+# EXPECT_ERROR_CODE: CE6001
+# EXPECT_STDERR_CONTAINS: unexpected token 'let'
 fn main() i32:
     let i32 x = 5 let i32 y = 6
     return Result.Ok(0)

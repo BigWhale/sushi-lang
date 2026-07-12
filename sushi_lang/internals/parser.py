@@ -3,8 +3,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lark import Lark, UnexpectedInput
+from typing import Optional
 
+from lark import Lark, UnexpectedInput
+from lark.exceptions import LarkError
+
+from sushi_lang.internals.diagnostics import SushiError
+from sushi_lang.internals.parse_errors import lark_to_diagnostic
 from sushi_lang.semantics.ast_builder import ASTBuilder
 
 GRAMMAR_PATH = Path(__file__).parent.parent / "grammar.lark"
@@ -28,10 +33,8 @@ class ChainedPostlexer:
         return self.indenter.process(stream)
 
 
-def improve_parse_error(e: UnexpectedInput) -> str:
-    """Improve parsing error messages for common cases."""
-    error_text = str(e)
-
+def parse_error_hint(e: UnexpectedInput) -> Optional[str]:
+    """Advice for a parse failure the grammar cannot phrase itself. None if none applies."""
     # The if/elif grammar (`IF "(" expr ")" ...`) is the only place that fails
     # with LPAR as the SOLE expected token: after the keyword the parser demands
     # `(`. Gate the parentheses hint on that, so an unrelated error that merely
@@ -39,11 +42,9 @@ def improve_parse_error(e: UnexpectedInput) -> str:
     # "missing parentheses around if" message.
     expected = getattr(e, "expected", None)
     if expected is not None and set(expected) == {"LPAR"}:
-        location_line = error_text.split('\n', 1)[0]
-        return (f"{location_line}\nParsing error: Missing parentheses around if/elif condition.\n"
-                "Hint: Use 'if (condition):' instead of 'if condition:'")
+        return "use 'if (condition):' instead of 'if condition:'"
 
-    return error_text
+    return None
 
 
 def parse_to_ast(src: str, dump_parse: bool = False):
@@ -51,6 +52,9 @@ def parse_to_ast(src: str, dump_parse: bool = False):
 
     Returns:
         Tuple of (ast, parse_tree).
+
+    Raises:
+        SushiError: any parse failure, as a spanned diagnostic.
     """
     kwargs = dict(
         parser="lalr",
@@ -59,8 +63,16 @@ def parse_to_ast(src: str, dump_parse: bool = False):
         postlex=ChainedPostlexer(),
         lexer="basic",
     )
-    parser = Lark.open(str(GRAMMAR_PATH), **kwargs)
-    tree = parser.parse(src)
+    try:
+        # Lark.open raises GrammarError if grammar.lark itself is broken -- an ICE.
+        parser = Lark.open(str(GRAMMAR_PATH), **kwargs)
+        tree = parser.parse(src)
+    except SushiError:
+        raise
+    except LarkError as e:
+        hint = parse_error_hint(e) if isinstance(e, UnexpectedInput) else None
+        raise lark_to_diagnostic(e, hint) from e
+
     if dump_parse:
         print(tree.pretty())
 

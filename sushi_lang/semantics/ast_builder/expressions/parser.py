@@ -2,8 +2,9 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from lark import Tree, Token
-from sushi_lang.semantics.ast import Expr, Name
-from sushi_lang.semantics.ast_builder.expressions import literals, operators, chains, calls
+from sushi_lang.semantics.ast import Expr
+from sushi_lang.semantics.ast_builder.expressions import literals, operators, chains
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import unhandled
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
@@ -62,13 +63,7 @@ class ExpressionParser:
         if tag == "atom":
             return chains.expr_atom(t, self.ast_builder)
 
-        # Legacy postfix (compatibility)
-        if tag == "postfix":
-            atom_expr = chains.expr_atom(t.children[0], self.ast_builder)
-            if len(t.children) == 2:
-                if not isinstance(atom_expr, Name):
-                    raise NotImplementedError("only NAME(...) calls supported for now")
-                return calls.call_from_parts(atom_expr.id, t.children[1], self.ast_builder)
-            return atom_expr
+        # `?postfix` is aliased to `maybe_call` in the grammar, so a `postfix` Tree
+        # never survives into the builder. The branch that handled it was dead.
 
-        raise NotImplementedError(f"unhandled expr node: {tag}")
+        unhandled(t)

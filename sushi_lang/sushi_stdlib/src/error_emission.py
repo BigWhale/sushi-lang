@@ -7,6 +7,8 @@ Design: Single Responsibility - only runtime error handling.
 """
 
 import llvmlite.ir as ir
+from sushi_lang.internals.errors import message_for
+
 from .libc_declarations import declare_fprintf, declare_exit
 from .string_helpers import create_string_constant
 from .io.stdio.common import get_stderr_handle_name
@@ -20,17 +22,19 @@ def emit_runtime_error(
     module: ir.Module,
     builder: ir.IRBuilder,
     error_code: str,
-    error_message: str
+    **params
 ) -> None:
     """Emit a runtime error and exit.
 
-    Prints an error message to stderr and exits with code 1.
+    Prints an error message to stderr and exits with code 1. The text comes from
+    the diagnostic registry and is rendered in the same form the backend's emitter
+    uses, so one code reads the same wherever it fires.
 
     Args:
         module: The LLVM module (for declaring functions).
         builder: The IR builder for creating instructions.
         error_code: Error code (e.g., "RE2020", "RE2021").
-        error_message: Human-readable error message.
+        **params: Format parameters for the registry text, if it has any.
     """
     # Declare required functions
     fprintf_fn = declare_fprintf(module)
@@ -53,8 +57,10 @@ def emit_runtime_error(
     # Load stderr pointer (FILE*)
     stderr_ptr = builder.load(stderr_global, name="stderr_file")
 
-    # Create error message string: "[error_code] error_message\n"
-    full_message = f"[{error_code}] {error_message}\\n"
+    # Same form the backend emits: "Runtime Error RE2021: message\n".
+    # create_string_constant does NOT process escapes, so this must be a real
+    # newline -- the old "\\n" here emitted a literal backslash-n.
+    full_message = f"Runtime Error {error_code}: {message_for(error_code, **params)}\n"
     msg_str = create_string_constant(module, builder, full_message, name=f"err_{error_code}")
 
     # Print error message to stderr

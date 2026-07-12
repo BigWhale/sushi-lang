@@ -1,0 +1,6 @@
+# Error: '@' is not part of any Sushi token.
+# EXPECT_ERROR_CODE: CE6002
+
+fn main() i32:
+    let i32 x = @@@
+    return Result.Ok(0)

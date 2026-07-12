@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List
 from lark import Tree
 from sushi_lang.semantics.ast import Block, Stmt
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import expect
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -11,7 +12,7 @@ if TYPE_CHECKING:
 
 def parse_block(t: Tree, ast_builder: 'ASTBuilder') -> Block:
     """Parse block with dispatch to statement handlers."""
-    assert t.data == "block"
+    t = expect(t, "block")
     statements: List[Stmt] = []
 
     for ch in t.children:

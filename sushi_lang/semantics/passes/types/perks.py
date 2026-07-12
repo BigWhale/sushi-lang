@@ -107,7 +107,14 @@ def check_no_conflicts_with_regular_methods(
 
     for method in perk_impl.methods:
         if method.name in conflicts:
-            er.emit(reporter, er.ERR.CE4007, method.loc,
-                    method=method.name, perk=perk_impl.perk_name)
+            # Relational: the perk method is only a conflict BECAUSE the extension
+            # exists. Point at it -- the table already carries its span.
+            existing = existing_methods[method.name]
+            diag = er.emit_with(reporter, er.ERR.CE4007, method.loc,
+                                method=method.name, perk=perk_impl.perk_name)
+            prev_span = existing.name_span or existing.loc
+            if prev_span is not None:
+                diag.note(f"extension method '{method.name}' is defined here", prev_span)
+            diag.emit()
 
     return False

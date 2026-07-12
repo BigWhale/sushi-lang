@@ -1,0 +1,8 @@
+# Error: the dedent lands on a column no enclosing block opened.
+# EXPECT_ERROR_CODE: CE6004
+
+fn main() i32:
+    if (true):
+        println("a")
+      println("b")
+    return Result.Ok(0)

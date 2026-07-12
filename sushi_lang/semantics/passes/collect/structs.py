@@ -12,7 +12,7 @@ from sushi_lang.semantics.ast import StructDef, Program, BoundedTypeParam
 from sushi_lang.semantics.typesys import Type, StructType
 from sushi_lang.semantics.generics.types import GenericStructType, TypeParameter
 
-from .utils import extract_type_param_names
+from .utils import extract_type_param_names, note_first_declaration
 
 
 @dataclass
@@ -20,6 +20,11 @@ class StructTable:
     """Table of struct types collected in Phase 0."""
     by_name: Dict[str, StructType] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
+    # Where each name was declared. A StructType is a frozen semantic type and has
+    # no business carrying a source span, but a duplicate-declaration error needs to
+    # point at the original -- so the TABLE remembers. A name that is here but not in
+    # `spans` was predefined by the compiler.
+    spans: Dict[str, Optional[Span]] = field(default_factory=dict)
 
 
 @dataclass
@@ -32,6 +37,7 @@ class GenericStructTable:
     """
     by_name: Dict[str, GenericStructType] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
+    spans: Dict[str, Optional[Span]] = field(default_factory=dict)
 
 
 class StructCollector:
@@ -123,17 +129,23 @@ class StructCollector:
 
         # Check for duplicate struct names (both regular and generic namespaces)
         if name in self.structs.by_name:
-            er.emit(self.r, ERR.CE0004, name_span, name=name)
+            note_first_declaration(
+                er.emit_with(self.r, ERR.CE0004, name_span, name=name),
+                self.structs.spans, name,
+            ).emit()
             return
 
         if name in self.generic_structs.by_name:
-            er.emit_with(self.r, ERR.CE0004, name_span, name=name) \
-                .note("predefined as generic struct").emit()
+            note_first_declaration(
+                er.emit_with(self.r, ERR.CE0004, name_span, name=name),
+                self.generic_structs.spans, name,
+                what="first defined here, as a generic struct",
+            ).emit()
             return
 
         # Collect struct fields
         fields_list: List[Tuple[str, Type]] = []
-        field_names: Set[str] = set()
+        field_spans: Dict[str, Optional[Span]] = {}
 
         struct_fields = getattr(struct, "fields", [])
         for field in struct_fields:
@@ -145,8 +157,13 @@ class StructCollector:
                 continue
 
             # Check for duplicate field names
-            if field_name in field_names:
-                er.emit(self.r, ERR.CE0005, field_loc, name=field_name, struct_name=name)
+            if field_name in field_spans:
+                note_first_declaration(
+                    er.emit_with(self.r, ERR.CE0005, field_loc,
+                                 name=field_name, struct_name=name),
+                    field_spans, field_name,
+                    what="first declared here",
+                ).emit()
                 continue
 
             # Check for missing field type
@@ -156,7 +173,7 @@ class StructCollector:
 
             # NOTE: Field types may be TypeParameter instances (e.g., T, U) for generic structs
             # These will be resolved during monomorphization
-            field_names.add(field_name)
+            field_spans[field_name] = field_loc
             fields_list.append((field_name, field_type))
 
         # Branch based on whether this is a generic struct or regular struct
@@ -180,6 +197,7 @@ class StructCollector:
 
             self.generic_structs.order.append(name)
             self.generic_structs.by_name[name] = generic_struct
+            self.generic_structs.spans[name] = name_span
 
             # Note: Generic structs are not added to known_types until instantiated
         else:
@@ -191,6 +209,7 @@ class StructCollector:
 
             self.structs.order.append(name)
             self.structs.by_name[name] = struct_type
+            self.structs.spans[name] = name_span
 
             # Register struct type as known type for future lookups
             self.known_types.add(struct_type)

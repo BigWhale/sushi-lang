@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 from lark import Tree
 from sushi_lang.semantics.ast import Print, PrintLn
 from sushi_lang.semantics.ast_builder.utils.expression_discovery import find_outer_expr_structural
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import ice
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -14,7 +15,7 @@ def parse_print_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Print:
     """Parse print_stmt: PRINT expr"""
     expr_node = find_outer_expr_structural(node)
     if expr_node is None:
-        raise NotImplementedError("print: missing expression")
+        ice(node, "missing expression")
     return Print(value=ast_builder._expr(expr_node), loc=span_of(node))
 
 
@@ -22,5 +23,5 @@ def parse_println_stmt(node: Tree, ast_builder: 'ASTBuilder') -> PrintLn:
     """Parse println_stmt: PRINTLN expr"""
     expr_node = find_outer_expr_structural(node)
     if expr_node is None:
-        raise NotImplementedError("println: missing expression")
+        ice(node, "missing expression")
     return PrintLn(value=ast_builder._expr(expr_node), loc=span_of(node))

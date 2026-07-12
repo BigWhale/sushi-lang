@@ -33,11 +33,6 @@ from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.expressions.memory import get_element_size_constant
 
 
-# emit_runtime_error interns one message global per error code, so every RE2022 site
-# must use this exact string -- two different texts would silently share the first.
-_NO_FREE_BUCKET = "HashMap.insert() probed every bucket without finding a free slot (map destroyed?)"
-
-
 def emit_hashmap_insert(
     codegen: Any,
     expr: MethodCall,
@@ -225,7 +220,7 @@ def emit_hashmap_insert(
     )
 
     builder.position_at_end(no_slot_bb)
-    codegen.runtime.errors.emit_runtime_error("RE2022", _NO_FREE_BUCKET)
+    codegen.runtime.errors.emit_runtime_error("RE2022")
     builder.unreachable()
 
     # Done
@@ -582,7 +577,7 @@ def emit_hashmap_resize_to_capacity(
     # count, so it always has room. Unreachable in a correct compiler; guarded so a
     # bug here cannot become an unbounded loop.
     builder.position_at_end(rehash_no_slot_bb)
-    codegen.runtime.errors.emit_runtime_error("RE2022", _NO_FREE_BUCKET)
+    codegen.runtime.errors.emit_runtime_error("RE2022")
     builder.unreachable()
 
     # Skip non-occupied entries

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, List
 from lark import Tree
 from sushi_lang.semantics.ast import StructDef, StructField
 from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
-from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree, ice, expect
 from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
 from sushi_lang.internals.report import span_of
 
@@ -14,12 +14,12 @@ if TYPE_CHECKING:
 
 def parse_structdef(t: Tree, ast_builder: 'ASTBuilder') -> StructDef:
     """Parse struct_def: STRUCT NAME [type_params] ":" _NEWLINE _INDENT struct_field+ _DEDENT"""
-    assert t.data == "struct_def"
+    t = expect(t, "struct_def")
 
     # Extract struct name
     name_tok = first_name(t.children)
     if name_tok is None:
-        raise NotImplementedError("struct_def: missing struct NAME")
+        ice(t, "missing struct NAME")
 
     # Extract type parameters if present (e.g., <T> or <T: Hashable>)
     type_params_node = first_tree(t.children, "type_params")
@@ -32,7 +32,7 @@ def parse_structdef(t: Tree, ast_builder: 'ASTBuilder') -> StructDef:
             fields.append(parse_structfield(child, ast_builder))
 
     if not fields:
-        raise NotImplementedError("struct_def: struct must have at least one field")
+        ice(t, "struct must have at least one field")
 
     return StructDef(
         name=str(name_tok),
@@ -45,7 +45,7 @@ def parse_structdef(t: Tree, ast_builder: 'ASTBuilder') -> StructDef:
 
 def parse_structfield(t: Tree, ast_builder: 'ASTBuilder') -> StructField:
     """Parse struct_field: type NAME _NEWLINE"""
-    assert t.data == "struct_field"
+    t = expect(t, "struct_field")
 
     # Extract field type
     type_node = None
@@ -57,7 +57,7 @@ def parse_structfield(t: Tree, ast_builder: 'ASTBuilder') -> StructField:
     # Extract field name
     name_tok = first_name(t.children)
     if name_tok is None:
-        raise NotImplementedError("struct_field: missing field NAME")
+        ice(t, "missing field NAME")
 
     # Parse type
     field_type = ast_builder._parse_type(type_node) if type_node else None

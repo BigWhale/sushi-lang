@@ -1,0 +1,4 @@
+# Error: the file ends where an indented function body must begin.
+# EXPECT_ERROR_CODE: CE6003
+
+fn main() i32:

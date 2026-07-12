@@ -52,7 +52,7 @@ def emit_malloc(codegen: 'LLVMCodegen', builder: ir.IRBuilder, size_bytes: ir.Va
 
     # Null block: emit runtime error and exit
     builder.position_at_end(null_block)
-    codegen.runtime.errors.emit_runtime_error("RE2021", "memory allocation failed")
+    codegen.runtime.errors.emit_runtime_error("RE2021")
     # emit_runtime_error calls exit(), so this block is terminated
     # Add unreachable to satisfy LLVM
     builder.unreachable()

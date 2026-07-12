@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import List, Optional, Tuple
 from lark import Tree, Token
 
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import ice
+
 
 # Expression node names from grammar v0.4
 _EXPR_NODES = {
@@ -148,7 +150,7 @@ def expr_and_block(container: Tree) -> Tuple[Tree, Tree]:
 
     blk = find_tree_recursive(container, "block")
     if blk is None:
-        raise NotImplementedError("clause missing block")
+        ice(container, "clause missing block")
 
     # For if/elif/while statements, find expression before the block
     expr = None
@@ -163,5 +165,5 @@ def expr_and_block(container: Tree) -> Tuple[Tree, Tree]:
         expr = find_outer_expr_structural(container)
 
     if expr is None:
-        raise NotImplementedError("clause missing condition expr")
+        ice(container, "clause missing condition expr")
     return expr, blk

@@ -6,7 +6,8 @@ from lark import Lark, Token
 
 if TYPE_CHECKING:
     from sushi_lang.internals.report import Span
-    from sushi_lang.semantics.ast import Expr
+    from sushi_lang.semantics.ast import Expr, InterpolatedString, StringLit
+    from sushi_lang.semantics.ast_builder.builder import ASTBuilder
 
 
 def process_string_escapes(raw_string: str) -> str:
@@ -85,7 +86,7 @@ def parse_interpolated_string(raw_string: str, span: 'Span') -> Tuple[List[Union
     Raises:
         Exception with CE2026 error code for unterminated braces
     """
-    from sushi_lang.semantics.ast_builder.exceptions import UnterminatedInterpolationError, EmptyInterpolationError
+    from sushi_lang.internals.diagnostics import SyntaxDiagnostic
     from sushi_lang.internals.report import Span
 
     parts = []
@@ -113,17 +114,11 @@ def parse_interpolated_string(raw_string: str, span: 'Span') -> Tuple[List[Union
                 i += 1
 
             if brace_count > 0:
-                raise UnterminatedInterpolationError(
-                    "unterminated interpolation in string literal",
-                    span
-                )
+                raise SyntaxDiagnostic("CE2026", span=span)
 
             expr_content = raw_string[expr_start:i-1]
             if not expr_content.strip():
-                raise EmptyInterpolationError(
-                    "empty interpolation in string literal",
-                    span
-                )
+                raise SyntaxDiagnostic("CE2038", span=span)
 
             parts.append(expr_content)
             expr_col_offset = span.col + 1 + brace_start + 1
@@ -234,16 +229,30 @@ def parse_interpolation_expr(expr_text: str, ast_builder: 'ASTBuilder', fallback
         An Expr AST node representing the parsed expression
 
     Raises:
-        Exception: If the expression cannot be parsed
+        SyntaxDiagnostic: CE6010, spanned at the interpolation, if it cannot be parsed.
     """
+    from lark.exceptions import LarkError
+
+    from sushi_lang.internals.diagnostics import SushiError, SyntaxDiagnostic
+    from sushi_lang.internals.parse_errors import lark_to_diagnostic
+
     parser = get_interpolation_parser()
     try:
         tree = parser.parse(expr_text)
         expr_ast = ast_builder._expr(tree)
         apply_location_offset(expr_ast, fallback_span)
         return expr_ast
-    except Exception as e:
-        raise Exception(f"Failed to parse interpolation expression '{expr_text}': {e}")
+    except SushiError:
+        raise
+    except LarkError as e:
+        # The interpolation parser's spans are relative to the expression text, not
+        # to the file, so the diagnostic points at the interpolation as a whole and
+        # carries the parser's own complaint as a note.
+        inner = lark_to_diagnostic(e)
+        diag = SyntaxDiagnostic("CE6010", span=fallback_span, expr=expr_text)
+        for message, _span, _filename in inner.notes:
+            diag.note(message)
+        raise diag from e
 
 
 def parse_string_token(tok: Token, ast_builder: 'ASTBuilder') -> Union['StringLit', 'InterpolatedString']:
