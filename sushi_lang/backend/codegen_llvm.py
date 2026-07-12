@@ -16,9 +16,12 @@ then `str(cg.module)`.
 from __future__ import annotations
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from llvmlite import ir, binding as llvm
+
+if TYPE_CHECKING:
+    from sushi_lang.backend.library_paths import LibraryResolver
 
 from sushi_lang.semantics.ast import ConstDef, ExtendDef
 from sushi_lang.semantics.units import Unit
@@ -161,7 +164,7 @@ class LLVMCodegen:
         self.is_library_mode: bool = False
 
         # Library linker for custom library functions
-        self.library_linker: Optional['LibraryLinker'] = None
+        self.library_linker: Optional['LibraryResolver'] = None
 
         # Library registry for pre-parsed library metadata
         self.library_registry: Optional[LibraryRegistry] = None
@@ -191,6 +194,16 @@ class LLVMCodegen:
 
         # AST constant definitions (for constant evaluation in backend)
         self.ast_constants: Dict[str, ConstDef] = {}
+
+        # Recursive-destructor emission state (backend/destructors.py). Declared here
+        # rather than conjured onto the instance with getattr-or-init at first use:
+        # the types the destructors need are not discoverable from the read sites.
+        # _dtor_inprogress is the stack of type keys currently being inlined (a
+        # re-entry means the type is self-referential, so emit a call to the
+        # out-of-line destructor instead of inlining forever). _dtor_funcs caches
+        # those out-of-line destructors by type key.
+        self._dtor_inprogress: list[str] = []
+        self._dtor_funcs: Dict[str, ir.Function] = {}
 
     # Properties for runtime function access
     @property
@@ -380,7 +393,7 @@ class LLVMCodegen:
         keep_object: bool = False,
         main_expects_args: bool = False,
         monomorphized_extensions: list['ExtendDef'] = None,
-        library_linker: 'LibraryLinker' = None,
+        library_linker: 'LibraryResolver' = None,
         library_registry: Optional[LibraryRegistry] = None,
     ) -> Path:
         """Complete multi-unit compilation pipeline from multiple ASTs to native executable.
@@ -395,7 +408,7 @@ class LLVMCodegen:
             keep_object: Retain object files after linking.
             main_expects_args: Whether main() expects command line args.
             monomorphized_extensions: List of monomorphized extension methods.
-            library_linker: LibraryLinker instance with loaded libraries.
+            library_linker: LibraryResolver with loaded library manifests.
             library_registry: LibraryRegistry with pre-parsed library metadata.
 
         Returns:
@@ -439,7 +452,7 @@ class LLVMCodegen:
 
         # Use two-phase linking if we have libraries to link
         if library_linker is not None and library_paths:
-            from sushi_lang.backend.library_linker import TwoPhaseLinker
+            from sushi_lang.backend.module_linker import TwoPhaseLinker
 
             # Get target info for the linker
             target_triple = llmod.triple if hasattr(llmod, 'triple') else ""
@@ -835,7 +848,7 @@ class LLVMCodegen:
 
         Args:
             lib_path: Library path as used in use statements.
-            library_linker: LibraryLinker with resolved libraries.
+            library_linker: LibraryResolver with resolved libraries.
             opt: Optimization level.
 
         Returns:

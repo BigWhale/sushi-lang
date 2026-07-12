@@ -36,7 +36,7 @@ class SemanticAnalyzer:
     Supports both single-file and multi-file compilation modes.
     """
 
-    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional['LibraryLinker'] = None, library_registry: Optional['LibraryRegistry'] = None) -> None:
+    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional['LibraryResolver'] = None, library_registry: Optional['LibraryRegistry'] = None) -> None:
         self.reporter = reporter
         self.filename = filename
         self.unit_manager = unit_manager

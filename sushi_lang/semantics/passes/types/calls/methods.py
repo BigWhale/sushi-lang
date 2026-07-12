@@ -89,7 +89,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
 
     # Check for built-in array methods first (both fixed and dynamic arrays)
     if isinstance(receiver_type, (ArrayType, DynamicArrayType)):
-        from sushi_lang.semantics.validate_arrays import is_builtin_array_method, validate_builtin_array_method
+        from sushi_lang.semantics.passes.types.arrays import is_builtin_array_method, validate_builtin_array_method
         if is_builtin_array_method(call.method):
             validate_builtin_array_method(call, receiver_type, validator.reporter, validator)
 

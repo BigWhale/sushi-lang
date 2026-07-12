@@ -131,10 +131,7 @@ def _emit_composite_destructor(
     rather than recursing unbounded at compile time (the original #139 crash).
     """
     key = _dtor_type_key(value_type)
-    stack = getattr(codegen, "_dtor_inprogress", None)
-    if stack is None:
-        stack = []
-        codegen._dtor_inprogress = stack
+    stack = codegen._dtor_inprogress
 
     if key in stack:
         fn = _get_or_emit_dtor_func(codegen, value_type)
@@ -159,10 +156,7 @@ def _get_or_emit_dtor_func(codegen: LLVMCodegen, value_type: Type) -> ir.Functio
     point becomes a self-call while unrelated nested types still inline.
     """
     key = _dtor_type_key(value_type)
-    funcs = getattr(codegen, "_dtor_funcs", None)
-    if funcs is None:
-        funcs = {}
-        codegen._dtor_funcs = funcs
+    funcs = codegen._dtor_funcs
     if key in funcs:
         return funcs[key]
 
@@ -180,12 +174,12 @@ def _get_or_emit_dtor_func(codegen: LLVMCodegen, value_type: Type) -> ir.Functio
         name="self_ptr",
     )
 
-    saved = getattr(codegen, "_dtor_inprogress", None)
+    saved = codegen._dtor_inprogress
     codegen._dtor_inprogress = [key]
     try:
         _select_inline_destructor(value_type)(codegen, fb, typed_ptr, value_type)
     finally:
-        codegen._dtor_inprogress = saved if saved is not None else []
+        codegen._dtor_inprogress = saved
     fb.ret_void()
     return fn
 
