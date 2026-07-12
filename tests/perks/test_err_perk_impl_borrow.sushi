@@ -1,0 +1,29 @@
+# Guards issue #176: BorrowChecker.run() walked functions, extensions and generic
+# extensions, but never program.perk_impls -- so the body of a perk implementation was
+# never borrow-checked AT ALL. Every borrow diagnostic (use-after-move, use-after-destroy,
+# conflicting borrows, write-through-&peek) was silently unenforced inside a perk method.
+# ScopeAnalyzer.run() walked perk_impls the whole time; the borrow checker did not.
+#
+# `items` is MOVED into consume() by value, then used again -- CE2405 anywhere else.
+# Note the unwrapped extension/perk ABI: bare `return`, and b.total() yields a raw i32.
+# EXPECT_ERROR_CODE: CE2405
+
+perk Summable:
+    fn total() i32
+
+struct Bag:
+    i32 tag
+
+fn consume(i32[] a) i32:
+    return Result.Ok(a.len())
+
+extend Bag with Summable:
+    fn total() i32:
+        let i32[] items = from([1, 2, 3])
+        let i32 n = consume(items).realise(0)
+        return n + items.len()
+
+fn main() i32:
+    let Bag b = Bag(7)
+    println(b.total())
+    return Result.Ok(0)

@@ -22,11 +22,17 @@ from typing import Dict, Set, Optional
 from dataclasses import dataclass
 
 from sushi_lang.semantics.ast import *
-from sushi_lang.semantics.ast import Lambda
 from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, Type, is_owning_type
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.error_reporter import PassErrorReporter
+
+
+# Expression nodes that own nothing and name nothing: a literal value, or the empty
+# dynamic-array constructor. They have no sub-expressions and cannot reference a binding,
+# so there is nothing for the borrow checker to do with them. Listing them EXPLICITLY is
+# what lets _check_expr's `else` be a hard error instead of a silent skip.
+_INERT_EXPRS = (IntLit, FloatLit, BoolLit, BlankLit, StringLit, DynamicArrayNew)
 
 
 @dataclass
@@ -102,6 +108,14 @@ class BorrowChecker:
         # Check generic extension methods (borrow checking works the same regardless of generics)
         for ext in program.generic_extensions:
             self._check_extension(ext)
+
+        # Check perk implementations. Each method is a FuncDef with an implicit `self`
+        # (not in params), exactly like an extension method. Omitting these meant a perk
+        # body was never borrow-checked AT ALL -- no use-after-move, no use-after-destroy,
+        # no borrow conflicts (#176). ScopeAnalyzer.run() walked them the whole time.
+        for perk_impl in program.perk_impls:
+            for method in perk_impl.methods:
+                self._check_function(method)
 
     def _check_function(self, func: FuncDef) -> None:
         """Check borrow safety for a single function."""
@@ -414,7 +428,27 @@ class BorrowChecker:
                         state.is_moved = True
                         state.moved_at_span = state.moved_at_span or expr.loc
 
-        # Literals and other leaf expressions don't need checking
+        elif isinstance(expr, Spread):
+            # Bloom: `arr...`. The source is USED here (so a moved source is reported)
+            # and, in a call-argument position, MOVED -- see _mark_moved_if_applicable,
+            # which the Call arm runs over every argument after checking them.
+            self._check_expr(expr.value)
+
+        elif isinstance(expr, RangeExpr):
+            self._check_expr(expr.start)
+            self._check_expr(expr.end)
+
+        elif isinstance(expr, _INERT_EXPRS):
+            # A leaf that owns nothing and names nothing: there is nothing to check.
+            pass
+
+        else:
+            # NOT a silent fall-through. An expression node with no arm gets no borrow
+            # checking at all, which is a soundness hole, not a crash -- exactly how the
+            # bloom use-after-free (#174), the unchecked range bound (#175) and the
+            # unchecked perk body (#176) survived. The CI gate is
+            # tests/unit/test_borrow_dispatch_is_total.py; this is the backstop.
+            er.raise_internal_error("CE0125", node=type(expr).__name__)
 
     def _check_borrow(self, borrow: Borrow) -> None:
         """Check borrow expression: &peek expr or &poke expr
@@ -614,6 +648,14 @@ class BorrowChecker:
         # Rebinding from / passing a bare owning variable transfers ownership:
         # Example: arr1 := arr2  (arr2 is moved if arr2 is owning)
         # Example: x := y        (y is copied if y is a primitive like i32)
+
+        # A bloom `arr...` MOVES its source array into the callee -- the backend marks it
+        # moved and the callee frees it. CE0120 already restricts the source to a bare
+        # array variable, so the inner expression is always a Name. Unwrapping it here is
+        # what makes a use-after-bloom a CE2405 instead of a use-after-free (#174).
+        if isinstance(expr, Spread):
+            expr = expr.value
+
         if isinstance(expr, Name):
             if expr.id in self.borrow_state:
                 state = self.borrow_state[expr.id]

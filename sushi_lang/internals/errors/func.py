@@ -114,3 +114,7 @@ _add(ErrorMessage("CE0123", Severity.ERROR,
 _add(ErrorMessage("CE0124", Severity.ERROR,
     "'??' expression reached codegen without a type annotation from semantic analysis",
     Category.INTERNAL, "Pass 2 annotates every TryExpr it validates (inner type, unwrapped type, success tag). Reaching the backend without one means the expression's type was never inferred - the backend no longer re-infers types, so this is a gap in Pass 2, not a user error."))
+
+_add(ErrorMessage("CE0125", Severity.ERROR,
+    "internal error: borrow checker has no arm for expression node '{node}'",
+    Category.INTERNAL, "The Expr union grew a member the borrow checker does not dispatch on. This used to be a SILENT fall-through, which meant no borrow checking at all for that node - the root cause of the bloom use-after-free (#174), the unchecked range bound (#175) and the unchecked perk body (#176). tests/unit/test_borrow_dispatch_is_total.py is the CI gate; this is the runtime backstop."))

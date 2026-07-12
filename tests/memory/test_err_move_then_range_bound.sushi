@@ -1,0 +1,16 @@
+# Guards issue #175: `_check_expr` had no RangeExpr arm, so it never descended into a
+# range's bounds and a moved variable used there went unreported. The identical call
+# OUTSIDE a range (`let i32 m = xs.len()`) was correctly CE2405 -- the check existed and
+# worked; the bound was simply never visited.
+# EXPECT_ERROR_CODE: CE2405
+
+fn take(i32[] a) i32:
+    return Result.Ok(a.len())
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let i32 n = take(xs).realise(-1)
+    println("taken = {n}")
+    foreach(i in 0..xs.len()):
+        println(i)
+    return Result.Ok(0)
