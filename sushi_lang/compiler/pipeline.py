@@ -172,9 +172,10 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     # Validate and load library imports
     library_linker = None
     if library_imports:
-        from sushi_lang.backend.library_linker import LibraryLinker, LibraryError
+        from sushi_lang.backend.library_errors import LibraryError
+        from sushi_lang.backend.library_paths import LibraryResolver
         from sushi_lang.backend.library_format import LibraryFormat
-        library_linker = LibraryLinker()
+        library_linker = LibraryResolver()
 
         print(f"Linking {len(library_imports)} custom libraries:")
         for lib_path in sorted(library_imports):

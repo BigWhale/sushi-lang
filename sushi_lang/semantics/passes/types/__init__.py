@@ -36,7 +36,7 @@ from sushi_lang.semantics.ast import (
     If, Expr
 )
 from sushi_lang.semantics.typesys import Type, BuiltinType
-from sushi_lang.semantics.type_visitor import StatementValidator, ExpressionValidator, TypeInferenceVisitor
+from sushi_lang.semantics.passes.types.visitor import StatementValidator, ExpressionValidator, TypeInferenceVisitor
 
 # Import validation functions from specialized modules
 from .compatibility import types_compatible

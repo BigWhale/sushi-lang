@@ -59,7 +59,7 @@ def _read_bytes(f: BinaryIO, size: int, path: str, section: str) -> bytes:
     Raises:
         LibraryError: CE3510/CE3511 if truncated.
     """
-    from sushi_lang.backend.library_linker import LibraryError
+    from sushi_lang.backend.library_errors import LibraryError
 
     data = f.read(size)
     if len(data) != size:
@@ -81,7 +81,7 @@ def _read_header_and_metadata(f: BinaryIO, path: str) -> dict:
     Raises:
         LibraryError: CE3508-CE3512 for format errors.
     """
-    from sushi_lang.backend.library_linker import LibraryError
+    from sushi_lang.backend.library_errors import LibraryError
 
     # Read and validate magic (16 bytes)
     magic = _read_bytes(f, 16, path, "metadata")
@@ -160,7 +160,7 @@ class LibraryFormat:
         Raises:
             LibraryError: CE3508-CE3513 for format errors.
         """
-        from sushi_lang.backend.library_linker import LibraryError
+        from sushi_lang.backend.library_errors import LibraryError
 
         path = str(library_path)
 

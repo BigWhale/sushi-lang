@@ -23,7 +23,7 @@ def print_library_info(library_path: Path) -> int:
         0 on success, 2 on error.
     """
     from sushi_lang.backend.library_format import LibraryFormat
-    from sushi_lang.backend.library_linker import LibraryError
+    from sushi_lang.backend.library_errors import LibraryError
 
     if not library_path.exists():
         print(f"Error: file not found: {library_path}", file=sys.stderr)

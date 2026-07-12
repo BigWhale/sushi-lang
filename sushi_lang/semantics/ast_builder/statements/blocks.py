@@ -11,21 +11,19 @@ if TYPE_CHECKING:
 
 
 def parse_block(t: Tree, ast_builder: 'ASTBuilder') -> Block:
-    """Parse block with dispatch to statement handlers."""
+    """Parse a block by routing every child through the statement dispatcher.
+
+    This used to carry its own 14-entry tuple of statement kinds and SILENTLY SKIP
+    any child not in it -- a second copy of parse_stmt's dispatch table, kept in
+    sync by hand. They agreed, so nothing was dropped in practice, but adding a
+    15th grammar alternative would have made a statement vanish here while
+    parse_stmt would have reported it. parse_stmt is a total dispatcher: an
+    unhandled node is CE0003, not silence.
+    """
     t = expect(t, "block")
     statements: List[Stmt] = []
 
-    for ch in t.children:
-        if not isinstance(ch, Tree):
-            continue
-        node = ch
-        if node.data == "statement" and node.children:
-            node = node.children[0]
-
-        # Parse statement using statement parser
-        if node.data in ("return_stmt", "print_stmt", "println_stmt", "let_stmt", "rebind_stmt",
-                         "call_stmt", "if_stmt", "while_stmt", "foreach_stmt", "expand_stmt",
-                         "match_stmt", "break_stmt", "continue_stmt", "function_def"):
-            statements.append(ast_builder.stmt_parser.parse_stmt(node))
+    for child in t.children:
+        statements.append(ast_builder.stmt_parser.parse_stmt(child))
 
     return Block(statements=statements, loc=span_of(t))

@@ -107,7 +107,7 @@ class ArrayMethodInferrer:
     validator: 'TypeValidator'
 
     def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.semantics.validate_arrays import is_builtin_array_method, get_builtin_array_method_return_type
+        from sushi_lang.semantics.passes.types.arrays import is_builtin_array_method, get_builtin_array_method_return_type
         from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
         from sushi_lang.semantics.typesys import ReferenceType
 

@@ -1089,7 +1089,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
         if actual_type is not None and isinstance(actual_type, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
             # Try the method type registry first (handles all built-in types)
-            from sushi_lang.semantics.method_type_registry import METHOD_TYPE_REGISTRY
+            from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
             inferred_type = METHOD_TYPE_REGISTRY.infer_method_type(
                 actual_type, node.method, self.type_validator
             )
