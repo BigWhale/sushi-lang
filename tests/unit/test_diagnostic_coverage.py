@@ -11,15 +11,12 @@ only allows it to shrink, mirroring test_stdout_coverage.py.
 
 All error/warning directories are now backfilled (Batches A/B/C). The three
 semantic-validation-gap bugs (#46/#47/#48) have been fixed and their tests now
-assert codes (CE1003 / CE2006 / CE2505), so the remaining gap is exactly the 2
-parse-error tests below, each of which has no honest CE#### to assert.
-BASELINE may only go DOWN -- lower it when one of these is resolved.
+assert codes (CE1003 / CE2006 / CE2505).
 
-Parse-error limitations (Lark raises before semantic analysis; no CE#### code):
-- tests/perks/test_err_perk_no_methods -- empty perk body.
-- tests/array/test_err_hash_nested_arrays -- nested array type syntax i32[2][2].
-- tests/closures/test_err_let_two_statements_one_line -- two statements on one
-  physical line (the let newline is only optional before a block-body lambda).
+The gap is now ZERO. The last three tests in it were parse errors, which had no
+CE#### to assert because Lark's raw dump bypassed the reporter entirely. Tier 4.7
+gave syntax errors their own family (CE6001-CE6005), so every error/warning test
+in the corpus now pins a code. BASELINE may only go DOWN.
 
 To lower BASELINE after a backfill pass:
 1. Run this file (it prints the current gap on failure), or recompute manually:
@@ -47,7 +44,7 @@ from pathlib import Path
 # in their header (the "gap"). After each backfill pass this MUST be lowered to
 # the new gap count -- it may never increase (that would mean a new error/warning
 # test landed without a code assertion).
-BASELINE = 3
+BASELINE = 0
 
 TESTS_ROOT = Path(__file__).parent.parent  # tests/
 EXCLUDED_DIRS = {"helpers", "bin"}

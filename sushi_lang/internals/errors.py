@@ -21,6 +21,7 @@ class Category(str, Enum):
     TYPE      = "type"
     RETURN    = "return"
     UNIT      = "unit"
+    SYNTAX    = "syntax"
     RUNTIME   = "runtime"
     INTERNAL  = "internal"
 
@@ -152,6 +153,10 @@ _add(ErrorMessage("CE0007", Severity.ERROR,
     "standard library build failed: {detail}",
     Category.INTERNAL, "A generator under sushi_stdlib/src failed to produce the "
                        "standard library bitcode."))
+
+_add(ErrorMessage("CE0008", Severity.ERROR,
+    "internal error: the grammar itself is malformed: {detail}",
+    Category.INTERNAL, "grammar.lark failed to load. This is a compiler bug."))
 
 _add(ErrorMessage("CE0009", Severity.ERROR,
     "builder not initialized",
@@ -1277,3 +1282,33 @@ _add(ErrorMessage("RE2023", Severity.ERROR,
     "no match arm matched the value",
     Category.RUNTIME, "A nested pattern reached the end of its arms without matching. "
     "Exhaustiveness checking should make this unreachable."))
+
+# Syntax errors (CE6xxx) -- the parser's own diagnostics
+_add(ErrorMessage("CE6001", Severity.ERROR,
+    "unexpected token '{token}'",
+    Category.SYNTAX, "The parser reached a token that cannot appear here."))
+
+_add(ErrorMessage("CE6002", Severity.ERROR,
+    "unexpected character '{char}'",
+    Category.SYNTAX, "The character is not part of any Sushi token."))
+
+_add(ErrorMessage("CE6003", Severity.ERROR,
+    "unexpected end of file",
+    Category.SYNTAX, "The source ended in the middle of a construct."))
+
+_add(ErrorMessage("CE6004", Severity.ERROR,
+    "inconsistent indentation: dedent to column {got}, expected column {expected}",
+    Category.SYNTAX, "A dedent must return to a column that an enclosing block opened."))
+
+_add(ErrorMessage("CE6005", Severity.ERROR,
+    "could not tokenize input",
+    Category.SYNTAX, "The lexer failed on this input."))
+
+_add(ErrorMessage("CE6010", Severity.ERROR,
+    "could not parse the interpolated expression '{expr}'",
+    Category.SYNTAX, "The text between {braces} in a string literal must be a valid expression."))
+
+_add(ErrorMessage("CE6101", Severity.ERROR,
+    "nested function definitions are not supported",
+    Category.SYNTAX, "A function may only be defined at the top level. Use a lambda for a "
+                     "local callable."))

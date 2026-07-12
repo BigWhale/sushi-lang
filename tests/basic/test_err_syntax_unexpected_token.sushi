@@ -1,0 +1,7 @@
+# Error: a let with no right-hand side. The parser hits the newline where it
+# expects an expression.
+# EXPECT_ERROR_CODE: CE6001
+
+fn main() i32:
+    let i32 x = 
+    return Result.Ok(0)

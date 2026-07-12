@@ -34,7 +34,7 @@ REFERENCE_PATTERNS = [
 
 # The number of registered codes. Bumping this is a deliberate act: it is the
 # tripwire for silent loss when errors.py is split into a package.
-REGISTRY_SIZE = 268
+REGISTRY_SIZE = 276
 
 # Codes whose numeric range does not match their category. SHRINK-ONLY: never add.
 # Renumbering would break EXPECT_ERROR_CODE headers and the docs, so these stay
@@ -116,7 +116,9 @@ def _category_of_range(code: str) -> set[Category]:
         return {Category.UNIT}
     if number < 5000:
         return {Category.TYPE, Category.FUNC}  # perks are filed as TYPE today
-    return {Category.TYPE, Category.UNIT}      # FFI is filed as TYPE today
+    if number < 6000:
+        return {Category.TYPE, Category.UNIT}  # FFI is filed as TYPE today
+    return {Category.SYNTAX}
 
 
 def test_category_matches_range():

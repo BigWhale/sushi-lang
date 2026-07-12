@@ -46,8 +46,36 @@ def _path() -> str:
 # (id, source, expected_code, has_location)
 CHANNELS = [
     pytest.param(
+        "fn main() i32:\n    let i32 x = \n    return Result.Ok(0)\n",
+        "CE6001", True, id="unexpected_token",
+    ),
+    pytest.param(
+        "fn main() i32:\n    let i32 x = @@@\n    return Result.Ok(0)\n",
+        "CE6002", True, id="unexpected_characters",
+    ),
+    pytest.param(
+        "fn main() i32:\n",
+        "CE6003", True, id="unexpected_eof",
+    ),
+    pytest.param(
+        'fn main() i32:\n    if (true):\n        println("a")\n      println("b")\n'
+        "    return Result.Ok(0)\n",
+        "CE6004", True, id="inconsistent_dedent",
+    ),
+    pytest.param(
+        'fn main() i32:\n    println("val {1 +}")\n    return Result.Ok(0)\n',
+        "CE6010", True, id="interpolation_bad_expression",
+    ),
+    pytest.param(
         'fn main() i32:\n    println("{x")\n    return Result.Ok(0)\n',
         "CE2026", True, id="unterminated_interpolation",
+    ),
+    pytest.param(
+        "fn main() i32:\n"
+        "    let Result<i32, StdError> r = Result.Ok(1)\n"
+        "    let bool ok = r.is_ok(1)\n"
+        "    return Result.Ok(0)\n",
+        "CE2016", True, id="result_method_arity",
     ),
     pytest.param(
         "fn main() i32:\n    let i32 x = 0755\n    return Result.Ok(0)\n",
