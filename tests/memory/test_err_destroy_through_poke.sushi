@@ -1,0 +1,22 @@
+# Guards issue #168: the borrow checker was strictly intra-procedural -- borrow_state is
+# reset per function -- so a callee that destroys its &poke parameter had no effect on the
+# caller's binding. `wreck(&poke map)` left `map` looking live and the next insert was a
+# use-after-destroy that compiled clean. (RE2022's probe guard contains it at runtime, but
+# only for HashMap; the checker hole was not HashMap-specific.)
+#
+# Fixed by a destroy-effect summary: which &poke params does each function destroy?
+# Computed once over every unit, transitively, then applied at the call site. CE2406 still
+# fires from the existing Name arm -- no new error code, no new emit site.
+# EXPECT_ERROR_CODE: CE2406
+use <collections/hashmap>
+
+fn wreck(&poke HashMap<string, i32> m) ~:
+    m.destroy()
+    return Result.Ok(~)
+
+fn main() i32:
+    let HashMap<string, i32> map = HashMap.new()
+    map.insert("a", 1)
+    wreck(&poke map)
+    map.insert("b", 2)
+    return Result.Ok(0)

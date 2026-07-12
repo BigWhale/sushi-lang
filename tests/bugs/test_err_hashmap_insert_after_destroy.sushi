@@ -1,0 +1,30 @@
+# HISTORY: this was a RUNTIME test. A HashMap destroyed through a &poke parameter has
+# capacity 0 and null buckets; insert() then probed off the null bucket pointer and
+# SEGFAULTED. Tier 4.2 bounded the probe by capacity so it traps (RE2022) instead of
+# segfaulting, and this test pinned that trap.
+#
+# The trap was containment for a CHECKER hole (#168): the borrow checker only marked a
+# variable destroyed on a literal `m.destroy()` in the same function, so it never saw
+# this one and CE2406 never fired. #168 is now FIXED -- a destroy-effect summary
+# propagates the callee's effect to the call site -- so this program no longer compiles
+# and can never reach the trap. The test now asserts the diagnostic that supersedes it.
+#
+# The RE2022 trap REMAINS as defense-in-depth: the summary deliberately
+# under-approximates (it cannot see a generic callee, an extension method destroying its
+# implicit `self`, a library callee, or an argument that is not a bare name -- e.g.
+# `wreck(&poke h.m)`). Its direct test coverage is gone with this conversion, which is a
+# real cost, accepted: a reachable trap with a test was traded for an unreachable trap
+# behind a compile error.
+# EXPECT_ERROR_CODE: CE2406
+use <collections/hashmap>
+
+fn wreck(&poke HashMap<string, i32> m) ~:
+    m.destroy()
+    return Result.Ok(~)
+
+fn main() i32:
+    let HashMap<string, i32> map = HashMap.new()
+    map.insert("a", 1)
+    wreck(&poke map)
+    map.insert("b", 2)
+    return Result.Ok(0)

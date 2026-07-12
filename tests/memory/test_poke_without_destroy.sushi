@@ -1,0 +1,18 @@
+# Control for issue #168: the destroy-effect summary must be PRECISE, not blanket. A callee
+# that merely mutates through its &poke parameter destroys nothing, so the caller's binding
+# stays live and using it afterwards must compile. If the summary over-approximated (e.g.
+# "any &poke param may be destroyed"), this would be a false CE2406.
+# EXPECT_STDOUT_EXACT: "len = 2\n"
+use <collections/hashmap>
+
+fn touch(&poke HashMap<string, i32> m) ~:
+    m.insert("b", 2)
+    return Result.Ok(~)
+
+fn main() i32:
+    let HashMap<string, i32> map = HashMap.new()
+    map.insert("a", 1)
+    touch(&poke map)
+    println("len = {map.len()}")
+    map.destroy()
+    return Result.Ok(0)

@@ -1,0 +1,21 @@
+# Guards issue #168, transitive case: the destroy-effect summary must propagate through a
+# FORWARDING callee. `outer` never calls .destroy() itself -- it hands its own &poke param
+# to `wreck`, which does. The summary iterates to a fixed point, so `outer` inherits the
+# effect and the call site in main marks `map` destroyed.
+# EXPECT_ERROR_CODE: CE2406
+use <collections/hashmap>
+
+fn wreck(&poke HashMap<string, i32> m) ~:
+    m.destroy()
+    return Result.Ok(~)
+
+fn outer(&poke HashMap<string, i32> m) ~:
+    wreck(&poke m)
+    return Result.Ok(~)
+
+fn main() i32:
+    let HashMap<string, i32> map = HashMap.new()
+    map.insert("a", 1)
+    outer(&poke map)
+    map.insert("b", 2)
+    return Result.Ok(0)

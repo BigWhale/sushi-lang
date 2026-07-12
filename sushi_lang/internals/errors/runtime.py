@@ -40,8 +40,10 @@ _add(ErrorMessage("RE2022", Severity.ERROR,
     "insert into an unusable HashMap: no free bucket",
     Category.RUNTIME, "HashMap.insert() probed every bucket without finding a slot. A live map "
     "always resizes below a 0.75 load factor, so this means the map has no buckets at all -- it "
-    "was destroyed. Using a destroyed map is CE2406, but the borrow checker only sees a literal "
-    "`m.destroy()`, so a destroy through a `&poke` parameter reaches here instead."))
+    "was destroyed. Using a destroyed map is CE2406, which now also catches a destroy through a "
+    "`&poke` parameter (#168). This trap remains as defense-in-depth for the destroy-effect "
+    "summary's deliberate under-approximation: a generic callee, an extension method destroying "
+    "its implicit `self`, a library callee, or an argument that is not a bare name."))
 
 # Pattern match exhaustion
 _add(ErrorMessage("RE2023", Severity.ERROR,
