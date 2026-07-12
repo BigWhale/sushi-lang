@@ -34,7 +34,9 @@ REFERENCE_PATTERNS = [
 
 # The number of registered codes. Bumping this is a deliberate act: it is the
 # tripwire for silent loss when errors.py is split into a package.
-REGISTRY_SIZE = 277
+# 278: +CE0125 (borrow checker has no arm for an expression node) -- the runtime backstop
+# behind tests/unit/test_borrow_dispatch_is_total.py.
+REGISTRY_SIZE = 278
 
 # Codes whose numeric range does not match their category. SHRINK-ONLY: never add.
 # Renumbering would break EXPECT_ERROR_CODE headers and the docs, so these stay

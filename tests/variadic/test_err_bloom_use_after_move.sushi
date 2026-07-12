@@ -1,0 +1,17 @@
+# Guards issue #174: bloom (`arr...`) MOVES its source array -- the backend marks the
+# source moved and the callee frees it -- but the borrow checker never learned, because
+# `_check_expr` had no Spread arm and `_mark_moved_if_applicable` only matched a Name.
+# So using the source after a bloom was a use-after-free with NO diagnostic: this program
+# compiled clean and died with SIGSEGV (exit 139). The equivalent plain by-value move was
+# correctly CE2405 the whole time -- the two paths disagreed about a rule they share.
+# EXPECT_ERROR_CODE: CE2405
+
+fn count(...string args) i32:
+    return Result.Ok(args.len())
+
+fn main() i32:
+    let string[] argv = from(["mostly", "harmless"])
+    let i32 n = count(argv...).realise(-1)
+    println("count = {n}")
+    println("argv[0] after bloom = {argv[0]}")
+    return Result.Ok(0)
