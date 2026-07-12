@@ -33,6 +33,11 @@ from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.expressions.memory import get_element_size_constant
 
 
+# emit_runtime_error interns one message global per error code, so every RE2022 site
+# must use this exact string -- two different texts would silently share the first.
+_NO_FREE_BUCKET = "HashMap.insert() probed every bucket without finding a free slot (map destroyed?)"
+
+
 def emit_hashmap_insert(
     codegen: Any,
     expr: MethodCall,
@@ -207,11 +212,21 @@ def emit_hashmap_insert(
         builder.store(builder.add(size, one_i32, name="new_size"), size_ptr)
         builder.branch(insert_done_bb)
 
+    # A live map always resizes below a 0.75 load factor, so there is always an
+    # empty slot and the probe always ends. A DESTROYED map has capacity 0 and null
+    # buckets, and reaches here: without the guard the probe masks the hash with
+    # -1 and GEPs off the null pointer. Trap instead of corrupting memory.
+    no_slot_bb = builder.append_basic_block(name="insert_no_slot")
+
     emit_probe_loop(
         codegen, buckets_data, capacity, hash_i32,
         on_occupied=on_occupied, on_empty=on_empty, on_tombstone=on_tombstone,
-        prefix="probe",
+        exhausted_bb=no_slot_bb, prefix="probe",
     )
+
+    builder.position_at_end(no_slot_bb)
+    codegen.runtime.errors.emit_runtime_error("RE2022", _NO_FREE_BUCKET)
+    builder.unreachable()
 
     # Done
     builder.position_at_end(insert_done_bb)
@@ -325,7 +340,8 @@ def emit_hashmap_remove(
 
     emit_probe_loop(
         codegen, buckets_data, capacity, hash_i32,
-        on_occupied=on_occupied, on_empty=on_empty, prefix="remove_probe",
+        on_occupied=on_occupied, on_empty=on_empty,
+        exhausted_bb=not_found_bb, prefix="remove_probe",
     )
 
     # Found: remove entry and return Maybe.Some(value)
@@ -554,10 +570,20 @@ def emit_hashmap_resize_to_capacity(
     def keep_probing(slot: ProbeSlot) -> None:
         pass
 
+    rehash_no_slot_bb = builder.append_basic_block(name="rehash_no_slot")
+
     emit_probe_loop(
         codegen, new_bucket_ptr, new_capacity, hash_i32,
-        on_occupied=keep_probing, on_empty=on_empty, prefix="rehash_probe",
+        on_occupied=keep_probing, on_empty=on_empty,
+        exhausted_bb=rehash_no_slot_bb, prefix="rehash_probe",
     )
+
+    # The new table is freshly allocated and strictly larger than the live entry
+    # count, so it always has room. Unreachable in a correct compiler; guarded so a
+    # bug here cannot become an unbounded loop.
+    builder.position_at_end(rehash_no_slot_bb)
+    codegen.runtime.errors.emit_runtime_error("RE2022", _NO_FREE_BUCKET)
+    builder.unreachable()
 
     # Skip non-occupied entries
     builder.position_at_end(rehash_skip_bb)
