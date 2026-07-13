@@ -905,13 +905,12 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
     def _materialize_stdlib_return_type(self, ret_type: Optional[Type]) -> Optional[Type]:
         """Resolve a registry-declared stdlib return type into a concrete type.
 
-        The registry declares return types structurally, because it has no access to the
-        enum table: a Result comes back as ResultType with an UnknownType error (e.g.
-        UnknownType("FileError")), and getenv's Maybe as GenericTypeRef("Maybe", (string,)).
-        Materialize both into real enums here, so `??` and `match` see a concrete EnumType
-        rather than a forward reference. Non-generic returns (i32, bool, ~) pass through.
+        The registry declares return types as type-REFS, because it has no access to the enum
+        table: a Result comes back as GenericTypeRef("Result", (i64, UnknownType("FileError")))
+        and getenv's Maybe as GenericTypeRef("Maybe", (string,)). Materialize both into real
+        enums here, so `??` and `match` see a concrete EnumType rather than a forward reference.
+        Non-generic returns (i32, bool, ~) pass through.
         """
-        from sushi_lang.semantics.typesys import ResultType
         from sushi_lang.semantics.generics.types import GenericTypeRef
         from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
         from sushi_lang.semantics.generics.results import ensure_result_type_in_table
@@ -920,11 +919,13 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         structs = self.type_validator.struct_table.by_name
         enums = self.type_validator.enum_table.by_name
 
-        if isinstance(ret_type, ResultType):
-            ok_type = resolve_unknown_type(ret_type.ok_type, structs, enums)
-            err_type = resolve_unknown_type(ret_type.err_type, structs, enums)
+        if (isinstance(ret_type, GenericTypeRef) and ret_type.base_name == "Result"
+                and len(ret_type.type_args) == 2):
             return ensure_result_type_in_table(
-                self.type_validator.enum_table, ok_type, err_type
+                self.type_validator.enum_table,
+                ret_type.type_args[0],
+                ret_type.type_args[1],
+                struct_table=structs,
             ) or ret_type
 
         if (isinstance(ret_type, GenericTypeRef) and ret_type.base_name == "Maybe"

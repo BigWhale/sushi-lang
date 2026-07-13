@@ -40,18 +40,19 @@ def is_builtin_process_function(name: str) -> bool:
 
 def get_builtin_process_function_return_type(name: str):
     """Get return type for a process function."""
-    from sushi_lang.semantics.typesys import BuiltinType, ResultType
+    from sushi_lang.semantics.typesys import BuiltinType, UnknownType
+    from sushi_lang.semantics.generics.types import GenericTypeRef
 
+    # A Result comes back as a type-REF, not a concrete enum: get_return_type() has no access
+    # to the enum table, so the consumer (_materialize_stdlib_return_type) interns it. Same
+    # shape getenv has always used for its Maybe<string>.
     if name == 'getcwd':
-        from sushi_lang.semantics.typesys import UnknownType
-        return ResultType(ok_type=BuiltinType.STRING, err_type=UnknownType("ProcessError"))
+        return GenericTypeRef("Result", (BuiltinType.STRING, UnknownType("ProcessError")))
     elif name == 'run':
-        from sushi_lang.semantics.typesys import UnknownType
         # run(string cmd, string[] args) -> Result<ProcessOutput, ProcessError>
-        return ResultType(ok_type=UnknownType("ProcessOutput"), err_type=UnknownType("ProcessError"))
+        return GenericTypeRef("Result", (UnknownType("ProcessOutput"), UnknownType("ProcessError")))
     elif name == 'chdir':
-        from sushi_lang.semantics.typesys import UnknownType
-        return ResultType(ok_type=BuiltinType.I32, err_type=UnknownType("ProcessError"))
+        return GenericTypeRef("Result", (BuiltinType.I32, UnknownType("ProcessError")))
     elif name == 'exit':
         return BuiltinType.BLANK
     elif name == 'getpid':

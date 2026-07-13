@@ -67,9 +67,9 @@ def get_builtin_env_function_return_type(name: str) -> Type:
 
     elif name == 'setenv':
         # setenv(string key, string value) -> Result<i32, EnvError>
-        inner = BuiltinType('i32')
         from sushi_lang.semantics.typesys import UnknownType
-        return ResultType(ok_type=inner, err_type=UnknownType("EnvError"))
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        return GenericTypeRef("Result", (BuiltinType('i32'), UnknownType("EnvError")))
 
     raise ValueError(f"Unknown env function: {name}")
 

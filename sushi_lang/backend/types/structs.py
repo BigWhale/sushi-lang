@@ -150,13 +150,13 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
             from sushi_lang.semantics.generics.results import ensure_result_type_in_table
             ok_type = field_type.type_args[0]
             err_type = field_type.type_args[1]
-            result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type)
+            result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type, struct_table=codegen.struct_table.by_name)
             if result_enum is not None:
                 field_type = result_enum
     elif isinstance(field_type, ResultType):
         # Convert ResultType to Result enum
         from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-        result_enum = ensure_result_type_in_table(codegen.enum_table, field_type.ok_type, field_type.err_type)
+        result_enum = ensure_result_type_in_table(codegen.enum_table, field_type.ok_type, field_type.err_type, struct_table=codegen.struct_table.by_name)
         if result_enum is not None:
             field_type = result_enum
 

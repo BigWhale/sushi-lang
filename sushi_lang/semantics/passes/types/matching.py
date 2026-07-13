@@ -98,7 +98,8 @@ def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optiona
         result_enum = ensure_result_type_in_table(
             validator.enum_table,
             ok_type,
-            err_type
+            err_type,
+            struct_table=validator.struct_table.by_name,
         )
         if result_enum:
             scrutinee_type = result_enum

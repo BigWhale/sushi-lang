@@ -390,7 +390,7 @@ def emit_list_insert(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Str
     from sushi_lang.semantics.typesys import BuiltinType
     from sushi_lang.semantics.generics.results import ensure_result_type_in_table
     std_error = codegen.enum_table.by_name.get("StdError")
-    result_type = ensure_result_type_in_table(codegen.enum_table, BuiltinType.BLANK, std_error)
+    result_type = ensure_result_type_in_table(codegen.enum_table, BuiltinType.BLANK, std_error, struct_table=codegen.struct_table.by_name)
     result_llvm_type = codegen.types.ll_type(result_type)
     # Result.Err() - tag = 1, no data
     err_enum = ir.Constant(result_llvm_type, ir.Undefined)

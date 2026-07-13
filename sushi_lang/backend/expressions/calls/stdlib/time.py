@@ -83,7 +83,7 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
     # Create Result<i32, StdError> enum if it doesn't exist
     ok_type = BuiltinType.I32
     err_type = UnknownType("StdError")
-    result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type)
+    result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type, struct_table=codegen.struct_table.by_name)
 
     if result_enum:
         result_llvm_type = codegen.types.ll_type(result_enum)

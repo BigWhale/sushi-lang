@@ -70,10 +70,23 @@ class TypeMonomorphizer:
 
         concrete_enums: Dict[str, EnumType] = {}
 
+        from sushi_lang.semantics.type_predicates import is_abstract_type
+
         for base_name, type_args in instantiations:
             # Look up the generic enum definition
             if base_name not in generic_enums:
                 # This shouldn't happen if type validation passes, but be defensive
+                continue
+
+            # An abstract instantiation still names an enclosing template's own type params
+            # (`Result<Either<U, T>, StdError>`, collected off a generic fn's signature). There
+            # is nothing to monomorphize until a concrete call site binds them, and producing a
+            # bogus concrete enum strands the enum topological sort on an `Either<U, T>` that is
+            # never itself interned -- which then gets misreported as a recursive enum (CE2052).
+            # The concrete instantiations are collected separately.
+            structs = self.monomorphizer.struct_table.by_name if self.monomorphizer.struct_table else {}
+            enums = self.monomorphizer.enum_table.by_name if self.monomorphizer.enum_table else {}
+            if any(is_abstract_type(arg, structs, enums) for arg in type_args):
                 continue
 
             generic = generic_enums[base_name]

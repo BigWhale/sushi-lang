@@ -393,6 +393,15 @@ _add(ErrorMessage("CE0091", Severity.ERROR,
     "Result type not found: {type}",
     Category.INTERNAL, "Result enum type not found in symbol table."))
 
+_add(ErrorMessage("CE0126", Severity.ERROR,
+    "poisoned intern of '{name}': already interned as {existing}, rebuilt as {rebuilt}",
+    Category.INTERNAL,
+    "Two spellings of one Result<T, E> mangled to the same enum name but carry different "
+    "payload types -- one of them was interned before its UnknownType payloads were resolved. "
+    "EnumType hashes on the name alone but compares on the variants, so a poisoned entry "
+    "hash-matches and compares unequal: a silent cache miss, not a crash. Every Result must "
+    "be interned through ensure_result_type_in_table, which resolves its payloads first."))
+
 # Maybe<T> Operations (CE0092-CE0095)
 _add(ErrorMessage("CE0092", Severity.ERROR,
     "Maybe enum missing Some variant: {enum}",

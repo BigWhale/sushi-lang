@@ -127,7 +127,8 @@ def _validate_named_struct_constructor(
                 )
 
                 # Ensure Result<T, E> exists in enum table
-                result_enum = ensure_result_type_in_table(validator.enum_table, ok_type, err_type)
+                result_enum = ensure_result_type_in_table(validator.enum_table, ok_type, err_type,
+                                    struct_table=validator.struct_table.by_name)
                 if result_enum is not None:
                     resolved_field_type = result_enum
             else:
@@ -209,7 +210,8 @@ def _validate_positional_struct_constructor(
                 )
 
                 # Ensure Result<T, E> exists in enum table
-                result_enum = ensure_result_type_in_table(validator.enum_table, ok_type, err_type)
+                result_enum = ensure_result_type_in_table(validator.enum_table, ok_type, err_type,
+                                    struct_table=validator.struct_table.by_name)
                 if result_enum is not None:
                     resolved_field_type = result_enum
             else:

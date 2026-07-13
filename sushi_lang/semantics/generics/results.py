@@ -236,6 +236,27 @@ def validate_result_realise_method_with_validator(
                expected=str(t_type), got=str(arg_type))
 
 
+def is_result_enum(t: Any) -> bool:
+    """Whether ``t`` is a concrete ``Result<T, E>`` enum.
+
+    Keyed on the interned NAME, not on ``generic_base``: an on-demand intern and a
+    monomorphized instance both spell the name the same way, and the ~15 sites that
+    already ask this question spell it this way too.
+    """
+    return isinstance(t, EnumType) and t.name.startswith("Result<")
+
+
+def result_ok_err(result_enum: EnumType) -> tuple[Type, Type]:
+    """The ``(ok, err)`` payload types of a concrete ``Result<T, E>`` enum."""
+    ok_variant = result_enum.get_variant("Ok")
+    err_variant = result_enum.get_variant("Err")
+    if ok_variant is None or err_variant is None:
+        raise_internal_error("CE0089", enum=result_enum.name)
+    if len(ok_variant.associated_types) != 1 or len(err_variant.associated_types) != 1:
+        raise_internal_error("CE0090", got=len(ok_variant.associated_types))
+    return ok_variant.associated_types[0], err_variant.associated_types[0]
+
+
 def _result_type_to_str(t: Type) -> str:
     """Format a type for Result<T, E> naming (builtins lowercased)."""
     from sushi_lang.semantics.typesys import BuiltinType
@@ -244,23 +265,78 @@ def _result_type_to_str(t: Type) -> str:
     return str(t)
 
 
-def ensure_result_type_in_table(enum_table: Any, ok_type: Type, err_type: Type) -> Optional[EnumType]:
+def ensure_result_type_in_table(
+    enum_table: Any,
+    ok_type: Type,
+    err_type: Type,
+    struct_table: Optional[dict] = None,
+) -> Optional[EnumType]:
     """Ensure ``Result<ok_type, err_type>`` exists in ``enum_table``, creating it if needed.
 
     Works with just an enum table so both semantic analysis and codegen can call it.
+
+    THE INVARIANT. ``str(UnknownType("StdError"))`` and ``str(EnumType(name="StdError"))`` are
+    both ``"StdError"``, so a Result carrying an *unresolved* payload mangles to the same name
+    as the same Result carrying the resolved one. ``EnumType`` hashes on the name alone but
+    compares on the variants, so a table poisoned with an unresolved payload would hash-match
+    and compare unequal -- a silent cache miss and a duplicate monomorphization, never a crash.
+    That is the failure mode that hides.
+
+    So the payloads are resolved HERE, before the name is built, rather than at the call sites:
+    it must be impossible to intern a Result without resolving it first. The guard below then
+    catches any entry that got in some other way.
     """
     from sushi_lang.semantics.typesys import EnumType, EnumVariantInfo
+    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+    from sushi_lang.semantics.type_predicates import is_abstract_type
+
+    enums = enum_table.by_name
+    structs = struct_table if struct_table is not None else {}
+    ok_type = resolve_unknown_type(ok_type, structs, enums)
+    err_type = resolve_unknown_type(err_type, structs, enums)
 
     result_enum_name = f"Result<{_result_type_to_str(ok_type)}, {_result_type_to_str(err_type)}>"
 
-    if result_enum_name in enum_table.by_name:
-        return enum_table.by_name[result_enum_name]
-
     ok_variant = EnumVariantInfo(name="Ok", associated_types=(ok_type,))
     err_variant = EnumVariantInfo(name="Err", associated_types=(err_type,))
-    result_enum = EnumType(name=result_enum_name, variants=(ok_variant, err_variant))
+    variants = (ok_variant, err_variant)
 
-    enum_table.by_name[result_enum_name] = result_enum
+    # An abstract Result -- `Result<Either<U, T>, StdError>` from inside a generic body, whose
+    # payloads still name the enclosing template's own type params -- is not a real type. Hand
+    # the caller the enum it asked for, but keep it OUT of the table: interning it would strand
+    # the enum topological sort on an `Either<U, T>` that is never itself interned, which is
+    # then misreported as a recursive enum (CE2052). The concrete instantiations are interned
+    # separately, at the call sites that bind the parameters.
+    if (is_abstract_type(ok_type, structs, enums)
+            or is_abstract_type(err_type, structs, enums)):
+        return EnumType(
+            name=result_enum_name,
+            variants=variants,
+            generic_base="Result",
+            generic_args=(ok_type, err_type),
+        )
+
+    existing = enums.get(result_enum_name)
+    if existing is not None:
+        # Same name, different payloads: one of the two was interned unresolved. Fail loudly
+        # at the moment of corruption rather than let it decay into a cache miss.
+        if existing.variants and existing.variants != variants:
+            raise_internal_error(
+                "CE0126",
+                name=result_enum_name,
+                existing=str([str(t) for v in existing.variants for t in v.associated_types]),
+                rebuilt=str([str(t) for v in variants for t in v.associated_types]),
+            )
+        return existing
+
+    result_enum = EnumType(
+        name=result_enum_name,
+        variants=variants,
+        generic_base="Result",
+        generic_args=(ok_type, err_type),
+    )
+
+    enums[result_enum_name] = result_enum
     enum_table.order.append(result_enum_name)
 
     # Register the auto-derived hash() for the on-demand type (mirrors Pass 1.8).

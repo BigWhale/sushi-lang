@@ -120,8 +120,15 @@ def ensure_maybe_type_in_table(enum_table: Any, value_type: Type) -> Optional[En
     """Ensure ``Maybe<value_type>`` exists in ``enum_table``, creating it if needed.
 
     Works with just an enum table so both semantic analysis and codegen can call it.
+
+    ``generic_base`` / ``generic_args`` are populated because ``unify.py`` reads them to match
+    a monomorphized generic against a ``Maybe<T>`` parameter. Without them an on-demand Maybe
+    (the return of ``List.get`` and friends) carried no generic metadata, so passing one to
+    ``fn f<T>(Maybe<T> m)`` died with CE2060 -- while an annotated ``let Maybe<i32> m`` worked,
+    because that path goes through the monomorphizer, which does set them.
     """
     from sushi_lang.semantics.typesys import EnumType, EnumVariantInfo
+    from sushi_lang.semantics.generics.hashing import can_enum_be_hashed, register_enum_hash_method
 
     if isinstance(value_type, BuiltinType):
         type_str = str(value_type).lower()
@@ -136,9 +143,20 @@ def ensure_maybe_type_in_table(enum_table: Any, value_type: Type) -> Optional[En
     some_variant = EnumVariantInfo(name="Some", associated_types=(value_type,))
     none_variant = EnumVariantInfo(name="None", associated_types=())
 
-    maybe_enum = EnumType(name=maybe_enum_name, variants=(some_variant, none_variant))
+    maybe_enum = EnumType(
+        name=maybe_enum_name,
+        variants=(some_variant, none_variant),
+        generic_base="Maybe",
+        generic_args=(value_type,),
+    )
 
     enum_table.by_name[maybe_enum_name] = maybe_enum
     enum_table.order.append(maybe_enum_name)
+
+    # Register the auto-derived hash() for the on-demand type (mirrors Pass 1.8), matching
+    # what the Result twin has always done.
+    can_hash, _ = can_enum_be_hashed(maybe_enum)
+    if can_hash:
+        register_enum_hash_method(maybe_enum)
 
     return maybe_enum

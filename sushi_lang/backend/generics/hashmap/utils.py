@@ -46,13 +46,13 @@ def emit_key_equality_check(codegen: Any, key_type: Type, key1: ir.Value, key2: 
             from sushi_lang.semantics.generics.results import ensure_result_type_in_table
             ok_type = key_type.type_args[0]
             err_type = key_type.type_args[1]
-            result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type)
+            result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type, struct_table=codegen.struct_table.by_name)
             if result_enum is not None:
                 key_type = result_enum
     elif isinstance(key_type, ResultType):
         # Convert ResultType to Result enum
         from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-        result_enum = ensure_result_type_in_table(codegen.enum_table, key_type.ok_type, key_type.err_type)
+        result_enum = ensure_result_type_in_table(codegen.enum_table, key_type.ok_type, key_type.err_type, struct_table=codegen.struct_table.by_name)
         if result_enum is not None:
             key_type = result_enum
 

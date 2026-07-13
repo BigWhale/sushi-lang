@@ -113,8 +113,7 @@ class TypeSizing:
                 result_enum = ensure_result_type_in_table(
                     self.enum_table,
                     semantic_type.ok_type,
-                    semantic_type.err_type
-                )
+                    semantic_type.err_type, struct_table=self.struct_table.by_name)
                 return self.get_type_size_bytes(result_enum)
             case _:
                 # Check if this is a GenericTypeRef using shared helper
