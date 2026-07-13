@@ -1,0 +1,37 @@
+# Regression for the double-free uncovered while fixing #162/#183.
+#
+# `Own(tail)` in a match arm unwraps the Own and binds its POINTEE. That binding is a
+# borrow -- the Own<T> still owns the heap block and frees it at scope exit -- but
+# _extract_own_pattern registered it as an owner, so the pointee was freed twice.
+#
+# It was latent, not harmless-by-design: the enum destructor used to no-op on an Own
+# payload (needs_cleanup answered False for Own<T>, whose only field is a raw pointer),
+# so the bogus second free destroyed nothing. Making that destructor real turned the
+# double-registration into an abort (mfm_free / EXC_BREAKPOINT).
+#
+# Needs a chain at least 2 deep AND a recursive traversal: a single level, or a
+# non-recursive by-value pass, both happen to survive.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "len 3\n"
+# EXPECT_NO_LEAKS: true
+
+enum IntList:
+    Nil()
+    Cons(i32, Own<IntList>)
+
+fn length(IntList list) i32:
+    match list:
+        IntList.Nil() ->
+            return Result.Ok(0)
+        IntList.Cons(_, Own(tail)) ->
+            let i32 tail_len = length(tail)??
+            return Result.Ok(1 + tail_len)
+
+fn main() i32:
+    let Own<IntList> t3 = Own.alloc(IntList.Nil())
+    let Own<IntList> t2 = Own.alloc(IntList.Cons(3, t3))
+    let Own<IntList> t1 = Own.alloc(IntList.Cons(2, t2))
+    let IntList list = IntList.Cons(1, t1)
+
+    println("len {length(list).realise(99)}")
+    return Result.Ok(0)

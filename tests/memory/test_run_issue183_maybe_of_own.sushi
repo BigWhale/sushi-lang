@@ -1,0 +1,11 @@
+# Regression for #183: an Own<T> inside an enum payload was never destroyed. Same predicate as
+# Maybe<List<T>> and as the recursive Own<Tree<T>> of #162 -- one fix, three symptoms.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "some = true"
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let Own<i32> b = Own.alloc(42)
+    let Maybe<Own<i32>> m = Maybe.Some(b)
+    println("some = {m.is_some()}")
+    return Result.Ok(0)

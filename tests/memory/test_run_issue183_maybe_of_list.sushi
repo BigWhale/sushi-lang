@@ -1,0 +1,16 @@
+# Regression for #183: a List<T> inside an enum payload was never destroyed. needs_cleanup()
+# answered False for Own<T>/List<T> because their only fields are raw pointers, so the variant
+# carrying them was dropped from the enum destructor's switch. Every other Maybe payload
+# (string, dynamic array, owning struct, owning enum) was already clean -- only Own/List leaked.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "some = true"
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let List<i32> tmp = List.new()
+    tmp.push(1)
+    tmp.push(2)
+    tmp.push(3)
+    let Maybe<List<i32>> m = Maybe.Some(tmp)
+    println("some = {m.is_some()}")
+    return Result.Ok(0)

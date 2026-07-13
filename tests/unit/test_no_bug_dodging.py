@@ -35,13 +35,7 @@ _DODGE = re.compile("|".join(DODGE_PATTERNS), re.I)
 # Tests that legitimately dodge a bug, keyed by path relative to tests/.
 # Each entry needs a reason and a tracking issue URL. Empty is the goal state.
 #   {"reason": "...", "issue": "https://github.com/BigWhale/sushi-lang/issues/N"}
-BUG_DODGE_REGISTRY: dict[str, dict] = {
-    "generics/test_run_own_recursive_generic.sushi": {
-        "reason": "recursive Own<Tree<T>> destructor drops the inner free (~12 B/level); "
-                  "leak assertion removed until the destructor is fixed",
-        "issue": "https://github.com/BigWhale/sushi-lang/issues/162",
-    },
-}
+BUG_DODGE_REGISTRY: dict[str, dict] = {}
 
 
 def _scan() -> list[tuple[str, int, str]]:
