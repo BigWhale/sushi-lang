@@ -1,0 +1,17 @@
+# Regression for #179, owning-struct payload. Also guards the second half of the fix: the Ok
+# payload arrives as a bare UnknownType('Box'), and needs_cleanup() answers False for an
+# unresolved name -- which silently dropped the variant from the destructor's switch.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "ok = true"
+# EXPECT_NO_LEAKS: true
+
+struct Box:
+    i32[] data
+
+fn mk() Box:
+    return Result.Ok(Box(data: from([0, 1, 2, 3, 4, 5, 6, 0])))
+
+fn main() i32:
+    let Result<Box, StdError> r = mk()
+    println("ok = {r.is_ok()}")
+    return Result.Ok(0)

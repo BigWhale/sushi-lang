@@ -1,0 +1,15 @@
+# Regression for #179. The issue's table claimed .realise() was leak-free because it 'moves the
+# payload out'. It does not -- it copies, and left the original in a shell nobody destroyed.
+# Value = 16 B, default = 64 B (deliberately different), so a leak names which copy survived.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "v = "
+# EXPECT_NO_LEAKS: true
+
+fn mk() string:
+    return Result.Ok("xxxxxxxxxxxx{'abcd'}")
+
+fn main() i32:
+    let Result<string, StdError> r = mk()
+    let string v = r.realise("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx{'abcd'}")
+    println("v = {v}")
+    return Result.Ok(0)

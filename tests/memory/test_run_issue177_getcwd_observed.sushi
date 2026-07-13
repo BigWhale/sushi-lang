@@ -1,0 +1,13 @@
+# Regression for #177: getcwd() wrapped its PATH_MAX buffer with owned=0 -- the 'literal /
+# borrow, never free' bit -- so RAII never freed it. 4096 bytes per call.
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_CWD: /
+# EXPECT_STDOUT_CONTAINS: "ok = true"
+# EXPECT_NO_LEAKS: true
+
+use <sys/process>
+
+fn main() i32:
+    let Result<string, ProcessError> r = getcwd()
+    println("ok = {r.is_ok()}")
+    return Result.Ok(0)

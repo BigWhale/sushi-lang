@@ -1,0 +1,13 @@
+# Regression for #179, nested: a struct whose only owning field is a Result. needs_cleanup()
+# had no Result branch, so the field was gated out of the recursion and never freed.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "ok = true"
+# EXPECT_NO_LEAKS: true
+
+struct Holder:
+    Result<string, StdError> r
+
+fn main() i32:
+    let Holder h = Holder(r: Result.Ok("xxxxxxxxxxxx{'abcd'}"))
+    println("ok = {h.r.is_ok()}")
+    return Result.Ok(0)

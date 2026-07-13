@@ -1,0 +1,13 @@
+# Regression for #179, nested: Maybe<Result<string>>. The enum destructor recurses through
+# needs_cleanup(), which answered False for a Result.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "some = true"
+# EXPECT_NO_LEAKS: true
+
+fn mk() string:
+    return Result.Ok("xxxxxxxxxxxx{'abcd'}")
+
+fn main() i32:
+    let Maybe<Result<string, StdError>> m = Maybe.Some(mk())
+    println("some = {m.is_some()}")
+    return Result.Ok(0)

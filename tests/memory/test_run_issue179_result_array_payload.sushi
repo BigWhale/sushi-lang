@@ -1,0 +1,13 @@
+# Regression for #179, dynamic-array payload. This was the decisive probe: arrays have their own
+# cleanup registry, so had this stayed clean the bug would not have been Result-shaped. It leaked.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "ok = true"
+# EXPECT_NO_LEAKS: true
+
+fn mk() i32[]:
+    return Result.Ok(from([0, 1, 2, 3, 4, 5, 6, 0]))
+
+fn main() i32:
+    let Result<i32[], StdError> r = mk()
+    println("ok = {r.is_ok()}")
+    return Result.Ok(0)

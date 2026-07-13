@@ -1,0 +1,16 @@
+# Regression for #179: a Result<T, E> whose payload owns heap was NEVER destroyed at scope
+# exit, while a Maybe<T> in the same position was. Result reaches the backend as a ResultType
+# (or a GenericTypeRef from an annotation), and every RAII predicate keyed on EnumType, so the
+# local was registered in no cleanup registry at all. This is the issue's 15-byte repro.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "ok = true"
+# EXPECT_NO_LEAKS: true
+
+fn make() string:
+    let string a = "mostly"
+    return Result.Ok("{a} harmless")
+
+fn main() i32:
+    let Result<string, StdError> r = make()
+    println("ok = {r.is_ok()}")
+    return Result.Ok(0)

@@ -1,0 +1,16 @@
+# Regression for #179, owning-enum payload (an enum inside the Result's Ok variant).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "ok = true"
+# EXPECT_NO_LEAKS: true
+
+enum Msg:
+    Text(string)
+    Num(i32)
+
+fn mk() Msg:
+    return Result.Ok(Msg.Text("xxxxxxxxxxxx{'abcd'}"))
+
+fn main() i32:
+    let Result<Msg, StdError> r = mk()
+    println("ok = {r.is_ok()}")
+    return Result.Ok(0)
