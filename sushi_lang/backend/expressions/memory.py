@@ -645,17 +645,19 @@ def _clone_list_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struc
 def _clone_struct_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: StructType) -> ir.Value:
     """Deep-copy a regular struct field-by-field, recursing through emit_value_clone.
 
-    Gated on `needs_cleanup(field_type)` -- the SAME predicate `_emit_struct_destructor`
+    Gated on `field_needs_cleanup(field_type)` -- the SAME predicate `_emit_struct_destructor`
     uses -- so exactly the fields the destructor frees get cloned, at full depth (a struct
     holding an enum/List/Own field is handled, unlike `deep_copy_struct` which only covers
     array and nested-struct fields; that helper's other call sites are left untouched).
+    The gate must RESOLVE a named/generic field type, exactly as the destructor does: clone
+    fewer buffers than the destructor frees and the shared buffer is freed twice (#183).
     """
-    from sushi_lang.backend.destructors import needs_cleanup
+    from sushi_lang.backend.destructors import field_needs_cleanup
 
     b = codegen.builder
     new_struct = value
     for i, (_field_name, field_type) in enumerate(value_type.fields):
-        if needs_cleanup(field_type):
+        if field_needs_cleanup(codegen, field_type):
             field_val = b.extract_value(value, i, name=f"clone_field_{i}")
             cloned = emit_value_clone(codegen, field_val, field_type)
             new_struct = b.insert_value(new_struct, cloned, i, name=f"cloned_field_{i}")
@@ -670,13 +672,17 @@ def _clone_enum_value(codegen: 'LLVMCodegen', value: ir.Value, value_type) -> ir
     back) instead of destroying. Materialised through an alloca so the byte-offset GEPs
     have an address; the mutated value is reloaded as a single dominating SSA result.
     """
-    from sushi_lang.backend.destructors import needs_cleanup
+    from sushi_lang.backend.destructors import field_needs_cleanup
     from sushi_lang.backend.constants.llvm_values import ZERO_I32, ONE_I32, make_i32_const
 
     b = codegen.builder
+    # Resolve the payload type before gating, exactly as `_emit_enum_destructor` does. An
+    # `Own<IntList>` payload arrives as an unresolved name, and an unresolved name answers
+    # "owns nothing" -- so the destructor (which resolves) would free it while the clone
+    # (which did not) handed out a shallow copy sharing the same pointer: double free (#183).
     variants_nc = [
         (i, v) for i, v in enumerate(value_type.variants)
-        if v.associated_types and any(needs_cleanup(t) for t in v.associated_types)
+        if v.associated_types and any(field_needs_cleanup(codegen, t) for t in v.associated_types)
     ]
     if not variants_nc:
         return value  # no owning payload in any variant -> nothing to clone
@@ -698,7 +704,7 @@ def _clone_enum_value(codegen: 'LLVMCodegen', value: ir.Value, value_type) -> ir
 
         offset = 0
         for assoc_type in variant.associated_types:
-            if needs_cleanup(assoc_type):
+            if field_needs_cleanup(codegen, assoc_type):
                 data_i8_ptr = b.bitcast(data_ptr, ir.PointerType(ir.IntType(8)),
                                         name="clone_enum_data_i8")
                 field_i8_ptr = b.gep(data_i8_ptr, [make_i32_const(offset)],

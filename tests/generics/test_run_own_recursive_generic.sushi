@@ -9,11 +9,12 @@
 # end to end: it compiles, constructs both variants (including a real Own alloc),
 # and matches. (CLAUDE.md limitation #12.)
 #
-# NOT leak-gated (known bug): the destructor for a recursive Own<Tree<T>> payload
-# drops the inner free -- ~12 B leak per recursion level, confirmed by the malloc
-# interposer (macOS `leaks` misses it because the block stays reachable). Re-add the
-# leak assertion once the recursive-Own destructor is fixed. See PLAN.md Phase 5.5.
+# Leak-gated again (#162 fixed): the destructor used to drop the inner free, ~12 B per
+# recursion level. needs_cleanup() answered False for Own<T>/List<T> -- their only fields
+# are raw pointers -- so the Node(Own<Tree<T>>) variant was omitted from the destructor's
+# discriminant switch entirely, and nothing freed the payload.
 # EXPECT_STDOUT_EXACT: "leaf\nnode\n"
+# EXPECT_NO_LEAKS: true
 
 enum Tree<T>:
     Leaf

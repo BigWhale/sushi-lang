@@ -590,9 +590,16 @@ def _extract_own_pattern(codegen: 'LLVMCodegen', own_pattern: 'OwnPattern', own_
     # Bind the inner pattern
     inner_pattern = own_pattern.inner_pattern
     if isinstance(inner_pattern, str):
-        # Simple binding: create local variable for the unwrapped value (skip wildcards "_")
+        # Simple binding: create local variable for the unwrapped value (skip wildcards "_").
+        # The binding BORROWS the Own's pointee -- the Own<T> still owns that heap block and
+        # frees it at scope exit -- so it must NOT be registered for its own RAII free, the
+        # same rule the plain match-arm binding follows above. Registering it double-freed
+        # the pointee. This was latent: the enum destructor used to no-op on an Own payload
+        # (needs_cleanup answered False for Own<T>), so the extra free destroyed nothing.
+        # Fixing that no-op (#162/#183) made the bogus owner real.
         if inner_pattern != "_":
-            codegen.memory.create_local(inner_pattern, element_llvm_type, unwrapped_value, element_type)
+            codegen.memory.create_local(inner_pattern, element_llvm_type, unwrapped_value,
+                                        element_type, register_cleanup=False)
     elif isinstance(inner_pattern, PatternNode):
         # Nested pattern: recursively extract and validate the unwrapped value
         _extract_nested_pattern(codegen, inner_pattern, unwrapped_value, element_type, next_arm_bb)

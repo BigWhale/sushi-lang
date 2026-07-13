@@ -1,0 +1,28 @@
+# Regression for #162: a recursive Own<Tree<T>> leaked ~12 B per level (measured 12/36/60 at
+# depths 1/3/5 -- linear in depth, so the whole chain was dropped, not a fixed overhead).
+# tests/generics/test_run_own_recursive_generic.sushi is the depth-1 form, now leak-gated again.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "node"
+# EXPECT_NO_LEAKS: true
+
+enum Tree<T>:
+    Leaf
+    Node(Own<Tree<T>>)
+
+
+fn main() i32:
+    let Tree<i32> t0 = Tree.Leaf()
+    let Own<Tree<i32>> c1 = Own.alloc(t0)
+    let Tree<i32> t1 = Tree.Node(c1)
+    let Own<Tree<i32>> c2 = Own.alloc(t1)
+    let Tree<i32> t2 = Tree.Node(c2)
+    let Own<Tree<i32>> c3 = Own.alloc(t2)
+    let Tree<i32> t3 = Tree.Node(c3)
+    let Own<Tree<i32>> c4 = Own.alloc(t3)
+    let Tree<i32> t4 = Tree.Node(c4)
+    let Own<Tree<i32>> c5 = Own.alloc(t4)
+    let Tree<i32> t5 = Tree.Node(c5)
+    match t5:
+        Tree.Leaf() -> println("leaf")
+        Tree.Node(_) -> println("node")
+    return Result.Ok(0)

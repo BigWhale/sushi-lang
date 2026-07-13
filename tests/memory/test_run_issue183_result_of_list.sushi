@@ -1,0 +1,18 @@
+# Regression for #183 + #179 together: Result<List<i32>>. Needed BOTH fixes -- the Ok payload
+# arrives as a GenericTypeRef('List', (i32,)), an unresolved reference that every cleanup
+# predicate fell through to False on, and List itself was gated out by needs_cleanup.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "ok = true"
+# EXPECT_NO_LEAKS: true
+
+fn mk() List<i32>:
+    let List<i32> l = List.new()
+    l.push(1)
+    l.push(2)
+    l.push(3)
+    return Result.Ok(l)
+
+fn main() i32:
+    let Result<List<i32>, StdError> r = mk()
+    println("ok = {r.is_ok()}")
+    return Result.Ok(0)

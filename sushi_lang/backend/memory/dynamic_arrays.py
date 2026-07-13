@@ -578,14 +578,8 @@ class DynamicArrayManager:
         `enum Tree: Node(Own<Tree>)`) terminates instead of looping.
         """
         from sushi_lang.semantics.typesys import (
-            UnknownType, FunctionType, BuiltinType, StructType, EnumType)
-        from sushi_lang.backend.destructors import result_ok_err
-        # Resolve a named type to its concrete struct/enum definition.
-        if isinstance(ty, UnknownType):
-            if ty.name in self.codegen.struct_table.by_name:
-                ty = self.codegen.struct_table.by_name[ty.name]
-            elif ty.name in self.codegen.enum_table.by_name:
-                ty = self.codegen.enum_table.by_name[ty.name]
+            FunctionType, BuiltinType, StructType, EnumType)
+        from sushi_lang.backend.destructors import result_ok_err, resolve_named_type
 
         # A Result<T, E> field/payload is an enum carrying T and E, but it reaches us as a
         # ResultType / GenericTypeRef, which match no branch below -- so a struct or enum
@@ -594,6 +588,12 @@ class DynamicArrayManager:
         if result_args is not None:
             return (self._payload_needs_cleanup(result_args[0])
                     or self._payload_needs_cleanup(result_args[1]))
+
+        # Resolve a named type -- UnknownType('Box') or GenericTypeRef('List', (i32,)), the
+        # latter being how the Ok payload of Result<List<i32>, E> arrives -- to its concrete
+        # struct/enum definition. An unresolved reference matches no branch below and is
+        # silently reported as owning nothing (#183).
+        ty = resolve_named_type(self.codegen, ty)
 
         if isinstance(ty, DynamicArrayType):
             return True

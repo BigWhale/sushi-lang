@@ -90,6 +90,9 @@ def emit_value_destructor(
     # composite arm below sees it. Without this it matches no arm and, because the chain
     # has no `else`, silently destroys nothing (#179).
     value_type = resolve_result_type(codegen, value_type)
+    # ...and a named / generic reference (UnknownType('Box'), GenericTypeRef('List', (i32,)))
+    # to the concrete struct/enum it names, so the dispatch below lands on a real class.
+    value_type = resolve_named_type(codegen, value_type)
 
     # Strings: runtime-guarded free of the heap buffer via the owned bit (#145). A literal /
     # borrow carries owned=0, making the free a no-op -- same data-driven discipline as the
@@ -333,8 +336,9 @@ def _emit_dynamic_array_destructor(
     )
 
     with builder.if_then(is_not_null):
-        # Check if element type needs cleanup
-        if needs_cleanup(value_type.base_type):
+        # Check if element type needs cleanup (resolving a named/generic element first --
+        # an unresolved name answers False and the elements are silently leaked)
+        if field_needs_cleanup(codegen, value_type.base_type):
             # Load array length
             len_ptr = builder.gep(value_ptr, [
                 ZERO_I32,
@@ -429,8 +433,8 @@ def _emit_struct_destructor(
     else:
         # Regular struct: recursively destroy each field
         for i, (field_name, field_type) in enumerate(value_type.fields):
-            # Check if field needs cleanup
-            if needs_cleanup(field_type):
+            # Check if field needs cleanup (resolving a named/generic field type first)
+            if field_needs_cleanup(codegen, field_type):
                 field_ptr = builder.gep(value_ptr, [
                     ZERO_I32,
                     make_i32_const(i)
@@ -462,7 +466,7 @@ def _emit_list_value_destructor(
 
     is_not_null = builder.icmp_unsigned("!=", data_ptr, ir.Constant(data_ptr.type, None))
     with builder.if_then(is_not_null):
-        if needs_cleanup(element_type):
+        if field_needs_cleanup(codegen, element_type):
             from sushi_lang.backend.generics.container_walk import emit_container_walk
 
             len_ptr = builder.gep(value_ptr, [ZERO_I32, ZERO_I32], name="list_len_field")
@@ -562,18 +566,41 @@ def _emit_enum_destructor(
 
 
 def resolve_named_type(codegen: LLVMCodegen, value_type: Type) -> Type:
-    """Resolve an `UnknownType` name against the struct and enum tables.
+    """Resolve a named or generic type reference against the struct and enum tables.
 
     A named type may be a struct OR an enum. `needs_cleanup` and
     `emit_value_destructor` both dispatch on the resolved class, so an unresolved
     name silently reports "no cleanup needed" and destroys nothing.
+
+    Handles two unresolved spellings:
+      - `UnknownType('Box')`      -- a bare named struct/enum
+      - `GenericTypeRef('List', (i32,))` -- e.g. the Ok payload of `Result<List<i32>, E>`
+
+    A monomorphized generic is interned under its mangled name ("List<i32>"), which is
+    exactly what `str()` spells for a GenericTypeRef.
     """
     from sushi_lang.semantics.typesys import UnknownType
-    if not isinstance(value_type, UnknownType):
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    if isinstance(value_type, UnknownType):
+        name = value_type.name
+    elif isinstance(value_type, GenericTypeRef):
+        name = str(value_type)
+    else:
         return value_type
-    return (codegen.struct_table.by_name.get(value_type.name)
-            or codegen.enum_table.by_name.get(value_type.name)
+    return (codegen.struct_table.by_name.get(name)
+            or codegen.enum_table.by_name.get(name)
             or value_type)
+
+
+def field_needs_cleanup(codegen: LLVMCodegen, value_type: Type) -> bool:
+    """`needs_cleanup`, but resolving a named/generic reference first.
+
+    `needs_cleanup` is deliberately table-free (it is called from contexts with no
+    codegen), so it answers False for any unresolved name. Every recursion gate that
+    reads a payload type off a struct field, array element, List element or enum variant
+    must therefore resolve first, or the member is silently skipped and leaked.
+    """
+    return needs_cleanup(resolve_named_type(codegen, value_type))
 
 
 def needs_cleanup(value_type: Type) -> bool:
@@ -614,6 +641,21 @@ def needs_cleanup(value_type: Type) -> bool:
     elif isinstance(value_type, DynamicArrayType):
         return True  # Dynamic arrays need cleanup
     elif isinstance(value_type, StructType):
+        # Own<T> / List<T> always own a heap allocation, but their only fields are raw
+        # pointers -- so the field scan below answered False and every recursion gate in
+        # this module skipped them. An Own/List nested in an enum payload, a struct field,
+        # an array element or a List element was therefore registered as owning heap by
+        # dynamic_arrays._payload_needs_cleanup (which HAS this check) and then dropped by
+        # the destructor meant to free it. That mismatch is #162 (recursive Own<Tree<T>>,
+        # ~12 B/level) and #183 (Maybe<List<T>>, Maybe<Own<T>>).
+        #
+        # This predicate gates RECURSION only. The top-level registration gate uses
+        # dynamic_arrays.struct_needs_cleanup, and a top-level Own/List local is owned by
+        # its own registry (register_own / register_list) and deliberately NOT by
+        # _struct_cleanup -- so do not "unify" the two predicates by teaching that gate the
+        # same trick, or such a local lands in both registries and double-frees.
+        if value_type.name.startswith("Own<") or value_type.name.startswith("List<"):
+            return True
         # Structs need cleanup if any field needs cleanup
         return any(needs_cleanup(field_type) for _, field_type in value_type.fields)
     elif isinstance(value_type, EnumType):
