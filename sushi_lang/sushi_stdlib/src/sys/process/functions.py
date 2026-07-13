@@ -81,10 +81,11 @@ def generate_getcwd(module: ir.Module) -> None:
     builder.position_at_end(success_block)
     str_len = builder.call(strlen_fn, [result_ptr])
     str_len_i32 = builder.trunc(str_len, i32)
-    sushi_string = cstr_to_fat_pointer_with_len(builder, result_ptr, str_len_i32, owned=0)
-
-    # Note: Do NOT free the buffer - the fat pointer points to it,
-    # and Sushi's RAII will handle cleanup when the string goes out of scope
+    # owned=1: the buffer is a live malloc and the fat pointer is its sole owner, so RAII
+    # must free it at scope exit. It was owned=0 (the "literal / borrow, never free" bit),
+    # which leaked all 4096 bytes on every call (#177). Do NOT free it here -- the string
+    # owns it now.
+    sushi_string = cstr_to_fat_pointer_with_len(builder, result_ptr, str_len_i32, owned=1)
 
     # Pack into Result.Ok
     result_ok = builder.alloca(result_type)

@@ -390,6 +390,11 @@ class ScopeManager:
 
             # Track struct / enum variables that need cleanup
             from sushi_lang.semantics.typesys import StructType, EnumType, FunctionType, BuiltinType
+            from sushi_lang.backend.destructors import resolve_result_type
+            # A Result<T, E> local is an enum at runtime but reaches us as a ResultType,
+            # which matches none of the branches below -- so it was registered in no
+            # cleanup registry at all and its owning payload leaked (#179).
+            semantic_ty = resolve_result_type(self.codegen, semantic_ty)
             if not register_cleanup:
                 pass  # borrow-like binding: aliases memory owned elsewhere, do not free
             elif isinstance(semantic_ty, (StructType, EnumType)):
@@ -454,6 +459,11 @@ class ScopeManager:
 
             # Track struct / enum variables that need cleanup
             from sushi_lang.semantics.typesys import StructType, EnumType, FunctionType, BuiltinType
+            from sushi_lang.backend.destructors import resolve_result_type
+            # A Result<T, E> local is an enum at runtime but reaches us as a ResultType,
+            # which matches none of the branches below -- so it was registered in no
+            # cleanup registry at all and its owning payload leaked (#179).
+            semantic_ty = resolve_result_type(self.codegen, semantic_ty)
             if isinstance(semantic_ty, (StructType, EnumType)):
                 # An enum local whose active variant owns heap (a dynamic-array / string /
                 # closure / owning-struct payload) is freed at scope exit like a struct

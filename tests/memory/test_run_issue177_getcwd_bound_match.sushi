@@ -1,0 +1,18 @@
+# Regression for #177: getcwd() through ?? in a helper, the Result bound and matched in main.
+# TEST_CWD: /
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "cwd = "
+# EXPECT_NO_LEAKS: true
+
+use <sys/process>
+
+fn read_cwd() string | ProcessError:
+    let string cwd = getcwd()??
+    return Result.Ok(cwd)
+
+fn main() i32:
+    let Result<string, ProcessError> r = read_cwd()
+    match r:
+        Result.Ok(p) -> println("cwd = {p}")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

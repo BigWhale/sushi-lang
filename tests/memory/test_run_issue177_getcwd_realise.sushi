@@ -1,0 +1,14 @@
+# Regression for #177. This was the probe that proved #177 is INDEPENDENT of #179 rather than a
+# symptom of it: .realise() moves the payload out of the Result shell, so the #179 leak cannot
+# explain it -- yet it still leaked all 4096 bytes. Only owned=0 can do that.
+# EXPECT_RUNTIME_EXIT: 0
+# TEST_CWD: /
+# EXPECT_STDOUT_CONTAINS: "cwd = "
+# EXPECT_NO_LEAKS: true
+
+use <sys/process>
+
+fn main() i32:
+    let string cwd = getcwd().realise("/nope")
+    println("cwd = {cwd}")
+    return Result.Ok(0)

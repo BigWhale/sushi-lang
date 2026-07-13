@@ -1,0 +1,31 @@
+# Regression for #179 on the ?? propagation path, in a NON-main function, with the Err path
+# actually taken. Carries two owners of distinct weight -- the Result<string> (16 B) and an
+# unrelated bare i32[32] (128 B) -- so the byte count alone says which the error path frees.
+# It frees the array: CLAUDE.md's 'RAII-safe with automatic cleanup on error path' holds.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "ok = true"
+# EXPECT_STDOUT_CONTAINS: "err taken"
+# EXPECT_NO_LEAKS: true
+
+enum MyErr:
+    Boom
+
+fn mk() string:
+    return Result.Ok("xxxxxxxxxxxx{'abcd'}")
+
+fn fails() i32 | MyErr:
+    return Result.Err(MyErr.Boom)
+
+fn probe() i32 | MyErr:
+    let Result<string, StdError> r = mk()
+    let i32[] big = from([0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3])
+    println("ok = {r.is_ok()} big = {big.len()}")
+    let i32 v = fails()??
+    println("unreachable {v}")
+    return Result.Ok(v)
+
+fn main() i32:
+    match probe():
+        Result.Ok(v) -> println("v = {v}")
+        Result.Err(_) -> println("err taken")
+    return Result.Ok(0)

@@ -15,12 +15,53 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 import llvmlite.ir as ir
 
-from sushi_lang.semantics.typesys import Type, BuiltinType, DynamicArrayType, StructType, EnumType, FunctionType
+from sushi_lang.semantics.typesys import (
+    Type, BuiltinType, DynamicArrayType, StructType, EnumType, FunctionType, ResultType)
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, DA_DATA_INDEX
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, ONE_I32, make_i32_const
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
+
+
+def result_ok_err(value_type: Type) -> tuple[Type, Type] | None:
+    """The (ok, err) type args if `value_type` spells a `Result<T, E>`, else None.
+
+    `Result<T, E>` reaches the backend in THREE shapes, and only the third is an enum:
+      - `ResultType`     -- stamped on every call's return type by Pass 2
+      - `GenericTypeRef` -- what an explicit `let Result<T, E> r = ...` annotation stays as
+      - `EnumType`       -- the interned form, which is what it actually is at runtime
+
+    `Maybe<T>` has only ever had the last shape, which is the whole reason `Maybe` locals
+    are freed and `Result` locals leaked (#179): every RAII predicate keys on
+    `isinstance(..., EnumType)` and the first two shapes match none of them.
+    """
+    if isinstance(value_type, ResultType):
+        return value_type.ok_type, value_type.err_type
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    if isinstance(value_type, GenericTypeRef) and value_type.base_name == "Result":
+        if len(value_type.type_args) == 2:
+            return value_type.type_args[0], value_type.type_args[1]
+    return None
+
+
+def resolve_result_type(codegen: LLVMCodegen, value_type: Type) -> Type:
+    """Resolve a `Result<T, E>` in any spelling to the `EnumType` it is at runtime (#179).
+
+    `ll_type` / `match` / sizing already intern it this way via
+    `ensure_result_type_in_table`; the cleanup path did not, so a `Result` local was
+    registered in no cleanup registry and its owning payload was never freed.
+
+    Callers with no `enum_table` in scope cannot use this -- they must destructure the
+    (ok, err) pair structurally instead (see `needs_cleanup`).
+    """
+    args = result_ok_err(value_type)
+    if args is not None:
+        from sushi_lang.semantics.generics.results import ensure_result_type_in_table
+        resolved = ensure_result_type_in_table(codegen.enum_table, args[0], args[1])
+        if resolved is not None:
+            return resolved
+    return value_type
 
 
 def emit_value_destructor(
@@ -45,6 +86,11 @@ def emit_value_destructor(
         value_ptr: Pointer to the value to destroy (not the value itself)
         value_type: The Sushi type of the value
     """
+    # A `Result<T, E>` is a tagged enum at runtime; resolve it to the EnumType so the
+    # composite arm below sees it. Without this it matches no arm and, because the chain
+    # has no `else`, silently destroys nothing (#179).
+    value_type = resolve_result_type(codegen, value_type)
+
     # Strings: runtime-guarded free of the heap buffer via the owned bit (#145). A literal /
     # borrow carries owned=0, making the free a no-op -- same data-driven discipline as the
     # closure drop_ptr (ownership can't be told from the uniform `string` type alone).
@@ -455,14 +501,22 @@ def _emit_enum_destructor(
     variants_needing_cleanup = []
     for i, variant in enumerate(value_type.variants):
         if variant.associated_types:
-            # Check if any associated type needs cleanup
-            if any(needs_cleanup(assoc_type) for assoc_type in variant.associated_types):
-                variants_needing_cleanup.append((i, variant))
+            # Resolve named payloads FIRST. A variant payload can arrive as a bare
+            # UnknownType -- e.g. the Ok payload of `Result<Box, StdError>` is
+            # UnknownType('Box') -- and needs_cleanup() is documented to answer False for
+            # an unresolved name. That silently dropped the variant from the switch below,
+            # so its heap was never freed (#179). Maybe<Box> escaped this only because its
+            # payload happens to reach us already resolved.
+            resolved_types = tuple(
+                resolve_named_type(codegen, assoc_type)
+                for assoc_type in variant.associated_types)
+            if any(needs_cleanup(assoc_type) for assoc_type in resolved_types):
+                variants_needing_cleanup.append((i, variant, resolved_types))
 
     if variants_needing_cleanup:
         # Create basic blocks for each variant that needs cleanup
         cleanup_blocks = {}
-        for tag_val, variant in variants_needing_cleanup:
+        for tag_val, variant, _resolved in variants_needing_cleanup:
             cleanup_blocks[tag_val] = builder.append_basic_block(name=f"cleanup_variant_{variant.name}")
 
         end_block = builder.append_basic_block(name="enum_cleanup_end")
@@ -471,17 +525,17 @@ def _emit_enum_destructor(
         switch = builder.switch(tag, end_block)
 
         # Add cases for each variant that needs cleanup
-        for tag_val, variant in variants_needing_cleanup:
+        for tag_val, variant, _resolved in variants_needing_cleanup:
             tag_const = make_i32_const(tag_val)
             switch.add_case(tag_const, cleanup_blocks[tag_val])
 
         # Emit cleanup code for each variant
-        for tag_val, variant in variants_needing_cleanup:
+        for tag_val, variant, resolved_types in variants_needing_cleanup:
             builder.position_at_end(cleanup_blocks[tag_val])
 
             # Calculate offset into data array for each associated value
             offset = 0
-            for j, assoc_type in enumerate(variant.associated_types):
+            for j, assoc_type in enumerate(resolved_types):
                 if needs_cleanup(assoc_type):
                     # Get pointer to this field within the data array
                     # Cast the [N x i8]* to i8* first
@@ -537,6 +591,14 @@ def needs_cleanup(value_type: Type) -> bool:
     from sushi_lang.semantics.typesys import ForeignPtrType
     if isinstance(value_type, ForeignPtrType):
         return False  # Foreign `ptr` is unmanaged: RAII never frees it
+    result_args = result_ok_err(value_type)
+    if result_args is not None:
+        # `Result<T, E>` is an enum whose two variants carry T and E. This predicate has no
+        # enum_table to intern through (unlike emit_value_destructor, which resolves via
+        # resolve_result_type), so answer structurally -- same answer, no table needed.
+        # Without this a Result nested in a struct field / enum payload / array element is
+        # gated out of every recursion and never freed (#179).
+        return needs_cleanup(result_args[0]) or needs_cleanup(result_args[1])
     if isinstance(value_type, FunctionType):
         # A function value may own a heap environment (a capturing closure). Capture is
         # erased from the type, so we conservatively treat every function value as
