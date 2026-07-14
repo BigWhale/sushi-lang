@@ -694,20 +694,11 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if not isinstance(generic_type, GenericTypeRef):
             return generic_type
 
-        # Special handling for Result<T, E> - convert to ResultType
+        # Result<T, E> interns to its EnumType, like every other generic.
         if generic_type.base_name == "Result" and len(generic_type.type_args) == 2:
-            # Recursively resolve type arguments in case they're also generic
-            ok_type = resolve_unknown_type(
-                generic_type.type_args[0],
-                self.type_validator.struct_table.by_name,
-                self.type_validator.enum_table.by_name
-            )
-            err_type = resolve_unknown_type(
-                generic_type.type_args[1],
-                self.type_validator.struct_table.by_name,
-                self.type_validator.enum_table.by_name
-            )
-            return ResultType(ok_type=ok_type, err_type=err_type)
+            interned = self._intern_result(generic_type.type_args[0], generic_type.type_args[1])
+            if interned is not None:
+                return interned
 
         # For other generic types (Maybe, Own, etc.), return as-is
         # They will be handled by monomorphization
@@ -961,7 +952,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if not isinstance(node.callee, Name):
             callee_ty = self.type_validator.infer_expression_type(node.callee)
             if isinstance(callee_ty, FunctionType):
-                return ResultType(ok_type=callee_ty.ok_type, err_type=callee_ty.err_type)
+                return self._intern_result(callee_ty.ok_type, callee_ty.err_type)
             return None
 
         # Look up function return type
@@ -971,7 +962,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         # exactly like a direct call (so `f(x)??` unwraps to ok_type).
         callee_var_ty = self.type_validator.variable_types.get(function_name)
         if isinstance(callee_var_ty, FunctionType):
-            return ResultType(ok_type=callee_var_ty.ok_type, err_type=callee_var_ty.err_type)
+            return self._intern_result(callee_var_ty.ok_type, callee_var_ty.err_type)
 
         # Check if this is a struct constructor
         if function_name in self.type_validator.struct_table.by_name:
@@ -1163,10 +1154,9 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         # Result<ok, err>, exactly like a direct call (so `obj.handler(x)??` unwraps).
         fn_field_ty = resolve_fn_field_call(self.type_validator, node)
         if fn_field_ty is not None:
-            from sushi_lang.semantics.typesys import ResultType
             node.callee_fn_type = fn_field_ty
-            node.inferred_return_type = ResultType(ok_type=fn_field_ty.ok_type,
-                                                   err_type=fn_field_ty.err_type)
+            node.inferred_return_type = self._intern_result(fn_field_ty.ok_type,
+                                                            fn_field_ty.err_type)
             return node.inferred_return_type
 
         # Otherwise, it's a method call - infer return type from method
