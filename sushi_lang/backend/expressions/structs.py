@@ -9,8 +9,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
-from sushi_lang.semantics.ast import Expr, Name, Call, MemberAccess, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom
-from sushi_lang.semantics.typesys import UnknownType, StructType, EnumType, DynamicArrayType, ReferenceType, BuiltinType
+from sushi_lang.semantics.ast import (
+    Expr, Name, Call, MemberAccess, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom,
+    IndexAccess,
+)
+from sushi_lang.semantics.typesys import (
+    UnknownType, StructType, EnumType, ArrayType, DynamicArrayType, ReferenceType, BuiltinType,
+)
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -272,6 +277,12 @@ def try_get_struct_alloca(codegen: 'LLVMCodegen', receiver_expr: Expr) -> Option
             name=f"{receiver_expr.member}_ptr"
         )
         return field_ptr
+    elif isinstance(receiver_expr, IndexAccess):
+        # `a[i].field` -- GEP into the element rather than loading it (#187). Loading would
+        # hand back a struct VALUE, and a dynamic-array field must be reached by ADDRESS:
+        # `.len()`/`.push()` dispatch on the field's pointer, so a copy makes them fail.
+        from sushi_lang.backend.types.arrays.indexing import emit_element_pointer
+        return emit_element_pointer(codegen, receiver_expr)
     else:
         # Other expressions (method calls, etc.) - can't get alloca
         return None
@@ -392,5 +403,47 @@ def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
 
         raise_internal_error("CE0069", method=expr.method)
 
+    elif isinstance(expr, IndexAccess):
+        # `a[i].field` -- the struct is the indexed array's ELEMENT type. Both a fixed `T[N]`
+        # and a dynamic `T[]` index to their element (#187): without this arm, reading a field
+        # off an indexed element fell through to CE0067 and reported itself as a compiler bug.
+        # Pass 2 already infers exactly this (passes/types/inference.py::infer_index_access_type);
+        # this mirrors its rule rather than inventing a second one.
+        array_type = _indexed_array_type(codegen, expr.array)
+        if isinstance(array_type, (ArrayType, DynamicArrayType)):
+            return _resolve_struct_type(codegen, array_type.base_type, "CE0043")
+        raise_internal_error("CE0043", type=str(array_type))
+
     else:
         raise_internal_error("CE0067", expr=type(expr).__name__)
+
+
+def _indexed_array_type(codegen: 'LLVMCodegen', array_expr: Expr):
+    """Semantic type of the array being indexed (a local, or a struct field)."""
+    if isinstance(array_expr, Name):
+        array_type = codegen.memory.find_semantic_type(array_expr.id)
+        if isinstance(array_type, ReferenceType):
+            array_type = array_type.referenced_type
+        return array_type
+    if isinstance(array_expr, MemberAccess):
+        parent = infer_struct_type(codegen, array_expr.receiver)
+        return parent.get_field_type(array_expr.member)
+    return None
+
+
+def _resolve_struct_type(codegen: 'LLVMCodegen', ty, err_code: str) -> StructType:
+    """Resolve a declared type to the concrete StructType it names."""
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+
+    if isinstance(ty, StructType):
+        return ty
+    if isinstance(ty, UnknownType):
+        if ty.name not in codegen.struct_table.by_name:
+            raise_internal_error("CE0020", type=ty.name)
+        return codegen.struct_table.by_name[ty.name]
+    if isinstance(ty, GenericTypeRef):
+        type_args_str = ", ".join(str(arg) for arg in ty.type_args)
+        struct_name = f"{ty.base_name}<{type_args_str}>"
+        if struct_name in codegen.struct_table.by_name:
+            return codegen.struct_table.by_name[struct_name]
+    raise_internal_error(err_code, type=str(ty))

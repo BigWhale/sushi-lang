@@ -1,0 +1,18 @@
+# Regression for #187: reading a struct field through an index into a FIXED array (a[0].data) was an
+# ICE -- CE0067, "cannot infer struct type from expression: IndexAccess". infer_struct_type in the
+# backend has arms for Name, MemberAccess, MethodCall and DotCall, and its else branch raises. Pass 2
+# already infers this correctly (infer_index_access_type); the backend simply never grew the arm.
+# This is a type-inference gap, NOT the RAII gap in #185 -- deliberately a separate issue and test.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "len = 8"
+
+struct Box:
+    i32[] data
+
+
+fn main() i32:
+    let Box b1 = Box(data: from([1, 2, 3, 4, 5, 6, 7, 8]))
+    let Box b2 = Box(data: from([9, 10, 11, 12]))
+    let Box[2] a = [b1, b2]
+    println("len = {a[0].data.len()}")
+    return Result.Ok(0)
