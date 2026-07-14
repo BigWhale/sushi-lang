@@ -1,0 +1,20 @@
+# Regression for #185: the hole is wider than a missing registration -- destructors.py has no
+# ArrayType arm at all. needs_cleanup() answers False for an ArrayType, so a fixed-size array FIELD
+# inside a struct is gated out of the struct destructor's field recursion and is never freed, even
+# though the struct itself IS registered.
+# The array field is only CONSTRUCTED here, never indexed: reading a fixed-array field back is a
+# separate ICE (#200), and observing this leak does not require reading it. The sibling `count`
+# field exists purely so the struct can be used without touching the array.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "count = 3"
+# EXPECT_NO_LEAKS: true
+
+struct Holder:
+    string[3] names
+    i32 count
+
+
+fn main() i32:
+    let Holder h = Holder(names: ["xxxxxxxxxxxx{'abcd'}", "xxxxxxxxxxxx{'efgh'}", "xxxxxxxxxxxx{'ijkl'}"], count: 3)
+    println("count = {h.count}")
+    return Result.Ok(0)

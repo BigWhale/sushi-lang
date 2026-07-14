@@ -1,0 +1,11 @@
+# Regression for #185: a fixed-size array local (string[3]) is registered in NO cleanup registry.
+# ArrayType matches no branch in either registration chain in scopes.py (which handles only
+# StructType/EnumType, FunctionType and BuiltinType.STRING), so no exit path can ever free it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "first = "
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let string[3] a = ["xxxxxxxxxxxx{'abcd'}", "xxxxxxxxxxxx{'efgh'}", "xxxxxxxxxxxx{'ijkl'}"]
+    println("first = {a[0]}")
+    return Result.Ok(0)
