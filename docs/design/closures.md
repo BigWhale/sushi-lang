@@ -378,7 +378,7 @@ evaluates to a function value now works, reusing the fat-pointer indirect-call p
 Mechanically: the AST builder now emits a general `Call` for a non-`Name`, non-`MemberAccess` call
 base; the type checker infers the non-`Name` callee and, when it resolves to a `FunctionType`,
 dispatches to the same indirect-call validator used for a named local, annotating the node for the
-backend. `??` was also taught to unwrap a `ResultType` **and** a `Maybe` `Some` payload, so a
+backend. `??` was also taught to unwrap a `Result` **and** a `Maybe` `Some` payload, so a
 function-value call inside a lambda body can infer its return type through a `Maybe`-returning
 chain, not just a `Result`-returning one.
 
