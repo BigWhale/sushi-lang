@@ -110,11 +110,11 @@ def _register_temp_scrutinee(codegen: 'LLVMCodegen', scrutinee: 'Expr', scrutine
     A bound scrutinee (a Name / field read) is already owned by whoever declared it -- taking a
     second owner here would double-free at scope exit.
     """
-    from sushi_lang.backend.expressions.memory import enum_temp_is_unowned
+    from sushi_lang.backend.expressions.memory import expression_is_temporary
     from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
     from sushi_lang.semantics.typesys import EnumType
 
-    if not enum_temp_is_unowned(codegen, scrutinee):
+    if not expression_is_temporary(scrutinee):
         return False
 
     # `needs_cleanup` is table-free -- an unresolved UnknownType answers False, which is how a
