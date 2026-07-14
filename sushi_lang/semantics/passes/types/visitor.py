@@ -458,8 +458,15 @@ class ExpressionValidator(RecursiveVisitor):
             self._validate_from_bits(node)
             return
 
-        # Validate receiver first
-        self.type_validator.validate_expression(node.receiver)
+        # The receiver is deliberately NOT validated here. Every path out of this method either
+        # does not have a receiver to validate, or delegates to something that validates it --
+        # and validating it here as well walked the receiver TWICE, so any diagnostic inside it
+        # was reported twice (#201). Errors, not just warnings.
+        #
+        #   enum constructor  -- the receiver is a type NAME, not a value; nothing to validate
+        #   fn-typed field    -- validated explicitly in that branch, below
+        #   method call       -- validate_method_call validates it (calls/methods.py), as it must
+        #                        anyway for a real MethodCall node reaching visit_methodcall
 
         # Check if receiver is an enum type name
         if isinstance(node.receiver, Name):
@@ -496,6 +503,8 @@ class ExpressionValidator(RecursiveVisitor):
         # node.callee_fn_type to emit the fat-pointer indirect call.
         fn_field_ty = resolve_fn_field_call(self.type_validator, node)
         if fn_field_ty is not None:
+            # This branch does not reach validate_method_call, so it owns the receiver walk.
+            self.type_validator.validate_expression(node.receiver)
             node.callee_fn_type = fn_field_ty
             validate_fn_field_call_args(self.type_validator, node, fn_field_ty)
             return
