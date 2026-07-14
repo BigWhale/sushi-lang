@@ -111,6 +111,15 @@ def emit_enum_realise(
     # Emit the default value expression
     default_value = codegen.expressions.emit_expr(call.args[0])
 
+    # A dynamic-array default arrives as a POINTER: `from([...])` (emit_dynamic_array_from) hands
+    # back the array's alloca, not the {len, cap, data*} value the payload is compared and selected
+    # as. Load it. Without this the coercion ladder below -- which knows only int<->int and
+    # float<->float -- fell off its end and reported CE0017, an INTERNAL code, for the ordinary
+    # `r.realise(from([0]))` on a Result<i32[], E> (#186).
+    if (isinstance(default_value.type, ir.PointerType)
+            and default_value.type.pointee == value_llvm_type):
+        default_value = codegen.builder.load(default_value, name="realise_default_value")
+
     # Ensure default_value has the same LLVM type as unpacked_value
     # The LLVM select instruction requires both operands to have identical types
     if default_value.type != value_llvm_type:
