@@ -1,0 +1,20 @@
+# Regression for #200: reading an OWNING element out of a fixed-size array struct field.
+# Making the index work (the #200 ICE) newly exposes value semantics: the element loaded from
+# h.names[0] shallowly aliases the struct's own storage, and the struct still frees it -- so
+# binding it hands one buffer two owners and both free it. The element must be deep-copied on the
+# way out, exactly as an index into a fixed-array LOCAL already does.
+# This is the same shape as #203 (List.get aliasing) and #185 (the array literal): a value read out
+# of a container that keeps owning it must be copied.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "first = xxxxxxxxxxxxabcd"
+# EXPECT_NO_LEAKS: true
+
+struct Holder:
+    string[3] names
+
+
+fn main() i32:
+    let Holder h = Holder(names: ["xxxxxxxxxxxx{'abcd'}", "xxxxxxxxxxxx{'efgh'}", "xxxxxxxxxxxx{'ijkl'}"])
+    let string first = h.names[0]
+    println("first = {first}")
+    return Result.Ok(0)

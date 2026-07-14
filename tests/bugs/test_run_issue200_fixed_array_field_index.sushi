@@ -1,0 +1,19 @@
+# Regression for #200: indexing a fixed-size array that is a STRUCT FIELD was an ICE --
+# CE0000, "AttributeError: 'ArrayType' object has no attribute 'pointee'". emit_element_pointer
+# assumed the indexed expression yields an LLVM pointer, but a fixed array reached through a member
+# access arrives as an ArrayType VALUE (an extract_value of the field), not a pointer to one.
+# Not owning-type-specific: a plain i32[3] field is enough. Declaring and constructing such a field
+# already worked, and indexing a fixed-array LOCAL already worked -- only the index THROUGH a field
+# was broken.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "first = 1\nlast = 3\n"
+
+struct Holder:
+    i32[3] nums
+
+
+fn main() i32:
+    let Holder h = Holder(nums: [1, 2, 3])
+    println("first = {h.nums[0]}")
+    println("last = {h.nums[2]}")
+    return Result.Ok(0)
