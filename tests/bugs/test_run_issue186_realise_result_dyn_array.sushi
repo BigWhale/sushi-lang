@@ -1,0 +1,21 @@
+# Regression for #186: .realise() on a Result<i32[], E> was an ICE -- CE0017, "cannot convert value of
+# type '{i32, i32, i32*}*' to '{i32, i32, i32*}'". emit_enum_realise wants the payload as a VALUE, but
+# the default expression from([0]) is emitted by emit_dynamic_array_from, which returns an alloca --
+# a POINTER. The coercion ladder handles int/int and float/float, and falls off the end into the ICE.
+# Both P48 and P49 recorded this as silently fixed by the Result-enum consolidation. It was not.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "v = 8"
+# EXPECT_NO_LEAKS: true
+
+fn mk() i32[]:
+    return Result.Ok(from([1, 2, 3, 4, 5, 6, 7, 8]))
+
+fn probe() ~:
+    let Result<i32[], StdError> r = mk()
+    let i32[] v = r.realise(from([0]))
+    println("v = {v.len()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    probe()
+    return Result.Ok(0)
