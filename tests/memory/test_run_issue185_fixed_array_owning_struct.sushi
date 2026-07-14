@@ -1,0 +1,19 @@
+# Regression for #185, generality cell: a fixed array whose ELEMENTS are owning structs. It proves
+# the destructor recurses INTO the elements rather than merely freeing a flat buffer.
+# The elements are constructed INLINE, on purpose: binding them to locals first (let Box b1 = ...)
+# would leave those locals owning the buffers, and their own scope-exit cleanup would free them --
+# so the cell would pass without the array being destroyed at all, and prove nothing.
+# This cell was blocked until #187: reading a[0].data was a CE0067 ICE, so the fixed-array leak
+# could only ever be tested with string elements.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "len = 8"
+# EXPECT_NO_LEAKS: true
+
+struct Box:
+    i32[] data
+
+
+fn main() i32:
+    let Box[2] a = [Box(data: from([1, 2, 3, 4, 5, 6, 7, 8])), Box(data: from([9, 10, 11, 12]))]
+    println("len = {a[0].data.len()}")
+    return Result.Ok(0)

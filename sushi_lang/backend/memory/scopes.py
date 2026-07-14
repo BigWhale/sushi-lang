@@ -393,7 +393,7 @@ class ScopeManager:
             # GenericTypeRef('List', (i32,)), GenericTypeRef('Result', (T, E)) -- to the concrete
             # struct/enum it names. The branches below dispatch on the resolved class, so an
             # unresolved local is registered in NO cleanup registry and its payload leaks (#179).
-            from sushi_lang.semantics.typesys import StructType, EnumType, FunctionType, BuiltinType
+            from sushi_lang.semantics.typesys import StructType, EnumType, ArrayType, FunctionType, BuiltinType
             from sushi_lang.backend.destructors import resolve_named_type
             semantic_ty = resolve_named_type(self.codegen, semantic_ty)
             if not register_cleanup:
@@ -408,6 +408,15 @@ class ScopeManager:
                 if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
                     if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
                         self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
+            # A fixed-size array local (`string[3]`, `Box[2]`) whose ELEMENTS own heap. It owns no
+            # buffer of its own -- the storage is the alloca -- so it is not a dynamic array and
+            # has no registry of its own; it reuses the owning-value registry, whose drain calls
+            # the same recursion-safe emit_value_destructor. ArrayType matched NO branch in this
+            # chain, so such a local was registered nowhere and no exit path could free it (#185).
+            elif isinstance(semantic_ty, ArrayType):
+                from sushi_lang.backend.destructors import needs_cleanup
+                if needs_cleanup(semantic_ty):
+                    self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
             # Track function-value locals for runtime-guarded env free at scope exit.
             elif isinstance(semantic_ty, FunctionType):
                 self._closure_cleanup.setdefault(name, []).append((self._scope_depth, slot))
@@ -463,7 +472,7 @@ class ScopeManager:
             # GenericTypeRef('List', (i32,)), GenericTypeRef('Result', (T, E)) -- to the concrete
             # struct/enum it names. The branches below dispatch on the resolved class, so an
             # unresolved local is registered in NO cleanup registry and its payload leaks (#179).
-            from sushi_lang.semantics.typesys import StructType, EnumType, FunctionType, BuiltinType
+            from sushi_lang.semantics.typesys import StructType, EnumType, ArrayType, FunctionType, BuiltinType
             from sushi_lang.backend.destructors import resolve_named_type
             semantic_ty = resolve_named_type(self.codegen, semantic_ty)
             if isinstance(semantic_ty, (StructType, EnumType)):
@@ -476,6 +485,15 @@ class ScopeManager:
                 if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
                     if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
                         self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
+            # A fixed-size array local (`string[3]`, `Box[2]`) whose ELEMENTS own heap. It owns no
+            # buffer of its own -- the storage is the alloca -- so it is not a dynamic array and
+            # has no registry of its own; it reuses the owning-value registry, whose drain calls
+            # the same recursion-safe emit_value_destructor. ArrayType matched NO branch in this
+            # chain, so such a local was registered nowhere and no exit path could free it (#185).
+            elif isinstance(semantic_ty, ArrayType):
+                from sushi_lang.backend.destructors import needs_cleanup
+                if needs_cleanup(semantic_ty):
+                    self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
             # Track function-value locals for runtime-guarded env free at scope exit.
             elif isinstance(semantic_ty, FunctionType):
                 self._closure_cleanup.setdefault(name, []).append((self._scope_depth, slot))

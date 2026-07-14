@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 import llvmlite.ir as ir
 
 from sushi_lang.semantics.typesys import (
-    Type, BuiltinType, DynamicArrayType, StructType, EnumType, FunctionType)
+    Type, BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType, FunctionType)
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, DA_DATA_INDEX
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, ONE_I32, make_i32_const
 
@@ -72,7 +72,7 @@ def emit_value_destructor(
     # `enum MsgValue: Arr(MsgValue[])` or `Own<Tree>`), emits an out-of-line per-type
     # destructor function and calls it at the self-referential position, so cleanup
     # terminates via runtime recursion instead of unbounded compile-time inlining (#139).
-    elif isinstance(value_type, (DynamicArrayType, StructType, EnumType)):
+    elif isinstance(value_type, (DynamicArrayType, ArrayType, StructType, EnumType)):
         _emit_composite_destructor(codegen, builder, value_ptr, value_type)
 
     # Function values (closures): free the heap environment through the runtime-guarded
@@ -86,6 +86,8 @@ def _select_inline_destructor(value_type: Type):
     """Pick the inline destructor emitter for a composite type."""
     if isinstance(value_type, DynamicArrayType):
         return _emit_dynamic_array_destructor
+    if isinstance(value_type, ArrayType):
+        return _emit_fixed_array_destructor
     if isinstance(value_type, StructType):
         return _emit_struct_destructor
     if isinstance(value_type, EnumType):
@@ -101,6 +103,8 @@ def _dtor_type_key(value_type: Type) -> str:
     """
     if isinstance(value_type, DynamicArrayType):
         return "[]" + _dtor_type_key(value_type.base_type)
+    if isinstance(value_type, ArrayType):
+        return f"[{value_type.size}]" + _dtor_type_key(value_type.base_type)
     if isinstance(value_type, (StructType, EnumType)):
         return value_type.name
     return getattr(value_type, "name", type(value_type).__name__)
@@ -342,6 +346,53 @@ def _emit_dynamic_array_destructor(
         builder.call(free_func, [void_ptr])
 
 
+def _emit_fixed_array_destructor(
+    codegen: LLVMCodegen,
+    builder: ir.IRBuilder,
+    value_ptr: ir.Value,
+    value_type: 'ArrayType'
+) -> None:
+    """Emit destructor code for a fixed-size array `T[N]` (#185).
+
+    Unlike a dynamic array there is NO buffer to free: the storage is inline, in the alloca or in
+    the enclosing struct. Only the ELEMENTS can own heap, so this walks them and destroys each.
+    A non-owning element type is a no-op, so `i32[3]` emits nothing.
+
+    The count is the compile-time `size` rather than a loaded length field, and the elements are
+    reached by GEPing to the first and stepping -- llvmlite requires a constant index to GEP into
+    an array type, so a runtime index cannot be used directly. Kept a loop rather than unrolled so
+    a large N does not blow up the IR.
+    """
+    if not field_needs_cleanup(codegen, value_type.base_type):
+        return
+
+    count = ir.Constant(ZERO_I32.type, value_type.size)
+    first_elem = builder.gep(value_ptr, [ZERO_I32, ZERO_I32], name="fixed_first_elem")
+
+    loop_i = builder.alloca(ZERO_I32.type, name="fixed_cleanup_i")
+    builder.store(ZERO_I32, loop_i)
+
+    cond_bb = builder.append_basic_block(name="fixed_cleanup_cond")
+    body_bb = builder.append_basic_block(name="fixed_cleanup_body")
+    end_bb = builder.append_basic_block(name="fixed_cleanup_end")
+
+    builder.branch(cond_bb)
+
+    builder.position_at_end(cond_bb)
+    i_val = builder.load(loop_i, name="i_val")
+    cond = builder.icmp_unsigned("<", i_val, count, name="fixed_cleanup_cond")
+    builder.cbranch(cond, body_bb, end_bb)
+
+    builder.position_at_end(body_bb)
+    i_val = builder.load(loop_i, name="i_val")
+    element_ptr = builder.gep(first_elem, [i_val], name="fixed_element_ptr")
+    emit_value_destructor(codegen, builder, element_ptr, value_type.base_type)
+    builder.store(builder.add(i_val, ONE_I32, name="i_next"), loop_i)
+    builder.branch(cond_bb)
+
+    builder.position_at_end(end_bb)
+
+
 def _emit_struct_destructor(
     codegen: LLVMCodegen,
     builder: ir.IRBuilder,
@@ -543,6 +594,13 @@ def resolve_named_type(codegen: LLVMCodegen, value_type: Type) -> Type:
         name = value_type.name
     elif isinstance(value_type, GenericTypeRef):
         name = str(value_type)
+    elif isinstance(value_type, ArrayType):
+        # Resolve THROUGH a fixed array to its element. `Box[2]` arrives as
+        # ArrayType(base=UnknownType('Box')), and `needs_cleanup` is table-free -- so an
+        # unresolved element answers False and the whole array is silently treated as owning
+        # nothing (#185, and the same shape as #179).
+        base = resolve_named_type(codegen, value_type.base_type)
+        return value_type if base is value_type.base_type else ArrayType(base, value_type.size)
     else:
         return value_type
     return (codegen.struct_table.by_name.get(name)
@@ -608,6 +666,12 @@ def needs_cleanup(value_type: Type) -> bool:
             return True
         # Structs need cleanup if any field needs cleanup
         return any(needs_cleanup(field_type) for _, field_type in value_type.fields)
+    elif isinstance(value_type, ArrayType):
+        # A fixed array `T[N]` owns no buffer of its own -- its storage is inline -- but its
+        # ELEMENTS can own heap. Answering False here (the old behaviour) gated a fixed array out
+        # of every recursion, so a `string[3]` FIELD inside a struct was never freed even though
+        # the struct itself was registered (#185).
+        return needs_cleanup(value_type.base_type)
     elif isinstance(value_type, EnumType):
         # Enums need cleanup if any variant has associated data that needs cleanup
         for variant in value_type.variants:

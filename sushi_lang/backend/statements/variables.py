@@ -119,7 +119,8 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
         # Special handling for array literals
         if isinstance(stmt.ty, ArrayType) and isinstance(stmt.value, ArrayLiteral):
             from sushi_lang.backend.statements import initialization
-            initialization.initialize_array_literal(codegen, slot, stmt.value, ll_type)
+            initialization.initialize_array_literal(codegen, slot, stmt.value, ll_type,
+                                                    stmt.ty.base_type)
         else:
             rhs = codegen.expressions.emit_expr(stmt.value)
             # Owning-struct copy semantics (#60/#134/#147): a struct that owns heap memory
