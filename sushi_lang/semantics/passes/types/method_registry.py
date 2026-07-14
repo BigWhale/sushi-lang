@@ -118,7 +118,7 @@ class ArrayMethodInferrer:
             # Special handling for .get() which returns Maybe<T>
             if self.method_name == "get":
                 element_type = actual_type.base_type
-                maybe_type = ensure_maybe_type_in_table(self.validator.enum_table, element_type)
+                maybe_type = ensure_maybe_type_in_table(self.validator.enum_table, element_type, struct_table=self.validator.struct_table.by_name)
                 return maybe_type
 
             # u8[].to_string_checked() returns Result<string, StdError>
@@ -145,19 +145,19 @@ class StringMethodInferrer:
             # Special handling for methods returning Maybe<T>
             if self.method_name in ("find", "find_last"):
                 # Returns Maybe<i32>
-                maybe_i32_type = ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I32)
+                maybe_i32_type = ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I32, struct_table=self.validator.struct_table.by_name)
                 return maybe_i32_type
             elif self.method_name == "to_i32":
                 # Returns Maybe<i32>
-                maybe_i32_type = ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I32)
+                maybe_i32_type = ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I32, struct_table=self.validator.struct_table.by_name)
                 return maybe_i32_type
             elif self.method_name == "to_i64":
                 # Returns Maybe<i64>
-                maybe_i64_type = ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I64)
+                maybe_i64_type = ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I64, struct_table=self.validator.struct_table.by_name)
                 return maybe_i64_type
             elif self.method_name == "to_f64":
                 # Returns Maybe<f64>
-                maybe_f64_type = ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.F64)
+                maybe_f64_type = ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.F64, struct_table=self.validator.struct_table.by_name)
                 return maybe_f64_type
             else:
                 return get_builtin_string_method_return_type(self.method_name, BuiltinType.STRING)
@@ -236,7 +236,7 @@ class ResultMethodInferrer:
             elif self.method_name == "err":
                 if err_variant and err_variant.associated_types:
                     err_type = err_variant.associated_types[0]
-                    return ensure_maybe_type_in_table(self.validator.enum_table, err_type)
+                    return ensure_maybe_type_in_table(self.validator.enum_table, err_type, struct_table=self.validator.struct_table.by_name)
         return None
 
 
@@ -274,7 +274,7 @@ class HashMapMethodInferrer:
             if key_type is not None and value_type is not None:
                 if self.method_name in ("get", "remove"):
                     from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
-                    return ensure_maybe_type_in_table(self.validator.enum_table, value_type)
+                    return ensure_maybe_type_in_table(self.validator.enum_table, value_type, struct_table=self.validator.struct_table.by_name)
                 elif self.method_name in ("contains_key", "is_empty"):
                     return BuiltinType.BOOL
                 elif self.method_name in ("len", "tombstone_count"):
@@ -332,7 +332,7 @@ class ListMethodInferrer:
             if element_type is not None:
                 if self.method_name in ("get", "pop", "remove"):
                     from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
-                    return ensure_maybe_type_in_table(self.validator.enum_table, element_type)
+                    return ensure_maybe_type_in_table(self.validator.enum_table, element_type, struct_table=self.validator.struct_table.by_name)
                 elif self.method_name in ("len", "capacity"):
                     return BuiltinType.I32
                 elif self.method_name == "is_empty":

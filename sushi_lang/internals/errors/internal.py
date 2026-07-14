@@ -392,11 +392,13 @@ _add(ErrorMessage("CE0091", Severity.ERROR,
 _add(ErrorMessage("CE0126", Severity.ERROR,
     "poisoned intern of '{name}': already interned as {existing}, rebuilt as {rebuilt}",
     Category.INTERNAL,
-    "Two spellings of one Result<T, E> mangled to the same enum name but carry different "
-    "payload types -- one of them was interned before its UnknownType payloads were resolved. "
+    "Two spellings of one generic enum (Result<T, E>, Maybe<T>) mangled to the same name but "
+    "carry different payload types -- one was interned before its UnknownType payloads were "
+    "resolved. str(UnknownType('Point')) and str(StructType('Point')) are both 'Point', and "
     "EnumType hashes on the name alone but compares on the variants, so a poisoned entry "
-    "hash-matches and compares unequal: a silent cache miss, not a crash. Every Result must "
-    "be interned through ensure_result_type_in_table, which resolves its payloads first."))
+    "hash-matches and compares unequal: a silent cache miss and a duplicate monomorphization, "
+    "not a crash. Intern only through ensure_result_type_in_table / ensure_maybe_type_in_table, "
+    "which resolve their payloads before mangling the name."))
 
 # Maybe<T> Operations (CE0092-CE0095)
 _add(ErrorMessage("CE0092", Severity.ERROR,

@@ -929,8 +929,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 and len(ret_type.type_args) == 1):
             value_type = resolve_unknown_type(ret_type.type_args[0], structs, enums)
             return ensure_maybe_type_in_table(
-                self.type_validator.enum_table, value_type
-            ) or ret_type
+                self.type_validator.enum_table, value_type, struct_table=structs) or ret_type
 
         return ret_type
 

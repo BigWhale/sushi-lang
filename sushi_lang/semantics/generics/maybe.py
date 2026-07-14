@@ -116,10 +116,25 @@ def _validate_maybe_expect(
                 expected="string", got=str(arg_type))
 
 
-def ensure_maybe_type_in_table(enum_table: Any, value_type: Type) -> Optional[EnumType]:
+def ensure_maybe_type_in_table(
+    enum_table: Any,
+    value_type: Type,
+    struct_table: Optional[dict] = None,
+) -> Optional[EnumType]:
     """Ensure ``Maybe<value_type>`` exists in ``enum_table``, creating it if needed.
 
     Works with just an enum table so both semantic analysis and codegen can call it.
+
+    THE INVARIANT (the same one ``ensure_result_type_in_table`` enforces -- it is not
+    Result-specific, it is a property of how any generic enum is named). ``str(UnknownType("Point"))``
+    and ``str(StructType(name="Point"))`` are both ``"Point"``, so a Maybe carrying an *unresolved*
+    payload mangles to the same name as the same Maybe carrying the resolved one. ``EnumType``
+    hashes on the name alone but compares on the variants, so a table poisoned with an unresolved
+    payload hash-matches and compares unequal -- a silent cache miss and a duplicate
+    monomorphization, never a crash. That is the failure mode that hides.
+
+    So the payload is resolved HERE, before the name is built, rather than at the call sites, and
+    the guard below catches any entry that got in some other way (CE0126).
 
     ``generic_base`` / ``generic_args`` are populated because ``unify.py`` reads them to match
     a monomorphized generic against a ``Maybe<T>`` parameter. Without them an on-demand Maybe
@@ -129,6 +144,11 @@ def ensure_maybe_type_in_table(enum_table: Any, value_type: Type) -> Optional[En
     """
     from sushi_lang.semantics.typesys import EnumType, EnumVariantInfo
     from sushi_lang.semantics.generics.hashing import can_enum_be_hashed, register_enum_hash_method
+    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+
+    enums = enum_table.by_name
+    structs = struct_table if struct_table is not None else {}
+    value_type = resolve_unknown_type(value_type, structs, enums)
 
     if isinstance(value_type, BuiltinType):
         type_str = str(value_type).lower()
@@ -137,20 +157,31 @@ def ensure_maybe_type_in_table(enum_table: Any, value_type: Type) -> Optional[En
 
     maybe_enum_name = f"Maybe<{type_str}>"
 
-    if maybe_enum_name in enum_table.by_name:
-        return enum_table.by_name[maybe_enum_name]
-
     some_variant = EnumVariantInfo(name="Some", associated_types=(value_type,))
     none_variant = EnumVariantInfo(name="None", associated_types=())
+    variants = (some_variant, none_variant)
+
+    existing = enums.get(maybe_enum_name)
+    if existing is not None:
+        # Same name, different payload: one of the two was interned unresolved. Fail loudly at the
+        # moment of corruption rather than let it decay into a cache miss.
+        if existing.variants and existing.variants != variants:
+            raise_internal_error(
+                "CE0126",
+                name=maybe_enum_name,
+                existing=str([str(t) for v in existing.variants for t in v.associated_types]),
+                rebuilt=str([str(t) for v in variants for t in v.associated_types]),
+            )
+        return existing
 
     maybe_enum = EnumType(
         name=maybe_enum_name,
-        variants=(some_variant, none_variant),
+        variants=variants,
         generic_base="Maybe",
         generic_args=(value_type,),
     )
 
-    enum_table.by_name[maybe_enum_name] = maybe_enum
+    enums[maybe_enum_name] = maybe_enum
     enum_table.order.append(maybe_enum_name)
 
     # Register the auto-derived hash() for the on-demand type (mirrors Pass 1.8), matching
