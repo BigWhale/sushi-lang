@@ -4,7 +4,7 @@ File utility functions for io/files module.
 Provides the standard stdlib interface for function discovery and validation.
 This is separate from __init__.py which handles file type methods.
 """
-from sushi_lang.semantics.typesys import Type, BuiltinType, ResultType
+from sushi_lang.semantics.typesys import Type, BuiltinType
 
 
 # List of all file utility functions

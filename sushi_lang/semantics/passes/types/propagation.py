@@ -24,7 +24,7 @@ eliminate duplication across statement validators.
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-from sushi_lang.semantics.typesys import ResultType, EnumType, StructType, BuiltinType
+from sushi_lang.semantics.typesys import EnumType, StructType, BuiltinType
 from sushi_lang.semantics.ast import EnumConstructor, DotCall, Call, Name, IntLit, FloatLit, UnaryOp, BinaryOp
 from sushi_lang.internals import errors as er
 from .inference import int_literal_fits, float_literal_fits
@@ -168,47 +168,6 @@ def _propagate_to_struct_args(validator: 'TypeValidator', node: Expr,
             propagate_types_to_value(validator, arg, field_type)
 
 
-def _propagate_result_enum_type(validator: 'TypeValidator', node: Expr,
-                                result_type: ResultType) -> None:
-    """Propagate ResultType to Result.Ok/Result.Err constructors.
-
-    Sets resolved_enum_type on EnumConstructor or DotCall nodes to enable
-    backend code generation for generic Result enums.
-
-    Args:
-        validator: The type validator instance
-        node: The Result.Ok() or Result.Err() constructor node
-        result_type: The expected ResultType from context
-
-    Consolidates lines 220-244 (return), 112-121 (let) from statements.py.
-    """
-    if not isinstance(node, (EnumConstructor, DotCall)):
-        return
-
-    # Check if this is Result.Ok() or Result.Err()
-    is_result_enum = False
-
-    if isinstance(node, EnumConstructor):
-        is_result_enum = (node.enum_name == "Result")
-    elif isinstance(node, DotCall) and isinstance(node.receiver, Name):
-        is_result_enum = (node.receiver.id == "Result")
-
-    if is_result_enum and isinstance(result_type, ResultType):
-        # Create/get the corresponding Result enum from table
-        from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-        result_enum = ensure_result_type_in_table(
-            validator.enum_table,
-            result_type.ok_type,
-            result_type.err_type,
-            struct_table=validator.struct_table.by_name,
-        )
-        if result_enum:
-            node.resolved_enum_type = result_enum
-
-            # Recursively propagate to constructor arguments
-            _propagate_to_enum_args(validator, node, result_enum)
-
-
 def _propagate_generic_enum_type(validator: 'TypeValidator', node: Expr,
                                  enum_type: EnumType) -> None:
     """Propagate generic enum type (Maybe, Either, user-defined) to constructor.
@@ -240,79 +199,6 @@ def _propagate_generic_enum_type(validator: 'TypeValidator', node: Expr,
 
         # Recursively propagate to constructor arguments
         _propagate_to_enum_args(validator, node, enum_type)
-
-
-def _propagate_nested_enum_type(validator: 'TypeValidator', ok_node: Expr,
-                                expected_ok_type: 'Type') -> None:
-    """Propagate type to nested enum constructors inside Result.Ok().
-
-    Handles cases like Result.Ok(Maybe.Some(42)) where the Maybe.Some
-    needs to know it should be Maybe<i32>.
-
-    Args:
-        validator: The type validator instance
-        ok_node: The Result.Ok() constructor node
-        expected_ok_type: The expected type for the Ok value (T in Result<T, E>)
-
-    Consolidates lines 246-289 from validate_return_statement().
-    """
-    if not isinstance(ok_node, (EnumConstructor, DotCall)):
-        return
-
-    # Extract variant name
-    variant_name = None
-    if isinstance(ok_node, EnumConstructor):
-        variant_name = ok_node.variant_name
-    elif isinstance(ok_node, DotCall):
-        variant_name = ok_node.method
-
-    # Only propagate for Result.Ok variant
-    if variant_name != "Ok":
-        return
-
-    # Check if the argument is a nested enum constructor
-    if not ok_node.args or not isinstance(ok_node.args[0], (EnumConstructor, DotCall)):
-        return
-
-    arg_constructor = ok_node.args[0]
-
-    # Extract nested enum name
-    nested_enum_name = None
-    if isinstance(arg_constructor, EnumConstructor):
-        nested_enum_name = arg_constructor.enum_name
-    elif isinstance(arg_constructor, DotCall) and isinstance(arg_constructor.receiver, Name):
-        nested_enum_name = arg_constructor.receiver.id
-
-    if not nested_enum_name:
-        return
-
-    # Determine if we should propagate and what type to propagate
-    should_propagate = False
-    nested_expected_type = None
-
-    # Check built-in generic enums first (Maybe, Either, etc.)
-    if nested_enum_name in validator.generic_enum_table.by_name:
-        should_propagate = True
-        nested_expected_type = expected_ok_type
-
-    # Check if expected_ok_type is a concrete enum matching the nested enum
-    elif isinstance(expected_ok_type, EnumType) and expected_ok_type.name.startswith(nested_enum_name + "<"):
-        should_propagate = True
-        nested_expected_type = expected_ok_type
-
-    # Check if expected_ok_type is a GenericTypeRef
-    else:
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        if isinstance(expected_ok_type, GenericTypeRef) and expected_ok_type.base_name == nested_enum_name:
-            # Resolve the concrete enum from enum_table
-            concrete_name = str(expected_ok_type)
-            if concrete_name in validator.enum_table.by_name:
-                should_propagate = True
-                nested_expected_type = validator.enum_table.by_name[concrete_name]
-
-    # Propagate the expected enum type to the nested constructor
-    if should_propagate and nested_expected_type and isinstance(nested_expected_type, EnumType):
-        arg_constructor.resolved_enum_type = nested_expected_type
 
 
 def _propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
@@ -357,53 +243,6 @@ def _propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
             _propagate_to_struct_args(validator, node, struct_type)
 
 
-def _propagate_nested_struct_type(validator: 'TypeValidator', ok_node: Expr,
-                                  expected_ok_type: 'Type') -> None:
-    """Propagate type to nested struct constructors inside Result.Ok().
-
-    Handles cases like Result.Ok(Pair(1, 2)) where the Pair constructor
-    needs to know it should be Pair<i32, i32>.
-
-    Args:
-        validator: The type validator instance
-        ok_node: The Result.Ok() constructor node
-        expected_ok_type: The expected type for the Ok value (T in Result<T, E>)
-
-    Consolidates lines 291-308 from validate_return_statement().
-    """
-    if not isinstance(ok_node, (EnumConstructor, DotCall)):
-        return
-
-    # Extract variant name
-    variant_name = None
-    if isinstance(ok_node, EnumConstructor):
-        variant_name = ok_node.variant_name
-    elif isinstance(ok_node, DotCall):
-        variant_name = ok_node.method
-
-    # Only propagate for Result.Ok variant
-    if variant_name != "Ok":
-        return
-
-    # Check if the argument is a Call node (struct constructor)
-    if not ok_node.args or not isinstance(ok_node.args[0], Call):
-        return
-
-    arg_constructor = ok_node.args[0]
-    if not hasattr(arg_constructor.callee, 'id'):
-        return
-
-    struct_name = arg_constructor.callee.id
-
-    # Check if this is a generic struct constructor
-    if struct_name in validator.generic_struct_table.by_name:
-        # Check if expected_ok_type is a StructType matching this struct
-        if isinstance(expected_ok_type, StructType) and expected_ok_type.name.startswith(struct_name + "<"):
-            # Update the Call node's callee to use concrete type name
-            # e.g., Pair -> Pair<i32, string>
-            arg_constructor.callee.id = expected_ok_type.name
-
-
 def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
                             expected_type: 'Type') -> None:
     """Unified entry point for all type propagation.
@@ -444,18 +283,9 @@ def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
         value_expr.expected_type = expected_type
         return
 
-    # Handle Result<T, E> propagation
-    if isinstance(expected_type, ResultType):
-        _propagate_result_enum_type(validator, value_expr, expected_type)
-
-        # Also propagate to nested enum constructors inside Result.Ok()
-        _propagate_nested_enum_type(validator, value_expr, expected_type.ok_type)
-
-        # Also propagate to nested struct constructors inside Result.Ok()
-        _propagate_nested_struct_type(validator, value_expr, expected_type.ok_type)
-
-    # Handle generic enum propagation (Maybe, Either, user-defined)
-    elif isinstance(expected_type, EnumType):
+    # Generic enum propagation -- Result, Maybe, Either, user-defined. Result used to have a
+    # parallel path of its own here, because it arrived as a ResultType rather than an EnumType.
+    if isinstance(expected_type, EnumType):
         _propagate_generic_enum_type(validator, value_expr, expected_type)
 
     # Handle generic struct propagation (Own, Box, Pair, user-defined)

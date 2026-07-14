@@ -56,7 +56,7 @@ def is_builtin_env_function(name: str) -> bool:
 
 def get_builtin_env_function_return_type(name: str) -> Type:
     """Get the return type for a built-in env function."""
-    from sushi_lang.semantics.typesys import BuiltinType, ResultType
+    from sushi_lang.semantics.typesys import BuiltinType
 
     if name == 'getenv':
         # getenv(string key) -> Maybe<string>. Return a type-ref rather than a

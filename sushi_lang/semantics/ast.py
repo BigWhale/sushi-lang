@@ -553,7 +553,7 @@ class TryExpr(Node):
     - inferred_success_tag: Variant index for Ok/Some
     - inferred_error_type: The error type E (for Result-like enums, None for Maybe)
     - inferred_error_tag: Variant index for Err (for Result-like enums)
-    - inferred_func_return_type: The enclosing function's return type as ResultType
+    - inferred_func_return_type: The enclosing function's Result<T, E> enum
     """
     expr: "Expr"  # The expression being unwrapped (must be Result<T>)
 

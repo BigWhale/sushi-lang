@@ -11,7 +11,6 @@ from sushi_lang.semantics.typesys import (
     UnknownType,
     StructType,
     EnumType,
-    ResultType,
 )
 
 if TYPE_CHECKING:
@@ -47,7 +46,7 @@ def resolve_generic_type_ref(
     semantic_type,
     struct_table: dict[str, StructType],
     enum_table: dict[str, EnumType],
-) -> StructType | EnumType | ResultType | None:
+) -> StructType | EnumType | None:
     """Resolve GenericTypeRef to its monomorphized type.
 
     Args:
@@ -57,7 +56,6 @@ def resolve_generic_type_ref(
 
     Returns:
         The resolved type, or None if not a GenericTypeRef.
-        Returns ResultType for Result<T, E> patterns.
 
     Raises:
         InternalError: CE0045 if generic type cannot be resolved.

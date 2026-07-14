@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Tuple
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef
-from sushi_lang.semantics.typesys import Type as Ty, ResultType
+from sushi_lang.semantics.typesys import Type as Ty
 from sushi_lang.backend import enum_utils
 from sushi_lang.internals.errors import raise_internal_error
 

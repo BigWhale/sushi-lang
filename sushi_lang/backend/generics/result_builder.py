@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Optional
 
 import llvmlite.ir as ir
 
-from sushi_lang.semantics.typesys import EnumType, Type, ResultType
+from sushi_lang.semantics.typesys import EnumType, Type
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -62,8 +62,8 @@ def build_err_from_return_type(
 ) -> ir.Value:
     """Construct the Err variant of a function's Result return type.
 
-    Accepts the return type in any of its spellings: the interned Result<T, E> EnumType (what
-    Pass 2 now stamps), a ResultType, or a GenericTypeRef("Result", [T, E]).
+    Accepts the interned Result<T, E> EnumType (what Pass 2 stamps) or a
+    GenericTypeRef("Result", [T, E]).
 
     Args:
         codegen: The LLVM code generator instance.

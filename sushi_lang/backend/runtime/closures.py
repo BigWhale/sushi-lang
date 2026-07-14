@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, List
 
 from llvmlite import ir
 
-from sushi_lang.semantics.typesys import FunctionType, ResultType
+from sushi_lang.semantics.typesys import FunctionType
 from sushi_lang.backend.memory.heap import emit_malloc
 
 if TYPE_CHECKING:

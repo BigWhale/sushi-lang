@@ -219,16 +219,9 @@ class StatementValidator(RecursiveVisitor):
         # Check if the expression evaluates to Result<T, E>
         expr_type = self.type_validator.infer_expression_type(node.expr)
         if expr_type is not None:
-            from sushi_lang.semantics.typesys import EnumType, BuiltinType, ResultType
+            from sushi_lang.semantics.typesys import EnumType, BuiltinType
 
-            # Handle ResultType (semantic representation)
-            if isinstance(expr_type, ResultType):
-                # Skip warning if T is blank type (~)
-                # Blank functions have no meaningful return value to handle
-                if expr_type.ok_type != BuiltinType.BLANK:
-                    er.emit(self.type_validator.reporter, er.ERR.CW2001, node.expr.loc)
-            # Handle EnumType (monomorphized representation)
-            elif isinstance(expr_type, EnumType) and expr_type.name.startswith("Result<"):
+            if isinstance(expr_type, EnumType) and expr_type.name.startswith("Result<"):
                 # Extract T from Result<T, E>
                 ok_variant = expr_type.get_variant("Ok")
                 if ok_variant and ok_variant.associated_types:
@@ -671,7 +664,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
     # === Utility methods ===
 
     def _resolve_generic_to_semantic_type(self, generic_type: 'Type') -> 'Type':
-        """Resolve GenericTypeRef to semantic types (ResultType, etc.) where applicable.
+        """Resolve a GenericTypeRef to its concrete semantic type where applicable.
 
         This centralizes the conversion logic for special generic types that have
         semantic representations beyond simple monomorphization.
@@ -680,14 +673,13 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             generic_type: The type to potentially resolve (may be GenericTypeRef or other)
 
         Returns:
-            Resolved semantic type (ResultType, etc.) or original type if no resolution needed
+            Resolved semantic type, or the original type if no resolution is needed
 
         Examples:
-            GenericTypeRef("Result", [i32, MyError]) → ResultType(i32, MyError)
+            GenericTypeRef("Result", [i32, MyError]) → EnumType("Result<i32, MyError>")
             GenericTypeRef("Maybe", [i32]) → GenericTypeRef("Maybe", [i32])  # no change
         """
         from sushi_lang.semantics.generics.types import GenericTypeRef
-        from sushi_lang.semantics.typesys import ResultType
         from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
         # Only process GenericTypeRef types
@@ -763,7 +755,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         """Infer member access type (struct field access).
 
         For fields with generic types like Result<T, E>, this resolves them to their
-        semantic type representations (ResultType) for compatibility with pattern matching
+        semantic type representations for compatibility with pattern matching
         and other type operations.
         """
         # Get the type of the receiver (the struct)
@@ -778,7 +770,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             for field_name, field_type in receiver_type.fields:
                 if field_name == node.member:
                     # Resolve generic types to semantic types where applicable
-                    # E.g., GenericTypeRef("Result", [T, E]) → ResultType(T, E)
+                    # E.g., GenericTypeRef("Result", [T, E]) → EnumType("Result<T, E>")
                     # This ensures pattern matching and other operations work correctly
                     resolved_type = self._resolve_generic_to_semantic_type(field_type)
                     return resolved_type
@@ -944,7 +936,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_call(self, node: Call) -> Optional[Type]:
         """Infer function call type."""
-        from sushi_lang.semantics.typesys import FunctionType, ResultType
+        from sushi_lang.semantics.typesys import FunctionType
         # Call-through an arbitrary expression that evaluates to a function value:
         # `env.f(x)` (a captured closure in a lifted lambda body), `obj.handler()`,
         # `arr[0]()`, `(e)()`. Calling through it yields Result<ok, err>, exactly like a
@@ -1016,7 +1008,6 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             # Functions can declare explicit Result<T, E> or just T (implicit Result<T, StdError>)
             if func_sig.ret_type is not None:
                 from sushi_lang.semantics.generics.types import GenericTypeRef
-                from sushi_lang.semantics.typesys import ResultType
                 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
                 # Every shape of Result a signature can declare interns to the same EnumType,
@@ -1027,10 +1018,6 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 # Wrapping it again would produce Result<Result<T, E>, StdError>.
                 if is_result_enum(func_sig.ret_type):
                     return func_sig.ret_type
-
-                if isinstance(func_sig.ret_type, ResultType):
-                    return self._intern_result(func_sig.ret_type.ok_type,
-                                               func_sig.ret_type.err_type)
 
                 # Explicit `fn foo() Result<T, E>` -- not wrapped again.
                 if isinstance(func_sig.ret_type, GenericTypeRef) and func_sig.ret_type.base_name == "Result":
@@ -1213,13 +1200,10 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if inner_type is None:
             return None
 
-        # A first-class function value call yields a ResultType (not a concrete Result
+        # A first-class function value call yields a Result enum (not a concrete Result
         # EnumType); `??` unwraps it to its ok_type -- e.g. a captured closure called in
         # a lambda body, `f(x)??`.
-        from sushi_lang.semantics.typesys import EnumType, ResultType
-        if isinstance(inner_type, ResultType):
-            return inner_type.ok_type
-
+        from sushi_lang.semantics.typesys import EnumType
         # Result-like (Ok(T)) or Maybe (Some(T)) enum: `??` unwraps the payload variant.
         if isinstance(inner_type, EnumType):
             for variant_name in ("Ok", "Some"):

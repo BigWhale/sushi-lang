@@ -93,7 +93,7 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
         The monomorphized EnumType of the scrutinee, or None if not found.
     """
     from sushi_lang.semantics.ast import Name, DotCall, MethodCall, MemberAccess
-    from sushi_lang.semantics.typesys import EnumType, ResultType, StructType
+    from sushi_lang.semantics.typesys import EnumType, StructType
 
     # Try to get type from variable table if it's a Name
     if isinstance(scrutinee, Name):

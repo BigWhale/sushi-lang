@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, List, Optional
 
 from sushi_lang.internals.report import Span
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType, ResultType, ReferenceType
+from sushi_lang.semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType, ReferenceType
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
 if TYPE_CHECKING:
@@ -28,12 +28,12 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
     # Check if this is a GenericTypeRef
     from sushi_lang.semantics.generics.types import GenericTypeRef
     if isinstance(type_obj, GenericTypeRef):
-        # Special handling for Result<T, E> - it doesn't get monomorphized, it gets resolved to ResultType
+        # Result<T, E> is monomorphized into the enum table like any other generic
         if type_obj.base_name == "Result" and len(type_obj.type_args) == 2:
             # Validate type arguments recursively
             for type_arg in type_obj.type_args:
                 validate_type_name(validator, type_arg, span)
-            # Result<T, E> is valid - it will be resolved to ResultType during type checking
+            # Result<T, E> is valid - it resolves to its interned enum during type checking
             return
 
         # CE5012: foreign `ptr` as a generic type argument is only supported by
@@ -101,10 +101,6 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
             return
         # Recursively validate the base type
         validate_type_name(validator, type_obj.base_type, span)
-    elif isinstance(type_obj, ResultType):
-        # ResultType is a valid semantic type - recursively validate ok_type and err_type
-        validate_type_name(validator, type_obj.ok_type, span)
-        validate_type_name(validator, type_obj.err_type, span)
 
 
 def validate_and_register_parameters(validator: 'TypeValidator', params: List['Param']) -> None:
@@ -152,7 +148,7 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
             validator.variable_types[param.name] = resolved_fn
             continue
 
-        if isinstance(param.ty, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType, ResultType)):
+        if isinstance(param.ty, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
             validator.variable_types[param.name] = param.ty
         elif isinstance(param.ty, UnknownType):
             # Resolve UnknownType to StructType/EnumType for struct/enum-typed parameters

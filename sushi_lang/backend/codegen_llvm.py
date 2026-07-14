@@ -1052,7 +1052,6 @@ class LLVMCodegen:
         Uses pre-parsed FuncSig objects from LibraryRegistry when available,
         eliminating duplicate manifest parsing.
         """
-        from sushi_lang.semantics.typesys import ResultType
 
         # Use library_registry if available (pre-parsed metadata)
         if self.library_registry is not None:
@@ -1110,7 +1109,6 @@ class LLVMCodegen:
         (C4b/C5) - either way the definition lives in the library bitcode and
         the consumer module only needs an external declaration.
         """
-        from sushi_lang.semantics.typesys import ResultType
 
         all_sigs = dict(self.library_registry.get_all_functions())
         for name, (_lib, sig) in self.library_registry.get_all_private_functions().items():

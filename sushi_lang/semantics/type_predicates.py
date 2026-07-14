@@ -170,7 +170,7 @@ def is_abstract_type(ty: Type, struct_table: Optional[dict] = None,
         True if the type transitively mentions an unbound type parameter.
     """
     from sushi_lang.semantics.typesys import (
-        ArrayType, DynamicArrayType, ReferenceType, PointerType, ResultType,
+        ArrayType, DynamicArrayType, ReferenceType, PointerType,
         IteratorType, StructType, EnumType, UnknownType,
     )
     from sushi_lang.semantics.generics.types import TypeParameter, GenericTypeRef
@@ -200,8 +200,6 @@ def is_abstract_type(ty: Type, struct_table: Optional[dict] = None,
         return recurse(ty.pointee_type)
     if isinstance(ty, IteratorType):
         return recurse(ty.element_type)
-    if isinstance(ty, ResultType):
-        return recurse(ty.ok_type) or recurse(ty.err_type)
     if isinstance(ty, (StructType, EnumType)):
         # A monomorphized instance carries the args it was built from; an abstract one carries
         # the enclosing template's own parameters (Either<U, T>). `generic_args` is not enough:
@@ -249,7 +247,7 @@ def contains_foreign_ptr(ty: Type, struct_table: Optional[dict] = None,
     """
     from sushi_lang.semantics.typesys import (
         ForeignPtrType, ArrayType, DynamicArrayType, ReferenceType,
-        PointerType, ResultType, IteratorType, StructType, EnumType, UnknownType,
+        PointerType, IteratorType, StructType, EnumType, UnknownType,
     )
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
@@ -269,8 +267,6 @@ def contains_foreign_ptr(ty: Type, struct_table: Optional[dict] = None,
         return recurse(ty.referenced_type)
     if isinstance(ty, PointerType):
         return recurse(ty.pointee_type)
-    if isinstance(ty, ResultType):
-        return recurse(ty.ok_type) or recurse(ty.err_type)
     if isinstance(ty, IteratorType):
         return recurse(ty.element_type)
     if isinstance(ty, GenericTypeRef):

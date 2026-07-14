@@ -22,7 +22,6 @@ from sushi_lang.semantics.typesys import (
     ArrayType,
     StructType,
     EnumType,
-    ResultType,
     DynamicArrayType,
     ReferenceType,
 )
@@ -39,7 +38,7 @@ def is_explicit_result_type(ty: Optional[Type]) -> bool:
     """Check if a type is an explicit Result<T, E>.
 
     Returns True if:
-    - Type is ResultType (from semantic analysis)
+    - Type is the interned Result<T, E> enum (from semantic analysis)
     - Type is GenericTypeRef with base_name "Result"
 
     This is used to detect when a function return type is already wrapped
@@ -47,7 +46,8 @@ def is_explicit_result_type(ty: Optional[Type]) -> bool:
     """
     if ty is None:
         return False
-    if isinstance(ty, ResultType):
+    from sushi_lang.semantics.generics.results import is_result_enum
+    if is_result_enum(ty):
         return True
     if isinstance(ty, GenericTypeRef) and ty.base_name == "Result":
         return True

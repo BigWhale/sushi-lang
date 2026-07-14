@@ -116,28 +116,6 @@ class StructType:
         return None
 
 @dataclass(frozen=True)
-class ResultType:
-    """Represents a Result<T, E> type for function returns.
-
-    All functions implicitly return Result<T, E> where T is their declared return type
-    and E is the error type. This type is transparent to users but used internally for
-    type checking.
-    """
-    ok_type: "Type"   # The type wrapped in Ok(value)
-    err_type: "Type"  # The type wrapped in Err(error)
-
-    def __str__(self) -> str:
-        return f"Result<{self.ok_type}, {self.err_type}>"
-
-    def __hash__(self) -> int:
-        return hash(("result", self.ok_type, self.err_type))
-
-    def __eq__(self, other) -> bool:
-        return (isinstance(other, ResultType) and
-                self.ok_type == other.ok_type and
-                self.err_type == other.err_type)
-
-@dataclass(frozen=True)
 class IteratorType:
     """Represents an Iterator<T> type for iteration over sequences.
 
@@ -377,7 +355,7 @@ class EnumType:
 # Note: GenericEnumType is NOT in the Type union - it's a template that produces EnumTypes
 Type = Union[
     BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType,
-    ResultType, IteratorType, ReferenceType, PointerType, ForeignPtrType,
+    IteratorType, ReferenceType, PointerType, ForeignPtrType,
     FunctionType, TypeParameter, GenericTypeRef
 ]
 
