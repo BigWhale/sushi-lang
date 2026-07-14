@@ -91,28 +91,29 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
             if type_name in codegen.enum_table.by_name:
                 return codegen.enum_table.by_name[type_name] if type_name.startswith(prefix) else None
 
-    # Strategy 2: Infer from function call return type (for Call expressions)
+    # Strategy 2: Infer from function call return type (for Call expressions).
+    #
+    # Both lookups here used to build a ONE-argument name -- f"Result<{ok}>" -- which can never
+    # match the two-argument name a Result is interned under ("Result<i32, StdError>"). So they
+    # always missed, and every call fell through to Strategy 3's LLVM-type matching, which picks
+    # the first enum with a matching layout. Two Results with the same layout but different type
+    # arguments are indistinguishable there. Both now look up the interned enum directly.
     if isinstance(receiver, Call):
-        from sushi_lang.semantics.typesys import ResultType, FunctionType
+        from sushi_lang.semantics.typesys import FunctionType
         if not isinstance(receiver.callee, Name):
             # Indirect call through a function value (env.f(x), arr[0]()): recover the
             # Result enum from the FunctionType the type checker annotated.
             fn_ty = getattr(receiver, 'callee_fn_type', None)
             if isinstance(fn_ty, FunctionType):
-                result_enum_name = f"Result<{fn_ty.ok_type}>"
-                if result_enum_name in codegen.enum_table.by_name:
-                    return codegen.enum_table.by_name[result_enum_name]
+                from sushi_lang.backend.generics.result_builder import intern_result
+                result_enum = intern_result(codegen, fn_ty.ok_type, fn_ty.err_type)
+                if result_enum is not None and result_enum.name.startswith(prefix):
+                    return result_enum
         else:
             func_name = receiver.callee.id
             if func_name in codegen.function_return_types:
                 result_type = codegen.function_return_types[func_name]
-                # Handle ResultType wrapper
-                if isinstance(result_type, ResultType):
-                    result_enum_name = f"Result<{result_type.ok_type}>"
-                    if result_enum_name in codegen.enum_table.by_name:
-                        return codegen.enum_table.by_name[result_enum_name]
-                # Handle direct EnumType
-                elif isinstance(result_type, EnumType) and result_type.name.startswith(prefix):
+                if isinstance(result_type, EnumType) and result_type.name.startswith(prefix):
                     return result_type
 
     # Strategy 3: Fallback to LLVM type matching (last resort, only when the

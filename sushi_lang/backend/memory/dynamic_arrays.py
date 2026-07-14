@@ -579,15 +579,7 @@ class DynamicArrayManager:
         """
         from sushi_lang.semantics.typesys import (
             FunctionType, BuiltinType, StructType, EnumType)
-        from sushi_lang.backend.destructors import result_ok_err, resolve_named_type
-
-        # A Result<T, E> field/payload is an enum carrying T and E, but it reaches us as a
-        # ResultType / GenericTypeRef, which match no branch below -- so a struct or enum
-        # owning a Result was not registered for cleanup at all (#179).
-        result_args = result_ok_err(ty)
-        if result_args is not None:
-            return (self._payload_needs_cleanup(result_args[0])
-                    or self._payload_needs_cleanup(result_args[1]))
+        from sushi_lang.backend.destructors import resolve_named_type
 
         # Resolve a named type -- UnknownType('Box') or GenericTypeRef('List', (i32,)), the
         # latter being how the Ok payload of Result<List<i32>, E> arrives -- to its concrete

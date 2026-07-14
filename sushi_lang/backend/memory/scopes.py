@@ -388,13 +388,14 @@ class ScopeManager:
                 self._types[name] = []
             self._types[name].append((self._scope_depth, semantic_ty))
 
-            # Track struct / enum variables that need cleanup
+            # Track struct / enum variables that need cleanup.
+            # Resolve a named / generic reference first -- UnknownType('Box'),
+            # GenericTypeRef('List', (i32,)), GenericTypeRef('Result', (T, E)) -- to the concrete
+            # struct/enum it names. The branches below dispatch on the resolved class, so an
+            # unresolved local is registered in NO cleanup registry and its payload leaks (#179).
             from sushi_lang.semantics.typesys import StructType, EnumType, FunctionType, BuiltinType
-            from sushi_lang.backend.destructors import resolve_result_type
-            # A Result<T, E> local is an enum at runtime but reaches us as a ResultType,
-            # which matches none of the branches below -- so it was registered in no
-            # cleanup registry at all and its owning payload leaked (#179).
-            semantic_ty = resolve_result_type(self.codegen, semantic_ty)
+            from sushi_lang.backend.destructors import resolve_named_type
+            semantic_ty = resolve_named_type(self.codegen, semantic_ty)
             if not register_cleanup:
                 pass  # borrow-like binding: aliases memory owned elsewhere, do not free
             elif isinstance(semantic_ty, (StructType, EnumType)):
@@ -457,13 +458,14 @@ class ScopeManager:
                 self._types[name] = []
             self._types[name].append((self._scope_depth, semantic_ty))
 
-            # Track struct / enum variables that need cleanup
+            # Track struct / enum variables that need cleanup.
+            # Resolve a named / generic reference first -- UnknownType('Box'),
+            # GenericTypeRef('List', (i32,)), GenericTypeRef('Result', (T, E)) -- to the concrete
+            # struct/enum it names. The branches below dispatch on the resolved class, so an
+            # unresolved local is registered in NO cleanup registry and its payload leaks (#179).
             from sushi_lang.semantics.typesys import StructType, EnumType, FunctionType, BuiltinType
-            from sushi_lang.backend.destructors import resolve_result_type
-            # A Result<T, E> local is an enum at runtime but reaches us as a ResultType,
-            # which matches none of the branches below -- so it was registered in no
-            # cleanup registry at all and its owning payload leaked (#179).
-            semantic_ty = resolve_result_type(self.codegen, semantic_ty)
+            from sushi_lang.backend.destructors import resolve_named_type
+            semantic_ty = resolve_named_type(self.codegen, semantic_ty)
             if isinstance(semantic_ty, (StructType, EnumType)):
                 # An enum local whose active variant owns heap (a dynamic-array / string /
                 # closure / owning-struct payload) is freed at scope exit like a struct

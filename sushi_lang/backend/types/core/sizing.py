@@ -107,14 +107,6 @@ class TypeSizing:
                 # {i8* fn_ptr, i8* env_ptr, i8* drop_ptr} = 24 bytes.
                 from sushi_lang.backend.constants.sizes import CLOSURE_FAT_POINTER_SIZE_BYTES
                 return CLOSURE_FAT_POINTER_SIZE_BYTES
-            case ResultType():
-                # Result<T, E> - ensure the corresponding enum exists and calculate its size
-                from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-                result_enum = ensure_result_type_in_table(
-                    self.enum_table,
-                    semantic_type.ok_type,
-                    semantic_type.err_type, struct_table=self.struct_table.by_name)
-                return self.get_type_size_bytes(result_enum)
             case _:
                 # Check if this is a GenericTypeRef using shared helper
                 resolved = resolve_generic_type_ref(

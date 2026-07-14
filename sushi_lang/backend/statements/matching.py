@@ -135,15 +135,6 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
                 if concrete_name in codegen.enum_table.by_name:
                     return codegen.enum_table.by_name[concrete_name]
 
-        # Handle ResultType - ensure it's in the enum table
-        elif isinstance(var_type, ResultType):
-            from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-            result_enum = ensure_result_type_in_table(
-                codegen.enum_table,
-                var_type.ok_type,
-                var_type.err_type, struct_table=codegen.struct_table.by_name)
-            return result_enum
-
     # For MemberAccess (struct field access like op.result), infer the field type
     if isinstance(scrutinee, MemberAccess):
         # Get the struct type of the receiver
@@ -184,14 +175,6 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
                                 concrete_name = f"{field_type.base_name}<{type_args_str}>"
                                 if concrete_name in codegen.enum_table.by_name:
                                     return codegen.enum_table.by_name[concrete_name]
-                        # If field type is ResultType, ensure it's in the enum table
-                        elif isinstance(field_type, ResultType):
-                            from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-                            result_enum = ensure_result_type_in_table(
-                                codegen.enum_table,
-                                field_type.ok_type,
-                                field_type.err_type, struct_table=codegen.struct_table.by_name)
-                            return result_enum
                         elif isinstance(field_type, EnumType):
                             return field_type
         return None

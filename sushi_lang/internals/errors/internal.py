@@ -196,10 +196,6 @@ _add(ErrorMessage("CE0045", Severity.ERROR,
     "generic type '{type}' not found in enum or struct table - monomorphization may have failed",
     Category.INTERNAL, "Generic type instantiation not found - monomorphization failure."))
 
-_add(ErrorMessage("CE0046", Severity.ERROR,
-    "Result<{type}> not found in enum table - monomorphization failed",
-    Category.INTERNAL, "Result type instantiation missing - monomorphization failure."))
-
 _add(ErrorMessage("CE0047", Severity.ERROR,
     "failed to create Maybe<{type}> enum type",
     Category.INTERNAL, "Maybe type instantiation failed during codegen."))

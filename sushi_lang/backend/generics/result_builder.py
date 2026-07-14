@@ -21,6 +21,40 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
+def intern_result(codegen: 'LLVMCodegen', ok_type: Type, err_type: Type) -> Optional[EnumType]:
+    """The interned ``Result<ok, err>`` enum, using this codegen's tables.
+
+    The backend's single way of naming a Result. It exists so no site is tempted to build the
+    type structurally again: ``ensure_result_type_in_table`` resolves the payloads before it
+    mangles the name, and skipping that is what poisons the enum table (CE0126).
+    """
+    from sushi_lang.semantics.generics.results import ensure_result_type_in_table
+    return ensure_result_type_in_table(
+        codegen.enum_table, ok_type, err_type,
+        struct_table=codegen.struct_table.by_name,
+    )
+
+
+def implicit_result_of(codegen: 'LLVMCodegen', fn) -> Optional[EnumType]:
+    """The interned Result a function's declared return type implies.
+
+    `fn foo() T` means `Result<T, StdError>`; `fn foo() T | E` means `Result<T, E>`. Pass 2 has
+    already worked this out, but the backend re-derives it in a handful of places (prototype
+    emission, the main wrapper, the `??` error path).
+    """
+    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+
+    err_type = getattr(fn, 'err_type', None)
+    if err_type is not None:
+        err_type = resolve_unknown_type(
+            err_type, codegen.struct_table.by_name, codegen.enum_table.by_name)
+    else:
+        err_type = codegen.enum_table.by_name.get("StdError")
+    if err_type is None:
+        err_type = fn.ret  # Fallback (shouldn't happen with StdError registered)
+    return intern_result(codegen, fn.ret, err_type)
+
+
 def build_err_from_return_type(
     codegen: 'LLVMCodegen',
     return_type: Type,
@@ -47,9 +81,7 @@ def build_err_from_return_type(
     if is_result_enum(return_type):
         return _build_err_variant(codegen, return_type, error_value)
 
-    if isinstance(return_type, ResultType):
-        ok_type, err_type = return_type.ok_type, return_type.err_type
-    elif isinstance(return_type, GenericTypeRef) and return_type.base_name == "Result":
+    if isinstance(return_type, GenericTypeRef) and return_type.base_name == "Result":
         if len(return_type.type_args) != 2:
             raise_internal_error("CE0040", variant="Err",
                 type=f"Result must have exactly 2 type parameters, got {len(return_type.type_args)}")
