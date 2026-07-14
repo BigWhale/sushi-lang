@@ -1,0 +1,16 @@
+# Regression for #159: an unbound Result temporary whose payload is NEVER extracted -- .is_ok() reads
+# the tag and discards the value. The simplest shape of the whole issue.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "ok = true"
+# EXPECT_NO_LEAKS: true
+
+fn mk() string:
+    return Result.Ok("xxxxxxxxxxxx{'abcd'}")
+
+fn probe() ~:
+    println("ok = {mk().is_ok()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    probe()
+    return Result.Ok(0)

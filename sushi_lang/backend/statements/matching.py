@@ -5,6 +5,7 @@ This module handles the generation of LLVM IR for match statements with
 exhaustive pattern matching on enum types.
 """
 from __future__ import annotations
+import itertools
 from typing import TYPE_CHECKING
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend import enum_utils
@@ -13,7 +14,8 @@ from sushi_lang.backend.utils import require_both_initialized
 if TYPE_CHECKING:
     from llvmlite import ir
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-    from sushi_lang.semantics.ast import Match
+    from sushi_lang.semantics.ast import Match, Expr, Pattern, OwnPattern
+    from sushi_lang.semantics.typesys import EnumType, Type
 
 
 def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
@@ -47,6 +49,18 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     if not isinstance(scrutinee_type, EnumType):
         scrutinee_type = _get_scrutinee_type(codegen, stmt.scrutinee)
 
+    # An UNBOUND scrutinee (`match mk():`) is a temporary that nothing owns, and the arm
+    # bindings only BORROW its payload -- so an owning payload was never freed (#159). Give it a
+    # real owner: an ordinary owning enum local in a scope wrapped around the whole match.
+    #
+    # Registering it as a normal local rather than inventing a temp registry means every exit
+    # path that already works keeps working, unchanged: fall-through frees it at pop_scope, an
+    # arm that `return`s frees it via emit_scope_cleanup, an arm that `break`s frees it via
+    # emit_loop_exit_cleanup -- and it inherits the move guard, so an arm that moves the payload
+    # out does not then double-free it. It behaves exactly like the already-correct bound case
+    # (`let Maybe<Box> m = arr.get(0)` then `match m:`).
+    owns_temp_scrutinee = _register_temp_scrutinee(codegen, stmt.scrutinee, scrutinee_value, scrutinee_type)
+
     # Extract the tag (discriminant) from the enum struct: {i32 tag, [N x i8] data}
     tag = enum_utils.extract_enum_tag(codegen, scrutinee_value, name="match_tag")
 
@@ -76,6 +90,43 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
 
     # Position at end block
     codegen.builder.position_at_end(end_bb)
+
+    # Close the synthetic scope owning an unbound scrutinee. Emitted at match.end, this is the
+    # fall-through free; the early-exit paths (return / break / ??) already freed it through the
+    # same registry before branching away.
+    if owns_temp_scrutinee:
+        codegen.memory.pop_scope()
+
+
+# A counter, not a fixed name: two matches in one function would otherwise register the same
+# name twice and the inner scope's free would shadow the outer's.
+_TEMP_SCRUTINEE_SEQ = itertools.count()
+
+
+def _register_temp_scrutinee(codegen: 'LLVMCodegen', scrutinee: 'Expr', scrutinee_value: 'ir.Value',
+                             scrutinee_type: 'EnumType | None') -> bool:
+    """Own an unbound match scrutinee for the duration of the match. Returns True if a scope was pushed.
+
+    A bound scrutinee (a Name / field read) is already owned by whoever declared it -- taking a
+    second owner here would double-free at scope exit.
+    """
+    from sushi_lang.backend.expressions.memory import enum_temp_is_unowned
+    from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
+    from sushi_lang.semantics.typesys import EnumType
+
+    if not enum_temp_is_unowned(codegen, scrutinee):
+        return False
+
+    # `needs_cleanup` is table-free -- an unresolved UnknownType answers False, which is how a
+    # Result's owning payload escaped every RAII predicate in #179. Resolve first.
+    resolved = resolve_named_type(codegen, scrutinee_type) if scrutinee_type is not None else None
+    if not isinstance(resolved, EnumType) or not needs_cleanup(resolved):
+        return False
+
+    codegen.memory.push_scope()
+    name = f"__match_temp_{next(_TEMP_SCRUTINEE_SEQ)}"
+    codegen.memory.create_local(name, scrutinee_value.type, scrutinee_value, resolved)
+    return True
 
 
 def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType | None':

@@ -1,0 +1,18 @@
+# Regression for #159: an unbound Maybe temporary from a container get-out, consumed by `match`.
+# Distinct from #199: there is no .realise() here, so the receiver is emitted exactly once -- this
+# leaks purely because the temporary has no owner. Holding the get-out fixed and binding it to a
+# local (see the bound control) is clean, which is what isolates the defect to the temporary.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "len = 8"
+# EXPECT_NO_LEAKS: true
+
+struct Box:
+    i32[] data
+
+
+fn main() i32:
+    let Box[] arr = from([Box(data: from([1, 2, 3, 4, 5, 6, 7, 8])), Box(data: from([9, 10, 11, 12]))])
+    match arr.get(0):
+        Maybe.Some(b) -> println("len = {b.data.len()}")
+        Maybe.None() -> println("none")
+    return Result.Ok(0)

@@ -1,0 +1,27 @@
+# Regression for #159: `break` out of a loop whose body matches an unbound temporary. The break path
+# runs emit_loop_exit_cleanup, a DIFFERENT exit path from both scope-exit and return -- a temporary
+# registered for cleanup must be freed there too, and only once. The loop also runs the non-breaking
+# arm twice first, so a per-iteration leak shows up as multiple blocks.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "stopped at 2"
+# EXPECT_NO_LEAKS: true
+
+fn mk(i32 n) string:
+    return Result.Ok("xxxxxxxxxxxx{n}")
+
+fn probe() ~:
+    let i32 i = 0
+    while (i < 5):
+        match mk(i):
+            Result.Ok(v) ->
+                println("saw {v}")
+                if (i == 2):
+                    println("stopped at {i}")
+                    break
+            Result.Err(_) -> println("err")
+        i := i + 1
+    return Result.Ok(~)
+
+fn main() i32:
+    probe()
+    return Result.Ok(0)

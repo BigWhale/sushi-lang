@@ -1,0 +1,17 @@
+# Regression for #159: an unbound Result temporary used as an `if` condition. Only the discriminant
+# tag is read; the payload is never extracted, so nothing takes ownership of it and it leaks.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "yes"
+# EXPECT_NO_LEAKS: true
+
+fn mk() string:
+    return Result.Ok("xxxxxxxxxxxx{'abcd'}")
+
+fn probe() ~:
+    if (mk()):
+        println("yes")
+    return Result.Ok(~)
+
+fn main() i32:
+    probe()
+    return Result.Ok(0)

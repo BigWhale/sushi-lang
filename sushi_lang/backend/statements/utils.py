@@ -15,6 +15,36 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
+def emit_condition(codegen: 'LLVMCodegen', expr) -> 'ir.Value':
+    """Emit a boolean condition, freeing an unowned Result/Maybe temporary behind it (#159).
+
+    `if (mk())` / `while (mk())` read ONLY the discriminant tag -- `as_i1` compares it against the
+    success variant and the payload is never extracted. So a temporary condition owned its heap and
+    nobody ever freed it.
+
+    The destroy is emitted inline, in the same block as the value, immediately after the tag is
+    read and before the branch. That is deliberate: it is straight-line code, so no early exit can
+    escape it and the value trivially dominates its own destructor. For a `while` it lands in the
+    condition block, which is re-entered every iteration -- exactly right, since the condition
+    builds a FRESH temporary each time round.
+
+    A bound condition (`if (r)`) is a Name, so `destroy_enum_temp` leaves it to its owner.
+    """
+    from sushi_lang.backend.expressions.memory import destroy_enum_temp, enum_temp_is_unowned
+    from sushi_lang.backend.expressions.calls.utils import infer_generic_enum_type
+
+    value = codegen.expressions.emit_expr(expr)
+    cond = codegen.utils.as_i1(value)
+
+    if enum_temp_is_unowned(codegen, expr):
+        enum_type = (infer_generic_enum_type(codegen, expr, value, "Result<")
+                     or infer_generic_enum_type(codegen, expr, value, "Maybe<"))
+        if enum_type is not None:
+            destroy_enum_temp(codegen, expr, value, enum_type)
+
+    return cond
+
+
 # ============================================================================
 # RAII Cleanup Helpers
 # ============================================================================

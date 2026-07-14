@@ -353,6 +353,101 @@ def deep_copy_if_owning_struct(codegen: 'LLVMCodegen', value: ir.Value, semantic
     return value
 
 
+def expression_is_temporary(expr) -> bool:
+    """Does `expr` produce a value that NO other owner will free?
+
+    A bare name or a struct-field read hands back a shallow view of storage some other owner
+    still frees; anything else (constructor, call return, container get-out) is a temporary
+    that nobody owns. Same clone-vs-adopt discipline the `let` binding uses in
+    `statements/variables.py`.
+
+    This is the single definition, and it must stay single. `.realise()` reads it as "the
+    receiver is a temporary, so I ADOPT its payload"; the non-extracting consumers below read
+    it as "the receiver is a temporary, so I DESTROY it". If the two ever disagreed about a
+    given AST node, the payload would be adopted *and* freed -- a double free.
+    """
+    from sushi_lang.semantics.ast import Name, MemberAccess
+    return not isinstance(expr, (Name, MemberAccess))
+
+
+def enum_temp_is_unowned(codegen: 'LLVMCodegen', expr) -> bool:
+    """Is `expr` a Result/Maybe whose payload NOBODY else will free?
+
+    Ownership, not just binding. `expression_is_temporary` answers the narrower question "does
+    any binding name this value" -- but a value that no binding names can still hold a payload
+    that another owner frees, and freeing it here would double-free.
+
+    That is exactly what a `List` / `HashMap` get-out does: `list.get(i)` wraps the element
+    SHALLOWLY, so the returned `Maybe` aliases the container's storage and the container still
+    frees it (**#203**). A dynamic array's `.get()` deep-copies an owning element first
+    (`safe_access.py`, via `deep_copy_if_owning_struct`), so its get-out really is unowned --
+    which is why the two containers must be told apart here rather than treated alike.
+    """
+    from sushi_lang.semantics.ast import MethodCall, DotCall
+
+    if not expression_is_temporary(expr):
+        return False
+
+    if isinstance(expr, (MethodCall, DotCall)) and expr.method == "get":
+        receiver_type = _receiver_semantic_type(codegen, expr.receiver)
+        name = getattr(receiver_type, "name", "")
+        if name.startswith("List<") or name.startswith("HashMap<"):
+            return False
+
+    return True
+
+
+def _receiver_semantic_type(codegen: 'LLVMCodegen', receiver):
+    """Best-effort semantic type of a receiver expression (None when it cannot be determined)."""
+    from sushi_lang.semantics.ast import Name
+    from sushi_lang.semantics.typesys import ReferenceType
+
+    if not isinstance(receiver, Name):
+        return None
+    ty = codegen.memory.find_semantic_type(receiver.id)
+    if isinstance(ty, ReferenceType):
+        ty = ty.referenced_type
+    return ty
+
+
+def destroy_enum_temp(codegen: 'LLVMCodegen', expr_ast, enum_value: ir.Value,
+                      enum_type: Type) -> None:
+    """Free an unbound Result/Maybe temporary whose payload is never extracted (#159).
+
+    `match`, an `if`/`while` condition, and `is_ok()`/`is_err()`/`is_some()`/`is_none()` read
+    only the discriminant tag, or bind the payload as a BORROW. None of them takes ownership,
+    so an owning payload behind a temporary had no owner at all and was never freed.
+
+    Called ONLY from those non-extracting sites. `??` moves the payload out to a new owner and
+    `.realise()`/`.expect()` adopt it, so those temporaries already have exactly one owner --
+    destroying them here as well would double-free. That is why this is driven by the
+    consumption site rather than by a registry filled at production: a missed site leaks (the
+    status quo), while a missed de-registration would corrupt the heap.
+
+    The destructor switches on the runtime tag, so the live variant is freed and the others are
+    not -- no reasoning about which payload is present is needed here.
+    """
+    from sushi_lang.backend.destructors import (
+        emit_value_destructor, needs_cleanup, resolve_named_type
+    )
+
+    if not enum_temp_is_unowned(codegen, expr_ast):
+        return
+
+    # `needs_cleanup` is table-free: an unresolved UnknownType answers False, which is exactly
+    # how a Result's owning payload escaped every RAII predicate in #179. Resolve first.
+    resolved = resolve_named_type(codegen, enum_type)
+    if not isinstance(resolved, EnumType) or not needs_cleanup(resolved):
+        return
+
+    # emit_value_destructor takes a POINTER, and the temporary is an SSA aggregate. Park it in an
+    # ENTRY-block alloca: a `while` condition is re-entered every iteration, and an alloca emitted
+    # there would allocate per iteration and grow the stack without bound.
+    slot = codegen.memory.entry_alloca(enum_value.type, "enum_temp_slot")
+    codegen.builder.store(enum_value, slot)
+    emit_value_destructor(codegen, codegen.builder, slot, resolved)
+
+
 def move_owning_arg_into_container(codegen: 'LLVMCodegen', arg_ast) -> None:
     """Mark a bare-Name owning local as moved when it is stored into a container.
 

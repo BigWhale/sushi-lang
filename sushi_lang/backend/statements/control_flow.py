@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_both_initialized
+from sushi_lang.backend.statements import utils
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -35,13 +36,13 @@ def emit_if(codegen: 'LLVMCodegen', node: 'If') -> None:
     else_bb = codegen.func.append_basic_block(name="if.else") if node.else_block is not None else None
     test_bbs = [codegen.func.append_basic_block(name=f"if.{i}.test") for i in range(1, n)]
 
-    cond0 = codegen.utils.as_i1(codegen.expressions.emit_expr(arms[0][0], to_i1=True))
+    cond0 = utils.emit_condition(codegen, arms[0][0])
     false0 = test_bbs[0] if n > 1 else (else_bb or after_bb)
     codegen.builder.cbranch(cond0, body_bbs[0], false0)
 
     for i in range(1, n):
         codegen.builder.position_at_end(test_bbs[i - 1])
-        cond_i = codegen.utils.as_i1(codegen.expressions.emit_expr(arms[i][0], to_i1=True))
+        cond_i = utils.emit_condition(codegen, arms[i][0])
         false_i = test_bbs[i] if (i + 1) < n else (else_bb or after_bb)
         codegen.builder.cbranch(cond_i, body_bbs[i], false_i)
 
@@ -86,7 +87,7 @@ def emit_while(codegen: 'LLVMCodegen', node: 'While') -> None:
     codegen.builder.branch(cond_bb)
 
     codegen.builder.position_at_end(cond_bb)
-    cond_val = codegen.utils.as_i1(codegen.expressions.emit_expr(node.cond))
+    cond_val = utils.emit_condition(codegen, node.cond)
     codegen.builder.cbranch(cond_val, body_bb, end_bb)
 
     codegen.builder.position_at_end(body_bb)
