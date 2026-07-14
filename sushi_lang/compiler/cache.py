@@ -1,12 +1,32 @@
 """Cache management for incremental compilation.
 
-Manages the __sushi_cache__/ directory, manifest metadata, and staleness
-detection for per-unit object file caching.
+Manages the ``__sushi_cache__/`` directory and staleness detection for per-unit
+object-file caching.
+
+**The cache is shared, so it is never destroyed on the compile path.** It is rooted
+at the source file's parent directory (see ``pipeline.py``), so two ``sushic``
+processes compiling two files in one directory -- an ordinary parallel build, and
+what the test harness does with four jobs -- share it. The cache used to answer "this
+entry was built with different settings" by deleting the whole directory, which raced
+peers that were reading or writing inside it (issue #196: ``shutil.rmtree`` walking a
+tree another process was still creating files in, surfaced as CE0000).
+
+Instead, **an object is keyed by everything that produced it** -- the global
+parameters (compiler version, target triple, opt level) and the unit's semantic
+fingerprint -- so a stale entry can never be a false hit and nothing has to be
+evicted to stay correct. Different settings simply name different files. Publishing
+is atomic (``os.replace``), so a peer reading the path sees complete bytes or no file
+at all, never a truncated object.
+
+Entries for settings you no longer use are dead weight, not a correctness problem;
+``sushic --clean-cache`` prunes them.
 """
 from __future__ import annotations
 
-import json
+import hashlib
+import os
 import shutil
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -17,30 +37,32 @@ from sushi_lang import __version__ as compiler_version
 
 # Cache directory name (placed at project root)
 CACHE_DIR_NAME = "__sushi_cache__"
-MANIFEST_NAME = "cache.json"
 UNITS_DIR = "units"
 STDLIB_DIR = "stdlib"
 LIBS_DIR = "libs"
 
+# Length of the hex digests embedded in cached object names. Collision risk is
+# negligible and short names keep the cache readable.
+_KEY_LEN = 12
+
 
 class CacheManager:
-    """Manages the incremental compilation cache directory and manifest.
-
-    The cache stores per-unit .o files alongside a manifest that tracks
-    compiler version, platform, and optimization level. A mismatch in
-    any global parameter triggers a full cache wipe.
+    """Manages the incremental compilation cache directory.
 
     Directory layout::
 
         __sushi_cache__/
-            cache.json          -- manifest (version, platform, opt)
             units/
-                main.o          -- cached object file for main.sushi
-                helpers/math.o  -- mirrors source tree
+                main.<global>.<fingerprint>.o          -- mirrors the source tree
+                helpers/math.<global>.<fingerprint>.o
             stdlib/
-                io_stdio.o      -- compiled stdlib bitcode
+                io_stdio.<global>.<fingerprint>.o
             libs/
-                mylib.o         -- compiled library bitcode
+                mylib.<global>.<fingerprint>.o
+
+    ``<global>`` digests the compiler version, target triple and opt level;
+    ``<fingerprint>`` digests the unit itself. Both are in the name, so a hit is
+    exactly "an object built from this input, by this compiler, with these settings".
     """
 
     def __init__(self, project_root: Path, opt_level: str = "mem2reg",
@@ -51,177 +73,102 @@ class CacheManager:
         self.units_path = self.cache_path / UNITS_DIR
         self.stdlib_path = self.cache_path / STDLIB_DIR
         self.libs_path = self.cache_path / LIBS_DIR
-        self._manifest: Optional[dict] = None
         self._target_triple = llvm.get_default_triple()
+
+    @property
+    def global_key(self) -> str:
+        """Digest of the settings every cached object depends on.
+
+        This is what the manifest used to check (and wipe the cache over). Folding it
+        into the object name turns "the cache is stale" from an eviction into a miss.
+        """
+        material = f"{compiler_version}|{self._target_triple}|{self.opt_level}"
+        return hashlib.sha1(material.encode("utf-8")).hexdigest()[:_KEY_LEN]
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    def is_valid(self) -> bool:
-        """Check whether the cache exists and the manifest matches current settings."""
-        manifest = self._read_manifest()
-        if manifest is None:
-            return False
-        return (
-            manifest.get("compiler_version") == compiler_version
-            and manifest.get("target_triple") == self._target_triple
-            and manifest.get("opt_level") == self.opt_level
-        )
+    def prepare(self) -> None:
+        """Ready the cache directory for a compile.
+
+        The single entry point a compiler driver needs. Creating the directories is
+        all it takes -- and it is idempotent and safe to race, which is the point.
+        """
+        self.ensure_dirs()
 
     def ensure_dirs(self) -> None:
         """Create the cache directory structure if it doesn't exist."""
-        self.units_path.mkdir(parents=True, exist_ok=True)
-        self.stdlib_path.mkdir(parents=True, exist_ok=True)
-        self.libs_path.mkdir(parents=True, exist_ok=True)
-
-    def write_manifest(self) -> None:
-        """Write (or overwrite) the cache manifest with current settings."""
-        self.ensure_dirs()
-        manifest = {
-            "compiler_version": compiler_version,
-            "target_triple": self._target_triple,
-            "opt_level": self.opt_level,
-        }
-        manifest_path = self.cache_path / MANIFEST_NAME
-        manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-        self._manifest = manifest
+        for path in (self.units_path, self.stdlib_path, self.libs_path):
+            path.mkdir(parents=True, exist_ok=True)
 
     def wipe(self) -> None:
-        """Remove the entire cache directory."""
-        if self.cache_path.exists():
-            shutil.rmtree(self.cache_path)
-        self._manifest = None
+        """Remove the entire cache directory.
 
-    def invalidate_and_rebuild(self) -> None:
-        """Wipe cache and recreate with fresh manifest."""
-        self.wipe()
-        self.write_manifest()
+        Only for the explicit, single-process ``--clean-cache``. **Never call this on
+        the compile path** -- a peer may be reading the tree (#196). ``ignore_errors``
+        because even here a concurrent compile may be creating files underneath us,
+        and failing to prune is not worth an error.
+        """
+        shutil.rmtree(self.cache_path, ignore_errors=True)
 
     # ------------------------------------------------------------------
     # Per-unit object file management
     # ------------------------------------------------------------------
 
-    def unit_object_path(self, unit_name: str) -> Path:
-        """Return the cached .o path for a source unit (mirrors source tree)."""
-        return self.units_path / (unit_name + ".o")
+    def unit_object_path(self, unit_name: str, fingerprint: str) -> Path:
+        """Cached .o path for a source unit (mirrors the source tree)."""
+        return self._object_path(self.units_path, unit_name, fingerprint)
 
-    def stdlib_object_path(self, stdlib_unit: str) -> Path:
-        """Return the cached .o path for a stdlib unit.
+    def stdlib_object_path(self, stdlib_unit: str, fingerprint: str) -> Path:
+        """Cached .o path for a stdlib unit (``io/stdio`` -> ``stdlib/io_stdio.*.o``)."""
+        return self._object_path(self.stdlib_path, stdlib_unit.replace("/", "_"), fingerprint)
 
-        Converts path separators to underscores for flat storage:
-        ``io/stdio`` -> ``stdlib/io_stdio.o``
-        """
-        safe_name = stdlib_unit.replace("/", "_")
-        return self.stdlib_path / (safe_name + ".o")
-
-    def lib_object_path(self, lib_name: str) -> Path:
-        """Return the cached .o path for a library."""
-        safe_name = lib_name.replace("/", "_")
-        return self.libs_path / (safe_name + ".o")
+    def lib_object_path(self, lib_name: str, fingerprint: str) -> Path:
+        """Cached .o path for a library."""
+        return self._object_path(self.libs_path, lib_name.replace("/", "_"), fingerprint)
 
     def has_cached_unit(self, unit_name: str, fingerprint: str) -> bool:
-        """Check whether a valid cached .o exists for *unit_name* with matching fingerprint."""
-        obj_path = self.unit_object_path(unit_name)
-        if not obj_path.exists():
-            return False
-        stored = self._read_unit_fingerprint(unit_name)
-        return stored == fingerprint
-
-    def store_unit_object(self, unit_name: str, obj_bytes: bytes, fingerprint: str) -> Path:
-        """Store a compiled .o file and its fingerprint for a unit."""
-        obj_path = self.unit_object_path(unit_name)
-        obj_path.parent.mkdir(parents=True, exist_ok=True)
-        obj_path.write_bytes(obj_bytes)
-        self._write_unit_fingerprint(unit_name, fingerprint)
-        return obj_path
+        return self.unit_object_path(unit_name, fingerprint).exists()
 
     def has_cached_stdlib(self, stdlib_unit: str, fingerprint: str) -> bool:
-        """Check whether a valid cached .o exists for a stdlib module."""
-        obj_path = self.stdlib_object_path(stdlib_unit)
-        if not obj_path.exists():
-            return False
-        stored = self._read_stdlib_fingerprint(stdlib_unit)
-        return stored == fingerprint
-
-    def store_stdlib_object(self, stdlib_unit: str, obj_bytes: bytes, fingerprint: str) -> Path:
-        """Store a compiled stdlib .o file and its fingerprint."""
-        obj_path = self.stdlib_object_path(stdlib_unit)
-        obj_path.parent.mkdir(parents=True, exist_ok=True)
-        obj_path.write_bytes(obj_bytes)
-        self._write_stdlib_fingerprint(stdlib_unit, fingerprint)
-        return obj_path
+        return self.stdlib_object_path(stdlib_unit, fingerprint).exists()
 
     def has_cached_lib(self, lib_name: str, fingerprint: str) -> bool:
-        """Check whether a valid cached .o exists for a library."""
-        obj_path = self.lib_object_path(lib_name)
-        if not obj_path.exists():
-            return False
-        stored = self._read_lib_fingerprint(lib_name)
-        return stored == fingerprint
+        return self.lib_object_path(lib_name, fingerprint).exists()
+
+    def store_unit_object(self, unit_name: str, obj_bytes: bytes, fingerprint: str) -> Path:
+        return self._store(self.unit_object_path(unit_name, fingerprint), obj_bytes)
+
+    def store_stdlib_object(self, stdlib_unit: str, obj_bytes: bytes, fingerprint: str) -> Path:
+        return self._store(self.stdlib_object_path(stdlib_unit, fingerprint), obj_bytes)
 
     def store_lib_object(self, lib_name: str, obj_bytes: bytes, fingerprint: str) -> Path:
-        """Store a compiled library .o file and its fingerprint."""
-        obj_path = self.lib_object_path(lib_name)
+        return self._store(self.lib_object_path(lib_name, fingerprint), obj_bytes)
+
+    # ------------------------------------------------------------------
+    # Internals
+    # ------------------------------------------------------------------
+
+    def _object_path(self, section: Path, name: str, fingerprint: str) -> Path:
+        return section / f"{name}.{self.global_key}.{fingerprint[:_KEY_LEN]}.o"
+
+    def _store(self, obj_path: Path, obj_bytes: bytes) -> Path:
+        """Publish an object atomically.
+
+        A plain ``write_bytes`` truncates first, so for the length of the write the
+        path names a short file -- and a peer linking at that instant hands ``cc`` a
+        truncated object. Write to a private temp beside the target, then rename:
+        ``os.replace`` is atomic, so the path only ever names complete bytes.
+        """
         obj_path.parent.mkdir(parents=True, exist_ok=True)
-        obj_path.write_bytes(obj_bytes)
-        self._write_lib_fingerprint(lib_name, fingerprint)
-        return obj_path
-
-    def collect_all_object_paths(self) -> list[Path]:
-        """Collect all cached .o file paths (units + stdlib + libs)."""
-        paths = []
-        for subdir in (self.units_path, self.stdlib_path, self.libs_path):
-            if subdir.exists():
-                paths.extend(subdir.rglob("*.o"))
-        return paths
-
-    # ------------------------------------------------------------------
-    # Fingerprint persistence (stored as .fingerprint sidecar files)
-    # ------------------------------------------------------------------
-
-    def _fingerprint_path(self, obj_path: Path) -> Path:
-        return obj_path.with_suffix(".fingerprint")
-
-    def _read_unit_fingerprint(self, unit_name: str) -> Optional[str]:
-        fp = self._fingerprint_path(self.unit_object_path(unit_name))
-        return fp.read_text(encoding="utf-8").strip() if fp.exists() else None
-
-    def _write_unit_fingerprint(self, unit_name: str, fingerprint: str) -> None:
-        fp = self._fingerprint_path(self.unit_object_path(unit_name))
-        fp.parent.mkdir(parents=True, exist_ok=True)
-        fp.write_text(fingerprint, encoding="utf-8")
-
-    def _read_stdlib_fingerprint(self, stdlib_unit: str) -> Optional[str]:
-        fp = self._fingerprint_path(self.stdlib_object_path(stdlib_unit))
-        return fp.read_text(encoding="utf-8").strip() if fp.exists() else None
-
-    def _write_stdlib_fingerprint(self, stdlib_unit: str, fingerprint: str) -> None:
-        fp = self._fingerprint_path(self.stdlib_object_path(stdlib_unit))
-        fp.parent.mkdir(parents=True, exist_ok=True)
-        fp.write_text(fingerprint, encoding="utf-8")
-
-    def _read_lib_fingerprint(self, lib_name: str) -> Optional[str]:
-        fp = self._fingerprint_path(self.lib_object_path(lib_name))
-        return fp.read_text(encoding="utf-8").strip() if fp.exists() else None
-
-    def _write_lib_fingerprint(self, lib_name: str, fingerprint: str) -> None:
-        fp = self._fingerprint_path(self.lib_object_path(lib_name))
-        fp.parent.mkdir(parents=True, exist_ok=True)
-        fp.write_text(fingerprint, encoding="utf-8")
-
-    # ------------------------------------------------------------------
-    # Manifest I/O
-    # ------------------------------------------------------------------
-
-    def _read_manifest(self) -> Optional[dict]:
-        if self._manifest is not None:
-            return self._manifest
-        manifest_path = self.cache_path / MANIFEST_NAME
-        if not manifest_path.exists():
-            return None
+        tmp_path = obj_path.with_name(
+            f"{obj_path.name}.{os.getpid()}.{threading.get_ident()}.tmp"
+        )
         try:
-            self._manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            return self._manifest
-        except (json.JSONDecodeError, OSError):
-            return None
+            tmp_path.write_bytes(obj_bytes)
+            os.replace(tmp_path, obj_path)
+        finally:
+            # os.replace consumed it on the happy path; this is for the failure path.
+            tmp_path.unlink(missing_ok=True)
+        return obj_path

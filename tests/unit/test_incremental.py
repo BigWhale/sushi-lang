@@ -119,12 +119,12 @@ def test_cold_build_all_units_rebuilt(tmp_path):
     assert _rebuilt(result.stdout) == {"main", "helpers/helper"}
     assert _cached(result.stdout) == set()
 
-    # Cache artefacts must exist
+    # Cache artefacts must exist. An object is named for what produced it --
+    # <unit>.<global-key>.<fingerprint>.o -- so match on the stem, not the whole name.
     cache_units = tmp_path / "__sushi_cache__" / "units"
-    assert (cache_units / "main.o").exists()
-    assert (cache_units / "main.fingerprint").exists()
-    assert (cache_units / "helpers" / "helper.o").exists()
-    assert (cache_units / "helpers" / "helper.fingerprint").exists()
+    assert list(cache_units.glob("main.*.o"))
+    assert list((cache_units / "helpers").glob("helper.*.o"))
+    assert not list(cache_units.rglob("*.tmp"))
 
     # Executable is runnable and produces expected output
     exe = tmp_path / "out"
@@ -233,13 +233,15 @@ def test_whitespace_only_change_rebuilds_unit(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_opt_level_change_invalidates_entire_cache(tmp_path):
-    """Changing --opt level wipes the cache; every unit is rebuilt."""
+    """Changing --opt level rebuilds every unit."""
     _make_project(tmp_path)
     first = _compile(tmp_path, ["--opt", "mem2reg"])
     assert first.returncode == 0
     assert _rebuilt(first.stdout) == {"main", "helpers/helper"}
 
-    # Recompile with a different opt level — CacheManager.is_valid() returns False
+    # Recompile with a different opt level. The opt level is part of every object's
+    # cache key, so none of them can be hit -- a miss, not a wipe (the wipe raced
+    # concurrent compilers; see cache.py and issue #196).
     second = _compile(tmp_path, ["--opt", "O2"])
     assert second.returncode == 0
     assert _rebuilt(second.stdout) == {"main", "helpers/helper"}
