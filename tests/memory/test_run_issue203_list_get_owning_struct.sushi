@@ -1,0 +1,20 @@
+# Regression for #203: a List whose element is an owning STRUCT (a dynamic-array field), rather
+# than a nested List. Proves the fix is the generic value-semantics clone, not a List-of-List
+# special case.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "len = 8"
+# EXPECT_NO_LEAKS: true
+
+struct Box:
+    i32[] data
+
+
+fn main() i32:
+    let List<Box> boxes = List.new()
+    boxes.push(Box(data: from([1, 2, 3, 4, 5, 6, 7, 8])))
+
+    let Maybe<Box> m = boxes.get(0)
+    match m:
+        Maybe.Some(b) -> println("len = {b.data.len()}")
+        Maybe.None() -> println("none")
+    return Result.Ok(0)

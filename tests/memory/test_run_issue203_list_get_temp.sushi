@@ -1,0 +1,19 @@
+# Regression for #203: the UNBOUND form of the same get-out. It did not abort before the fix only
+# because nobody owned the temporary (#159) -- it aliased the list and was simply never freed, so
+# one bug masked the other. Once List.get() deep-copies, the temporary owns a real buffer and the
+# #159 machinery must destroy it exactly once: no leak, and no double free of the list's element.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "len = 2"
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let List<List<i32>> matrix = List.new()
+    let List<i32> row1 = List.new()
+    row1.push(1)
+    row1.push(2)
+    matrix.push(row1)
+
+    match matrix.get(0):
+        Maybe.Some(row) -> println("len = {row.len()}")
+        Maybe.None() -> println("none")
+    return Result.Ok(0)

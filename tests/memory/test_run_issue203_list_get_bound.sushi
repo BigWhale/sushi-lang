@@ -1,0 +1,22 @@
+# Regression for #203: List.get() of an OWNING element wrapped the element shallowly, so the
+# returned Maybe aliased the list's own storage. Binding that Maybe registers it for RAII cleanup,
+# and the element's buffer was then freed twice -- once by the Maybe, once by the list.
+# The dynamic-array .get() never had this bug: it deep-copies an owning element first. Only the
+# List/HashMap get-outs wrapped the raw element.
+# This is the shape that ABORTS (exit 133, heap corruption), not merely leaks.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "len = 2"
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let List<List<i32>> matrix = List.new()
+    let List<i32> row1 = List.new()
+    row1.push(1)
+    row1.push(2)
+    matrix.push(row1)
+
+    let Maybe<List<i32>> m = matrix.get(0)
+    match m:
+        Maybe.Some(row) -> println("len = {row.len()}")
+        Maybe.None() -> println("none")
+    return Result.Ok(0)

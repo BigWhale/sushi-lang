@@ -248,6 +248,19 @@ def emit_list_get(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Struct
     codegen.builder.position_at_end(in_bounds_block)
     element_ptr = gep_utils.gep_array_element(codegen, data_ptr, index_value, "element_ptr")
     element_value = codegen.builder.load(element_ptr, name="element")
+
+    # Deep-copy an owning element out so the returned Some(T) owns independent heap buffers (#203).
+    # `get` does NOT remove the element -- the list keeps it and still frees it at scope exit, so
+    # wrapping it shallowly gave one buffer two owners and the bound Maybe double-freed it. No-op
+    # for a non-owning T. This is exactly what the array `.get()` and `HashMap.get()` already do;
+    # `List` was the only container that wrapped the raw element.
+    #
+    # Deliberately NOT done in `emit_list_pop`: pop decrements `len`, so the popped element falls
+    # outside the destructor's `data[0..len)` walk and the list no longer owns it. That Maybe MOVES
+    # the element, and cloning there would strand the original.
+    from sushi_lang.backend.expressions.memory import emit_value_clone
+    element_value = emit_value_clone(codegen, element_value, element_type)
+
     some_value = maybe.emit_maybe_some(codegen, element_type, element_value)
     codegen.builder.branch(end_block)
     in_bounds_predecessor = codegen.builder.block

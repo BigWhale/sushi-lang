@@ -365,49 +365,15 @@ def expression_is_temporary(expr) -> bool:
     receiver is a temporary, so I ADOPT its payload"; the non-extracting consumers below read
     it as "the receiver is a temporary, so I DESTROY it". If the two ever disagreed about a
     given AST node, the payload would be adopted *and* freed -- a double free.
+
+    It rests on an invariant every container must keep: **a get-out returns a value nobody else
+    owns.** The array `.get()`, `HashMap.get()` and `List.get()` all deep-copy an owning element
+    before wrapping it, and `List.pop()` removes the element outright. A container that wrapped
+    its element SHALLOWLY would hand back a temporary the container still frees, and this
+    predicate would then be wrong about it -- which is precisely what #203 was.
     """
     from sushi_lang.semantics.ast import Name, MemberAccess
     return not isinstance(expr, (Name, MemberAccess))
-
-
-def enum_temp_is_unowned(codegen: 'LLVMCodegen', expr) -> bool:
-    """Is `expr` a Result/Maybe whose payload NOBODY else will free?
-
-    Ownership, not just binding. `expression_is_temporary` answers the narrower question "does
-    any binding name this value" -- but a value that no binding names can still hold a payload
-    that another owner frees, and freeing it here would double-free.
-
-    That is exactly what a `List` / `HashMap` get-out does: `list.get(i)` wraps the element
-    SHALLOWLY, so the returned `Maybe` aliases the container's storage and the container still
-    frees it (**#203**). A dynamic array's `.get()` deep-copies an owning element first
-    (`safe_access.py`, via `deep_copy_if_owning_struct`), so its get-out really is unowned --
-    which is why the two containers must be told apart here rather than treated alike.
-    """
-    from sushi_lang.semantics.ast import MethodCall, DotCall
-
-    if not expression_is_temporary(expr):
-        return False
-
-    if isinstance(expr, (MethodCall, DotCall)) and expr.method == "get":
-        receiver_type = _receiver_semantic_type(codegen, expr.receiver)
-        name = getattr(receiver_type, "name", "")
-        if name.startswith("List<") or name.startswith("HashMap<"):
-            return False
-
-    return True
-
-
-def _receiver_semantic_type(codegen: 'LLVMCodegen', receiver):
-    """Best-effort semantic type of a receiver expression (None when it cannot be determined)."""
-    from sushi_lang.semantics.ast import Name
-    from sushi_lang.semantics.typesys import ReferenceType
-
-    if not isinstance(receiver, Name):
-        return None
-    ty = codegen.memory.find_semantic_type(receiver.id)
-    if isinstance(ty, ReferenceType):
-        ty = ty.referenced_type
-    return ty
 
 
 def destroy_enum_temp(codegen: 'LLVMCodegen', expr_ast, enum_value: ir.Value,
@@ -431,7 +397,7 @@ def destroy_enum_temp(codegen: 'LLVMCodegen', expr_ast, enum_value: ir.Value,
         emit_value_destructor, needs_cleanup, resolve_named_type
     )
 
-    if not enum_temp_is_unowned(codegen, expr_ast):
+    if not expression_is_temporary(expr_ast):
         return
 
     # `needs_cleanup` is table-free: an unresolved UnknownType answers False, which is exactly
