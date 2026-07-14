@@ -45,11 +45,61 @@ class FunctionCollector:
         self.variable_types = variable_types
         self.visited_types = visited_types
 
+    def _reset_scope(self) -> None:
+        """Clear the per-function variable scope in place.
+
+        The scope dict is shared by reference with the expression scanner and the
+        shared inferrer, so it must be cleared, never rebound -- a rebind would leave
+        those holding the previous function's scope, and types would leak across
+        function (and unit) boundaries.
+        """
+        self.variable_types.clear()
+
+    def _resolve_local_type(self, ty):
+        """Resolve a bare struct/enum name (UnknownType) to its concrete type.
+
+        A `let P p = ...` stores the annotation `UnknownType("P")`; the shared inferrer
+        needs the StructType to reach `p`'s fields and methods. Non-Unknown types (and
+        names that resolve to nothing) pass through unchanged.
+        """
+        from sushi_lang.semantics.typesys import UnknownType
+        if not isinstance(ty, UnknownType):
+            return ty
+        from sushi_lang.semantics.type_resolution import resolve_unknown_type
+        structs = self.expression_scanner.type_inferrer.struct_table or {}
+        enums = self.expression_scanner.type_inferrer.enum_table or {}
+        resolved = resolve_unknown_type(ty, structs, enums)
+        return resolved if resolved is not None else ty
+
+    def _bind_self(self, target_type) -> None:
+        """Bind `self` to the receiver type, mirroring Pass 2 (signatures.py).
+
+        Without this, `identity(self)` in an extension or perk-impl body infers nothing
+        at Pass 1.5, the instantiation is never recorded, and Pass 2 -- which does bind
+        self -- fails to find the monomorphized symbol (CE2061; issue #171).
+        """
+        from sushi_lang.semantics.typesys import (
+            BuiltinType, ArrayType, DynamicArrayType, StructType, UnknownType,
+        )
+        if target_type is None:
+            return
+        if isinstance(target_type, (BuiltinType, ArrayType, DynamicArrayType, StructType)):
+            self.variable_types["self"] = target_type
+        elif isinstance(target_type, UnknownType):
+            from sushi_lang.semantics.type_resolution import resolve_unknown_type
+            structs = self.expression_scanner.type_inferrer.struct_table or {}
+            enums = self.expression_scanner.type_inferrer.enum_table or {}
+            resolved = resolve_unknown_type(target_type, structs, enums)
+            if resolved is not None and resolved != target_type:
+                self.variable_types["self"] = resolved
+
     def collect_from_function(self, func) -> None:
         """Collect generic instantiations from function signature and body."""
         # Skip generic functions entirely - they will be scanned during monomorphization
         if hasattr(func, 'type_params') and func.type_params:
             return
+
+        self._reset_scope()
 
         # Collect from return type
         # IMPORTANT: All functions implicitly return Result<T, E>, so we need to
@@ -74,6 +124,9 @@ class FunctionCollector:
 
     def collect_from_extension(self, ext) -> None:
         """Collect generic instantiations from extension method signature and body."""
+        self._reset_scope()
+        self._bind_self(ext.target_type)
+
         # Collect from target type
         if ext.target_type is not None:
             self._collect_from_type(ext.target_type)
@@ -98,6 +151,9 @@ class FunctionCollector:
         """
         # Process each method in the perk implementation
         for method in perk_impl.methods:
+            self._reset_scope()
+            self._bind_self(perk_impl.target_type)
+
             # Collect from return type (but don't wrap in Result)
             if method.ret is not None:
                 self._collect_from_type(method.ret)
@@ -150,7 +206,7 @@ class FunctionCollector:
             self._collect_from_type(param.ty)
             # Track parameter type for method call inference
             if param.name is not None:
-                self.variable_types[param.name] = param.ty
+                self.variable_types[param.name] = self._resolve_local_type(param.ty)
 
     def _collect_from_block(self, block) -> None:
         """Collect generic instantiations from block statements."""
@@ -166,9 +222,12 @@ class FunctionCollector:
             # Variable declaration with type annotation
             if stmt.ty is not None:
                 self._collect_from_type(stmt.ty)
-                # Track variable type for later reference
+                # Track variable type for later reference. Resolve a bare struct/enum
+                # name (UnknownType) to its concrete type so the shared inferrer can
+                # reach the fields and methods of a local when it appears as a generic
+                # call argument (#191: identity(p.x), identity(p.method())).
                 if stmt.name is not None:
-                    self.variable_types[stmt.name] = stmt.ty
+                    self.variable_types[stmt.name] = self._resolve_local_type(stmt.ty)
             # NEW: Scan initialization expression
             if stmt.value is not None:
                 self.expression_scanner.scan_expression(stmt.value)

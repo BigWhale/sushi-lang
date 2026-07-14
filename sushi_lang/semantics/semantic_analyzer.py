@@ -169,7 +169,8 @@ class SemanticAnalyzer:
             enum_table=self.enums.by_name,
             generic_structs=self.generic_structs.by_name,
             generic_funcs=self.generic_funcs.by_name,
-            func_table=self.funcs.by_name
+            func_table=self.funcs.by_name,
+            tables=self.tables,
         )
         for unit in compilation_order:
             if unit.ast is not None:

@@ -1,0 +1,22 @@
+# Issue #171: same root cause in a perk-implementation body, which shares the
+# extension self-binding path.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n"
+
+fn identity<T>(T value) T:
+    return Result.Ok(value)
+
+perk Doubling:
+    fn dbl() i32
+
+struct Box:
+    i32 v
+
+extend Box with Doubling:
+    fn dbl() i32:
+        return identity(self.v).realise(0) * 2
+
+fn main() i32:
+    let Box b = Box(21)
+    println(b.dbl())
+    return Result.Ok(0)

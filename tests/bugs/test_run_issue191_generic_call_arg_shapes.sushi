@@ -1,0 +1,34 @@
+# Issue #191: a generic call whose argument is a method call, a field access, an index,
+# a unary op, or a nested call was dropped by Pass 1.5's thin inferrer (it had no arm
+# for any of them), so identity__i32 was never monomorphized and Pass 2 raised CE2061.
+# Pass 1.5 now infers argument types through Pass 2's inferrer. All five shapes below
+# unify T = i32; the summed result is 3 + 3 + 3 + 5 + 7 = 21.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "21\n"
+
+fn identity<T>(T value) T:
+    return Result.Ok(value)
+
+struct P:
+    i32 x
+
+extend P get_x() i32:
+    return self.x
+
+fn seven() i32:
+    return Result.Ok(7)
+
+fn compute() i32:
+    let P p = P(3)
+    let i32[] arr = from([3, 4])
+    let i32 n = 5
+    let i32 a = identity(p.get_x())??     # method call
+    let i32 b = identity(p.x)??           # field access
+    let i32 c = identity(arr[0])??        # index
+    let i32 d = identity(-n)?? * -1       # unary op
+    let i32 e = identity(seven()??)??     # nested call
+    return Result.Ok(a + b + c + d + e)
+
+fn main() i32:
+    println(compute().realise(-1))
+    return Result.Ok(0)

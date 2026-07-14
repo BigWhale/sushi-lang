@@ -31,19 +31,24 @@ class ExpressionScanner:
         instantiations: Set[Tuple[str, Tuple["Type", ...]]],
         function_instantiations: Set[Tuple[str, Tuple["Type", ...]]],
         generic_funcs: dict,
+        type_validator=None,
     ):
         """Initialize expression scanner.
 
         Args:
-            type_inferrer: Type inference helper
+            type_inferrer: Thin fallback type inference helper (used when no validator)
             instantiations: Set to accumulate type instantiations
             function_instantiations: Set to accumulate function instantiations
             generic_funcs: Table of generic function definitions
+            type_validator: Pass 2's TypeValidator over the same tables, with a discard
+                reporter. When present, argument and receiver types are inferred through
+                it so Pass 1.5 agrees with Pass 2 (issues #171/#191).
         """
         self.type_inferrer = type_inferrer
         self.instantiations = instantiations
         self.function_instantiations = function_instantiations
         self.generic_funcs = generic_funcs
+        self.type_validator = type_validator
         # Create TypeResolver for centralized type resolution
         self._resolver = TypeResolver(
             type_inferrer.struct_table or {},
@@ -241,6 +246,27 @@ class ExpressionScanner:
             # Note: We don't emit errors here if inference fails
             # Type validation will catch that in Pass 2
 
+    def _infer_arg_type(self, arg_expr):
+        """Infer a generic call argument's type, preferring Pass 2's real inferrer.
+
+        The thin inferrer had no arm for a method call, field access, index, unary op,
+        or nested call argument (#191), and could not see `self` (#171). Pass 2's
+        TypeValidator handles all of them; the thin inferrer stays only as a fallback
+        for the unit-test paths that build the collector without a SymbolTables.
+
+        A lambda argument is the one shape kept on the thin path. Pass 2's inferrer
+        *caches* a lambda's inferred type onto the node (`lam.resolved_type`), and at
+        Pass 1.5 that type is computed before any expected-type propagation -- freezing
+        an under-resolved type that Pass 2 would then read back. The thin inferrer types
+        a lambda with no such side effect, and lambda arguments were never the bug here.
+        """
+        from sushi_lang.semantics.ast import Lambda
+        if self.type_validator is not None and not isinstance(arg_expr, Lambda):
+            inferred = self.type_validator.infer_expression_type(arg_expr)
+            if inferred is not None:
+                return inferred
+        return self.type_inferrer.infer_simple_expr_type(arg_expr)
+
     def _infer_type_args_from_call(self, call, generic_func) -> tuple["Type", ...] | None:
         """Infer type arguments for generic function call.
 
@@ -267,7 +293,7 @@ class ExpressionScanner:
         call_args = getattr(call, "args", []) or []
         arg_types: list["Type"] = []
         for arg_expr in call_args:
-            arg_type = self.type_inferrer.infer_simple_expr_type(arg_expr)
+            arg_type = self._infer_arg_type(arg_expr)
             if arg_type is None:
                 # Can't infer argument type
                 return None
