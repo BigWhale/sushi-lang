@@ -1,0 +1,13 @@
+# Issue #212: an extension method's return expression was never type-checked, so a
+# type mismatch there reached the backend and crashed it with a CE0000 internal error
+# instead of a diagnostic. Here the body returns `self` (i32) where `string` is
+# declared. The identical mistake in a plain `fn` is a clean CE2003.
+# EXPECT_ERROR_CODE: CE2003
+
+extend i32 mislabelled() string:
+    return self
+
+fn main() i32:
+    let i32 n = 1
+    println(n.mislabelled())
+    return Result.Ok(0)

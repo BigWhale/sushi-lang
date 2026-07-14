@@ -1,0 +1,18 @@
+# Issue #212: because an extension method's return expression was never validated, a
+# generic call in that position was never rewritten to its monomorphized name, so the
+# backend looked up the unmangled `identity` and crashed (CE0000: KeyError). Validating
+# the return expression rewrites the call to identity__i32, which Pass 1.5 already
+# collected here (the argument is a literal, so it needs no `self` binding).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n"
+
+fn identity<T>(T value) T:
+    return Result.Ok(value)
+
+extend i32 boosted() i32:
+    return identity(21).realise(0) + self
+
+fn main() i32:
+    let i32 n = 21
+    println(n.boosted())
+    return Result.Ok(0)

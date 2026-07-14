@@ -182,18 +182,33 @@ def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:
     """
     if not validator.current_function:
         # Extension and perk-implementation method bodies have no current_function
-        # (they return a BARE value at the IR level). A Result.Ok(...)/Result.Err(...)
-        # wrapper here is the anti-pattern that later crashes codegen (CE0113); reject
-        # it cleanly at type-check time.
+        # (they return a BARE value at the IR level, not a Result). The bare value
+        # still has to be type-checked, and its expression still has to be walked --
+        # otherwise a generic call in it is never rewritten to its monomorphized name
+        # and an undefined method or type mismatch sails straight into the backend as
+        # a CE0000 crash (issue #212).
         if getattr(validator, "in_extension_context", False) and stmt.value is not None:
             value = stmt.value
+            # A Result.Ok(...)/Result.Err(...) wrapper is the anti-pattern that later
+            # crashes codegen (CE0113); reject it cleanly here.
             if (isinstance(value, DotCall)
                     and isinstance(value.receiver, Name)
                     and value.receiver.id == "Result"
                     and value.method in ("Ok", "Err")):
                 method_name = getattr(validator, "extension_method_name", None) or "<method>"
                 er.emit(validator.reporter, er.ERR.CE2091, value.loc, name=method_name)
-        return  # Should not happen, but defensive programming
+                return
+
+            # Walk the return expression and check the bare value against the declared
+            # return type. validate_return_compatibility does both (and emits CE2003 on
+            # a mismatch). A blank (~) return type accepts anything, so skip the check.
+            expected_type = getattr(validator, "extension_return_type", None)
+            if expected_type is not None and expected_type != BuiltinType.BLANK:
+                from .compatibility import validate_return_compatibility
+                validate_return_compatibility(validator, expected_type, value, value.loc)
+            else:
+                validator.validate_expression(value)
+        return
 
     expected_type = validator.current_function.ret
     if expected_type is None:
