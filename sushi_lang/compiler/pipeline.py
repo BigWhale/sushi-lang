@@ -330,11 +330,7 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
     cache_dir = Path(args.cache_dir) if getattr(args, 'cache_dir', None) else None
     cache = CacheManager(src_path.parent, opt_level=args.opt, cache_dir=cache_dir)
 
-    # Validate cache or wipe and rebuild
-    if not cache.is_valid():
-        cache.invalidate_and_rebuild()
-    else:
-        cache.ensure_dirs()
+    cache.prepare()
 
     monomorphized_extensions = getattr(analyzer, 'monomorphized_extensions', [])
 
@@ -382,7 +378,7 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
         )
 
         if cache.has_cached_unit(unit.name, fp):
-            obj_path = cache.unit_object_path(unit.name)
+            obj_path = cache.unit_object_path(unit.name, fp)
             obj_paths.append(obj_path)
             cached.append(unit.name)
             print(f"  {unit.name:<30s} [cached]")
@@ -406,7 +402,7 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
             continue
         fp = compute_stdlib_fingerprint(bc_paths)
         if cache.has_cached_stdlib(stdlib_unit, fp):
-            obj_paths.append(cache.stdlib_object_path(stdlib_unit))
+            obj_paths.append(cache.stdlib_object_path(stdlib_unit, fp))
         else:
             obj_bytes = cg.compile_stdlib_to_object(stdlib_unit, opt=args.opt)
             obj_path = cache.store_stdlib_object(stdlib_unit, obj_bytes, fp)
@@ -419,7 +415,7 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
             fp = library_fingerprints.get(lib_path) or compute_lib_fingerprint(slib_path)
             lib_name = lib_path.replace("/", "_")
             if cache.has_cached_lib(lib_name, fp):
-                obj_paths.append(cache.lib_object_path(lib_name))
+                obj_paths.append(cache.lib_object_path(lib_name, fp))
             else:
                 obj_bytes = cg.compile_library_to_object(lib_path, library_linker, opt=args.opt)
                 obj_path = cache.store_lib_object(lib_name, obj_bytes, fp)
