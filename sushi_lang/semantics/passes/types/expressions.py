@@ -279,111 +279,74 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
         er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
         return
 
-    # If function uses implicit Result syntax (not explicitly Result<T, E>),
-    # construct the ResultType for validation
-    from sushi_lang.semantics.type_resolution import TypeResolver
-    if not isinstance(func_return_type, ResultType) and not (isinstance(func_return_type, GenericTypeRef) and func_return_type.base_name == "Result"):
-        # Implicit syntax: fn foo() i32 | MyError or fn foo() i32 (defaults to StdError)
-        # Construct ResultType(ok_type=i32, err_type=MyError or StdError)
-        if validator.current_function.err_type is not None:
-            # Custom error type: fn foo() i32 | MyError
-            resolver = TypeResolver(
-                validator.struct_table.by_name,
-                validator.enum_table.by_name
-            )
-            err_type_resolved = resolver.resolve(validator.current_function.err_type)
-        else:
-            # Default to StdError: fn foo() i32 or fn main() i32
-            err_type_resolved = validator.enum_table.by_name.get("StdError")
-            if err_type_resolved is None:
-                # StdError not found (shouldn't happen)
-                er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
-                return
-        func_return_type = ResultType(ok_type=func_return_type, err_type=err_type_resolved)
-    elif isinstance(func_return_type, GenericTypeRef) and func_return_type.base_name == "Result":
-        # Explicit Result<T, E> syntax - resolve to ResultType
-        resolver = TypeResolver(
-            validator.struct_table.by_name,
-            validator.enum_table.by_name
-        )
-        func_return_type = resolver.resolve(func_return_type)
+    # Normalize the enclosing function's return type to the interned Result<T, E> enum, whichever
+    # way it was spelled: an implicit `fn foo() T` / `fn foo() T | E`, an explicit
+    # `fn foo() Result<T, E>` (still a GenericTypeRef), or a signature already resolved in place.
+    from sushi_lang.semantics.type_resolution import TypeResolver, resolve_unknown_type
+    from sushi_lang.semantics.generics.results import (
+        ensure_result_type_in_table, is_result_enum, result_ok_err,
+    )
 
-    # Check if function returns Result<T, E>
-    # Note: When ?? is used with Maybe<T>, it still propagates as Result.Err()
+    structs = validator.struct_table.by_name
+    enums = validator.enum_table.by_name
 
-    # ResultType is always valid
+    def intern(ok: 'Type', err: 'Type'):
+        return ensure_result_type_in_table(validator.enum_table, ok, err, struct_table=structs)
+
     if isinstance(func_return_type, ResultType):
-        # Function returns Result<T, E> - validate error types match
-        inner_err_type = None
-        outer_err_type = func_return_type.err_type
-
-        # Extract inner error type
-        if isinstance(inner_type, ResultType):
-            inner_err_type = inner_type.err_type
-        elif isinstance(inner_type, EnumType):
-            err_variant = inner_type.get_variant("Err")
-            if err_variant and err_variant.associated_types:
-                inner_err_type = err_variant.associated_types[0]
-
-        # Strict error type matching - no conversions
-        # Compare by string representation since types might be different instances
-        if inner_err_type is not None and outer_err_type is not None:
-            if str(inner_err_type) != str(outer_err_type):
-                # Error type mismatch - emit CE2511
-                ok_type_str = str(func_return_type.ok_type) if hasattr(func_return_type, 'ok_type') else "T"
-                er.emit(validator.reporter, er.ERR.CE2511, expr.loc,
-                        ok_type=ok_type_str,
-                        inner_err=str(inner_err_type),
-                        outer_err=str(outer_err_type))
-                return
-
-        # Validation passed - annotate AST
-        _annotate_try_expr(expr, inner_type, unwrapped_type, success_tag,
-                          error_type, error_tag, func_return_type)
-        return
-
-    # GenericTypeRef with base_name "Result" is also valid (not yet resolved)
-    if isinstance(func_return_type, GenericTypeRef) and func_return_type.base_name == "Result":
-        # Verify it has exactly 2 type parameters
+        func_return_type = intern(func_return_type.ok_type, func_return_type.err_type)
+    elif isinstance(func_return_type, GenericTypeRef) and func_return_type.base_name == "Result":
         if len(func_return_type.type_args) != 2:
             er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
             return
+        func_return_type = intern(func_return_type.type_args[0], func_return_type.type_args[1])
+    elif not is_result_enum(func_return_type):
+        # Implicit syntax: fn foo() i32 | MyError, or fn foo() i32 (defaults to StdError)
+        if validator.current_function.err_type is not None:
+            resolver = TypeResolver(structs, enums)
+            err_type_resolved = resolver.resolve(validator.current_function.err_type)
+        else:
+            err_type_resolved = enums.get("StdError")
+        if err_type_resolved is None:
+            # StdError not found (shouldn't happen)
+            er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
+            return
+        func_return_type = intern(func_return_type, err_type_resolved)
 
-        # Extract error types for validation
-        inner_err_type = None
-        outer_err_type = func_return_type.type_args[1]
-
-        # Extract inner error type
-        if isinstance(inner_type, ResultType):
-            inner_err_type = inner_type.err_type
-        elif isinstance(inner_type, EnumType):
-            err_variant = inner_type.get_variant("Err")
-            if err_variant and err_variant.associated_types:
-                inner_err_type = err_variant.associated_types[0]
-
-        # Strict error type matching
-        # Compare by string representation since types might be different instances
-        if inner_err_type is not None and outer_err_type is not None:
-            if str(inner_err_type) != str(outer_err_type):
-                # Error type mismatch - emit CE2511
-                ok_type_str = str(func_return_type.type_args[0])
-                er.emit(validator.reporter, er.ERR.CE2511, expr.loc,
-                        ok_type=ok_type_str,
-                        inner_err=str(inner_err_type),
-                        outer_err=str(outer_err_type))
-                return
-
-        # Validation passed - annotate AST (convert GenericTypeRef to ResultType)
-        resolved_func_return = ResultType(
-            ok_type=func_return_type.type_args[0],
-            err_type=func_return_type.type_args[1]
-        )
-        _annotate_try_expr(expr, inner_type, unwrapped_type, success_tag,
-                          error_type, error_tag, resolved_func_return)
+    if not is_result_enum(func_return_type):
+        # Function doesn't return Result<T, E>
+        er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
         return
 
-    # Function doesn't return Result<T, E>
-    er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
+    # Note: when ?? is used with Maybe<T>, it still propagates as Result.Err()
+    outer_ok_type, outer_err_type = result_ok_err(func_return_type)
+
+    # Extract the inner error type
+    inner_err_type = None
+    if isinstance(inner_type, ResultType):
+        inner_err_type = inner_type.err_type
+    elif isinstance(inner_type, EnumType):
+        err_variant = inner_type.get_variant("Err")
+        if err_variant and err_variant.associated_types:
+            inner_err_type = err_variant.associated_types[0]
+
+    # Strict error-type matching, no conversions. This used to compare str(inner) != str(outer)
+    # because the two sides could be different instances of the same type -- the workaround that
+    # only existed because Result had no single representation. Both sides now resolve to the
+    # interned type, so they are compared as types.
+    if inner_err_type is not None and outer_err_type is not None:
+        inner_resolved = resolve_unknown_type(inner_err_type, structs, enums)
+        outer_resolved = resolve_unknown_type(outer_err_type, structs, enums)
+        if inner_resolved != outer_resolved:
+            er.emit(validator.reporter, er.ERR.CE2511, expr.loc,
+                    ok_type=str(outer_ok_type),
+                    inner_err=str(inner_err_type),
+                    outer_err=str(outer_err_type))
+            return
+
+    # Validation passed - annotate AST
+    _annotate_try_expr(expr, inner_type, unwrapped_type, success_tag,
+                      error_type, error_tag, func_return_type)
 
 
 def _annotate_try_expr(

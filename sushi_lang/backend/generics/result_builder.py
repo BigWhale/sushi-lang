@@ -28,7 +28,8 @@ def build_err_from_return_type(
 ) -> ir.Value:
     """Construct the Err variant of a function's Result return type.
 
-    Accepts the return type as either a ResultType or a GenericTypeRef("Result", [T, E]).
+    Accepts the return type in any of its spellings: the interned Result<T, E> EnumType (what
+    Pass 2 now stamps), a ResultType, or a GenericTypeRef("Result", [T, E]).
 
     Args:
         codegen: The LLVM code generator instance.
@@ -38,8 +39,13 @@ def build_err_from_return_type(
     Returns:
         LLVM value representing Result.Err(error).
     """
-    from sushi_lang.semantics.generics.results import ensure_result_type_in_table
+    from sushi_lang.semantics.generics.results import (
+        ensure_result_type_in_table, is_result_enum, result_ok_err,
+    )
     from sushi_lang.semantics.generics.types import GenericTypeRef
+
+    if is_result_enum(return_type):
+        return _build_err_variant(codegen, return_type, error_value)
 
     if isinstance(return_type, ResultType):
         ok_type, err_type = return_type.ok_type, return_type.err_type

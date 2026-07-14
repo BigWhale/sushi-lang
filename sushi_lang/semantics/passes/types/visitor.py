@@ -694,20 +694,11 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if not isinstance(generic_type, GenericTypeRef):
             return generic_type
 
-        # Special handling for Result<T, E> - convert to ResultType
+        # Result<T, E> interns to its EnumType, like every other generic.
         if generic_type.base_name == "Result" and len(generic_type.type_args) == 2:
-            # Recursively resolve type arguments in case they're also generic
-            ok_type = resolve_unknown_type(
-                generic_type.type_args[0],
-                self.type_validator.struct_table.by_name,
-                self.type_validator.enum_table.by_name
-            )
-            err_type = resolve_unknown_type(
-                generic_type.type_args[1],
-                self.type_validator.struct_table.by_name,
-                self.type_validator.enum_table.by_name
-            )
-            return ResultType(ok_type=ok_type, err_type=err_type)
+            interned = self._intern_result(generic_type.type_args[0], generic_type.type_args[1])
+            if interned is not None:
+                return interned
 
         # For other generic types (Maybe, Own, etc.), return as-is
         # They will be handled by monomorphization
@@ -902,6 +893,20 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
         return None
 
+    def _intern_result(self, ok_type: Type, err_type: Type) -> Optional[Type]:
+        """The interned ``Result<ok, err>`` EnumType -- what a call's return type IS at runtime.
+
+        A call used to infer as a `ResultType`, which is not an `EnumType`, so it compared unequal
+        to the `Result<...>` enum a declared field/annotation resolves to -- that is #184's
+        "expects Result<string, StdError>, got Result<string, StdError>". Interning both sides
+        through here makes them the same object.
+        """
+        from sushi_lang.semantics.generics.results import ensure_result_type_in_table
+        return ensure_result_type_in_table(
+            self.type_validator.enum_table, ok_type, err_type,
+            struct_table=self.type_validator.struct_table.by_name,
+        )
+
     def _materialize_stdlib_return_type(self, ret_type: Optional[Type]) -> Optional[Type]:
         """Resolve a registry-declared stdlib return type into a concrete type.
 
@@ -947,7 +952,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if not isinstance(node.callee, Name):
             callee_ty = self.type_validator.infer_expression_type(node.callee)
             if isinstance(callee_ty, FunctionType):
-                return ResultType(ok_type=callee_ty.ok_type, err_type=callee_ty.err_type)
+                return self._intern_result(callee_ty.ok_type, callee_ty.err_type)
             return None
 
         # Look up function return type
@@ -957,7 +962,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         # exactly like a direct call (so `f(x)??` unwraps to ok_type).
         callee_var_ty = self.type_validator.variable_types.get(function_name)
         if isinstance(callee_var_ty, FunctionType):
-            return ResultType(ok_type=callee_var_ty.ok_type, err_type=callee_var_ty.err_type)
+            return self._intern_result(callee_var_ty.ok_type, callee_var_ty.err_type)
 
         # Check if this is a struct constructor
         if function_name in self.type_validator.struct_table.by_name:
@@ -1014,37 +1019,37 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 from sushi_lang.semantics.typesys import ResultType
                 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
-                # If function already returns ResultType, return it as-is
-                if isinstance(func_sig.ret_type, ResultType):
+                # Every shape of Result a signature can declare interns to the same EnumType,
+                # which is what the call's value actually is at runtime.
+                from sushi_lang.semantics.generics.results import is_result_enum
+
+                # Already the interned enum (the signature was resolved in place): return it.
+                # Wrapping it again would produce Result<Result<T, E>, StdError>.
+                if is_result_enum(func_sig.ret_type):
                     return func_sig.ret_type
 
-                # If function declares Result<T, E>, resolve and return it
+                if isinstance(func_sig.ret_type, ResultType):
+                    return self._intern_result(func_sig.ret_type.ok_type,
+                                               func_sig.ret_type.err_type)
+
+                # Explicit `fn foo() Result<T, E>` -- not wrapped again.
                 if isinstance(func_sig.ret_type, GenericTypeRef) and func_sig.ret_type.base_name == "Result":
-                    # Resolve GenericTypeRef("Result") to ResultType
+                    if len(func_sig.ret_type.type_args) == 2:
+                        return self._intern_result(func_sig.ret_type.type_args[0],
+                                                   func_sig.ret_type.type_args[1])
                     return resolve_unknown_type(
                         func_sig.ret_type,
                         self.type_validator.struct_table.by_name,
                         self.type_validator.enum_table.by_name
                     )
                 elif func_sig.err_type is not None:
-                    # Implicit Result syntax: fn foo() i32 | MyError
-                    # Construct ResultType(ok_type=i32, err_type=MyError)
-                    err_type = resolve_unknown_type(
-                        func_sig.err_type,
-                        self.type_validator.struct_table.by_name,
-                        self.type_validator.enum_table.by_name
-                    )
-                    return ResultType(ok_type=func_sig.ret_type, err_type=err_type)
+                    # Implicit Result with a custom error: fn foo() i32 | MyError
+                    return self._intern_result(func_sig.ret_type, func_sig.err_type)
                 else:
-                    # Default implicit Result syntax: fn foo() i32 (defaults to StdError)
-                    # Construct ResultType(ok_type=i32, err_type=StdError)
+                    # Implicit Result, default error: fn foo() i32 -> Result<i32, StdError>
                     err_type = self.type_validator.enum_table.by_name.get("StdError")
                     if err_type is not None:
-                        return ResultType(ok_type=func_sig.ret_type, err_type=err_type)
-                    # Fallback to old behavior if StdError not found
-                    result_enum_name = f"Result<{func_sig.ret_type}>"
-                    if result_enum_name in self.type_validator.enum_table.by_name:
-                        return self.type_validator.enum_table.by_name[result_enum_name]
+                        return self._intern_result(func_sig.ret_type, err_type)
                 # Fallback to declared return type
                 return func_sig.ret_type
         return None
@@ -1149,10 +1154,9 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         # Result<ok, err>, exactly like a direct call (so `obj.handler(x)??` unwraps).
         fn_field_ty = resolve_fn_field_call(self.type_validator, node)
         if fn_field_ty is not None:
-            from sushi_lang.semantics.typesys import ResultType
             node.callee_fn_type = fn_field_ty
-            node.inferred_return_type = ResultType(ok_type=fn_field_ty.ok_type,
-                                                   err_type=fn_field_ty.err_type)
+            node.inferred_return_type = self._intern_result(fn_field_ty.ok_type,
+                                                            fn_field_ty.err_type)
             return node.inferred_return_type
 
         # Otherwise, it's a method call - infer return type from method
