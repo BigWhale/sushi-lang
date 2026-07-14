@@ -37,9 +37,8 @@ def emit_key_equality_check(codegen: Any, key_type: Type, key1: ir.Value, key2: 
     builder = codegen.builder
     zero_i32 = ZERO_I32
 
-    # Handle Result<T, E> types (GenericTypeRef or ResultType) - convert to EnumType
+    # An unresolved Result<T, E> annotation (GenericTypeRef) - intern it to its EnumType
     from sushi_lang.semantics.generics.types import GenericTypeRef
-    from sushi_lang.semantics.typesys import ResultType
     if isinstance(key_type, GenericTypeRef) and key_type.base_name == "Result":
         # Convert GenericTypeRef("Result", [T, E]) to Result enum
         if len(key_type.type_args) >= 2:

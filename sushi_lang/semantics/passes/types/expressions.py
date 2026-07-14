@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType, ResultType
+from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, IntLit, RangeExpr
 from sushi_lang.semantics.type_predicates import is_numeric_type
@@ -172,7 +172,7 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
     - inferred_success_tag: Variant index for Ok/Some
     - inferred_error_type: The error type E (None for Maybe-like)
     - inferred_error_tag: Variant index for Err (None for Maybe-like)
-    - inferred_func_return_type: The enclosing function's ResultType
+    - inferred_func_return_type: The enclosing function's Result<T, E> enum
 
     Args:
         validator: The TypeValidator instance.
@@ -192,35 +192,7 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
 
     # Check if inner expression is a supported type (Result<T, E>, Maybe<T>, or result-like enum)
     if inner_type is not None:
-        # ResultType is always valid for ??
-        if isinstance(inner_type, ResultType):
-            # ResultType is a semantic type - convert to EnumType for backend when the
-            # concrete Result<T, E> enum has already been materialized.
-            result_type = inner_type
-            result_enum_name = f"Result<{inner_type.ok_type}, {inner_type.err_type}>"
-            if result_enum_name in validator.enum_table.by_name:
-                inner_type = validator.enum_table.by_name[result_enum_name]
-            # Extract variant info. Prefer the materialized enum, but fall back to reading
-            # straight from the ResultType so the annotation does not depend on the enum
-            # already being registered (Result variants are canonically Ok=0, Err=1).
-            # Without this fallback a `??` through an fn-typed parameter fails
-            # order-dependently with CE0055 when the higher-order fn is defined before its
-            # concrete callee (so the Result<T, E> enum is not yet in the table).
-            if isinstance(inner_type, EnumType):
-                ok_variant = inner_type.get_variant("Ok")
-                if ok_variant and ok_variant.associated_types:
-                    unwrapped_type = ok_variant.associated_types[0]
-                    success_tag = inner_type.get_variant_index("Ok")
-                err_variant = inner_type.get_variant("Err")
-                if err_variant and err_variant.associated_types:
-                    error_type = err_variant.associated_types[0]
-                    error_tag = inner_type.get_variant_index("Err")
-            else:
-                unwrapped_type = result_type.ok_type
-                success_tag = 0
-                error_type = result_type.err_type
-                error_tag = 1
-        elif isinstance(inner_type, EnumType):
+        if isinstance(inner_type, EnumType):
             # For EnumType, check if it matches Result-like or Maybe-like pattern
             # Check for Result-like pattern: Ok(value) and Err(...)
             ok_variant = inner_type.get_variant("Ok")
@@ -254,7 +226,7 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
                 error_type = None
                 error_tag = None
         else:
-            # Not an enum, ResultType, or MaybeType
+            # Not a Result-like or Maybe-like enum
             er.emit(validator.reporter, er.ERR.CE2507, expr.loc, got=str(inner_type))
             return
 
@@ -271,7 +243,7 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
         # Continue validation - this is just a warning
 
     # Get the function's return type
-    # For implicit syntax (fn foo() i32 | MyError), we need to construct ResultType
+    # For implicit syntax (fn foo() i32 | MyError), the Result is interned here
     func_return_type = validator.current_function.ret
 
     if func_return_type is None:
@@ -293,9 +265,7 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
     def intern(ok: 'Type', err: 'Type'):
         return ensure_result_type_in_table(validator.enum_table, ok, err, struct_table=structs)
 
-    if isinstance(func_return_type, ResultType):
-        func_return_type = intern(func_return_type.ok_type, func_return_type.err_type)
-    elif isinstance(func_return_type, GenericTypeRef) and func_return_type.base_name == "Result":
+    if isinstance(func_return_type, GenericTypeRef) and func_return_type.base_name == "Result":
         if len(func_return_type.type_args) != 2:
             er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
             return
@@ -323,9 +293,7 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
 
     # Extract the inner error type
     inner_err_type = None
-    if isinstance(inner_type, ResultType):
-        inner_err_type = inner_type.err_type
-    elif isinstance(inner_type, EnumType):
+    if isinstance(inner_type, EnumType):
         err_variant = inner_type.get_variant("Err")
         if err_variant and err_variant.associated_types:
             inner_err_type = err_variant.associated_types[0]
@@ -356,7 +324,7 @@ def _annotate_try_expr(
     success_tag: int,
     error_type: 'Optional[Type]',
     error_tag: 'Optional[int]',
-    func_return_type: 'ResultType'
+    func_return_type: 'Type'
 ) -> None:
     """Annotate TryExpr AST node with inferred type information.
 
@@ -371,7 +339,7 @@ def _annotate_try_expr(
         success_tag: Variant index for Ok/Some.
         error_type: The error type E (None for Maybe-like).
         error_tag: Variant index for Err (None for Maybe-like).
-        func_return_type: The enclosing function's ResultType.
+        func_return_type: The enclosing function's interned Result<T, E> enum.
     """
     expr.inferred_inner_type = inner_type
     expr.inferred_unwrapped_type = unwrapped_type
@@ -411,7 +379,7 @@ def validate_boolean_condition(validator: 'TypeValidator', expr: Expr, context: 
 
     Allows:
     - bool type (traditional boolean)
-    - Result<T, E> in any representation (EnumType, ResultType, GenericTypeRef)
+    - Result<T, E> in either representation (the interned EnumType, or a GenericTypeRef)
     """
     # First, validate the expression itself (this triggers visitor validation)
     validator.validate_expression(expr)
@@ -425,10 +393,6 @@ def validate_boolean_condition(validator: 'TypeValidator', expr: Expr, context: 
 
         # Allow Result<T, E> enum types (monomorphized representation)
         if isinstance(expr_type, EnumType) and expr_type.name.startswith("Result<"):
-            return
-
-        # Allow ResultType (semantic representation)
-        if isinstance(expr_type, ResultType):
             return
 
         # Allow GenericTypeRef("Result", ...) (parsed representation)

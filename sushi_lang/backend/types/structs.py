@@ -141,9 +141,8 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
 
         return nested_hash
 
-    # For Result<T, E> types (GenericTypeRef or ResultType), convert to EnumType and hash
+    # An unresolved Result<T, E> annotation (GenericTypeRef) - intern it to its EnumType and hash
     from sushi_lang.semantics.generics.types import GenericTypeRef
-    from sushi_lang.semantics.typesys import ResultType
     if isinstance(field_type, GenericTypeRef) and field_type.base_name == "Result":
         # Convert GenericTypeRef("Result", [T, E]) to Result enum
         if len(field_type.type_args) >= 2:

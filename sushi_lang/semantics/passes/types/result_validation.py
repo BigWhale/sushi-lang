@@ -11,7 +11,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Tuple, List
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.typesys import ResultType
 from sushi_lang.semantics.ast import EnumConstructor, DotCall, MethodCall, Name, MemberAccess, Expr
 from .compatibility import types_compatible
 
@@ -131,7 +130,7 @@ def is_result_pattern(node: Expr) -> Tuple[bool, Optional[str]]:
 
 
 def validate_result_pattern(validator: 'TypeValidator', node: Expr,
-                           expected_type: ResultType) -> bool:
+                           expected_type: 'Type') -> bool:
     """Main orchestrator for Result pattern validation.
 
     Validates that the node is a Result.Ok() or Result.Err() pattern with
@@ -140,7 +139,7 @@ def validate_result_pattern(validator: 'TypeValidator', node: Expr,
     Args:
         validator: The type validator instance
         node: The AST node to validate (should be return value expression)
-        expected_type: The expected ResultType from the function signature
+        expected_type: The expected Result<T, E> enum from the function signature
 
     Returns:
         True if node is a valid Result.Ok/Err pattern, False otherwise
@@ -167,14 +166,11 @@ def validate_result_pattern(validator: 'TypeValidator', node: Expr,
 
     # Extract the (ok, err) payloads the variants are validated against. The expected type is
     # the function's Result in whichever shape it currently has -- the interned EnumType, or the
-    # legacy ResultType.
+
     from sushi_lang.semantics.generics.results import is_result_enum, result_ok_err
 
     if is_result_enum(expected_type):
         compare_type, expected_error_type = result_ok_err(expected_type)
-    elif isinstance(expected_type, ResultType):
-        compare_type = expected_type.ok_type
-        expected_error_type = expected_type.err_type
     else:
         compare_type = expected_type
         expected_error_type = None

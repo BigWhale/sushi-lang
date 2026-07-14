@@ -124,7 +124,7 @@ def _construct_result_err_variant(codegen: 'LLVMCodegen', return_type, error_val
 
     Args:
         codegen: The LLVM codegen instance.
-        return_type: The semantic type (ResultType or GenericTypeRef with base_name "Result").
+        return_type: The enclosing function's Result<T, E> (the interned enum, or a GenericTypeRef).
         error_value: The LLVM value containing the error data to pack into Err variant.
 
     Returns:

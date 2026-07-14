@@ -81,9 +81,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
                           receiver_type.name.startswith("List<")))
 
     # Allow StructType through for perk method checking and auto-derived methods
-    # Also allow ResultType through for Result<T, E> method validation
-    from sushi_lang.semantics.typesys import ResultType
-    if not isinstance(receiver_type, (BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType, ResultType)) and not is_generic_struct:
+    if not isinstance(receiver_type, (BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType)) and not is_generic_struct:
         # Can't call methods on unknown types - this is handled by unknown type validation
         return
 
@@ -122,28 +120,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
             return
 
     # Check for built-in Result<T, E> methods
-    # Handle both EnumType (monomorphized Result<T, E>) and ResultType (semantic type)
-    from sushi_lang.semantics.typesys import ResultType
-    if isinstance(receiver_type, ResultType):
-        # Convert ResultType to EnumType for method validation
-        from sushi_lang.semantics.generics.results import is_builtin_result_method, validate_result_method_with_validator, ensure_result_type_in_table
-
-        # ALWAYS ensure Result<T, E> enum exists in the table (for hash, builtin methods, etc.)
-        result_enum = ensure_result_type_in_table(validator.enum_table, receiver_type.ok_type, receiver_type.err_type,
-                                    struct_table=validator.struct_table.by_name)
-
-        if is_builtin_result_method(call.method):
-            # Builtin Result method (is_ok, is_err, realise, expect, err)
-            if result_enum:
-                validate_result_method_with_validator(call, result_enum, validator.reporter, validator)
-            return
-        else:
-            # Other methods (hash, etc.) - replace ResultType with EnumType for downstream lookup
-            # This allows hash and other auto-derived methods to work on Result types
-            if result_enum:
-                receiver_type = result_enum
-            # Fall through to generic method lookup
-    elif isinstance(receiver_type, EnumType) and receiver_type.name.startswith("Result<"):
+    if isinstance(receiver_type, EnumType) and receiver_type.name.startswith("Result<"):
         from sushi_lang.semantics.generics.results import is_builtin_result_method, validate_result_method_with_validator
         if is_builtin_result_method(call.method):
             validate_result_method_with_validator(call, receiver_type, validator.reporter, validator)

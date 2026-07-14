@@ -65,7 +65,7 @@ def is_builtin_time_function(name: str) -> bool:
 
 def get_builtin_time_function_return_type(name: str) -> Type:
     """Get the return type for a built-in time function."""
-    from sushi_lang.semantics.typesys import BuiltinType, ResultType
+    from sushi_lang.semantics.typesys import BuiltinType
 
     if name in {'nanosleep', 'sleep', 'msleep', 'usleep'}:
         # All sleep functions return Result<i32, StdError>

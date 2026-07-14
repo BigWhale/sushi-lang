@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 from sushi_lang.semantics.typesys import (
     Type as Ty, BuiltinType, ArrayType, DynamicArrayType, StructType,
-    EnumType, UnknownType, ResultType, IteratorType, ReferenceType, PointerType,
+    EnumType, UnknownType, IteratorType, ReferenceType, PointerType,
     ForeignPtrType, FunctionType
 )
 from sushi_lang.internals.errors import raise_internal_error

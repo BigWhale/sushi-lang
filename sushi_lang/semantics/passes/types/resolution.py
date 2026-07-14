@@ -3,7 +3,7 @@
 Type resolution utilities for semantic analysis.
 
 This module provides utilities for resolving declared types (GenericTypeRef,
-UnknownType) to concrete types (ResultType, EnumType, StructType, etc.).
+UnknownType) to concrete types (EnumType, StructType, etc.).
 
 Resolution happens BEFORE type propagation and validation, establishing the
 expected types for expressions.
@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Optional
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import (
     BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType,
-    UnknownType, ResultType
+    UnknownType
 )
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
@@ -30,11 +30,11 @@ if TYPE_CHECKING:
 
 def resolve_return_type_to_result(validator: 'TypeValidator',
                                    declared_type: 'Type',
-                                   err_type_node: Optional['Type']) -> ResultType:
-    """Convert function return type to ResultType.
+                                   err_type_node: Optional['Type']) -> 'Type':
+    """Convert a function's declared return type to its interned Result<T, E> enum.
 
     Handles three cases:
-    1. Explicit Result<T, E> (GenericTypeRef) → resolve to ResultType
+    1. Explicit Result<T, E> (GenericTypeRef) → resolve to the interned Result enum
     2. Implicit T | E → wrap in Result<T, E> with custom error
     3. Implicit T → wrap in Result<T, StdError>
 
@@ -44,16 +44,15 @@ def resolve_return_type_to_result(validator: 'TypeValidator',
         err_type_node: The error type node (for T | E syntax), or None
 
     Returns:
-        ResultType representing the actual return type
+        The interned Result<T, E> enum representing the actual return type
 
     Consolidates lines 144-173 from validate_return_statement().
     """
     resolved_type = declared_type
 
-    # Case 1: Explicit Result<T, E> - resolve GenericTypeRef to ResultType
+    # Case 1: Explicit Result<T, E> - resolve the GenericTypeRef to the interned enum
     if isinstance(declared_type, GenericTypeRef):
         if declared_type.base_name == "Result" and len(declared_type.type_args) == 2:
-            # Special handling for Result<T, E> - resolve to ResultType
             resolved_type = resolve_unknown_type(
                 declared_type,
                 validator.struct_table.by_name,
@@ -67,12 +66,11 @@ def resolve_return_type_to_result(validator: 'TypeValidator',
                 resolved_type = validator.enum_table.by_name[enum_name]
 
     # Case 2/3: Implicit Result wrapping (T | E or just T).
-    # An explicit Result<T, E> now resolves to the interned EnumType, so the "already a Result"
-    # guard has to recognise THAT -- not just the legacy ResultType -- or `fn foo() Result<T, E>`
-    # gets wrapped a second time into Result<Result<T, E>, StdError>.
+    # An explicit Result<T, E> has already resolved to its interned enum above, and wrapping that
+    # again would produce Result<Result<T, E>, StdError> -- hence the guard.
     from sushi_lang.semantics.generics.results import is_result_enum, ensure_result_type_in_table
 
-    if not isinstance(resolved_type, ResultType) and not is_result_enum(resolved_type):
+    if not is_result_enum(resolved_type):
         # Function declares T or T | E (not explicit Result<T, E>)
         # Implicitly wraps in Result<T, E>
 
@@ -105,7 +103,7 @@ def resolve_variable_type(validator: 'TypeValidator',
     Handles:
     - Builtin/Array/Struct/Enum types (already resolved)
     - UnknownType → resolved EnumType/StructType
-    - GenericTypeRef for Result<T, E> → ResultType
+    - GenericTypeRef for Result<T, E> → the interned Result enum
     - GenericTypeRef for HashMap<K, V> → concrete StructType (with validation)
     - GenericTypeRef for other generics → concrete EnumType/StructType
 

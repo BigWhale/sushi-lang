@@ -21,7 +21,6 @@ from sushi_lang.semantics.typesys import (
     StructType,
     EnumType,
     UnknownType,
-    ResultType,
     IteratorType,
     ReferenceType,
     PointerType,

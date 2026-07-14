@@ -397,12 +397,20 @@ def test_contains_foreign_ptr_walk():
     """The shared CE5008/CE5002 walk sees ptr through Result/Maybe-style wrappers."""
     from sushi_lang.semantics.type_predicates import contains_foreign_ptr
     from sushi_lang.semantics.typesys import (
-        ForeignPtrType, BuiltinType, ResultType, StructType,
+        ForeignPtrType, BuiltinType, EnumType, EnumVariantInfo, StructType,
     )
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
     assert contains_foreign_ptr(ForeignPtrType())
-    assert contains_foreign_ptr(ResultType(ForeignPtrType(), BuiltinType.I32))
+    # A Result<ptr, i32> is an ordinary interned enum; the walk reaches ptr through its variants.
+    result_ptr = EnumType(
+        name="Result<ptr, i32>",
+        variants=(
+            EnumVariantInfo(name="Ok", associated_types=(ForeignPtrType(),)),
+            EnumVariantInfo(name="Err", associated_types=(BuiltinType.I32,)),
+        ),
+    )
+    assert contains_foreign_ptr(result_ptr)
     # Pass 2-era representation: an unresolved Result<ptr, E> annotation.
     assert contains_foreign_ptr(
         GenericTypeRef(base_name="Result", type_args=(ForeignPtrType(), BuiltinType.I32))

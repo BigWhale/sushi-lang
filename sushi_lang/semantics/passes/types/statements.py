@@ -15,7 +15,7 @@ Statement validation follows a three-phase pattern:
 
 1. **Type Resolution** (resolution.py)
    - Converts declared types to concrete types
-   - Handles GenericTypeRef → EnumType/StructType/ResultType
+   - Handles GenericTypeRef → EnumType/StructType
    - Handles UnknownType → resolved enum/struct types
    - Validates special cases (HashMap key types, Result<T, E>)
 
@@ -74,7 +74,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.typesys import BuiltinType, EnumType, IteratorType, ResultType
+from sushi_lang.semantics.typesys import BuiltinType, EnumType, IteratorType
 from sushi_lang.semantics.ast import Let, Return, Rebind, If, While, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .utils import validate_type_name
@@ -128,8 +128,7 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
                 and stmt.value.receiver.id == "Result")
         )
         lhs_is_result = (
-            isinstance(resolved_type, ResultType)
-            or (isinstance(resolved_type, EnumType) and resolved_type.name.startswith("Result<"))
+            (isinstance(resolved_type, EnumType) and resolved_type.name.startswith("Result<"))
             or (isinstance(stmt.ty, GenericTypeRef) and stmt.ty.base_name == "Result")
             or (isinstance(stmt.ty, EnumType) and stmt.ty.name.startswith("Result<"))
         )
@@ -153,13 +152,12 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
     if stmt.value:
         rhs_type = validator.infer_expression_type(stmt.value)
 
-        # Robustly detect whether the LHS is itself a Result type. A declared
-        # `Result<T, E>` may remain a GenericTypeRef (line 113 keeps it) or resolve
-        # to a ResultType / Result<...> EnumType, so check all forms -- otherwise a
-        # Result-returning method assigned to a Result variable misfires as CE2505.
+        # Detect whether the LHS is itself a Result. A declared `Result<T, E>` either resolves
+        # to its interned enum or stays a GenericTypeRef (line 113 keeps it), so both spellings
+        # are checked -- otherwise a Result-returning method assigned to a Result variable
+        # misfires as CE2505.
         lhs_is_result = (
-            isinstance(resolved_type, ResultType)
-            or (isinstance(resolved_type, EnumType) and resolved_type.name.startswith("Result<"))
+            (isinstance(resolved_type, EnumType) and resolved_type.name.startswith("Result<"))
             or (isinstance(stmt.ty, GenericTypeRef) and stmt.ty.base_name == "Result")
             or (isinstance(stmt.ty, EnumType) and stmt.ty.name.startswith("Result<"))
         )
@@ -201,7 +199,7 @@ def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:
     if expected_type is None:
         return  # Functions without return type (shouldn't happen after CE0103)
 
-    # Resolve return type to ResultType (handles explicit Result<T, E> and implicit T | E)
+    # Resolve the return type to its Result enum (explicit Result<T, E> and implicit T | E)
     from .resolution import resolve_return_type_to_result
     expected_type = resolve_return_type_to_result(
         validator,
