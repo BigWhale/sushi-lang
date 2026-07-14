@@ -281,9 +281,9 @@ class MainFunctionWrapper:
         # Create function signature matching the user's main function
         params = params_of_fn(fn)
         ll_param_tys = [self.codegen.types.ll_type(ty) for _, ty in params]
-        # Use ll_type with ResultType to get the monomorphized enum type
+        from sushi_lang.backend.generics.result_builder import intern_result
         std_error = self.codegen.enum_table.by_name.get("StdError")
-        result_type = ResultType(ok_type=fn.ret, err_type=std_error if std_error else fn.ret)
+        result_type = intern_result(self.codegen, fn.ret, std_error if std_error else fn.ret)
         ll_ret = self.codegen.types.ll_type(result_type)
 
         fnty = ir.FunctionType(ll_ret, ll_param_tys)

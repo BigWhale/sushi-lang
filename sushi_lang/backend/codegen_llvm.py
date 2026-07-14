@@ -1087,8 +1087,9 @@ class LLVMCodegen:
                     self.enum_table.by_name if self.enum_table else {}
                 )
 
+                from sushi_lang.backend.generics.result_builder import intern_result
                 std_error = self.enum_table.by_name.get("StdError") if self.enum_table else None
-                result_type = ResultType(ok_type=ret_type, err_type=std_error if std_error else ret_type)
+                result_type = intern_result(self, ret_type, std_error if std_error else ret_type)
                 ll_ret = self.types.ll_type(result_type)
 
                 fnty = ir.FunctionType(ll_ret, param_types)
@@ -1122,8 +1123,9 @@ class LLVMCodegen:
             param_types = [self.types.ll_type(p.ty) for p in func_sig.params]
             ret_type = func_sig.ret_type
 
+            from sushi_lang.backend.generics.result_builder import intern_result
             std_error = self.enum_table.by_name.get("StdError") if self.enum_table else None
-            result_type = ResultType(ok_type=ret_type, err_type=std_error if std_error else ret_type)
+            result_type = intern_result(self, ret_type, std_error if std_error else ret_type)
             ll_ret = self.types.ll_type(result_type)
 
             fnty = ir.FunctionType(ll_ret, param_types)

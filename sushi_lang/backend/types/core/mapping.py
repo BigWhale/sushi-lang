@@ -156,16 +156,6 @@ class TypeMapper:
             case EnumType():
                 # Map EnumType to LLVM tagged union struct: {i32 tag, [union of variant data]}
                 return self._get_enum_type(t)
-            case ResultType():
-                # Map ResultType to Result<T, E> enum
-                # Create/get the corresponding enum via ensure_result_type_in_table
-                from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-                result_enum = ensure_result_type_in_table(self.enum_table, t.ok_type, t.err_type, struct_table=self.struct_table.by_name)
-                if result_enum:
-                    return self._get_enum_type(result_enum)
-                else:
-                    # This should never happen if ensure_result_type_in_table is working
-                    raise_internal_error("CE0046", type=f"Result<{t.ok_type}, {t.err_type}>")
             case IteratorType():
                 # Map IteratorType to LLVM struct based on underlying collection type
                 return self._create_iterator_struct_type(t)
@@ -209,8 +199,6 @@ class TypeMapper:
                     t, self.struct_table.by_name, self.enum_table.by_name
                 )
                 if resolved is not None:
-                    if isinstance(resolved, ResultType):
-                        return self.ll_type(resolved)
                     if isinstance(resolved, StructType):
                         return self._get_struct_type(resolved)
                     return self._get_enum_type(resolved)

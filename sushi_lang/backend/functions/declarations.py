@@ -75,27 +75,18 @@ class FunctionDeclarations:
             from sushi_lang.semantics.typesys import GenericTypeRef
 
             # Check if return type is already explicit Result<T, E>
+            from sushi_lang.semantics.generics.results import is_result_enum
+            from sushi_lang.backend.generics.result_builder import implicit_result_of
+
+            # An explicit `fn foo() Result<T, E>` is used as-is; anything else is implicitly
+            # wrapped. The interned enum counts as explicit -- wrapping it again would produce
+            # Result<Result<T, E>, StdError>.
             is_explicit_result = (
-                isinstance(fn.ret, ResultType) or
+                is_result_enum(fn.ret) or
                 (isinstance(fn.ret, GenericTypeRef) and fn.ret.base_name == "Result")
             )
 
-            if is_explicit_result:
-                # Function explicitly returns Result<T, E> - use as-is (no wrapping)
-                result_ty = fn.ret
-            else:
-                # Implicit Result wrapping with error type from fn.err_type or StdError default
-                if fn.err_type is not None:
-                    # Custom error type specified: fn foo() i32 | MyError
-                    # Resolve the error type through type resolution to get actual EnumType
-                    from sushi_lang.semantics.type_resolution import resolve_unknown_type
-                    err_type = resolve_unknown_type(fn.err_type, self.codegen.struct_table.by_name, self.codegen.enum_table.by_name)
-                else:
-                    # Default to StdError if not specified: fn foo() i32
-                    err_type = self.codegen.enum_table.by_name.get("StdError")
-                    if err_type is None:
-                        err_type = fn.ret  # Fallback (shouldn't happen with StdError registered)
-                result_ty = ResultType(ok_type=fn.ret, err_type=err_type)
+            result_ty = fn.ret if is_explicit_result else implicit_result_of(self.codegen, fn)
             ll_ret = self.codegen.types.ll_type(result_ty)
 
             fnty = ir.FunctionType(ll_ret, ll_param_tys)
@@ -120,26 +111,13 @@ class FunctionDeclarations:
         # Store the semantic return type for Result<T, E> type inference
         # This helps when inferring Result<T, E> types from function call expressions
         if fn.name != 'main' and fn.ret is not None:
-            # Check if return type is already explicit Result<T, E>
             is_explicit_result = (
-                isinstance(fn.ret, ResultType) or
+                is_result_enum(fn.ret) or
                 (isinstance(fn.ret, GenericTypeRef) and fn.ret.base_name == "Result")
             )
-
-            if is_explicit_result:
-                # Function explicitly returns Result<T, E> - store as-is (no wrapping)
-                self.codegen.function_return_types[fn.name] = fn.ret
-            else:
-                # Implicit Result wrapping with error type from fn.err_type or StdError default
-                if fn.err_type is not None:
-                    # Resolve the error type to get actual EnumType
-                    from sushi_lang.semantics.type_resolution import resolve_unknown_type
-                    err_type = resolve_unknown_type(fn.err_type, self.codegen.struct_table.by_name, self.codegen.enum_table.by_name)
-                else:
-                    err_type = self.codegen.enum_table.by_name.get("StdError")
-                    if err_type is None:
-                        err_type = fn.ret  # Fallback
-                self.codegen.function_return_types[fn.name] = ResultType(ok_type=fn.ret, err_type=err_type)
+            self.codegen.function_return_types[fn.name] = (
+                fn.ret if is_explicit_result else implicit_result_of(self.codegen, fn)
+            )
 
         return llvm_fn
 

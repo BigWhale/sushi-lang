@@ -67,12 +67,9 @@ def resolve_generic_type_ref(
     if not isinstance(semantic_type, GenericTypeRef):
         return None
 
-    if semantic_type.base_name == "Result" and len(semantic_type.type_args) == 2:
-        return ResultType(
-            ok_type=semantic_type.type_args[0],
-            err_type=semantic_type.type_args[1]
-        )
-
+    # Result<T, E> resolves by concrete-name lookup like every other generic -- it is interned
+    # into the enum table exactly like Maybe. It used to be special-cased into a ResultType here,
+    # which is not an EnumType, so it matched none of the RAII predicates downstream (#179).
     type_args_str = ", ".join(str(arg) for arg in semantic_type.type_args)
     concrete_name = f"{semantic_type.base_name}<{type_args_str}>"
 

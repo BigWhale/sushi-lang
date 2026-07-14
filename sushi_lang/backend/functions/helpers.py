@@ -165,8 +165,9 @@ class FunctionHelpers:
 
         # With Result<T, E>, create an Err(error) result using enum constructor logic
         # Get the monomorphized Result<T, E> enum type
+        from sushi_lang.backend.generics.result_builder import intern_result
         std_error = self.codegen.enum_table.by_name.get("StdError")
-        result_type = ResultType(ok_type=ret_type, err_type=std_error if std_error else ret_type)
+        result_type = intern_result(self.codegen, ret_type, std_error if std_error else ret_type)
         result_llvm_type = self.codegen.types.ll_type(result_type)
 
         # Look up the Result<T, E> enum in the enum table

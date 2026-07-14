@@ -254,15 +254,6 @@ def try_emit_enum_hash(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                 return None
             semantic_type = result_enum
 
-    # Convert ResultType to EnumType if needed
-    elif isinstance(semantic_type, ResultType):
-        # Ensure Result<T, E> enum exists and get it
-        from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-        result_enum = ensure_result_type_in_table(codegen.enum_table, semantic_type.ok_type, semantic_type.err_type, struct_table=codegen.struct_table.by_name)
-        if result_enum is None:
-            return None
-        semantic_type = result_enum
-
     if not isinstance(semantic_type, EnumType):
         return None
 
