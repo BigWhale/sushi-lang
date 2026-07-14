@@ -1,0 +1,19 @@
+# Regression for #199: .expect() had the same double-emitted receiver as .realise() -- they are the
+# only two method names present in BOTH is_builtin_result_method and is_builtin_maybe_method, so both
+# fall through the Result handler (which emits the receiver before it can tell the receiver is a Maybe)
+# and are then emitted a second time by the Maybe handler.
+# EXPECT_STDOUT_EXACT: "called\nv = 1\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn mk() Maybe<i32>:
+    println("called")
+    return Result.Ok(Maybe.Some(1))
+
+fn probe() ~:
+    let i32 v = mk()??.expect("value must be present")
+    println("v = {v}")
+    return Result.Ok(~)
+
+fn main() i32:
+    probe()
+    return Result.Ok(0)

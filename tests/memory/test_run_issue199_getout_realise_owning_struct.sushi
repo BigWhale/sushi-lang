@@ -1,0 +1,20 @@
+# Regression for #199, and this is ALSO the exact repro from #159 (arr.get(0).realise(default)).
+# The leak is NOT a temporary-ownership bug: an unbound Result temporary consumed by .realise() is
+# measurably clean. It leaks because .realise() on a Maybe receiver EMITS THE RECEIVER TWICE, and
+# arr.get(0) on an owning-struct element runs deep_copy_if_owning_struct -- so the first, orphaned
+# emission mallocs a 32-byte copy of Box.data that nobody owns and nobody frees. The second copy is
+# the one .realise() adopts and the scope frees.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "len = 8"
+# EXPECT_NO_LEAKS: true
+
+struct Box:
+    i32[] data
+
+
+fn main() i32:
+    let Box[] arr = from([Box(data: from([1, 2, 3, 4, 5, 6, 7, 8])), Box(data: from([9, 10, 11, 12]))])
+    let Box d = Box(data: from([0]))
+    let Box b = arr.get(0).realise(d)
+    println("len = {b.data.len()}")
+    return Result.Ok(0)
