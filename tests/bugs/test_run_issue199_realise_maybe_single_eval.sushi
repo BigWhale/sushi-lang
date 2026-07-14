@@ -1,0 +1,21 @@
+# Regression for #199: .realise() evaluated its receiver TWICE when the receiver was a Maybe<T>.
+# The backend dispatcher tried the Result handler first; it gated on the METHOD NAME, emitted the
+# receiver's IR to infer its type, discovered the receiver was a Maybe, returned None -- and left the
+# emitted instructions stranded. The Maybe handler then emitted the receiver all over again.
+# 'realise' and 'expect' are the only two names in both builtin-method sets, so only they double-emit.
+# A leak gate cannot see a duplicated side effect; only an exact-stdout assertion can.
+# EXPECT_STDOUT_EXACT: "called\nv = 1\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn mk() Maybe<i32>:
+    println("called")
+    return Result.Ok(Maybe.Some(1))
+
+fn probe() ~:
+    let i32 v = mk()??.realise(0)
+    println("v = {v}")
+    return Result.Ok(~)
+
+fn main() i32:
+    probe()
+    return Result.Ok(0)

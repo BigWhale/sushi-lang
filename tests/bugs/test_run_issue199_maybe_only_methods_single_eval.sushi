@@ -1,0 +1,20 @@
+# Control for #199: a Maybe-ONLY method name (.is_some()/.is_none()) is absent from the Result
+# builtin-method set, so the Result handler declines it before emitting anything and the receiver is
+# evaluated exactly once. This was already correct before the fix and must stay correct after it --
+# it is what pins the bug to the OVERLAPPING names (realise/expect) rather than to Maybe dispatch
+# in general.
+# EXPECT_STDOUT_EXACT: "called\nsome = true\ncalled\nnone = false\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn mk() Maybe<i32>:
+    println("called")
+    return Result.Ok(Maybe.Some(1))
+
+fn probe() ~:
+    println("some = {mk()??.is_some()}")
+    println("none = {mk()??.is_none()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    probe()
+    return Result.Ok(0)

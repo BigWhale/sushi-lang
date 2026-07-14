@@ -15,59 +15,53 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
-def try_emit_result_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
-    """Try to emit as Result<T> method. Returns None if not a Result<T> method."""
+def try_emit_result_or_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
+    """Try to emit a built-in Result<T, E> or Maybe<T> method.
+
+    Result and Maybe are handled together because `realise` and `expect` belong to BOTH
+    built-in method sets. Dispatching them in two passes meant the Result pass emitted the
+    receiver, discovered from its type that the receiver was a Maybe, declined -- and left the
+    emitted IR stranded in the block, after which the Maybe pass emitted the receiver a second
+    time. That duplicated the receiver's side effects and orphaned any heap it allocated
+    (issue #199; the leak in issue #159's repro was the orphaned copy).
+
+    The receiver's type, not the method's name, decides which family owns the call -- the same
+    order Pass 2 uses (semantics/passes/types/calls/methods.py). So the receiver is emitted
+    exactly ONCE here and the resulting value is reused for whichever family claims it.
+    """
     from sushi_lang.semantics.generics.results import is_builtin_result_method
-    from sushi_lang.backend.expressions.calls.utils import infer_semantic_type
-
-    method = expr.method
-    if not is_builtin_result_method(method):
-        return None
-
-    receiver = expr.receiver
-    args = expr.args
-
-    # Emit the receiver first to get its value
-    result_value = codegen.expressions.emit_expr(receiver)
-
-    # Try to infer the receiver's type through multiple strategies
-    receiver_semantic_type = infer_semantic_type(codegen, expr, result_value, "Result<", EnumType)
-
-    # If we found a Result<T> type, emit the method call
-    if isinstance(receiver_semantic_type, EnumType) and receiver_semantic_type.name.startswith("Result<"):
-        from sushi_lang.backend.generics.results import emit_builtin_result_method
-        temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
-        # Copy resolved_enum_type from original expr if it exists
-        if hasattr(expr, 'resolved_enum_type'):
-            temp_expr.resolved_enum_type = expr.resolved_enum_type
-        return emit_builtin_result_method(codegen, temp_expr, result_value, receiver_semantic_type, to_i1)
-
-    return None
-
-
-def try_emit_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
-    """Try to emit as Maybe<T> method. Returns None if not a Maybe<T> method."""
     from sushi_lang.semantics.generics.maybe import is_builtin_maybe_method
     from sushi_lang.backend.expressions.calls.utils import infer_semantic_type
 
     method = expr.method
-    if not is_builtin_maybe_method(method):
+    may_be_result = is_builtin_result_method(method)
+    may_be_maybe = is_builtin_maybe_method(method)
+    if not (may_be_result or may_be_maybe):
         return None
 
     receiver = expr.receiver
     args = expr.args
 
-    # Emit the receiver first to get its value
-    maybe_value = codegen.expressions.emit_expr(receiver)
+    # Emit the receiver ONCE. Type inference may need the emitted value (its LLVM layout is the
+    # last-resort strategy), so this cannot be deferred until after the family is known.
+    receiver_value = codegen.expressions.emit_expr(receiver)
 
-    # Try to infer the receiver's type (same strategies as Result<T>)
-    receiver_semantic_type = infer_semantic_type(codegen, expr, maybe_value, "Maybe<", EnumType)
+    if may_be_result:
+        receiver_semantic_type = infer_semantic_type(codegen, expr, receiver_value, "Result<", EnumType)
+        if isinstance(receiver_semantic_type, EnumType) and receiver_semantic_type.name.startswith("Result<"):
+            from sushi_lang.backend.generics.results import emit_builtin_result_method
+            temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
+            # Copy resolved_enum_type from original expr if it exists
+            if hasattr(expr, 'resolved_enum_type'):
+                temp_expr.resolved_enum_type = expr.resolved_enum_type
+            return emit_builtin_result_method(codegen, temp_expr, receiver_value, receiver_semantic_type, to_i1)
 
-    # If we found a Maybe<T> type, emit the method call
-    if isinstance(receiver_semantic_type, EnumType) and receiver_semantic_type.name.startswith("Maybe<"):
-        from sushi_lang.backend.generics.maybe import emit_builtin_maybe_method
-        temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
-        return emit_builtin_maybe_method(codegen, temp_expr, maybe_value, receiver_semantic_type, to_i1)
+    if may_be_maybe:
+        receiver_semantic_type = infer_semantic_type(codegen, expr, receiver_value, "Maybe<", EnumType)
+        if isinstance(receiver_semantic_type, EnumType) and receiver_semantic_type.name.startswith("Maybe<"):
+            from sushi_lang.backend.generics.maybe import emit_builtin_maybe_method
+            temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
+            return emit_builtin_maybe_method(codegen, temp_expr, receiver_value, receiver_semantic_type, to_i1)
 
     return None
 
