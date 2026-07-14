@@ -20,25 +20,49 @@ def initialize_array_literal(
     codegen: 'LLVMCodegen',
     slot: 'ir.AllocaInstr',
     array_literal: 'ArrayLiteral',
-    array_type: 'ir.ArrayType'
+    array_type: 'ir.ArrayType',
+    element_semantic_type=None
 ) -> None:
     """Initialize array variable with array literal elements.
 
     Creates GEP instructions for each array element and stores the
     evaluated expression value at that location.
 
+    Value semantics (#60/#185): an element written from a BORROWED source -- a bare name or a
+    field read, which some other owner still frees -- is deep-copied, so the array and that owner
+    hold independent buffers. Storing it shallowly gives one buffer two owners and both free it.
+    This became reachable when a fixed-size array became an owner at all (#185): before that the
+    array was registered nowhere, so the aliased buffer had exactly one owner (the source local)
+    and the bug was invisible.
+
+    An element built INLINE (`[Box(data: from(...)), ...]`) is a temporary that nobody else owns,
+    so it is ADOPTED, not copied -- copying it would strand the original. Same clone-vs-adopt
+    discipline as `.realise()` and the `let` binding.
+
     Args:
         codegen: The main LLVMCodegen instance.
         slot: The alloca instruction for the array variable.
         array_literal: The array literal AST node.
         array_type: The LLVM array type.
+        element_semantic_type: The element's Sushi type (None skips the value-semantics copy).
     """
     from llvmlite import ir
+    from sushi_lang.backend.expressions import memory
+    from sushi_lang.backend.destructors import resolve_named_type, needs_cleanup
+
     builder = require_builder(codegen)
+
+    resolved_element = (resolve_named_type(codegen, element_semantic_type)
+                        if element_semantic_type is not None else None)
+    element_owns_heap = resolved_element is not None and needs_cleanup(resolved_element)
+
     # Initialize each element of the array
     for i, element_expr in enumerate(array_literal.elements):
         # Emit the element expression
         element_value = codegen.expressions.emit_expr(element_expr)
+
+        if element_owns_heap and not memory.expression_is_temporary(element_expr):
+            element_value = memory.emit_value_clone(codegen, element_value, resolved_element)
 
         # Create GEP to the array element: array[0][i]
         zero = ir.Constant(codegen.i32, 0)

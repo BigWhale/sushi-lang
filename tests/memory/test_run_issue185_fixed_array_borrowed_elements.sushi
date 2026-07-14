@@ -1,0 +1,27 @@
+# Regression for #185: a fixed array built from BORROWED sources (bound locals, not inline
+# constructors) must deep-copy them. The array and the source locals are then independent owners of
+# independent buffers, and each frees its own exactly once.
+# Storing the elements shallowly gives one buffer TWO owners: this aborted with a double free
+# (exit 133) the moment #185 made the array an owner at all. Before that the array was registered
+# nowhere, so the aliased buffer had exactly one owner and the bug was invisible.
+# The inline-constructed form must NOT be copied (it is a temporary nobody else owns), which the
+# sibling owning-struct cell covers -- so the two cells together pin both halves of clone-vs-adopt.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "first = xxxxxxxxxxxxabcd"
+# EXPECT_NO_LEAKS: true
+
+struct Box:
+    i32[] data
+
+
+fn main() i32:
+    let string s1 = "xxxxxxxxxxxx{'abcd'}"
+    let string s2 = "xxxxxxxxxxxx{'efgh'}"
+    let string[2] names = [s1, s2]
+    println("first = {names[0]}")
+
+    let Box b1 = Box(data: from([1, 2, 3, 4, 5, 6, 7, 8]))
+    let Box b2 = Box(data: from([9, 10, 11, 12]))
+    let Box[2] boxes = [b1, b2]
+    println("len = {boxes[0].data.len()}")
+    return Result.Ok(0)

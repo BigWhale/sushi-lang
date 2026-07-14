@@ -578,7 +578,7 @@ class DynamicArrayManager:
         `enum Tree: Node(Own<Tree>)`) terminates instead of looping.
         """
         from sushi_lang.semantics.typesys import (
-            FunctionType, BuiltinType, StructType, EnumType)
+            ArrayType, FunctionType, BuiltinType, StructType, EnumType)
         from sushi_lang.backend.destructors import resolve_named_type
 
         # Resolve a named type -- UnknownType('Box') or GenericTypeRef('List', (i32,)), the
@@ -589,6 +589,12 @@ class DynamicArrayManager:
 
         if isinstance(ty, DynamicArrayType):
             return True
+        # A fixed array `T[N]` holds its elements inline and owns no buffer of its own, but the
+        # ELEMENTS can own heap -- a `string[3]` field makes its struct heap-owning (#185). Must
+        # agree with destructors.needs_cleanup: this predicate gates REGISTRATION and that one
+        # gates RECURSION, and the two disagreeing is exactly what #162/#183 were.
+        if isinstance(ty, ArrayType):
+            return self._payload_needs_cleanup(ty.base_type)
         # A function-value (closure) owns a heap environment freed through its
         # runtime-guarded drop pointer (a no-op for a non-capturing value).
         if isinstance(ty, FunctionType):
