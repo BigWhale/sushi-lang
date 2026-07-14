@@ -15,6 +15,14 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
+# Built-in Result/Maybe methods that read the discriminant tag and NEVER extract the payload.
+# When their receiver is an unbound temporary, nothing else will ever free that payload, so the
+# receiver is destroyed after the tag is read (#159). The extracting methods -- `realise`,
+# `expect` -- are deliberately absent: they hand the payload to a new owner, and destroying the
+# receiver as well would double-free it.
+TAG_ONLY_METHODS = frozenset({"is_ok", "is_err", "is_some", "is_none"})
+
+
 def try_emit_result_or_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
     """Try to emit a built-in Result<T, E> or Maybe<T> method.
 
@@ -32,6 +40,7 @@ def try_emit_result_or_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCa
     from sushi_lang.semantics.generics.results import is_builtin_result_method
     from sushi_lang.semantics.generics.maybe import is_builtin_maybe_method
     from sushi_lang.backend.expressions.calls.utils import infer_semantic_type
+    from sushi_lang.backend.expressions.memory import destroy_enum_temp
 
     method = expr.method
     may_be_result = is_builtin_result_method(method)
@@ -54,14 +63,20 @@ def try_emit_result_or_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCa
             # Copy resolved_enum_type from original expr if it exists
             if hasattr(expr, 'resolved_enum_type'):
                 temp_expr.resolved_enum_type = expr.resolved_enum_type
-            return emit_builtin_result_method(codegen, temp_expr, receiver_value, receiver_semantic_type, to_i1)
+            emitted = emit_builtin_result_method(codegen, temp_expr, receiver_value, receiver_semantic_type, to_i1)
+            if method in TAG_ONLY_METHODS:
+                destroy_enum_temp(codegen, receiver, receiver_value, receiver_semantic_type)
+            return emitted
 
     if may_be_maybe:
         receiver_semantic_type = infer_semantic_type(codegen, expr, receiver_value, "Maybe<", EnumType)
         if isinstance(receiver_semantic_type, EnumType) and receiver_semantic_type.name.startswith("Maybe<"):
             from sushi_lang.backend.generics.maybe import emit_builtin_maybe_method
             temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
-            return emit_builtin_maybe_method(codegen, temp_expr, receiver_value, receiver_semantic_type, to_i1)
+            emitted = emit_builtin_maybe_method(codegen, temp_expr, receiver_value, receiver_semantic_type, to_i1)
+            if method in TAG_ONLY_METHODS:
+                destroy_enum_temp(codegen, receiver, receiver_value, receiver_semantic_type)
+            return emitted
 
     return None
 

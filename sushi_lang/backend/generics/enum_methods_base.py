@@ -173,12 +173,12 @@ def emit_enum_realise(
 def _expression_is_borrow(expr) -> bool:
     """Does `expr` name storage that keeps owning its heap after we read it?
 
-    A bare name or a struct-field read hands back a shallow view of a value some other
-    owner still frees; anything else (constructor, call return, get-out) is a temporary.
-    Same clone-vs-adopt discipline the `let` binding uses in `statements/variables.py`.
+    The inverse of `expression_is_temporary`, which is the single definition -- `.realise()`
+    ADOPTS a temporary's payload while the non-extracting consumers DESTROY the temporary
+    outright (#159), so the two must agree on every AST node or a payload is adopted and freed.
     """
-    from sushi_lang.semantics.ast import Name, MemberAccess
-    return isinstance(expr, (Name, MemberAccess))
+    from sushi_lang.backend.expressions.memory import expression_is_temporary
+    return not expression_is_temporary(expr)
 
 
 def _emit_owning_realise(
