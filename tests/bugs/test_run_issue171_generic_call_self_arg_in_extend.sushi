@@ -1,0 +1,17 @@
+# Issue #171: a generic call whose argument is `self`, inside an extension body, was
+# not collected by Pass 1.5 (it never bound `self`), so the monomorphized identity__i32
+# did not exist and Pass 2 raised CE2061. Pass 1.5 now infers through Pass 2's own
+# inferrer with `self` bound, so the instantiation is recorded.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n"
+
+fn identity<T>(T value) T:
+    return Result.Ok(value)
+
+extend i32 doubled() i32:
+    return identity(self).realise(0) * 2
+
+fn main() i32:
+    let i32 n = 21
+    println(n.doubled())
+    return Result.Ok(0)

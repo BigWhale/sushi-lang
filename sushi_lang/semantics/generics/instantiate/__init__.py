@@ -71,6 +71,12 @@ class InstantiationCollector:
     # FunctionType for a bare function reference passed as a higher-order argument.
     func_table: dict | None = field(default=None)
 
+    # The whole-program SymbolTables. When present, Pass 1.5 infers generic-call
+    # argument and receiver types through Pass 2's own TypeValidator instead of a thin
+    # parallel inferrer -- the two used to disagree, and every method Pass 2 knew and
+    # Pass 1.5 did not dropped an instantiation on the floor (CE2061; issues #171/#191).
+    tables: object | None = field(default=None)
+
     # Simple variable type table for tracking explicitly typed variables in current scope
     # Maps variable name -> type for variables with explicit type annotations
     variable_types: dict[str, "Type"] = field(default_factory=dict)
@@ -97,11 +103,19 @@ class InstantiationCollector:
             func_table=self.func_table or {},
         )
 
+        # Build Pass 2's real inferrer over the same tables, with a discard reporter so
+        # any diagnostics it raises never reach the user (they belong to Pass 2, which
+        # runs later and emits them for real). It shares this collector's variable_types
+        # dict, so the scope the collector builds as it walks is the scope the inferrer
+        # sees. Constructed only when the whole SymbolTables is available.
+        type_validator = self._build_shared_inferrer()
+
         expression_scanner = ExpressionScanner(
             type_inferrer=type_inferrer,
             instantiations=self.instantiations,
             function_instantiations=self.function_instantiations,
             generic_funcs=self.generic_funcs or {},
+            type_validator=type_validator,
         )
 
         function_collector = FunctionCollector(
@@ -142,3 +156,21 @@ class InstantiationCollector:
             function_collector.collect_from_perk_impl(perk_impl)
 
         return self.instantiations, self.function_instantiations
+
+    def _build_shared_inferrer(self):
+        """Pass 2's TypeValidator over the same tables, wired to discard diagnostics.
+
+        Returns None when the full SymbolTables was not supplied (some unit tests
+        construct the collector from loose dicts), in which case the scanner falls back
+        to the thin inferrer.
+        """
+        if self.tables is None:
+            return None
+        from sushi_lang.internals.report import Reporter
+        from sushi_lang.semantics.passes.types import TypeValidator
+
+        validator = TypeValidator(Reporter(), self.tables)
+        # Share the scope dict: the collector populates it (params, locals, self) as it
+        # walks, and the inferrer reads from the same object.
+        validator.variable_types = self.variable_types
+        return validator
