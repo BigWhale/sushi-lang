@@ -129,7 +129,8 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
         from sushi_lang.semantics.generics.results import is_builtin_result_method, validate_result_method_with_validator, ensure_result_type_in_table
 
         # ALWAYS ensure Result<T, E> enum exists in the table (for hash, builtin methods, etc.)
-        result_enum = ensure_result_type_in_table(validator.enum_table, receiver_type.ok_type, receiver_type.err_type)
+        result_enum = ensure_result_type_in_table(validator.enum_table, receiver_type.ok_type, receiver_type.err_type,
+                                    struct_table=validator.struct_table.by_name)
 
         if is_builtin_result_method(call.method):
             # Builtin Result method (is_ok, is_err, realise, expect, err)

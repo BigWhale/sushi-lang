@@ -199,7 +199,8 @@ def _propagate_result_enum_type(validator: 'TypeValidator', node: Expr,
         result_enum = ensure_result_type_in_table(
             validator.enum_table,
             result_type.ok_type,
-            result_type.err_type
+            result_type.err_type,
+            struct_table=validator.struct_table.by_name,
         )
         if result_enum:
             node.resolved_enum_type = result_enum

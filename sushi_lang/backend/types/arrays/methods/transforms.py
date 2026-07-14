@@ -120,7 +120,7 @@ def emit_byte_array_to_string_checked(codegen: "LLVMCodegen", call: MethodCall, 
 
     # Result<string, StdError> layout.
     std_error = codegen.enum_table.by_name.get("StdError")
-    result_type = ensure_result_type_in_table(codegen.enum_table, BuiltinType.STRING, std_error)
+    result_type = ensure_result_type_in_table(codegen.enum_table, BuiltinType.STRING, std_error, struct_table=codegen.struct_table.by_name)
     result_llvm_type = codegen.types.ll_type(result_type)
     ok_index = result_type.get_variant_index("Ok")
     err_index = result_type.get_variant_index("Err")

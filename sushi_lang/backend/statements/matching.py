@@ -126,8 +126,7 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
                 result_enum = ensure_result_type_in_table(
                     codegen.enum_table,
                     ok_type,
-                    err_type
-                )
+                    err_type, struct_table=codegen.struct_table.by_name)
                 return result_enum
             else:
                 # Other generic type - look up in enum table
@@ -142,8 +141,7 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
             result_enum = ensure_result_type_in_table(
                 codegen.enum_table,
                 var_type.ok_type,
-                var_type.err_type
-            )
+                var_type.err_type, struct_table=codegen.struct_table.by_name)
             return result_enum
 
     # For MemberAccess (struct field access like op.result), infer the field type
@@ -178,8 +176,7 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
                                 result_enum = ensure_result_type_in_table(
                                     codegen.enum_table,
                                     ok_type,
-                                    err_type
-                                )
+                                    err_type, struct_table=codegen.struct_table.by_name)
                                 return result_enum
                             else:
                                 # Other generic type - look up in enum table
@@ -193,8 +190,7 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
                             result_enum = ensure_result_type_in_table(
                                 codegen.enum_table,
                                 field_type.ok_type,
-                                field_type.err_type
-                            )
+                                field_type.err_type, struct_table=codegen.struct_table.by_name)
                             return result_enum
                         elif isinstance(field_type, EnumType):
                             return field_type

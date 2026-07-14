@@ -69,9 +69,9 @@ def get_builtin_time_function_return_type(name: str) -> Type:
 
     if name in {'nanosleep', 'sleep', 'msleep', 'usleep'}:
         # All sleep functions return Result<i32, StdError>
-        inner = BuiltinType('i32')
         from sushi_lang.semantics.typesys import UnknownType
-        return ResultType(ok_type=inner, err_type=UnknownType("StdError"))
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        return GenericTypeRef("Result", (BuiltinType('i32'), UnknownType("StdError")))
 
     raise ValueError(f"Unknown time function: {name}")
 

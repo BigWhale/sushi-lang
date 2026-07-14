@@ -58,7 +58,7 @@ def resolve_result_type(codegen: LLVMCodegen, value_type: Type) -> Type:
     args = result_ok_err(value_type)
     if args is not None:
         from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-        resolved = ensure_result_type_in_table(codegen.enum_table, args[0], args[1])
+        resolved = ensure_result_type_in_table(codegen.enum_table, args[0], args[1], struct_table=codegen.struct_table.by_name)
         if resolved is not None:
             return resolved
     return value_type

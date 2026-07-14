@@ -30,12 +30,12 @@ def get_builtin_files_function_return_type(func_name: str) -> Type:
         # But since this is type inference, we'll use a placeholder approach
         # The actual FileError will be resolved during code generation
         from sushi_lang.semantics.typesys import UnknownType
-        file_error = UnknownType("FileError")
-        return ResultType(ok_type=BuiltinType.I64, err_type=file_error)
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        return GenericTypeRef("Result", (BuiltinType.I64, UnknownType("FileError")))
     elif func_name in ["remove", "rename", "copy", "mkdir", "rmdir"]:
         from sushi_lang.semantics.typesys import UnknownType
-        file_error = UnknownType("FileError")
-        return ResultType(ok_type=BuiltinType.I32, err_type=file_error)
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        return GenericTypeRef("Result", (BuiltinType.I32, UnknownType("FileError")))
     else:
         raise ValueError(f"Unknown files utility function: {func_name}")
 

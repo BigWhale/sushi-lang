@@ -143,6 +143,86 @@ def is_string_convertible(ty: Type) -> bool:
     return False
 
 
+def is_abstract_type(ty: Type, struct_table: Optional[dict] = None,
+                     enum_table: Optional[dict] = None,
+                     _visited: Optional[Set[str]] = None) -> bool:
+    """Whether a type still mentions an unbound type parameter.
+
+    An abstract type is a template artifact, not a real type: it exists only while a generic
+    body is analysed with its own `<T, U>` still unbound. It must never be monomorphized and
+    must never be interned into the enum table -- `Result<Either<U, T>, StdError>` would sit
+    there depending on an `Either<U, T>` that is never itself interned, which strands the
+    enum topological sort and gets misreported as a recursive enum (CE2052).
+
+    A type parameter is not always spelled `TypeParameter`. By the time a generic function's
+    signature reaches the monomorphizer its params survive as bare `UnknownType("U")` -- a name
+    that resolves to no struct and no enum. That is what makes the tables load-bearing here:
+    WITHOUT them an `UnknownType` cannot be told apart from a not-yet-resolved user type, so it
+    is conservatively treated as concrete.
+
+    Args:
+        ty: The type to inspect (None-safe).
+        struct_table: Optional name -> StructType mapping, to tell a user type from a type param.
+        enum_table: Optional name -> EnumType mapping, likewise.
+        _visited: Internal cycle guard over struct/enum names.
+
+    Returns:
+        True if the type transitively mentions an unbound type parameter.
+    """
+    from sushi_lang.semantics.typesys import (
+        ArrayType, DynamicArrayType, ReferenceType, PointerType, ResultType,
+        IteratorType, StructType, EnumType, UnknownType,
+    )
+    from sushi_lang.semantics.generics.types import TypeParameter, GenericTypeRef
+
+    if ty is None:
+        return False
+    if _visited is None:
+        _visited = set()
+
+    def recurse(inner: Type) -> bool:
+        return is_abstract_type(inner, struct_table, enum_table, _visited)
+
+    if isinstance(ty, TypeParameter):
+        return True
+    if isinstance(ty, UnknownType):
+        if struct_table is None and enum_table is None:
+            return False
+        known = (struct_table or {}), (enum_table or {})
+        return ty.name not in known[0] and ty.name not in known[1]
+    if isinstance(ty, GenericTypeRef):
+        return any(recurse(arg) for arg in (ty.type_args or ()))
+    if isinstance(ty, (ArrayType, DynamicArrayType)):
+        return recurse(ty.base_type)
+    if isinstance(ty, ReferenceType):
+        return recurse(ty.referenced_type)
+    if isinstance(ty, PointerType):
+        return recurse(ty.pointee_type)
+    if isinstance(ty, IteratorType):
+        return recurse(ty.element_type)
+    if isinstance(ty, ResultType):
+        return recurse(ty.ok_type) or recurse(ty.err_type)
+    if isinstance(ty, (StructType, EnumType)):
+        # A monomorphized instance carries the args it was built from; an abstract one carries
+        # the enclosing template's own parameters (Either<U, T>). `generic_args` is not enough:
+        # it is None on anything not built by the monomorphizer, so the payloads themselves are
+        # scanned too -- an abstract `Either<U, T>` has variants Left(U) / Right(T) whose
+        # associated types ARE the bare type parameters.
+        if ty.name in _visited:
+            return False
+        _visited.add(ty.name)
+        if any(recurse(arg) for arg in (ty.generic_args or ())):
+            return True
+        if isinstance(ty, EnumType):
+            return any(
+                recurse(assoc)
+                for variant in ty.variants
+                for assoc in variant.associated_types
+            )
+        return any(recurse(field_type) for _, field_type in ty.fields)
+    return False
+
+
 def contains_foreign_ptr(ty: Type, struct_table: Optional[dict] = None,
                          enum_table: Optional[dict] = None,
                          _visited: Optional[Set[str]] = None) -> bool:

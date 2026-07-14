@@ -52,7 +52,7 @@ def build_err_from_return_type(
         raise_internal_error("CE0040", variant="Err",
             type=f"Expected Result<T, E>, got {return_type}")
 
-    enum_type = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type)
+    enum_type = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type, struct_table=codegen.struct_table.by_name)
     if enum_type is None:
         raise_internal_error("CE0091", type=str(return_type))
 

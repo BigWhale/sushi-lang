@@ -199,17 +199,33 @@ class SemanticAnalyzer:
             struct_table=self.structs,
         )
 
-        # Separate enum and struct instantiations
+        # Separate enum and struct instantiations.
+        #
+        # Type arguments are resolved FIRST. A collected instantiation can name a user type as a
+        # bare UnknownType (e.g. Result<Point, StdError> arrives as UnknownType("Point")), and the
+        # monomorphizer builds its concrete EnumType directly -- it does not go through
+        # ensure_*_type_in_table, so nothing else would resolve it. Since `str(UnknownType("Point"))`
+        # and `str(StructType("Point"))` are both "Point", the two mangle to the SAME enum name
+        # while carrying different payloads: EnumType hashes on the name but compares on the
+        # variants, so the unresolved one hash-matches and compares unequal. Resolving here keeps
+        # the monomorphized instance and the on-demand intern byte-identical.
+        # (Abstract instantiations are dropped by the monomorphizer itself, which is the one
+        # choke point every source of instantiations flows through.)
+        from sushi_lang.semantics.type_resolution import resolve_unknown_type
+
+        def _resolve_args(type_args):
+            return tuple(
+                resolve_unknown_type(arg, self.structs.by_name, self.enums.by_name)
+                for arg in type_args
+            )
+
         enum_instantiations = set()
         struct_instantiations = set()
         for base_name, type_args in type_instantiations:
-            # Skip Result<T, E> - it's handled specially as ResultType, not monomorphized
-            if base_name == "Result" and len(type_args) == 2:
-                continue
             if base_name in self.generic_enums.by_name:
-                enum_instantiations.add((base_name, type_args))
+                enum_instantiations.add((base_name, _resolve_args(type_args)))
             elif base_name in self.generic_structs.by_name:
-                struct_instantiations.add((base_name, type_args))
+                struct_instantiations.add((base_name, _resolve_args(type_args)))
 
         # Phase 3: Monomorphize generic functions
         # Monomorphize all detected function instantiations (multi-file mode)
@@ -218,8 +234,13 @@ class SemanticAnalyzer:
         # Monomorphize generic enums
         concrete_enums = monomorphizer.monomorphize_all(self.generic_enums.by_name, enum_instantiations)
 
-        # Merge monomorphized concrete enums into the global enum table
+        # Merge monomorphized concrete enums into the global enum table. A name may already be
+        # interned on demand (ensure_result_type_in_table / ensure_maybe_type_in_table run during
+        # Pass 2 and codegen), so keep the first entry rather than clobbering it and appending a
+        # duplicate `order` key -- the two paths mangle the same name from the same type args.
         for enum_name, enum_type in concrete_enums.items():
+            if enum_name in self.enums.by_name:
+                continue
             self.enums.by_name[enum_name] = enum_type
             self.enums.order.append(enum_name)
 
