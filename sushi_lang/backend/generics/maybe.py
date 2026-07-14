@@ -204,7 +204,7 @@ def ensure_maybe_type_exists(codegen: 'LLVMCodegen', value_type: Type) -> Option
     Returns:
         The EnumType for Maybe<T>, or None if it couldn't be created.
     """
-    return ensure_maybe_type_in_table(codegen.enum_table, value_type)
+    return ensure_maybe_type_in_table(codegen.enum_table, value_type, struct_table=codegen.struct_table.by_name)
 
 
 def get_maybe_enum_type(codegen: 'LLVMCodegen', value_type: Type) -> ir.Type:

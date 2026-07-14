@@ -20,6 +20,7 @@ from sushi_lang.semantics.typesys import (
     BuiltinType,
     EnumType,
     EnumVariantInfo,
+    StructType,
     UnknownType,
 )
 
@@ -100,6 +101,43 @@ def test_interning_is_idempotent():
 
     assert first is second
     assert table.order.count("Result<i32, StdError>") == 1
+
+
+def test_maybe_unresolved_payload_is_resolved_before_interning():
+    """The invariant is not Result-specific: Maybe<T> mangles its name the same way.
+
+    `str(UnknownType("Point"))` and `str(StructType(name="Point"))` are both "Point", so a Maybe
+    interned with an unresolved payload lands under the SAME name as the monomorphized one while
+    carrying different variants -- it hash-matches and compares unequal. Silent, exactly like the
+    Result case (CE0126).
+    """
+    point = StructType(name="Point", fields=(("x", BuiltinType.I32),))
+    table = FakeEnumTable({"Point": point})
+
+    interned = ensure_maybe_type_in_table(table, UnknownType("Point"))
+
+    some = interned.get_variant("Some")
+    assert some.associated_types[0] == point
+    assert not isinstance(some.associated_types[0], UnknownType)
+
+
+def test_maybe_poisoned_intern_raises_rather_than_silently_missing():
+    poisoned = EnumType(
+        name="Maybe<Point>",
+        variants=(
+            EnumVariantInfo(name="Some", associated_types=(UnknownType("Point"),)),
+            EnumVariantInfo(name="None", associated_types=()),
+        ),
+    )
+    point = StructType(name="Point", fields=(("x", BuiltinType.I32),))
+    table = FakeEnumTable({"Point": point})
+    table.by_name[poisoned.name] = poisoned
+    table.order.append(poisoned.name)
+
+    with pytest.raises(InternalCompilerError) as excinfo:
+        ensure_maybe_type_in_table(table, point)
+
+    assert "CE0126" in str(excinfo.value)
 
 
 # --- generic metadata (the CE2060 hole) ----------------------------------------------

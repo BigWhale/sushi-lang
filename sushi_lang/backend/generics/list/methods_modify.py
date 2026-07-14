@@ -577,7 +577,7 @@ def emit_list_remove(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Str
 
     # Out of bounds: return Maybe.None()
     codegen.builder.position_at_end(out_of_bounds_block)
-    maybe_type = ensure_maybe_type_in_table(codegen.enum_table, element_type)
+    maybe_type = ensure_maybe_type_in_table(codegen.enum_table, element_type, struct_table=codegen.struct_table.by_name)
     maybe_llvm_type = codegen.types.ll_type(maybe_type)
     # Maybe.None() - tag = 1, no data
     none_enum = ir.Constant(maybe_llvm_type, ir.Undefined)
