@@ -1,0 +1,20 @@
+# ANTI-DOUBLE-FREE CONTROL for #159 -- green before the fix, and it MUST stay green after it.
+# The SAME get-out as the leaking cell, but BOUND to a local first. The bound receiver is registered
+# in the ordinary cleanup registry and .realise() CLONES rather than adopts, so there are two
+# allocations and two frees. Holding the get-out fixed and varying only whether it is bound is what
+# isolates the defect to the unowned temporary.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "len = 8"
+# EXPECT_NO_LEAKS: true
+
+struct Box:
+    i32[] data
+
+
+fn main() i32:
+    let Box[] arr = from([Box(data: from([1, 2, 3, 4, 5, 6, 7, 8])), Box(data: from([9, 10, 11, 12]))])
+    let Box d = Box(data: from([0]))
+    let Maybe<Box> m = arr.get(0)
+    let Box b = m.realise(d)
+    println("len = {b.data.len()}")
+    return Result.Ok(0)

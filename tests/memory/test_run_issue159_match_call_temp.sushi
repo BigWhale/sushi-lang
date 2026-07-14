@@ -1,0 +1,15 @@
+# Regression for #159: an UNBOUND Result temporary consumed by `match` is never destroyed. The match
+# arm bindings BORROW the enum's payload (matching.py documents this: the enum, its owner, frees it at
+# scope exit) -- but a temporary has no owner, so nothing ever frees it. No `let`, no owner, no free.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "got "
+# EXPECT_NO_LEAKS: true
+
+fn mk() string:
+    return Result.Ok("xxxxxxxxxxxx{'abcd'}")
+
+fn main() i32:
+    match mk():
+        Result.Ok(v) -> println("got {v}")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

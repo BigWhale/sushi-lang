@@ -1,0 +1,25 @@
+# Regression for #159: a `match` arm that RETURNS skips match.end entirely, so an inline destroy after
+# the match would never run. The scrutinee temporary must be freed on the early-exit path too --
+# exactly once, not twice.
+# Note the payload is a heap-allocating Box, not a string LITERAL: a literal carries owned=0 and is
+# never freed by anyone, so it cannot leak and would make this cell green for the wrong reason.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "n = 8"
+# EXPECT_NO_LEAKS: true
+
+struct Box:
+    i32[] data
+
+
+fn mkbox() Box:
+    return Result.Ok(Box(data: from([1, 2, 3, 4, 5, 6, 7, 8])))
+
+fn probe() i32:
+    match mkbox():
+        Result.Ok(b) -> return Result.Ok(b.data.len())
+        Result.Err(_) -> return Result.Ok(-1)
+
+fn main() i32:
+    let i32 n = probe().realise(-1)
+    println("n = {n}")
+    return Result.Ok(0)
