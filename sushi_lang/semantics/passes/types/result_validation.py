@@ -165,11 +165,19 @@ def validate_result_pattern(validator: 'TypeValidator', node: Expr,
                 return False
         return False
 
-    # Extract ok_type for Ok() validation
-    compare_type = expected_type.ok_type if isinstance(expected_type, ResultType) else expected_type
+    # Extract the (ok, err) payloads the variants are validated against. The expected type is
+    # the function's Result in whichever shape it currently has -- the interned EnumType, or the
+    # legacy ResultType.
+    from sushi_lang.semantics.generics.results import is_result_enum, result_ok_err
 
-    # Extract err_type for Err() validation
-    expected_error_type = expected_type.err_type if isinstance(expected_type, ResultType) else None
+    if is_result_enum(expected_type):
+        compare_type, expected_error_type = result_ok_err(expected_type)
+    elif isinstance(expected_type, ResultType):
+        compare_type = expected_type.ok_type
+        expected_error_type = expected_type.err_type
+    else:
+        compare_type = expected_type
+        expected_error_type = None
 
     # Get node location for error reporting
     loc = node.loc

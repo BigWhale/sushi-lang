@@ -223,20 +223,17 @@ def resolve_unknown_type(
         if ty.name in enum_table:
             return enum_table[ty.name]
 
-    # Handle GenericTypeRef - resolve to concrete monomorphized type
+    # Handle GenericTypeRef - resolve to concrete monomorphized type.
+    # Result<T, E> takes the same path as every other generic: it is monomorphized into the
+    # enum table like Maybe, so it resolves by concrete-name lookup. It used to be special-cased
+    # into a ResultType here, which is NOT an EnumType -- so a Result from an annotation and a
+    # Result from a call compared unequal (#184).
     elif isinstance(ty, GenericTypeRef):
-        # Special handling for Result<T, E> - convert to ResultType
-        if ty.base_name == "Result" and len(ty.type_args) == 2:
-            from sushi_lang.semantics.typesys import ResultType
-            # Resolve type arguments first
-            ok_type = resolve_type_recursively(ty.type_args[0], struct_table, enum_table)
-            err_type = resolve_type_recursively(ty.type_args[1], struct_table, enum_table)
-            # Return ResultType directly - no need to create enum here
-            # The backend will call ensure_result_type_in_table() when it needs the LLVM type
-            return ResultType(ok_type=ok_type, err_type=err_type)
-
         # Generate the concrete type name (e.g., "Box<i32>")
-        type_arg_strs = ", ".join(str(arg) for arg in ty.type_args)
+        type_arg_strs = ", ".join(
+            str(resolve_type_recursively(arg, struct_table, enum_table))
+            for arg in ty.type_args
+        )
         concrete_name = f"{ty.base_name}<{type_arg_strs}>"
 
         # Look up the monomorphized concrete type

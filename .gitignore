@@ -25,6 +25,9 @@ a.out
 /sushi_lang/sushi_stdlib/**/*.bc
 /sushi_lang/sushi_stdlib/**/*.o
 
+sushi_spike.ll
+sushi_spike_bin
+
 # Backup files
 *.py.old
 *.py.bak*

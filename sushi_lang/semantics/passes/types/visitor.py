@@ -902,6 +902,20 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
         return None
 
+    def _intern_result(self, ok_type: Type, err_type: Type) -> Optional[Type]:
+        """The interned ``Result<ok, err>`` EnumType -- what a call's return type IS at runtime.
+
+        A call used to infer as a `ResultType`, which is not an `EnumType`, so it compared unequal
+        to the `Result<...>` enum a declared field/annotation resolves to -- that is #184's
+        "expects Result<string, StdError>, got Result<string, StdError>". Interning both sides
+        through here makes them the same object.
+        """
+        from sushi_lang.semantics.generics.results import ensure_result_type_in_table
+        return ensure_result_type_in_table(
+            self.type_validator.enum_table, ok_type, err_type,
+            struct_table=self.type_validator.struct_table.by_name,
+        )
+
     def _materialize_stdlib_return_type(self, ret_type: Optional[Type]) -> Optional[Type]:
         """Resolve a registry-declared stdlib return type into a concrete type.
 
@@ -1014,37 +1028,37 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 from sushi_lang.semantics.typesys import ResultType
                 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
-                # If function already returns ResultType, return it as-is
-                if isinstance(func_sig.ret_type, ResultType):
+                # Every shape of Result a signature can declare interns to the same EnumType,
+                # which is what the call's value actually is at runtime.
+                from sushi_lang.semantics.generics.results import is_result_enum
+
+                # Already the interned enum (the signature was resolved in place): return it.
+                # Wrapping it again would produce Result<Result<T, E>, StdError>.
+                if is_result_enum(func_sig.ret_type):
                     return func_sig.ret_type
 
-                # If function declares Result<T, E>, resolve and return it
+                if isinstance(func_sig.ret_type, ResultType):
+                    return self._intern_result(func_sig.ret_type.ok_type,
+                                               func_sig.ret_type.err_type)
+
+                # Explicit `fn foo() Result<T, E>` -- not wrapped again.
                 if isinstance(func_sig.ret_type, GenericTypeRef) and func_sig.ret_type.base_name == "Result":
-                    # Resolve GenericTypeRef("Result") to ResultType
+                    if len(func_sig.ret_type.type_args) == 2:
+                        return self._intern_result(func_sig.ret_type.type_args[0],
+                                                   func_sig.ret_type.type_args[1])
                     return resolve_unknown_type(
                         func_sig.ret_type,
                         self.type_validator.struct_table.by_name,
                         self.type_validator.enum_table.by_name
                     )
                 elif func_sig.err_type is not None:
-                    # Implicit Result syntax: fn foo() i32 | MyError
-                    # Construct ResultType(ok_type=i32, err_type=MyError)
-                    err_type = resolve_unknown_type(
-                        func_sig.err_type,
-                        self.type_validator.struct_table.by_name,
-                        self.type_validator.enum_table.by_name
-                    )
-                    return ResultType(ok_type=func_sig.ret_type, err_type=err_type)
+                    # Implicit Result with a custom error: fn foo() i32 | MyError
+                    return self._intern_result(func_sig.ret_type, func_sig.err_type)
                 else:
-                    # Default implicit Result syntax: fn foo() i32 (defaults to StdError)
-                    # Construct ResultType(ok_type=i32, err_type=StdError)
+                    # Implicit Result, default error: fn foo() i32 -> Result<i32, StdError>
                     err_type = self.type_validator.enum_table.by_name.get("StdError")
                     if err_type is not None:
-                        return ResultType(ok_type=func_sig.ret_type, err_type=err_type)
-                    # Fallback to old behavior if StdError not found
-                    result_enum_name = f"Result<{func_sig.ret_type}>"
-                    if result_enum_name in self.type_validator.enum_table.by_name:
-                        return self.type_validator.enum_table.by_name[result_enum_name]
+                        return self._intern_result(func_sig.ret_type, err_type)
                 # Fallback to declared return type
                 return func_sig.ret_type
         return None

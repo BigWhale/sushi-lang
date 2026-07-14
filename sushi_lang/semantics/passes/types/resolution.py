@@ -66,8 +66,13 @@ def resolve_return_type_to_result(validator: 'TypeValidator',
             if enum_name in validator.enum_table.by_name:
                 resolved_type = validator.enum_table.by_name[enum_name]
 
-    # Case 2/3: Implicit Result wrapping (T | E or just T)
-    if not isinstance(resolved_type, ResultType):
+    # Case 2/3: Implicit Result wrapping (T | E or just T).
+    # An explicit Result<T, E> now resolves to the interned EnumType, so the "already a Result"
+    # guard has to recognise THAT -- not just the legacy ResultType -- or `fn foo() Result<T, E>`
+    # gets wrapped a second time into Result<Result<T, E>, StdError>.
+    from sushi_lang.semantics.generics.results import is_result_enum, ensure_result_type_in_table
+
+    if not isinstance(resolved_type, ResultType) and not is_result_enum(resolved_type):
         # Function declares T or T | E (not explicit Result<T, E>)
         # Implicitly wraps in Result<T, E>
 
@@ -83,7 +88,11 @@ def resolve_return_type_to_result(validator: 'TypeValidator',
             err_type = validator.enum_table.by_name.get("StdError")
 
         if err_type:
-            resolved_type = ResultType(ok_type=resolved_type, err_type=err_type)
+            interned = ensure_result_type_in_table(
+                validator.enum_table, resolved_type, err_type,
+                struct_table=validator.struct_table.by_name,
+            )
+            resolved_type = interned if interned is not None else resolved_type
 
     return resolved_type
 
@@ -135,19 +144,19 @@ def resolve_variable_type(validator: 'TypeValidator',
 
     # GenericTypeRef → resolve based on base name
     if isinstance(declared_type, GenericTypeRef):
-        # Special case: Result<T, E> → ResultType (semantic type, not enum)
+        # Result<T, E> interns to an EnumType, exactly like Maybe<T>. It used to resolve to a
+        # ResultType here, which is not an EnumType -- so `let Result<T, E> r = mk()` compared
+        # the annotation against the call's type and found them unequal (#184).
         if declared_type.base_name == "Result" and len(declared_type.type_args) == 2:
-            ok_type = resolve_unknown_type(
+            from sushi_lang.semantics.generics.results import ensure_result_type_in_table
+            interned = ensure_result_type_in_table(
+                validator.enum_table,
                 declared_type.type_args[0],
-                validator.struct_table.by_name,
-                validator.enum_table.by_name
-            )
-            err_type = resolve_unknown_type(
                 declared_type.type_args[1],
-                validator.struct_table.by_name,
-                validator.enum_table.by_name
+                struct_table=validator.struct_table.by_name,
             )
-            return ResultType(ok_type=ok_type, err_type=err_type)
+            if interned is not None:
+                return interned
 
         # Special case: HashMap<K, V> → validate key type first
         if declared_type.base_name == "HashMap" and len(declared_type.type_args) >= 1:
