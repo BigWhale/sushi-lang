@@ -53,6 +53,7 @@ def validate_function(self, func: FuncDef) -> None:
     _check_public_fn_ptr_fence(self, func)
     self.in_extension_context = False  # Normal functions are never extension/perk bodies
     self.extension_method_name = None
+    self.extension_return_type = None
     self.variable_types = {}  # Reset for each function
     self.destroyed_arrays = [set()]  # Reset for each function with initial scope
 
@@ -101,6 +102,7 @@ def validate_extension_method(self, ext: ExtendDef) -> None:
     self.current_function = None  # Extension methods are not functions, but we can reuse some logic
     self.in_extension_context = True  # Dedicated flag: this body returns a bare value
     self.extension_method_name = ext.name
+    self.extension_return_type = ext.ret  # Bare return type; validate_return_statement checks against it
     self.variable_types = {}  # Reset for each extension method
     self.destroyed_arrays = [set()]  # Reset for each extension method with initial scope
 
@@ -164,6 +166,7 @@ def validate_perk_implementation_method(self, impl: ExtendWithDef) -> None:
         self.current_function = None
         self.in_extension_context = True  # Dedicated flag: this body returns a bare value
         self.extension_method_name = method.name
+        self.extension_return_type = method.ret  # Bare return type; checked in validate_return_statement
         self.variable_types = {}
         self.destroyed_arrays = [set()]
 

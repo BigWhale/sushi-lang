@@ -1,0 +1,12 @@
+# Issue #212: an extension method's return expression was never type-checked, so a
+# call to a method that does not exist reached the backend as an unresolved name and
+# crashed it (CE0000) instead of reporting CE2008.
+# EXPECT_ERROR_CODE: CE2008
+
+extend i32 broken() i32:
+    return self.no_such_method()
+
+fn main() i32:
+    let i32 n = 1
+    println(n.broken())
+    return Result.Ok(0)

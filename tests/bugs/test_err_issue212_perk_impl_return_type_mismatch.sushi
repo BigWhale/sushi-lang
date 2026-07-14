@@ -1,0 +1,19 @@
+# Issue #212: perk-implementation method bodies share the extension return path, so a
+# type-mismatched return there was also a CE0000 internal error rather than a
+# diagnostic. The method returns `self.v` (i32) where `string` is declared.
+# EXPECT_ERROR_CODE: CE2003
+
+perk Labeller:
+    fn label() string
+
+struct Box:
+    i32 v
+
+extend Box with Labeller:
+    fn label() string:
+        return self.v
+
+fn main() i32:
+    let Box b = Box(1)
+    println(b.label())
+    return Result.Ok(0)
