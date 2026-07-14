@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from llvmlite import ir
-from sushi_lang.semantics.ast import IndexAccess, Name
+from sushi_lang.semantics.ast import IndexAccess, Name, MemberAccess
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
 
@@ -61,6 +61,17 @@ def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
         # We need to load that pointer to get the array's address
         if type_utils.is_reference_parameter(codegen, expr.array.id):
             array_slot = codegen.builder.load(array_slot, name=f"{expr.array.id}_ref_ptr")
+    elif isinstance(expr.array, MemberAccess):
+        # An array that is a STRUCT FIELD must be indexed through its ADDRESS (#200). Emitting it
+        # as an expression hands back a fixed array by VALUE -- `extract_value` of the field -- and
+        # everything below wants a pointer (`.pointee`, the bounds check, the element GEP), so it
+        # died as `AttributeError: 'ArrayType' object has no attribute 'pointee'`. GEP to the field
+        # instead. (A dynamic-array field already came back as a pointer via emit_member_access's
+        # fast path, which is why only the fixed case broke.)
+        from sushi_lang.backend.expressions.structs import try_get_struct_alloca
+        field_ptr = try_get_struct_alloca(codegen, expr.array)
+        array_slot = (field_ptr if field_ptr is not None
+                      else codegen.expressions.emit_expr(expr.array))
     else:
         # For more complex array expressions, emit normally
         array_value = codegen.expressions.emit_expr(expr.array)
@@ -127,14 +138,16 @@ def _finish_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, result: ir.V
     # the indexed copy does not shallow-share the array element's buffer. Two owners of one
     # buffer (the array's element destructor and the new binding / the container it is stored
     # into) would otherwise double-free. Covers owning structs/enums AND heap-owned string
-    # elements (`let s = words[0]`, `m.insert(words[0], ...)` on a split() array, N1). Only the
-    # Name-array case carries a resolvable element type; other forms are left unchanged.
-    if not to_i1 and isinstance(expr.array, Name):
+    # elements (`let s = words[0]`, `m.insert(words[0], ...)` on a split() array, N1).
+    #
+    # A field array (`h.names[0]`) needs this every bit as much as a local (#200): the struct owns
+    # and frees its field's elements, so a bound copy would be a second owner. It could not reach
+    # here before -- indexing a fixed-array field was an ICE -- so making that work without this
+    # would have traded an ICE for a double free.
+    if not to_i1:
         from sushi_lang.semantics.typesys import (
-            ArrayType, DynamicArrayType, ReferenceType, BuiltinType)
-        array_sem = codegen.variable_types.get(expr.array.id) or codegen.memory.find_semantic_type(expr.array.id)
-        if isinstance(array_sem, ReferenceType):
-            array_sem = array_sem.referenced_type
+            ArrayType, DynamicArrayType, BuiltinType)
+        array_sem = _indexed_array_semantic_type(codegen, expr.array)
         if isinstance(array_sem, (ArrayType, DynamicArrayType)):
             from sushi_lang.backend.expressions import memory
             if array_sem.base_type == BuiltinType.STRING:
@@ -152,3 +165,26 @@ def _finish_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, result: ir.V
                 result = memory.deep_copy_if_owning_struct(codegen, result, array_sem.base_type)
 
     return codegen.utils.as_i1(result) if to_i1 else result
+
+
+def _indexed_array_semantic_type(codegen: 'LLVMCodegen', array_expr):
+    """Semantic type of the array being indexed -- a local, or a struct field (#200).
+
+    Shares `infer_struct_type`'s resolution of the parent struct, so the two cannot drift apart
+    about what `h.names` is.
+    """
+    from sushi_lang.semantics.typesys import ReferenceType
+
+    if isinstance(array_expr, Name):
+        array_sem = (codegen.variable_types.get(array_expr.id)
+                     or codegen.memory.find_semantic_type(array_expr.id))
+        if isinstance(array_sem, ReferenceType):
+            array_sem = array_sem.referenced_type
+        return array_sem
+
+    if isinstance(array_expr, MemberAccess):
+        from sushi_lang.backend.expressions.structs import infer_struct_type
+        parent = infer_struct_type(codegen, array_expr.receiver)
+        return parent.get_field_type(array_expr.member)
+
+    return None
