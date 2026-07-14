@@ -33,6 +33,21 @@ def emit_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, to_i1: bool = F
     Note:
         Emits runtime error RE2020 for out-of-bounds access on fixed arrays.
     """
+    element_ptr = emit_element_pointer(codegen, expr)
+
+    # Load the value from the pointer
+    result = codegen.builder.load(element_ptr)
+    return _finish_index_access(codegen, expr, result, to_i1)
+
+
+def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
+    """Emit the bounds-checked POINTER to `expr`'s element, without loading it.
+
+    Split out of `emit_index_access` so a field read through an index (`a[i].field`) can GEP
+    straight into the element (#187) instead of loading it to a value first: a dynamic-array
+    field must be reached by pointer, because `.len()`/`.push()` dispatch on the field's
+    address, not on a copy of it.
+    """
     from sushi_lang.backend.expressions import type_utils
 
     builder = require_builder(codegen)
@@ -102,9 +117,12 @@ def emit_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, to_i1: bool = F
         # Other pointer types (shouldn't happen for array indexing)
         element_ptr = codegen.builder.gep(array_slot, [zero, index_value])
 
-    # Load the value from the pointer
-    result = codegen.builder.load(element_ptr)
+    return element_ptr
 
+
+def _finish_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, result: ir.Value,
+                         to_i1: bool) -> ir.Value:
+    """Apply value semantics to a loaded element and coerce for a boolean context."""
     # Value semantics (#60, #145): an element that owns heap memory must be deep-copied so
     # the indexed copy does not shallow-share the array element's buffer. Two owners of one
     # buffer (the array's element destructor and the new binding / the container it is stored
