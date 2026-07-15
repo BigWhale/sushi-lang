@@ -1,0 +1,18 @@
+# Regression for #181 sibling: a List<string> struct field double-freed at scope exit
+# (SIGABRT) because _clone_list_value was a shallow buffer memcpy -- the struct copy and
+# the source local shared the element string buffers, and both freed them. Owning string
+# elements now deep-clone, so the copy owns independent buffers.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "len = 2"
+# EXPECT_NO_LEAKS: true
+
+struct Holder:
+    List<string> m
+
+fn main() i32:
+    let List<string> l = List.new()
+    l.push("mostly-{'x'}")
+    l.push("harmless-{'y'}")
+    let Holder h = Holder(l)
+    println("len = {h.m.len()}")
+    return Result.Ok(0)

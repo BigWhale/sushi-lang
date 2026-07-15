@@ -439,6 +439,12 @@ def _emit_struct_destructor(
         # below would free nothing. Destroy live elements then free the buffer, keeping
         # this in lockstep with _clone_list_value (issue #140).
         _emit_list_value_destructor(codegen, builder, value_ptr, value_type)
+    elif value_type.name.startswith("HashMap<"):
+        # HashMap<K, V> keeps its owning keys/values in an LLVM-only Entry<K, V> buffer
+        # that the generic field loop cannot see (the semantic `buckets` field is an i32[]
+        # placeholder). Destroy every occupied Entry then free the bucket buffer, in
+        # lockstep with _clone_hashmap_value (issue #181).
+        _emit_hashmap_value_destructor(codegen, builder, value_ptr, value_type)
     else:
         # Regular struct: recursively destroy each field
         for i, (field_name, field_type) in enumerate(value_type.fields):
@@ -488,6 +494,45 @@ def _emit_list_value_destructor(
                                 prefix="list_cleanup")
 
         void_ptr = builder.bitcast(data_ptr, ir.PointerType(ir.IntType(INT8_BIT_WIDTH)))
+        free_func = codegen.get_free_func()
+        builder.call(free_func, [void_ptr])
+
+
+def _emit_hashmap_value_destructor(
+    codegen: LLVMCodegen,
+    builder: ir.IRBuilder,
+    value_ptr: ir.Value,
+    value_type: StructType
+) -> None:
+    """Free a HashMap<K, V> value's bucket buffer, destroying every occupied Entry first.
+
+    The owning keys/values live in an LLVM-only Entry<K, V> buffer the generic field walk
+    cannot reach (the semantic `buckets` field is an i32[] placeholder), so -- like the
+    List branch -- this works off the real layout via the HashMap helpers and reuses
+    emit_destroy_all_entries, symmetric with _clone_hashmap_value (issue #181). null_guard
+    on the entry walk handles an already-emptied map.
+    """
+    from sushi_lang.backend.generics.hashmap.types import (
+        get_hashmap_field_ptrs, get_entry_type
+    )
+    from sushi_lang.backend.generics.hashmap.utils import emit_destroy_all_entries
+    from sushi_lang.semantics.generics.hashmap import extract_key_value_types
+
+    key_type, value_type_kv = extract_key_value_types(value_type, codegen)
+
+    fields = get_hashmap_field_ptrs(codegen, value_ptr)
+    capacity = builder.load(fields.capacity, name="hm_dtor_cap")
+    buckets_data = builder.load(fields.buckets_data, name="hm_dtor_data")
+
+    emit_destroy_all_entries(codegen, buckets_data, capacity, key_type, value_type_kv,
+                             null_guard=True)
+
+    entry_llvm = get_entry_type(codegen, key_type, value_type_kv)
+    is_not_null = builder.icmp_unsigned(
+        "!=", buckets_data, ir.Constant(ir.PointerType(entry_llvm), None))
+    with builder.if_then(is_not_null):
+        void_ptr = builder.bitcast(buckets_data,
+                                   ir.PointerType(ir.IntType(INT8_BIT_WIDTH)))
         free_func = codegen.get_free_func()
         builder.call(free_func, [void_ptr])
 
@@ -662,7 +707,11 @@ def needs_cleanup(value_type: Type) -> bool:
         # its own registry (register_own / register_list) and deliberately NOT by
         # _struct_cleanup -- so do not "unify" the two predicates by teaching that gate the
         # same trick, or such a local lands in both registries and double-frees.
-        if value_type.name.startswith("Own<") or value_type.name.startswith("List<"):
+        if (value_type.name.startswith("Own<") or value_type.name.startswith("List<")
+                or value_type.name.startswith("HashMap<")):
+            # HashMap always owns a heap bucket buffer; its only owning field is the i32[]
+            # placeholder, so the field scan below answered True only incidentally. Make it
+            # explicit (matching Own/List) so it no longer depends on the placeholder (#181).
             return True
         # Structs need cleanup if any field needs cleanup
         return any(needs_cleanup(field_type) for _, field_type in value_type.fields)
