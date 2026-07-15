@@ -44,8 +44,6 @@ class ScopeAnalyzer:
         self.external_table = external_table or ExternalTable()
         # Stack of scopes, each scope maps variable name to VariableInfo
         self.scopes: List[Dict[str, VariableInfo]] = []
-        # Track destroyed dynamic arrays per scope
-        self.destroyed_arrays: List[set[str]] = []
         # Loop-nesting depth for the current function. break/continue are only
         # legal when this is > 0 (CE1003); reset to 0 across nested functions.
         self._loop_depth: int = 0
@@ -91,7 +89,6 @@ class ScopeAnalyzer:
     def _push_scope(self) -> None:
         """Enter a new scope."""
         self.scopes.append({})
-        self.destroyed_arrays.append(set())
 
     def _pop_scope(self) -> None:
         """Exit current scope and emit warnings for unused variables."""
@@ -113,10 +110,6 @@ class ScopeAnalyzer:
                 else:
                     # Variable is completely unused
                     self.err.emit(er.ERR.CW1001, var_info.declared_at, name=var_info.name)
-
-        # Also pop destroyed arrays for this scope
-        if self.destroyed_arrays:
-            self.destroyed_arrays.pop()
 
     def _declare_variable(self, name: str, span: Optional[Span]) -> None:
         """Declare a variable in the current scope."""
@@ -207,18 +200,6 @@ class ScopeAnalyzer:
         self._pop_scope()
         self._capture_collectors.pop()
         lam.captures = list(collector['names'].values())
-
-    def _mark_array_destroyed(self, name: str) -> None:
-        """Mark a dynamic array as destroyed in the current scope."""
-        if self.destroyed_arrays:
-            self.destroyed_arrays[-1].add(name)
-
-    def _is_array_destroyed(self, name: str) -> bool:
-        """Check if a dynamic array has been destroyed in any current scope."""
-        for destroyed_set in self.destroyed_arrays:
-            if name in destroyed_set:
-                return True
-        return False
 
     def _check_constant(self, const: ConstDef) -> None:
         """Check a constant definition - validate the value expression."""
@@ -525,10 +506,6 @@ class ScopeAnalyzer:
 
                 for arg in expr.args:
                     self._check_expression(arg)
-
-                # Track destroy() calls on dynamic arrays
-                if expr.method == "destroy" and isinstance(expr.receiver, Name):
-                    self._mark_array_destroyed(expr.receiver.id)
             case DotCall():
                 # DotCall is the unified X.Y(args) node
                 # Check if receiver is an enum/struct type name - if so, it's a constructor
@@ -555,9 +532,6 @@ class ScopeAnalyzer:
                     else:
                         # Method call - check receiver as variable
                         self._check_expression(expr.receiver)
-                        # Track destroy() calls
-                        if expr.method == "destroy":
-                            self._mark_array_destroyed(receiver_name)
                 else:
                     # Complex receiver expression - check it
                     self._check_expression(expr.receiver)

@@ -281,8 +281,6 @@ class LLVMOptimizer:
         try:
             llmod.verify()
         except Exception as e:
-            print(e)
-            ir_dump = str(llmod)
             raise_internal_error("CE0015", message=f"LLVM IR verification failed ({when}): {e}")
 
     def ensure_llvm(self) -> None:

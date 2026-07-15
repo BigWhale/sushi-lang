@@ -7,7 +7,6 @@ using the Visitor Pattern, eliminating the need for large match/isinstance chain
 Usage:
     1. Subclass NodeVisitor[T] for visitors that return values
     2. Subclass RecursiveVisitor for analysis passes (void return)
-    3. Subclass NodeTransformer for AST transformations
 
 Example:
     class MyAnalyzer(RecursiveVisitor):
@@ -67,19 +66,6 @@ class NodeVisitor(ABC, Generic[T]):
         raise NotImplementedError(
             f"Visitor {self.__class__.__name__} doesn't handle {type(node).__name__}"
         )
-
-
-class NodeTransformer(NodeVisitor[Node]):
-    """
-    Base class for visitors that transform AST nodes.
-
-    Returns modified versions of nodes, useful for AST transformations
-    and optimizations.
-    """
-
-    def generic_visit(self, node: Node) -> Node:
-        """Default behavior: return node unchanged."""
-        return node
 
 
 class RecursiveVisitor(NodeVisitor[None]):

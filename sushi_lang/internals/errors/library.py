@@ -33,17 +33,11 @@ _add(ErrorMessage("CE3502", Severity.ERROR,
     "library not found: '{lib}' (searched: {paths})",
     Category.LIBRARY, "Library bitcode and manifest files not found in search paths."))
 
-_add(ErrorMessage("CE3503", Severity.ERROR,
-    "invalid library manifest '{path}': {reason}",
-    Category.LIBRARY, "Library manifest file is malformed or missing required fields."))
 
 _add(ErrorMessage("CE3504", Severity.ERROR,
     "platform mismatch: library compiled for '{lib_platform}', current platform is '{current_platform}'",
     Category.LIBRARY, "Libraries must be compiled for the same platform they are used on."))
 
-_add(ErrorMessage("CE3506", Severity.ERROR,
-    "cannot use --lib with --link: libraries cannot link other libraries yet",
-    Category.LIBRARY, "Transitive library dependencies are not yet supported."))
 
 _add(ErrorMessage("CE3507", Severity.ERROR,
     "failed to link library '{lib}': {reason}",

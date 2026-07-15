@@ -33,7 +33,7 @@ def create_module(name: str) -> ir.Module:
     return ir.Module(name=name)
 
 
-def compile_module_to_bc(module: ir.Module, output_path: Path):
+def compile_module_to_bc(module: ir.Module, output_path: Path, quiet: bool = False):
     """Compile LLVM module to bitcode file."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -44,116 +44,126 @@ def compile_module_to_bc(module: ir.Module, output_path: Path):
     with open(output_path, 'wb') as f:
         f.write(mod.as_bitcode())
 
-    print(f"  → {output_path}")
+    if not quiet:
+        print(f"  → {output_path}")
 
 
-def build_collections_strings(platform_dir: Path):
+def build_collections_strings(platform_dir: Path, quiet: bool = False):
     """Build collections/strings unit (platform-agnostic)."""
-    print("Building collections/strings...")
+    if not quiet:
+        print("Building collections/strings...")
 
     # Use the new standalone IR generator
     module = strings.generate_module_ir()
 
     output = platform_dir / "collections" / "strings.bc"
-    compile_module_to_bc(module, output)
+    compile_module_to_bc(module, output, quiet=quiet)
 
 
-def build_core_primitives(platform_dir: Path):
+def build_core_primitives(platform_dir: Path, quiet: bool = False):
     """Build core/primitives unit (platform-agnostic)."""
-    print("Building core/primitives...")
+    if not quiet:
+        print("Building core/primitives...")
 
     # Use the new standalone IR generator
     module = primitives.generate_module_ir()
 
     output = platform_dir / "core" / "primitives.bc"
-    compile_module_to_bc(module, output)
+    compile_module_to_bc(module, output, quiet=quiet)
 
 
-def build_io_stdio(platform_dir: Path, platform: TargetPlatform):
+def build_io_stdio(platform_dir: Path, platform: TargetPlatform, quiet: bool = False):
     """Build io/stdio unit (platform-specific).
 
     This module uses platform-specific stdio handles (darwin vs linux).
     """
-    print(f"Building io/stdio (platform: {platform.os})...")
+    if not quiet:
+        print(f"Building io/stdio (platform: {platform.os})...")
 
     # Use the new standalone IR generator
     # The module will use platform-specific handles via common.py
     module = stdio.generate_module_ir()
 
     output = platform_dir / "io" / "stdio.bc"
-    compile_module_to_bc(module, output)
+    compile_module_to_bc(module, output, quiet=quiet)
 
 
-def build_io_files(platform_dir: Path):
+def build_io_files(platform_dir: Path, quiet: bool = False):
     """Build io/files unit (platform-agnostic)."""
-    print("Building io/files...")
+    if not quiet:
+        print("Building io/files...")
 
     # Use the new standalone IR generator
     from sushi_lang.sushi_stdlib.src.io import files
     module = files.generate_module_ir()
 
     output = platform_dir / "io" / "files.bc"
-    compile_module_to_bc(module, output)
+    compile_module_to_bc(module, output, quiet=quiet)
 
 
-def build_time(platform_dir: Path):
+def build_time(platform_dir: Path, quiet: bool = False):
     """Build time unit (includes platform-specific nanosleep declarations)."""
-    print("Building time...")
+    if not quiet:
+        print("Building time...")
 
     # Use the new standalone IR generator
     from sushi_lang.sushi_stdlib.src import time
     module = time.generate_module_ir()
 
     output = platform_dir / "time.bc"
-    compile_module_to_bc(module, output)
+    compile_module_to_bc(module, output, quiet=quiet)
 
 
-def build_math(platform_dir: Path):
+def build_math(platform_dir: Path, quiet: bool = False):
     """Build math unit (platform-agnostic)."""
-    print("Building math...")
+    if not quiet:
+        print("Building math...")
 
     # Use the new standalone IR generator
     from sushi_lang.sushi_stdlib.src import math
     module = math.generate_module_ir()
 
     output = platform_dir / "math.bc"
-    compile_module_to_bc(module, output)
+    compile_module_to_bc(module, output, quiet=quiet)
 
 
-def build_sys_env(platform_dir: Path):
+def build_sys_env(platform_dir: Path, quiet: bool = False):
     """Build sys/env unit (includes platform-specific getenv/setenv declarations)."""
-    print("Building sys/env...")
+    if not quiet:
+        print("Building sys/env...")
 
     # Use the new standalone IR generator
     from sushi_lang.sushi_stdlib.src.sys import env
     module = env.generate_module_ir()
 
     output = platform_dir / "sys" / "env.bc"
-    compile_module_to_bc(module, output)
+    compile_module_to_bc(module, output, quiet=quiet)
 
 
-def build_random(platform_dir: Path):
+def build_random(platform_dir: Path, quiet: bool = False):
     """Build random unit (includes platform-specific random declarations)."""
-    print("Building random...")
+    if not quiet:
+        print("Building random...")
 
     # Use the new standalone IR generator
     from sushi_lang.sushi_stdlib.src import random
     module = random.generate_module_ir()
 
     output = platform_dir / "random.bc"
-    compile_module_to_bc(module, output)
+    compile_module_to_bc(module, output, quiet=quiet)
 
 
-def build_sys_process(platform_dir: Path):
+def build_sys_process(platform_dir: Path, quiet: bool = False):
     """Build sys/process unit (includes platform-specific process control declarations)."""
-    print("Building sys/process...")
+    if not quiet:
+        print("Building sys/process...")
 
     # Use the new standalone IR generator
     from sushi_lang.sushi_stdlib.src.sys import process
     module = process.generate_module_ir()
 
     output = platform_dir / "sys" / "process.bc"
-    compile_module_to_bc(module, output)
+    compile_module_to_bc(module, output, quiet=quiet)
 
 
 def build_all(platform_name: str, quiet: bool = False) -> None:
@@ -182,17 +192,17 @@ def build_all(platform_name: str, quiet: bool = False) -> None:
         print()
 
     # Build platform-agnostic modules
-    build_collections_strings(platform_dir)
-    build_core_primitives(platform_dir)
-    build_io_files(platform_dir)
-    build_time(platform_dir)
-    build_math(platform_dir)
-    build_sys_env(platform_dir)
-    build_sys_process(platform_dir)
-    build_random(platform_dir)
+    build_collections_strings(platform_dir, quiet=quiet)
+    build_core_primitives(platform_dir, quiet=quiet)
+    build_io_files(platform_dir, quiet=quiet)
+    build_time(platform_dir, quiet=quiet)
+    build_math(platform_dir, quiet=quiet)
+    build_sys_env(platform_dir, quiet=quiet)
+    build_sys_process(platform_dir, quiet=quiet)
+    build_random(platform_dir, quiet=quiet)
 
     # Build platform-specific modules
-    build_io_stdio(platform_dir, platform)
+    build_io_stdio(platform_dir, platform, quiet=quiet)
 
     # Note: core/results and core/maybe use inline emission only
     # They are not built as stdlib units because monomorphizing for
