@@ -16,6 +16,24 @@ from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
 from sushi_lang.semantics.units import Unit, UnitManager
 
 
+def _check_library_platform(metadata: dict, lib_path: str) -> None:
+    """Reject a `.slib` built for a different platform (CE3504).
+
+    The `.slib` bitcode is platform-specific; linking a darwin library on Linux
+    otherwise fails much later as an incomprehensible `cc`/LLVM error. Compare the
+    platform the manifest recorded against the host and fail early with a clear code.
+    Raises LibraryError so it renders through the existing library-error path.
+    """
+    from sushi_lang.backend.library_errors import LibraryError
+    from sushi_lang.backend.platform_detect import current_platform_name
+
+    lib_platform = metadata.get("platform")
+    host = current_platform_name()
+    # "unknown" on either side means we could not determine a platform; do not block.
+    if lib_platform and lib_platform != "unknown" and host != "unknown" and lib_platform != host:
+        raise LibraryError("CE3504", lib_platform=lib_platform, current_platform=host)
+
+
 def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -> bool:
     """Merge bundled Sushi-source stdlib modules (e.g. <collections/iter>) as units.
 
@@ -182,6 +200,7 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
             try:
                 slib_path = library_linker.resolve_library(lib_path)
                 metadata = LibraryFormat.read_metadata_only(slib_path)
+                _check_library_platform(metadata, lib_path)
                 library_linker.loaded_libraries[metadata["library_name"]] = metadata
 
                 formatted_path = " / ".join(lib_path.split('/'))
@@ -196,6 +215,17 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
                                            unit_manager=unit_manager,
                                            library_linker=library_linker)
     multi_file_analyzer.check(main_ast)
+
+    # A library must not carry main(): --lib used to embed it into the .slib silently,
+    # where it collides at link time in every consumer. Reject it here (CE3501).
+    if is_library:
+        from sushi_lang.internals import errors as er
+        for unit in compilation_order:
+            if unit.ast is None:
+                continue
+            for func in unit.ast.functions:
+                if func.name == "main":
+                    er.emit(reporter, er.ERR.CE3501, func.name_span)
 
     if reporter.has_errors:
         return 2

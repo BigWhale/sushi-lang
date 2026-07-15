@@ -54,7 +54,7 @@ def emit_fixed_array_iter(codegen: 'LLVMCodegen', call: MethodCall, receiver_val
         else:
             raise_internal_error("CE0041", type=type(semantic_type).__name__)
     else:
-        raise NotImplementedError("iter() on complex array expressions not fully supported yet")
+        raise_internal_error("CE0072", operation="iter() on a complex array expression")
 
     iterator_type = IteratorType(element_type=element_semantic_type)
     iterator_struct_type = codegen.types.get_iterator_struct_type(iterator_type)
@@ -115,7 +115,7 @@ def emit_dynamic_array_iter(codegen: 'LLVMCodegen', call: MethodCall, receiver_v
         else:
             raise_internal_error("CE0042", type=type(semantic_type).__name__)
     else:
-        raise NotImplementedError("iter() on complex dynamic array expressions not fully supported yet")
+        raise_internal_error("CE0072", operation="iter() on a complex dynamic array expression")
 
     iterator_type = IteratorType(element_type=element_semantic_type)
     iterator_struct_type = codegen.types.get_iterator_struct_type(iterator_type)

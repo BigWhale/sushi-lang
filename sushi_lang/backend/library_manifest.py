@@ -40,12 +40,11 @@ class LibraryManifestGenerator:
                 decides which private functions need external linkage in the
                 bitcode) and passes it here to avoid extracting twice.
         """
-        from sushi_lang.backend.platform_detect import get_current_platform
+        from sushi_lang.backend.platform_detect import current_platform_name
         from sushi_lang.internals.version import _get_versions
         from sushi_lang.backend.library_format import LibraryFormat
 
-        platform = get_current_platform()
-        platform_name = "darwin" if platform.is_darwin else "linux" if platform.is_linux else "unknown"
+        platform_name = current_platform_name()
         VERSION = _get_versions()["app"]
 
         # Extract library name from output path (mylib.slib -> mylib)

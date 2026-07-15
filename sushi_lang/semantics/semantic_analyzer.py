@@ -627,8 +627,11 @@ class SemanticAnalyzer:
                 try:
                     impl = deserialize_perk_impl(record)
                 except Exception:
-                    # The snippet failed to re-parse; skip rather than crash
-                    # the consumer build (the consumer can supply its own impl).
+                    # The snippet failed to re-parse; skip rather than crash the
+                    # consumer build (it can supply its own impl) -- but say so, or the
+                    # user later gets "no such method" on a perk the library implements.
+                    from sushi_lang.internals import errors as er
+                    er.emit(self.reporter, er.ERR.CW3506, None, type=type_name)
                     continue
 
                 if self.perk_impls.register(impl, type_name):

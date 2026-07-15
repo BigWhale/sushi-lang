@@ -48,9 +48,14 @@ _add(ErrorMessage("CW3001", Severity.WARNING,
     "duplicate use statement for unit '{unit}'", Category.UNIT,
     "A unit was already imported earlier in this file. The duplicate use statement has no effect."))
 
-_add(ErrorMessage("CW3505", Severity.WARNING,
-    "platform mismatch: library compiled for '{lib_platform}', current platform is '{current_platform}'",
-    Category.UNIT, "Library was compiled for a different platform. This may cause runtime issues."))
+# CW3505 (platform mismatch, WARNING) was deleted: it was a byte-for-byte duplicate of
+# CE3504 at warning severity, and a platform mismatch is not a warning -- the link
+# cannot succeed. The error, CE3504, is the survivor.
+
+_add(ErrorMessage("CW3506", Severity.WARNING,
+    "library perk implementation for '{type}' could not be loaded and was skipped",
+    Category.LIBRARY, "A perk implementation shipped by a library failed to deserialize. "
+                      "Methods it provides will be unavailable unless the consumer supplies its own."))
 
 # FFI / Foreign Function Interface (CW5001, CE5001-CE5008)
 _add(ErrorMessage("CW5001", Severity.WARNING,
