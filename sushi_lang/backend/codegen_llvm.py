@@ -458,7 +458,7 @@ class LLVMCodegen:
             target_triple = llmod.triple if hasattr(llmod, 'triple') else ""
             data_layout = llmod.data_layout if hasattr(llmod, 'data_layout') else ""
 
-            two_phase = TwoPhaseLinker(target_triple, data_layout, verbose=False)
+            two_phase = TwoPhaseLinker(target_triple, data_layout)
 
             # Add main module
             two_phase.add_main_module(llmod, "main")

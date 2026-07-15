@@ -34,9 +34,9 @@ REFERENCE_PATTERNS = [
 
 # The number of registered codes. Bumping this is a deliberate act: it is the
 # tripwire for silent loss when errors.py is split into a package.
-# 278: +CE0125 (borrow checker has no arm for an expression node) -- the runtime backstop
-# behind tests/unit/test_borrow_dispatch_is_total.py.
-REGISTRY_SIZE = 278
+# 261: deleted 17 genuinely-dead speculative codes (CE0001/37/38/39/48/63/66/70/82/84/
+# 86/88/97/98, CE2022, CE3503, CE3506) that nothing emitted -- Tier 4.8 PR4 hygiene.
+REGISTRY_SIZE = 261
 
 # Codes whose numeric range does not match their category. SHRINK-ONLY: never add.
 # Renumbering would break EXPECT_ERROR_CODE headers and the docs, so these stay
@@ -86,8 +86,8 @@ def test_every_registry_text_formats():
 
 def test_missing_format_key_degrades_instead_of_raising():
     """The error machinery must not crash while reporting an error."""
-    rendered = _fmt("CE0001")  # CE0001's text needs {node}; deliberately omitted
-    assert rendered == "unknown type node '<missing:node>'"
+    rendered = _fmt("CE0073")  # CE0073's text needs {type}; deliberately omitted
+    assert rendered == "unknown primitive type: <missing:type>"
 
 
 def test_unknown_code_degrades_instead_of_raising():
@@ -158,15 +158,16 @@ def test_expect_error_code_directives_are_registered():
     assert not unknown, f"EXPECT_ERROR_CODE names an unregistered code: {unknown}"
 
 
-# Registered but referenced from nowhere in sushi_lang/. Some are reachable-but-
-# untested, some are genuinely dead. This is an EXACT-MATCH ratchet: a new code
-# may not join the list, and one that leaves must be removed from it.
-# TODO(4.8): reachable? test it. unreachable? delete it.
+# Registered but referenced from nowhere in sushi_lang/. What remains is the "Group 3"
+# set: codes reserved for genuinely-missing checks not yet implemented (plus CE0074, an
+# unreachable internal guard). PR4 deleted the 17 speculative catch-alls that nothing
+# would ever emit. This is an EXACT-MATCH ratchet: a new code may not join the list, and
+# one that leaves must be removed from it.
+# TODO: implement each remaining check (CE0119 expand, CE1004 loop-shadow, CE2042/CE2043
+# match exhaustiveness/pattern-type, CE3004 unit-path, CE4008/CE4009 generic-perk arity)
+# and drop it from here; delete CE0074 if it stays unreachable.
 UNREFERENCED = {
-    "CE0001", "CE0037", "CE0038", "CE0039", "CE0048", "CE0063", "CE0066", "CE0070",
-    "CE0074", "CE0082", "CE0084", "CE0086", "CE0088", "CE0097", "CE0098",
-    "CE0119", "CE1004", "CE2022", "CE2042", "CE2043", "CE3004", "CE3503",
-    "CE3506", "CE4008", "CE4009",
+    "CE0074", "CE0119", "CE1004", "CE2042", "CE2043", "CE3004", "CE4008", "CE4009",
 }
 
 

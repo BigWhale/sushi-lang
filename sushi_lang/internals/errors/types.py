@@ -80,9 +80,6 @@ _add(ErrorMessage("CE2016", Severity.ERROR,
     Category.TYPE, "Built-in Result<T, E> and Maybe<T> methods take a fixed number of arguments."))
 
 # Dynamic array-specific errors (compile-time only)
-_add(ErrorMessage("CE2022", Severity.ERROR,
-    "invalid dynamic array element type '{type}'",
-    Category.TYPE, "Dynamic arrays can only hold supported element types (int, bool, string)."))
 
 _add(ErrorMessage("CE2023", Severity.ERROR,
     "dynamic array method argument mismatch for '{method}': expected {expected}, got {got}",

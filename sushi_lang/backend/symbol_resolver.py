@@ -13,15 +13,13 @@ if TYPE_CHECKING:
 class SymbolResolver:
     """Resolves symbol conflicts and selects which definitions to use."""
 
-    def __init__(self, symbol_tables: list['SymbolTable'], verbose: bool = False):
+    def __init__(self, symbol_tables: list['SymbolTable']):
         """Initialize resolver with all symbol tables.
 
         Args:
             symbol_tables: List of tables from main, libraries, stdlib, runtime.
-            verbose: If True, print conflict resolution messages.
         """
         self.symbol_tables = symbol_tables
-        self.verbose = verbose
         self.resolution_map: dict[str, 'SymbolInfo'] = {}  # Final symbol choices
         self.conflicts: list[tuple[str, list['SymbolInfo']]] = []  # Track conflicts
 
@@ -99,16 +97,7 @@ class SymbolResolver:
         # Sort by priority (lower enum value = higher priority)
         candidates_sorted = sorted(candidates, key=lambda s: s.source.value)
 
-        chosen = candidates_sorted[0]
-
-        # Log the choice for debugging
-        if self.verbose and len(candidates) > 1:
-            others = [f"{s.module_name}({s.source.name})" for s in candidates_sorted[1:]]
-            print(f"  Symbol conflict '{symbol_name}': "
-                  f"chose {chosen.module_name}({chosen.source.name}) "
-                  f"over {', '.join(others)}")
-
-        return chosen
+        return candidates_sorted[0]
 
     def get_conflicts(self) -> list[tuple[str, list['SymbolInfo']]]:
         """Get list of all symbol conflicts that were resolved.

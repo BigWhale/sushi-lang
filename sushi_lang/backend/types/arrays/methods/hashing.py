@@ -282,27 +282,18 @@ def emit_fixed_array_hash_direct(codegen: Any, expr: Any, receiver_value: ir.Val
     Returns:
         Hash value as u64
     """
-    from sushi_lang.semantics.typesys import ArrayType, BuiltinType
-
-    # Determine the semantic array type from the codegen's variable_types table
-    # receiver_type is ir.ArrayType with count and element type
     from sushi_lang.semantics.ast import Name
 
-    llvm_element_type = receiver_type.element
-    array_size = receiver_type.count
-
-    # Get the semantic type from the variable table
-    # The receiver should be a Name node (variable reference)
+    # Get the semantic type from the variable table.
+    # The receiver's semantic type must be resolvable here -- semantic analysis
+    # guarantees a resolved Name receiver for .hash(). Falling back to an i32 array
+    # would silently produce a wrong hash, so a missing type is a compiler bug.
     if isinstance(expr.receiver, Name):
         array_type = codegen.variable_types.get(expr.receiver.id)
         if array_type is None:
-            # Fallback: create a simple i32 array type (should not happen in practice)
-            print(f"[WARNING] Cannot find semantic type for variable '{expr.receiver.id}', falling back to i32 array")
-            array_type = ArrayType(BuiltinType.I32, array_size)
+            raise_internal_error("CE0056", name=expr.receiver.id)
     else:
-        # Receiver is not a simple variable name - this shouldn't happen for .hash() calls
-        print(f"[WARNING] Receiver is not a Name node: {type(expr.receiver).__name__}, falling back to i32 array")
-        array_type = ArrayType(BuiltinType.I32, array_size)
+        raise_internal_error("CE0056", name=f"<{type(expr.receiver).__name__}>")
 
     # Create emitter and call it
     emitter = _emit_fixed_array_hash(array_type)
@@ -325,21 +316,16 @@ def emit_dynamic_array_hash_direct(codegen: Any, expr: Any, receiver_value: ir.V
     Returns:
         Hash value as u64
     """
-    from sushi_lang.semantics.typesys import DynamicArrayType, BuiltinType
     from sushi_lang.semantics.ast import Name
 
-    # Get the semantic type from the variable table
-    # The receiver should be a Name node (variable reference)
+    # Get the semantic type from the variable table.
+    # As above: a missing receiver type is a compiler bug, not an i32[] fallback.
     if isinstance(expr.receiver, Name):
         array_type = codegen.variable_types.get(expr.receiver.id)
         if array_type is None:
-            # Fallback: create a simple i32[] type (should not happen in practice)
-            print(f"[WARNING] Cannot find semantic type for variable '{expr.receiver.id}', falling back to i32[]")
-            array_type = DynamicArrayType(BuiltinType.I32)
+            raise_internal_error("CE0056", name=expr.receiver.id)
     else:
-        # Receiver is not a simple variable name - this shouldn't happen for .hash() calls
-        print(f"[WARNING] Receiver is not a Name node: {type(expr.receiver).__name__}, falling back to i32[]")
-        array_type = DynamicArrayType(BuiltinType.I32)
+        raise_internal_error("CE0056", name=f"<{type(expr.receiver).__name__}>")
 
     # Create emitter and call it
     emitter = _emit_dynamic_array_hash(array_type)

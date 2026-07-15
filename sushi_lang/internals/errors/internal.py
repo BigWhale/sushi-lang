@@ -19,9 +19,6 @@ _add(ErrorMessage("CE0000", Severity.ERROR,
     Category.INTERNAL, "The compiler crashed. This is a compiler bug, not a problem "
                        "with the program being compiled."))
 
-_add(ErrorMessage("CE0001", Severity.ERROR,
-    "unknown type node '{node}'",
-    Category.INTERNAL, "Found an unexpected type (bug or unsupported feature)."))
 
 _add(ErrorMessage("CE0002", Severity.ERROR,
     "internal error: malformed parse tree at '{node}': {detail}",
@@ -158,17 +155,6 @@ _add(ErrorMessage("CE0036", Severity.ERROR,
     "enum variant '{variant}' has wrong number of associated types: expected {expected}, got {got}",
     Category.INTERNAL, "Enum variant associated type count mismatch - monomorphization failure."))
 
-_add(ErrorMessage("CE0037", Severity.ERROR,
-    "malformed enum '{enum}': {reason}",
-    Category.INTERNAL, "Enum structure violates expected invariants."))
-
-_add(ErrorMessage("CE0038", Severity.ERROR,
-    "variable '{var}' is not an enum type",
-    Category.INTERNAL, "Expected enum type but got different type - semantic analysis failure."))
-
-_add(ErrorMessage("CE0039", Severity.ERROR,
-    "try operator requires Result-like or Maybe-like enum, got {type}",
-    Category.INTERNAL, "Try operator applied to non-result type - semantic analysis should prevent this."))
 
 _add(ErrorMessage("CE0040", Severity.ERROR,
     "cannot construct {variant} variant for return type: {type}",
@@ -200,9 +186,6 @@ _add(ErrorMessage("CE0047", Severity.ERROR,
     "failed to create Maybe<{type}> enum type",
     Category.INTERNAL, "Maybe type instantiation failed during codegen."))
 
-_add(ErrorMessage("CE0048", Severity.ERROR,
-    "failed to create Maybe<{type}>. Available: {available}",
-    Category.INTERNAL, "Maybe type instantiation failed - debugging info shows available types."))
 
 _add(ErrorMessage("CE0049", Severity.ERROR,
     "invalid {generic} type name: {name}",
@@ -263,9 +246,6 @@ _add(ErrorMessage("CE0062", Severity.ERROR,
     "invalid cleanup_type: {type}",
     Category.INTERNAL, "Unknown cleanup type in destructor emission."))
 
-_add(ErrorMessage("CE0063", Severity.ERROR,
-    "cannot infer return type for method: {method}",
-    Category.INTERNAL, "Method return type inference failed during codegen."))
 
 # Main Function Validation (CE0064-CE0066)
 _add(ErrorMessage("CE0064", Severity.ERROR,
@@ -276,9 +256,6 @@ _add(ErrorMessage("CE0065", Severity.ERROR,
     "args parameter not found in main function",
     Category.INTERNAL, "Main function parameter structure invalid."))
 
-_add(ErrorMessage("CE0066", Severity.ERROR,
-    "main function validation failed: {reason}",
-    Category.INTERNAL, "Main function does not meet requirements."))
 
 # Type Inference (CE0067-CE0070)
 _add(ErrorMessage("CE0067", Severity.ERROR,
@@ -293,9 +270,6 @@ _add(ErrorMessage("CE0069", Severity.ERROR,
     "cannot infer struct type from DotCall: {method}",
     Category.INTERNAL, "Struct type inference failed for dot-call expression."))
 
-_add(ErrorMessage("CE0070", Severity.ERROR,
-    "cannot determine type for expression: {expr}",
-    Category.INTERNAL, "Expression type inference failed during codegen."))
 
 # Iterator Operations (CE0071-CE0072)
 _add(ErrorMessage("CE0071", Severity.ERROR,
@@ -346,35 +320,23 @@ _add(ErrorMessage("CE0081", Severity.ERROR,
     "Own<T> field 'value' has unexpected type: {type}",
     Category.INTERNAL, "Own<T> internal structure does not match expected layout."))
 
-_add(ErrorMessage("CE0082", Severity.ERROR,
-    "Own<T> operation failed: {reason}",
-    Category.INTERNAL, "Own<T> operation encountered unexpected condition."))
 
 # List<T> Operations (CE0083-CE0084)
 _add(ErrorMessage("CE0083", Severity.ERROR,
     "unknown List<T> method: {method}",
     Category.INTERNAL, "List<T> method not implemented."))
 
-_add(ErrorMessage("CE0084", Severity.ERROR,
-    "List<T>.{method}() expects {expected} argument(s), got {got}",
-    Category.INTERNAL, "List method called with incorrect number of arguments."))
 
 # HashMap<K,V> Operations (CE0085-CE0088)
 _add(ErrorMessage("CE0085", Severity.ERROR,
     "unknown HashMap<K, V> method: {method}",
     Category.INTERNAL, "HashMap method not implemented."))
 
-_add(ErrorMessage("CE0086", Severity.ERROR,
-    "HashMap operation failed: {reason}",
-    Category.INTERNAL, "HashMap operation encountered unexpected condition."))
 
 _add(ErrorMessage("CE0087", Severity.ERROR,
     "expected HashMap<K, V> type, got {type}",
     Category.INTERNAL, "Type mismatch: expected HashMap but got different type."))
 
-_add(ErrorMessage("CE0088", Severity.ERROR,
-    "HashMap type parsing failed: {reason}",
-    Category.INTERNAL, "Failed to parse HashMap type signature."))
 
 # Result<T> Operations (CE0089-CE0091)
 _add(ErrorMessage("CE0089", Severity.ERROR,
@@ -422,13 +384,6 @@ _add(ErrorMessage("CE0096", Severity.ERROR,
     "invalid intrinsic operation: {operation}",
     Category.INTERNAL, "Intrinsic operation not recognized."))
 
-_add(ErrorMessage("CE0097", Severity.ERROR,
-    "intrinsic validation failed: {reason}",
-    Category.INTERNAL, "Intrinsic operation validation failed."))
-
-_add(ErrorMessage("CE0098", Severity.ERROR,
-    "unsupported intrinsic type: {type}",
-    Category.INTERNAL, "Type not supported for intrinsic operation."))
 
 # Expression Type Validation (CE0099-CE0100)
 _add(ErrorMessage("CE0099", Severity.ERROR,
