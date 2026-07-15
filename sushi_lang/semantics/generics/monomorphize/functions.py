@@ -503,6 +503,28 @@ class FunctionMonomorphizer:
             # Leaf nodes: no nested expressions to scan.
             pass
 
+    def _get_arg_inferrer(self, var_types: Dict[str, Type]):
+        """Pass 2's TypeValidator over the whole program, seeded with this scope.
+
+        Cached per FunctionMonomorphizer and re-seeded with the current `var_types` on each
+        call (the scope changes per monomorphized function). Wired to discard diagnostics --
+        they belong to Pass 2, which runs later. Returns None when no SymbolTables was
+        supplied (unit-test paths), in which case the caller falls back to the var-type map.
+        Mirrors the shared inferrer Pass 1.5 builds in instantiate/__init__.py.
+        """
+        tables = getattr(self.monomorphizer, "tables", None)
+        if tables is None:
+            return None
+        inferrer = getattr(self, "_arg_inferrer", None)
+        if inferrer is None:
+            from sushi_lang.internals.report import Reporter
+            from sushi_lang.semantics.passes.types import TypeValidator
+            inferrer = TypeValidator(Reporter(), tables)
+            self._arg_inferrer = inferrer
+        # Share the current scope by reference so Name/self lookups resolve to concrete types.
+        inferrer.variable_types = var_types
+        return inferrer
+
     def _infer_type_args_with_substitution(
         self,
         call: 'Call',
@@ -529,14 +551,20 @@ class FunctionMonomorphizer:
         if len(call_args) != len(generic_func.params):
             return None
 
+        inferrer = self._get_arg_inferrer(var_types)
+
         for arg_expr, param in zip(call_args, generic_func.params):
-            # Infer argument type
+            # Infer the argument's type through Pass 2's shared inferrer when available
+            # (it types any expression: a call, cast, method result, or literal -- not just
+            # a bare Name), falling back to the var-type map on the unit-test paths that have
+            # no SymbolTables. The Names-only fallback used to abort inference on the FIRST
+            # non-Name argument, dropping the whole instantiation even when a later Name
+            # argument still supplied the type parameter (issue #214).
             arg_type = None
-            if isinstance(arg_expr, Name):
-                arg_name = arg_expr.id
-                # Look up in variable types map
-                if arg_name in var_types:
-                    arg_type = var_types[arg_name]
+            if inferrer is not None:
+                arg_type = inferrer.infer_expression_type(arg_expr)
+            if arg_type is None and isinstance(arg_expr, Name) and arg_expr.id in var_types:
+                arg_type = var_types[arg_expr.id]
 
             if arg_type is None:
                 # Can't infer, skip

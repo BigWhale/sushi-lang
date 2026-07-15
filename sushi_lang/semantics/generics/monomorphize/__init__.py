@@ -98,6 +98,11 @@ class Monomorphizer:
     enum_table: 'EnumTable | None' = None
     # Struct table for registering on-demand monomorphized structs
     struct_table: 'StructTable | None' = None
+    # Whole-program SymbolTables. Lets the nested-call collector infer a generic call's
+    # argument types through Pass 2's TypeValidator instead of the old Names-only inferrer,
+    # so a non-Name argument (a call, cast, or method result) no longer aborts inference and
+    # drops the instantiation (issue #214). None on unit-test paths built from loose tables.
+    tables: object | None = None
     # Pending instantiations worklist (for nested generic function calls)
     pending_instantiations: Set[Tuple[str, Tuple[Type, ...]]] = field(default_factory=set)
 

@@ -198,6 +198,7 @@ class SemanticAnalyzer:
             func_table=self.funcs,
             enum_table=self.enums,
             struct_table=self.structs,
+            tables=self.tables,
         )
 
         # Separate enum and struct instantiations.
