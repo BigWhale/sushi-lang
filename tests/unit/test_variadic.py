@@ -99,53 +99,8 @@ def test_ce0116_public_variadic_aborts_manifest(tmp_path):
     assert any(item.code == "CE0116" for item in reporter.items)
 
 
-# ---------------------------------------------------------------------------
-# E2 (#71): Pass 1.5 must infer the type of an enum/struct-constructor *DotCall*
-# pack argument. `Color.Red()` parses to a DotCall (not yet an EnumConstructor),
-# so without a DotCall case the shared inferrer returns None and the pack
-# instantiation is never registered -> Pass 2 raises CE2061. These tests pin the
-# shared inferrer directly; they fail (return None) before the fix.
-# ---------------------------------------------------------------------------
-
-def _make_inferrer(struct_table=None, enum_table=None):
-    from sushi_lang.semantics.generics.instantiate.types import TypeInferrer
-    return TypeInferrer(
-        variable_types={},
-        struct_table=struct_table or {},
-        enum_table=enum_table or {},
-    )
-
-
-def _dotcall(receiver_name, method):
-    from sushi_lang.semantics.ast import DotCall, Name
-    return DotCall(loc=None, receiver=Name(loc=None, id=receiver_name), method=method, args=[])
-
-
-def test_infer_enum_constructor_dotcall_arg():
-    """`Color.Red()` (a DotCall) infers to the Color enum type, not None."""
-    from sushi_lang.semantics.typesys import EnumType, EnumVariantInfo
-
-    color = EnumType(
-        name="Color",
-        variants=(
-            EnumVariantInfo(name="Red", associated_types=()),
-            EnumVariantInfo(name="Green", associated_types=()),
-        ),
-    )
-    inferrer = _make_inferrer(enum_table={"Color": color})
-    assert inferrer.infer_simple_expr_type(_dotcall("Color", "Red")) == color
-
-
-def test_infer_struct_constructor_dotcall_arg():
-    """A struct-constructor DotCall (e.g. via a static-like form) infers the struct type."""
-    from sushi_lang.semantics.typesys import StructType, BuiltinType
-
-    point = StructType(name="Point", fields=(("x", BuiltinType.I32), ("y", BuiltinType.I32)))
-    inferrer = _make_inferrer(struct_table={"Point": point})
-    assert inferrer.infer_simple_expr_type(_dotcall("Point", "new")) == point
-
-
-def test_infer_unknown_receiver_dotcall_still_none():
-    """A DotCall whose receiver is not a known enum/struct stays uninferable (None)."""
-    inferrer = _make_inferrer()
-    assert inferrer.infer_simple_expr_type(_dotcall("Unknown", "thing")) is None
+# E2 (#71) coverage note: Pass 1.5's inference of an enum/struct-constructor DotCall
+# pack argument (`Color.Red()`) is done by Pass 2's shared inferrer. The three unit tests
+# that used to pin the thin parallel inferrer's DotCall arm directly were removed with that
+# inferrer in #214; the behaviour is covered by test_p1t5_shared_inference.py,
+# test_p1t5_pack_inference.py, and the end-to-end pack tests under tests/generics/.

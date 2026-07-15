@@ -213,6 +213,7 @@ def test_collector_discovers_pack_instantiation():
         enum_table=tables.enums.by_name,
         generic_structs=tables.generic_structs.by_name,
         generic_funcs=tables.generic_funcs.by_name,
+        tables=tables,
     )
     _type_inst, func_inst = inst.run(program)
 

@@ -53,17 +53,26 @@ def function_value_type_of(type_validator, name: str) -> Optional[Type]:
     return FunctionType(param_types=param_types, ok_type=ok_type, err_type=err_type)
 
 
-def infer_lambda_type(type_validator, lam: Lambda):
-    """Compute (and cache on the node) the FunctionType of a lambda literal.
+def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
+    """Compute (and, by default, cache on the node) the FunctionType of a lambda literal.
 
     Idempotent and diagnostic-free (the validator emits CE2094 separately). Resolves
     each param's type — declared for a typed param `|i32 x|`, or, for a bare param
     `|x|`, from an expected FunctionType propagated onto the node (`lam.expected_type`)
     — and fills the types of the captured free names from the enclosing scope. The
     result's `captures` descriptor marks the value as owning iff it captures anything.
+
+    `stamp` is the annotate seam (issue #214). Pass 2 calls it with `stamp=True`: the
+    result and the resolved param/capture types are persisted on the node for the lift
+    pass and backend. Pass 1.5 calls it with `stamp=False` to type a lambda *argument*
+    for instantiation collection WITHOUT mutating the node — Pass 1.5 runs before
+    expected-type propagation, so stamping there would freeze an under-resolved
+    `resolved_type` that Pass 2 (and lambda-lift) would then read back. The scope table
+    is snapshotted and restored either way, so the read-only call has no side effect at
+    all.
     """
     from sushi_lang.semantics.typesys import FunctionType, UnknownType
-    if getattr(lam, "resolved_type", None) is not None:
+    if stamp and getattr(lam, "resolved_type", None) is not None:
         return lam.resolved_type
 
     expected = getattr(lam, "expected_type", None)
@@ -74,15 +83,17 @@ def infer_lambda_type(type_validator, lam: Lambda):
         pty = p.ty
         if pty is None and isinstance(expected, FunctionType) and idx < len(expected.param_types):
             pty = expected.param_types[idx]
-            p.ty = pty  # persist the inferred type for the lift pass / backend
+            if stamp:
+                p.ty = pty  # persist the inferred type for the lift pass / backend
         param_types.append(pty)
         if pty is not None:
             type_validator.variable_types[p.name] = pty
 
     # Fill captured names' types from the ENCLOSING scope (pre-param bindings).
-    for cap in (lam.captures or []):
-        if cap.ty is None:
-            cap.ty = saved.get(cap.name)
+    if stamp:
+        for cap in (lam.captures or []):
+            if cap.ty is None:
+                cap.ty = saved.get(cap.name)
 
     if lam.ret is not None:
         ok_type = lam.ret
@@ -107,7 +118,8 @@ def infer_lambda_type(type_validator, lam: Lambda):
         err_type=err_type,
         captures=tuple(lam.captures or ()),
     )
-    lam.resolved_type = ft
+    if stamp:
+        lam.resolved_type = ft
     return ft
 
 
