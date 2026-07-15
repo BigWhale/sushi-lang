@@ -1,0 +1,14 @@
+# PR3a: .iter() on a non-variable array receiver (here a fixed-array struct field)
+# is not implemented at codegen. It used to raise a bare NotImplementedError, which
+# the top-level guard rendered as a generic CE0000. It now raises a specific,
+# registered CE0072 instead of a raw exception.
+# EXPECT_ERROR_CODE: CE0072
+
+struct Holder:
+    i32[3] nums
+
+fn main() i32:
+    let Holder h = Holder([10, 20, 30])
+    foreach(x in h.nums.iter()):
+        println(x)
+    return Result.Ok(0)

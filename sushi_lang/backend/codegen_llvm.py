@@ -465,6 +465,7 @@ class LLVMCodegen:
 
             # Add library modules
             from sushi_lang.backend.library_format import LibraryFormat
+            from sushi_lang.backend.library_errors import LibraryError
             for lib_path in library_paths:
                 try:
                     slib_path = library_linker.resolve_library(lib_path)
@@ -473,8 +474,10 @@ class LLVMCodegen:
 
                     lib_mod = llvm.parse_bitcode(bitcode)
                     two_phase.add_library_module(lib_mod, metadata["library_name"])
+                except LibraryError:
+                    raise
                 except Exception as e:
-                    raise RuntimeError(f"Failed to load library {lib_path}: {e}")
+                    raise LibraryError("CE3507", lib=lib_path, reason=str(e))
 
             # Add stdlib modules
             for stdlib_path in stdlib_units:

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Optional, Tuple, Union
 from llvmlite import ir
 from sushi_lang.semantics.ast import Name, Call, Expr, MemberAccess, MethodCall, DotCall
 from sushi_lang.semantics.typesys import EnumType, StructType
+from sushi_lang.internals.diagnostics import InternalCompilerError
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -47,7 +48,10 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
         try:
             parent_struct = infer_struct_type(codegen, receiver.receiver)
             field_type = parent_struct.get_field_type(receiver.member)
-        except Exception:
+        except InternalCompilerError:
+            # infer_struct_type raise_internal_error()s when the receiver is not a
+            # struct -- the "not a struct field" case here. A genuine bug (any other
+            # exception) now propagates instead of being read as "no field type".
             field_type = None
         if isinstance(field_type, ReferenceType):
             field_type = field_type.referenced_type
@@ -160,8 +164,9 @@ def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Valu
         try:
             struct_type = infer_struct_type(codegen, receiver.receiver)
             semantic_type = struct_type.get_field_type(receiver.member)
-        except:
-            # If we can't infer the struct type, leave semantic_type as None
+        except InternalCompilerError:
+            # Not a struct receiver (infer_struct_type raise_internal_error()s); leave
+            # semantic_type as None. A bare `except:` here also swallowed Ctrl-C.
             pass
     else:
         receiver_value = codegen.expressions.emit_expr(receiver)

@@ -63,8 +63,12 @@ def _read_bytes(f: BinaryIO, size: int, path: str, section: str) -> bytes:
 
     data = f.read(size)
     if len(data) != size:
-        code = "CE3510" if section == "metadata" else "CE3511"
-        raise LibraryError(code, path=path, expected=size, actual=len(data))
+        # Two literal raises, not a variable code: the registry-completeness gate
+        # (test_error_registry.py) only sees string-literal codes, and a code it
+        # cannot see is a code it cannot prove is registered.
+        if section == "metadata":
+            raise LibraryError("CE3510", path=path, expected=size, actual=len(data))
+        raise LibraryError("CE3511", path=path, expected=size, actual=len(data))
     return data
 
 

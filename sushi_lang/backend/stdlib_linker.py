@@ -129,7 +129,12 @@ class StdlibLinker:
                     stdlib_mod = llvm.parse_bitcode(bc_data)
                     llmod.link_in(stdlib_mod, preserve=True)
                 except Exception as e:
-                    print(f"Warning: Failed to link stdlib unit {bc_path}: {e}")
+                    # A stdlib .bc is compiler-produced; if it will not link, the build
+                    # cannot succeed. Failing here beats printing a warning to stdout and
+                    # continuing into an incoherent `cc` undefined-symbol error.
+                    from sushi_lang.internals.errors import raise_internal_error
+                    raise_internal_error(
+                        "CE0007", detail=f"failed to link stdlib unit {bc_path}: {e}")
 
     # Virtual stdlib units that don't have .bc files (generic types emitted inline).
     # collections/iter is a bundled Sushi-SOURCE module (see stdlib_registry

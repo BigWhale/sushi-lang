@@ -164,9 +164,9 @@ def test_expect_error_code_directives_are_registered():
 # TODO(4.8): reachable? test it. unreachable? delete it.
 UNREFERENCED = {
     "CE0001", "CE0037", "CE0038", "CE0039", "CE0048", "CE0063", "CE0066", "CE0070",
-    "CE0072", "CE0074", "CE0082", "CE0084", "CE0086", "CE0088", "CE0097", "CE0098",
-    "CE0119", "CE1004", "CE2022", "CE2042", "CE2043", "CE3004", "CE3501", "CE3503",
-    "CE3504", "CE3506", "CE3507", "CE3510", "CE3511", "CE4008", "CE4009", "CW3505",
+    "CE0074", "CE0082", "CE0084", "CE0086", "CE0088", "CE0097", "CE0098",
+    "CE0119", "CE1004", "CE2022", "CE2042", "CE2043", "CE3004", "CE3503",
+    "CE3506", "CE4008", "CE4009",
 }
 
 

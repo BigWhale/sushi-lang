@@ -76,3 +76,13 @@ def parse_triple(triple: str) -> TargetPlatform:
 def get_current_platform() -> TargetPlatform:
     """Get the platform for the current compilation."""
     return parse_triple(llvm.get_default_triple())
+
+
+def current_platform_name() -> str:
+    """The host platform as the short name a `.slib` records in its metadata.
+
+    The single source of truth for that string: the library manifest writes it and
+    the load-time platform check (CE3504) compares against it, so they must agree.
+    """
+    platform = get_current_platform()
+    return "darwin" if platform.is_darwin else "linux" if platform.is_linux else "unknown"
