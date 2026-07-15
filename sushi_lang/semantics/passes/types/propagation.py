@@ -224,6 +224,18 @@ def _propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
             # Store the resolved struct type in the AST node for backend
             node.resolved_struct_type = struct_type
 
+            # Own<T>'s only field is T* (a PointerType), which propagate_types_to_value has
+            # no branch for -- so the generic field walk below would pass the pointer-wrapped
+            # element type, drop it, and never stamp resolved_enum_type / resolved_struct_type
+            # on an inline `Own.alloc(<constructor>)` argument (#135: CE0113 for a generic-enum
+            # element, CE0000 for a generic-struct element). Propagate the UNWRAPPED element
+            # type instead, mirroring the normal-call argument path.
+            if struct_name == "Own" and node.args:
+                from sushi_lang.semantics.generics.own import get_own_element_type
+                propagate_types_to_value(
+                    validator, node.args[0], get_own_element_type(struct_type))
+                return
+
             # Recursively propagate to constructor arguments
             _propagate_to_struct_args(validator, node, struct_type)
 

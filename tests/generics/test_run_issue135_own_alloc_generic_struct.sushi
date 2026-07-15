@@ -1,0 +1,18 @@
+# Regression for #135 (struct variant): Own.alloc(<inline generic-struct constructor>) hit
+# the same dropped-element-type propagation (surfacing as CE0000 'unknown function: Pair'
+# because resolved_struct_type was never set). The fix propagates the unwrapped element type
+# through the struct branch too.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_CONTAINS: "sum = 3"
+
+struct Pair<T, U>:
+    T first
+    U second
+
+fn main() i32:
+    let Own<Pair<i32, i32>> p = Own.alloc(Pair(1, 2))
+    let Pair<i32, i32> v = p.get()
+    println("sum = {v.first + v.second}")
+    p.destroy()
+    return Result.Ok(0)
