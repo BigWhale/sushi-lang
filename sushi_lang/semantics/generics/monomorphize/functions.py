@@ -377,9 +377,15 @@ class FunctionMonomorphizer:
                 concrete_ty = self.monomorphizer.substitutor.substitute_type(param.ty, substitution)
                 var_types[param.name] = concrete_ty
 
+        from sushi_lang.semantics.ast import Lambda
+
         for stmt in body.statements:
             if isinstance(stmt, Let) and stmt.value:
                 self._collect_from_expr(stmt.value, substitution, var_types)
+                # A block-body lambda (only ever a `let` RHS) has its statements walked here,
+                # where generic_func is available to rebuild the nested scope.
+                if isinstance(stmt.value, Lambda) and stmt.value.is_block_body:
+                    self._collect_nested_instantiations(stmt.value.body, substitution, generic_func)
             elif isinstance(stmt, ExprStmt):
                 self._collect_from_expr(stmt.expr, substitution, var_types)
             elif isinstance(stmt, Return) and stmt.value:
@@ -413,25 +419,37 @@ class FunctionMonomorphizer:
             substitution: Type parameter substitution map
             var_types: Map from variable names to their concrete types
         """
-        from sushi_lang.semantics.ast import Call, Name, BinaryOp, UnaryOp, TryExpr, DotCall
+        from sushi_lang.semantics.ast import (
+            Call, Name, BinaryOp, UnaryOp, TryExpr, DotCall,
+            IndexAccess, ArrayLiteral, EnumConstructor, CastExpr,
+            InterpolatedString, Borrow, RangeExpr, Spread, MemberAccess,
+            MethodCall, DynamicArrayFrom, DynamicArrayNew, BlankLit, Lambda,
+            IntLit, FloatLit, StringLit, BoolLit,
+        )
 
-        if isinstance(expr, Call) and isinstance(expr.callee, Name):
-            function_name = expr.callee.id
+        if isinstance(expr, Call):
+            if isinstance(expr.callee, Name):
+                function_name = expr.callee.id
 
-            # Check if this is a generic function
-            if self.monomorphizer.generic_funcs and function_name in self.monomorphizer.generic_funcs:
-                generic_func = self.monomorphizer.generic_funcs[function_name]
+                # Check if this is a generic function
+                if self.monomorphizer.generic_funcs and function_name in self.monomorphizer.generic_funcs:
+                    generic_func = self.monomorphizer.generic_funcs[function_name]
 
-                # Infer type arguments by applying substitution to argument types
-                type_args = self._infer_type_args_with_substitution(expr, generic_func, var_types)
+                    # Infer type arguments by applying substitution to argument types
+                    type_args = self._infer_type_args_with_substitution(expr, generic_func, var_types)
 
-                if type_args:
-                    # Track this instantiation for later processing
-                    # We don't monomorphize recursively here to avoid registration issues
-                    # Instead, we add to a worklist that will be processed by monomorphize_all_functions
-                    cache_key = (function_name, type_args)
-                    if cache_key not in self.monomorphizer.func_cache and hasattr(self.monomorphizer, 'pending_instantiations'):
-                        self.monomorphizer.pending_instantiations.add(cache_key)
+                    if type_args:
+                        # Track this instantiation for later processing
+                        # We don't monomorphize recursively here to avoid registration issues
+                        # Instead, we add to a worklist that will be processed by monomorphize_all_functions
+                        cache_key = (function_name, type_args)
+                        if cache_key not in self.monomorphizer.func_cache and hasattr(self.monomorphizer, 'pending_instantiations'):
+                            self.monomorphizer.pending_instantiations.add(cache_key)
+
+            # Recurse into arguments: a generic call nested inside another call's argument
+            # (e.g. f(g(x))) was missed, the monomorphizer's own #191 (issue #214).
+            for arg in getattr(expr, "args", []) or []:
+                self._collect_from_expr(arg, substitution, var_types)
 
         elif isinstance(expr, BinaryOp):
             self._collect_from_expr(expr.left, substitution, var_types)
@@ -444,6 +462,46 @@ class FunctionMonomorphizer:
             self._collect_from_expr(expr.receiver, substitution, var_types)
             for arg in expr.args:
                 self._collect_from_expr(arg, substitution, var_types)
+        elif isinstance(expr, IndexAccess):
+            self._collect_from_expr(expr.array, substitution, var_types)
+            self._collect_from_expr(expr.index, substitution, var_types)
+        elif isinstance(expr, ArrayLiteral):
+            for element in expr.elements:
+                self._collect_from_expr(element, substitution, var_types)
+        elif isinstance(expr, EnumConstructor):
+            for arg in expr.args:
+                self._collect_from_expr(arg, substitution, var_types)
+        elif isinstance(expr, CastExpr):
+            self._collect_from_expr(expr.expr, substitution, var_types)
+        elif isinstance(expr, InterpolatedString):
+            for part in expr.parts:
+                if not isinstance(part, str):
+                    self._collect_from_expr(part, substitution, var_types)
+        elif isinstance(expr, Borrow):
+            self._collect_from_expr(expr.expr, substitution, var_types)
+        elif isinstance(expr, RangeExpr):
+            self._collect_from_expr(expr.start, substitution, var_types)
+            self._collect_from_expr(expr.end, substitution, var_types)
+        elif isinstance(expr, Spread):
+            self._collect_from_expr(expr.value, substitution, var_types)
+        elif isinstance(expr, MemberAccess):
+            self._collect_from_expr(expr.receiver, substitution, var_types)
+        elif isinstance(expr, MethodCall):
+            self._collect_from_expr(expr.receiver, substitution, var_types)
+            for arg in expr.args:
+                self._collect_from_expr(arg, substitution, var_types)
+        elif isinstance(expr, DynamicArrayFrom):
+            self._collect_from_expr(expr.elements, substitution, var_types)
+        elif isinstance(expr, Lambda):
+            # An expression-body lambda scans directly. A block-body lambda (a `let` RHS) is
+            # walked in _collect_nested_instantiations, which has the generic_func needed to
+            # rebuild its var-type scope.
+            if not expr.is_block_body:
+                self._collect_from_expr(expr.body, substitution, var_types)
+        elif isinstance(expr, (IntLit, FloatLit, StringLit, BoolLit, Name,
+                               BlankLit, DynamicArrayNew)):
+            # Leaf nodes: no nested expressions to scan.
+            pass
 
     def _infer_type_args_with_substitution(
         self,

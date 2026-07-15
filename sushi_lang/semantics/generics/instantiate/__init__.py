@@ -125,6 +125,10 @@ class InstantiationCollector:
             visited_types=self.visited_types,
         )
 
+        # Wire the block scanner so a lambda's block body (a `let` RHS) is walked for
+        # nested generic instantiations, reusing the collector's statement walker.
+        expression_scanner.scan_block = function_collector._collect_from_block
+
         # Collect from constants
         for const in program.constants:
             function_collector.collect_from_const(const)
