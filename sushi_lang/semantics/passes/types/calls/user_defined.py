@@ -159,11 +159,15 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         return
 
     if function_name not in validator.func_table.by_name:
-        er.emit(validator.reporter, er.ERR.CE2008, call.callee.loc, name=function_name)
-        # Check if this is a generic struct constructor used inline - provide a helpful hint
+        diag = er.emit_with(validator.reporter, er.ERR.CE2008, call.callee.loc,
+                            name=function_name)
+        # A generic struct constructor used inline is the most common cause; attach the
+        # hint as a real help line on the diagnostic instead of a hand-indented print
+        # faking a note underneath it.
         if function_name in validator.generic_struct_table.by_name:
-            import sys
-            print(f"      Generic struct constructors require explicit type parameters in variable declarations", file=sys.stderr)
+            diag.help("generic struct constructors require explicit type parameters "
+                      "in variable declarations")
+        diag.emit()
         return
 
     # Get function signature

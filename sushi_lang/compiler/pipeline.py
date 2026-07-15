@@ -67,8 +67,10 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -
         for module_path in sorted(todo):
             src_path = resolve_source_stdlib_path(module_path)
             if src_path is None or not src_path.exists():
-                print(f"error: bundled stdlib module '{module_path}' not found "
-                      f"at {src_path}", file=sys.stderr)
+                # A bundled module missing is a broken install, not a user error.
+                from sushi_lang.internals import errors as er
+                er.emit(reporter, er.ERR.CE0007, None,
+                        detail=f"bundled stdlib module '{module_path}' not found at {src_path}")
                 return False
             module_src = src_path.read_text(encoding="utf-8")
             try:
@@ -206,7 +208,10 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
                 formatted_path = " / ".join(lib_path.split('/'))
                 print(f"  - {formatted_path}")
             except LibraryError as e:
-                print(f"{e}", file=sys.stderr)
+                # LibraryError is a SushiError carrying its own code; render it through
+                # the reporter (code + message) instead of a bare stringified print.
+                from sushi_lang.internals import errors as er
+                er.emit_exception(reporter, e)
                 return 2
         print()
 
