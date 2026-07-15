@@ -1,0 +1,25 @@
+# Regression for #214 (unify the monomorphizer's inferrer): the monomorphizer's Names-only
+# type-argument inferrer aborted on the FIRST non-Name argument, dropping the instantiation
+# even when a later Name argument still supplied the type parameter. Here pick<T> takes a
+# concrete `i32 which` (passed the non-Name `amount()??`) and a `T val` (passed the Name
+# `v`); T is inferable from `val`, but the old inferrer bailed on `amount()??`.
+# Pre-fix (even after arg-recursion): CE2061 "monomorphized function 'pick__string' not found".
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "s = hi"
+
+fn pick<T>(i32 which, T val) T:
+    if (which > 0):
+        return Result.Ok(val)
+    return Result.Ok(val)
+
+fn amount() i32:
+    return Result.Ok(3)
+
+fn wrap<T>(T v) T:
+    let T r = pick(amount()??, v)??
+    return Result.Ok(r)
+
+fn main() i32:
+    let string s = wrap("hi").realise("?")
+    println("s = {s}")
+    return Result.Ok(0)

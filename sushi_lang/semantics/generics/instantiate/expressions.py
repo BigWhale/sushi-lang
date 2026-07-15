@@ -49,6 +49,11 @@ class ExpressionScanner:
         self.function_instantiations = function_instantiations
         self.generic_funcs = generic_funcs
         self.type_validator = type_validator
+        # Callback to scan a lambda's block body (a statement Block). Wired by the
+        # InstantiationCollector to its FunctionCollector._collect_from_block; left None on
+        # the unit-test paths that drive the scanner directly (a block-body lambda is a
+        # `let` RHS, which those paths do not construct).
+        self.scan_block = None
         # Create TypeResolver for centralized type resolution
         self._resolver = TypeResolver(
             type_inferrer.struct_table or {},
@@ -72,7 +77,9 @@ class ExpressionScanner:
         from sushi_lang.semantics.ast import (
             Call, BinaryOp, UnaryOp, IndexAccess, ArrayLiteral,
             EnumConstructor, CastExpr, InterpolatedString, DotCall, TryExpr,
-            IntLit, FloatLit, StringLit, BoolLit, Name, Borrow
+            IntLit, FloatLit, StringLit, BoolLit, Name, Borrow,
+            RangeExpr, Spread, MemberAccess, MethodCall, DynamicArrayFrom,
+            DynamicArrayNew, BlankLit, Lambda,
         )
 
         if isinstance(expr, Call):
@@ -134,8 +141,46 @@ class ExpressionScanner:
             # Borrow expression (&x) - scan the expression being borrowed
             self.scan_expression(expr.expr)
 
-        elif isinstance(expr, (IntLit, FloatLit, StringLit, BoolLit, Name)):
-            # Literals and names don't contain nested expressions
+        elif isinstance(expr, RangeExpr):
+            # Range (start..end) - scan both bounds
+            self.scan_expression(expr.start)
+            self.scan_expression(expr.end)
+
+        elif isinstance(expr, Spread):
+            # Bloom (arr...) - scan the array being spread
+            self.scan_expression(expr.value)
+
+        elif isinstance(expr, MemberAccess):
+            # Field access (x.field) - scan the receiver
+            self.scan_expression(expr.receiver)
+
+        elif isinstance(expr, MethodCall):
+            # MethodCall is normally backend-only (the parser emits DotCall), but handle
+            # it for totality: scan the receiver and arguments.
+            self.scan_expression(expr.receiver)
+            for arg in expr.args:
+                self.scan_expression(arg)
+
+        elif isinstance(expr, DynamicArrayFrom):
+            # from([...]) - scan the element array literal
+            self.scan_expression(expr.elements)
+
+        elif isinstance(expr, Lambda):
+            # Lambda bodies are still present at Pass 1.5 (lambda-lifting is Pass 2.5), so a
+            # generic call inside one must be collected. An expression body scans directly; a
+            # block body (only valid as a `let` RHS) is walked through the injected block
+            # scanner. Types depending on the lambda's own (possibly bare) params can't be
+            # inferred here -- that is the pre-existing bare-param limitation, not a new gap.
+            if expr.is_block_body:
+                if self.scan_block is not None:
+                    self.scan_block(expr.body)
+            else:
+                self.scan_expression(expr.body)
+
+        elif isinstance(expr, (IntLit, FloatLit, StringLit, BoolLit, Name,
+                               BlankLit, DynamicArrayNew)):
+            # Leaf nodes: no nested expressions to scan. (DynamicArrayNew is an empty `T[]`;
+            # BlankLit is `~`.)
             pass
 
     def _scan_dot_call(self, call) -> None:
@@ -247,25 +292,30 @@ class ExpressionScanner:
             # Type validation will catch that in Pass 2
 
     def _infer_arg_type(self, arg_expr):
-        """Infer a generic call argument's type, preferring Pass 2's real inferrer.
+        """Infer a generic call argument's type through Pass 2's real inferrer.
 
         The thin inferrer had no arm for a method call, field access, index, unary op,
         or nested call argument (#191), and could not see `self` (#171). Pass 2's
-        TypeValidator handles all of them; the thin inferrer stays only as a fallback
-        for the unit-test paths that build the collector without a SymbolTables.
+        TypeValidator handles all of them, so argument inference routes through it.
 
-        A lambda argument is the one shape kept on the thin path. Pass 2's inferrer
-        *caches* a lambda's inferred type onto the node (`lam.resolved_type`), and at
-        Pass 1.5 that type is computed before any expected-type propagation -- freezing
-        an under-resolved type that Pass 2 would then read back. The thin inferrer types
-        a lambda with no such side effect, and lambda arguments were never the bug here.
+        A lambda argument goes through the annotate seam `infer_lambda_type(..., stamp=False)`
+        (issue #214): Pass 2's inferrer would otherwise *cache* the lambda's type onto the
+        node before expected-type propagation, freezing an under-resolved type that Pass 2
+        and lambda-lift then read back. The read-only form computes the same FunctionType
+        with no node mutation.
+
+        Production always supplies a SymbolTables, so this always routes through Pass 2.
+        A collector built without one (`type_validator is None`) simply collects nothing
+        from argument positions -- the thin parallel inferrer that used to fill that gap is
+        gone (issue #214).
         """
         from sushi_lang.semantics.ast import Lambda
-        if self.type_validator is not None and not isinstance(arg_expr, Lambda):
-            inferred = self.type_validator.infer_expression_type(arg_expr)
-            if inferred is not None:
-                return inferred
-        return self.type_inferrer.infer_simple_expr_type(arg_expr)
+        if self.type_validator is None:
+            return None
+        if isinstance(arg_expr, Lambda):
+            from sushi_lang.semantics.passes.types.visitor import infer_lambda_type
+            return infer_lambda_type(self.type_validator, arg_expr, stamp=False)
+        return self.type_validator.infer_expression_type(arg_expr)
 
     def _infer_type_args_from_call(self, call, generic_func) -> tuple["Type", ...] | None:
         """Infer type arguments for generic function call.

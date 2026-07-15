@@ -1,0 +1,24 @@
+# Regression for #214 (monomorphizer arg-recursion): a generic call reachable only as a
+# nested argument inside a monomorphized generic body was never collected, because
+# FunctionMonomorphizer._collect_from_expr's Call arm did not recurse into arguments.
+# Here `tag(v)` is nested inside `add_one(...)` in box<T>'s body; box<string> is
+# instantiated from main, so tag<string> is discoverable only after substitution.
+# Pre-fix: CE2061 "monomorphized function 'tag__string' not found".
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "s = hi"
+
+fn tag<T>(T v) i32:
+    return Result.Ok((v.hash() as i32) & 1)
+
+fn add_one(i32 n) i32:
+    return Result.Ok(n + 1)
+
+fn box<T>(T v) T:
+    let i32 t = add_one(tag(v)??)??
+    println("t = {t}")
+    return Result.Ok(v)
+
+fn main() i32:
+    let string s = box("hi").realise("?")
+    println("s = {s}")
+    return Result.Ok(0)
