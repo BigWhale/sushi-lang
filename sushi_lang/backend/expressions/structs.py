@@ -124,6 +124,18 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
                 if codegen.dynamic_arrays.struct_needs_cleanup(resolved_field_type):
                     from sushi_lang.backend.expressions import memory
                     arg_value = memory.deep_copy_struct(codegen, arg_value, resolved_field_type)
+                # A List<T>/Own<T> field owns heap behind a raw pointer, which the field scan
+                # in struct_needs_cleanup cannot see -- so the branch above never fired and the
+                # field was stored SHALLOWLY, aliasing the source. When the source is an
+                # existing owner (a bare-Name local / param, or a struct-field read), both it
+                # and the new struct field free the same buffer at scope exit (double-free,
+                # #181). Clone so each owns independent buffers; a fresh RHS is a sole owner
+                # stored as-is. (HashMap<K,V> takes the branch above via its i32[] placeholder.)
+                elif isinstance(arg, (Name, MemberAccess)):
+                    from sushi_lang.backend.destructors import needs_cleanup
+                    if needs_cleanup(resolved_field_type):
+                        from sushi_lang.backend.expressions.memory import emit_value_clone
+                        arg_value = emit_value_clone(codegen, arg_value, resolved_field_type)
 
             # An owning enum field (a variant carrying heap, #139): when the arg ALIASES an
             # existing owner (a bare-Name local / param, or a struct-field read), CLONE it so

@@ -528,6 +528,8 @@ def _inline_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) -> 
             return _clone_own_value(codegen, value, value_type)
         if value_type.name.startswith("List<"):
             return _clone_list_value(codegen, value, value_type)
+        if value_type.name.startswith("HashMap<"):
+            return _clone_hashmap_value(codegen, value, value_type)
         return _clone_struct_value(codegen, value, value_type)
     if isinstance(value_type, EnumType):
         return _clone_enum_value(codegen, value, value_type)
@@ -668,11 +670,17 @@ def _clone_list_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struc
     """Deep-copy a List<T>: allocate a fresh buffer and copy the elements.
 
     List<T> is `{i32 len@0, i32 cap@1, T* data@2}`. Null-data passes through unchanged
-    (empty list). Otherwise malloc cap*sizeof(T) and memcpy the `len` live elements
-    (shallow per element -- one level, matching `clone_dynamic_array_value`). The new
-    buffer is freed exactly once by the symmetric List branch added to the destructor.
+    (empty list). Otherwise malloc cap*sizeof(T) and memcpy the `len` live elements. When
+    the element type OWNS heap (a string / nested container), the shallow memcpy leaves the
+    copy aliasing the source's element buffers, so each live element is then deep-cloned in
+    place -- exactly what `clone_dynamic_array_value` does per element, and the symmetric
+    partner of the List destructor's per-element walk. Without it a `List<string>` copy and
+    its source both free the same buffers (double-free). The new buffer is freed exactly
+    once by the symmetric List branch added to the destructor (issue #140/#181).
     """
     from sushi_lang.backend.generics.list.types import extract_element_type
+    from sushi_lang.backend.destructors import field_needs_cleanup
+    from sushi_lang.backend.generics.container_walk import emit_container_walk
 
     b = codegen.builder
     elem_ty = extract_element_type(value_type, codegen)
@@ -698,9 +706,90 @@ def _clone_list_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struc
         old_i8 = b.bitcast(data, ir.PointerType(codegen.types.i8), name="list_old_i8")
         b.call(_declare_memcpy(codegen),
                [new_raw, old_i8, bytes_to_copy, ir.Constant(ir.IntType(1), 0)])
-        b.store(b.insert_value(value, new_data, 2), slot)
+
+        # Deep-clone each live element when the element type owns heap, so the copy owns
+        # independent buffers (a no-op walk for a non-owning element type).
+        if field_needs_cleanup(codegen, elem_ty):
+            def clone_element(element_ptr: ir.Value, _index: ir.Value) -> None:
+                loaded = codegen.builder.load(element_ptr, name="list_clone_elem")
+                cloned = emit_value_clone(codegen, loaded, elem_ty)
+                codegen.builder.store(cloned, element_ptr)
+
+            emit_container_walk(codegen, new_data, length, clone_element,
+                                prefix="list_clone")
+
+        codegen.builder.store(codegen.builder.insert_value(value, new_data, 2), slot)
 
     return b.load(slot, name="cloned_list")
+
+
+def _clone_hashmap_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: StructType) -> ir.Value:
+    """Deep-copy a HashMap<K, V>: fresh bucket buffer, deep-cloned owning keys/values.
+
+    HashMap<K, V> is `{ {i32 len, i32 cap, Entry<K,V>* data} buckets, i32 size,
+    i32 capacity, i32 tombstones }`. Its semantic `buckets` field is only an `i32[]`
+    placeholder (the real element is the LLVM-only `Entry<K, V>`), so the generic struct
+    clone mis-handles it -- this branch, like the `Own<`/`List<` ones, bypasses the
+    field walk and works off the real layout via the HashMap type helpers.
+
+    Null bucket storage passes through unchanged. Otherwise malloc `capacity`
+    Entry slots, memcpy the whole buffer (states + shallow keys/values), then walk the
+    OCCUPIED slots and deep-clone each Entry key and value in place so the copy owns
+    independent buffers -- the symmetric partner of the destructor's `emit_destroy_all_entries`
+    (issue #181). Empty/tombstone slots hold garbage and must NOT be cloned, hence the
+    occupied filter.
+    """
+    from sushi_lang.semantics.generics.hashmap import extract_key_value_types
+    from sushi_lang.backend.generics.hashmap.types import get_entry_type, ENTRY_OCCUPIED
+    from sushi_lang.backend.generics.hashmap.utils import emit_entry_state_check
+    from sushi_lang.backend.generics.container_walk import emit_container_walk
+    from sushi_lang.backend.constants import ENTRY_KEY_INDICES, ENTRY_VALUE_INDICES
+
+    b = codegen.builder
+    key_type, val_type = extract_key_value_types(value_type, codegen)
+    entry_llvm = get_entry_type(codegen, key_type, val_type)
+
+    buckets = b.extract_value(value, 0, name="clone_hm_buckets")   # {len, cap, Entry*}
+    capacity = b.extract_value(value, 2, name="clone_hm_cap")      # outer capacity field
+    data = b.extract_value(buckets, 2, name="clone_hm_data")       # Entry*
+
+    slot = b.alloca(value.type, name="clone_hm_slot")
+    b.store(value, slot)  # default: passthrough (null data)
+
+    is_not_null = b.icmp_unsigned("!=", data, ir.Constant(data.type, None))
+    with b.if_then(is_not_null):
+        entry_size_i64 = b.zext(get_element_size_constant(codegen, entry_llvm),
+                                ir.IntType(INT64_BIT_WIDTH))
+        cap_i64 = b.zext(capacity, ir.IntType(INT64_BIT_WIDTH))
+        total_bytes = b.mul(cap_i64, entry_size_i64)
+        new_raw = emit_malloc(codegen, codegen.builder, total_bytes)
+        new_data = codegen.builder.bitcast(new_raw, ir.PointerType(entry_llvm),
+                                           name="hm_new_data")
+
+        old_i8 = codegen.builder.bitcast(data, ir.PointerType(codegen.types.i8),
+                                         name="hm_old_i8")
+        codegen.builder.call(_declare_memcpy(codegen),
+                             [new_raw, old_i8, total_bytes, ir.Constant(ir.IntType(1), 0)])
+
+        def occupied(entry_ptr: ir.Value, _index: ir.Value) -> ir.Value:
+            return emit_entry_state_check(codegen, entry_ptr, ENTRY_OCCUPIED, "hm_occupied")
+
+        def clone_entry(entry_ptr: ir.Value, _index: ir.Value) -> None:
+            key_ptr = codegen.builder.gep(entry_ptr, ENTRY_KEY_INDICES, name="hm_key_ptr")
+            val_ptr = codegen.builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="hm_val_ptr")
+            k = codegen.builder.load(key_ptr, name="hm_key")
+            codegen.builder.store(emit_value_clone(codegen, k, key_type), key_ptr)
+            v = codegen.builder.load(val_ptr, name="hm_val")
+            codegen.builder.store(emit_value_clone(codegen, v, val_type), val_ptr)
+
+        emit_container_walk(codegen, new_data, capacity, clone_entry,
+                            should_visit=occupied, prefix="hm_clone")
+
+        new_buckets = codegen.builder.insert_value(buckets, new_data, 2, name="hm_new_buckets")
+        codegen.builder.store(
+            codegen.builder.insert_value(value, new_buckets, 0), slot)
+
+    return b.load(slot, name="cloned_hashmap")
 
 
 def _clone_struct_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: StructType) -> ir.Value:

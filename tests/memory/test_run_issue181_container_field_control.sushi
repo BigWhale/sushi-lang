@@ -1,0 +1,22 @@
+# Positive control for #181: non-owning HashMap<i32,i32> and List<i32> struct fields
+# still compile, run, and don't leak -- guards against a fix that mishandles the
+# non-owning clone/destroy fast path.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "ok 1 1"
+# EXPECT_NO_LEAKS: true
+
+use <collections/hashmap>
+
+struct Bag:
+    HashMap<i32, i32> m
+    List<i32> xs
+
+fn main() i32:
+    let HashMap<i32, i32> map = HashMap.new()
+    map.insert(1, 10)
+    let List<i32> l = List.new()
+    l.push(7)
+    let Bag b = Bag(map, l)
+    map.free()
+    println("ok {b.m.len()} {b.xs.len()}")
+    return Result.Ok(0)

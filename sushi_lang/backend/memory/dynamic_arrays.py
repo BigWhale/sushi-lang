@@ -604,10 +604,13 @@ class DynamicArrayManager:
         if ty == BuiltinType.STRING:
             return True
         if isinstance(ty, StructType):
-            # Own<T> / List<T> always own a heap allocation; other structs are checked
-            # field-by-field. Named-prefix check short-circuits the self-referential
-            # Own<Tree> / List<Node> cycle without recursing into the payload type.
-            if ty.name.startswith("Own<") or ty.name.startswith("List<"):
+            # Own<T> / List<T> / HashMap<K,V> always own a heap allocation; other structs
+            # are checked field-by-field. Named-prefix check short-circuits the
+            # self-referential Own<Tree> / List<Node> cycle without recursing into the
+            # payload type. HashMap is explicit here (matching destructors.needs_cleanup)
+            # so registration no longer relies on its i32[] `buckets` placeholder (#181).
+            if (ty.name.startswith("Own<") or ty.name.startswith("List<")
+                    or ty.name.startswith("HashMap<")):
                 return True
             return self.struct_needs_cleanup(ty)
         if isinstance(ty, EnumType):
