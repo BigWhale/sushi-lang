@@ -21,7 +21,51 @@ from __future__ import annotations
 from typing import Dict, FrozenSet, Iterable, Iterator, Set, Optional
 from dataclasses import dataclass
 
-from sushi_lang.semantics.ast import *
+from sushi_lang.semantics.ast import (
+    ArrayLiteral,
+    BinaryOp,
+    BlankLit,
+    Block,
+    BoolLit,
+    Borrow,
+    Break,
+    Call,
+    CastExpr,
+    Continue,
+    DotCall,
+    DynamicArrayFrom,
+    DynamicArrayNew,
+    EnumConstructor,
+    Expr,
+    ExprStmt,
+    ExtendDef,
+    FloatLit,
+    Foreach,
+    FuncDef,
+    If,
+    IndexAccess,
+    InterpolatedString,
+    IntLit,
+    Lambda,
+    Let,
+    Match,
+    MemberAccess,
+    MethodCall,
+    Name,
+    Pattern,
+    Print,
+    PrintLn,
+    Program,
+    RangeExpr,
+    Rebind,
+    Return,
+    Spread,
+    Stmt,
+    StringLit,
+    TryExpr,
+    UnaryOp,
+    While,
+)
 from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, Type, is_owning_type
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
