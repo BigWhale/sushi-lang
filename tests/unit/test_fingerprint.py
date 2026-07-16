@@ -239,3 +239,29 @@ def test_mono_ext_fingerprint_ignores_source_position(make_unit):
         compute_unit_fingerprint(unit, monomorphized_extensions=[ext_a])
         == compute_unit_fingerprint(unit, monomorphized_extensions=[ext_b])
     )
+
+
+# --------------------------------------------------------------------------
+# Stdlib generator-source coverage (regression: silently-skipped dead path)
+# --------------------------------------------------------------------------
+
+def test_stdlib_generator_sources_all_exist():
+    """Every path the stdlib source fingerprint hashes must exist. The hasher
+    silently skips missing paths, so a generator that moves (types/primitives.py
+    became the types/primitives/ package) drops out of the digest without a
+    trace - and editing it no longer invalidates the shipped .bc."""
+    from sushi_lang.compiler.fingerprint import _stdlib_generator_sources
+
+    sources = _stdlib_generator_sources()
+    missing = [str(p) for p in sources if not p.exists()]
+    assert not missing, f"fingerprinted generator sources do not exist: {missing}"
+
+
+def test_stdlib_generator_sources_cover_primitives_package():
+    """build.py generates core/primitives from backend/types/primitives/ (a
+    package); its files must be part of the stdlib source digest."""
+    from sushi_lang.compiler.fingerprint import _stdlib_generator_sources
+
+    sources = _stdlib_generator_sources()
+    prim = [p for p in sources if "backend" in p.parts and "primitives" in p.parts]
+    assert prim, "no backend/types/primitives/ files in the stdlib source fingerprint"

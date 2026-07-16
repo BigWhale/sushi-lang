@@ -123,4 +123,6 @@ nav:
       - Stdlib Build: internals/stdlib-build.md
       - "Variadics (design)": design/variadics.md
       - "Closures & First-Class Functions (design)": design/closures.md
+      - "Omakase Install (design)": design/omakase-install.md
+      - "String Representation (design)": design/string-representation.md
   - Examples: examples/README.md
