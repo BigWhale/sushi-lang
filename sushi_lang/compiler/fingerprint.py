@@ -135,29 +135,24 @@ def compute_stdlib_source_fingerprint() -> str:
     detect when the shipped `.bc` are stale and rebuild them on the fly.
 
     Global (whole-tree) granularity: every `.py` under
-    `sushi_stdlib/src/`, plus `backend/types/primitives.py` (the source of the
-    `core/primitives` unit) and `sushi_stdlib/build.py` (the build logic
-    itself). Any generator edit flips the digest and triggers a rebuild of the
-    current platform's units -- deliberately over-eager, since shared helpers
-    (common.py, ir_builders.py, ...) legitimately affect many units. The value
-    is platform-independent (the same sources emit both platforms' `.bc`).
+    `sushi_stdlib/src/`, plus `backend/types/primitives/` (the package
+    `build.py` generates the `core/primitives` unit from) and
+    `sushi_stdlib/build.py` (the build logic itself). Any generator edit flips
+    the digest and triggers a rebuild of the current platform's units --
+    deliberately over-eager, since shared helpers (common.py, ir_builders.py,
+    ...) legitimately affect many units. The value is platform-independent
+    (the same sources emit both platforms' `.bc`).
 
     Returns:
         Hex SHA-256 digest of the generator sources.
     """
-    from pathlib import Path
-
-    # sushi_lang/compiler/fingerprint.py -> sushi_lang/
-    sushi_lang_dir = Path(__file__).resolve().parent.parent
-    src_dir = sushi_lang_dir / "sushi_stdlib" / "src"
-
-    sources: list[Path] = sorted(src_dir.rglob("*.py"))
-    sources.append(sushi_lang_dir / "backend" / "types" / "primitives.py")
-    sources.append(sushi_lang_dir / "sushi_stdlib" / "build.py")
-
+    sushi_lang_dir = _sushi_lang_dir()
     hasher = hashlib.sha256()
     hasher.update(b"STDLIB_SRC:")
-    for path in sorted(sources, key=str):
+    for path in _stdlib_generator_sources():
+        # A listed source that does not exist would be SILENTLY absent from the
+        # digest -- exactly how the primitives generator dropped out when it
+        # became a package. tests/unit/test_fingerprint.py pins the list.
         if not path.exists():
             continue
         # Path-relative-to-sushi_lang keeps the digest stable across checkouts.
@@ -165,6 +160,27 @@ def compute_stdlib_source_fingerprint() -> str:
         hasher.update(f"{rel}:".encode())
         hasher.update(path.read_bytes())
     return hasher.hexdigest()
+
+
+def _sushi_lang_dir():
+    from pathlib import Path
+    # sushi_lang/compiler/fingerprint.py -> sushi_lang/
+    return Path(__file__).resolve().parent.parent
+
+
+def _stdlib_generator_sources() -> list:
+    """The generator sources the stdlib fingerprint hashes, sorted by path.
+
+    Kept as its own function so the unit tests can assert every listed path
+    exists (the hasher skips missing paths silently).
+    """
+    sushi_lang_dir = _sushi_lang_dir()
+    sources = list((sushi_lang_dir / "sushi_stdlib" / "src").rglob("*.py"))
+    # core/primitives is generated from the backend's primitives PACKAGE
+    # (build.py: `from sushi_lang.backend.types import primitives`).
+    sources.extend((sushi_lang_dir / "backend" / "types" / "primitives").rglob("*.py"))
+    sources.append(sushi_lang_dir / "sushi_stdlib" / "build.py")
+    return sorted(sources, key=str)
 
 
 def compute_lib_fingerprint(slib_path) -> str:

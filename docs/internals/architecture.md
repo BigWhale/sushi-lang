@@ -37,16 +37,15 @@ the direct monolithic path.
 
 ```
 sushi/
-├── compiler.py                 # Main compiler entry point
-├── compiler/
-│   ├── pipeline.py            # Multi-file compilation orchestration
-│   ├── loader.py              # Unit loading and dependency resolution
-│   ├── cli.py                 # CLI argument parsing
-│   ├── cache.py               # Incremental compilation cache manager
-│   └── fingerprint.py         # Per-unit semantic fingerprint computation
+├── compiler/                   # Compiler package (entry point: compiler/cli.py:main)
+│   ├── cli.py                  # CLI argument parsing, main() entry point
+│   ├── pipeline.py             # Multi-file compilation orchestration
+│   ├── loader.py               # Unit loading and dependency resolution
+│   ├── cache.py                # Incremental compilation cache manager
+│   └── fingerprint.py          # Per-unit semantic fingerprint computation
 ├── grammar.lark                # Lark grammar specification
 ├── semantics/
-│   ├── ast_builder/           # Modular AST construction (40 modules)
+│   ├── ast_builder/           # Modular AST construction, split by concern
 │   │   ├── builder.py         # Main orchestrator
 │   │   ├── declarations/      # Top-level constructs
 │   │   │   ├── functions.py   # Function parsing
@@ -134,28 +133,35 @@ sushi/
 │           └── registry.py    # Provider registry
 ├── backend/
 │   ├── codegen_llvm.py        # Main LLVM orchestrator
-│   ├── interfaces.py          # Protocol definitions (reduces circular deps)
-│   ├── llvm_constants.py      # Centralized LLVM constants (DRY)
+│   ├── constants/              # Centralized LLVM constants (DRY)
+│   │   ├── llvm_values.py      # FALSE_I1, ZERO_I32, make_i32_const(), etc
+│   │   ├── bit_widths.py
+│   │   ├── error_codes.py
+│   │   ├── hash_constants.py
+│   │   ├── indices.py
+│   │   └── sizes.py
 │   ├── gep_utils.py           # GetElementPtr utilities
 │   ├── enum_utils.py          # Enum tag/data utilities
 │   ├── destructors.py         # Unified recursive destruction
 │   ├── platform_detect.py     # Target platform detection
-│   ├── expressions/           # Expression emission
+│   ├── expressions/           # Expression emission (array codegen lives under
+│   │   │                      # backend/types/arrays/ instead, see below)
 │   │   ├── literals.py
-│   │   ├── operators.py       # Binary/unary operators (32KB)
+│   │   ├── operators.py       # Binary/unary operators
 │   │   ├── memory.py
 │   │   ├── casts.py
-│   │   ├── arrays.py
-│   │   ├── structs.py         # Struct operations (17KB)
+│   │   ├── structs.py         # Struct operations
 │   │   ├── enums.py
 │   │   ├── type_utils.py
 │   │   └── calls/             # Subdivided for complexity
 │   │       ├── dispatcher.py  # Main call routing
-│   │       ├── stdlib.py      # Standard library calls (33KB)
 │   │       ├── generics.py    # Generic method instantiation
 │   │       ├── intrinsics.py  # Compiler intrinsics
 │   │       ├── file_open.py   # File I/O operations
-│   │       └── utils.py       # Call utilities
+│   │       ├── utils.py       # Call utilities
+│   │       └── stdlib/        # Standard library calls, one module per area
+│   │           # (io.py, strings.py, math.py, time.py, random.py, env.py,
+│   │           #  process.py, primitives.py)
 │   ├── statements/            # Statement emission
 │   │   ├── io.py
 │   │   ├── loops.py           # while, foreach (19KB)
@@ -175,16 +181,26 @@ sushi/
 │   │       ├── libc_ctype.py  # isalpha, isdigit, etc.
 │   │       └── libc_process.py # exit, getenv, setenv
 │   ├── types/                 # Type-specific codegen
-│   │   ├── arrays/
-│   │   │   └── methods/       # Array method implementations
-│   │   │       ├── core.py    # len, get, push, pop
-│   │   │       ├── hashing.py # Hash function generation
+│   │   ├── arrays/             # Construction, indexing, bounds checks
+│   │   │   ├── dispatcher.py   # Array-method call routing
+│   │   │   ├── indexing.py     # Direct indexing, GEP helpers
+│   │   │   ├── bounds.py       # Bounds-check emission
+│   │   │   ├── literals.py     # Array literal construction
+│   │   │   ├── utils.py
+│   │   │   └── methods/        # Array method implementations
+│   │   │       ├── core.py     # len, get, push, pop
+│   │   │       ├── hashing.py  # Hash function generation
 │   │   │       ├── iterators.py # Iterator creation
-│   │   │       └── transforms.py # fill, reverse, clone
+│   │   │       ├── safe_access.py # .get() Maybe<T> wrapping
+│   │   │       ├── transforms.py # fill, reverse, clone
+│   │   │       └── utf8_validate.py # u8[].to_string_checked()
+│   │   ├── primitives/          # i8..u64, f32/f64, bool
+│   │   │   ├── bit_reinterpret.py # to_bits()/from_bits()
+│   │   │   ├── hashing.py
+│   │   │   └── to_str.py
 │   │   ├── structs.py
 │   │   ├── enums.py
-│   │   ├── primitives.py
-│   │   └── hashing.py
+│   │   └── hash_utils.py
 │   ├── memory/                # Memory management
 │   │   ├── scopes.py          # Scope-based cleanup
 │   │   ├── dynamic_arrays.py  # Dynamic array management
@@ -495,10 +511,14 @@ Located in `backend/expressions/`:
 - **operators.py** - Binary/unary operations
 - **memory.py** - Loads, stores, references
 - **casts.py** - Type conversions
-- **arrays.py** - Array operations
 - **structs.py** - Struct field access
 - **enums.py** - Enum construction/matching
-- **calls.py** - Function/method calls
+- **calls/** - Function/method calls, subdivided by concern: `dispatcher.py`
+  (main call routing), `generics.py`, `intrinsics.py`, `file_open.py`,
+  `utils.py`, and a `stdlib/` subpackage with one module per stdlib area
+
+Array *expression* codegen (construction, indexing, methods) lives under
+`backend/types/arrays/` instead — see [Type System](#type-system) below.
 
 ### Statement Emission
 
@@ -515,11 +535,13 @@ Located in `backend/statements/`:
 
 Located in `backend/types/`:
 
-- **primitives.py** - i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, bool
-- **arrays.py** - Fixed and dynamic arrays
+- **primitives/** - i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, bool
+  (`bit_reinterpret.py`, `hashing.py`, `to_str.py`)
+- **arrays/** - Fixed and dynamic arrays: construction, indexing, bounds checks,
+  and a `methods/` subpackage for `.len()`/`.get()`/`.push()`/etc
 - **structs.py** - Struct layout and field access
 - **enums.py** - Enum discriminant and variant data
-- **hashing.py** - Hash function generation
+- **hash_utils.py** - Hash function generation
 
 ### Runtime Support
 
@@ -591,42 +613,39 @@ pm.run(module)
 
 ## Recent Architectural Improvements
 
-### Protocol-Based Interface Pattern (SOLID Compliance)
+### Breaking Circular Imports: Deferred Local Imports
 
-**File:** `backend/interfaces.py`
+There used to be a `backend/interfaces.py` module of `Protocol` classes for this
+purpose; it was deleted (Tier 4.5) and no `Protocol`-based scheme has replaced it
+(`grep -rl Protocol sushi_lang/backend` now returns nothing). The mechanism that
+actually breaks circular dependencies between backend components today is simpler:
+an import that would cycle at module-load time is written **inside the function
+or method that needs it** instead of at the top of the file, so the cycle only
+has to resolve at call time, by which point both modules have finished loading.
 
-The codebase has been refactored to use Protocol classes (Python's structural subtyping) to eliminate circular dependencies between backend components. This follows the Dependency Inversion Principle from SOLID.
-
-**Benefits:**
-- Eliminates circular import issues
-- Enables easier testing with mock implementations
-- Clarifies component contracts
-- Reduces coupling between modules
-
-**Defined Protocols:**
+**Example** (`backend/destructors.py`, `_emit_list_value_destructor`):
 ```python
-class LLVMCodegenProtocol(Protocol):
-    """Main code generation interface"""
-    def emit_expression(self, expr) -> ir.Value: ...
-    def emit_statement(self, stmt) -> None: ...
-
-class ExpressionEmitterProtocol(Protocol):
-    """Expression emission interface"""
-    def emit_literal(self, value) -> ir.Value: ...
-    def emit_binary_op(self, op, left, right) -> ir.Value: ...
-
-class StatementEmitterProtocol(Protocol):
-    """Statement emission interface"""
-    def emit_if_statement(self, stmt) -> None: ...
-    def emit_loop(self, loop) -> None: ...
-
-class LLVMContextProtocol(Protocol):
-    """LLVM module and builder access"""
-    @property
-    def module(self) -> ir.Module: ...
-    @property
-    def builder(self) -> ir.IRBuilder: ...
+def _emit_list_value_destructor(codegen, builder, value_ptr, value_type):
+    from sushi_lang.backend.generics.list.types import extract_element_type
+    element_type = extract_element_type(value_type, codegen)
+    ...
 ```
+
+`generics/list/types.py` needs destructor helpers, and `destructors.py` needs to
+inspect a `List<T>`'s element type — a top-level import on either side would
+cycle. Deferring the import into the function body sidesteps it.
+
+A second, narrower use of `TYPE_CHECKING`-guarded imports covers pure type
+annotations (no runtime import at all), e.g. `backend/enum_utils.py`:
+```python
+if TYPE_CHECKING:
+    from sushi_lang.backend.codegen_llvm import LLVMCodegen
+```
+
+**Benefits (unchanged from the old Protocol approach):**
+- Eliminates circular import issues
+- Reduces coupling between modules — a module only pays the import cost for the
+  functions it actually calls
 
 ### Centralized Utilities (DRY Principle)
 
@@ -634,7 +653,7 @@ Recent refactors have extracted common patterns into reusable utility modules:
 
 #### LLVM Constants Module
 
-**File:** `backend/llvm_constants.py`
+**File:** `backend/constants/llvm_values.py`
 
 Eliminates duplication of LLVM constant creation across 100+ call sites.
 
@@ -744,7 +763,7 @@ def emit_value_destructor(codegen, builder, value, llvm_type, ast_type):
 
 #### PassErrorReporter Helper
 
-**File:** `semantics/passes/pass_error_reporter.py`
+**File:** `semantics/error_reporter.py`
 
 Reduces boilerplate in semantic passes by binding Reporter instance.
 
@@ -770,7 +789,8 @@ def validate_expression(expr):
 
 The backend has been organized into logical subdirectories for better maintainability:
 
-- **`backend/expressions/calls/`** - Subdivided due to complexity (stdlib routing is 33KB)
+- **`backend/expressions/calls/`** - Subdivided due to complexity; stdlib call
+  routing is itself a `stdlib/` subpackage, one module per stdlib area
 - **`backend/generics/`** - Complete generic type system with HashMap and List implementations
 - **`backend/memory/`** - Separated scope management, dynamic arrays, and heap operations
 - **`backend/runtime/externs/`** - Organized libc bindings by category (stdio, strings, ctype, process)
@@ -778,17 +798,13 @@ The backend has been organized into logical subdirectories for better maintainab
 
 ## Key Design Patterns
 
-### Protocol-Based Interfaces
+### Deferred Local Imports
 
-`backend/interfaces.py` defines protocols to avoid circular dependencies:
-
-```python
-class TypeManagerProtocol(Protocol):
-    def get_llvm_type(self, sushi_type: str) -> ir.Type: ...
-
-class MemoryManagerProtocol(Protocol):
-    def emit_value_destructor(self, value: ir.Value, type_: str) -> None: ...
-```
+There is no shared protocol/interface module. Circular dependencies between
+backend components are avoided by importing inside the function that needs the
+dependency rather than at module top level — see
+[Breaking Circular Imports: Deferred Local Imports](#breaking-circular-imports-deferred-local-imports)
+above for the mechanism and a concrete example from `backend/destructors.py`.
 
 ### Recursive Destructors
 
@@ -869,7 +885,8 @@ Compiles all tests and verifies expected exit codes.
 ### Adding a New Feature
 
 1. Update grammar (`grammar.lark`)
-2. Update AST builder (`semantics/ast_builder.py`)
+2. Update AST builder (`semantics/ast_builder/` — pick the matching module under
+   `declarations/`, `expressions/`, `statements/`, or `types/`)
 3. Add semantic analysis (appropriate phase)
 4. Add code generation (`backend/`)
 5. Write tests (`tests/test_feature.sushi`)

@@ -66,17 +66,21 @@ and LLVM-powered code generation.
 
 **Key Features:**
 - Static type system with explicit casting
-- Generic types with compile-time monomorphization (`Result<T>`,
-  `Maybe<T>`, user-defined structs, enums, and functions)
+- Generic types with compile-time monomorphization (`Result<T, E>`,
+  `Maybe<T>`, `List<T>`, `HashMap<K, V>`, user-defined structs, enums, and functions)
 - Generic functions with automatic type inference and perk constraints
 - Perks (traits/interfaces) for polymorphic behavior with static dispatch
 - Error propagation operator (`??`) for ergonomic error handling
-- Mutable references with compile-time borrow checking
+- References (`&peek`/`&poke`) with compile-time borrow checking
+- `Own<T>` heap allocation for recursive types (linked lists, trees)
 - Extension methods for zero-cost method chaining
+- Closures / lambdas (`|x| expr`) with RAII-managed, move-semantics captures
+- First-class functions (`fn(i32) -> i32` values, passable and callable)
+- Foreign Function Interface (`unsafe external "C"`) for calling C libraries
 - Variadic functions (memory-safe native `...T` array sugar; C `...` for FFI bindings)
 - Variadic generics / parameter packs (`...Ts: Perk` + `expand(x in args)`, compile-time unrolled)
 - Rust-style enums with exhaustive pattern matching
-- Automatic memory management (RAII) for structs and arrays
+- Automatic memory management (RAII) for structs, arrays, and collections
 - Full UTF-8 Unicode support
 - Native code generation via LLVM
 - Incremental compilation with per-unit object file caching
@@ -95,9 +99,9 @@ and LLVM-powered code generation.
 ./sushic --opt O3 program.sushi       # Maximum performance
 
 # Create and use libraries
-./sushic --lib mylib.sushi -o mylib.bc  # Compile to library
-export SUSHI_LIB_PATH=.                  # Set library path
-./sushic main.sushi                      # use <lib/mylib> in source
+./sushic --lib mylib.sushi -o mylib.slib  # Compile to library
+export SUSHI_LIB_PATH=.                   # Set library path
+./sushic main.sushi                       # use <lib/mylib> in source
 ```
 
 ### Hello World
@@ -117,7 +121,7 @@ fn main() i32:
   running on your machine
 - [Language Guide](https://bigwhale.github.io/sushi-lang/language-guide/) - Friendly tour of
   Sushi's features
-- [Examples](https://bigwhale.github.io/sushi-lang/examples/) - Learn by example (21 hands-on
+- [Examples](https://bigwhale.github.io/sushi-lang/examples/) - Learn by example (29 hands-on
   programs)
 
 ### Language Reference
@@ -152,7 +156,7 @@ All functions return `Result<T>` for type-safe error handling:
 ```sushi
 fn divide(i32 a, i32 b) i32:
     if (b == 0):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     return Result.Ok(a / b)
 
 fn main() i32:
@@ -211,13 +215,13 @@ fn main() i32:
 Compile-time borrow checking and RAII:
 
 ```sushi
-fn increment(&i32 counter) ~:
+fn increment(&poke i32 counter) ~:
     counter := counter + 1
     return Result.Ok(~)
 
 fn main() i32:
     let i32 count = 0
-    increment(&count)
+    increment(&poke count)
     println("Count: {count}")  # 1
     return Result.Ok(0)
 ```
@@ -309,6 +313,11 @@ python tests/run_tests.py --enhanced
 python tests/run_tests.py --filter hashmap
 ```
 
+CI (GitHub Actions) additionally runs `ruff` and `mypy` (blocking over a growing set of
+type-checked packages, informational over the full tree) as a lint gate, and a cross-platform
+leak-detection gate (`tests/run_tests.py --leaks-only`, backed by a malloc-interposer in
+`tests/leakcheck`) on both Linux and macOS before the full suite runs.
+
 ## Examples
 
 Check out the [examples directory](https://bigwhale.github.io/sushi-lang/examples/) for hands-on
@@ -321,17 +330,19 @@ learning:
 - [07-result.sushi](https://bigwhale.github.io/sushi-lang/examples/07-result.sushi) - Error handling
 - [15-lists.sushi](https://bigwhale.github.io/sushi-lang/examples/15-lists.sushi) - Generic lists
 - [16-hashmaps.sushi](https://bigwhale.github.io/sushi-lang/examples/16-hashmaps.sushi) - Hash tables
+- [28-ffi.sushi](https://bigwhale.github.io/sushi-lang/examples/28-ffi.sushi) - Foreign function
+  interface
 
-[See all 22 examples →](https://bigwhale.github.io/sushi-lang/examples/)
+[See all 29 examples →](https://bigwhale.github.io/sushi-lang/examples/)
 
 ## Project Structure
 
 ```
 sushi/
 ├── sushi_lang/                  # Main package (installed to site-packages)
-│   ├── compiler.py              # Main compiler entry point
-│   ├── compiler/                # Compilation pipeline & caching
+│   ├── compiler/                # CLI entry point, pipeline & caching
 │   ├── grammar.lark             # Lark grammar specification
+│   ├── internals/               # Diagnostics, parser, error registry
 │   ├── semantics/               # Semantic analysis passes
 │   │   ├── passes/              # Multi-pass type checking
 │   │   └── generics/            # Generic type system
@@ -339,9 +350,10 @@ sushi/
 │   │   ├── expressions/         # Expression emission
 │   │   ├── statements/          # Statement emission
 │   │   └── types/               # Type-specific codegen
-│   └── sushi_stdlib/            # Standard library
-│       ├── src/                 # Python IR generators
-│       └── dist/                # Precompiled .bc files
+│   ├── sushi_stdlib/            # Standard library
+│   │   ├── src/                 # Python IR generators
+│   │   └── dist/                # Precompiled .bc files
+│   └── packager/                # Nori package manager CLI
 ├── sushic                       # Development wrapper script
 ├── tests/                       # Test suite
 └── docs/                        # Documentation
@@ -419,14 +431,14 @@ uv build --wheel
 
 # The wheel will be created in dist/
 ls dist/
-# sushi_lang-0.9.1-py3-none-any.whl
+# sushi_lang-0.10.0-py3-none-any.whl
 ```
 
 ### Installing from Wheel
 
 ```bash
 # Install in a virtual environment
-pip install sushi_lang-0.9.1-py3-none-any.whl
+pip install sushi_lang-0.10.0-py3-none-any.whl
 
 # The sushic command is now available
 sushic program.sushi
@@ -437,7 +449,9 @@ sushic program.sushi
 The wheel contains:
 - The `sushi_lang` package with all compiler modules
 - Grammar file (sushi_lang/grammar.lark)
-- Standard library Python modules (sushi_lang/sushi_stdlib/src/, sushi_lang/sushi_stdlib/generics/)
+- Standard library sources, both the Python IR generators
+  (sushi_lang/sushi_stdlib/src/) and the Sushi-source modules
+  (sushi_lang/sushi_stdlib/src_sushi/)
 - Precompiled stdlib bitcode for macOS and Linux (sushi_lang/sushi_stdlib/dist/)
 
 Users don't need to install LLVM - the `llvmlite` dependency bundles
@@ -453,8 +467,8 @@ platforms via `.github/workflows/release.yml`. The workflow:
 3. Attaches the wheel to the GitHub release
 
 To create a release:
-1. Tag a commit: `git tag v0.9.1`
-2. Push the tag: `git push upstream v0.9.1`
+1. Tag a commit: `git tag v0.10.0`
+2. Push the tag: `git push upstream v0.10.0`
 3. Create a release on GitHub from the tag
 4. The workflow will automatically build and attach the wheel
 

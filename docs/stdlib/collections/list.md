@@ -19,6 +19,11 @@ Generic growable array with automatic memory management.
 - **Iterator support**: Works with foreach loops
 - **RAII cleanup**: Automatic recursive element destruction
 
+`List<T>` is an owning type: assigning it, or passing it by value to a function, **moves**
+it (the source binding can no longer be used; the destination now owns and frees it). Borrow
+it with `&peek List<T>` / `&poke List<T>` to use it without transferring ownership. There is no
+direct `list[i]` indexing operator (unlike `T[]` arrays) — use `.get(i)` for safe access.
+
 ## Construction
 
 ### `List.new() -> List<T>`
@@ -68,7 +73,9 @@ if (list.is_empty()):
 
 ### `.get(i32 index) -> Maybe<T>`
 
-Get element at index (bounds-checked).
+Get element at index (bounds-checked). The list keeps the element — `.get()` does not remove
+it. If `T` is an owning type (e.g. `string`, a struct/enum holding heap data), the returned
+value is a deep copy, so the list and the returned `Maybe` each own independent memory.
 
 ```sushi
 match list.get(0):
@@ -80,7 +87,8 @@ match list.get(0):
 
 ### `.pop() -> Maybe<T>`
 
-Remove and return last element.
+Remove and return last element. Unlike `.get()`, this moves the element out — the list no
+longer owns it.
 
 ```sushi
 match list.pop():
@@ -103,17 +111,26 @@ list.push(100)
 
 ### `.insert(i32 index, T element) -> Result<~>`
 
-Insert element at index (shifts elements right).
+Insert element at index (shifts elements right). Returns `Result.Err` if `index` is out of
+bounds — unlike `.push()`/`.get()`/`.pop()`/`.remove()`, this is the one `List<T>` method that
+can fail, so it returns a `Result` instead of `~` or `Maybe<T>`.
 
 ```sushi
+let List<i32> nums = List.new()
+nums.push(2)
+nums.push(3)
+nums.push(4)
+
 # Insert at beginning
-list.insert(0, 1)
+match nums.insert(0, 1):
+    Result.Ok(_) -> println("inserted")
+    Result.Err(_) -> println("index out of bounds")
 
 # Insert in middle
-list.insert(5, 42)
+nums.insert(2, 99)
 
 # Insert at end (equivalent to push)
-list.insert(list.len(), 99)
+nums.insert(nums.len(), 100)
 ```
 
 **Bounds:** `0 <= index <= len`
@@ -144,12 +161,14 @@ println("Capacity: {list.capacity()}")  # Unchanged
 
 ## Capacity Management
 
-### `.reserve(i32 n) -> ~`
+### `.reserve(i32 additional) -> ~`
 
-Ensure capacity is at least `n`.
+Ensure capacity is at least `len() + additional` — i.e. reserve room for `additional` more
+elements on top of what the list already holds. Only grows, never shrinks; a no-op if the
+current capacity already covers `len() + additional`.
 
 ```sushi
-list.reserve(100)  # Ensure space for 100 elements
+list.reserve(100)  # Ensure space for 100 more elements beyond the current length
 ```
 
 ### `.shrink_to_fit() -> ~`
@@ -198,7 +217,18 @@ list.destroy()
 Print internal state (length, capacity, elements).
 
 ```sushi
-list.debug()  # Output: List<i32> { len: 3, capacity: 4, [1, 2, 3] }
+list.debug()
+```
+
+Output (one element per line):
+
+```
+List<i32> {
+  len: 3, capacity: 4
+  [0] 1
+  [1] 2
+  [2] 3
+}
 ```
 
 ## Performance
