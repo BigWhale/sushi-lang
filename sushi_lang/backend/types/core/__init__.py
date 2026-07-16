@@ -157,7 +157,7 @@ class LLVMTypeSystem:
 
     # Struct/enum type helpers (delegated to mapper)
     def get_string_struct_type(self) -> ir.LiteralStructType:
-        """Get LLVM struct type for strings: {i8* data, i32 size}"""
+        """Get LLVM struct type for strings: {i8* data, i32 size, i8 owned}."""
         return self.mapper.string_struct
 
     def get_dynamic_array_struct_type(self, element_type: ir.Type) -> ir.LiteralStructType:

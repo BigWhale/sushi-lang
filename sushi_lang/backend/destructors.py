@@ -34,7 +34,8 @@ def emit_value_destructor(
 
     This is the central cleanup mechanism for all Sushi types:
     - Primitives (i8-i64, u8-u64, f32, f64, bool): no-op
-    - Strings: no-op (string literals or static data)
+    - Strings: owned-bit-guarded free of the heap buffer (a literal/borrow
+      carries owned=0, making the free a runtime no-op)
     - Dynamic arrays: free data pointer, recursively destroy elements if needed
     - Structs: recursively destroy each field
     - Enums: switch on discriminant tag, destroy variant data

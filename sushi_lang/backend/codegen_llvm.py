@@ -661,8 +661,11 @@ class LLVMCodegen:
 
         Emits full definitions for symbols owned by *target_unit* and external
         declarations for symbols from other units that this unit references.
-        Monomorphized generics consumed by this unit use ``linkonce_odr`` linkage
-        so the system linker can deduplicate across object files.
+        Monomorphized generic functions get ordinary ``external``/``internal``
+        linkage (from ``is_public``) and are funnelled into ``units[0]``, so no
+        deduplicating linkage is needed for them; ``linkonce_odr`` is used only
+        by inline runtime helpers, destructor bodies and one memory helper
+        (perk impls get ``weak_odr``).
 
         Args:
             target_unit: The unit to compile.
@@ -758,7 +761,7 @@ class LLVMCodegen:
                     self.functions.emit_extension_method_def(synthetic_ext)
 
         # Emit monomorphized generic extension method bodies for all units
-        # These use linkonce_odr linkage so the linker deduplicates
+        # (linkage comes from emit_extension_method_def, not linkonce_odr)
         for ext in self.monomorphized_extensions:
             self.functions.emit_extension_method_def(ext)
 

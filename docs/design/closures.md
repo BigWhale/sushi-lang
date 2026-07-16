@@ -492,10 +492,10 @@ Test coverage: `tests/generics/test_generic_fn_ref.sushi`,
 | Fat-pointer precedent (strings) | `backend/strings.py` |
 
 Where the passes actually run (worth knowing before touching any of the above): the live semantic
-pipeline is `semantics/semantic_analyzer.py`, not the `build_pipeline`/`add_pass` scaffold in
-`semantics/pipeline.py` (that scaffold is dead code — nothing calls `build_pipeline`). The
-lambda-lift pass is inserted in both `_check_single_file` and `_check_multi_file`, after
-`type_validator.run(...)` and before `borrow_checker.run(...)`.
+pipeline is `semantics/semantic_analyzer.py`. (The old `semantics/pipeline.py` scaffold and the
+`_check_single_file` path were both deleted in Tier 3 — a single-file compile is a one-unit
+multi-file compile.) The lambda-lift pass (Pass 2.5, `passes/lambda_lift.py`) is inserted in
+`_check_multi_file`, per unit, after type validation and before the borrow checker.
 
 ---
 
