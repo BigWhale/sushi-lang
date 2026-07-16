@@ -91,3 +91,25 @@ def test_dunder_main_module_exists():
     import importlib.util
 
     assert importlib.util.find_spec("sushi_lang.packager.__main__") is not None
+
+
+def test_dunder_main_propagates_exit_code(tmp_path):
+    """python -m sushi_lang.packager must exit with main()'s return code, and
+    honor NORI_CWD. The old nori wrapper's inline `python -c "... main()"`
+    snippet discarded the return value, so ./nori exited 0 on failure."""
+    import os
+    import subprocess
+    import sys
+
+    env = dict(os.environ, NORI_CWD=str(tmp_path))
+    failing = subprocess.run(
+        [sys.executable, "-m", "sushi_lang.packager", "install", "nosuchpkg"],
+        capture_output=True, env=env,
+    )
+    assert failing.returncode == 1
+
+    ok = subprocess.run(
+        [sys.executable, "-m", "sushi_lang.packager", "list"],
+        capture_output=True, env=env,
+    )
+    assert ok.returncode == 0
