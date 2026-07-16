@@ -1,0 +1,10 @@
+# expand(...) is a compile-time construct over a ...Ts type-pack; in a function
+# with no pack parameter the node survived monomorphization untouched and hit
+# the backend as an internal error (CE0000 NotImplementedError). It must be a
+# real diagnostic.
+# EXPECT_ERROR_CODE: CE0119
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    expand(a in xs):
+        println(a)
+    return Result.Ok(0)

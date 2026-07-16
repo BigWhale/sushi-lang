@@ -1,0 +1,23 @@
+# expand(...) over anything but the pack parameter NAME is malformed. This used
+# to unroll silently to ZERO statements: the body vanished, the program compiled
+# and ran without it (exit 0) - a silent miscompile, not an error.
+# EXPECT_ERROR_CODE: CE0119
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "i:{self}"
+
+fn helper() i32:
+    return Result.Ok(1)
+
+fn show<...Ts: Display>(...Ts args) ~:
+    expand(a in helper()):
+        println(a.display())
+    return Result.Ok(~)
+
+fn main() i32:
+    if (show(1, 2)):
+        println("done")
+    return Result.Ok(0)

@@ -1,0 +1,10 @@
+# A generic perk whose type parameter is used in a method signature. This file
+# used to be test_perk_generic_parse.sushi asserting exit 0 - it pinned the bug:
+# the perk parsed and was silently inert (nothing ever read PerkDef.type_params).
+# Perks cannot be generic; CE4010 now rejects the declaration.
+# EXPECT_ERROR_CODE: CE4010
+perk Iterator<Item>:
+    fn next() Maybe<Item>
+
+fn main() i32:
+    return Result.Ok(0)

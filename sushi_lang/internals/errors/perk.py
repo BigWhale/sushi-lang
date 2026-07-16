@@ -42,10 +42,11 @@ _add(ErrorMessage("CE4007", Severity.ERROR,
     "method {method} conflicts with perk method from {perk}",
     Category.PERK, "A regular extension method has the same name as a perk method. Rename one of the methods to avoid ambiguity."))
 
-_add(ErrorMessage("CE4008", Severity.ERROR,
-    "cannot implement perk {perk} for type {type}: perk is generic but no type arguments provided",
-    Category.PERK, "Generic perks require type arguments when implemented. Use 'extend {type} with {perk}<T>:' syntax."))
+# CE4008/CE4009 (generic-perk implementation arity) were registered speculatively
+# for a generic-perk feature that never landed; CE4010 now rejects generic perks
+# at the declaration, so those two codes became unreachable by construction and
+# were removed. If generic perks ever land, mint fresh codes.
 
-_add(ErrorMessage("CE4009", Severity.ERROR,
-    "perk {perk} requires {expected} type arguments, got {actual}",
-    Category.PERK, "The number of type arguments provided does not match the perk definition."))
+_add(ErrorMessage("CE4010", Severity.ERROR,
+    "perk {name} cannot have type parameters",
+    Category.PERK, "Perks cannot be generic. Remove the <...> type parameter list; constrain generic functions with '<T: {name}>' instead."))

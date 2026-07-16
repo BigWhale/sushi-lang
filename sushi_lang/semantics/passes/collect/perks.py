@@ -270,6 +270,13 @@ class PerkCollector:
 
         name_span: Optional[Span] = getattr(perk, "name_span", None) or getattr(perk, "loc", None)
 
+        # Perks cannot be generic (CE4010). The grammar parses `perk Name<T>:`
+        # and the AST builder stores the params, but nothing consumes them - so
+        # before this check a generic perk was silently accepted and inert.
+        if getattr(perk, "type_params", None):
+            er.emit(self.r, ERR.CE4010, name_span, name=name)
+            return
+
         # Variadic parameters are not allowed in perk methods (CE0115).
         for method in getattr(perk, "methods", []) or []:
             for p in getattr(method, "params", []) or []:
