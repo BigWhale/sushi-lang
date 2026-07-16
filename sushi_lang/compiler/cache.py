@@ -81,8 +81,18 @@ class CacheManager:
 
         This is what the manifest used to check (and wipe the cache over). Folding it
         into the object name turns "the cache is stale" from an eviction into a miss.
+
+        The compiler-source digest is part of the key: ``compiler_version`` is the
+        static pyproject string, so without it a codegen fix was invisible to a warm
+        cache (the F9 experiment: a warm rebuild after the T1.1 ``sext``->``zext``
+        fix kept printing the stale answer until ``--clean-cache``). With the digest
+        in the name, editing any compiler ``.py`` makes every cached object a miss.
         """
-        material = f"{compiler_version}|{self._target_triple}|{self.opt_level}"
+        from sushi_lang.compiler.fingerprint import compute_compiler_source_fingerprint
+        material = (
+            f"{compiler_version}|{self._target_triple}|{self.opt_level}"
+            f"|{compute_compiler_source_fingerprint()}"
+        )
         return hashlib.sha1(material.encode("utf-8")).hexdigest()[:_KEY_LEN]
 
     # ------------------------------------------------------------------

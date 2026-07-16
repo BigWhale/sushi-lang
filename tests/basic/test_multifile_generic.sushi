@@ -1,0 +1,13 @@
+# A multi-unit (incremental) build whose helper unit exports GENERIC symbols:
+# a generic fn, a constrained generic fn, a generic struct and a generic enum.
+# Regression test: computing the helper's fingerprint joined BoundedTypeParam
+# objects as if they were strings (fingerprint.py), so this program was a
+# guaranteed CE0000 TypeError ICE - the only multi-unit tests carried no
+# generics, so incremental compilation of generic exporters was silently broken.
+# EXPECT_STDOUT_EXACT: "42\n"
+use "helpers/generic_exports"
+
+fn main() i32:
+    let i32 v = helper_val().realise(0)
+    println("{v}")
+    return Result.Ok(0)

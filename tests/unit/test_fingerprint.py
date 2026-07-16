@@ -163,3 +163,79 @@ def test_unit_fingerprint_no_library_matches_empty_mapping(make_unit):
         compute_unit_fingerprint(unit)
         == compute_unit_fingerprint(unit, library_fingerprints={})
     )
+
+
+# --------------------------------------------------------------------------
+# Generic exporters (regression: BoundedTypeParam join TypeError)
+# --------------------------------------------------------------------------
+
+def test_definition_signature_with_generic_type_params():
+    """A FuncDef whose type_params are BoundedTypeParam objects must produce a
+    signature, not a TypeError. Before the fix, ",".join(defn.type_params) made
+    every incremental build exporting a generic function a CE0000 ICE."""
+    from sushi_lang.compiler.fingerprint import _definition_signature
+    from sushi_lang.semantics.ast import BoundedTypeParam
+    program, _ = parse_to_ast("public fn identity<T>(T x) T:\n    return Result.Ok(x)\n")
+    sig = _definition_signature(program.functions[0])
+    assert "<T>" in sig
+
+    # A constraint is part of the signature (a constraint change must invalidate).
+    program2, _ = parse_to_ast(
+        "perk Hashable:\n    fn hash() u64\n\n"
+        "public fn identity<T: Hashable>(T x) T:\n    return Result.Ok(x)\n"
+    )
+    sig2 = _definition_signature(program2.functions[0])
+    assert sig2 != sig
+    assert "Hashable" in sig2
+
+
+def test_fingerprint_generic_struct_and_enum_do_not_crash(tmp_path):
+    """Generic struct/enum type_params went through the same broken join."""
+    src = (
+        "struct Wrap<T>:\n    T inner\n\n"
+        "enum Slot<T>:\n    Filled(T)\n    Empty\n" + CLEAN
+    )
+    unit = _unit_with_ast(tmp_path, src)
+    plain = _unit_with_ast(tmp_path, CLEAN, name="plain")
+    assert compute_unit_fingerprint(unit) != compute_unit_fingerprint(plain)
+
+
+# --------------------------------------------------------------------------
+# Monomorphized-extension key: signature AND body, span-insensitive
+# --------------------------------------------------------------------------
+
+def _parse_extension(src):
+    program, _ = parse_to_ast(src)
+    return program.extensions[0]
+
+
+def test_mono_ext_fingerprint_covers_body(make_unit):
+    """The old key was target::name only, so a body edit reused a stale .o."""
+    unit = make_unit(CLEAN)
+    ext_a = _parse_extension("extend i32 squared() i32:\n    return Result.Ok(self * self)\n")
+    ext_b = _parse_extension("extend i32 squared() i32:\n    return Result.Ok(self + self)\n")
+    fp_a = compute_unit_fingerprint(unit, monomorphized_extensions=[ext_a])
+    fp_b = compute_unit_fingerprint(unit, monomorphized_extensions=[ext_b])
+    assert fp_a != fp_b
+
+
+def test_mono_ext_fingerprint_covers_signature(make_unit):
+    unit = make_unit(CLEAN)
+    ext_a = _parse_extension("extend i32 scaled(i32 k) i32:\n    return Result.Ok(self * k)\n")
+    ext_b = _parse_extension("extend i32 scaled(i64 k) i32:\n    return Result.Ok(self)\n")
+    assert (
+        compute_unit_fingerprint(unit, monomorphized_extensions=[ext_a])
+        != compute_unit_fingerprint(unit, monomorphized_extensions=[ext_b])
+    )
+
+
+def test_mono_ext_fingerprint_ignores_source_position(make_unit):
+    """Shifting an extension down a line must NOT invalidate (span-insensitive):
+    otherwise every unrelated edit above it would rebuild all consumers."""
+    unit = make_unit(CLEAN)
+    ext_a = _parse_extension("extend i32 squared() i32:\n    return Result.Ok(self * self)\n")
+    ext_b = _parse_extension("# shifted\n\n\nextend i32 squared() i32:\n    return Result.Ok(self * self)\n")
+    assert (
+        compute_unit_fingerprint(unit, monomorphized_extensions=[ext_a])
+        == compute_unit_fingerprint(unit, monomorphized_extensions=[ext_b])
+    )

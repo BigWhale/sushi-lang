@@ -122,3 +122,32 @@ def test_wipe_removes_cache_directory(cache):
 def test_wipe_tolerates_a_missing_cache(tmp_path):
     """--clean-cache on a project that never had one is a no-op, not an error."""
     CacheManager(tmp_path, opt_level="mem2reg").wipe()
+
+
+# --------------------------------------------------------------------------
+# Compiler-source digest in the global key
+# --------------------------------------------------------------------------
+
+def test_global_key_differs_on_compiler_source_digest(tmp_path, monkeypatch):
+    """A compiler-source edit must change every cached object's name (a miss by
+    construction). compiler_version alone is the static pyproject string, so
+    without the digest a codegen fix was invisible to a warm cache (F9)."""
+    import sushi_lang.compiler.fingerprint as fp
+
+    monkeypatch.setattr(fp, "_compiler_source_fingerprint", "digest-one")
+    key_one = CacheManager(tmp_path, opt_level="mem2reg").global_key
+
+    monkeypatch.setattr(fp, "_compiler_source_fingerprint", "digest-two")
+    key_two = CacheManager(tmp_path, opt_level="mem2reg").global_key
+
+    assert key_one != key_two
+
+
+def test_compiler_source_digest_is_cached_per_process(monkeypatch):
+    """The whole-tree content pass runs once; later calls hit the module cache."""
+    import sushi_lang.compiler.fingerprint as fp
+
+    monkeypatch.setattr(fp, "_compiler_source_fingerprint", None)
+    first = fp.compute_compiler_source_fingerprint()
+    assert fp._compiler_source_fingerprint == first
+    assert fp.compute_compiler_source_fingerprint() == first
