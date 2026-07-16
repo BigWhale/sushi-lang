@@ -79,11 +79,22 @@ def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None
     if unit.ast is not None:
         _hash_ast_structure(hasher, unit.ast)
 
-    # 5. Monomorphized extension methods that this unit might use
+    # 5. Monomorphized extension methods that this unit might use. The key must
+    # cover the full signature AND the body: these are concrete instances whose
+    # generic source may live in another unit or a library, so this unit's own
+    # source hash does not cover an edit to them. Hashing only target::name (the
+    # old key) reused a stale .o across a body or signature change.
     if monomorphized_extensions:
         hasher.update(b"MONO_EXT:")
         ext_sigs = sorted(
-            f"{ext.target_type}::{ext.name}" for ext in monomorphized_extensions
+            "{}::{}({})->{}|{}".format(
+                ext.target_type,
+                ext.name,
+                ",".join(f"{p.ty}:{p.name}" for p in ext.params),
+                str(ext.ret) if ext.ret else "~",
+                _node_digest(ext.body),
+            )
+            for ext in monomorphized_extensions
         )
         for sig in ext_sigs:
             hasher.update(sig.encode())
@@ -167,6 +178,91 @@ def compute_lib_fingerprint(slib_path) -> str:
     return hasher.hexdigest()
 
 
+_compiler_source_fingerprint: str | None = None
+
+
+def compute_compiler_source_fingerprint() -> str:
+    """Content digest of the compiler's own Python sources.
+
+    ``compiler_version`` is the static string from pyproject (``0.10.0``), so on
+    its own it cannot invalidate cached objects across a codegen change - fix a
+    backend bug, recompile a warm multi-unit project, and the stale ``.o`` was
+    silently reused until ``--clean-cache``. Folding this digest into the cache's
+    ``global_key`` makes a compiler-source edit a cache MISS by construction
+    (the object filename changes), exactly like the stdlib-generator digest
+    (``compute_stdlib_source_fingerprint``) already does for the ``.bc``.
+
+    Whole-tree granularity: every ``.py`` under ``sushi_lang/`` (which includes
+    the stdlib generators - a harmless superset). Deliberately over-eager, since
+    shared helpers legitimately affect all units. Computed once per process:
+    only incremental (multi-unit) builds construct a CacheManager, and one
+    content pass over the tree is far below a unit's compile cost.
+    """
+    global _compiler_source_fingerprint
+    if _compiler_source_fingerprint is not None:
+        return _compiler_source_fingerprint
+
+    from pathlib import Path
+
+    # sushi_lang/compiler/fingerprint.py -> sushi_lang/
+    sushi_lang_dir = Path(__file__).resolve().parent.parent
+    hasher = hashlib.sha256()
+    hasher.update(b"COMPILER_SRC:")
+    for path in sorted(sushi_lang_dir.rglob("*.py"), key=str):
+        # Path-relative-to-sushi_lang keeps the digest stable across checkouts.
+        rel = path.resolve().relative_to(sushi_lang_dir)
+        hasher.update(f"{rel}:".encode())
+        hasher.update(path.read_bytes())
+    _compiler_source_fingerprint = hasher.hexdigest()
+    return _compiler_source_fingerprint
+
+
+def _node_digest(node) -> str:
+    """Stable digest of an AST subtree, insensitive to source positions.
+
+    Walks dataclass fields recursively, skipping ``loc`` and ``*_span`` fields,
+    so shifting a definition down a line does not flip the digest but any
+    structural or literal change does.
+    """
+    import dataclasses
+
+    hasher = hashlib.sha256()
+    seen: set[int] = set()
+
+    def walk(value) -> None:
+        if dataclasses.is_dataclass(value) and not isinstance(value, type):
+            # Recursive generics tie the knot with self-referential type objects
+            # (e.g. a monomorphized Own<Tree<i32>> struct); stamped annotations on
+            # body nodes can reach them, so guard against cycles.
+            if id(value) in seen:
+                hasher.update(b"<cycle>")
+                return
+            seen.add(id(value))
+            hasher.update(type(value).__name__.encode())
+            for f in dataclasses.fields(value):
+                if f.name == "loc" or f.name.endswith("_span"):
+                    continue
+                hasher.update(f"|{f.name}=".encode())
+                walk(getattr(value, f.name))
+        elif isinstance(value, (list, tuple)):
+            hasher.update(b"[")
+            for item in value:
+                walk(item)
+                hasher.update(b",")
+            hasher.update(b"]")
+        elif isinstance(value, dict):
+            hasher.update(b"{")
+            for k in sorted(value, key=str):
+                hasher.update(f"{k}:".encode())
+                walk(value[k])
+            hasher.update(b"}")
+        else:
+            hasher.update(repr(value).encode())
+
+    walk(node)
+    return hasher.hexdigest()[:16]
+
+
 def _definition_signature(defn) -> str:
     """Extract a stable signature string from a function/constant definition."""
     from sushi_lang.semantics.ast import FuncDef, ConstDef
@@ -176,7 +272,10 @@ def _definition_signature(defn) -> str:
         ret = str(defn.ret) if defn.ret else "~"
         generic = ""
         if hasattr(defn, 'type_params') and defn.type_params:
-            generic = "<" + ",".join(defn.type_params) + ">"
+            # type_params are BoundedTypeParam objects; str() renders the name,
+            # constraints and pack marker. Joining them raw was a TypeError, so
+            # every incremental build exporting a generic fn ICEd (CE0000).
+            generic = "<" + ",".join(str(tp) for tp in defn.type_params) + ">"
         return f"fn{generic}({params})->{ret}"
 
     if isinstance(defn, ConstDef):
@@ -193,7 +292,7 @@ def _hash_ast_structure(hasher: hashlib._Hash, ast: Program) -> None:
         fields = ",".join(f"{f.ty}:{f.name}" for f in struct.fields)
         generic = ""
         if hasattr(struct, 'type_params') and struct.type_params:
-            generic = "<" + ",".join(struct.type_params) + ">"
+            generic = "<" + ",".join(str(tp) for tp in struct.type_params) + ">"
         hasher.update(f"{struct.name}{generic}({fields})".encode())
 
     # Enum definitions
@@ -205,7 +304,7 @@ def _hash_ast_structure(hasher: hashlib._Hash, ast: Program) -> None:
         )
         generic = ""
         if hasattr(enum, 'type_params') and enum.type_params:
-            generic = "<" + ",".join(enum.type_params) + ">"
+            generic = "<" + ",".join(str(tp) for tp in enum.type_params) + ">"
         hasher.update(f"{enum.name}{generic}[{variants}]".encode())
 
     # Extension method signatures

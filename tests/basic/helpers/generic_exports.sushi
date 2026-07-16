@@ -1,0 +1,27 @@
+# Helper unit that EXPORTS generic definitions. Fingerprinting a unit whose
+# public symbols carry type_params used to ICE (",".join over BoundedTypeParam
+# objects), so incremental builds of generic-exporting units were broken.
+public fn identity<T>(T x) T:
+    return Result.Ok(x)
+
+perk Hashable:
+    fn hash() u64
+
+public fn pick_larger_hash<T: Hashable>(T a, T b) T:
+    if (a.hash() >= b.hash()):
+        return Result.Ok(a)
+    return Result.Ok(b)
+
+struct Wrap<T>:
+    T inner
+
+enum Slot<T>:
+    Filled(T)
+    Empty
+
+public fn helper_val() i32:
+    let Wrap<i32> w = Wrap(identity(21)??)
+    let Slot<i32> s = Slot.Filled(w.inner)
+    match s:
+        Slot.Filled(v) -> return Result.Ok(pick_larger_hash(v * 2, v * 2)??)
+        Slot.Empty -> return Result.Ok(0)

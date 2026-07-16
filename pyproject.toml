@@ -81,11 +81,3 @@ ignore = ["E501"]
 # the full count so drift stays visible. No strictness flags yet.
 python_version = "3.13"
 ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-# fingerprint.py carries a REAL bug mypy found (",".join over BoundedTypeParam
-# objects - a TypeError on any incremental build defining a generic function).
-# It is fixed test-first in Tier 5.3 with the rest of the fingerprint work;
-# excluded here so the wave-1 gate could go blocking without a fix-before-test.
-module = "sushi_lang.compiler.fingerprint"
-ignore_errors = true
