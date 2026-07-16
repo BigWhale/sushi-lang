@@ -50,7 +50,7 @@ def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
     """
     from sushi_lang.backend.expressions import type_utils
 
-    builder = require_builder(codegen)
+    require_builder(codegen)
     # For array indexing, we need to get the array slot directly from the variable
     # rather than loading the array value
     if isinstance(expr.array, Name):

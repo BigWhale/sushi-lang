@@ -148,7 +148,8 @@ class Reporter:
                 right = span_len - left - 1
                 marker = " " * (start - 1) + "\u2500" * left + "\u252c" + "\u2500" * right
             if use_color:
-                gray = lambda s: f"{C.GRAY}{s}{C.RESET}"
+                def gray(s: str) -> str:
+                    return f"{C.GRAY}{s}{C.RESET}"
                 out.append(f"{gray(prefix + chr(0x2502))}{' ' * 1}{line_text}")
                 out.append(f"{gray(prefix + chr(0x2502))}{' ' * 1}{color}{marker}{C.RESET}")
             else:
@@ -197,7 +198,8 @@ class Reporter:
 
                 if use_unicode:
                     if use_color:
-                        gray = lambda s: f"{C.GRAY}{s}{C.RESET}"
+                        def gray(s: str) -> str:
+                            return f"{C.GRAY}{s}{C.RESET}"
                         error_color = C.RED if d.kind == "error" else C.YELLOW
 
                     top_curve = "  ╭──┤ "
@@ -275,7 +277,7 @@ class Reporter:
                         sub_label = f"{C.CYAN}{sub_loc}{C.RESET}: {sub_kind_color}{sub.kind}{C.RESET}: {sub.message}"
                         out.append(f"{C.GRAY}  \u251c\u2500\u2500\u2524{C.RESET} {sub_label}")
                     else:
-                        out.append(f"  \u2502")
+                        out.append("  \u2502")
                         out.append(f"  \u251c\u2500\u2500\u2524 {sub_loc}: {sub.kind}: {sub.message}")
                     note_color = C.BLUE if use_color else ""
                     self._render_snippet(sub.span, sub_src_lines, note_color, use_color, use_unicode, out)
@@ -310,7 +312,8 @@ class Reporter:
 
     def print(self, stream=None, use_color: Optional[bool] = None, use_unicode: Optional[bool] = None) -> None:
         """Print diagnostics to `stream` (default: sys.stderr)."""
-        import os, sys
+        import os
+        import sys
         stream = stream or sys.stderr
 
         if use_color is None:

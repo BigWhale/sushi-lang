@@ -1,0 +1,20 @@
+# Local hooks only - no network fetch, everything runs out of the project venv.
+# Install with: uv run pre-commit install
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check (sushi_lang)
+        entry: uv run ruff check sushi_lang
+        language: system
+        pass_filenames: false
+        files: ^(sushi_lang/.*\.py|pyproject\.toml)$
+
+      # Optional heavier gate: run the leak subset before pushing compiler changes.
+      # Enable per-clone with: git config sushi.leakgate true
+      - id: leak-gate
+        name: leak gate (--leaks-only)
+        entry: bash -c '[ "$(git config --get sushi.leakgate)" = "true" ] && uv run python tests/run_tests.py --leaks-only || exit 0'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

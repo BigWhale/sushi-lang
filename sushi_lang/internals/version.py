@@ -1,5 +1,7 @@
 from __future__ import annotations
-import sys, platform, datetime
+import sys
+import platform
+import datetime
 
 from sushi_lang import __version__ as app_ver, __dev__ as is_dev
 

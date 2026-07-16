@@ -583,12 +583,12 @@ def _emit_enum_destructor(
         switch = builder.switch(tag, end_block)
 
         # Add cases for each variant that needs cleanup
-        for tag_val, variant, _resolved in variants_needing_cleanup:
+        for tag_val, _variant, _resolved in variants_needing_cleanup:
             tag_const = make_i32_const(tag_val)
             switch.add_case(tag_const, cleanup_blocks[tag_val])
 
         # Emit cleanup code for each variant
-        for tag_val, variant, resolved_types in variants_needing_cleanup:
+        for tag_val, _variant, resolved_types in variants_needing_cleanup:
             builder.position_at_end(cleanup_blocks[tag_val])
 
             # Calculate offset into data array for each associated value

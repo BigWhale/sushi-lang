@@ -46,7 +46,6 @@ def emit_string_to_i32(module: ir.Module) -> ir.Function:
 
     # Get common types
     i8, i8_ptr, i32, i64, string_type = get_string_types()
-    i1 = ir.IntType(1)
 
     # Maybe<i32> = {i32 tag, [4 x i8] data}
     # tag = 0 for Some(i32), 1 for None()

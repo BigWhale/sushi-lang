@@ -141,7 +141,7 @@ class TypeMonomorphizer:
         # Build substitution map: type parameter name → concrete type
         # Example: {"T": BuiltinType.I32}
         substitution: Dict[str, Type] = {}
-        for param, arg in zip(generic.type_params, type_args):
+        for param, arg in zip(generic.type_params, type_args, strict=False):
             substitution[param.name] = arg
 
         # Generate unique name for concrete type
@@ -261,7 +261,7 @@ class TypeMonomorphizer:
 
         # Build substitution map: type parameter name → concrete type
         substitution: Dict[str, Type] = {}
-        for param, arg in zip(generic.type_params, type_args):
+        for param, arg in zip(generic.type_params, type_args, strict=False):
             substitution[param.name] = arg
 
         # Generate unique name for concrete type

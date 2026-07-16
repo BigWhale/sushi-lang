@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, List, Optional
 
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import BoundedTypeParam
+from sushi_lang.semantics.ast import BoundedTypeParam, Param
 from sushi_lang.semantics.typesys import Type
 
 

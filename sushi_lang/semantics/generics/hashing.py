@@ -152,7 +152,7 @@ def can_enum_be_hashed(enum_type: EnumType, visited: Optional[set] = None, path:
 
     # Check each variant's associated types
     for variant in enum_type.variants:
-        for assoc_idx, assoc_type in enumerate(variant.associated_types):
+        for _assoc_idx, assoc_type in enumerate(variant.associated_types):
             # Skip enums with unresolved types (will be registered later)
             if isinstance(assoc_type, UnknownType):
                 return False, f"variant {variant.name} has unresolved type '{assoc_type.name}'"

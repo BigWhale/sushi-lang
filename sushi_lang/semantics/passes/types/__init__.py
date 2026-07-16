@@ -28,6 +28,7 @@ from typing import Dict, List, Optional, Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.tables import SymbolTables
+    from sushi_lang.semantics.passes.collect.externals import ExternalSig
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
@@ -205,7 +206,7 @@ class TypeValidator:
             er.emit(self.reporter, er.ERR.CE2009, node.loc,
                     name=fq_name, expected=len(expected), got=len(node.args))
             return
-        for index, (arg, exp_ty) in enumerate(zip(node.args, expected)):
+        for index, (arg, exp_ty) in enumerate(zip(node.args, expected, strict=False)):
             got_ty = self.infer_expression_type(arg)
             if got_ty is None or exp_ty is None:
                 continue

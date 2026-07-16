@@ -340,7 +340,7 @@ class StdlibRegistry:
 
         # Get constant value getter
         constant_getter_name = f"get_builtin_{module_name}_constant_value"
-        constant_getter = getattr(py_module, constant_getter_name, None)
+        getattr(py_module, constant_getter_name, None)
 
         for name in common_constants:
             if checker(name):

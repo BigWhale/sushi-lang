@@ -24,13 +24,11 @@ impractical.
 See docs/stdlib/ISSUES.md for why Result<T, E> cannot be moved to stdlib.
 """
 
-from typing import Any, Optional
+from typing import Any
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import EnumType, Type
 import llvmlite.ir as ir
-from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.generics.results import ensure_result_type_in_table
 
 
 # ==============================================================================

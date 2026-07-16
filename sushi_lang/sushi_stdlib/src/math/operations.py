@@ -35,7 +35,7 @@ def _generate_f64_intrinsic_wrapper(module: ir.Module, llvm_name: str, sushi_nam
         intrinsic = ir.Function(module, sig, name=llvm_name)
 
     func = ir.Function(module, ir.FunctionType(f64, [f64] * len(arg_names)), name=sushi_name)
-    for arg, name in zip(func.args, arg_names):
+    for arg, name in zip(func.args, arg_names, strict=True):
         arg.name = name
 
     builder = ir.IRBuilder(func.append_basic_block("entry"))

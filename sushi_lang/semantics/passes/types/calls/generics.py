@@ -115,7 +115,7 @@ def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected
         return None
 
     type_param_map: Dict[str, Type] = {}
-    for param, exp_pty in zip(func_params, expected_ty.param_types):
+    for param, exp_pty in zip(func_params, expected_ty.param_types, strict=False):
         if param.ty is None:
             return None
         if not _unify_types_for_inference(param.ty, exp_pty, type_param_map):
@@ -200,7 +200,7 @@ def _infer_type_args_from_call_site(
         if len(leading_arg_types) != len(leading_params):
             return None
 
-        for arg_type, param in zip(leading_arg_types, leading_params):
+        for arg_type, param in zip(leading_arg_types, leading_params, strict=False):
             if param.ty is None:
                 return None
             if not _unify_types_for_inference(param.ty, arg_type, type_param_map):
@@ -316,7 +316,7 @@ def validate_call_arguments(
         # Still continue with validation of provided arguments
 
     # Validate each argument type against corresponding parameter type
-    for i, (arg, param) in enumerate(zip(actual_args, expected_params)):
+    for i, (arg, param) in enumerate(zip(actual_args, expected_params, strict=False)):
         # Propagate expected types to DotCall nodes for generic enums (before validation)
         # This allows Maybe.None(), Result.Ok(), etc. to work as function arguments
         propagate_enum_type_to_dotcall(validator, arg, param.ty)

@@ -73,12 +73,9 @@ def emit_hashmap_insert(
     # Get LLVM types
     entry_type = get_entry_type(codegen, key_type, value_type)
     key_llvm = codegen.types.ll_type(key_type)
-    value_llvm = codegen.types.ll_type(value_type)
 
     # Constants
-    zero_i32 = ir.Constant(codegen.types.i32, 0)
     one_i32 = ir.Constant(codegen.types.i32, 1)
-    zero_i8 = ir.Constant(codegen.types.i8, 0)
 
     # Emit the key and value arguments
     if len(expr.args) != 2:
@@ -271,11 +268,9 @@ def emit_hashmap_remove(
     key_type, value_type = extract_key_value_types(hashmap_type, codegen)
 
     # Get LLVM types
-    entry_type = get_entry_type(codegen, key_type, value_type)
     value_llvm = codegen.types.ll_type(value_type)
 
     # Constants
-    zero_i32 = ir.Constant(codegen.types.i32, 0)
     one_i32 = ir.Constant(codegen.types.i32, 1)
 
     # Emit the key argument
@@ -381,7 +376,6 @@ def emit_hashmap_remove(
         maybe_enum_type = ensure_maybe_type_exists(codegen, value_type)
         if maybe_enum_type is None:
             # Still couldn't create it - this shouldn't happen
-            available = list(codegen.enum_table.by_name.keys())
             raise_internal_error("CE0047", type=type_str)
 
     # Get LLVM type for Maybe<V> enum: {i32 tag, [N x i8] data}
@@ -478,7 +472,7 @@ def emit_hashmap_resize_to_capacity(
     tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
 
     # Load current values
-    size = builder.load(size_ptr, name="size")
+    builder.load(size_ptr, name="size")
     old_capacity = builder.load(capacity_ptr, name="old_capacity")
 
     # Get old buckets pointer
@@ -624,7 +618,6 @@ def emit_hashmap_rehash(
         Unit value (~).
     """
     builder = codegen.builder
-    zero_i32 = ir.Constant(codegen.types.i32, 0)
 
     # Load current capacity
     capacity_ptr = builder.gep(hashmap_value, HASHMAP_CAPACITY_INDICES, name="capacity_ptr")
@@ -683,12 +676,9 @@ def emit_hashmap_free(
 
     # Get LLVM types
     entry_type = get_entry_type(codegen, key_type, value_type)
-    key_llvm = codegen.types.ll_type(key_type)
-    value_llvm = codegen.types.ll_type(value_type)
 
     # Constants
     zero_i32 = ir.Constant(codegen.types.i32, 0)
-    one_i32 = ir.Constant(codegen.types.i32, 1)
     initial_capacity = ir.Constant(codegen.types.i32, 16)
 
     # Get HashMap field pointers
@@ -778,7 +768,6 @@ def emit_hashmap_destroy(
 
     # Constants
     zero_i32 = ir.Constant(codegen.types.i32, 0)
-    one_i32 = ir.Constant(codegen.types.i32, 1)
 
     # Get HashMap field pointers
     fields = get_hashmap_field_ptrs(codegen, hashmap_value)

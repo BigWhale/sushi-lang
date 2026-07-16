@@ -44,7 +44,7 @@ def emit_runtime_error(
     # Platform-specific: uses __stderrp on macOS/Darwin, stderr on Linux
     stderr_handle_name = get_stderr_handle_name()
     i8_ptr = ir.IntType(8).as_pointer()
-    i8_ptr_ptr = i8_ptr.as_pointer()
+    i8_ptr.as_pointer()
 
     # Check if stderr handle is already declared
     if stderr_handle_name not in module.globals:

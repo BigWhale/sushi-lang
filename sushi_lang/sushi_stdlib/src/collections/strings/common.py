@@ -160,8 +160,6 @@ def clone_string_to_owned(
     """
     malloc = declare_malloc(module)
     memcpy = declare_memcpy(module)
-    i8_ptr = ir.IntType(8).as_pointer()
-    i32 = ir.IntType(32)
     i64 = ir.IntType(64)
 
     src_data = builder.extract_value(string_val, 0, name="clone_src_data")

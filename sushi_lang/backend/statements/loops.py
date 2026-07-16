@@ -12,7 +12,8 @@ from sushi_lang.backend.utils import require_both_initialized
 if TYPE_CHECKING:
     from llvmlite import ir
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-    from sushi_lang.semantics.ast import Foreach
+    from sushi_lang.semantics.ast import Foreach, RangeExpr
+    from sushi_lang.semantics.typesys import StructType
 
 
 def emit_break(codegen: 'LLVMCodegen') -> None:

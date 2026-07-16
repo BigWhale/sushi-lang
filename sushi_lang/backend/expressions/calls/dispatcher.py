@@ -123,10 +123,10 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
         codegen.builder.load(v, name="arg_by_value")
         if isinstance(p.type, ir.LiteralStructType) and v.type == ir.PointerType(p.type)
         else v
-        for v, p in zip(args, params)
+        for v, p in zip(args, params, strict=True)
     ]
 
-    casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(args, params)]
+    casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(args, params, strict=True)]
     result_struct = codegen.builder.call(llvm_fn, casted)
 
     # Functions now return Result<T> as enum: {i32 tag, [N x i8] data}
@@ -191,7 +191,7 @@ def _register_inline_closure_temps(codegen: 'LLVMCodegen', arg_exprs: list, arg_
     double-free), and a container get-out / struct-field read is a non-owning borrow.
     """
     from sushi_lang.semantics.ast import Lambda
-    for arg_expr, value in zip(arg_exprs, arg_values):
+    for arg_expr, value in zip(arg_exprs, arg_values, strict=True):
         if isinstance(arg_expr, Lambda):
             codegen.memory.register_closure_temp(value)
 
@@ -428,7 +428,7 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
             and emitted_args[0].type == ir.PointerType(params[0].type)):
         emitted_args[0] = codegen.builder.load(emitted_args[0], name="self_by_value")
 
-    casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(emitted_args, params)]
+    casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(emitted_args, params, strict=True)]
     result_value = codegen.builder.call(llvm_fn, casted)
 
     # Extension methods return bare types (not Result<T>)
@@ -460,7 +460,7 @@ def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     # with param casting against the declared parameter type.
     num_fixed = len(sig.param_types)
     emitted_args = []
-    for arg, param_ty in zip(expr.args, sig.param_types):
+    for arg, param_ty in zip(expr.args[:num_fixed], sig.param_types, strict=True):
         value = codegen.expressions.emit_expr(arg)
         if isinstance(param_ty, BuiltinType) and param_ty == BuiltinType.STRING:
             c_str = codegen.runtime.strings.emit_to_cstr(value)
@@ -471,7 +471,7 @@ def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
 
     params = list(llvm_fn.args)
     fixed_args = [codegen.utils.cast_for_param(v, p.type)
-                  for v, p in zip(emitted_args, params)]
+                  for v, p in zip(emitted_args, params, strict=True)]
 
     # Marshal the TRAILING variadic arguments. There is no declared target type,
     # so apply C default-argument promotion by hand against the emitted value's
@@ -566,7 +566,7 @@ def _check_stdlib_function_codegen(codegen: 'LLVMCodegen', function_name: str) -
     return None
 
 
-def _emit_stdlib_function(codegen: 'LLVMCodegen', expr: Call, function_name: str, 
+def _emit_stdlib_function(codegen: 'LLVMCodegen', expr: Call, function_name: str,
                           module_and_func: tuple, to_i1: bool) -> ir.Value:
     """
     Emit code for a stdlib function call.
@@ -584,7 +584,7 @@ def _emit_stdlib_function(codegen: 'LLVMCodegen', expr: Call, function_name: str
         LLVM IR value
     """
     module_path, stdlib_func = module_and_func
-    
+
     # Dispatch to module-specific emitters
     if module_path == "time":
         return emit_time_function(codegen, expr, function_name, to_i1)

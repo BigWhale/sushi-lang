@@ -49,7 +49,7 @@ def cmd_info(args: argparse.Namespace) -> int:
                 files.append(f"  data/{f.relative_to(data_dir)}")
 
     if files:
-        print(f"Files:")
+        print("Files:")
         for f in files:
             print(f)
 

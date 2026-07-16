@@ -83,7 +83,7 @@ def topological_sort_structs(struct_table: StructTable) -> List[str]:
 
     for struct_name, struct_type in struct_table.by_name.items():
         # Check each field for struct dependencies
-        for field_name, field_type in struct_type.fields:
+        for _field_name, field_type in struct_type.fields:
             if isinstance(field_type, StructType):
                 # This struct depends on the field's struct type
                 dependencies[struct_name].add(field_type.name)
@@ -353,7 +353,7 @@ def collect_array_types(struct_table: StructTable, enum_table: EnumTable) -> Set
 
     # Collect from struct fields
     for struct_type in struct_table.by_name.values():
-        for field_name, field_type in struct_type.fields:
+        for _field_name, field_type in struct_type.fields:
             extract_arrays_from_type(field_type)
 
     # Collect from enum variant data

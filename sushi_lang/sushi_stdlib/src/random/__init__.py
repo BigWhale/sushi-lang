@@ -54,9 +54,7 @@ from llvmlite import ir
 
 if typing.TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
-    from sushi_lang.semantics.symbols import Signature
 
-from sushi_lang.sushi_stdlib.src import type_converters
 
 
 def is_builtin_random_function(name: str) -> bool:
@@ -85,7 +83,7 @@ def get_builtin_random_function_return_type(name: str) -> Type:
     raise ValueError(f"Unknown random function: {name}")
 
 
-def validate_random_function_call(name: str, signature: Signature) -> None:
+def validate_random_function_call(name: str, signature: object) -> None:
     """Validate a call to a built-in random function."""
     from sushi_lang.semantics.typesys import BuiltinType
 

@@ -48,7 +48,7 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
 
     # Emit field values
     field_values = []
-    for arg, (field_name, field_type) in zip(expr.args, struct_type.fields):
+    for arg, (_field_name, field_type) in zip(expr.args, struct_type.fields, strict=True):
         # Special handling for dynamic array fields
         if isinstance(field_type, DynamicArrayType):
             # For dynamic arrays, we need to create the struct value directly

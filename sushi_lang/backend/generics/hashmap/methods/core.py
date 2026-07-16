@@ -104,8 +104,6 @@ def emit_hashmap_len(codegen: Any, hashmap_value: ir.Value) -> ir.Value:
     """
     # Get pointer to size field (index 1: buckets at 0, size at 1)
     builder = codegen.builder
-    zero_i32 = ir.Constant(codegen.types.i32, 0)
-    one_i32 = ir.Constant(codegen.types.i32, 1)
     size_ptr = builder.gep(hashmap_value, HASHMAP_SIZE_INDICES, name="size_ptr")
     return builder.load(size_ptr, name="hashmap_size")
 
@@ -148,8 +146,6 @@ def emit_hashmap_tombstone_count(codegen: Any, hashmap_value: ir.Value) -> ir.Va
     """
     # Get pointer to tombstones field (index 3: buckets at 0, size at 1, capacity at 2, tombstones at 3)
     builder = codegen.builder
-    zero_i32 = ir.Constant(codegen.types.i32, 0)
-    three_i32 = ir.Constant(codegen.types.i32, 3)
     tombstones_ptr = builder.gep(hashmap_value, HASHMAP_TOMBSTONES_INDICES, name="tombstones_ptr")
     return builder.load(tombstones_ptr, name="hashmap_tombstones")
 
@@ -190,12 +186,9 @@ def emit_hashmap_get(
     key_type, value_type = extract_key_value_types(hashmap_type, codegen)
 
     # Get LLVM types
-    entry_type = get_entry_type(codegen, key_type, value_type)
     value_llvm = codegen.types.ll_type(value_type)
 
     # Constants
-    zero_i32 = ir.Constant(codegen.types.i32, 0)
-    one_i32 = ir.Constant(codegen.types.i32, 1)
 
     # Emit the key argument
     if len(expr.args) != 1:
@@ -288,7 +281,6 @@ def emit_hashmap_get(
         maybe_enum_type = ensure_maybe_type_exists(codegen, value_type)
         if maybe_enum_type is None:
             # Still couldn't create it - this shouldn't happen
-            available = list(codegen.enum_table.by_name.keys())
             raise_internal_error("CE0047", type=type_str)
 
     # Get LLVM type for Maybe<V> enum: {i32 tag, [N x i8] data}
@@ -368,11 +360,8 @@ def emit_hashmap_contains_key(
     key_type, value_type = extract_key_value_types(hashmap_type, codegen)
 
     # Get LLVM types
-    entry_type = get_entry_type(codegen, key_type, value_type)
 
     # Constants
-    zero_i32 = ir.Constant(codegen.types.i32, 0)
-    one_i32 = ir.Constant(codegen.types.i32, 1)
     true_val = ir.Constant(codegen.types.i32, 1)
     false_val = ir.Constant(codegen.types.i32, 0)
 

@@ -137,7 +137,7 @@ def emit_cast_expression(codegen: 'LLVMCodegen', expr: CastExpr) -> ir.Value:
     Raises:
         NotImplementedError: If the cast operation is not supported.
     """
-    builder = require_builder(codegen)
+    require_builder(codegen)
 
     # An integer literal cast directly to an integer type materializes at the
     # TARGET width, so values above i32 range (e.g. 40000000000 as i64) are

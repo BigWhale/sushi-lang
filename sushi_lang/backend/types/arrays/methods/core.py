@@ -19,6 +19,7 @@ from sushi_lang.backend import gep_utils
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
+    from sushi_lang.semantics.typesys import Type
 
 
 def _infer_builtin_type_from_llvm(llvm_type: ir.Type) -> BuiltinType:
@@ -673,7 +674,6 @@ def emit_fixed_array_reverse(codegen: 'LLVMCodegen', array_ptr: ir.Value, array_
     # Constants
     zero = ir.Constant(codegen.types.i32, 0)
     one = ir.Constant(codegen.types.i32, 1)
-    two = ir.Constant(codegen.types.i32, 2)
     array_size = array_type.count
 
     # If array has fewer than 2 elements, nothing to reverse

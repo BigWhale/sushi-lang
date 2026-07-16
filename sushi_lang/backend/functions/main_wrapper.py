@@ -126,7 +126,7 @@ class MainFunctionWrapper:
 
         # Create argument list for user_main call
         user_main_args = []
-        for i, param in enumerate(fn.params):
+        for _i, param in enumerate(fn.params):
             if param.name == "args":
                 # args_array is a pointer to the struct, but we need to load the struct value
                 args_struct = self.codegen.builder.load(args_array, name="args_struct")

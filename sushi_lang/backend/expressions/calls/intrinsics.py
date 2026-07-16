@@ -113,10 +113,6 @@ def try_emit_stdio_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
     if not is_builtin_stdio_method(method):
         return None
 
-    # Map identifier to BuiltinType
-    type_map = {'stdin': BuiltinType.STDIN, 'stdout': BuiltinType.STDOUT, 'stderr': BuiltinType.STDERR}
-    builtin_type = type_map[receiver.id]
-
     # Require stdlib unit - no fallback to inline emission
     if not codegen.has_stdlib_unit("io/stdio"):
         raise_internal_error("CE0096", operation="Missing stdlib unit: io/stdio. Add 'use <io/stdio>' to use {receiver.id}.{method}()"
@@ -192,7 +188,7 @@ def try_emit_string_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCa
         is_empty_func = emit_string_is_empty_intrinsic(codegen.module)
 
         # Call the intrinsic
-        builder = require_builder(codegen)
+        require_builder(codegen)
         result = codegen.builder.call(is_empty_func, [receiver_value], name="is_empty_result")
 
         # Convert i8 to i1 if needed
@@ -377,7 +373,7 @@ def try_emit_perk_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
 
     # Cast arguments to match function signature
     params = list(llvm_fn.args)
-    casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(emitted_args, params)]
+    casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(emitted_args, params, strict=True)]
 
     # Call the perk method
     result_value = codegen.builder.call(llvm_fn, casted)

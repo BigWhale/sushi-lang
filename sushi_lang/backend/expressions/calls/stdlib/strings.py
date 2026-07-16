@@ -42,7 +42,7 @@ def emit_stdlib_string_call(
     Raises:
         ValueError: If the method is not implemented in stdlib
     """
-    builder = require_builder(codegen)
+    require_builder(codegen)
     i32 = ir.IntType(INT32_BIT_WIDTH)
     i8 = ir.IntType(INT8_BIT_WIDTH)
     i8_ptr = ir.IntType(INT8_BIT_WIDTH).as_pointer()

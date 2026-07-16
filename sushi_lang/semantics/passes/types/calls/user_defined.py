@@ -89,7 +89,7 @@ def validate_indirect_call(validator: 'TypeValidator', call: Call, fn_ty) -> Non
                 expected=str(fn_ty),
                 actual=f"a call with {len(actual)} argument(s)")
         return
-    for arg, param_ty in zip(actual, expected):
+    for arg, param_ty in zip(actual, expected, strict=False):
         validator.validate_expression(arg)
         arg_ty = validator.infer_expression_type(arg)
         if arg_ty is None:
@@ -205,7 +205,7 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
                    name=function_name, expected=fixed_count, got=len(actual_args))
 
         # Validate fixed (non-variadic) arguments. A bloom spread is illegal here.
-        for i, (arg, param) in enumerate(zip(actual_args[:fixed_count], expected_params[:fixed_count])):
+        for i, (arg, param) in enumerate(zip(actual_args[:fixed_count], expected_params[:fixed_count], strict=False)):
             if _reject_misplaced_spread(validator, arg):
                 continue
             propagate_enum_type_to_dotcall(validator, arg, param.ty)
@@ -237,7 +237,7 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         # Still continue with validation of provided arguments
 
     # Validate each argument type against corresponding parameter type
-    for i, (arg, param) in enumerate(zip(actual_args, expected_params)):
+    for i, (arg, param) in enumerate(zip(actual_args, expected_params, strict=False)):
         # A bloom spread `arr...` is illegal in a call to a non-variadic function.
         if _reject_misplaced_spread(validator, arg):
             continue
@@ -364,7 +364,7 @@ def validate_stdlib_function(validator: 'TypeValidator', call: Call, module_and_
             er.emit(validator.reporter, er.ERR.CE2009, call.callee.loc,
                    name=function_name, expected=fixed_count, got=len(args))
             return
-        for i, (arg, expected_type) in enumerate(zip(args[:fixed_count], expected_params[:fixed_count])):
+        for i, (arg, expected_type) in enumerate(zip(args[:fixed_count], expected_params[:fixed_count], strict=False)):
             if _reject_misplaced_spread(validator, arg):
                 continue
             validator.validate_expression(arg)
@@ -389,7 +389,7 @@ def validate_stdlib_function(validator: 'TypeValidator', call: Call, module_and_
         return
 
     # Check each argument type
-    for i, (arg, expected_type) in enumerate(zip(args, expected_params)):
+    for i, (arg, expected_type) in enumerate(zip(args, expected_params, strict=False)):
         arg_type = validator.infer_expression_type(arg)
         if arg_type is not None and not types_compatible(validator, arg_type, expected_type):
             er.emit(validator.reporter, er.ERR.CE2006, arg.loc,

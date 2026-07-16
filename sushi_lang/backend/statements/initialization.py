@@ -50,7 +50,7 @@ def initialize_array_literal(
     from sushi_lang.backend.expressions import memory
     from sushi_lang.backend.destructors import resolve_named_type, needs_cleanup
 
-    builder = require_builder(codegen)
+    require_builder(codegen)
 
     resolved_element = (resolve_named_type(codegen, element_semantic_type)
                         if element_semantic_type is not None else None)

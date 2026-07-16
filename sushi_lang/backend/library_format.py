@@ -109,7 +109,7 @@ def _read_header_and_metadata(f: BinaryIO, path: str) -> dict:
     try:
         return msgpack.unpackb(metadata_blob, raw=False)
     except Exception as e:
-        raise LibraryError("CE3512", path=path, reason=str(e))
+        raise LibraryError("CE3512", path=path, reason=str(e)) from e
 
 
 class LibraryFormat:

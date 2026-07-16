@@ -83,7 +83,6 @@ def emit_integer_to_string(
 
     # Prepare value for sprintf (may need extension)
     i32 = ir.IntType(32)
-    i64 = ir.IntType(64)
 
     # sprintf expects at least i32 for integers due to C promotion rules
     if bit_width < 32:

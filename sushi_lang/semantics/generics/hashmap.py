@@ -305,7 +305,7 @@ def _validate_hashmap_insert(
 
     # Validate each argument with type propagation (reuse standard validation logic)
     expected_types = [key_type, value_type]
-    for i, (arg, expected_ty) in enumerate(zip(call.args, expected_types)):
+    for i, (arg, expected_ty) in enumerate(zip(call.args, expected_types, strict=False)):
         # Propagate expected types to DotCall nodes for generic enums (before validation)
         # This allows Maybe.None(), Result.Ok(), etc. to work as function arguments
         propagate_enum_type_to_dotcall(validator, arg, expected_ty)

@@ -64,6 +64,15 @@ exclude = [
 ]
 
 
+[tool.ruff]
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "B"]
+# E501: no formatter is in use (black was dropped unadopted); a line-length gate
+# without a formatter is hand-wrapping busywork with no bug-finding value.
+ignore = ["E501"]
+
 [tool.mypy]
 # Deliberately minimal. mypy has never run on this tree: until the prose comment at
 # backend/types/core/mapping.py was reworded, it aborted on the first file, reading

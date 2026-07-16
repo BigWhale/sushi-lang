@@ -566,7 +566,7 @@ class ScopeManager:
         builder = self.codegen.builder
         if builder is None or builder.block is None or builder.block.is_terminated:
             return
-        for var_name, entries in self._string_cleanup.items():
+        for _var_name, entries in self._string_cleanup.items():
             for _depth, slot in entries:
                 if not self.codegen.moves.is_moved(slot):
                     self._emit_string_free(slot)

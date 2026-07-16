@@ -35,7 +35,7 @@ def emit_random_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bo
     Raises:
         ValueError: If the function is not a recognized random function
     """
-    builder = require_builder(codegen)
+    require_builder(codegen)
 
     i32 = ir.IntType(INT32_BIT_WIDTH)
     i64 = ir.IntType(INT64_BIT_WIDTH)

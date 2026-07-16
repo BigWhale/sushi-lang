@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter
-from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
 
 class TypeInferrer:
@@ -181,7 +180,7 @@ class TypeInferrer:
 
         # Build substitution map
         substitution = {}
-        for param, arg in zip(type_params, type_args):
+        for param, arg in zip(type_params, type_args, strict=False):
             param_name = param.name if hasattr(param, 'name') else str(param)
             substitution[param_name] = arg
 

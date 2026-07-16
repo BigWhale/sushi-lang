@@ -199,7 +199,7 @@ def emit_open_function(codegen: 'LLVMCodegen', expr: 'Call', to_i1: bool) -> ir.
 
     # Create phi node to merge mode_ptr from all mode blocks
     mode_phi = codegen.builder.phi(codegen.types.str_ptr, name="mode_phi")
-    for tag, (mode_ptr, block) in mode_ptrs.items():
+    for _tag, (mode_ptr, block) in mode_ptrs.items():
         mode_phi.add_incoming(mode_ptr, block)
 
     # Call fopen(path, mode)

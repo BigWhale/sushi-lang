@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
+    from llvmlite import ir
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.semantics.ast import Let, Rebind
 
@@ -35,7 +36,7 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
         raise_internal_error("CE0060")
 
     if stmt.ty is None:
-        raise_internal_error("CE0015", message=f"let statement missing type information for '{{stmt.name}}'")
+        raise_internal_error("CE0015", message=f"let statement missing type information for '{stmt.name}'")
 
     # Track variable type for struct member access resolution
     codegen.variable_types[stmt.name] = stmt.ty
@@ -474,7 +475,7 @@ def _emit_field_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
 
     if struct_ptr is None:
         # Can't get struct pointer - this shouldn't happen after semantic analysis
-        raise_internal_error("CE0022", type=f"Cannot get pointer for field rebinding")
+        raise_internal_error("CE0022", type="Cannot get pointer for field rebinding")
 
     # Use GEP to get pointer to the specific field
     from sushi_lang.backend import gep_utils

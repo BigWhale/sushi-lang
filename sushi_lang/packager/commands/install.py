@@ -192,7 +192,7 @@ def _install_directory(path: Path, project_root: Path | None) -> int:
 def _install_remote(package: str, repository: str) -> int:
     """Stub for installing a package from a remote repository."""
     print(f"Remote install from {repository} is not yet implemented.")
-    print(f"Install from a local source: nori install <package> from <path>")
+    print("Install from a local source: nori install <package> from <path>")
     return 1
 
 

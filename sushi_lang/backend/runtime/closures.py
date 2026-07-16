@@ -238,6 +238,6 @@ def emit_indirect_call(
     callee = codegen.builder.bitcast(fn_ptr_i8, ir.PointerType(callee_ty))
 
     param_ll = list(callee_ty.args)[1:]  # skip the env slot
-    casted = [codegen.utils.cast_for_param(v, pt) for v, pt in zip(arg_values, param_ll)]
+    casted = [codegen.utils.cast_for_param(v, pt) for v, pt in zip(arg_values, param_ll, strict=True)]
     result = codegen.builder.call(callee, [env_ptr] + casted)
     return codegen.utils.as_i1(result) if to_i1 else result

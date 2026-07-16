@@ -70,7 +70,7 @@ def _signatures_match(impl: FuncDef, required: PerkMethodSignature) -> bool:
         return False
 
     # Check parameter types
-    for impl_param, req_param in zip(impl.params, required.params):
+    for impl_param, req_param in zip(impl.params, required.params, strict=False):
         if impl_param.ty != req_param.ty:
             return False
 

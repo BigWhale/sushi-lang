@@ -85,7 +85,7 @@ class TwoPhaseLinker:
         # Format: { i32 priority, void ()* @func_name, i8* null }
         ctor_pattern = re.compile(r'@llvm\.global_ctors.*?@([a-zA-Z_][a-zA-Z0-9_\.]*)')
 
-        for module, name, source in self.modules:
+        for module, _name, _source in self.modules:
             # Get full IR text and search for global_ctors
             ir_text = str(module)
             for match in ctor_pattern.finditer(ir_text):

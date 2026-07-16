@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Tuple, Union
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.typesys import Type, EnumType, EnumVariantInfo
+    from sushi_lang.semantics.typesys import Type, EnumType, EnumVariantInfo, StructType
     from sushi_lang.semantics.ast import BoundedTypeParam
 
 # Type alias for type parameters (supports both old and new formats)
@@ -122,7 +122,7 @@ class GenericEnumType:
 
         # Build substitution mapping: param_name -> concrete_type
         substitution = {}
-        for param, arg in zip(self.type_params, type_args):
+        for param, arg in zip(self.type_params, type_args, strict=False):
             substitution[param.name] = arg
 
         # Substitute type parameters in all variant associated types
@@ -217,7 +217,7 @@ class GenericStructType:
 
         # Build substitution mapping: param_name -> concrete_type
         substitution = {}
-        for param, arg in zip(self.type_params, type_args):
+        for param, arg in zip(self.type_params, type_args, strict=False):
             substitution[param.name] = arg
 
         # Substitute type parameters in all field types

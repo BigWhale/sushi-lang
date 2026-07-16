@@ -167,7 +167,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
             return
 
         # Validate each argument type
-        for i, (arg, param) in enumerate(zip(call.args, perk_method.params)):
+        for _i, (arg, param) in enumerate(zip(call.args, perk_method.params, strict=False)):
             validator.validate_expression(arg)
             arg_type = validator.infer_expression_type(arg)
             if arg_type is not None and param.ty is not None:
@@ -245,7 +245,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
                name=f"{receiver_type}.{call.method}", expected=len(expected_params), got=len(actual_args))
 
     # Validate each argument type against corresponding parameter type
-    for i, (arg, param) in enumerate(zip(actual_args, expected_params)):
+    for i, (arg, param) in enumerate(zip(actual_args, expected_params, strict=False)):
         # Recursively validate the argument expression
         validator.validate_expression(arg)
 

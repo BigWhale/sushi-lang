@@ -33,9 +33,9 @@ The List<T> type is a generic struct with automatic growth:
 This module provides list methods that work with List<T> after monomorphization.
 """
 
-from typing import Any, Optional
+from typing import Any
 from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.semantics.typesys import StructType, Type
+from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
 
 from sushi_lang.internals.errors import raise_internal_error

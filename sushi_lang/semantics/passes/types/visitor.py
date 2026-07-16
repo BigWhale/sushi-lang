@@ -6,9 +6,12 @@ chains in type validation and inference, providing a cleaner, more maintainable
 approach to AST type analysis.
 """
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
+
+if TYPE_CHECKING:
+    from . import TypeValidator
 from sushi_lang.semantics.visitors import NodeVisitor, RecursiveVisitor
 from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType, StructType, ForeignPtrType
 from sushi_lang.semantics.type_predicates import is_string_convertible
@@ -17,7 +20,8 @@ from sushi_lang.semantics.ast import (
     Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, Break, Continue,
     # Expressions
     Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
-    UnaryOp, BinaryOp, Call, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom, CastExpr, EnumConstructor, TryExpr, RangeExpr, Borrow, Spread, Lambda
+    UnaryOp, BinaryOp, Call, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom, CastExpr, EnumConstructor, TryExpr, RangeExpr, Borrow, Spread, Lambda,
+    BlankLit, MemberAccess
 )
 
 
@@ -163,7 +167,7 @@ def validate_fn_field_call_args(type_validator, node, fn_ty) -> None:
                 actual=f"a call with {len(node.args)} argument(s)")
         return
     from sushi_lang.semantics.passes.types.compatibility import types_compatible
-    for arg, param_ty in zip(node.args, expected):
+    for arg, param_ty in zip(node.args, expected, strict=False):
         type_validator.validate_expression(arg)
         arg_ty = type_validator.infer_expression_type(arg)
         if arg_ty is None:
@@ -701,7 +705,6 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             GenericTypeRef("Maybe", [i32]) → GenericTypeRef("Maybe", [i32])  # no change
         """
         from sushi_lang.semantics.generics.types import GenericTypeRef
-        from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
         # Only process GenericTypeRef types
         if not isinstance(generic_type, GenericTypeRef):

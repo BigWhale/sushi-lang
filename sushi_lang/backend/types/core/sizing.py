@@ -131,7 +131,7 @@ class TypeSizing:
         offset = 0
         max_align = 1  # Track maximum alignment requirement of all fields
 
-        for field_name, field_type in struct_type.fields:
+        for _field_name, field_type in struct_type.fields:
             # Get the size and alignment requirements for this field
             field_size = self.get_type_size_bytes(field_type)
             field_align = self.get_type_alignment(field_type)
@@ -211,7 +211,7 @@ class TypeSizing:
             case StructType():
                 # Struct aligned to maximum alignment of its fields
                 max_align = 1
-                for field_name, field_type in semantic_type.fields:
+                for _field_name, field_type in semantic_type.fields:
                     field_align = self.get_type_alignment(field_type)
                     max_align = max(max_align, field_align)
                 return max_align

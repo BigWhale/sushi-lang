@@ -37,10 +37,9 @@ def emit_env_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
     Raises:
         ValueError: If the function is not a recognized env function
     """
-    builder = require_builder(codegen)
+    require_builder(codegen)
 
     i32 = ir.IntType(INT32_BIT_WIDTH)
-    i8_ptr = ir.IntType(8).as_pointer()
 
     # Map user function name to stdlib function name
     stdlib_func_name = f"sushi_{func_name}"

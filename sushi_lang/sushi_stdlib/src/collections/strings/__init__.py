@@ -154,9 +154,11 @@ def _validate_method_signature(call: MethodCall, spec: MethodSpec, reporter: Any
                name=spec.name, expected=spec.arg_count, got=len(call.args))
         return
 
-    # Validate argument types if validator is available
+    # Validate argument types if validator is available. strict=False is load-bearing:
+    # a spec may list fewer arg_types than arg_count (join declares 1 arg, [] types --
+    # its string[] argument has no entry), so this zip validates only the typed prefix.
     if validator:
-        for i, (arg, expected_type) in enumerate(zip(call.args, spec.arg_types)):
+        for i, (arg, expected_type) in enumerate(zip(call.args, spec.arg_types, strict=False)):
             validator.validate_expression(arg)
             arg_type = validator.infer_expression_type(arg)
             if arg_type is not None and arg_type != expected_type:
@@ -195,8 +197,7 @@ def get_builtin_string_method_return_type(method_name: str, string_type: Builtin
     Note: is_empty is included here even though it's an inline intrinsic,
     because type checking happens before code generation.
     """
-    from sushi_lang.semantics.typesys import DynamicArrayType, EnumType
-    from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
+    from sushi_lang.semantics.typesys import DynamicArrayType
     # Methods returning int
     if method_name in {"len", "size"}:
         return BuiltinType.I32

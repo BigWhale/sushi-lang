@@ -403,7 +403,7 @@ def pack_all_variant_fields(
         raise ValueError(f"Mismatch: {len(field_values)} values vs {len(field_types)} types")
 
     offset = 0
-    for i, (value, field_type) in enumerate(zip(field_values, field_types)):
+    for i, (value, field_type) in enumerate(zip(field_values, field_types, strict=True)):
         offset = pack_variant_field(
             codegen, data_ptr, value, field_type, offset,
             name=f"{name_prefix}_{i}"

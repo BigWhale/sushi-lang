@@ -31,7 +31,6 @@ def emit_toupper_intrinsic(module: ir.Module) -> ir.Function:
             return func
 
     # Types
-    i1 = ir.IntType(1)
     i32 = ir.IntType(32)
 
     # Function signature: i32 llvm_toupper(i32 c)
@@ -88,7 +87,6 @@ def emit_tolower_intrinsic(module: ir.Module) -> ir.Function:
             return func
 
     # Types
-    i1 = ir.IntType(1)
     i32 = ir.IntType(32)
 
     # Function signature: i32 llvm_tolower(i32 c)
@@ -148,7 +146,6 @@ def emit_isspace_intrinsic(module: ir.Module) -> ir.Function:
             return func
 
     # Types
-    i1 = ir.IntType(1)
     i8 = ir.IntType(8)
     i32 = ir.IntType(32)
 

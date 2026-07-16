@@ -11,6 +11,42 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Stage 0: lint. Cheap (seconds) and blocking - the quality gate Tier 5.1
+  # installed so the F821/F841 bug class cannot regenerate.
+  lint:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie-slim
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Check for code changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v4
+        id: changes
+        with:
+          filters: |
+            code:
+              - 'sushi_lang/**'
+              - 'tests/**'
+              - '.github/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'sushic'
+
+      - name: Set up Sushi toolchain
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        uses: ./.github/actions/setup-sushi
+
+      - name: Run ruff
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run ruff check sushi_lang
+
   pytest:
     if: github.event_name != 'push'
     runs-on: ubuntu-latest

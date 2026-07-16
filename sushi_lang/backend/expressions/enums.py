@@ -113,14 +113,14 @@ def emit_enum_constructor_from_method_call(
     if args:
         # Allocate temporary storage for the data
         data_array_type = llvm_enum_type.elements[1]  # [N x i8] array
-        temp_alloca = codegen.builder.alloca(data_array_type, name=f"enum_data_temp")
+        temp_alloca = codegen.builder.alloca(data_array_type, name="enum_data_temp")
 
         # Cast to i8* for bitcasting
         data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")
 
         # Pack each argument into the data field
         offset = 0
-        for i, (arg_expr, arg_type) in enumerate(zip(args, variant.associated_types)):
+        for i, (arg_expr, arg_type) in enumerate(zip(args, variant.associated_types, strict=True)):
             # Special handling for dynamic arrays to ensure proper ownership
             # Similar to how struct constructors handle dynamic arrays
             from sushi_lang.semantics.ast import DynamicArrayFrom

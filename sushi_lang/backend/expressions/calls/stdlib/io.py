@@ -43,7 +43,7 @@ def emit_stdlib_stdio_call(
     Raises:
         ValueError: If the method is not implemented in stdlib
     """
-    builder = require_builder(codegen)
+    require_builder(codegen)
     # Map method names to stdlib function names
     i8 = ir.IntType(INT8_BIT_WIDTH)
     i32 = ir.IntType(INT32_BIT_WIDTH)
@@ -140,7 +140,7 @@ def emit_stdlib_file_call(
     Raises:
         ValueError: If the method is not implemented in stdlib
     """
-    builder = require_builder(codegen)
+    require_builder(codegen)
     i8 = ir.IntType(INT8_BIT_WIDTH)
     i32 = ir.IntType(INT32_BIT_WIDTH)
     i64 = ir.IntType(INT64_BIT_WIDTH)
@@ -261,11 +261,10 @@ def emit_files_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: boo
     Raises:
         ValueError: If the function is not a recognized files function
     """
-    builder = require_builder(codegen)
+    require_builder(codegen)
 
     i8 = ir.IntType(INT8_BIT_WIDTH)
     i32 = ir.IntType(INT32_BIT_WIDTH)
-    i64 = ir.IntType(INT64_BIT_WIDTH)
 
     # Map user function name to stdlib function name
     stdlib_func_name = f"sushi_io_files_{func_name}"

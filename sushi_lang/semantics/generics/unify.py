@@ -62,7 +62,7 @@ def unify_types(param_type: Type, arg_type: Type, type_param_map: Dict[str, Type
                     return False
                 if len(param_type_args) != len(arg_type.generic_args):
                     return False
-                for param_arg, concrete_arg in zip(param_type_args, arg_type.generic_args):
+                for param_arg, concrete_arg in zip(param_type_args, arg_type.generic_args, strict=False):
                     if not unify_types(param_arg, concrete_arg, type_param_map):
                         return False
                 return True
@@ -73,7 +73,7 @@ def unify_types(param_type: Type, arg_type: Type, type_param_map: Dict[str, Type
                 return False
             if len(param_type_args) != len(arg_type.type_args):
                 return False
-            for param_arg, arg_arg in zip(param_type_args, arg_type.type_args):
+            for param_arg, arg_arg in zip(param_type_args, arg_type.type_args, strict=False):
                 if not unify_types(param_arg, arg_arg, type_param_map):
                     return False
             return True
@@ -83,7 +83,7 @@ def unify_types(param_type: Type, arg_type: Type, type_param_map: Dict[str, Type
     if isinstance(param_type, FunctionType) and isinstance(arg_type, FunctionType):
         if len(param_type.param_types) != len(arg_type.param_types):
             return False
-        for p_param, a_param in zip(param_type.param_types, arg_type.param_types):
+        for p_param, a_param in zip(param_type.param_types, arg_type.param_types, strict=False):
             if not unify_types(p_param, a_param, type_param_map):
                 return False
         return unify_types(param_type.ok_type, arg_type.ok_type, type_param_map)

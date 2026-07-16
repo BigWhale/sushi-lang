@@ -200,7 +200,7 @@ class UnitManager:
 
         # Calculate in-degree for each unit
         in_degree = {unit: 0 for unit in dependency_graph}
-        for unit, deps in dependency_graph.items():
+        for _unit, deps in dependency_graph.items():
             for dep in deps:
                 if dep in in_degree:
                     in_degree[dep] += 1

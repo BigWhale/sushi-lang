@@ -127,7 +127,7 @@ def propagate_generic_types_to_nested_constructors(
     actual_args = constructor.args
 
     # Propagate expected types to nested generic enum constructors BEFORE validation
-    for i, (arg, expected_type) in enumerate(zip(actual_args, expected_types)):
+    for _i, (arg, expected_type) in enumerate(zip(actual_args, expected_types, strict=False)):
         # Resolve GenericTypeRef to concrete EnumType
         # This handles cases like Maybe<Result<i32>>.Some where associated_types[0] is GenericTypeRef
         resolved_type = expected_type
@@ -192,7 +192,7 @@ def validate_constructor_arguments(
         # Still continue with validation of provided arguments
 
     # Validate each argument type against corresponding associated type
-    for i, (arg, expected_type) in enumerate(zip(actual_args, expected_types)):
+    for _i, (arg, expected_type) in enumerate(zip(actual_args, expected_types, strict=False)):
         # Recursively validate the argument expression
         validator.validate_expression(arg)
 

@@ -103,7 +103,7 @@ def _validate_named_struct_constructor(
 
     # Validate each argument type against corresponding field type
     # (Same logic as positional, but args are now reordered)
-    for i, (arg, (field_name, field_type)) in enumerate(zip(reordered_args, expected_fields)):
+    for _i, (arg, (field_name, field_type)) in enumerate(zip(reordered_args, expected_fields, strict=False)):
         # Resolve GenericTypeRef to concrete type if needed
         from sushi_lang.semantics.generics.types import GenericTypeRef
         from sushi_lang.semantics.typesys import StructType as StructTypeClass
@@ -186,7 +186,7 @@ def _validate_positional_struct_constructor(
         # Still continue with validation of provided arguments
 
     # Validate each argument type against corresponding field type
-    for i, (arg, (field_name, field_type)) in enumerate(zip(actual_args, expected_fields)):
+    for _i, (arg, (field_name, field_type)) in enumerate(zip(actual_args, expected_fields, strict=False)):
         # Resolve GenericTypeRef to concrete type if needed
         from sushi_lang.semantics.generics.types import GenericTypeRef
         from sushi_lang.semantics.typesys import StructType as StructTypeClass

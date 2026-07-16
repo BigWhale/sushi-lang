@@ -143,7 +143,6 @@ def _emit_variant_data_hash(codegen: Any, enum_value: ir.Value, variant: Any, in
 
     builder = require_builder(codegen)
     builder = codegen.builder
-    u64 = ir.IntType(INT64_BIT_WIDTH)
 
     # Extract the data field from enum: [N x i8] array
     data_array = enum_utils.extract_enum_data(codegen, enum_value, name="enum_data")
@@ -202,7 +201,7 @@ def _emit_associated_value_hash(codegen: Any, value: ir.Value, value_type: Type)
     """
     from sushi_lang.semantics.ast import MethodCall, Name
 
-    builder = require_builder(codegen)
+    require_builder(codegen)
     # For primitive types, call their hash() method inline
     if isinstance(value_type, BuiltinType):
         # Ensure hash methods are registered

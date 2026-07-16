@@ -25,13 +25,19 @@ This ensures zero-overhead monomorphization for arbitrarily nested generics.
 """
 from __future__ import annotations
 from contextlib import contextmanager
-from typing import Dict, Iterator, Tuple, Set
+from typing import Dict, Iterator, Tuple, Set, TYPE_CHECKING
 from dataclasses import dataclass, field
 
 from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
 from sushi_lang.semantics.typesys import Type, EnumType, StructType
 from sushi_lang.semantics.ast import BoundedTypeParam
 from sushi_lang.internals.report import Reporter
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.ast import FuncDef
+    from sushi_lang.semantics.passes.collect.functions import GenericFuncDef, FunctionTable
+    from sushi_lang.semantics.passes.collect.enums import EnumTable
+    from sushi_lang.semantics.passes.collect.structs import StructTable
 from sushi_lang.internals import errors as er
 
 # Import constraint validator for perk constraint checking
@@ -152,7 +158,7 @@ class Monomorphizer:
         if self.constraint_validator is None:
             return
 
-        for param, arg in zip(type_params, type_args):
+        for param, arg in zip(type_params, type_args, strict=False):
             # All params are now BoundedTypeParam (may have empty constraints list)
             if isinstance(param, BoundedTypeParam) and param.constraints:
                 # Validate all constraints on this type parameter
