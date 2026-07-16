@@ -38,7 +38,7 @@ def cmd_info(args: argparse.Namespace) -> int:
     bin_dir = pkg_path / "bin"
     data_dir = pkg_path / "data"
 
-    files = []
+    files: list[str] = []
     if lib_dir.exists():
         files.extend(f"  lib/{f.name}" for f in sorted(lib_dir.iterdir()) if f.is_file())
     if bin_dir.exists():
@@ -50,7 +50,7 @@ def cmd_info(args: argparse.Namespace) -> int:
 
     if files:
         print("Files:")
-        for f in files:
-            print(f)
+        for line in files:
+            print(line)
 
     return 0

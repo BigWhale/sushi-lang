@@ -74,7 +74,7 @@ def get_builtin_time_function_return_type(name: str) -> Type:
     raise ValueError(f"Unknown time function: {name}")
 
 
-def validate_time_function_call(name: str, signature: object) -> None:
+def validate_time_function_call(name: str, signature: typing.Any) -> None:
     """Validate a call to a built-in time function."""
     from sushi_lang.semantics.typesys import BuiltinType
 

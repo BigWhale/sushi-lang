@@ -7,7 +7,7 @@ from pathlib import Path
 
 from sushi_lang.internals.diagnostics import SushiError
 from sushi_lang.internals.parser import parse_to_ast
-from sushi_lang.internals.report import Reporter
+from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics.ast import Program
 from sushi_lang.semantics.units import UnitManager
 
@@ -31,7 +31,7 @@ def check_duplicate_uses(ast: Program, reporter: Reporter) -> None:
     """Check for duplicate use statements in a single file and emit warnings."""
     from sushi_lang.internals import errors as er
 
-    seen_units = {}  # unit_path -> first occurrence location
+    seen_units: dict[str, Span | None] = {}  # unit_path -> first occurrence location
 
     for use_stmt in ast.uses:
         if use_stmt.path in seen_units:

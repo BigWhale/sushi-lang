@@ -1,4 +1,5 @@
 from __future__ import annotations
+import io
 import sys
 import platform
 import datetime
@@ -7,7 +8,8 @@ from sushi_lang import __version__ as app_ver, __dev__ as is_dev
 
 def _ensure_utf8_stdout() -> None:
     try:
-        sys.stdout.reconfigure(encoding="utf-8")  # py3.7+
+        if isinstance(sys.stdout, io.TextIOWrapper):
+            sys.stdout.reconfigure(encoding="utf-8")
     except Exception:
         pass
 

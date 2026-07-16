@@ -72,7 +72,7 @@ def get_builtin_env_function_return_type(name: str) -> Type:
     raise ValueError(f"Unknown env function: {name}")
 
 
-def validate_env_function_call(name: str, signature: object) -> None:
+def validate_env_function_call(name: str, signature: typing.Any) -> None:
     """Validate a call to a built-in env function."""
     from sushi_lang.semantics.typesys import BuiltinType
 
