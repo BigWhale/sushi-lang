@@ -4,6 +4,9 @@
 
 Sushi supports compiling code to reusable libraries and linking them into programs. This enables code sharing, modular architecture, and faster incremental builds.
 
+> Contributor-level design: see [design/libraries.md](design/libraries.md) for how the
+> `.slib` container, manifest, and export-closure machinery work internally.
+
 ## Table of Contents
 
 - [Overview](#overview)

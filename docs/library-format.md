@@ -14,6 +14,10 @@ Sushi libraries use the `.slib` format, a binary container that combines LLVM bi
 - Forward-compatible via version field and reserved space
 - Fast introspection with `--lib-info`
 
+> Contributor-level design: see [design/libraries.md](design/libraries.md) for how the
+> `templates` section is produced/consumed (the export closure, perk-impl shipping,
+> the two link paths a consumer uses).
+
 ## Binary Layout
 
 ```
@@ -61,7 +65,7 @@ Each sushi emoji is 4 UTF-8 bytes, total magic is 16 bytes.
 
 ### Version
 
-4-byte unsigned integer (little-endian). Current version: `1`.
+4-byte unsigned integer (little-endian). Current version: `2`.
 
 Used for forward compatibility checks. Readers should reject files with unsupported versions.
 
@@ -256,7 +260,7 @@ Bitcode: 5,432 bytes
 ### Writing
 
 1. Write 16-byte magic
-2. Write 4-byte version (1)
+2. Write 4-byte version (2)
 3. Write 24 bytes of zeros (reserved)
 4. Serialize metadata to MessagePack
 5. Write 8-byte metadata length

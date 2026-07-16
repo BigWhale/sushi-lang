@@ -26,11 +26,12 @@ struct Cell<T>:
 struct Holder<T>:
     Cell<T> cell
 
-# NOTE: a recursive generic enum (e.g. `enum Tree<T>: Leaf(T), Node(Own<Tree<T>>)`)
-# is intentionally NOT exported here: instantiating one infinite-loops the
-# monomorphizer's type substitutor (transformer.py substitute_type) even for a
-# purely in-program definition. That is a pre-existing local limitation, not a
-# cross-library one; revisit when the monomorphizer memoizes in-progress types.
+# NOTE on recursive generic enums (e.g. `enum Tree<T>: Leaf(T), Node(Own<Tree<T>>)`):
+# an old comment here claimed instantiating one infinite-loops the monomorphizer.
+# That is stale - T2.5's tie-the-knot fixed it, and the shape was re-verified
+# 2026-07-16 to compile and run both in-program AND across a .slib boundary
+# (see docs/design/libraries.md). Not exported here only to keep this fixture
+# focused on the plain/constrained template paths.
 
 # Constrained generic struct: proves consumer-relative CE4006 re-checking for a
 # library-shipped generic TYPE template (not just a generic function).
