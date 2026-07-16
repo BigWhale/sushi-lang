@@ -10,10 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Change to the sushi project directory to ensure Python can find the module
 cd "$SCRIPT_DIR"
 
-# Run nori with the original working directory restored
-exec env NORI_CWD="$ORIGINAL_CWD" uv run --frozen --active python -c "
-import os, sys
-os.chdir(os.environ['NORI_CWD'])
-from sushi_lang.packager import main
-main()
-" "$@"
+# Run nori; __main__.py restores NORI_CWD and exits with main()'s return code.
+# (The old inline `python -c "... main()"` snippet discarded that return code,
+# so ./nori exited 0 even when a command failed.)
+exec env NORI_CWD="$ORIGINAL_CWD" uv run --frozen --active python -m sushi_lang.packager "$@"
