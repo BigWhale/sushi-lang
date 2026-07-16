@@ -156,7 +156,7 @@ match open("output.txt", FileMode.Write()):
 **HashMap<K, V>** - Generic hash table (`use <collections/hashmap>`):
 - Construction: `new()`
 - Operations: `insert()`, `get()`, `remove()`, `contains_key()`
-- Iteration: `keys()`, `values()`
+- Iteration: `keys()`, `values()`, `entries()`
 - Automatic resizing at 0.75 load factor
 - Memory: `free()`, `destroy()`
 
@@ -210,11 +210,17 @@ High-precision sleep functions:
 
 ### Environment (`use <sys/env>`)
 
-Environment and system:
 - `getenv()` - Get environment variable
 - `setenv()` - Set environment variable
-- `unsetenv()` - Remove environment variable
-- Process control: `exit()`, `getcwd()`, `chdir()`
+
+### Process (`use <sys/process>`)
+
+- `getcwd()` - Get current working directory
+- `chdir()` - Change working directory
+- `exit()` - Terminate the process with an exit code
+- `getpid()` - Get the process ID
+- `getuid()` - Get the user ID
+- `run()` - Spawn a program by argv (no shell), capturing stdout/stderr and exit code
 
 ## Design Principles
 

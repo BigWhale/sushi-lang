@@ -100,7 +100,7 @@ fn divide(i32 a, i32 b) i32 | MathError:
     return Result.Ok(a / b)
 ```
 
-**Important:** `Result.Err()` without error data is **deprecated**. Always include the error value.
+**Important:** `Result.Err()` without error data is a **compile error** (**CE2050** — wrong argument count for the `Err` variant), not a deprecation. Always include the error value.
 
 ### Handling Results
 

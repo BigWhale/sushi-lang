@@ -3,7 +3,8 @@
 [← Back to Documentation](index.md)
 
 Guide to closures and lambda literals in Sushi: anonymous function values that **capture** their
-enclosing scope. This is the Tier 1 slice — the minimal but real capability, built on the
+enclosing scope. Tier 1 is complete, and two Tier 2 items (generic-function references with an
+explicit expected type, and widened call-through) have landed on top of it, built on the
 [First-Class Functions](first-class-functions.md) floor. See the
 [design note](design/closures.md) for the full tiered plan and what remains.
 
@@ -87,8 +88,8 @@ written `|x| f(g(x)??)??` and not `|x| f(g(x)??)`.
 
 ## Capture
 
-Tier 1 supports **copy capture** only: primitives, strings, and copyable structs/fixed arrays are
-captured by value into a heap-allocated environment.
+Primitives, strings, and copyable structs/fixed arrays are captured **by copy** into a
+heap-allocated environment:
 
 ```sushi
 fn main() i32:
@@ -99,23 +100,24 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-Two capture shapes are rejected in Tier 1, both as **CE2094**:
-
-- **Capturing a `&peek`/`&poke` borrow.** Threading a borrow's exclusivity through an escaping
-  closure is deferred to Tier 2.
-- **Capturing an owned value** (a dynamic array, `List<T>`, `Own<T>`). Move-capture (and the
-  environment RAII it needs) isn't implemented yet, so it's rejected rather than silently aliasing
-  the outer buffer:
+An owned dynamic array, `List<T>`, or `Own<T>` is captured **by move**: the outer binding is
+consumed (a later use of it is CE2405, use-after-move) and the heap environment becomes the sole
+owner, freeing the value when the closure's environment is freed:
 
 ```sushi
 fn main() i32:
     let i32[] nums = from([1, 2, 3])
-    let fn(i32) -> i32 f = |i32 x| x + nums.len()   # CE2094: owned value 'nums' cannot be captured
+    let fn() -> i32 f = |~| nums.len()   # moves nums into f's environment
+    println(f().realise(0))              # 3
     return Result.Ok(0)
 ```
 
-A lambda **parameter** whose type is owning is also rejected (CE2094) — see
-[Limitations](#limitations).
+Two capture shapes are still rejected, both as **CE2094**:
+
+- **Capturing a `&peek`/`&poke` borrow.** Threading a borrow's exclusivity through an escaping
+  closure is deferred to Tier 2.
+- **A lambda parameter whose type is owning** (the indirect-call path has no deep-copy for an
+  owning parameter yet) — see [Limitations](#limitations).
 
 ## Escaping closures
 
@@ -143,29 +145,28 @@ and any closure of that shape — capture is not part of the type. A mismatch is
 
 | Code | Meaning |
 | --- | --- |
-| **CE2094** | illegal closure capture — a `&peek`/`&poke` borrow, an owned value (dynamic array / `List<T>` / `Own<T>`), or an owning lambda-parameter type |
+| **CE2094** | illegal closure capture — a `&peek`/`&poke` borrow, or an owning lambda-parameter type |
 | **CE2092** | function value type mismatch at call-through (reused, unchanged from v1) |
 | **CE2002** | function value assigned to an incompatible function-typed variable (reused, unchanged from v1) |
 
 ## Limitations
 
-Tier 1 is deliberately the minimal real slice. Known gaps, in order of how much they matter:
+Tier 1 is complete, plus two Tier 2 items (T2.3/T2.4) have landed. Known gaps that remain:
 
-- **The captured environment leaks.** A capturing closure's heap environment is never freed (RAII
-  wiring for it is the main remaining Tier 1 item) — this is safe (no double-free, no
-  use-after-free) but not memory-clean. Avoid creating capturing closures in a hot loop until this
-  lands.
-- **No move-capture of owned types.** Capturing a dynamic array, `List<T>`, or `Own<T>` is
-  rejected (CE2094) rather than silently aliased.
-- **No stdlib combinators yet.** `List.map`/`.filter`/`.fold` and a `compose` helper are not
-  authored — the foundation (passing a capturing closure to a function and calling it) works, but
-  there's no library code built on it yet.
+- **`List<T>`/`Own<T>`/dynamic-array-typed lambda *parameters* have no deep-copy** in the
+  indirect-call path, so they're rejected (CE2094) — this is distinct from *capture*, which does
+  move owned values (see [Capture](#capture)).
+- **No UFCS method form** (`xs.map(f)`) for the stdlib combinators — `use
+  <collections/iter>` ships `map`/`filter`/`fold`/`compose` as free generic functions
+  (`map(xs, f)`, not `xs.map(f)`); owned-element combinators are not authored yet.
 - **Nested lambdas** (a lambda written inside another lambda's body) are lifted best-effort; deep
   nested capture chains are not guaranteed to work.
-- **Deferred to Tier 2** (unchanged from the design note): `&peek`/`&poke` borrow capture, bound
-  method values (`obj.method` as a callable), generic-function references (still **CE2093**),
-  widening `Call.callee` so `arr[0]()`/`obj.handler()` work directly (still need a local binding),
-  and first-class C callbacks.
+- **Deferred to Tier 2**: `&peek`/`&poke` borrow capture, bound method values (`obj.method` as a
+  bare callable), and first-class C callbacks. Generic-function references now work when an
+  explicit expected `fn` type is present (`let fn(i32) -> i32 g = identity`); a bare reference with
+  no expected type is still **CE2093**. Calling through a fn-typed struct field, a container
+  get-out, a parenthesized expression, or a captured closure *value* all work now (`Call.callee`
+  widening, T2.4).
 
 The full tiered plan, the fat-pointer ABI rationale, and file:line implementation anchors live in
 the [design note](design/closures.md).

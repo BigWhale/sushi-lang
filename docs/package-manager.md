@@ -280,7 +280,7 @@ The search queries the Omakase API and returns matching packages by name and des
 
 ```bash
 nori search math --page 2
-nori search math --limit 20
+nori search math --per-page 20
 ```
 
 ## Managing Packages
@@ -481,7 +481,7 @@ nori info math-lib
 | `nori install --global <archive>` | Force global install, skip `nori.toml` update |
 | `nori search <query>` | Search Omakase for packages matching the query |
 | `nori search <query> --page <n>` | Paginate search results |
-| `nori search <query> --limit <n>` | Set results per page |
+| `nori search <query> --per-page <n>` | Set results per page |
 | `nori list` | List project-local packages (or global if outside a project) |
 | `nori list --global` | List globally installed packages |
 | `nori info <name>` | Show details about an installed package |

@@ -521,7 +521,7 @@ fn main() i32:
 
 **Memory Management**: HashMaps use recursive destruction - when you call `.free()` or when the HashMap goes out of scope, it destroys all entries and their contents. This works correctly even for complex value types like structs containing arrays or nested enums.
 
-**Limitations**: Keys must implement `.hash()` (auto-derived for most types). Storing an owning value that contains heap memory (a struct or enum with a dynamic-array field, `List<T>`, or `Own<T>`) currently crashes at runtime on `get`/`free` (issue #140); use a copyable value type, or hold such data outside the map for now.
+**Limitations**: Keys must implement `.hash()` (auto-derived for most types).
 
 ## Structs and Enums
 

@@ -17,7 +17,7 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 ### Basic Usage
 
 ```bash
-./sushic [options] <source-files> [-o output]
+./sushic [options] <source-file> [-o output]
 ```
 
 ### Examples
@@ -29,8 +29,8 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 # Specify output name
 ./sushic program.sushi -o myprogram
 
-# Multiple files (multi-unit project)
-./sushic main.sushi utils.sushi -o app
+# Multi-unit project (units are pulled in via `use` imports, not extra CLI args)
+./sushic main.sushi -o app
 
 # With optimization
 ./sushic --opt O3 program.sushi -o optimized
@@ -97,16 +97,21 @@ Multi-unit projects (those with `use` statements to other `.sushi` files) automa
 **How it works:**
 - Semantic analysis always runs whole-program (fast, pure Python)
 - After analysis, a content-based fingerprint is computed per unit
-- If the fingerprint matches the cached `.o` file, codegen is skipped
-- Stdlib and library imports are also cached as `.o` files
+- Each cached object is content-addressed: its filename is
+  `{name}.{global_key}.{fingerprint}.o`, where `global_key` digests the compiler
+  version, target triple, opt level, **and** a content digest of the compiler's own
+  sources, and `fingerprint` digests the unit itself
+- A hit therefore means exactly "an object built from this input, by this compiler,
+  with these settings" — there is no separate staleness check to get wrong; a
+  compiler upgrade, a compiler source edit, or a settings change simply names a
+  different file and is a cache miss by construction
+- Stdlib and library imports are cached as `.o` files the same way
+- Publishing an object is atomic (write to a temp file, then `os.replace`), so a
+  concurrent build sharing the same cache directory never links a truncated object
 - All `.o` files are linked together at the end
 
-**Cache invalidation triggers:**
-- Source file content changes
-- Dependency public API changes (transitive)
-- Compiler version mismatch
-- Optimization level change
-- Platform/target triple change
+Because invalidation is structural, `--clean-cache` is never needed for
+correctness — it only prunes entries for settings/versions you no longer use.
 
 **Output example:**
 ```
