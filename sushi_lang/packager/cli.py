@@ -122,13 +122,13 @@ def build_parser() -> argparse.ArgumentParser:
     # nori help
     subparsers.add_parser("help", help="Show this help message")
 
-    # nori login <api-key>
+    # nori login  (the key is read from the terminal or stdin, never argv --
+    # an argv key leaks into shell history and `ps` output)
     login_parser = subparsers.add_parser("login", help="Authenticate with an Omakase repository")
     login_parser.add_argument(
         "--repository", default=None,
         help="Package repository URL (default: omakase.lubica.net)",
     )
-    login_parser.add_argument("api_key", help="API key (starts with nori_)")
 
     # nori status
     status_parser = subparsers.add_parser("status", help="Show login status and published packages")
