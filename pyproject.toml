@@ -31,10 +31,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=8.4",
-  "ruff>=0.13",
-  "black>=25.9",
-  "mypy>=1.18",
+  "pytest>=9.1",
+  "ruff>=0.15",
+  "mypy>=2.3",
+  "pre-commit>=4.6",
   "tqdm>=4.67,<5"
 ]
 docs = [
