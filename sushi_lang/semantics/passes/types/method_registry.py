@@ -20,6 +20,7 @@ from dataclasses import dataclass
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
     from sushi_lang.semantics.passes.types import TypeValidator
+    from sushi_lang.semantics.ast import MethodCall
 
 
 class MethodTypeInferrer(Protocol):

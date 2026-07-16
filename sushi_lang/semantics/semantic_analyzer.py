@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals.report import Reporter
-from sushi_lang.semantics.ast import Program
+from sushi_lang.semantics.ast import Program, ExtendDef, ExtendWithDef
 from sushi_lang.semantics.passes.collect import CollectorPass, ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, PerkTable, PerkImplementationTable, FunctionTable, ExtensionTable, GenericExtensionTable, GenericFunctionTable
 
 if TYPE_CHECKING:
@@ -36,10 +36,12 @@ class SemanticAnalyzer:
     Supports both single-file and multi-file compilation modes.
     """
 
-    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional['LibraryResolver'] = None, library_registry: Optional['LibraryRegistry'] = None) -> None:
+    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional[object] = None, library_registry: Optional['LibraryRegistry'] = None) -> None:
         self.reporter = reporter
         self.filename = filename
         self.unit_manager = unit_manager
+        # A backend LibraryResolver, held opaquely: semantics must not import
+        # backend (Tier 4.1 layering invariant), so no tighter annotation is legal.
         self.library_linker = library_linker
         self.library_registry = library_registry
         self.constants: Optional[ConstantTable] = None

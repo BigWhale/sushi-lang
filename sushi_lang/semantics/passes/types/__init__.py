@@ -28,6 +28,7 @@ from typing import Dict, List, Optional, Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.tables import SymbolTables
+    from sushi_lang.semantics.passes.collect.externals import ExternalSig
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter

@@ -22,6 +22,9 @@ from llvmlite import ir, binding as llvm
 
 if TYPE_CHECKING:
     from sushi_lang.backend.library_paths import LibraryResolver
+    from sushi_lang.semantics.ast import ExtendWithDef, FuncDef
+    from sushi_lang.semantics.typesys import Type
+    from sushi_lang.semantics.passes.collect import FunctionTable, PerkImplementationTable, ConstantTable
 
 from sushi_lang.semantics.ast import ConstDef, ExtendDef
 from sushi_lang.semantics.units import Unit

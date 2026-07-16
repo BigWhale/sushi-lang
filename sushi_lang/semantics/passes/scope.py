@@ -11,7 +11,7 @@ from sushi_lang.semantics.ast import (
     If, Expr, Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall,
     DynamicArrayNew, DynamicArrayFrom, Rebind, Continue, CastExpr, MemberAccess, EnumConstructor, TryExpr, Borrow, RangeExpr, Spread, Lambda, Param
 )
-from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, EnumTable, GenericEnumTable
+from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, ExternalTable
 
 
 @dataclass

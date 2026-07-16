@@ -17,7 +17,7 @@ from typing import Optional
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
 from sushi_lang.semantics.ast import BoundedTypeParam
 from sushi_lang.semantics.passes.collect import PerkTable, PerkImplementationTable
-from sushi_lang.internals.report import Reporter
+from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 
 

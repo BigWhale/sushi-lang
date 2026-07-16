@@ -3,11 +3,15 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ERR
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.passes.collect.structs import StructTable, GenericStructTable
+    from sushi_lang.semantics.passes.collect.enums import EnumTable, GenericEnumTable
 from sushi_lang.semantics.ast import (
     Program,
     FuncDef,

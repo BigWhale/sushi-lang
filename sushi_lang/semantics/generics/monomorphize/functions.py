@@ -17,7 +17,8 @@ from sushi_lang.semantics.generics.types import TypePack
 from sushi_lang.semantics.typesys import Type
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import Block, Call
+    from sushi_lang.semantics.ast import Block, Call, FuncDef
+    from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
 
 
 class FunctionMonomorphizer:

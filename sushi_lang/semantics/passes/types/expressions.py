@@ -11,7 +11,7 @@ This module contains validation functions for various expression types:
 - Boolean conditions
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType
@@ -22,6 +22,7 @@ from .compatibility import is_valid_cast
 
 if TYPE_CHECKING:
     from . import TypeValidator
+    from sushi_lang.semantics.typesys import Type
 
 
 def validate_array_literal(validator: 'TypeValidator', expr: ArrayLiteral) -> None:

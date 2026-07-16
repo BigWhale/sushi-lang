@@ -25,7 +25,10 @@ This module provides ergonomic optional value handling methods that work with
 the Maybe<T> type after monomorphization.
 """
 
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sushi_lang.backend.codegen_llvm import LLVMCodegen
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import EnumType, Type
 import llvmlite.ir as ir
