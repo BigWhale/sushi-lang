@@ -198,7 +198,7 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
                         string_values.append(codegen.runtime.formatting.emit_integer_to_string(expr_value, is_signed=is_signed, bit_width=width))
                         fresh_flags.append(True)
                     else:
-                        raise_internal_error("CE0022", type=f"i{{width}}")
+                        raise_internal_error("CE0022", type=f"i{width}")
                 elif isinstance(llvm_type, (ir.FloatType, ir.DoubleType)):
                     # Float type
                     is_double = isinstance(llvm_type, ir.DoubleType)

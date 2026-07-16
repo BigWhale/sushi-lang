@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter
-from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
 
 class TypeInferrer:

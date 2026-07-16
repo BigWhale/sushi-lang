@@ -54,7 +54,7 @@ def cmd_publish(args: argparse.Namespace) -> int:
 
     # Build manifest content with [publish] section
     manifest_content = manifest_path.read_text()
-    manifest_content += f"\n[publish]\n"
+    manifest_content += "\n[publish]\n"
     manifest_content += f'namespace = "{ns}"\n'
     manifest_content += f'platform = "{plat}"\n'
 

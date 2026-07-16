@@ -113,7 +113,7 @@ def emit_enum_constructor_from_method_call(
     if args:
         # Allocate temporary storage for the data
         data_array_type = llvm_enum_type.elements[1]  # [N x i8] array
-        temp_alloca = codegen.builder.alloca(data_array_type, name=f"enum_data_temp")
+        temp_alloca = codegen.builder.alloca(data_array_type, name="enum_data_temp")
 
         # Cast to i8* for bitcasting
         data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")

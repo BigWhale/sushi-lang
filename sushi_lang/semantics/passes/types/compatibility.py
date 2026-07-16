@@ -166,7 +166,6 @@ def types_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -
     - Recursive comparison for container types (arrays, etc.)
     """
     from sushi_lang.semantics.typesys import FunctionType
-    from sushi_lang.semantics.generics.types import GenericTypeRef
 
     # Quick check for direct equality
     if actual == expected:

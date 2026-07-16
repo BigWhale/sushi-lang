@@ -275,7 +275,7 @@ class Reporter:
                         sub_label = f"{C.CYAN}{sub_loc}{C.RESET}: {sub_kind_color}{sub.kind}{C.RESET}: {sub.message}"
                         out.append(f"{C.GRAY}  \u251c\u2500\u2500\u2524{C.RESET} {sub_label}")
                     else:
-                        out.append(f"  \u2502")
+                        out.append("  \u2502")
                         out.append(f"  \u251c\u2500\u2500\u2524 {sub_loc}: {sub.kind}: {sub.message}")
                     note_color = C.BLUE if use_color else ""
                     self._render_snippet(sub.span, sub_src_lines, note_color, use_color, use_unicode, out)

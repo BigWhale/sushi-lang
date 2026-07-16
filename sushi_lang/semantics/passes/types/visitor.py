@@ -701,7 +701,6 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             GenericTypeRef("Maybe", [i32]) → GenericTypeRef("Maybe", [i32])  # no change
         """
         from sushi_lang.semantics.generics.types import GenericTypeRef
-        from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
         # Only process GenericTypeRef types
         if not isinstance(generic_type, GenericTypeRef):

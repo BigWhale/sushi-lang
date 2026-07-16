@@ -56,7 +56,6 @@ if typing.TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
     from sushi_lang.semantics.symbols import Signature
 
-from sushi_lang.sushi_stdlib.src import type_converters
 
 
 def is_builtin_random_function(name: str) -> bool:

@@ -23,9 +23,8 @@ in Sushi (used for dynamic array creation).
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.semantics.typesys import StructType, Type, PointerType
+from sushi_lang.semantics.typesys import StructType, Type
 import llvmlite.ir as ir
-from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.semantics.generics.own import get_own_element_type

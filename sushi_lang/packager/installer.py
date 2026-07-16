@@ -299,7 +299,7 @@ class PackageInstaller:
             return
         today = datetime.date.today().isoformat()
         with open(manifest_path, "a") as f:
-            f.write(f"\n[install]\n")
+            f.write("\n[install]\n")
             f.write(f'source = "{source}"\n')
             f.write(f'date = "{today}"\n')
 
@@ -310,6 +310,6 @@ class PackageInstaller:
             return
         today = datetime.date.today().isoformat()
         with open(manifest_path, "a") as f:
-            f.write(f"\n[install]\n")
+            f.write("\n[install]\n")
             f.write(f'source = "{source}"\n')
             f.write(f'date = "{today}"\n')

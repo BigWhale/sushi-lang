@@ -74,7 +74,7 @@ def build_err_from_return_type(
         LLVM value representing Result.Err(error).
     """
     from sushi_lang.semantics.generics.results import (
-        ensure_result_type_in_table, is_result_enum, result_ok_err,
+        ensure_result_type_in_table, is_result_enum,
     )
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
