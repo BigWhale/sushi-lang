@@ -1,0 +1,18 @@
+# Regression for #222: an inline `match Own<GenericEnum>.get()` failed with CE0121 because
+# Pass 2 had no return-type inferrer for Own methods, so infer_expression_type(t.get())
+# returned None and the match scrutinee's concrete generic-enum type was never resolved
+# (the backend then could not extract the pattern bindings). An OwnMethodInferrer now
+# infers Own<T>.get() -> T, so the scrutinee resolves like the typed-local workaround did.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_CONTAINS: "v = 42"
+
+enum Box<T>:
+    Val(T)
+
+fn main() i32:
+    let Own<Box<i32>> t = Own.alloc(Box.Val(42))
+    match t.get():
+        Box.Val(v) -> println("v = {v}")
+    t.destroy()
+    return Result.Ok(0)

@@ -353,6 +353,32 @@ class ListMethodInferrer:
         return None
 
 
+@dataclass
+class OwnMethodInferrer:
+    """Type inferrer for Own<T> methods called on an Own value (.get(), .destroy()).
+
+    Without this, infer_expression_type(own_val.get()) returned None, so an inline
+    `match own_val.get()` on a generic-enum payload never resolved its concrete enum type
+    and the backend raised CE0121 (#222). `.alloc()` is a constructor-style call on the
+    type name, not on an Own value, so it is typed elsewhere and not handled here.
+    """
+    receiver_type: StructType
+    method_name: str
+    validator: 'TypeValidator'
+
+    def infer_return_type(self) -> Optional['Type']:
+        from sushi_lang.semantics.generics.own import get_own_element_type
+        if self.method_name == "get":
+            # Own<T>.get() yields the payload T (a non-owning borrow).
+            try:
+                return get_own_element_type(self.receiver_type)
+            except (TypeError, IndexError):
+                return None
+        if self.method_name == "destroy":
+            return BuiltinType.BLANK
+        return None
+
+
 # Register all built-in type checkers
 @METHOD_TYPE_REGISTRY.register_checker
 def check_array_methods(receiver_type, method_name, validator):
@@ -429,4 +455,11 @@ def check_hashmap_methods(receiver_type, method_name, validator):
 def check_list_methods(receiver_type, method_name, validator):
     if isinstance(receiver_type, StructType) and receiver_type.name.startswith("List<"):
         return ListMethodInferrer(receiver_type, method_name, validator)
+    return None
+
+
+@METHOD_TYPE_REGISTRY.register_checker
+def check_own_methods(receiver_type, method_name, validator):
+    if isinstance(receiver_type, StructType) and receiver_type.name.startswith("Own<"):
+        return OwnMethodInferrer(receiver_type, method_name, validator)
     return None
