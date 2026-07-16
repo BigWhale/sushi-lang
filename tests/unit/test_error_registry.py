@@ -36,7 +36,7 @@ REFERENCE_PATTERNS = [
 # tripwire for silent loss when errors.py is split into a package.
 # 261: deleted 17 genuinely-dead speculative codes (CE0001/37/38/39/48/63/66/70/82/84/
 # 86/88/97/98, CE2022, CE3503, CE3506) that nothing emitted -- Tier 4.8 PR4 hygiene.
-REGISTRY_SIZE = 261
+REGISTRY_SIZE = 260  # Tier 6.0: -CE4008 -CE4009 (unreachable, deleted) +CE4010
 
 # Codes whose numeric range does not match their category. SHRINK-ONLY: never add.
 # Renumbering would break EXPECT_ERROR_CODE headers and the docs, so these stay
@@ -163,11 +163,14 @@ def test_expect_error_code_directives_are_registered():
 # unreachable internal guard). PR4 deleted the 17 speculative catch-alls that nothing
 # would ever emit. This is an EXACT-MATCH ratchet: a new code may not join the list, and
 # one that leaves must be removed from it.
-# TODO: implement each remaining check (CE0119 expand, CE1004 loop-shadow, CE2042/CE2043
-# match exhaustiveness/pattern-type, CE3004 unit-path, CE4008/CE4009 generic-perk arity)
-# and drop it from here; delete CE0074 if it stays unreachable.
+# Tier 6.0 shrank it: CE0119 is now emitted (malformed expand, three shapes) and
+# CE4008/CE4009 were deleted outright (CE4010 rejects generic perks at declaration,
+# making implementation-arity codes unreachable by construction).
+# TODO: implement each remaining check (CE1004 loop-shadow, CE2042/CE2043
+# match exhaustiveness/pattern-type, CE3004 unit-path) and drop it from here;
+# delete CE0074 if it stays unreachable.
 UNREFERENCED = {
-    "CE0074", "CE0119", "CE1004", "CE2042", "CE2043", "CE3004", "CE4008", "CE4009",
+    "CE0074", "CE1004", "CE2042", "CE2043", "CE3004",
 }
 
 

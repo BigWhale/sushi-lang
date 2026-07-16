@@ -1,0 +1,9 @@
+# Perks cannot have type parameters. The grammar parses `perk Name<T>:` and the
+# AST builder stored the params, but no pass ever read them - a generic perk was
+# silently accepted and inert. It must be rejected.
+# EXPECT_ERROR_CODE: CE4010
+perk Container<T>:
+    fn first() i32
+
+fn main() i32:
+    return Result.Ok(0)

@@ -135,9 +135,25 @@ def _unroll_expand(
     node: Expand, pack_param_fanout: Dict[str, List[str]]
 ) -> List[Stmt]:
     """Expand a single ``Expand`` node into its N unrolled body copies."""
-    # The iterable must be a Name referencing a pack value-parameter.
-    pack_name = node.iterable.id if isinstance(node.iterable, Name) else None
-    fanout = pack_param_fanout.get(pack_name, []) if pack_name is not None else []
+    # The iterable must be a Name referencing a pack value-parameter. Anything
+    # else is a malformed expand (CE0119) -- it used to fall through to an empty
+    # fan-out and silently unroll to ZERO statements, vanishing the body from
+    # the compiled program. Raised as a SushiError (no reporter is threaded
+    # this deep); the top-level guard renders it as a normal diagnostic.
+    from sushi_lang.internals.diagnostics import SushiError
+
+    if not isinstance(node.iterable, Name):
+        raise SushiError(
+            "CE0119", span=node.loc,
+            message="the iterable must be the ...Ts pack parameter name",
+        )
+    pack_name = node.iterable.id
+    if pack_name not in pack_param_fanout:
+        raise SushiError(
+            "CE0119", span=node.loc,
+            message=f"'{pack_name}' is not the function's ...Ts type-pack parameter",
+        )
+    fanout = pack_param_fanout[pack_name]
 
     out: List[Stmt] = []
     for i, elem_name in enumerate(fanout):

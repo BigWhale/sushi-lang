@@ -1,0 +1,20 @@
+# expand(...) over a Name that is not the function's type-pack parameter is
+# malformed. This also unrolled silently to zero statements (the body vanished).
+# EXPECT_ERROR_CODE: CE0119
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "i:{self}"
+
+fn show<...Ts: Display>(...Ts args) ~:
+    let i32 other = 1
+    expand(a in other):
+        println(a.display())
+    return Result.Ok(~)
+
+fn main() i32:
+    if (show(1, 2)):
+        println("done")
+    return Result.Ok(0)

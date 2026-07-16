@@ -215,6 +215,18 @@ class StatementValidator(RecursiveVisitor):
         """Validate foreach statement iterator type and body."""
         self.type_validator._validate_foreach_statement(node)
 
+    def visit_expand(self, node) -> None:
+        """Reject an Expand that survived to Pass 2 (CE0119).
+
+        A well-formed expand lives only inside a ...Ts pack function and is
+        unrolled into ordinary statements during monomorphization (Pass 1.6),
+        so Pass 2 never sees one. An Expand reaching here is in a function
+        with no pack parameter; it used to flow untouched into the backend
+        and die as a CE0000 NotImplementedError.
+        """
+        er.emit(self.type_validator.reporter, er.ERR.CE0119, node.loc,
+                message="expand(...) is only valid inside a function with a ...Ts type-pack parameter")
+
     def visit_match(self, node: Match) -> None:
         """Validate match statement with exhaustiveness checking."""
         self.type_validator._validate_match_statement(node)
