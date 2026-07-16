@@ -180,7 +180,7 @@ class TypeInferrer:
 
         # Build substitution map
         substitution = {}
-        for param, arg in zip(type_params, type_args):
+        for param, arg in zip(type_params, type_args, strict=False):
             param_name = param.name if hasattr(param, 'name') else str(param)
             substitution[param_name] = arg
 

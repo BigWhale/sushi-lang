@@ -167,7 +167,7 @@ def validate_fn_field_call_args(type_validator, node, fn_ty) -> None:
                 actual=f"a call with {len(node.args)} argument(s)")
         return
     from sushi_lang.semantics.passes.types.compatibility import types_compatible
-    for arg, param_ty in zip(node.args, expected):
+    for arg, param_ty in zip(node.args, expected, strict=False):
         type_validator.validate_expression(arg)
         arg_ty = type_validator.infer_expression_type(arg)
         if arg_ty is None:

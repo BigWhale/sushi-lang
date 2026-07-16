@@ -38,7 +38,7 @@ def validate_array_literal(validator: 'TypeValidator', expr: ArrayLiteral) -> No
     # Check type consistency of all elements (CE2013)
     first_element_type = validator.infer_expression_type(expr.elements[0])
     if first_element_type is not None:
-        for i, element in enumerate(expr.elements[1:], 1):
+        for _i, element in enumerate(expr.elements[1:], 1):
             element_type = validator.infer_expression_type(element)
             if element_type is not None and element_type != first_element_type:
                 er.emit(validator.reporter, er.ERR.CE2013, element.loc,

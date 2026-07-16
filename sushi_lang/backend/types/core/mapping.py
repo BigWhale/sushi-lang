@@ -244,7 +244,7 @@ class TypeMapper:
 
         # Compute field types (may recursively reference the cached struct)
         field_types = []
-        for field_name, field_type in struct_type.fields:
+        for _field_name, field_type in struct_type.fields:
             field_types.append(self.ll_type(field_type))
 
         # Replace placeholder with actual struct type

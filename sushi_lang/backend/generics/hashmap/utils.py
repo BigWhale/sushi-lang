@@ -180,7 +180,7 @@ def emit_enum_equality(codegen: Any, enum_type: EnumType, enum1: ir.Value, enum2
         vals2 = enum_utils.unpack_all_variant_fields(codegen, data2_ptr, field_types, "k2")
 
         variant_eq = TRUE_I1
-        for field_type, v1, v2 in zip(field_types, vals1, vals2):
+        for field_type, v1, v2 in zip(field_types, vals1, vals2, strict=True):
             field_eq = emit_key_equality_check(codegen, field_type, v1, v2)
             variant_eq = builder.and_(variant_eq, field_eq, name="variant_field_eq")
         builder.store(variant_eq, data_eq_slot)

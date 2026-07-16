@@ -53,10 +53,10 @@ def api_request(
             body = json.loads(e.read().decode()).get("detail", "")
         except Exception:
             pass
-        raise ApiError(e.code, body or f"HTTP {e.code}")
+        raise ApiError(e.code, body or f"HTTP {e.code}") from e
     except (urllib.error.URLError, OSError) as e:
         reason = getattr(e, "reason", e)
-        raise ConnectionError(f"Could not connect to {repository}: {reason}")
+        raise ConnectionError(f"Could not connect to {repository}: {reason}") from e
 
 
 def api_upload_multipart(
@@ -108,7 +108,7 @@ def api_upload_multipart(
             detail = json.loads(e.read().decode()).get("detail", "")
         except Exception:
             pass
-        raise ApiError(e.code, detail or f"HTTP {e.code}")
+        raise ApiError(e.code, detail or f"HTTP {e.code}") from e
     except (urllib.error.URLError, OSError) as e:
         reason = getattr(e, "reason", e)
-        raise ConnectionError(f"Could not connect to {repository}: {reason}")
+        raise ConnectionError(f"Could not connect to {repository}: {reason}") from e

@@ -480,7 +480,7 @@ class LLVMCodegen:
                 except LibraryError:
                     raise
                 except Exception as e:
-                    raise LibraryError("CE3507", lib=lib_path, reason=str(e))
+                    raise LibraryError("CE3507", lib=lib_path, reason=str(e)) from e
 
             # Add stdlib modules
             for stdlib_path in stdlib_units:
@@ -1070,7 +1070,7 @@ class LLVMCodegen:
 
         from sushi_lang.semantics.type_resolution import parse_type_string
 
-        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+        for _lib_name, manifest in self.library_linker.loaded_libraries.items():
             for func_info in manifest.get("public_functions", []):
                 func_name = func_info["name"]
                 if func_name in self.funcs:

@@ -339,7 +339,7 @@ class FunctionCollector:
 
             self.visited_types.add(type_key)
 
-            for field_name, field_type in ty.fields:
+            for _field_name, field_type in ty.fields:
                 self._collect_from_type(field_type)
 
         # For enum types, check variant associated types

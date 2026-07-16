@@ -222,7 +222,7 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
 
     result = string_values[0]
     result_fresh = fresh_flags[0]
-    for string_value, sv_fresh in zip(string_values[1:], fresh_flags[1:]):
+    for string_value, sv_fresh in zip(string_values[1:], fresh_flags[1:], strict=True):
         new_result = codegen.runtime.strings.emit_string_concat(result, string_value)
         if free_intermediates:
             if result_fresh:

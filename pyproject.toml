@@ -68,8 +68,7 @@ exclude = [
 target-version = "py313"
 
 [tool.ruff.lint]
-# Started at ["F"]; widens to ["F", "E", "W", "B"] as the burn-down lands (Tier 5.1).
-select = ["F"]
+select = ["F", "E", "W", "B"]
 # E501: no formatter is in use (black was dropped unadopted); a line-length gate
 # without a formatter is hand-wrapping busywork with no bug-finding value.
 ignore = ["E501"]

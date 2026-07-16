@@ -564,7 +564,7 @@ class DynamicArrayManager:
         if isinstance(struct_type, EnumType):
             return self._enum_needs_cleanup(struct_type)
 
-        for field_name, field_type in struct_type.fields:
+        for _field_name, field_type in struct_type.fields:
             if self._payload_needs_cleanup(field_type):
                 return True
         return False

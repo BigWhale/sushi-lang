@@ -120,7 +120,7 @@ def emit_enum_constructor_from_method_call(
 
         # Pack each argument into the data field
         offset = 0
-        for i, (arg_expr, arg_type) in enumerate(zip(args, variant.associated_types)):
+        for i, (arg_expr, arg_type) in enumerate(zip(args, variant.associated_types, strict=True)):
             # Special handling for dynamic arrays to ensure proper ownership
             # Similar to how struct constructors handle dynamic arrays
             from sushi_lang.semantics.ast import DynamicArrayFrom

@@ -97,7 +97,7 @@ METHOD_TYPE_REGISTRY = MethodTypeRegistry()
 # These should eventually be moved to their respective type modules,
 # but for now we keep them here for a smooth migration.
 
-from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType
+from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType  # noqa: E402
 
 
 @dataclass

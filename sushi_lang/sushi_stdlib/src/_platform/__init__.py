@@ -56,4 +56,4 @@ def get_platform_module(module_name: str):
         raise NotImplementedError(
             f"Platform module '{module_name}' not implemented for {platform_name}. "
             f"Expected: sushi_stdlib/src/_platform/{platform_name}/{module_name}.py"
-        )
+        ) from None

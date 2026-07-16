@@ -31,7 +31,7 @@ def infer_array_literal_type(validator: 'TypeValidator', expr: ArrayLiteral) -> 
         return None
 
     # Verify all elements have the same type (CE2013)
-    for i, element in enumerate(expr.elements[1:], start=1):
+    for _i, element in enumerate(expr.elements[1:], start=1):
         element_type = validator.infer_expression_type(element)
         if element_type is not None and element_type != first_element_type:
             # Type mismatch in array literal elements

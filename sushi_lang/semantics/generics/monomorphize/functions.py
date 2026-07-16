@@ -86,7 +86,7 @@ class FunctionMonomorphizer:
             self.monomorphizer._validate_type_constraints(generic.type_params, type_args)
 
             substitution: Dict[str, "Type | TypePack"] = {}
-            for param, arg in zip(generic.type_params, type_args):
+            for param, arg in zip(generic.type_params, type_args, strict=False):
                 param_name = param.name if hasattr(param, 'name') else str(param)
                 substitution[param_name] = arg
             return substitution
@@ -118,7 +118,7 @@ class FunctionMonomorphizer:
         self.monomorphizer._validate_type_constraints(leading_params, leading_args)
 
         substitution = {}
-        for param, arg in zip(leading_params, leading_args):
+        for param, arg in zip(leading_params, leading_args, strict=False):
             param_name = param.name if hasattr(param, 'name') else str(param)
             substitution[param_name] = arg
 
@@ -554,7 +554,7 @@ class FunctionMonomorphizer:
 
         inferrer = self._get_arg_inferrer(var_types)
 
-        for arg_expr, param in zip(call_args, generic_func.params):
+        for arg_expr, param in zip(call_args, generic_func.params, strict=False):
             # Infer the argument's type through Pass 2's shared inferrer when available
             # (it types any expression: a call, cast, method result, or literal -- not just
             # a bare Name), falling back to the var-type map on the unit-test paths that have

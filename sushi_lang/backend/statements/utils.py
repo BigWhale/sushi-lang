@@ -89,7 +89,7 @@ def emit_closure_cleanup(codegen: 'LLVMCodegen') -> None:
     mem = getattr(codegen, 'memory', None)
     if mem is None or not getattr(mem, '_closure_cleanup', None):
         return
-    for var_name, entries in mem._closure_cleanup.items():
+    for _var_name, entries in mem._closure_cleanup.items():
         for _depth, slot in entries:
             if not codegen.moves.is_moved(slot):
                 mem._emit_closure_free(slot)

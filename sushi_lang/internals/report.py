@@ -148,7 +148,8 @@ class Reporter:
                 right = span_len - left - 1
                 marker = " " * (start - 1) + "\u2500" * left + "\u252c" + "\u2500" * right
             if use_color:
-                gray = lambda s: f"{C.GRAY}{s}{C.RESET}"
+                def gray(s: str) -> str:
+                    return f"{C.GRAY}{s}{C.RESET}"
                 out.append(f"{gray(prefix + chr(0x2502))}{' ' * 1}{line_text}")
                 out.append(f"{gray(prefix + chr(0x2502))}{' ' * 1}{color}{marker}{C.RESET}")
             else:
@@ -197,7 +198,8 @@ class Reporter:
 
                 if use_unicode:
                     if use_color:
-                        gray = lambda s: f"{C.GRAY}{s}{C.RESET}"
+                        def gray(s: str) -> str:
+                            return f"{C.GRAY}{s}{C.RESET}"
                         error_color = C.RED if d.kind == "error" else C.YELLOW
 
                     top_curve = "  ╭──┤ "
@@ -310,7 +312,8 @@ class Reporter:
 
     def print(self, stream=None, use_color: Optional[bool] = None, use_unicode: Optional[bool] = None) -> None:
         """Print diagnostics to `stream` (default: sys.stderr)."""
-        import os, sys
+        import os
+        import sys
         stream = stream or sys.stderr
 
         if use_color is None:

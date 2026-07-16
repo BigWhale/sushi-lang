@@ -73,7 +73,7 @@ def validate_and_reorder_named_args(
         return None
 
     # Build mapping: field_name -> arg_expr
-    name_to_expr = {name: expr for name, expr in zip(field_names, arg_exprs)}
+    name_to_expr = {name: expr for name, expr in zip(field_names, arg_exprs, strict=False)}
 
     # Reorder arguments to match field declaration order
     reordered_args = []

@@ -67,7 +67,7 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     # Create basic blocks for each arm and the merge block
     end_bb = codegen.func.append_basic_block(name="match.end")
     arm_blocks = []
-    for i, arm in enumerate(stmt.arms):
+    for i, _arm in enumerate(stmt.arms):
         arm_bb = codegen.func.append_basic_block(name=f"match.arm{i}")
         arm_blocks.append(arm_bb)
 
@@ -365,7 +365,7 @@ def _add_switch_cases(codegen: 'LLVMCodegen', stmt: 'Match', arm_blocks: list['i
     # (needed for nested patterns where multiple patterns can have the same outer variant)
     added_tags = set()
 
-    for i, (arm, arm_bb) in enumerate(zip(stmt.arms, arm_blocks)):
+    for _i, (arm, arm_bb) in enumerate(zip(stmt.arms, arm_blocks, strict=True)):
         if isinstance(arm.pattern, WildcardPattern):
             # Skip wildcard - already set as default
             continue
@@ -405,7 +405,7 @@ def _emit_match_arms(
     """
     from sushi_lang.semantics.ast import Pattern, Block
 
-    for i, (arm, arm_bb) in enumerate(zip(stmt.arms, arm_blocks)):
+    for i, (arm, arm_bb) in enumerate(zip(stmt.arms, arm_blocks, strict=True)):
         codegen.builder.position_at_end(arm_bb)
         codegen.memory.push_scope()
 
@@ -481,7 +481,7 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
 
     # Extract each binding
     offset = 0
-    for binding_item, binding_type in zip(pattern.bindings, variant.associated_types):
+    for binding_item, binding_type in zip(pattern.bindings, variant.associated_types, strict=True):
         # Get the LLVM type for this binding
         binding_llvm_type = codegen.types.ll_type(binding_type)
 

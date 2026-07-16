@@ -381,7 +381,7 @@ class ExpressionScanner:
             return None
 
         # Match each argument type to corresponding parameter
-        for arg_type, param in zip(leading_arg_types, func_params):
+        for arg_type, param in zip(leading_arg_types, func_params, strict=False):
             # Unify argument type with parameter type
             if param.ty is None:
                 # Parameter has no type annotation - shouldn't happen
@@ -442,7 +442,7 @@ class ExpressionScanner:
             return
 
         type_param_map: dict[str, "Type"] = {}
-        for param, exp_param_ty in zip(func_params, expected_ty.param_types):
+        for param, exp_param_ty in zip(func_params, expected_ty.param_types, strict=False):
             if param.ty is None:
                 return
             if not self.type_inferrer.unify_types(param.ty, exp_param_ty, type_param_map):

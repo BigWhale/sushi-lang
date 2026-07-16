@@ -73,7 +73,7 @@ class ModuleMerger:
         declarations = []
         definitions = []
 
-        for symbol_name, symbol in resolved_symbols.items():
+        for _symbol_name, symbol in resolved_symbols.items():
             if symbol.ir_text is None:
                 continue
 
@@ -106,7 +106,7 @@ class ModuleMerger:
             raise RuntimeError(
                 f"Failed to parse merged IR. Debug IR written to {debug_path}\n"
                 f"Error: {e}"
-            )
+            ) from e
 
     def _extract_type_definitions(
         self,

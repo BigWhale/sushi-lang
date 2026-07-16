@@ -76,7 +76,7 @@ def _reconcile_type_params(parsed_node, record: dict) -> None:
     rec_tps = record.get("type_params") or []
     parsed_tps = parsed_node.type_params or []
     if len(rec_tps) == len(parsed_tps):
-        for parsed_tp, rec_tp in zip(parsed_tps, rec_tps):
+        for parsed_tp, rec_tp in zip(parsed_tps, rec_tps, strict=False):
             parsed_tp.constraints = list(rec_tp.get("constraints") or [])
             if "is_pack" in rec_tp:
                 parsed_tp.is_pack = bool(rec_tp["is_pack"])

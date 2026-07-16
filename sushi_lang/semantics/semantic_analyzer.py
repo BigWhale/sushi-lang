@@ -286,7 +286,7 @@ class SemanticAnalyzer:
         )
 
         # Store monomorphized ExtendDef nodes for backend codegen
-        for (target_type_name, method_name, type_args), extend_def in concrete_extension_defs.items():
+        for (_target_type_name, _method_name, _type_args), extend_def in concrete_extension_defs.items():
             self.monomorphized_extensions.append(extend_def)
             # Add to extension table for method lookup during type validation
             from sushi_lang.semantics.passes.collect import ExtensionMethod
@@ -394,7 +394,7 @@ class SemanticAnalyzer:
         from sushi_lang.semantics.passes.collect.functions import FuncSig, Param
         from sushi_lang.semantics.type_resolution import parse_type_string
 
-        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+        for _lib_name, manifest in self.library_linker.loaded_libraries.items():
             for func_info in manifest.get("public_functions", []):
                 func_name = func_info["name"]
                 if func_name in self.funcs.by_name:
@@ -601,7 +601,7 @@ class SemanticAnalyzer:
         if self.perk_impls is None or self.perks is None or self.library_linker is None:
             return
 
-        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+        for _lib_name, manifest in self.library_linker.loaded_libraries.items():
             templates = manifest.get("templates") or {}
             for record in templates.get("perk_impls", []) or []:
                 type_name = record.get("type")
@@ -705,7 +705,7 @@ class SemanticAnalyzer:
                 # any future divergence).
                 rec_tps = record.get("type_params") or []
                 if len(rec_tps) == len(gfd.type_params):
-                    for tp, rec_tp in zip(gfd.type_params, rec_tps):
+                    for tp, rec_tp in zip(gfd.type_params, rec_tps, strict=False):
                         if hasattr(tp, "constraints"):
                             tp.constraints = list(rec_tp.get("constraints") or [])
                         if hasattr(tp, "is_pack") and "is_pack" in rec_tp:
@@ -802,7 +802,7 @@ class SemanticAnalyzer:
         from sushi_lang.semantics.typesys import StructType
         from sushi_lang.semantics.type_resolution import parse_type_string
 
-        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+        for _lib_name, manifest in self.library_linker.loaded_libraries.items():
             for struct_info in manifest.get("structs", []):
                 struct_name = struct_info["name"]
                 if struct_name in self.structs.by_name:
@@ -843,7 +843,7 @@ class SemanticAnalyzer:
         from sushi_lang.semantics.typesys import EnumType, EnumVariantInfo
         from sushi_lang.semantics.type_resolution import parse_type_string
 
-        for lib_name, manifest in self.library_linker.loaded_libraries.items():
+        for _lib_name, manifest in self.library_linker.loaded_libraries.items():
             for enum_info in manifest.get("enums", []):
                 enum_name = enum_info["name"]
                 if enum_name in self.enums.by_name:

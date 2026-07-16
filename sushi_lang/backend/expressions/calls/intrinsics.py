@@ -373,7 +373,7 @@ def try_emit_perk_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
 
     # Cast arguments to match function signature
     params = list(llvm_fn.args)
-    casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(emitted_args, params)]
+    casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(emitted_args, params, strict=True)]
 
     # Call the perk method
     result_value = codegen.builder.call(llvm_fn, casted)

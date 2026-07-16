@@ -206,7 +206,7 @@ class TypeValidator:
             er.emit(self.reporter, er.ERR.CE2009, node.loc,
                     name=fq_name, expected=len(expected), got=len(node.args))
             return
-        for index, (arg, exp_ty) in enumerate(zip(node.args, expected)):
+        for index, (arg, exp_ty) in enumerate(zip(node.args, expected, strict=False)):
             got_ty = self.infer_expression_type(arg)
             if got_ty is None or exp_ty is None:
                 continue

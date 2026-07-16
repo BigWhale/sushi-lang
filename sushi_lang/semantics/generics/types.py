@@ -122,7 +122,7 @@ class GenericEnumType:
 
         # Build substitution mapping: param_name -> concrete_type
         substitution = {}
-        for param, arg in zip(self.type_params, type_args):
+        for param, arg in zip(self.type_params, type_args, strict=False):
             substitution[param.name] = arg
 
         # Substitute type parameters in all variant associated types
@@ -217,7 +217,7 @@ class GenericStructType:
 
         # Build substitution mapping: param_name -> concrete_type
         substitution = {}
-        for param, arg in zip(self.type_params, type_args):
+        for param, arg in zip(self.type_params, type_args, strict=False):
             substitution[param.name] = arg
 
         # Substitute type parameters in all field types

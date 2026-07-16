@@ -488,11 +488,11 @@ class FunctionCollector:
                 continue
 
             # Register all functions from this module
-            for func_name, stdlib_func in module.functions.items():
+            for _func_name, stdlib_func in module.functions.items():
                 self.funcs.register_stdlib_function(module_path, stdlib_func)
 
             # Register all constants from this module (e.g., PI, E, TAU)
-            for const_name, stdlib_const in module.constants.items():
+            for _const_name, stdlib_const in module.constants.items():
                 self.funcs.register_stdlib_function(module_path, stdlib_const)
 
     def _emit_duplicate_function(self, name: str, name_span: Optional[Span],

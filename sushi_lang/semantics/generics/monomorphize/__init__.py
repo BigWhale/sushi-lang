@@ -158,7 +158,7 @@ class Monomorphizer:
         if self.constraint_validator is None:
             return
 
-        for param, arg in zip(type_params, type_args):
+        for param, arg in zip(type_params, type_args, strict=False):
             # All params are now BoundedTypeParam (may have empty constraints list)
             if isinstance(param, BoundedTypeParam) and param.constraints:
                 # Validate all constraints on this type parameter

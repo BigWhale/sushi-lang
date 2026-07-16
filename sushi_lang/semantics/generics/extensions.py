@@ -104,7 +104,7 @@ def monomorphize_extension_method(
 
     # Extract names from type parameters (handles both str and BoundedTypeParam)
     substitution = {}
-    for param, arg in zip(generic_method.type_params, type_args):
+    for param, arg in zip(generic_method.type_params, type_args, strict=False):
         # param can be: str (legacy), TypeParameter, or BoundedTypeParam
         param_name = param.name if hasattr(param, 'name') else param
         substitution[param_name] = arg

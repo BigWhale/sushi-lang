@@ -227,7 +227,7 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
         return False
 
     # Validate each binding (may be variable name, wildcard, nested pattern, or Own pattern)
-    for i, (binding, binding_type) in enumerate(zip(pattern.bindings, variant.associated_types)):
+    for _i, (binding, binding_type) in enumerate(zip(pattern.bindings, variant.associated_types, strict=False)):
         if isinstance(binding, Pattern):
             # Nested pattern - recursively validate
             # First, resolve the binding_type to an EnumType
@@ -336,7 +336,7 @@ def register_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
         pattern: The pattern with bindings to register.
         variant: The enum variant being matched.
     """
-    for binding, binding_type in zip(pattern.bindings, variant.associated_types):
+    for binding, binding_type in zip(pattern.bindings, variant.associated_types, strict=False):
         if isinstance(binding, str):
             # Simple variable binding or wildcard
             if binding != "_":  # Skip wildcards
