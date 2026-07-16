@@ -26,7 +26,6 @@ def emit_fixed_array_iter(codegen: 'LLVMCodegen', call: MethodCall, receiver_val
         raise_internal_error("CE0071", got=len(call.args))
 
     # Get array element type and length
-    element_type = receiver_type.element
     array_length = receiver_type.count
 
     # Get pointer to the array (either from slot or allocate)
@@ -88,7 +87,6 @@ def emit_dynamic_array_iter(codegen: 'LLVMCodegen', call: MethodCall, receiver_v
         raise_internal_error("CE0071", got=len(call.args))
 
     # receiver_value is a pointer to the dynamic array struct {i32 len, i32 cap, T* data}
-    zero = ir.Constant(codegen.types.i32, 0)
 
     # Extract length from dynamic array struct (field 0)
     len_ptr = gep_utils.gep_dynamic_array_len(codegen, receiver_value)

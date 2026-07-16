@@ -61,7 +61,6 @@ def emit_list_reserve(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: St
     # Check if growth needed
     need_growth = codegen.builder.icmp_unsigned(">", needed_cap, current_cap)
 
-    before_if = codegen.builder.block
 
     with codegen.builder.if_then(need_growth):
         # Reallocate to needed_cap
@@ -78,7 +77,6 @@ def emit_list_reserve(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: St
         # Update capacity and data pointer
         codegen.builder.store(needed_cap, capacity_ptr)
         codegen.builder.store(typed_new_data_ptr, data_ptr_ptr)
-        after_if = codegen.builder.block
 
     # Return updated list
     return codegen.builder.load(list_alloca, name="updated_list")
@@ -136,7 +134,6 @@ def emit_list_shrink_to_fit(codegen: Any, list_ptr: ir.Value, list_type: StructT
             codegen.builder.store(zero, capacity_ptr)
 
         # Not empty: realloc to exact size
-        empty_block_end = codegen.builder.block
         not_empty_block = codegen.func.append_basic_block("shrink_not_empty")
         after_empty_check = codegen.func.append_basic_block("after_empty_check")
 

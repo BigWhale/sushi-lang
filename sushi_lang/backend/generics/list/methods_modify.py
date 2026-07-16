@@ -128,8 +128,6 @@ def emit_list_pop(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir
 
     # Extract element type
     element_type = extract_element_type(list_type, codegen)
-    list_llvm_type = list_ptr.type.pointee
-    element_llvm_type = get_list_element_type(codegen, list_llvm_type)
 
     # Use the provided pointer directly
     list_alloca = list_ptr
@@ -208,8 +206,6 @@ def emit_list_get(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Struct
 
     # Extract element type
     element_type = extract_element_type(list_type, codegen)
-    list_llvm_type = list_ptr.type.pointee
-    element_llvm_type = get_list_element_type(codegen, list_llvm_type)
 
     # Use the provided pointer directly
     list_alloca = list_ptr

@@ -33,7 +33,7 @@ def emit_math_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
     Raises:
         ValueError: If the function is not a recognized math function
     """
-    builder = require_builder(codegen)
+    require_builder(codegen)
 
     from sushi_lang.backend.functions import declare_stdlib_function
 

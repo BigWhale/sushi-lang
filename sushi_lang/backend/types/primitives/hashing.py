@@ -17,7 +17,7 @@ from typing import Any
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import BuiltinType, Type
 import llvmlite.ir as ir
-from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
+from sushi_lang.backend.constants import INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
@@ -141,8 +141,6 @@ def _emit_string_hash_fnv1a(codegen: Any, string_value: ir.Value) -> ir.Value:
     """
     builder = require_builder(codegen)
     builder = codegen.builder
-    i8 = ir.IntType(INT8_BIT_WIDTH)
-    i32 = ir.IntType(INT32_BIT_WIDTH)
     u64 = ir.IntType(INT64_BIT_WIDTH)
 
     # Extract pointer and length from fat pointer struct

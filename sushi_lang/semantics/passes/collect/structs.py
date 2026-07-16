@@ -148,10 +148,10 @@ class StructCollector:
         field_spans: Dict[str, Optional[Span]] = {}
 
         struct_fields = getattr(struct, "fields", [])
-        for field in struct_fields:
-            field_name = getattr(field, "name", None)
-            field_type = getattr(field, "ty", None)
-            field_loc = getattr(field, "loc", None)
+        for field_node in struct_fields:
+            field_name = getattr(field_node, "name", None)
+            field_type = getattr(field_node, "ty", None)
+            field_loc = getattr(field_node, "loc", None)
 
             if not isinstance(field_name, str):
                 continue

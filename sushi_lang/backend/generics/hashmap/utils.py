@@ -205,9 +205,6 @@ def emit_insert_entry(codegen: Any, entry_ptr: ir.Value, key: ir.Value, value: i
         entry_type: LLVM type of the Entry struct.
     """
     builder = codegen.builder
-    zero_i32 = ZERO_I32
-    one_i32 = make_i32_const(1)
-    two_i32 = make_i32_const(2)
 
     # Set key
     key_ptr = builder.gep(entry_ptr, ENTRY_KEY_INDICES, name="entry_key_ptr")

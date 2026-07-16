@@ -41,7 +41,7 @@ def emit_stdlib_primitive_call(
     Raises:
         ValueError: If the method is not implemented in stdlib
     """
-    builder = require_builder(codegen)
+    require_builder(codegen)
     # For now, only handle to_str()
     if method != "to_str":
         raise_internal_error("CE0028", method=method)

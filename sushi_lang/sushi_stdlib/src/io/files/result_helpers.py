@@ -19,7 +19,6 @@ def wrap_in_result_ok(builder: ir.IRBuilder, i8: ir.IntType, value: ir.Value) ->
         Result<T> struct: { i8 tag=0, T value }
     """
     ok_tag = ir.Constant(i8, 0)
-    result_type = ir.LiteralStructType([i8, value.type])
     return ir.Constant.literal_struct([ok_tag, value])
 
 
@@ -36,7 +35,6 @@ def wrap_in_result_err(builder: ir.IRBuilder, i8: ir.IntType, value_type: ir.Typ
     """
     err_tag = ir.Constant(i8, 1)
     zero_value = ir.Constant(value_type, 0) if isinstance(value_type, ir.IntType) else ir.Constant(value_type, ir.Undefined)
-    result_type = ir.LiteralStructType([i8, value_type])
     return ir.Constant.literal_struct([err_tag, zero_value])
 
 

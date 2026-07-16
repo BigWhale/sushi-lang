@@ -37,7 +37,7 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
     Raises:
         ValueError: If the function is not a recognized time function
     """
-    builder = require_builder(codegen)
+    require_builder(codegen)
 
     i32 = ir.IntType(INT32_BIT_WIDTH)
     i64 = ir.IntType(INT64_BIT_WIDTH)

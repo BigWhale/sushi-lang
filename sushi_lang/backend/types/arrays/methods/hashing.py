@@ -198,8 +198,7 @@ def _emit_element_hash(codegen: Any, element_value: ir.Value, element_type: Type
     Returns:
         Hash value as u64
     """
-    builder = require_builder(codegen)
-    builder = codegen.builder
+    require_builder(codegen)
 
     # For primitive types, call their hash() method inline
     if isinstance(element_type, BuiltinType):

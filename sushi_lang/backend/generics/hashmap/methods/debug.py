@@ -7,9 +7,9 @@ This module contains the debug method for printing HashMap internal state.
 from typing import Any
 from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
 import llvmlite.ir as ir
-from ..types import get_entry_type, get_hashmap_field_ptrs, ENTRY_EMPTY, ENTRY_OCCUPIED, ENTRY_TOMBSTONE
+from ..types import get_hashmap_field_ptrs, ENTRY_EMPTY, ENTRY_OCCUPIED, ENTRY_TOMBSTONE
 from sushi_lang.semantics.generics.hashmap import extract_key_value_types
-from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i32_const, make_i8_const
+from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i8_const
 from sushi_lang.backend.constants import ENTRY_KEY_INDICES, ENTRY_VALUE_INDICES, ENTRY_STATE_INDICES
 from sushi_lang.backend.generics.container_walk import emit_container_walk
 
@@ -46,11 +46,8 @@ def emit_hashmap_debug(
     key_type, value_type = extract_key_value_types(hashmap_type, codegen)
 
     # Get LLVM types
-    entry_type = get_entry_type(codegen, key_type, value_type)
 
     # Constants
-    zero_i32 = ZERO_I32
-    one_i32 = make_i32_const(1)
 
     # Get HashMap fields
     fields = get_hashmap_field_ptrs(codegen, hashmap_value)

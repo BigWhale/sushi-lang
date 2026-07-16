@@ -16,7 +16,6 @@ from typing import Any
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType, Type, ArrayType, DynamicArrayType, EnumType
 import llvmlite.ir as ir
-from sushi_lang.backend.constants import INT64_BIT_WIDTH
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory
@@ -47,7 +46,6 @@ def _emit_struct_hash(prim_type: Type) -> Any:
 
         builder = require_builder(codegen)
         builder = codegen.builder
-        u64 = ir.IntType(INT64_BIT_WIDTH)
 
         # Initialize hash with FNV offset basis
         hash_value = emit_fnv1a_init(codegen)
@@ -123,7 +121,6 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
     elif isinstance(field_type, StructType):
         # Recursively hash the nested struct fields inline
         # field_value is already a struct value, process it directly
-        u64 = ir.IntType(INT64_BIT_WIDTH)
 
         # Initialize hash with FNV offset basis
         nested_hash = emit_fnv1a_init(codegen)

@@ -26,7 +26,6 @@ def allocate_and_read_line(
     i8 = ir.IntType(8)
     i32 = ir.IntType(32)
     i64 = ir.IntType(64)
-    i8_ptr = i8.as_pointer()
 
     # Declare required functions
     fgets_fn = declare_fgets(module)
@@ -39,7 +38,7 @@ def allocate_and_read_line(
     buffer = builder.call(malloc_fn, [buffer_size_i64])
 
     # Call fgets(buffer, 1024, file_ptr)
-    result = builder.call(fgets_fn, [buffer, buffer_size_i32, file_ptr])
+    builder.call(fgets_fn, [buffer, buffer_size_i32, file_ptr])
 
     # Remove trailing newline if present
     strlen_result = builder.call(strlen_fn, [buffer])
