@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from typing import Optional
+from typing import Any, Optional
 
 from lark import Lark, UnexpectedInput
 from lark.exceptions import LarkError
@@ -56,7 +56,7 @@ def parse_to_ast(src: str, dump_parse: bool = False):
     Raises:
         SushiError: any parse failure, as a spanned diagnostic.
     """
-    kwargs = dict(
+    kwargs: dict[str, Any] = dict(
         parser="lalr",
         propagate_positions=True,
         maybe_placeholders=False,

@@ -228,7 +228,7 @@ def get_builtin_math_function_return_type(name: str, param_types: list[Type]) ->
     raise ValueError(f"Unknown math function: {name}")
 
 
-def validate_math_function_call(name: str, signature: object) -> None:
+def validate_math_function_call(name: str, signature: typing.Any) -> None:
     """Validate a call to a built-in math function."""
     from sushi_lang.semantics.typesys import BuiltinType
 

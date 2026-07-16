@@ -47,6 +47,23 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           uv run ruff check sushi_lang
 
+      # Blocking over the mypy-clean packages (the Tier 5.2 ratchet); grow this
+      # list as later waves land. fingerprint.py is excluded via pyproject until
+      # its Tier 5.3 fix.
+      - name: Run mypy (ratcheted packages, blocking)
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run mypy sushi_lang/internals sushi_lang/compiler sushi_lang/packager sushi_lang/sushi_stdlib
+
+      # Full-tree count, never blocking: makes backlog drift visible in the log.
+      - name: Run mypy (full tree, informational)
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
+        continue-on-error: true
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run mypy sushi_lang | tail -2 || true
+
   pytest:
     if: github.event_name != 'push'
     runs-on: ubuntu-latest

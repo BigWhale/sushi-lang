@@ -264,9 +264,11 @@ class Reporter:
             no_span_subs = [s for s in d.sub if not s.span]
 
             for i, sub in enumerate(span_subs):
+                sub_span = sub.span
+                assert sub_span is not None  # span_subs is filtered on s.span above
                 sub_filename = sub.filename or d.filename or self.filename
                 sub_filename = self._resolve_filename(sub_filename)
-                sub_loc = f"{sub_filename}:{sub.span.line}:{sub.span.col}"
+                sub_loc = f"{sub_filename}:{sub_span.line}:{sub_span.col}"
                 sub_src_lines = self._get_source_lines(sub.filename or d.filename or self.filename, src_lines)
                 is_last = (i == len(span_subs) - 1)
 
@@ -280,11 +282,11 @@ class Reporter:
                         out.append("  \u2502")
                         out.append(f"  \u251c\u2500\u2500\u2524 {sub_loc}: {sub.kind}: {sub.message}")
                     note_color = C.BLUE if use_color else ""
-                    self._render_snippet(sub.span, sub_src_lines, note_color, use_color, use_unicode, out)
+                    self._render_snippet(sub_span, sub_src_lines, note_color, use_color, use_unicode, out)
 
                     if is_last:
-                        sub_start = max(1, sub.span.col)
-                        sub_end = max(sub_start, sub.span.end_col)
+                        sub_start = max(1, sub_span.col)
+                        sub_end = max(sub_start, sub_span.end_col)
                         sub_span_len = sub_end - sub_start + 1
                         sub_guide = sub_start + (sub_span_len // 2 if sub_span_len > 1 else 0)
                         if use_color:
@@ -299,7 +301,7 @@ class Reporter:
                     else:
                         out.append(f"  = {sub.kind}: {sub.message}")
                         out.append(f"    {sub_loc}")
-                    self._render_snippet(sub.span, sub_src_lines, "", use_color, use_unicode, out, prefix="    ")
+                    self._render_snippet(sub_span, sub_src_lines, "", use_color, use_unicode, out, prefix="    ")
 
             for sub in no_span_subs:
                 sub_kind_color = C.BLUE if sub.kind == "note" else C.BOLD

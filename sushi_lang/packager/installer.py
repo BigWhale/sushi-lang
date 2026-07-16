@@ -130,7 +130,7 @@ class PackageInstaller:
 
     def get_installed_packages(self) -> list[NoriManifest]:
         """List all installed packages."""
-        packages = []
+        packages: list[NoriManifest] = []
         if not BENTO_DIR.exists():
             return packages
         for pkg_dir in sorted(BENTO_DIR.iterdir()):
@@ -276,7 +276,7 @@ class PackageInstaller:
     def get_project_packages(self, project_root: Path) -> list[NoriManifest]:
         """List packages installed in a project's .sushi_bento/."""
         deps_dir = project_deps_dir(project_root)
-        packages = []
+        packages: list[NoriManifest] = []
         if not deps_dir.exists():
             return packages
         for pkg_link in sorted(deps_dir.iterdir()):
