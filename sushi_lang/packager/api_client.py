@@ -51,8 +51,8 @@ def api_request(
         body = ""
         try:
             body = json.loads(e.read().decode()).get("detail", "")
-        except Exception:
-            pass
+        except (ValueError, AttributeError, OSError):
+            pass  # malformed/unreadable error body: fall back to the HTTP code
         raise ApiError(e.code, body or f"HTTP {e.code}") from e
     except (urllib.error.URLError, OSError) as e:
         reason = getattr(e, "reason", e)
@@ -106,8 +106,8 @@ def api_upload_multipart(
         detail = ""
         try:
             detail = json.loads(e.read().decode()).get("detail", "")
-        except Exception:
-            pass
+        except (ValueError, AttributeError, OSError):
+            pass  # malformed/unreadable error body: fall back to the HTTP code
         raise ApiError(e.code, detail or f"HTTP {e.code}") from e
     except (urllib.error.URLError, OSError) as e:
         reason = getattr(e, "reason", e)

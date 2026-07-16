@@ -1,5 +1,7 @@
 """nori login - authenticate with an Omakase repository."""
 import argparse
+import getpass
+import sys
 
 from sushi_lang.packager.api_client import api_request, ApiError
 from sushi_lang.packager.credentials import save_token
@@ -9,8 +11,20 @@ from sushi_lang.packager.repository import resolve_repository
 TOKEN_PREFIX = "nori_"
 
 
+def _read_api_key() -> str:
+    """Read the API key without it touching argv.
+
+    Interactive: a no-echo prompt. Piped (scripts, CI): one line from stdin,
+    e.g. ``nori login < keyfile`` -- so the key never appears in shell history
+    or ``ps`` output either way.
+    """
+    if sys.stdin.isatty():
+        return getpass.getpass("API key: ").strip()
+    return sys.stdin.readline().strip()
+
+
 def cmd_login(args: argparse.Namespace) -> int:
-    api_key = args.api_key
+    api_key = _read_api_key()
     repository = resolve_repository(args)
 
     if not api_key.startswith(TOKEN_PREFIX):

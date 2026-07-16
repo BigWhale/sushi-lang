@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime
 import shutil
+import sys
 from pathlib import Path
 
 from sushi_lang.packager.archive import PackageArchive
@@ -142,8 +143,11 @@ class PackageInstaller:
                 from sushi_lang.packager.manifest import _parse_manifest
                 try:
                     packages.append(_parse_manifest(data))
-                except Exception:
-                    pass
+                except Exception as e:
+                    # A corrupt manifest must not abort the listing, but silently
+                    # skipping it made a broken package invisible.
+                    print(f"Warning: skipping unreadable manifest {manifest_path}: {e}",
+                          file=sys.stderr)
         return packages
 
     def _link_executables(self, pkg_name: str) -> None:
@@ -288,8 +292,11 @@ class PackageInstaller:
                 from sushi_lang.packager.manifest import _parse_manifest
                 try:
                     packages.append(_parse_manifest(data))
-                except Exception:
-                    pass
+                except Exception as e:
+                    # A corrupt manifest must not abort the listing, but silently
+                    # skipping it made a broken package invisible.
+                    print(f"Warning: skipping unreadable manifest {manifest_path}: {e}",
+                          file=sys.stderr)
         return packages
 
     def _stamp_store_source(self, pkg_name: str, version: str, source: str) -> None:
@@ -298,9 +305,10 @@ class PackageInstaller:
         if not manifest_path.exists():
             return
         today = datetime.date.today().isoformat()
+        from sushi_lang.packager.credentials import toml_escape
         with open(manifest_path, "a") as f:
             f.write("\n[install]\n")
-            f.write(f'source = "{source}"\n')
+            f.write(f'source = "{toml_escape(source)}"\n')
             f.write(f'date = "{today}"\n')
 
     def _stamp_source(self, pkg_name: str, source: str) -> None:
@@ -309,7 +317,8 @@ class PackageInstaller:
         if not manifest_path.exists():
             return
         today = datetime.date.today().isoformat()
+        from sushi_lang.packager.credentials import toml_escape
         with open(manifest_path, "a") as f:
             f.write("\n[install]\n")
-            f.write(f'source = "{source}"\n')
+            f.write(f'source = "{toml_escape(source)}"\n')
             f.write(f'date = "{today}"\n')

@@ -9,6 +9,33 @@ from sushi_lang.packager.constants import SUSHI_HOME
 CREDENTIALS_FILE = SUSHI_HOME / "credentials.toml"
 
 
+def toml_escape(s: str) -> str:
+    """Escape a string for a hand-written TOML basic string / quoted key.
+
+    The stdlib has a TOML reader (tomllib) but no writer, so the few writers in
+    the packager build lines by hand. Unescaped, a quote, backslash or newline
+    in a value corrupts the whole file -- and the corrupted read used to be
+    silently swallowed downstream.
+    """
+    out = []
+    for ch in s:
+        if ch == "\\":
+            out.append("\\\\")
+        elif ch == '"':
+            out.append('\\"')
+        elif ch == "\n":
+            out.append("\\n")
+        elif ch == "\r":
+            out.append("\\r")
+        elif ch == "\t":
+            out.append("\\t")
+        elif ord(ch) < 0x20 or ch == "\x7f":
+            out.append(f"\\u{ord(ch):04X}")
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
 def load_token(repository: str) -> str | None:
     """Load the API token for a repository. Returns None if not found."""
     if not CREDENTIALS_FILE.exists():
@@ -48,9 +75,9 @@ def _write_credentials(data: dict[str, dict]) -> None:
     CREDENTIALS_FILE.parent.mkdir(parents=True, exist_ok=True)
     lines = []
     for repo, values in data.items():
-        lines.append(f'["{repo}"]')
+        lines.append(f'["{toml_escape(repo)}"]')
         for key, val in values.items():
-            lines.append(f'{key} = "{val}"')
+            lines.append(f'{key} = "{toml_escape(str(val))}"')
         lines.append("")
     content = "\n".join(lines) + "\n" if lines else ""
 
