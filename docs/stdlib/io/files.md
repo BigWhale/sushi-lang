@@ -287,10 +287,15 @@ Error types for file operations:
 
 ```sushi
 enum FileError:
-    NotFound()
-    PermissionDenied()
-    AlreadyExists()
-    Other()
+    NotFound()          # ENOENT - file does not exist
+    PermissionDenied()  # EACCES, EPERM - insufficient permissions
+    AlreadyExists()     # EEXIST - file already exists
+    IsDirectory()       # EISDIR - path refers to a directory
+    DiskFull()          # ENOSPC - no space left on device
+    TooManyOpen()       # EMFILE, ENFILE - too many open files
+    InvalidPath()       # ENAMETOOLONG - invalid path or filename
+    IOError()           # EIO - generic I/O error
+    Other()             # any other error
 ```
 
 ### Error Patterns

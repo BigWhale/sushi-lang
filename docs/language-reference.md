@@ -198,7 +198,7 @@ x := 20     # OK
 x := 30     # OK
 
 # ERROR: Cannot rebind without prior declaration
-# y := 5    # CE1003: Undefined variable 'y'
+# y := 5    # CE1002: assignment to undeclared variable 'y'
 ```
 
 ### Scope

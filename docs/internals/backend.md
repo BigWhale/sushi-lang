@@ -64,8 +64,12 @@ Manages LLVM type creation and mapping.
 'u64': ir.IntType(64)
 'f32': ir.FloatType()
 'f64': ir.DoubleType()
-'bool': ir.IntType(1)
-'string': ir.IntType(8).as_pointer()  # i8*
+'bool': ir.IntType(8)  # i1 is only a transient condition type; storage is i8
+'string': ir.LiteralStructType([        # fat pointer, not a bare i8*
+    ir.IntType(8).as_pointer(),          # data
+    ir.IntType(32),                      # size
+    ir.IntType(8),                       # owned: 1 = heap (RAII frees), 0 = literal/borrow
+])
 ```
 
 **Array types:**
@@ -73,12 +77,12 @@ Manages LLVM type creation and mapping.
 # Fixed array: [5 x i32]
 ir.ArrayType(ir.IntType(32), 5)
 
-# Dynamic array struct: { i32*, i32, i32 }
-#                        ^ptr  ^len ^cap
+# Dynamic array struct: { i32, i32, T* }
+#                        ^len ^cap ^data
 ir.LiteralStructType([
-    ir.IntType(32).as_pointer(),  # data
-    ir.IntType(32),                # length
-    ir.IntType(32)                 # capacity
+    ir.IntType(32),                # length (index 0)
+    ir.IntType(32),                # capacity (index 1)
+    ir.IntType(32).as_pointer(),  # data (index 2)
 ])
 ```
 
@@ -857,10 +861,10 @@ View generated LLVM IR at different stages:
 
 ```bash
 # Unoptimized IR
-./sushic --dump-ll --opt=0 program.sushi
+./sushic --dump-ll --opt=none program.sushi
 
 # Optimized IR (O2)
-./sushic --dump-ll --opt=2 program.sushi
+./sushic --dump-ll --opt=O2 program.sushi
 
 # Compare optimization impact
 diff unoptimized.ll optimized.ll
@@ -871,7 +875,7 @@ View pass execution with LLVM debug output:
 ```bash
 # Set LLVM debug environment variable
 export LLVM_DEBUG=1
-./sushic --opt=2 program.sushi
+./sushic --opt=O2 program.sushi
 ```
 
 ## Linking

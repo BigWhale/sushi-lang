@@ -69,24 +69,28 @@ File system operation errors.
 - `FileError.NotFound` - File does not exist
 - `FileError.PermissionDenied` - Insufficient permissions
 - `FileError.AlreadyExists` - File already exists
+- `FileError.IsDirectory` - Path refers to a directory
+- `FileError.DiskFull` - No space left on device
+- `FileError.TooManyOpen` - Too many open files
 - `FileError.InvalidPath` - Invalid file path
-- `FileError.IoError` - Generic I/O error
+- `FileError.IOError` - Generic I/O error
+- `FileError.Other` - Any other error
 
 ### IoError
 
 I/O operation errors.
 
-- `IoError.Read` - Read operation failed
-- `IoError.Write` - Write operation failed
-- `IoError.Flush` - Flush operation failed
+- `IoError.ReadError` - Read operation failed
+- `IoError.WriteError` - Write operation failed
+- `IoError.FlushError` - Flush operation failed
 
 ### ProcessError
 
 Process management errors.
 
-- `ProcessError.Spawn` - Failed to spawn process
-- `ProcessError.Exit` - Process exited with error
-- `ProcessError.Signal` - Process terminated by signal
+- `ProcessError.SpawnFailed` - Failed to spawn process
+- `ProcessError.ExitFailure` - Process exited with error
+- `ProcessError.SignalReceived` - Process terminated by signal
 
 ### EnvError
 
@@ -118,7 +122,7 @@ fn divide(i32 a, i32 b) i32 | MathError:
     return Result.Ok(a / b)
 ```
 
-**Important:** `Result.Err()` must now include an error value. The old syntax without error data is deprecated.
+**Important:** `Result.Err()` requires an error value. Calling it with zero arguments is a compile error (**CE2050** — wrong argument count for the `Err` variant), not a deprecation warning.
 
 ## Methods
 

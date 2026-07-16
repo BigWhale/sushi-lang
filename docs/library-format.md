@@ -21,7 +21,7 @@ Sushi libraries use the `.slib` format, a binary container that combines LLVM bi
 │ MAGIC (16 bytes): 🍣SUSHILIB🍣 (UTF-8)                      │
 │   0xF0 0x9F 0x8D 0xA3 "SUSHILIB" 0xF0 0x9F 0x8D 0xA3        │
 ├─────────────────────────────────────────────────────────────┤
-│ VERSION (4 bytes): uint32 LE (current: 1)                   │
+│ VERSION (4 bytes): uint32 LE (current: 2)                   │
 ├─────────────────────────────────────────────────────────────┤
 │ SPARE_1 (4 bytes): uint32 LE (reserved, must be 0)          │
 ├─────────────────────────────────────────────────────────────┤
@@ -73,7 +73,7 @@ Used for forward compatibility checks. Readers should reject files with unsuppor
 - Checksums
 - Additional metadata offsets
 
-All spare fields must be zero in version 1.
+All spare fields must be zero in version 2.
 
 ### Metadata Section
 

@@ -404,15 +404,17 @@ fn compute_hash<T: Hashable>(T value) u64:
 
 ### 3. No Generic Perks
 
-Perks cannot have type parameters:
+Perks cannot have type parameters. Declaring one is a compile error:
 
 ```sushi
-# NOT supported yet
+# NOT supported
 perk Iterator<Item>:
     fn next() Maybe<Item>
+# CE4010: perk Iterator cannot have type parameters
 ```
 
-**Status:** Planned for future release (Phase 6).
+**Status:** Planned for future release (Phase 6). The compiler now rejects the
+declaration outright (**CE4010**) — it used to be silently accepted and ignored.
 
 ### 4. No Perk Inheritance
 
