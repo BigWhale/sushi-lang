@@ -5,7 +5,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "42\n"
 
-fn identity<T>(T value) T:
+fn identity@(T)(T value) T:
     return Result.Ok(value)
 
 extend i32 doubled() i32:

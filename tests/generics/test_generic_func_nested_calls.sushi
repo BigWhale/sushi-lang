@@ -2,14 +2,14 @@
 # EXPECT_RUNTIME_EXIT: 0
 
 # Test: Nested generic function calls
-fn identity<T>(T x) T:
+fn identity@(T)(T x) T:
     return Result.Ok(x)
 
-fn wrap<U>(U y) U:
+fn wrap@(U)(U y) U:
     let U result = identity(y)??
     return Result.Ok(result)
 
-fn double_wrap<V>(V z) V:
+fn double_wrap@(V)(V z) V:
     let V result = wrap(z)??
     return Result.Ok(result)
 

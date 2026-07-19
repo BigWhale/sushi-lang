@@ -5,7 +5,7 @@
 use <collections/hashmap>
 fn main() i32:
     # Create empty HashMap
-    let HashMap<string, i32> map = HashMap.new()
+    let HashMap@(string, i32) map = HashMap.new()
 
     # Test initial state
     let i32 size = map.len()

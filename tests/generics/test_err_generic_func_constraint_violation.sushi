@@ -8,7 +8,7 @@ perk Hashable:
 struct NoHash:
     i32 value
 
-fn compute_hash<T: Hashable>(T value) u64:
+fn compute_hash@(T: Hashable)(T value) u64:
     return value.hash()
 
 fn main() i32:

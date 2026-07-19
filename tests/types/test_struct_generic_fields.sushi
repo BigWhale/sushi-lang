@@ -7,8 +7,8 @@
 
 
 struct Point:
-    Maybe<i32> x
-    Maybe<i32> y
+    Maybe@(i32) x
+    Maybe@(i32) y
 
 fn main() i32:
     # Create a Point with Some and None values

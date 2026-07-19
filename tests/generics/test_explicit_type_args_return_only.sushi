@@ -1,0 +1,13 @@
+# EXPECT_STDOUT_EXACT: "len=0\n"
+# EXPECT_RUNTIME_EXIT: 0
+# Explicit type args enable a call where T appears ONLY in the return type,
+# which inference cannot resolve (issue #137).
+fn empty_list@(T)() List@(T):
+    let List@(T) xs = List.new()
+    return Result.Ok(xs)
+
+fn main() i32:
+    let List@(i32) a = empty_list@(i32)().realise(List.new())
+    println("len={a.len()}")
+    a.destroy()
+    return Result.Ok(0)

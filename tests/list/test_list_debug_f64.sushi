@@ -1,6 +1,6 @@
-# EXPECT_STDOUT_EXACT: "=== List<f64> Debug ===\nList<f64> {\n  len: 3, capacity: 4\n  [0] 3.141590\n  [1] 2.718280\n  [2] 1.414210\n}\n"
+# EXPECT_STDOUT_EXACT: "=== List<f64> Debug ===\nList@(f64) {\n  len: 3, capacity: 4\n  [0] 3.141590\n  [1] 2.718280\n  [2] 1.414210\n}\n"
 fn main() i32:
-    let List<f64> doubles = List.new()
+    let List@(f64) doubles = List.new()
 
     doubles.push(3.14159)
     doubles.push(2.71828)

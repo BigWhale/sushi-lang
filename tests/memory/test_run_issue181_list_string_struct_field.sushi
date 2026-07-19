@@ -7,10 +7,10 @@
 # EXPECT_NO_LEAKS: true
 
 struct Holder:
-    List<string> m
+    List@(string) m
 
 fn main() i32:
-    let List<string> l = List.new()
+    let List@(string) l = List.new()
     l.push("mostly-{'x'}")
     l.push("harmless-{'y'}")
     let Holder h = Holder(l)

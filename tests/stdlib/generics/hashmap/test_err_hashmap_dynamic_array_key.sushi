@@ -3,5 +3,5 @@
 
 use <collections/hashmap>
 fn main() i32:
-    let HashMap<i32[], string> map = HashMap.new()
+    let HashMap@(i32[], string) map = HashMap.new()
     return Result.Ok(0)

@@ -8,10 +8,10 @@ enum DbError:
     ConnectionFailed
     QueryFailed
 
-fn connect() Result<i32, DbError>:
+fn connect() Result@(i32, DbError):
     return Result.Err(DbError.ConnectionFailed)
 
-fn query() Result<string, DbError>:
+fn query() Result@(string, DbError):
     connect()??
     return Result.Ok("data")
 

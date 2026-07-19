@@ -4,8 +4,8 @@
 # Tests: .is_some(), .is_none(), .realise(), .expect()
 
 fn test_is_some() i32:
-    let Maybe<i32> val1 = Maybe.Some(42)
-    let Maybe<i32> val2 = Maybe.None()
+    let Maybe@(i32) val1 = Maybe.Some(42)
+    let Maybe@(i32) val2 = Maybe.None()
 
     if (val1.is_some()):
         if (val2.is_none()):
@@ -14,8 +14,8 @@ fn test_is_some() i32:
     return Result.Ok(0)
 
 fn test_realise() i32:
-    let Maybe<i32> val1 = Maybe.Some(42)
-    let Maybe<i32> val2 = Maybe.None()
+    let Maybe@(i32) val1 = Maybe.Some(42)
+    let Maybe@(i32) val2 = Maybe.None()
 
     let i32 x = val1.realise(99)
     let i32 y = val2.realise(88)
@@ -24,7 +24,7 @@ fn test_realise() i32:
     return Result.Ok(x + y)  # Should be 130
 
 fn test_expect_some() i32:
-    let Maybe<i32> val = Maybe.Some(42)
+    let Maybe@(i32) val = Maybe.Some(42)
     let i32 x = val.expect("Should have value")
     return Result.Ok(x)
 

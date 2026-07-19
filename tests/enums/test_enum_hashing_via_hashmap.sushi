@@ -12,13 +12,13 @@ enum Suit:
     Spades
 
 fn main() i32:
-    let HashMap<Suit, i32> values = HashMap.new()
+    let HashMap@(Suit, i32) values = HashMap.new()
     values.insert(Suit.Hearts(), 1)
     values.insert(Suit.Diamonds(), 2)
     values.insert(Suit.Clubs(), 3)
     values.insert(Suit.Spades(), 4)
 
-    let Maybe<i32> v = values.get(Suit.Clubs())
+    let Maybe@(i32) v = values.get(Suit.Clubs())
     match v:
         Maybe.Some(n) ->
             if (n != 3):

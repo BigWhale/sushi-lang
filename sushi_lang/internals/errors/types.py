@@ -232,6 +232,11 @@ _add(ErrorMessage("CE2061", Severity.ERROR,
     "monomorphized function '{mangled}' not found for '{name}' with type arguments {type_args}",
     Category.INTERNAL, "Internal compiler error: monomorphized function missing from function table."))
 
+_add(ErrorMessage("CE2062", Severity.ERROR,
+    "generic function '{name}' expects {expected} type argument(s), got {got}",
+    Category.TYPE, "The explicit `@(...)` type-argument list does not match the function's "
+                   "type parameters. Explicit type arguments are all-or-nothing."))
+
 # Radix literal errors (CE2070-CE2079)
 _add(ErrorMessage("CE2070", Severity.ERROR,
     "{radix} literal {literal} overflows {type}",

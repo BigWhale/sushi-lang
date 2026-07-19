@@ -1,8 +1,8 @@
 # Design: Closures & First-Class Functions
 
 **Status:** Function values (v1, PR #91) and Tier 1 closures (T1.0-T1.5, PR #122) are complete.
-Tier 1's residuals — `List<T>`/`Own<T>` move-capture and closure-aliasing soundness — landed in
-PR #122 as well. Generic higher-order functions (Gaps A/C) and `List<T>` extensibility (Gap D)
+Tier 1's residuals — `List@(T)`/`Own@(T)` move-capture and closure-aliasing soundness — landed in
+PR #122 as well. Generic higher-order functions (Gaps A/C) and `List@(T)` extensibility (Gap D)
 landed in #125/#126, and this release ships their payoff: the `collections/iter` combinator
 module (`map`/`filter`/`fold`/`compose`), `Call.callee` widened to any expression (T2.4), and
 generic-function references under an explicit expected type (T2.3). What remains is documented in
@@ -66,11 +66,11 @@ A function type mirrors the function-declaration return/error syntax:
 - `fn(i32) -> i32 | MathError` — explicit custom error type.
 - `fn() -> ~` — no parameters, blank return.
 
-Collections of functions use the generic form: `List<fn(i32) -> i32>` (a raw array of function
+Collections of functions use the generic form: `List@(fn(i32) -> i32)` (a raw array of function
 pointers is not expressible — the `[]` in `fn() -> T[]` binds to the return type).
 
-**Result-transparent call.** A Sushi `fn` lowers to `Result<T, E>(params)`. Calling through a
-function value therefore yields the same `Result<T, E>` a direct call would, so `??`, `if
+**Result-transparent call.** A Sushi `fn` lowers to `Result@(T, E)(params)`. Calling through a
+function value therefore yields the same `Result@(T, E)` a direct call would, so `??`, `if
 (result)`, and pattern matching all work unchanged.
 
 **Only plain top-level `fn`s are referenceable in v1.** Extension methods, perk methods, and FFI
@@ -109,11 +109,11 @@ let inc = |~| n + 1
   with `-> T [| E]` after the closing pipe.
 - **Result semantics are identical to `fn`.** An expression-body lambda `|x| e` desugars to a fn
   whose body is `return Result.Ok(e)`; a block-body lambda is a literal fn body. Calling through a
-  closure yields `Result<T, E>` exactly like any call, so `f(x)??`, `if (f(x))`, and matching are
+  closure yields `Result@(T, E)` exactly like any call, so `f(x)??`, `if (f(x))`, and matching are
   unchanged.
   - *Corollary:* because the expression body is auto-wrapped in `Ok`, a fallible call in the body
     must be unwrapped with `??` **at its point of use** — a bare `Result` left in body position is
-    wrapped again (`Result<Result<T, E>, E>`) and fails to typecheck. This is why `compose`'s body
+    wrapped again (`Result@(Result@(T, E), E)`) and fails to typecheck. This is why `compose`'s body
     is `f(g(x)??)??`, not `f(g(x)??)`. The rule generalizes: a lambda body can never let an inner
     `Result` pass through unchanged; every fallible call needs its own `??`.
 - **Block-body lambdas are a `let`-RHS-only form.** The grammar does not reach `lambda_block` from
@@ -145,7 +145,7 @@ A function value lowers to `{ i8* fn_ptr, i8* env_ptr, i8* drop_ptr }` (24 bytes
 | Field | Non-capturing value | Capturing closure |
 |-------|---------------------|-------------------|
 | `fn_ptr`   | address of a thunk `f__thunk(env, ...)` wrapping the bare fn | address of the lifted `__lambda_N(env, ...)` |
-| `env_ptr`  | `null` | heap `Own<__closure_env_N>*` holding captured values |
+| `env_ptr`  | `null` | heap `Own@(__closure_env_N)*` holding captured values |
 | `drop_ptr` | `null` | address of a type-erased env destructor |
 
 This mirrors the existing **string** fat pointer (`{i8*, i32}`, `backend/strings.py`), applying the
@@ -167,7 +167,7 @@ same insert_value/extract_value/store/load idioms.
 
 - **Copyable types** (primitives, strings, structs/fixed-arrays composed of those) are captured by
   **value-copy** into the environment record.
-- **Owned types** (dynamic array, `List<T>`, `Own<T>`) are captured by **move** into the
+- **Owned types** (dynamic array, `List@(T)`, `Own@(T)`) are captured by **move** into the
   environment — the outer binding is consumed (borrow-checker enforced; later use is CE2405), and
   the env's recursive destructor frees them.
 - **A captured closure *value*** (a `fn(...)` local that is itself a capturing closure) is also
@@ -177,7 +177,7 @@ same insert_value/extract_value/store/load idioms.
 
 ### Environment ownership, escape, and RAII
 
-- The environment is **heap-allocated and owned by the closure value** (`Own<__closure_env_N>`),
+- The environment is **heap-allocated and owned by the closure value** (`Own@(__closure_env_N)`),
   so a closure may **escape** its creating scope — be returned, or stored in a struct/`List`.
 - Freeing is **type-erased through `drop_ptr`**: at any RAII cleanup point, a function value is
   freed by `if (drop_ptr != null) drop_ptr(env_ptr)`. Non-capturing values carry `drop_ptr = null`,
@@ -192,7 +192,7 @@ same insert_value/extract_value/store/load idioms.
 - **Closure aliasing is sound.** A plain rebind `let g = f` **moves** the env (source consumed,
   CE2405 on later use); a container get-out (`let g = fns.get(0)??`) and a struct-field read
   (`let g = s.handler`) are non-owning **borrows** (the container/struct stays the sole owner,
-  mirroring `Own<T>.get()`); a closure stored in a struct field is freed by the struct's cleanup.
+  mirroring `Own@(T).get()`); a closure stored in a struct field is freed by the struct's cleanup.
   No leak, no double-free (validated with `leaks --atExit`).
 - **Compatibility stays invariant and capture-agnostic.** `fn(i32)->i32` matches a plain fn and a
   closure alike (the capture descriptor is metadata, excluded from type identity). Mismatch is
@@ -257,8 +257,8 @@ and run. Two gaps were closed to make this possible:
   type-substitution routines (rewriting type params to concrete types) gained a `FunctionType`
   branch that rebuilds `param_types`/`ok_type`/`err_type` recursively, carrying `captures` through
   unchanged (excluded from type identity but drives ownership).
-- **Gap D — `List<T>` is user-extensible.** A first-class generic struct now: both concrete
-  (`extend List<i32> sum_all()`) and generic (`extend List<T> first_or(T)`) extends compile and run.
+- **Gap D — `List@(T)` is user-extensible.** A first-class generic struct now: both concrete
+  (`extend List@(i32) sum_all()`) and generic (`extend List@(T) first_or(T)`) extends compile and run.
   A user List method **cannot shadow a builtin** List method name (providers are checked first at
   dispatch); the by-value-`self`-vs-by-pointer receiver ABI mismatch is reconciled at the dispatch
   site.
@@ -268,10 +268,10 @@ and run. Two gaps were closed to make this possible:
   temporary registry and freed via the runtime-guarded drop on every exit path; binding to a local
   is no longer required.
 
-Validated as **free generic functions** (`tests/generics/test_ho_*`): `map<T, U>(List<T>, fn(T) ->
+Validated as **free generic functions** (`tests/generics/test_ho_*`): `map@(T, U)(List@(T), fn(T) ->
 U)` with a capturing closure and with `U` genuinely differing from `T` (i32 -> bool);
-`filter<T>(List<T>, fn(T) -> bool)` with a capturing predicate; `fold<T, U>(List<T>, U, fn(U, T) ->
-U)` with two independently-inferred type params; `apply<T>(fn(T) -> T, T)` with a bare fn reference.
+`filter@(T)(List@(T), fn(T) -> bool)` with a capturing predicate; `fold@(T, U)(List@(T), U, fn(U, T) ->
+U)` with two independently-inferred type params; `apply@(T)(fn(T) -> T, T)` with a bare fn reference.
 
 ## 6. `collections/iter` — the bundled Sushi-source stdlib module
 
@@ -284,11 +284,11 @@ use <collections/iter>
 
 fn main() i32:
     let i32 factor = 10
-    let List<i32> xs = List.new()
+    let List@(i32) xs = List.new()
     xs.push(1)
     xs.push(2)
     xs.push(3)
-    let List<i32> ys = map(xs, |i32 x| x * factor).realise(List.new())
+    let List@(i32) ys = map(xs, |i32 x| x * factor).realise(List.new())
     println(ys.get(2).realise(-1))    # 30
     return Result.Ok(0)
 ```
@@ -324,7 +324,7 @@ fn main() i32:
 ### `compose` — the capture-and-call payoff
 
 ```sushi
-fn compose<T, U, V>(fn(T) -> U g, fn(U) -> V f) fn(T) -> V:
+fn compose@(T, U, V)(fn(T) -> U g, fn(U) -> V f) fn(T) -> V:
     return Result.Ok(|x| f(g(x)??)??)
 ```
 
@@ -408,11 +408,11 @@ Referencing a generic function as a value is now allowed **when an explicit expe
 is present**:
 
 ```sushi
-fn identity<T>(T x) T:
+fn identity@(T)(T x) T:
     return Result.Ok(x)
 
 fn run() i32:
-    let fn(i32) -> i32 g = identity   # the annotation drives the instantiation identity<i32>
+    let fn(i32) -> i32 g = identity   # the annotation drives the instantiation identity@(i32)
     return Result.Ok(g(41)?? + 1)     # 42
 ```
 
@@ -428,15 +428,15 @@ binding first (not directly as a bare argument):
 ```sushi
 use <collections/iter>
 
-fn identity<T>(T x) T:
+fn identity@(T)(T x) T:
     return Result.Ok(x)
 
 fn run() i32:
     let fn(i32) -> i32 id = identity   # fixes the instantiation
-    let List<i32> xs = List.new()
+    let List@(i32) xs = List.new()
     xs.push(5)
     xs.push(7)
-    let List<i32> ys = map(xs, id)??
+    let List@(i32) ys = map(xs, id)??
     return Result.Ok(ys.get(1).realise(-1))   # 7
 ```
 
@@ -457,8 +457,8 @@ Test coverage: `tests/generics/test_generic_fn_ref.sushi`,
   methods, perk methods, and FFI externals are not bare-referenceable at all — they surface as an
   undeclared identifier (**CE1001**), not CE2093.
 - **CE2094** — illegal closure capture: a `&peek`/`&poke` borrow (Tier 2, Part II §3); or an owning
-  /variadic fn-value *parameter* type (before T2.5, Part II §3). **Dynamic-array**, **`List<T>`**,
-  **`Own<T>`**, and now **closure-value** captures are all allowed (move-capture). The former
+  /variadic fn-value *parameter* type (before T2.5, Part II §3). **Dynamic-array**, **`List@(T)`**,
+  **`Own@(T)`**, and now **closure-value** captures are all allowed (move-capture). The former
   "capturing and calling a closure value" clause is **lifted** by T2.4 (§7) — that call now compiles
   instead of erroring.
 
@@ -484,7 +484,7 @@ Test coverage: `tests/generics/test_generic_fn_ref.sushi`,
 | Indirect call, non-`Name` callee routing | `backend/expressions/calls/dispatcher.py`, `backend/expressions/calls/utils.py` |
 | Generic higher-order unification (Pass 2 / Pass 1.5) | `semantics/passes/types/calls/generics.py:_unify_types_for_inference`; `semantics/generics/instantiate/types.py:unify_types` |
 | `FunctionType` substitution (monomorphization) | `semantics/generics/monomorphize/transformer.py`; `semantics/generics/types.py`; `backend/generics/extensions.py` |
-| Gap D (`List<T>` extensibility) | `semantics/passes/collect/__init__.py:373` (List as generic struct); `backend/expressions/calls/dispatcher.py:268,308,355` (provider-first dispatch + receiver reconcile) |
+| Gap D (`List@(T)` extensibility) | `semantics/passes/collect/__init__.py:373` (List as generic struct); `backend/expressions/calls/dispatcher.py:268,308,355` (provider-first dispatch + receiver reconcile) |
 | T2.3 generic-fn-ref-under-annotation | `semantics/generics/instantiate/expressions.py`; `semantics/generics/instantiate/functions.py`; `semantics/passes/types/calls/generics.py` |
 | `collections/iter` source module | `sushi_lang/sushi_stdlib/src_sushi/collections/iter.sushi` |
 | Source-stdlib-module registry + pipeline injection | `semantics/stdlib_registry.py:SOURCE_STDLIB_MODULES`; `compiler/pipeline.py` |
@@ -503,8 +503,8 @@ multi-file compile.) The lambda-lift pass (Pass 2.5, `passes/lambda_lift.py`) is
 
 ## 1. UFCS method form `xs.map(f)` — Gap B
 
-`extend List<T> map<U>(fn(T)->U f) List<U>` cannot be expressed today. A *same-type* combinator
-(`extend List<T> map(fn(T)->T f) List<T>`) already works (Gap D closed this half); only a
+`extend List@(T) map@(U)(fn(T)->U f) List@(U)` cannot be expressed today. A *same-type* combinator
+(`extend List@(T) map(fn(T)->T f) List@(T)`) already works (Gap D closed this half); only a
 *type-changing* method — one that needs its own method-level type parameter `<U>` — is blocked.
 Four pieces are missing:
 
@@ -534,7 +534,7 @@ Four pieces are missing:
 - **(A) Do nothing — free-function form (current default).** `map(xs, f)` works today, including
   type-changing (`i32 -> bool`) and capturing closures. The method form is pure UFCS sugar. Zero
   cost; this is what `collections/iter` documents and ships.
-- **(B) Same-type-only method combinators.** Ship `extend List<T>` methods whose result type is `T`
+- **(B) Same-type-only method combinators.** Ship `extend List@(T)` methods whose result type is `T`
   (in-place-style map, filter, fold-to-`T`). Works **today** on the back of Gap D, no Gap B needed.
   Real subset; type-changing map/fold still fall back to free functions.
 - **(C) Implement Gap B.** Medium-large. Reuses the higher-order inference (Gap C) and substitution
@@ -547,7 +547,7 @@ concrete consumer wants the fluent method form.
 **Constraints on List extension methods worth knowing (from the Gap D fix):**
 
 - **Builtin names cannot be shadowed.** The backend dispatcher checks List provider methods
-  (`push`/`get`/`iter`/…) *before* the user-extension fallback, so a user `extend List<T> push()` is
+  (`push`/`get`/`iter`/…) *before* the user-extension fallback, so a user `extend List@(T) push()` is
   unreachable. Only non-builtin names route to the extension path.
 - **Receiver ABI reconciliation.** A List-backed receiver shares the dynamic-array `{i32, i32, T*}`
   layout and is passed by pointer, but `self` is declared by value; the dispatch site loads the
@@ -557,8 +557,8 @@ concrete consumer wants the fluent method form.
 ## 2. Owned-element combinators — deferred
 
 `collections/iter`'s `map`/`filter`/`fold` assume copy/primitive element types: `filter` re-pushes
-each kept element by copy, `map` reads each element by copy before applying `f`. A `List<T>` where
-`T` is an owned type (dynamic array, `List<U>`, `Own<U>`, or a struct containing one) is not
+each kept element by copy, `map` reads each element by copy before applying `f`. A `List@(T)` where
+`T` is an owned type (dynamic array, `List@(U)`, `Own@(U)`, or a struct containing one) is not
 supported yet — re-pushing/reading would need move-aware element handling the current combinator
 bodies don't do. No diagnostic gate exists specifically for this; it is a correctness gap to close
 before advertising owned-element support, not a capability that was evaluated and rejected.
@@ -594,7 +594,7 @@ reference with **no** expected fn type — e.g. passing a generic function direc
 without first binding it to a typed local — is still CE2093:
 
 ```sushi
-fn identity<T>(T x) T:
+fn identity@(T)(T x) T:
     return Result.Ok(x)
 
 fn take(fn(i32) -> i32 f) i32:
@@ -614,7 +614,7 @@ diagnostic for a distinct reason (incompatible ABI, not deferred capability).
 ## 5. The `|T x|` lambda-parameter monomorphization gap
 
 A lambda parameter annotated with a type parameter from the enclosing generic (`|T x| ...` inside a
-`fn foo<T>(...)`) is not substituted during monomorphization — the lambda-lifting machinery lifts
+`fn foo@(T)(...)`) is not substituted during monomorphization — the lambda-lifting machinery lifts
 the lambda before the enclosing function's type-param substitution reaches its params. The
 workaround is a **bare** parameter (`|x| ...`), letting expected-type propagation supply the
 concrete type at each call site instead of relying on substitution. This is why `compose` (§6) is
@@ -656,7 +656,7 @@ treat this as a known authoring gotcha rather than a validated error path.
      the higher-order unifier for method-call inference, then bridge the extension monomorphizer to
      a call-site-driven path.
    - **Owned-element combinators (§2)** — needs move-aware `map`/`filter` bodies; scope it against a
-     concrete consumer (e.g. a `List<List<T>>` transform) before generalizing.
+     concrete consumer (e.g. a `List@(List@(T))` transform) before generalizing.
    - **T2.1-T2.6 (§3)** — pick by consumer need; T2.2/T2.5/T2.6 are mechanically straightforward,
      T2.1 is the hard one and should stay last.
 5. Keep the enhanced suite green after each step (`python tests/run_tests.py --enhanced`);

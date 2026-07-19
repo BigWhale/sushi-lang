@@ -6,7 +6,7 @@
 # add(i) = i + 10 for i = 0,1,2 -> 10 + 11 + 12 = 33.
 # EXPECT_STDOUT_EXACT: "33\n"
 fn make_boxed_adder(i32 base) fn(i32) -> i32:
-    let Own<i32> boxed = Own.alloc(base)
+    let Own@(i32) boxed = Own.alloc(base)
     return Result.Ok(|i32 x| x + boxed.get())
 
 fn use_it() i32:

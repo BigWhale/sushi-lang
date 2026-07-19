@@ -24,7 +24,7 @@ from sushi_lang.semantics.library_templates import (
 
 
 MAX_SRC = (
-    "public fn max<T: Ord>(T a, T b) T:\n"
+    "public fn max@(T: Ord)(T a, T b) T:\n"
     "    if (a > b):\n"
     "        return Result.Ok(a)\n"
     "    return Result.Ok(b)\n"
@@ -71,7 +71,7 @@ def test_serialize_record_shape():
     assert record["free_perks"] == ["Ord"]
     assert record["source"].endswith("\n")
     # The slice must cover the whole declaration, header through body.
-    assert record["source"].startswith("public fn max<T: Ord>")
+    assert record["source"].startswith("public fn max@(T: Ord)")
     assert "return Result.Ok(b)" in record["source"]
 
 
@@ -91,7 +91,7 @@ def test_slice_survives_surrounding_declarations():
         "fn helper() i32:\n"
         "    return Result.Ok(7)\n"
         "\n"
-        "public fn max<T: Ord>(T a, T b) T:\n"
+        "public fn max@(T: Ord)(T a, T b) T:\n"
         "    if (a > b):\n"
         "        return Result.Ok(a)\n"
         "    return Result.Ok(b)\n"
@@ -155,7 +155,7 @@ def test_round_trip_structural_equality():
 
 
 def test_closure_check_accepts_self_contained_generic(tmp_path):
-    """max<T: Ord> references only params + builtin `>` -> export succeeds."""
+    """max@(T: Ord) references only params + builtin `>` -> export succeeds."""
     from sushi_lang.backend.library_manifest import LibraryManifestGenerator
 
     unit = _make_unit(tmp_path, MAX_SRC)
@@ -183,7 +183,7 @@ def test_generics_route_to_templates_only(tmp_path):
     from sushi_lang.backend.library_manifest import LibraryManifestGenerator
 
     src = (
-        "public fn first_of<T>(T a, T b) T:\n"
+        "public fn first_of@(T)(T a, T b) T:\n"
         "    return Result.Ok(a)\n"
         "\n"
         "public fn area(i32 w) i32:\n"
@@ -209,7 +209,7 @@ PACK_SRC = (
     "perk Display:\n"
     "    fn display() string\n"
     "\n"
-    "public fn show_all<...Ts: Display>(...Ts args) ~:\n"
+    "public fn show_all@(...Ts: Display)(...Ts args) ~:\n"
     "    expand(a in args):\n"
     "        println(a.display())\n"
     "    return Result.Ok(~)\n"
@@ -267,7 +267,7 @@ def test_closure_ships_private_helper_reference(tmp_path):
         "fn secret(i32 x) i32:\n"
         "    return Result.Ok(x)\n"
         "\n"
-        "public fn wrap<T: Ord>(T a) i32:\n"
+        "public fn wrap@(T: Ord)(T a) i32:\n"
         "    return Result.Ok(secret(1)??)\n"
     )
     unit = _make_unit(tmp_path, src)
@@ -388,7 +388,7 @@ LIB_WITH_PERK_SRC = (
     "perk Unused:\n"
     "    fn nope() bool\n"
     "\n"
-    "public fn max_of<T: Ord>(T a, T b) T:\n"
+    "public fn max_of@(T: Ord)(T a, T b) T:\n"
     "    if (a > b):\n"
     "        return Result.Ok(a)\n"
     "    return Result.Ok(b)\n"
@@ -431,7 +431,7 @@ def test_extract_templates_ships_only_referenced_perks(tmp_path):
 
     templates = gen._extract_templates([unit])
 
-    # max_of<T: Ord> references Ord, so Ord ships; Unused is never referenced.
+    # max_of@(T: Ord) references Ord, so Ord ships; Unused is never referenced.
     perk_names = [p["name"] for p in templates["perks"]]
     assert perk_names == ["Ord"]
     # This library defines no `extend ... with` blocks, so nothing ships.
@@ -450,7 +450,7 @@ def test_extract_templates_perks_empty_without_constrained_generics(tmp_path):
         "perk Ord:\n"
         "    fn gt(i32 other) bool\n"
         "\n"
-        "public fn id<T>(T a) T:\n"
+        "public fn id@(T)(T a) T:\n"
         "    return Result.Ok(a)\n"
     )
     unit = _make_unit(tmp_path, src)
@@ -537,17 +537,17 @@ from sushi_lang.semantics.passes.collect import (
 )
 
 BOX_SRC = (
-    "struct Box<T>:\n"
+    "struct Box@(T):\n"
     "    T value\n"
 )
 
 RANKED_SRC = (
-    "struct Ranked<T: Ord>:\n"
+    "struct Ranked@(T: Ord):\n"
     "    T value\n"
 )
 
 OPT_SRC = (
-    "enum Opt<T>:\n"
+    "enum Opt@(T):\n"
     "    Nope\n"
     "    Yep(T)\n"
 )
@@ -563,7 +563,7 @@ def test_serialize_generic_struct_record_shape():
     assert record["name"] == "Ranked"
     assert record["type_params"] == [{"name": "T", "constraints": ["Ord"], "is_pack": False}]
     assert record["free_perks"] == ["Ord"]
-    assert record["source"].startswith("struct Ranked<T: Ord>")
+    assert record["source"].startswith("struct Ranked@(T: Ord)")
     assert record["source"].endswith("\n")
 
 
@@ -600,13 +600,13 @@ def test_generic_types_route_to_templates_only(tmp_path):
     from sushi_lang.backend.library_manifest import LibraryManifestGenerator
 
     src = (
-        "struct Box<T>:\n"
+        "struct Box@(T):\n"
         "    T value\n"
         "\n"
         "struct Point:\n"
         "    i32 x\n"
         "\n"
-        "enum Opt<T>:\n"
+        "enum Opt@(T):\n"
         "    Nope\n"
         "    Yep(T)\n"
         "\n"
@@ -630,15 +630,15 @@ def test_generic_types_route_to_templates_only(tmp_path):
 
 
 def test_closure_check_allows_co_shipped_generic_type_field(tmp_path):
-    """Outer<T> with a field of another exported generic Inner<T> is allowed."""
+    """Outer@(T) with a field of another exported generic Inner@(T) is allowed."""
     from sushi_lang.backend.library_manifest import LibraryManifestGenerator
 
     src = (
-        "struct Inner<T>:\n"
+        "struct Inner@(T):\n"
         "    T val\n"
         "\n"
-        "struct Outer<T>:\n"
-        "    Inner<T> inner\n"
+        "struct Outer@(T):\n"
+        "    Inner@(T) inner\n"
     )
     unit = _make_unit(tmp_path, src)
     reporter = Reporter(source="", filename="lib")
@@ -661,7 +661,7 @@ def test_closure_allows_concrete_type_field(tmp_path):
         "struct Secret:\n"
         "    i32 x\n"
         "\n"
-        "struct Leaky<T>:\n"
+        "struct Leaky@(T):\n"
         "    Secret hidden\n"
         "    T value\n"
     )
@@ -752,7 +752,7 @@ IMPL_LIB_SRC = (
     "    fn doubled() i32:\n"
     "        return self * 2\n"
     "\n"
-    "public fn pick_bigger<T: Doubler>(T a, T b) T:\n"
+    "public fn pick_bigger@(T: Doubler)(T a, T b) T:\n"
     "    if (a.doubled() > b.doubled()):\n"
     "        return Result.Ok(a)\n"
     "    return Result.Ok(b)\n"
@@ -823,7 +823,7 @@ def test_extract_templates_skips_impl_of_unreferenced_perk(tmp_path):
         "    fn hidden() i32:\n"
         "        return self\n"
         "\n"
-        "public fn id<T>(T a) T:\n"
+        "public fn id@(T)(T a) T:\n"
         "    return Result.Ok(a)\n"
     )
     unit = _make_unit(tmp_path, src)

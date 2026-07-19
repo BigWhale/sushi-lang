@@ -6,13 +6,13 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_CONTAINS: "sum = 3"
 
-struct Pair<T, U>:
+struct Pair@(T, U):
     T first
     U second
 
 fn main() i32:
-    let Own<Pair<i32, i32>> p = Own.alloc(Pair(1, 2))
-    let Pair<i32, i32> v = p.get()
+    let Own@(Pair@(i32, i32)) p = Own.alloc(Pair(1, 2))
+    let Pair@(i32, i32) v = p.get()
     println("sum = {v.first + v.second}")
     p.destroy()
     return Result.Ok(0)

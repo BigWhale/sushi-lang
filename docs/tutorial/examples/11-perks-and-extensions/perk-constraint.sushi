@@ -17,7 +17,7 @@ extend Ship with Describable:
     fn describe() string:
         return "Ship {self.name} (crew: {self.crew})"
 
-fn announce<T: Describable>(T item) ~:
+fn announce@(T: Describable)(T item) ~:
     println(item.describe())
     return Result.Ok(~)
 

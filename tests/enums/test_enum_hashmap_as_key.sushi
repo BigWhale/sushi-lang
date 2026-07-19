@@ -12,12 +12,12 @@ enum Weekday:
     Fri
 
 fn main() i32:
-    let HashMap<Weekday, string> schedule = HashMap.new()
+    let HashMap@(Weekday, string) schedule = HashMap.new()
     schedule.insert(Weekday.Mon(), "standup")
     schedule.insert(Weekday.Wed(), "review")
     schedule.insert(Weekday.Fri(), "retrospective")
 
-    let Maybe<string> mon = schedule.get(Weekday.Mon())
+    let Maybe@(string) mon = schedule.get(Weekday.Mon())
     match mon:
         Maybe.Some(s) ->
             println("Monday: {s}")
@@ -25,7 +25,7 @@ fn main() i32:
             println("FAIL: Monday not found")
             return Result.Ok(1)
 
-    let Maybe<string> tue = schedule.get(Weekday.Tue())
+    let Maybe@(string) tue = schedule.get(Weekday.Tue())
     match tue:
         Maybe.Some(_) ->
             println("FAIL: Tuesday should not exist")

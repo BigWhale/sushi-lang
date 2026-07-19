@@ -8,6 +8,6 @@
 use <sys/process>
 
 fn main() i32:
-    let Result<string, ProcessError> r = getcwd()
+    let Result@(string, ProcessError) r = getcwd()
     println("ok = {r.is_ok()}")
     return Result.Ok(0)

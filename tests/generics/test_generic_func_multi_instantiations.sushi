@@ -1,7 +1,7 @@
 # Test same generic function instantiated with many different types
 # This ensures monomorphization creates separate versions correctly
 
-fn triple<T>(T value) T:
+fn triple@(T)(T value) T:
     # Just return the value (simplified version)
     return Result.Ok(value)
 

@@ -7,7 +7,7 @@
 enum MyError:
     Error
 
-fn find_value(string key) Result<Maybe<i32>, MyError>:
+fn find_value(string key) Result@(Maybe@(i32), MyError):
     if (key == "fail"):
         return Result.Err(MyError.Error)
     if (key == "none"):

@@ -11,7 +11,7 @@ struct Point:
 # Test 1: Numeric types (i32, f32, f64)
 fn test_numeric_types() i32:
     # i32
-    let Maybe<i32> val_i32 = Maybe.Some(42)
+    let Maybe@(i32) val_i32 = Maybe.Some(42)
     if (val_i32.is_some()):
         let i32 r1 = val_i32.realise(0)
         if (r1 == 42):
@@ -21,8 +21,8 @@ fn test_numeric_types() i32:
 
 # Test 2: String type
 fn test_string_type() i32:
-    let Maybe<string> val_some = Maybe.Some("hello")
-    let Maybe<string> val_none = Maybe.None()
+    let Maybe@(string) val_some = Maybe.Some("hello")
+    let Maybe@(string) val_none = Maybe.None()
 
     let string s1 = val_some.realise("default")
     let string s2 = val_none.realise("fallback")
@@ -35,7 +35,7 @@ fn test_string_type() i32:
 fn test_dynamic_arrays() i32:
     # Maybe<i32[]>
     let i32[] arr = from([1, 2, 3])
-    let Maybe<i32[]> val_some = Maybe.Some(arr)
+    let Maybe@(i32[]) val_some = Maybe.Some(arr)
 
     match val_some:
         Maybe.Some(a) ->
@@ -49,7 +49,7 @@ fn test_dynamic_arrays() i32:
 # Test 4: Struct type
 fn test_struct_type() i32:
     let Point p = Point(10, 20)
-    let Maybe<Point> val_some = Maybe.Some(p)
+    let Maybe@(Point) val_some = Maybe.Some(p)
 
     # Use methods instead of pattern matching for struct extraction
     # Pattern matching with structs has type inference issues
@@ -63,8 +63,8 @@ fn test_struct_type() i32:
 # Test 5: Nested Maybe (Maybe<Maybe<i32>>)
 fn test_nested_maybe() i32:
     # Test 5a: Some(Some(42))
-    let Maybe<i32> inner1 = Maybe.Some(42)
-    let Maybe<Maybe<i32>> nested1 = Maybe.Some(inner1)
+    let Maybe@(i32) inner1 = Maybe.Some(42)
+    let Maybe@(Maybe@(i32)) nested1 = Maybe.Some(inner1)
 
     match nested1:
         Maybe.Some(inner) ->
@@ -78,9 +78,9 @@ fn test_nested_maybe() i32:
 
 # Test 6: Pattern matching with None variants
 fn test_none_variants() i32:
-    let Maybe<i32> val1 = Maybe.None()
-    let Maybe<string> val2 = Maybe.None()
-    let Maybe<bool> val3 = Maybe.None()
+    let Maybe@(i32) val1 = Maybe.None()
+    let Maybe@(string) val2 = Maybe.None()
+    let Maybe@(bool) val3 = Maybe.None()
 
     if (val1.is_none() and val2.is_none() and val3.is_none()):
         return Result.Ok(1)
@@ -88,7 +88,7 @@ fn test_none_variants() i32:
 
 # Test 7: Method chaining with realise
 fn test_method_chaining() i32:
-    let Maybe<i32> val = Maybe.Some(100)
+    let Maybe@(i32) val = Maybe.Some(100)
 
     # Chain: is_some check, then realise
     if (val.is_some()):
@@ -100,9 +100,9 @@ fn test_method_chaining() i32:
 
 # Test 8: Multiple type parameters in single function
 fn test_multiple_types() i32:
-    let Maybe<i32> int_val = Maybe.Some(42)
-    let Maybe<string> str_val = Maybe.Some("test")
-    let Maybe<bool> bool_val = Maybe.Some(true)
+    let Maybe@(i32) int_val = Maybe.Some(42)
+    let Maybe@(string) str_val = Maybe.Some("test")
+    let Maybe@(bool) bool_val = Maybe.Some(true)
 
     let i32 i = int_val.realise(0)
     let string s = str_val.realise("")

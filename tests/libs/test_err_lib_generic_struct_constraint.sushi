@@ -11,6 +11,6 @@ struct Widget:
     i32 id
 
 fn main() i32:
-    let Ranked<Widget> r = Ranked(Widget(1))
+    let Ranked@(Widget) r = Ranked(Widget(1))
     println(r.value.id)
     return Result.Ok(0)

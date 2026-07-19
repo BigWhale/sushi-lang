@@ -20,7 +20,7 @@ per-platform `.bc` files.
 
 Raw LLVM IR gives the stdlib access to constructs the Sushi language itself doesn't
 expose (raw libc externs, manual struct layout for `string`/`Result`/`Maybe`, etc.),
-and lets generic containers (`List<T>`, `HashMap<K, V>`) be emitted inline per
+and lets generic containers (`List@(T)`, `HashMap@(K, V)`) be emitted inline per
 instantiation instead of precompiled for every possible type argument.
 
 ## Directory Structure
@@ -83,7 +83,7 @@ not by branching in `build.py` — the *emitted* IR reflects the platform Python
 running on, `build.py`'s `--platform` argument only picks the output subdirectory.
 
 Two units are conspicuously absent from `dist/`: `core/results` and `core/maybe`.
-`Result<T, E>`/`Maybe<T>` are monomorphized per type argument and emitted inline at
+`Result@(T, E)`/`Maybe@(T)` are monomorphized per type argument and emitted inline at
 compile time (see `sushi_lang/backend/generics/`), so there is nothing fixed to
 precompile.
 
@@ -94,7 +94,7 @@ python sushi_lang/sushi_stdlib/build.py [--platform darwin|linux]
 ```
 
 This calls `build_all(platform_name)`, which initializes LLVM's native target, runs
-every `build_<unit>()` function (each: import the generator, call
+every `build_@(unit)()` function (each: import the generator, call
 `generate_module_ir()`, `llvm.parse_assembly()` the IR, write `.as_bitcode()` to
 `dist/<platform>/...`), then writes the freshness marker described below. `--platform`
 only affects which `dist/` subdirectory the output lands in; without it, the platform
@@ -176,7 +176,7 @@ compile-time function metadata). `compiler/loader.py` is unrelated — it handle
 ## Adding a New Stdlib Module
 
 1. Write the generator: a package/module under `src/` with `generate_module_ir()`.
-2. Add a `build_<name>()` function to `build.py` and call it from `build_all()`.
+2. Add a `build_@(name)()` function to `build.py` and call it from `build_all()`.
 3. Register the module's function metadata in `StdlibRegistry.KNOWN_MODULES`
    (`semantics/stdlib_registry.py`) so `use <name>` type-checks calls into it.
 4. If the unit needs its own `.bc` resolution logic beyond the default
@@ -189,7 +189,7 @@ the generator lives outside that tree (see the `core/primitives` gap above).
 
 ## Generic Types
 
-`List<T>`, `HashMap<K, V>`, `Maybe<T>`, `Result<T, E>`, and `Own<T>` are not built by
+`List@(T)`, `HashMap@(K, V)`, `Maybe@(T)`, `Result@(T, E)`, and `Own@(T)` are not built by
 `build.py` and have no `.bc` — they're monomorphized and emitted inline per
 instantiation at compile time. The emitters live in `sushi_lang/backend/generics/`
 (`list/`, `hashmap/`, `maybe.py`, `own.py`, `results.py`), with the IR-free half

@@ -4,17 +4,17 @@
 # Test nested List<List<T>>
 fn main() i32:
     # Create list of lists
-    let List<List<i32>> matrix = List.new()
+    let List@(List@(i32)) matrix = List.new()
 
     # Create first row
-    let List<i32> row1 = List.new()
+    let List@(i32) row1 = List.new()
     row1.push(1)
     row1.push(2)
     row1.push(3)
     matrix.push(row1)
 
     # Create second row
-    let List<i32> row2 = List.new()
+    let List@(i32) row2 = List.new()
     row2.push(4)
     row2.push(5)
     row2.push(6)

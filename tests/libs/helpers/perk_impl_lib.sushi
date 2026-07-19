@@ -10,7 +10,7 @@ extend i32 with Doubler:
     fn doubled() i32:
         return self * 2
 
-public fn pick_bigger<T: Doubler>(T a, T b) T:
+public fn pick_bigger@(T: Doubler)(T a, T b) T:
     if (a.doubled() > b.doubled()):
         return Result.Ok(a)
     return Result.Ok(b)

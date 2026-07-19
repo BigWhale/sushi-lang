@@ -1,7 +1,7 @@
 # Test generic functions using type parameters in variable declarations
 # This tests body substitution where T appears in let statements
 
-fn create_pair<T>(T first, T second) T:
+fn create_pair@(T)(T first, T second) T:
     # Variable declaration with generic type - use both params
     let T result = first
     # Copy second to temp and back to ensure both are used
@@ -10,7 +10,7 @@ fn create_pair<T>(T first, T second) T:
     result := first
     return Result.Ok(result)
 
-fn compute<T>(T value) T:
+fn compute@(T)(T value) T:
     # Multiple variable declarations with generic type
     let T a = value
     let T b = a

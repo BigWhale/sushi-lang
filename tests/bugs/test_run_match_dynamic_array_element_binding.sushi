@@ -7,9 +7,9 @@
 # EXPECT_STDOUT_EXACT: "got 1\ngot 2\n"
 
 fn main() i32:
-    let Maybe<i32> a = Maybe.Some(1)
-    let Maybe<i32> b = Maybe.Some(2)
-    let Maybe<i32>[] arr = from([a, b])
+    let Maybe@(i32) a = Maybe.Some(1)
+    let Maybe@(i32) b = Maybe.Some(2)
+    let Maybe@(i32)[] arr = from([a, b])
     match arr[0]:
         Maybe.Some(x) -> println("got {x}")
         Maybe.None() -> println("none")

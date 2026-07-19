@@ -2,7 +2,7 @@
 # EXPECT_ERROR_CODE: CE2053
 # Test error: push() with too many arguments
 fn main() i32:
-    let List<i32> data = List.new()
+    let List@(i32) data = List.new()
     # ERROR: push() expects exactly 1 argument
     data.push(1, 2)
     return Result.Ok(0)

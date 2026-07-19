@@ -4,7 +4,7 @@
 # compiler has already inserted the cleanup for us.
 
 fn main() i32:
-    let List<string> crew = List.new()
+    let List@(string) crew = List.new()
     crew.push("Arthur Dent")
     crew.push("Ford Prefect")
     crew.push("Trillian")

@@ -4,7 +4,7 @@
 # Test List<T> remove method - edge cases
 fn main() i32:
     # Test 1: Remove first element
-    let List<i32> nums1 = List.new()
+    let List@(i32) nums1 = List.new()
     nums1.push(1)
     nums1.push(2)
     nums1.push(3)
@@ -33,7 +33,7 @@ fn main() i32:
             return Result.Ok(5)
 
     # Test 2: Remove last element
-    let List<i32> nums2 = List.new()
+    let List@(i32) nums2 = List.new()
     nums2.push(10)
     nums2.push(20)
     nums2.push(30)
@@ -53,7 +53,7 @@ fn main() i32:
         return Result.Ok(8)
 
     # Test 3: Remove from single-element list
-    let List<i32> nums3 = List.new()
+    let List@(i32) nums3 = List.new()
     nums3.push(42)
 
     match nums3.remove(0):
@@ -71,7 +71,7 @@ fn main() i32:
         return Result.Ok(11)
 
     # Test 4: Out of bounds - negative index
-    let List<i32> nums4 = List.new()
+    let List@(i32) nums4 = List.new()
     nums4.push(1)
 
     match nums4.remove(-1):
@@ -90,7 +90,7 @@ fn main() i32:
             println("Out of bounds index correctly rejected")
 
     # Test 6: Remove from empty list
-    let List<i32> nums5 = List.new()
+    let List@(i32) nums5 = List.new()
 
     match nums5.remove(0):
         Maybe.Some(v) ->

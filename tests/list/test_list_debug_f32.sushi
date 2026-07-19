@@ -1,6 +1,6 @@
-# EXPECT_STDOUT_EXACT: "=== List<f32> Debug ===\nList<f32> {\n  len: 3, capacity: 4\n  [0] 3.140000\n  [1] 2.710000\n  [2] 1.410000\n}\n"
+# EXPECT_STDOUT_EXACT: "=== List<f32> Debug ===\nList@(f32) {\n  len: 3, capacity: 4\n  [0] 3.140000\n  [1] 2.710000\n  [2] 1.410000\n}\n"
 fn main() i32:
-    let List<f32> floats = List.new()
+    let List@(f32) floats = List.new()
 
     floats.push(3.14 as f32)
     floats.push(2.71 as f32)

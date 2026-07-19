@@ -4,6 +4,6 @@
 
 fn main() i32:
     # Should fail: HashMap not imported
-    let HashMap<i32, string> map = HashMap.new()
+    let HashMap@(i32, string) map = HashMap.new()
     return Result.Ok(0)
 

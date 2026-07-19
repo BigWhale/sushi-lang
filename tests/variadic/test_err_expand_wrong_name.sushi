@@ -8,7 +8,7 @@ extend i32 with Display:
     fn display() string:
         return "i:{self}"
 
-fn show<...Ts: Display>(...Ts args) ~:
+fn show@(...Ts: Display)(...Ts args) ~:
     let i32 other = 1
     expand(a in other):
         println(a.display())

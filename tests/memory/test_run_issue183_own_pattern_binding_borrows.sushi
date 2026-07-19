@@ -17,7 +17,7 @@
 
 enum IntList:
     Nil()
-    Cons(i32, Own<IntList>)
+    Cons(i32, Own@(IntList))
 
 fn length(IntList list) i32:
     match list:
@@ -28,9 +28,9 @@ fn length(IntList list) i32:
             return Result.Ok(1 + tail_len)
 
 fn main() i32:
-    let Own<IntList> t3 = Own.alloc(IntList.Nil())
-    let Own<IntList> t2 = Own.alloc(IntList.Cons(3, t3))
-    let Own<IntList> t1 = Own.alloc(IntList.Cons(2, t2))
+    let Own@(IntList) t3 = Own.alloc(IntList.Nil())
+    let Own@(IntList) t2 = Own.alloc(IntList.Cons(3, t3))
+    let Own@(IntList) t1 = Own.alloc(IntList.Cons(2, t2))
     let IntList list = IntList.Cons(1, t1)
 
     println("len {length(list).realise(99)}")

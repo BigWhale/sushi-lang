@@ -13,7 +13,8 @@ struct_def: STRUCT NAME [type_params] ":" _NEWLINE _INDENT struct_field+ _DEDENT
 struct_field: type NAME _NEWLINE
 
 enum_def: ENUM NAME [type_params] ":" _NEWLINE _INDENT enum_variant+ _DEDENT
-type_params: "<" type_param_list ">"
+# Generic type parameters, e.g. `struct Pair@(T, U):` / `fn id@(T)(T x) T:`.
+type_params: AT "(" type_param_list ")"
 type_param_list: type_param ("," type_param)*
 type_param: ELLIPSIS? NAME [perk_constraints]
 perk_constraints: ":" perk_constraint_list
@@ -111,12 +112,8 @@ continue_stmt: CONTINUE _NEWLINE
           | "string" -> string_t
           | "~" -> blank_t
           | "file" -> file_t
-          | NAME "<" type_list generic_close -> generic_type_t
+          | NAME AT "(" type_list ")" -> generic_type_t
           | NAME -> name_t
-
-# Allow both > and >> to close generic types
-# This enables Result<Maybe<i32>> without requiring a space before >>
-generic_close: GT | RSHIFT
 
 type_list: type ("," type)*
 
@@ -143,7 +140,9 @@ cast: add (AS type)*
       | postfix
 
 ?postfix: atom (call | method_call | member_access | index | try_op)*    -> maybe_call
-call: "(" [args] ")"
+# A call may carry explicit type arguments: `identity@(i32)(5)`. Free functions
+# only -- `method_call` deliberately has no type-arg slot.
+call: [AT "(" type_list ")"] "(" [args] ")"
 method_call: "." method_name "(" [args] ")"
 member_access: "." method_name
 index: "[" expr "]"
@@ -240,6 +239,7 @@ CHAR_STRING: /'([^'\\]|\\.)*'/
 ASSIGN_REBIND: ":="
 UNDERSCORE: "_"
 DOUBLE_QUESTION: "??"
+AT: "@"
 
 PLUS: "+"
 MINUS: "-"

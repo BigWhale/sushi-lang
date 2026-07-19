@@ -7,7 +7,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_CONTAINS: "s = hi"
 
-fn pick<T>(i32 which, T val) T:
+fn pick@(T)(i32 which, T val) T:
     if (which > 0):
         return Result.Ok(val)
     return Result.Ok(val)
@@ -15,7 +15,7 @@ fn pick<T>(i32 which, T val) T:
 fn amount() i32:
     return Result.Ok(3)
 
-fn wrap<T>(T v) T:
+fn wrap@(T)(T v) T:
     let T r = pick(amount()??, v)??
     return Result.Ok(r)
 

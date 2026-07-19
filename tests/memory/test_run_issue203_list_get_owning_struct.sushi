@@ -10,10 +10,10 @@ struct Box:
 
 
 fn main() i32:
-    let List<Box> boxes = List.new()
+    let List@(Box) boxes = List.new()
     boxes.push(Box(data: from([1, 2, 3, 4, 5, 6, 7, 8])))
 
-    let Maybe<Box> m = boxes.get(0)
+    let Maybe@(Box) m = boxes.get(0)
     match m:
         Maybe.Some(b) -> println("len = {b.data.len()}")
         Maybe.None() -> println("none")

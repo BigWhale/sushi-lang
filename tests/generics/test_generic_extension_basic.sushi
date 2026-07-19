@@ -8,14 +8,14 @@
 # 2. They are correctly monomorphized for concrete types (Box<i32>)
 # 3. Method calls work correctly with UFCS
 
-struct Box<T>:
+struct Box@(T):
     T value
 
-extend Box<T> unwrap() T:
+extend Box@(T) unwrap() T:
     return self.value
 
 fn main() i32:
-    let Box<i32> b = Box(42)
+    let Box@(i32) b = Box(42)
     let i32 result = b.unwrap()
     println(result)
     return Result.Ok(0)

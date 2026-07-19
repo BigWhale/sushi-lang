@@ -9,11 +9,11 @@ enum Category:
     Named(string)
 
 fn main() i32:
-    let HashMap<Category, string> labels = HashMap.new()
+    let HashMap@(Category, string) labels = HashMap.new()
     labels.insert(Category.Item(1), "first item")
     labels.insert(Category.Item(2), "second item")
 
-    let Maybe<string> v = labels.get(Category.Item(1))
+    let Maybe@(string) v = labels.get(Category.Item(1))
     match v:
         Maybe.Some(s) ->
             println("Found: {s}")
@@ -24,7 +24,7 @@ fn main() i32:
             println("FAIL: not found")
             return Result.Ok(1)
 
-    let Maybe<string> v2 = labels.get(Category.Item(99))
+    let Maybe@(string) v2 = labels.get(Category.Item(99))
     match v2:
         Maybe.Some(_) ->
             println("FAIL: 99 should not exist")

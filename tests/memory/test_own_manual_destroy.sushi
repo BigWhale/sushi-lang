@@ -3,9 +3,9 @@
 # The Own<T> is explicitly destroyed, so RAII should skip it
 
 fn main() i32:
-    let Own<i32> ptr1 = Own.alloc(10)
-    let Own<i32> ptr2 = Own.alloc(20)
-    let Own<i32> ptr3 = Own.alloc(30)
+    let Own@(i32) ptr1 = Own.alloc(10)
+    let Own@(i32) ptr2 = Own.alloc(20)
+    let Own@(i32) ptr3 = Own.alloc(30)
 
     # Use ptr1 and ptr2
     let i32 val1 = ptr1.get()

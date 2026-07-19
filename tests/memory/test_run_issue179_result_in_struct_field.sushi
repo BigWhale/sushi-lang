@@ -5,7 +5,7 @@
 # EXPECT_NO_LEAKS: true
 
 struct Holder:
-    Result<string, StdError> r
+    Result@(string, StdError) r
 
 fn main() i32:
     let Holder h = Holder(r: Result.Ok("xxxxxxxxxxxx{'abcd'}"))

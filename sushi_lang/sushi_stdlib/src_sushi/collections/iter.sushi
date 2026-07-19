@@ -12,22 +12,22 @@
 # (`|x| ...`) cannot be inferred against a generic parameter.
 
 # map: apply `f` to every element, collecting the results into a new List<U>.
-fn map<T, U>(List<T> xs, fn(T) -> U f) List<U>:
-    let List<U> out = List.new()
+fn map@(T, U)(List@(T) xs, fn(T) -> U f) List@(U):
+    let List@(U) out = List.new()
     foreach(x in xs.iter()):
         out.push(f(x)??)
     return Result.Ok(out)
 
 # filter: keep the elements for which `pred` returns true.
-fn filter<T>(List<T> xs, fn(T) -> bool pred) List<T>:
-    let List<T> out = List.new()
+fn filter@(T)(List@(T) xs, fn(T) -> bool pred) List@(T):
+    let List@(T) out = List.new()
     foreach(x in xs.iter()):
         if (pred(x)??):
             out.push(x)
     return Result.Ok(out)
 
 # fold: reduce the list left-to-right, threading `acc` through `f`.
-fn fold<T, U>(List<T> xs, U init, fn(U, T) -> U f) U:
+fn fold@(T, U)(List@(T) xs, U init, fn(U, T) -> U f) U:
     let U acc = init
     foreach(x in xs.iter()):
         acc := f(acc, x)??
@@ -35,5 +35,5 @@ fn fold<T, U>(List<T> xs, U init, fn(U, T) -> U f) U:
 
 # compose: build a new function that applies `g` then `f` (f after g). The returned
 # lambda captures `f` and `g` and calls them -- the capture-and-call case.
-fn compose<T, U, V>(fn(T) -> U g, fn(U) -> V f) fn(T) -> V:
+fn compose@(T, U, V)(fn(T) -> U g, fn(U) -> V f) fn(T) -> V:
     return Result.Ok(|x| f(g(x)??)??)

@@ -3,8 +3,8 @@
 # at function exit without explicit .destroy() calls
 
 fn main() i32:
-    let Own<i32> ptr1 = Own.alloc(42)
-    let Own<i32> ptr2 = Own.alloc(100)
+    let Own@(i32) ptr1 = Own.alloc(42)
+    let Own@(i32) ptr2 = Own.alloc(100)
 
     # Use the values to avoid warnings
     let i32 val1 = ptr1.get()

@@ -94,9 +94,9 @@ A few things worth calling out:
 - `.contains()`, `.starts_with()`, and `.ends_with()` return plain `bool`s, so they slot
   straight into an `if`.
 - `.count(needle)` counts non-overlapping occurrences.
-- `.find(needle)` returns a `Maybe<i32>` — `Maybe.Some(index)` when found, `Maybe.None()`
+- `.find(needle)` returns a `Maybe@(i32)` — `Maybe.Some(index)` when found, `Maybe.None()`
   when not. That's Sushi refusing to hand you a magic `-1`; you have to acknowledge the
-  "not found" case. We'll dig into `Maybe<T>` properly in
+  "not found" case. We'll dig into `Maybe@(T)` properly in
   [Chapter 6](06-error-handling.md).
 
 ## Transforming strings
@@ -150,7 +150,7 @@ Highlights:
   string `+`.
 - Escape sequences (`\n`, `\t`, `\\`, `\'`, `\"`) work in both quote styles.
 - `use <collections/strings>` unlocks the method library: `len`/`size`, `contains`,
-  `starts_with`/`ends_with`, `find` (returns `Maybe<i32>`), `count`, `trim`, `upper`/`lower`,
+  `starts_with`/`ends_with`, `find` (returns `Maybe@(i32)`), `count`, `trim`, `upper`/`lower`,
   `pad_left`/`pad_right`, `split`, and `join`.
 
 We kept bumping into `Maybe` and `Result`. It's time to meet them head-on. On to

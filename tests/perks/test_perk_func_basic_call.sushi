@@ -18,7 +18,7 @@ extend Point with Hashable:
         return hx * multiplier + hy
 
 # Generic function with constraint
-fn compute_hash<T: Hashable>(T value) u64:
+fn compute_hash@(T: Hashable)(T value) u64:
     return Result.Ok(value.hash())
 
 fn run_test() i32:

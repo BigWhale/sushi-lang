@@ -23,7 +23,7 @@ fn parse_code(string s) i32 | ParseError:
     return Result.Ok(42)
 
 fn main() i32:
-    let Result<i32, CalcError> r1 = divide(10, 0)
+    let Result@(i32, CalcError) r1 = divide(10, 0)
     match r1:
         Result.Ok(v) ->
             println("FAIL: empty should error not {v}")
@@ -34,7 +34,7 @@ fn main() i32:
             println("FAIL: wrong error")
             return Result.Ok(1)
 
-    let Result<i32, ParseError> r2 = parse_code("toolong")
+    let Result@(i32, ParseError) r2 = parse_code("toolong")
     match r2:
         Result.Ok(_) ->
             println("FAIL: should error")

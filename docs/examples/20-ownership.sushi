@@ -29,14 +29,14 @@ struct Point:
 # Recursive struct with Maybe<Own<T>> for optional next pointer
 struct Node:
     i32 value
-    Maybe<Own<Node>> next
+    Maybe@(Own@(Node)) next
 
 fn main() i32:
     # Demonstrate Own<T> for heap allocation
 
     # Allocate a Point on the heap
     let Point p = Point(10, 20)
-    let Own<Point> ptr = Own.alloc(p)
+    let Own@(Point) ptr = Own.alloc(p)
 
     # Dereference the pointer to get the value
     let Point loaded = ptr.get()

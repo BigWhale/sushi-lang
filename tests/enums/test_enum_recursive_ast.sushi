@@ -5,10 +5,10 @@
 
 enum Expr:
     Num(i32)
-    Add(Own<Expr>, Own<Expr>)
-    Sub(Own<Expr>, Own<Expr>)
-    Mul(Own<Expr>, Own<Expr>)
-    Neg(Own<Expr>)
+    Add(Own@(Expr), Own@(Expr))
+    Sub(Own@(Expr), Own@(Expr))
+    Mul(Own@(Expr), Own@(Expr))
+    Neg(Own@(Expr))
 
 fn eval(Expr e) i32:
     match e:
@@ -32,13 +32,13 @@ fn eval(Expr e) i32:
 
 fn main() i32:
     # Build: (3 + 4) * (10 - 2) = 7 * 8 = 56
-    let Own<Expr> n3 = Own.alloc(Expr.Num(3))
-    let Own<Expr> n4 = Own.alloc(Expr.Num(4))
-    let Own<Expr> n10 = Own.alloc(Expr.Num(10))
-    let Own<Expr> n2 = Own.alloc(Expr.Num(2))
+    let Own@(Expr) n3 = Own.alloc(Expr.Num(3))
+    let Own@(Expr) n4 = Own.alloc(Expr.Num(4))
+    let Own@(Expr) n10 = Own.alloc(Expr.Num(10))
+    let Own@(Expr) n2 = Own.alloc(Expr.Num(2))
 
-    let Own<Expr> add = Own.alloc(Expr.Add(n3, n4))
-    let Own<Expr> sub = Own.alloc(Expr.Sub(n10, n2))
+    let Own@(Expr) add = Own.alloc(Expr.Add(n3, n4))
+    let Own@(Expr) sub = Own.alloc(Expr.Sub(n10, n2))
     let Expr root = Expr.Mul(add, sub)
 
     let i32 result = eval(root).realise(-1)

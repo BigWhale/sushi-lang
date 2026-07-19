@@ -5,6 +5,6 @@ unsafe external "C" as libc because "intentional ptr in List":
 
 fn main() i32:
     let ptr a = libc.malloc(8 as i64)
-    let List<ptr> handles = List.new()
+    let List@(ptr) handles = List.new()
     handles.push(a)
     return Result.Ok(0)

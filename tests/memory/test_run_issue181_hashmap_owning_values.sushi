@@ -8,10 +8,10 @@
 use <collections/hashmap>
 
 struct Holder:
-    HashMap<string, string> m
+    HashMap@(string, string) m
 
 fn main() i32:
-    let HashMap<string, string> map = HashMap.new()
+    let HashMap@(string, string) map = HashMap.new()
     map.insert("k1-{'a'}", "v1-{'b'}")
     map.insert("k2-{'c'}", "v2-{'d'}")
     let Holder h = Holder(map)

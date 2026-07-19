@@ -13,7 +13,7 @@ enum Color:
     Blue
 
 fn main() i32:
-    let List<Color> colors = List.new()
+    let List@(Color) colors = List.new()
     colors.push(Color.Red())
     colors.push(Color.Green())
 

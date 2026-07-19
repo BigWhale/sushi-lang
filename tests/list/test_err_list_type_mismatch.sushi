@@ -1,7 +1,7 @@
 # Test error: pushing wrong type to List
 # EXPECT_ERROR_CODE: CE2006
 fn main() i32:
-    let List<i32> numbers = List.new()
+    let List@(i32) numbers = List.new()
     # ERROR: Cannot push string to List<i32>
     numbers.push("wrong type")
     return Result.Ok(0)

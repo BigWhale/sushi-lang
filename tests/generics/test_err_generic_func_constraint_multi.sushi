@@ -10,7 +10,7 @@ perk Displayable:
 struct NoPerks:
     i32 value
 
-fn process<T: Hashable + Displayable>(T item) ~:
+fn process@(T: Hashable + Displayable)(T item) ~:
     return Result.Ok(~)
 
 fn main() i32:

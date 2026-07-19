@@ -36,6 +36,7 @@ from typing import Any
 from sushi_lang.semantics.ast import MethodCall, IntLit
 from sushi_lang.semantics.typesys import Type, ArrayType, DynamicArrayType, BuiltinType, IteratorType
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.type_display import display_type
 
 
 def _is_integer_type(type_: Type) -> bool:
@@ -66,7 +67,7 @@ def _validate_fixed_array_get(call: MethodCall, array_type: ArrayType, reporter:
         arg_type = validator.infer_expression_type(call.args[0])
         if arg_type is not None and not _is_integer_type(arg_type):
             er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
-                   index=1, expected="integer type", got=str(arg_type))
+                   index=1, expected="integer type", got=display_type(arg_type))
 
     # Compile-time bounds checking for fixed arrays with constant indices
     if isinstance(call.args[0], IntLit):
@@ -106,7 +107,7 @@ def _validate_dynamic_array_get(call: MethodCall, array_type: DynamicArrayType, 
         arg_type = validator.infer_expression_type(call.args[0])
         if arg_type is not None and not _is_integer_type(arg_type):
             er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
-                   index=1, expected="integer type", got=str(arg_type))
+                   index=1, expected="integer type", got=display_type(arg_type))
 
 
 def _validate_dynamic_array_push(call: MethodCall, array_type: DynamicArrayType, reporter: Any, validator: Any = None) -> None:
@@ -127,7 +128,7 @@ def _validate_dynamic_array_push(call: MethodCall, array_type: DynamicArrayType,
         arg_type = validator.infer_expression_type(call.args[0])
         if arg_type is not None and arg_type != array_type.base_type:
             er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
-                   index=1, expected=str(array_type.base_type), got=str(arg_type))
+                   index=1, expected=display_type(array_type.base_type), got=display_type(arg_type))
 
 
 def _validate_dynamic_array_pop(call: MethodCall, array_type: DynamicArrayType, reporter: Any) -> None:
@@ -169,7 +170,7 @@ def _validate_byte_array_to_string(call: MethodCall, array_type: DynamicArrayTyp
     # Only available on u8[] (byte arrays)
     if array_type.base_type != BuiltinType.U8:
         er.emit(reporter, er.ERR.CE2023, call.loc,
-               method="to_string", expected="u8[]", got=str(array_type))
+               method="to_string", expected="u8[]", got=display_type(array_type))
         return
 
     if call.args:
@@ -184,7 +185,7 @@ def _validate_byte_array_to_string_checked(call: MethodCall, array_type: Dynamic
     """
     if array_type.base_type != BuiltinType.U8:
         er.emit(reporter, er.ERR.CE2023, call.loc,
-               method="to_string_checked", expected="u8[]", got=str(array_type))
+               method="to_string_checked", expected="u8[]", got=display_type(array_type))
         return
 
     if call.args:
@@ -212,7 +213,7 @@ def _validate_fixed_array_fill(call: MethodCall, array_type: ArrayType, reporter
         arg_type = validator.infer_expression_type(call.args[0])
         if arg_type is not None and arg_type != array_type.base_type:
             er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
-                   index=1, expected=str(array_type.base_type), got=str(arg_type))
+                   index=1, expected=display_type(array_type.base_type), got=display_type(arg_type))
 
 
 def _validate_dynamic_array_fill(call: MethodCall, array_type: DynamicArrayType, reporter: Any, validator: Any = None) -> None:
@@ -228,7 +229,7 @@ def _validate_dynamic_array_fill(call: MethodCall, array_type: DynamicArrayType,
         arg_type = validator.infer_expression_type(call.args[0])
         if arg_type is not None and arg_type != array_type.base_type:
             er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
-                   index=1, expected=str(array_type.base_type), got=str(arg_type))
+                   index=1, expected=display_type(array_type.base_type), got=display_type(arg_type))
 
 
 def _validate_fixed_array_reverse(call: MethodCall, array_type: ArrayType, reporter: Any) -> None:
@@ -275,7 +276,7 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
         # capacity() - only available on dynamic arrays
         if not isinstance(array_type, DynamicArrayType):
             er.emit(reporter, er.ERR.CE2023, call.loc,
-                   method="capacity", expected="dynamic array", got=str(array_type))
+                   method="capacity", expected="dynamic array", got=display_type(array_type))
             return
         _validate_dynamic_array_capacity(call, array_type, reporter)
 
@@ -289,7 +290,7 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
         # push(element) - only available on dynamic arrays
         if not isinstance(array_type, DynamicArrayType):
             er.emit(reporter, er.ERR.CE2023, call.loc,
-                   method="push", expected="dynamic array", got=str(array_type))
+                   method="push", expected="dynamic array", got=display_type(array_type))
             return
         _validate_dynamic_array_push(call, array_type, reporter, validator)
 
@@ -297,7 +298,7 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
         # pop() - only available on dynamic arrays
         if not isinstance(array_type, DynamicArrayType):
             er.emit(reporter, er.ERR.CE2023, call.loc,
-                   method="pop", expected="dynamic array", got=str(array_type))
+                   method="pop", expected="dynamic array", got=display_type(array_type))
             return
         _validate_dynamic_array_pop(call, array_type, reporter)
 
@@ -305,7 +306,7 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
         # destroy() - only available on dynamic arrays
         if not isinstance(array_type, DynamicArrayType):
             er.emit(reporter, er.ERR.CE2023, call.loc,
-                   method="destroy", expected="dynamic array", got=str(array_type))
+                   method="destroy", expected="dynamic array", got=display_type(array_type))
             return
         _validate_dynamic_array_destroy(call, array_type, reporter)
 
@@ -313,7 +314,7 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
         # free() - only available on dynamic arrays
         if not isinstance(array_type, DynamicArrayType):
             er.emit(reporter, er.ERR.CE2023, call.loc,
-                   method="free", expected="dynamic array", got=str(array_type))
+                   method="free", expected="dynamic array", got=display_type(array_type))
             return
         _validate_dynamic_array_free(call, array_type, reporter)
 
@@ -325,7 +326,7 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
         # to_string() - only available on u8[] (byte arrays)
         if not isinstance(array_type, DynamicArrayType):
             er.emit(reporter, er.ERR.CE2023, call.loc,
-                   method="to_string", expected="u8[]", got=str(array_type))
+                   method="to_string", expected="u8[]", got=display_type(array_type))
             return
         _validate_byte_array_to_string(call, array_type, reporter)
 
@@ -333,7 +334,7 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
         # to_string_checked() - only available on u8[] (byte arrays); returns Result<string>
         if not isinstance(array_type, DynamicArrayType):
             er.emit(reporter, er.ERR.CE2023, call.loc,
-                   method="to_string_checked", expected="u8[]", got=str(array_type))
+                   method="to_string_checked", expected="u8[]", got=display_type(array_type))
             return
         _validate_byte_array_to_string_checked(call, array_type, reporter)
 
@@ -341,7 +342,7 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
         # clone() - only available on dynamic arrays
         if not isinstance(array_type, DynamicArrayType):
             er.emit(reporter, er.ERR.CE2023, call.loc,
-                   method="clone", expected="dynamic array", got=str(array_type))
+                   method="clone", expected="dynamic array", got=display_type(array_type))
             return
         _validate_dynamic_array_clone(call, array_type, reporter)
 

@@ -14,11 +14,11 @@ fn main() i32:
     let i32 num = 42
 
     # Test read-only borrow
-    let Result<i32, StdError> read_result = read_value(&peek num)
+    let Result@(i32, StdError) read_result = read_value(&peek num)
     println(read_result.realise(0))
 
     # Test read-write borrow
-    let Result<~, StdError> mod_result = modify_value(&poke num)
+    let Result@(~, StdError) mod_result = modify_value(&poke num)
     if (mod_result):
         println(num)
         return Result.Ok(0)

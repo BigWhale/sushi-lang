@@ -6,13 +6,13 @@
 # Test complex pattern matching with nested generics
 # "Deep Thought's final answer to the Ultimate Question"
 
-fn parse_answer(string s) Maybe<i32>:
+fn parse_answer(string s) Maybe@(i32):
     if (s == "42"):
         return Result.Ok(Maybe.Some(42))
     return Result.Ok(Maybe.None())
 
 fn main() i32:
-    let Result<Maybe<i32>, StdError> result = parse_answer("42")
+    let Result@(Maybe@(i32), StdError) result = parse_answer("42")
 
     # Complex nested pattern matching
     match result:

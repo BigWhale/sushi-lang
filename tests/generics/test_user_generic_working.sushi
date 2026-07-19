@@ -7,12 +7,12 @@
 
 # Test user-defined generic enum (simplified version that works)
 
-enum Pair<T, U>:
+enum Pair@(T, U):
     Both(T, U)
 
 fn main() i32:
     # Create a Pair<i32, string>
-    let Pair<i32, string> p = Pair.Both(42, "Thanks for all the fish.")
+    let Pair@(i32, string) p = Pair.Both(42, "Thanks for all the fish.")
 
     println("Created pair successfully")
 

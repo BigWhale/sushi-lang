@@ -9,7 +9,7 @@ struct Point:
 
 fn main() i32:
     # Create a HashMap with Point keys and string values
-    let HashMap<Point, string> labels = HashMap.new()
+    let HashMap@(Point, string) labels = HashMap.new()
 
     # Insert some entries
     labels.insert(Point(0, 0), "origin")
@@ -23,7 +23,7 @@ fn main() i32:
         println("✗ Expected 3 entries")
 
     # Test get with existing key
-    let Maybe<string> result1 = labels.get(Point(0, 0))
+    let Maybe@(string) result1 = labels.get(Point(0, 0))
     match result1:
         Maybe.Some(label) ->
             println("Found origin: {label}")
@@ -31,7 +31,7 @@ fn main() i32:
             println("✗ origin not found")
 
     # Test get with non-existing key
-    let Maybe<string> result2 = labels.get(Point(100, 200))
+    let Maybe@(string) result2 = labels.get(Point(100, 200))
     match result2:
         Maybe.Some(label) ->
             println("✗ Unexpected: found {label}")
@@ -47,7 +47,7 @@ fn main() i32:
     # Update existing key
     labels.insert(Point(0, 0), "updated origin")
 
-    let Maybe<string> result3 = labels.get(Point(0, 0))
+    let Maybe@(string) result3 = labels.get(Point(0, 0))
     match result3:
         Maybe.Some(label) ->
             println("Updated label: {label}")
@@ -55,7 +55,7 @@ fn main() i32:
             println("✗ Updated origin not found")
 
     # Remove a key
-    let Maybe<string> result4 = labels.remove(Point(10, 20))
+    let Maybe@(string) result4 = labels.remove(Point(10, 20))
     match result4:
         Maybe.Some(removed) ->
             println("Removed: {removed}")

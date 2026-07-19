@@ -1,7 +1,7 @@
 # FFI: a non-C-ABI type in an external signature -> CE5003.
 # EXPECT_ERROR_CODE: CE5003
 unsafe external "C" as libc because "intentional bad signature":
-    fn bad(Maybe<i32> m) i32 = "bad"
+    fn bad(Maybe@(i32) m) i32 = "bad"
 
 fn main() i32:
     return Result.Ok(0)

@@ -3,11 +3,11 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "Result single-arg: 42\n"
 
-fn compute() Result<i32>:
+fn compute() Result@(i32):
   return Result.Ok(42)
 
 fn main() i32:
-  let Result<i32> r = compute()
+  let Result@(i32) r = compute()
   let i32 v = r.realise(0)
   if (v != 42):
     return Result.Ok(1)

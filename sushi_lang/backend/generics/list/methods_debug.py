@@ -54,8 +54,8 @@ def emit_list_debug(
     capacity = builder.load(capacity_ptr, name="capacity")
     data_ptr = builder.load(data_ptr_ptr, name="data_ptr")
 
-    # Print header: "List<T> {"
-    header_str = f"List<{element_type}> {{\n"
+    # Print header: "List@(T) {"
+    header_str = f"List@({element_type}) {{\n"
     emit_printf_string(codegen, builder, header_str)
 
     # Print stats: "  len: X, capacity: Y"

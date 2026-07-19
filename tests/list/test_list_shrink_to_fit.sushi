@@ -4,7 +4,7 @@
 # Test List<T> shrink_to_fit method
 fn main() i32:
     # Create list with excess capacity
-    let List<i32> data = List.with_capacity(100)
+    let List@(i32) data = List.with_capacity(100)
 
     # Add only a few elements
     data.push(10)

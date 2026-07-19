@@ -6,11 +6,11 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "7\n"
 
-extend List<T> first_or(T dflt) T:
+extend List@(T) first_or(T dflt) T:
     return self.get(0).realise(dflt)
 
 fn main() i32:
-    let List<i32> xs = List.new()
+    let List@(i32) xs = List.new()
     xs.push(7)
     let i32 v = xs.first_or(0)
     println(v)

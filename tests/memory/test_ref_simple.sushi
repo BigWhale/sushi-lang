@@ -8,7 +8,7 @@ fn test(&poke i32 x) i32:
 
 fn main() i32:
     let i32 i = 24
-    let Result<i32, StdError> result = test(&poke i)
+    let Result@(i32, StdError) result = test(&poke i)
     if (result):
         println(i)
         return Result.Ok(0)

@@ -9,7 +9,7 @@ fn mk() string:
     return Result.Ok("xxxxxxxxxxxx{'abcd'}")
 
 fn main() i32:
-    let Result<string, StdError> r = mk()
+    let Result@(string, StdError) r = mk()
     let string v = r.realise("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx{'abcd'}")
     println("v = {v}")
     return Result.Ok(0)

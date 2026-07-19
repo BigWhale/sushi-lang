@@ -8,7 +8,7 @@
 # Note: Actual calls to generic functions will work in Phase 3
 # when monomorphization is implemented.
 
-fn identity<T>(T x) T:
+fn identity@(T)(T x) T:
     return Result.Ok(x)
 
 fn main() i32:

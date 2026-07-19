@@ -3,22 +3,22 @@
 # at risk of an accidental quadratic). Many distinct instantiations on purpose.
 # Stdlib-free; not executed at runtime.
 
-struct Pair<T, U>:
+struct Pair@(T, U):
     T first
     U second
 
-struct Triple<A, B, C>:
+struct Triple@(A, B, C):
     A a
     B b
     C c
 
-fn identity<T>(T x) T:
+fn identity@(T)(T x) T:
     return Result.Ok(x)
 
-fn first_of<T, U>(Pair<T, U> p) T:
+fn first_of@(T, U)(Pair@(T, U) p) T:
     return Result.Ok(p.first)
 
-fn second_of<T, U>(Pair<T, U> p) U:
+fn second_of@(T, U)(Pair@(T, U) p) U:
     return Result.Ok(p.second)
 
 fn main() i32:
@@ -30,10 +30,10 @@ fn main() i32:
     let i16 sh = identity(3 as i16).realise(0 as i16)
 
     # Distinct Pair<T, U> / Triple<A, B, C> instantiations.
-    let Pair<i32, i32> p1 = Pair(1, 2)
-    let Pair<i64, u32> p2 = Pair(3 as i64, 4 as u32)
-    let Pair<u64, i16> p3 = Pair(5 as u64, 6 as i16)
-    let Triple<i32, i64, u32> t = Triple(1, 2 as i64, 3 as u32)
+    let Pair@(i32, i32) p1 = Pair(1, 2)
+    let Pair@(i64, u32) p2 = Pair(3 as i64, 4 as u32)
+    let Pair@(u64, i16) p3 = Pair(5 as u64, 6 as i16)
+    let Triple@(i32, i64, u32) t = Triple(1, 2 as i64, 3 as u32)
 
     let i32 f1 = first_of(p1).realise(0)
     let i64 f2 = first_of(p2).realise(0 as i64)

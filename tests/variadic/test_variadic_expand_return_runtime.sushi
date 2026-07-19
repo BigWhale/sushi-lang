@@ -14,7 +14,7 @@ extend string with Display:
     fn display() string:
         return self
 
-fn print_first<...Ts: Display>(...Ts args) ~:
+fn print_first@(...Ts: Display)(...Ts args) ~:
     expand(a in args):
         println(a.display())
         return Result.Ok(~)

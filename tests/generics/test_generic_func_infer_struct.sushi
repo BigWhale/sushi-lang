@@ -12,7 +12,7 @@ struct Point:
     i32 x
     i32 y
 
-fn identity<T>(T value) T:
+fn identity@(T)(T value) T:
     return Result.Ok(value)
 
 fn main() i32:

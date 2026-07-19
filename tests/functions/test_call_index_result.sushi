@@ -6,7 +6,7 @@ fn inc(i32 x) i32:
     return Result.Ok(x + 1)
 
 fn run() i32:
-    let List<fn(i32) -> i32> fns = List.new()
+    let List@(fn(i32) -> i32) fns = List.new()
     fns.push(inc)
     let i32 a = fns.get(0)??(10)??
     let i32 b = (fns.get(0)??)(20)??

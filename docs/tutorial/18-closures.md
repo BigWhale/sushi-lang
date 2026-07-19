@@ -77,7 +77,7 @@ nothing to capture and therefore nothing that could outlive its scope.
 ## Capturing owned values
 
 Copy-capture handles primitives, strings, and copyable structs. An **owned** value — a dynamic
-array, `List<T>`, or `Own<T>` — is captured by **move**: the environment takes ownership, so the
+array, `List@(T)`, or `Own@(T)` — is captured by **move**: the environment takes ownership, so the
 outer binding is consumed (using it afterward is a use-after-move error) and the value is freed
 when the closure's environment is:
 
@@ -108,10 +108,10 @@ later Tier. Pass the borrowed data as a parameter to the closure instead of capt
 - `|~|` is the zero-parameter form (`||` isn't usable — the lexer reads it as `or`).
 - A capturing closure's environment is **heap-allocated**, so the closure can **escape** — be
   returned or stored — and still work correctly, and it is **freed automatically** on every exit.
-- Copyable values are captured by **copy**; owned values (dynamic array, `List<T>`, `Own<T>`) by
+- Copyable values are captured by **copy**; owned values (dynamic array, `List@(T)`, `Own@(T)`) by
   **move** (the outer binding is consumed). Capturing a **borrow** is still **CE2094**.
 - A closure and a plain function value share the exact same type (`fn(...) -> T [| E]`) and call
-  semantics — everything from Chapter 17 about parameters, struct fields, `List<fn(...)>`, and
+  semantics — everything from Chapter 17 about parameters, struct fields, `List@(fn(...))`, and
   error types applies unchanged.
 
 For the full picture — the fat-pointer representation, every capture rule, and what's still

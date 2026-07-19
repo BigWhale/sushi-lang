@@ -4,7 +4,7 @@
 # receiver path. xs has one element, so f(5) = 5 + 1 = 6.
 # EXPECT_STDOUT_EXACT: "6\n"
 fn run() i32:
-    let List<i32> xs = List.new()
+    let List@(i32) xs = List.new()
     xs.push(10)
     let fn(i32) -> i32 f = |i32 x| x + xs.len()
     return Result.Ok(f(5)??)

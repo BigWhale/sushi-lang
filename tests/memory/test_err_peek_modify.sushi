@@ -10,5 +10,5 @@ fn try_modify(&peek i32 x) ~:
 fn main() i32:
     let i32 num = 42
     println(num)
-    let Result<~, StdError> result = try_modify(&peek num)
+    let Result@(~, StdError) result = try_modify(&peek num)
     return Result.Ok(0)

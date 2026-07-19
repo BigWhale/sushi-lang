@@ -3,15 +3,15 @@
 # Simple test: HashMap with Pair<T, U> keys
 
 use <collections/hashmap>
-struct Pair<T, U>:
+struct Pair@(T, U):
     T first
     U second
 
 fn main() i32:
     # Test: Pair<i32, string> as key
-    let HashMap<Pair<i32, string>, bool> map = HashMap.new()
+    let HashMap@(Pair@(i32, string), bool) map = HashMap.new()
 
-    let Pair<i32, string> p1 = Pair(1, "one")
+    let Pair@(i32, string) p1 = Pair(1, "one")
     map.insert(p1, true)
 
     match map.get(Pair(1, "one")):

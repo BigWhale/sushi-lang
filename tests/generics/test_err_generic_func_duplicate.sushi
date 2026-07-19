@@ -1,10 +1,10 @@
 # Test: Duplicate generic function names detected
 # EXPECT_ERROR_CODE: CE0101
 
-fn process<T>(T x) T:
+fn process@(T)(T x) T:
     return Result.Ok(x)
 
-fn process<U>(U y) U:  # Error CE0101: duplicate
+fn process@(U)(U y) U:  # Error CE0101: duplicate
     return Result.Ok(y)
 
 fn main() i32:

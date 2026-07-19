@@ -8,9 +8,9 @@
 
 fn main() i32:
     # The Answer computed by Deep Thought
-    let Result<i32, StdError> innermost = Result.Ok(42)
-    let Maybe<Result<i32, StdError>> middle = Maybe.Some(innermost)
-    let Result<Maybe<Result<i32, StdError>>, StdError> outermost = Result.Ok(middle)
+    let Result@(i32, StdError) innermost = Result.Ok(42)
+    let Maybe@(Result@(i32, StdError)) middle = Maybe.Some(innermost)
+    let Result@(Maybe@(Result@(i32, StdError)), StdError) outermost = Result.Ok(middle)
 
     # Unwrap all three layers
     match outermost:

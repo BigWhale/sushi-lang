@@ -26,7 +26,7 @@ def test_generic_struct_constructor_hint_is_a_help_line(tmp_path):
     """
     src = tmp_path / "main.sushi"
     src.write_text(
-        "struct Pair<T, U>:\n"
+        "struct Pair@(T, U):\n"
         "    T first\n"
         "    U second\n\n"
         "fn take(i32 x) i32:\n"

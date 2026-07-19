@@ -19,6 +19,7 @@ from sushi_lang.semantics.ast import BoundedTypeParam
 from sushi_lang.semantics.passes.collect import PerkTable, PerkImplementationTable
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.type_display import display_type
 
 
 class ConstraintValidator:
@@ -70,8 +71,9 @@ class ConstraintValidator:
 
         # Check if type implements the required perk
         if not self.perk_impl_table.implements(type_name, constraint_name):
+            # `type_name` stays `<>` (the impl-table lookup key above); display `@()`.
             er.emit(self.reporter, er.ERR.CE4006, span,
-                   type=type_name, perk=constraint_name)
+                   type=display_type(type_arg), perk=constraint_name)
             return False
 
         return True

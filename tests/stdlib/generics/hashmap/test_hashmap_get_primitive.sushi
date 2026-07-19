@@ -5,7 +5,7 @@
 use <collections/hashmap>
 fn main() i32:
     println("Creating HashMap...")
-    let HashMap<i32, bool> map = HashMap.new()
+    let HashMap@(i32, bool) map = HashMap.new()
 
     println("Inserting key 42...")
     map.insert(42, true)

@@ -95,8 +95,8 @@ print something; the next chapter is devoted entirely to it.
 ## A note on generics
 
 Both structs and enums can be **generic** — parameterised by a type. You've already used
-generic enums without thinking about it: `Maybe<T>` and `Result<T, E>` are exactly this.
-You can define your own, like a `Pair<T, U>` that holds two values of any types. We'll get
+generic enums without thinking about it: `Maybe@(T)` and `Result@(T, E)` are exactly this.
+You can define your own, like a `Pair@(T, U)` that holds two values of any types. We'll get
 to defining your own generics in [Chapter 10](10-generics.md); for now, just know the
 toolbox extends that far.
 

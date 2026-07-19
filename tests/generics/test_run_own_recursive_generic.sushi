@@ -16,21 +16,21 @@
 # EXPECT_STDOUT_EXACT: "leaf\nnode\n"
 # EXPECT_NO_LEAKS: true
 
-enum Tree<T>:
+enum Tree@(T):
     Leaf
-    Node(Own<Tree<T>>)
+    Node(Own@(Tree@(T)))
 
 fn main() i32:
-    let Tree<i32> leaf = Tree.Leaf()
+    let Tree@(i32) leaf = Tree.Leaf()
     match leaf:
         Tree.Leaf() ->
             println("leaf")
         Tree.Node(_) ->
             println("node")
 
-    let Tree<i32> inner = Tree.Leaf()
-    let Own<Tree<i32>> child = Own.alloc(inner)
-    let Tree<i32> node = Tree.Node(child)
+    let Tree@(i32) inner = Tree.Leaf()
+    let Own@(Tree@(i32)) child = Own.alloc(inner)
+    let Tree@(i32) node = Tree.Node(child)
     match node:
         Tree.Leaf() ->
             println("leaf")

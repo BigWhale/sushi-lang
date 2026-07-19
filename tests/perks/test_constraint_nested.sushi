@@ -15,16 +15,16 @@ extend Point with Hashable:
         let u64 hy = self.y as u64
         return hx + hy
 
-struct Inner<U: Hashable>:
+struct Inner@(U: Hashable):
     U value
 
-struct Outer<T: Hashable>:
-    Inner<T> inner
+struct Outer@(T: Hashable):
+    Inner@(T) inner
 
 fn main() i32:
     # Nested generics: both Outer and Inner require Hashable
     # Point implements Hashable, so this should work
-    let Inner<Point> inner = Inner(Point(10, 20))
-    let Outer<Point> outer = Outer(inner)
+    let Inner@(Point) inner = Inner(Point(10, 20))
+    let Outer@(Point) outer = Outer(inner)
     println(outer.inner.value.x)
     return Result.Ok(0)

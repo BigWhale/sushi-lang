@@ -5,15 +5,15 @@ Complete reference for Sushi's standard library modules and types.
 ## Table of Contents
 
 ### Core Types
-- [Result<T>](stdlib/result.md) - Error handling for fallible operations
-- [Maybe<T>](stdlib/maybe.md) - Optional values
+- [Result@(T)](stdlib/result.md) - Error handling for fallible operations
+- [Maybe@(T)](stdlib/maybe.md) - Optional values
 
 ### Collections
-- [List<T>](stdlib/collections/list.md) - Dynamic growable array
-- [HashMap<K, V>](stdlib/collections/hashmap.md) - Hash table with open addressing
+- [List@(T)](stdlib/collections/list.md) - Dynamic growable array
+- [HashMap@(K, V)](stdlib/collections/hashmap.md) - Hash table with open addressing
 - [Arrays](stdlib/collections/arrays.md) - Fixed and dynamic array methods
 - [Strings](stdlib/collections/strings.md) - 33 string manipulation methods
-- [Iter combinators](stdlib/collections/iter.md) - `map`/`filter`/`fold`/`compose` over `List<T>`
+- [Iter combinators](stdlib/collections/iter.md) - `map`/`filter`/`fold`/`compose` over `List@(T)`
 
 ### I/O Operations
 - [Console I/O](stdlib/io/console.md) - println, print, stdin/stdout/stderr
@@ -74,7 +74,7 @@ match arr.get(0):
 
 # String searching
 let string text = "hello world"
-let Maybe<i32> pos = text.find("world")
+let Maybe@(i32) pos = text.find("world")
 ```
 
 #### Collections
@@ -82,14 +82,14 @@ let Maybe<i32> pos = text.find("world")
 ```sushi
 use <collections/hashmap>
 
-# List<T> - no import required
-let List<i32> numbers = List.new()
+# List@(T) - no import required
+let List@(i32) numbers = List.new()
 numbers.push(1)
 numbers.push(2)
 numbers.push(3)
 
-# HashMap<K, V> - requires import
-let HashMap<string, i32> ages = HashMap.new()
+# HashMap@(K, V) - requires import
+let HashMap@(string, i32) ages = HashMap.new()
 ages.insert("Alice", 30)
 match ages.get("Alice"):
     Maybe.Some(age) -> println("Age: {age}")
@@ -146,14 +146,14 @@ match open("output.txt", FileMode.Write()):
 
 ### Collections
 
-**List<T>** - Generic dynamic array (built-in, no import required):
+**List@(T)** - Generic dynamic array (built-in, no import required):
 - Construction: `new()`, `with_capacity()`
 - Access: `get()`, `len()`, `is_empty()`
 - Modification: `push()`, `pop()`, `insert()`, `remove()`, `clear()`
 - Iteration: `iter()` for foreach loops
 - Memory: `free()`, `destroy()`
 
-**HashMap<K, V>** - Generic hash table (`use <collections/hashmap>`):
+**HashMap@(K, V)** - Generic hash table (`use <collections/hashmap>`):
 - Construction: `new()`
 - Operations: `insert()`, `get()`, `remove()`, `contains_key()`
 - Iteration: `keys()`, `values()`, `entries()`
@@ -164,7 +164,7 @@ match open("output.txt", FileMode.Write()):
 - Fixed arrays: `i32[10]`
 - Dynamic arrays: `i32[]` with `from([...])`
 - Methods: `len()`, `get()`, `push()`, `pop()`, `iter()`, `clone()`
-- Safe access with `get()` returns `Maybe<T>`
+- Safe access with `get()` returns `Maybe@(T)`
 - Unsafe direct indexing: `arr[i]`
 
 **Strings** - 33 methods (`use <collections/strings>`):
@@ -172,7 +172,7 @@ match open("output.txt", FileMode.Write()):
 - Splitting/joining, case conversion, parsing
 - UTF-8 aware where needed
 
-**Iter combinators** - higher-order functions over `List<T>` (`use <collections/iter>`):
+**Iter combinators** - higher-order functions over `List@(T)` (`use <collections/iter>`):
 - `map(xs, f)`, `filter(xs, pred)`, `fold(xs, init, f)`, `compose(g, f)`
 - Ordinary generic free functions (the first Sushi-source stdlib module, no bitcode)
 - Copy/primitive element types; pass a typed-param lambda (`|i32 x| ...`) or a function reference
@@ -224,7 +224,7 @@ High-precision sleep functions:
 
 ## Design Principles
 
-1. **Explicit error handling** - All fallible operations return `Result<T>` or `Maybe<T>`
+1. **Explicit error handling** - All fallible operations return `Result@(T)` or `Maybe@(T)`
 2. **Memory safety** - RAII cleanup, no manual memory management
 3. **Zero-cost abstractions** - Generics compile to concrete types
 4. **UTF-8 by default** - Strings are UTF-8, methods are aware where needed
@@ -233,8 +233,8 @@ High-precision sleep functions:
 
 ## Performance Notes
 
-- **List<T>**: Amortized O(1) push, O(n) insert/remove
-- **HashMap<K, V>**: O(1) average insert/get/remove, O(n) worst case
+- **List@(T)**: Amortized O(1) push, O(n) insert/remove
+- **HashMap@(K, V)**: O(1) average insert/get/remove, O(n) worst case
 - **String methods**: All allocate new strings, O(n) for most operations
 - **Arrays**: Direct memory access, bounds checked at runtime
 - **Generics**: Monomorphized at compile-time (no runtime overhead)

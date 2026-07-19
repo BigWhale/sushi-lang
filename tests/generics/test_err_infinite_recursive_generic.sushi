@@ -6,12 +6,12 @@
 # RecursionError. Before the fix this exited 1 with a traceback.
 # EXPECT_ERROR_CODE: CE0122
 
-enum Grow<T>:
+enum Grow@(T):
     Stop
-    More(Own<Grow<Grow<T>>>)
+    More(Own@(Grow@(Grow@(T))))
 
 fn main() i32:
-    let Grow<i32> g = Grow.Stop()
+    let Grow@(i32) g = Grow.Stop()
     match g:
         Grow.Stop() ->
             println("stop")

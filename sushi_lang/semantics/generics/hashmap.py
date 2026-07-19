@@ -15,6 +15,7 @@ from sushi_lang.semantics.generics.type_strings import (
     split_type_arguments,
 )
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -252,7 +253,7 @@ def _validate_hashmap_new(
     # Validate that K has .hash() method
     hash_method = get_builtin_method(key_type, "hash")
     if hash_method is None:
-        er.emit(reporter, er.ERR.CE2054, call.loc, key_type=str(key_type))
+        er.emit(reporter, er.ERR.CE2054, call.loc, key_type=display_type(key_type))
 
     # Validate that K supports equality comparison
     # Check if key_type is one of the supported types in emit_key_equality_check
@@ -267,7 +268,7 @@ def _validate_hashmap_new(
     )
 
     if not supported_equality:
-        er.emit(reporter, er.ERR.CE2055, call.loc, key_type=str(key_type))
+        er.emit(reporter, er.ERR.CE2055, call.loc, key_type=display_type(key_type))
 
 
 def _validate_hashmap_insert(
@@ -331,7 +332,7 @@ def _validate_hashmap_insert(
             arg_type = validator.infer_expression_type(arg)
             if arg_type is not None and not types_compatible(validator, arg_type, expected_ty):
                 er.emit(reporter, er.ERR.CE2006, arg.loc,
-                       index=i+1, expected=str(expected_ty), got=str(arg_type))
+                       index=i+1, expected=display_type(expected_ty), got=display_type(arg_type))
 
 
 def _validate_hashmap_get(
@@ -445,7 +446,7 @@ def _validate_hashmap_key_method(
         arg_type = validator.infer_expression_type(arg)
         if arg_type is not None and not types_compatible(validator, arg_type, key_type):
             er.emit(reporter, er.ERR.CE2006, arg.loc,
-                   index=1, expected=str(key_type), got=str(arg_type))
+                   index=1, expected=display_type(key_type), got=display_type(arg_type))
 
 
 def _validate_hashmap_len(

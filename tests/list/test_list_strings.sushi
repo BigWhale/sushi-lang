@@ -3,7 +3,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<string> with string elements
 fn main() i32:
-    let List<string> crew = List.new()
+    let List@(string) crew = List.new()
 
     crew.push("Arthur Dent")
     crew.push("Ford Prefect")

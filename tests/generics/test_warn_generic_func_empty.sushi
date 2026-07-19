@@ -2,7 +2,7 @@
 # EXPECT_ERROR_CODE: CW1001
 # Tests that generic functions with unused parameters compile
 
-fn noop<T>(T x) ~:
+fn noop@(T)(T x) ~:
     # Intentionally not using parameter to test minimal generic function
     return Result.Ok(~)
 

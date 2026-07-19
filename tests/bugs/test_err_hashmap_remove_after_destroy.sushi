@@ -9,16 +9,16 @@
 # EXPECT_ERROR_CODE: CE2406
 use <collections/hashmap>
 
-fn wreck(&poke HashMap<string, i32> m) ~:
+fn wreck(&poke HashMap@(string, i32) m) ~:
     m.destroy()
     return Result.Ok(~)
 
 fn main() i32:
-    let HashMap<string, i32> map = HashMap.new()
+    let HashMap@(string, i32) map = HashMap.new()
     map.insert("a", 1)
     wreck(&poke map)
 
-    let Maybe<i32> gone = map.remove("a")
+    let Maybe@(i32) gone = map.remove("a")
     if (gone.is_some()):
         println("found {gone.realise(0)}")
     else:

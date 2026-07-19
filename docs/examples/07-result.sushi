@@ -46,7 +46,7 @@ fn main() i32:
     # Pattern 1: Store Result<T, E> and check it explicitly.
     # This is the most explicit approach, allowing separate handling
     # of Ok and Err cases. Result<T, E> can be used in boolean context.
-    let Result<i32, StdError> jump1 = calculate_hyperspace_jump(1000, 50)
+    let Result@(i32, StdError) jump1 = calculate_hyperspace_jump(1000, 50)
 
     # Result<T, E> in boolean context: if (result) checks for Ok.
     # Inside the Ok branch, use .realise() to extract the value safely.
@@ -72,7 +72,7 @@ fn main() i32:
 
     # Pattern 3: Demonstrate error path.
     # This call will fail due to insufficient fuel (5 < required 50).
-    let Result<i32, StdError> jump3 = calculate_hyperspace_jump(5000, 5)
+    let Result@(i32, StdError) jump3 = calculate_hyperspace_jump(5000, 5)
 
     if (jump3):
         println("This won't print")
@@ -82,7 +82,7 @@ fn main() i32:
 
     # Pattern 4: Error with negative input.
     # This demonstrates input validation failure.
-    let Result<i32, StdError> jump4 = calculate_hyperspace_jump(-100, 50)
+    let Result@(i32, StdError) jump4 = calculate_hyperspace_jump(-100, 50)
 
     # Use .realise(0) to safely extract with default of 0.
     # If Err, we get 0 instead of the computed value.

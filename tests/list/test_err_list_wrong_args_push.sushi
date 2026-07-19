@@ -1,7 +1,7 @@
 # Test error: push() with wrong number of arguments (expects 1)
 # EXPECT_ERROR_CODE: CE2053
 fn main() i32:
-    let List<i32> data = List.new()
+    let List@(i32) data = List.new()
     # ERROR: push() expects exactly 1 argument
     data.push()
     return Result.Ok(0)

@@ -8,8 +8,8 @@ use <collections/hashmap>
 # "In the beginning the Universe was created. This has made a lot of people very angry."
 
 struct Config:
-    Maybe<i32> port
-    Result<string, StdError> host
+    Maybe@(i32) port
+    Result@(string, StdError) host
 
 fn main() i32:
     # Create a struct with nested generics
@@ -19,11 +19,11 @@ fn main() i32:
     )
 
     # Hash it and use in HashMap as a key (tests complete integration)
-    let HashMap<Config, string> map = HashMap.new()
+    let HashMap@(Config, string) map = HashMap.new()
     map.insert(cfg, "The Ultimate Computer")
 
     # Retrieve it
-    let Maybe<string> retrieved = map.get(cfg)
+    let Maybe@(string) retrieved = map.get(cfg)
 
     if (retrieved.is_some()):
         println("Hashing successful")

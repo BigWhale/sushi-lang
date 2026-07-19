@@ -17,14 +17,14 @@ fn main() i32:
     let i32 err_count = 0
 
     foreach(i in 0..5):
-        let Result<i32, MyError> r = check_value(i)
+        let Result@(i32, MyError) r = check_value(i)
         if (r.is_ok()):
             ok_count := ok_count + 1
         if (r.is_err()):
             err_count := err_count + 1
 
     foreach(i in -3..0):
-        let Result<i32, MyError> r = check_value(i)
+        let Result@(i32, MyError) r = check_value(i)
         if (r.is_ok()):
             ok_count := ok_count + 1
         if (r.is_err()):

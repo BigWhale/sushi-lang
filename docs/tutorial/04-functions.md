@@ -42,7 +42,7 @@ fn add(i32 a, i32 b) i32:
 ```
 
 the compiler reads that `i32` as shorthand and actually gives you back a
-`Result<i32, StdError>`. The `i32` is the success type; `StdError` is a built-in default
+`Result@(i32, StdError)`. The `i32` is the success type; `StdError` is a built-in default
 error type. That's why even `add`, which never fails, still has to say `Result.Ok(a + b)`.
 There is no way to "just return an int" — success is always announced explicitly.
 
@@ -105,7 +105,7 @@ Jumping to Magrathea
 The jump failed: out of fuel.
 ```
 
-Here `jump` returns `string | NavError`, i.e. `Result<string, NavError>`, and can fail in
+Here `jump` returns `string | NavError`, i.e. `Result@(string, NavError)`, and can fail in
 two named ways. We consume it in `main` with the same `if (result):` pattern as before.
 This is only a taste — designing error types, propagating them with `??`, and pattern
 matching on the specific failure is the subject of
@@ -135,7 +135,7 @@ habit you'll want once your programs grow past one file.
 
 - Declare functions with `fn name(Type param, ...) ReturnType:` and call them by name.
 - **Every** function returns a `Result`. A bare return type like `i32` is shorthand for
-  `Result<i32, StdError>`, so every path must end in `Result.Ok(...)` or `Result.Err(...)`.
+  `Result@(i32, StdError)`, so every path must end in `Result.Ok(...)` or `Result.Err(...)`.
 - In `main`, consume a `Result` without `??`: use `if (result):` / `else:` and
   `.realise(default)`.
 - Declare a custom error type with `fn foo() T | ErrorType` — explored fully in

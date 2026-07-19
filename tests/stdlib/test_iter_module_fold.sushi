@@ -4,7 +4,7 @@ use <collections/iter>
 
 fn run() i32:
     let i32 base = 100
-    let List<i32> xs = List.new()
+    let List@(i32) xs = List.new()
     xs.push(1)
     xs.push(2)
     xs.push(3)

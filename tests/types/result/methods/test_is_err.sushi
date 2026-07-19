@@ -14,14 +14,14 @@ fn get_err() i32 | MyError:
     return Result.Err(MyError.Error)
 
 fn main() i32:
-    let Result<i32, MyError> ok_result = get_ok()
+    let Result@(i32, MyError) ok_result = get_ok()
     if (not ok_result.is_err()):
         println("PASS: is_err returns false for Ok")
     else:
         println("FAIL: is_err returned true for Ok")
         return Result.Ok(1)
 
-    let Result<i32, MyError> err_result = get_err()
+    let Result@(i32, MyError) err_result = get_err()
     if (err_result.is_err()):
         println("PASS: is_err returns true for Err")
         return Result.Ok(0)

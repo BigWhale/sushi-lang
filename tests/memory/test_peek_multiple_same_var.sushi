@@ -11,7 +11,7 @@ fn main() i32:
     println(num)
 
     # Three &peek borrows of the same variable - all should work
-    let Result<i32, StdError> result = triple_read(&peek num, &peek num, &peek num)
+    let Result@(i32, StdError) result = triple_read(&peek num, &peek num, &peek num)
     let i32 sum = result.realise(0)
 
     # 10 + 10 + 10 = 30

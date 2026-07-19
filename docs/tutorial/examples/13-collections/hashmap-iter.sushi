@@ -12,7 +12,7 @@ use <collections/hashmap>
 use <collections/strings>
 
 fn main() i32:
-    let HashMap<string, i32> scores = HashMap.new()
+    let HashMap@(string, i32) scores = HashMap.new()
     scores.insert("Arthur", 42)
     scores.insert("Ford", 200)
     scores.insert("Trillian", 35)

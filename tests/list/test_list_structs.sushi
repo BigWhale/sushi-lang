@@ -7,7 +7,7 @@ struct Point:
     i32 y
 
 fn main() i32:
-    let List<Point> points = List.new()
+    let List@(Point) points = List.new()
 
     # Push struct elements
     points.push(Point(10, 20))

@@ -9,7 +9,7 @@ perk Hashable:
 struct NoHash:
     i32 value
 
-enum Box<T: Hashable>:
+enum Box@(T: Hashable):
     Empty
     Full(T)
 
@@ -17,6 +17,6 @@ fn main() i32:
     let NoHash nh = NoHash(42)
 
     # This should fail with CE4006 - NoHash does not implement Hashable
-    let Box<NoHash> b = Box.Full(nh)
+    let Box@(NoHash) b = Box.Full(nh)
 
     return Result.Ok(0)

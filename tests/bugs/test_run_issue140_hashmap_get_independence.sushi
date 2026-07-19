@@ -7,12 +7,12 @@
 # EXPECT_STDOUT_EXACT: "1\n"
 use <collections/hashmap>
 
-fn make_list() List<i32>:
-    let List<i32> xs = List.new()
+fn make_list() List@(i32):
+    let List@(i32) xs = List.new()
     xs.push(7)
     return Result.Ok(xs)
 
-fn len_of(Maybe<List<i32>> m) i32:
+fn len_of(Maybe@(List@(i32)) m) i32:
     match m:
         Maybe.Some(lst) ->
             return Result.Ok(lst.len())
@@ -20,12 +20,12 @@ fn len_of(Maybe<List<i32>> m) i32:
             return Result.Ok(-1)
 
 fn run() i32:
-    let HashMap<i32, List<i32>> map = HashMap.new()
+    let HashMap@(i32, List@(i32)) map = HashMap.new()
     map.insert(1, make_list()??)  # stored list has length 1
 
     # First get: grow the returned copy. If get shared the map's buffer, this would also
     # change the stored list.
-    let Maybe<List<i32>> first = map.get(1)
+    let Maybe@(List@(i32)) first = map.get(1)
     match first:
         Maybe.Some(copy) ->
             copy.push(8)

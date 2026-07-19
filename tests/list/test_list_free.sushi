@@ -3,7 +3,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<T> free method (reset to empty but still usable)
 fn main() i32:
-    let List<i32> data = List.new()
+    let List@(i32) data = List.new()
     data.push(10)
     data.push(20)
     data.push(30)

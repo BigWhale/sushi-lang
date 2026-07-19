@@ -11,7 +11,7 @@ struct Buf:
 
 fn run() i32:
     let Buf[] arr = from([Buf(data: from([1, 2, 3])), Buf(data: from([4, 5]))])
-    let Maybe<Buf> held = arr.get(0)
+    let Maybe@(Buf) held = arr.get(0)
     let Buf first = held.realise(Buf(data: from([0])))
     println("first={first.data.len()}")
     return Result.Ok(0)

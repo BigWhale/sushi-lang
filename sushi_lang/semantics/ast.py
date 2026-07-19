@@ -458,6 +458,13 @@ class Call(Node):
     callee: "Expr"
     args: List["Expr"]
     field_names: Optional[List[str]] = None  # For named struct construction
+    # Explicit call-site type arguments: `identity@(i32)(5)`. None when the call
+    # relies on inference. Present only on the direct-call (free-function) path;
+    # the parser never attaches these to method/indirect calls.
+    type_args: Optional[List["Type"]] = None
+    # Span of the `@(...)` type-arg list, for diagnostics (CE2062 arity, constraint
+    # failures) that must underline the type args rather than the callee.
+    type_args_loc: Optional["Span"] = None
     # Set by the type checker when `callee` is a non-Name expression resolving to a
     # FunctionType: the backend uses it to emit the fat-pointer indirect call without
     # re-inferring the callee's signature.

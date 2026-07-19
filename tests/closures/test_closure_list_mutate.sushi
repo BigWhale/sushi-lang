@@ -3,7 +3,7 @@
 # persists. Start [10]; f(5) -> [10,5] len 2; f(9) -> [10,5,9] len 3; 2 + 3 = 5.
 # EXPECT_STDOUT_EXACT: "5\n"
 fn run() i32:
-    let List<i32> xs = List.new()
+    let List@(i32) xs = List.new()
     xs.push(10)
     let fn(i32) -> i32 f = |i32 x|:
         xs.push(x)

@@ -8,12 +8,12 @@
 # EXPECT_NO_LEAKS: true
 
 fn main() i32:
-    let List<Result<string, StdError>> l = List.new()
+    let List@(Result@(string, StdError)) l = List.new()
     l.push(Result.Ok("alpha"))
     l.push(Result.Err(StdError.Error))
     println("len = {l.len()}")
 
-    let Maybe<Result<string, StdError>> head = l.get(0)
+    let Maybe@(Result@(string, StdError)) head = l.get(0)
     match head:
         Maybe.Some(r) -> println("first ok = {r.is_ok()}")
         Maybe.None() -> println("first ok = missing")

@@ -2,14 +2,14 @@
 # EXPECT_ERROR_CODE: CW1001
 # This tests body substitution with if/while statements
 
-fn find_max<T>(T a, T b) T:
+fn find_max@(T)(T a, T b) T:
     # Control flow with generic types
     if (a > b):
         return Result.Ok(a)
     else:
         return Result.Ok(b)
 
-fn loop_count<T>(T value, i32 max) i32:
+fn loop_count@(T)(T value, i32 max) i32:
     # Loop with generic type (just using it, not operating on it)
     let i32 count = 0
     while (count < max):

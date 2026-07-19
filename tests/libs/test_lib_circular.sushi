@@ -11,7 +11,7 @@ use <lib/circular_lib>
 
 fn main() i32:
     # foo(5) = 5 + bar(4) = 5 + (8 + foo(3)) = ... = 21
-    let Result<i32, StdError> r1 = foo(5)
+    let Result@(i32, StdError) r1 = foo(5)
     match r1:
         Result.Ok(result_foo) ->
             println("foo(5) = {result_foo}")
@@ -23,7 +23,7 @@ fn main() i32:
             return Result.Ok(1)
 
     # bar(5) = 5*2 + foo(4) = 10 + (4 + bar(3)) = ... = 24
-    let Result<i32, StdError> r2 = bar(5)
+    let Result@(i32, StdError) r2 = bar(5)
     match r2:
         Result.Ok(result_bar) ->
             println("bar(5) = {result_bar}")

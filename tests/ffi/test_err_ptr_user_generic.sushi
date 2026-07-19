@@ -5,12 +5,12 @@ unsafe external "C" as libc because "intentional ptr generic arg":
     fn malloc(i64 n) ptr = "malloc"
     fn free(ptr p) ~ = "free"
 
-struct Tagged<T>:
+struct Tagged@(T):
     T value
     i32 tag
 
 fn main() i32:
     let ptr a = libc.malloc(8 as i64)
-    let Tagged<ptr> t = Tagged(a, 1)
+    let Tagged@(ptr) t = Tagged(a, 1)
     libc.free(t.value)
     return Result.Ok(0)

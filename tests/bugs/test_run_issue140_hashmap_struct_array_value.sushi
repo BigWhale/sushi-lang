@@ -10,7 +10,7 @@ use <collections/hashmap>
 struct Items:
     i32[] data
 
-fn len_of(Maybe<Items> got) i32:
+fn len_of(Maybe@(Items) got) i32:
     match got:
         Maybe.Some(it) ->
             return Result.Ok(it.data.len())
@@ -18,7 +18,7 @@ fn len_of(Maybe<Items> got) i32:
             return Result.Ok(-2)
 
 fn run() i32:
-    let HashMap<i32, Items> map = HashMap.new()
+    let HashMap@(i32, Items) map = HashMap.new()
     let i32[] xs = from([1, 2, 3])
     let Items it = Items(xs)      # named owning local -> insert must MOVE it (no double-free)
     map.insert(7, it)

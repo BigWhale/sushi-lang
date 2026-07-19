@@ -2,7 +2,7 @@
 # Own<T> variables should be destroyed before the return
 
 fn test_early_return(bool condition) i32:
-    let Own<i32> ptr = Own.alloc(42)
+    let Own@(i32) ptr = Own.alloc(42)
     let i32 value = ptr.get()  # Use the value to avoid warnings
     if (condition):
         # ptr should be cleaned up here before returning

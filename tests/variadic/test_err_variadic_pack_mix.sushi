@@ -3,7 +3,7 @@
 perk Display:
     fn display() string
 
-fn f<...Ts: Display>(...Ts rest, ...i32 nums) ~:
+fn f@(...Ts: Display)(...Ts rest, ...i32 nums) ~:
     return Result.Ok(~)
 
 fn main() i32:

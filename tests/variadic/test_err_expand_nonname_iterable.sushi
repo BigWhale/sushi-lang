@@ -12,7 +12,7 @@ extend i32 with Display:
 fn helper() i32:
     return Result.Ok(1)
 
-fn show<...Ts: Display>(...Ts args) ~:
+fn show@(...Ts: Display)(...Ts args) ~:
     expand(a in helper()):
         println(a.display())
     return Result.Ok(~)

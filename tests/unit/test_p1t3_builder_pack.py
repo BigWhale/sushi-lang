@@ -30,7 +30,7 @@ def _funcdef(src: str, name: str):
 
 def test_type_pack_param_and_pack_value_param() -> None:
     src = (
-        "fn print_all<...Ts: Display>(...Ts args) ~:\n"
+        "fn print_all@(...Ts: Display)(...Ts args) ~:\n"
         "    return Result.Ok(~)\n"
     )
     fn = _funcdef(src, "print_all")
@@ -74,7 +74,7 @@ def test_v1_native_variadic_unchanged() -> None:
 
 def test_unconstrained_type_pack() -> None:
     src = (
-        "fn g<...Ts>(...Ts xs) ~:\n"
+        "fn g@(...Ts)(...Ts xs) ~:\n"
         "    return Result.Ok(~)\n"
     )
     fn = _funcdef(src, "g")

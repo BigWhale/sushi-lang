@@ -42,7 +42,7 @@ Given a runtime bit, the only sub-choice is where to store it:
 | | 3-field `{data, size, owned}` (chosen) | High-bit in `size` |
 |---|---|---|
 | String size | 16 B | 12 B |
-| `Result<string>`/`Maybe<string>` enum | 20 B (crosses the x86-64 16-byte SysV boundary) | 16 B (no growth) |
+| `Result@(string)`/`Maybe@(string)` enum | 20 B (crosses the x86-64 16-byte SysV boundary) | 16 B (no growth) |
 | `size` reads | clean `i32`, no masking | **every** read must mask off the ownership bit |
 | Failure mode of a missed site | a memcpy/memmove *length* is wrong → **loud crash**, easy to find | a masked *size* read is wrong by 2^31 → **silent corruption** |
 | Number of hazard sites | few (mem* length arguments) | many (`.len()`, `%.*s` precision, comparison, bounds, every method) |
@@ -59,7 +59,7 @@ inspectable, and was simpler to land.
 The 16-byte, 3-field shape produced three ABI bugs, all now fixed:
 
 1. ARM64 undef-register poisoning of the `owned` byte (#146).
-2. `Result<string>`/`Maybe<string>` payload-size corruption — the enum data array had to
+2. `Result@(string)`/`Maybe@(string)` payload-size corruption — the enum data array had to
    be sized to preserve `owned@12` (#146).
 3. x86-64 out-of-bounds: the 20-byte enum plus passing a string's raw `i32 size`
    (adjacent to `owned` + padding) as a `mem*` length let garbage upper bits reach

@@ -18,7 +18,7 @@ fn main() i32:
   let i8 r = ret_i8().realise(0)
   let P p = P(127, 200)
   let P pn = P(y: 200, x: 127)
-  let Maybe<i8> m = Maybe.Some(120)
+  let Maybe@(i8) m = Maybe.Some(120)
   let i8[3] fixed = [1, 2, 3]
   let i8[] dyn = from([4, 5, 6])
   if (c != 200 as u8):

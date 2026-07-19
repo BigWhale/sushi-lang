@@ -1,12 +1,12 @@
 # EXPECT_STDOUT_EXACT: "Woohoo: Life\n"
 # EXPECT_RUNTIME_EXIT: 0
-struct Pair<T, U>:
+struct Pair@(T, U):
     T first
     U second
 
 fn main() i32:
-    let Pair<i32, string> slartibartfast = Pair(42, "Life")
-    let Maybe<Pair<i32, string>> true_answer = Maybe.Some(slartibartfast)
+    let Pair@(i32, string) slartibartfast = Pair(42, "Life")
+    let Maybe@(Pair@(i32, string)) true_answer = Maybe.Some(slartibartfast)
 
     match true_answer:
         Maybe.Some(ford) ->

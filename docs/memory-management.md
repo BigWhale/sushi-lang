@@ -10,7 +10,7 @@ Comprehensive guide to Sushi's memory management: RAII, references, borrowing, a
 - [RAII (Automatic Cleanup)](#raii-automatic-cleanup)
 - [Move Semantics](#move-semantics)
 - [References and Borrowing](#references-and-borrowing)
-- [Own<T> for Heap Allocation](#own-for-heap-allocation)
+- [Own@(T) for Heap Allocation](#own-for-heap-allocation)
 - [Manual Memory Management](#manual-memory-management)
 
 ## Philosophy
@@ -90,14 +90,14 @@ fn build_tree() ~:
 
 ## Move Semantics
 
-Owning types use move semantics (ownership transfer): **dynamic arrays (`T[]`), `List<T>`, and
-`Own<T>`**. Passing one by value, binding it to a new name, or capturing it in a closure transfers
+Owning types use move semantics (ownership transfer): **dynamic arrays (`T[]`), `List@(T)`, and
+`Own@(T)`**. Passing one by value, binding it to a new name, or capturing it in a closure transfers
 ownership; the source is consumed and using it afterward is a use-after-move error (`CE2405`).
 Primitives, strings, and copyable structs are copied instead.
 
 ### What Moves
 
-**Dynamic arrays, `List<T>`, `Own<T>`:**
+**Dynamic arrays, `List@(T)`, `Own@(T)`:**
 ```sushi
 fn main() i32:
     let i32[] a = from([1, 2, 3])
@@ -144,7 +144,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-The same holds for `List<T>` and `Own<T>` value parameters: a bare owning argument is moved into the
+The same holds for `List@(T)` and `Own@(T)` value parameters: a bare owning argument is moved into the
 callee, which frees it exactly once at scope exit. To pass an owning value without giving it up,
 borrow it (`&peek` / `&poke`) or pass an explicit `.clone()`.
 
@@ -379,21 +379,21 @@ let i32 temp = 5 + 3
 let i32 x = add_one(&peek temp).realise(0)
 ```
 
-## Own<T> for Heap Allocation
+## Own@(T) for Heap Allocation
 
-`Own<T>` provides explicit heap allocation for recursive types.
+`Own@(T)` provides explicit heap allocation for recursive types.
 
 ### Creating Owned Values
 
 ```sushi
 enum IntList:
     Nil
-    Cons(i32, Own<IntList>)
+    Cons(i32, Own@(IntList))
 
 fn main() i32:
     # Create owned nodes on the heap
-    let Own<IntList> tail = Own.alloc(IntList.Nil())
-    let Own<IntList> node = Own.alloc(IntList.Cons(2, tail))
+    let Own@(IntList) tail = Own.alloc(IntList.Nil())
+    let Own@(IntList) node = Own.alloc(IntList.Cons(2, tail))
     let IntList head = IntList.Cons(1, node)
 
     match head:
@@ -412,7 +412,7 @@ struct Node:
     i32 value
 
 fn main() i32:
-    let Own<Node> owned = Own.alloc(Node(value: 42))
+    let Own@(Node) owned = Own.alloc(Node(value: 42))
 
     # Dereference the owned pointer
     let Node node = owned.get()
@@ -428,7 +428,7 @@ struct Node:
     i32 value
 
 fn main() i32:
-    let Own<Node> owned = Own.alloc(Node(value: 42))
+    let Own@(Node) owned = Own.alloc(Node(value: 42))
 
     # Manually destroy
     owned.destroy()
@@ -440,19 +440,19 @@ fn main() i32:
 
 ### Ownership Semantics
 
-- **`alloc(value)` takes ownership.** When `value` is itself an owning value (an `Own<T>`,
-  a `List<T>`, a dynamic array, or a struct with owned fields), the source variable is
+- **`alloc(value)` takes ownership.** When `value` is itself an owning value (an `Own@(T)`,
+  a `List@(T)`, a dynamic array, or a struct with owned fields), the source variable is
   *moved* into the new `Own` and may not be used afterwards (use-after-move is `CE2405`).
   Primitives are copied, so passing an `i32` variable leaves it usable.
 - **`get()` borrows.** It yields a non-owning view of the payload; the binding is never a
   second owner, so the container remains responsible for freeing it. This makes nested
-  owners such as `Own<Own<T>>` safe: the outer owner frees every level exactly once.
+  owners such as `Own@(Own@(T))` safe: the outer owner frees every level exactly once.
 
 ```sushi
 fn main() i32:
-    let Own<i32> inner = Own.alloc(42)
-    let Own<Own<i32>> outer = Own.alloc(inner)  # inner is moved into outer
-    let Own<i32> borrowed = outer.get()          # borrow, not a new owner
+    let Own@(i32) inner = Own.alloc(42)
+    let Own@(Own@(i32)) outer = Own.alloc(inner)  # inner is moved into outer
+    let Own@(i32) borrowed = outer.get()          # borrow, not a new owner
     let i32 value = borrowed.get()
     println(value)                               # 42
     return Result.Ok(0)
@@ -517,7 +517,7 @@ fn main() i32:
 use <collections/hashmap>
 
 fn main() i32:
-    let HashMap<string, i32> map = HashMap.new()
+    let HashMap@(string, i32) map = HashMap.new()
 
     map.insert("a", 1)
     map.insert("b", 2)

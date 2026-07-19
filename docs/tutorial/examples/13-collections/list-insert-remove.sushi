@@ -4,7 +4,7 @@
 # .remove(index) shifts later elements left and returns Maybe<T>.
 
 fn main() i32:
-    let List<i32> nums = List.new()
+    let List@(i32) nums = List.new()
     nums.push(10)
     nums.push(20)
     nums.push(30)

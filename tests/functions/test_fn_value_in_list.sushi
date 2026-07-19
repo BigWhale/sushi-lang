@@ -7,14 +7,14 @@ fn add_one(i32 x) i32:
 fn add_two(i32 x) i32:
     return Result.Ok(x + 2)
 
-fn dispatch(List<fn(i32) -> i32> ops, i32 v) i32:
+fn dispatch(List@(fn(i32) -> i32) ops, i32 v) i32:
     let i32 acc = v
     foreach(f in ops.iter()):
         acc := f(acc)??
     return Result.Ok(acc)
 
 fn main() i32:
-    let List<fn(i32) -> i32> ops = List.new()
+    let List@(fn(i32) -> i32) ops = List.new()
     ops.push(add_one)
     ops.push(add_two)
     # ops is moved into dispatch(), which owns and frees the list (and its fn values)

@@ -3,14 +3,14 @@
 # EXPECT_STDOUT_EXACT: "sum=60\n"
 # EXPECT_RUNTIME_EXIT: 0
 
-fn total(List<i32> xs) i32:
+fn total(List@(i32) xs) i32:
     let i32 acc = 0
     foreach(x in xs.iter()):
         acc := acc + x
     return Result.Ok(acc)
 
 fn main() i32:
-    let List<i32> xs = List.new()
+    let List@(i32) xs = List.new()
     xs.push(10)
     xs.push(20)
     xs.push(30)

@@ -1,6 +1,6 @@
 # Test Own pattern with non-recursive types
 enum Container:
-    Box(Own<i32>)
+    Box(Own@(i32))
     Empty()
 
 fn test_own_pattern(Container c) i32:
@@ -13,7 +13,7 @@ fn test_own_pattern(Container c) i32:
 
 fn main() i32:
     # Test the pattern matching
-    let Own<i32> ptr = Own.alloc(42)
+    let Own@(i32) ptr = Own.alloc(42)
     let Container c = Container.Empty()
     let i32 result = test_own_pattern(c).realise(-1)
     let i32 computed = result + ptr.get()

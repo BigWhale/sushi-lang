@@ -15,7 +15,7 @@ fn test_pad_left() ~:
 
 fn test_find() ~:
     let string s = "hello world"
-    let Maybe<i32> result = s.find('world')
+    let Maybe@(i32) result = s.find('world')
     let i32 index = result.realise(-1)
     let string interp = "{s.find('world').realise(-1)}"
     if (interp == "{index}"):

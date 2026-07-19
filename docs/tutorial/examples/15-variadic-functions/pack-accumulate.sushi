@@ -17,7 +17,7 @@ extend bool with Show:
             return "true"
         return "false"
 
-fn print_row<...Ts: Show>(...Ts cells) ~:
+fn print_row@(...Ts: Show)(...Ts cells) ~:
     let string line = ""
     expand(c in cells):
         line := "{line}[{c.show()}]"

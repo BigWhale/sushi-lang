@@ -3,7 +3,7 @@
 # dispatches through the env-field member-access receiver path. f(8) = 8 + 42 = 50.
 # EXPECT_STDOUT_EXACT: "50\n"
 fn run() i32:
-    let Own<i32> boxed = Own.alloc(42)
+    let Own@(i32) boxed = Own.alloc(42)
     let fn(i32) -> i32 f = |i32 x| x + boxed.get()
     return Result.Ok(f(8)??)
 

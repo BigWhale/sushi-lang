@@ -17,11 +17,11 @@ We start from the absolute basics and build up, one chapter at a time, to every 
 feature the language has:
 
 - **Foundations** — variables, types, control flow, functions, strings
-- **Safety** — `Result<T, E>`, `Maybe<T>`, error propagation with `??`
+- **Safety** — `Result@(T, E)`, `Maybe@(T)`, error propagation with `??`
 - **Data** — arrays, structs, enums, pattern matching
 - **Abstraction** — generics, perks (traits), extension methods
-- **Systems** — RAII, references and borrow checking, `Own<T>`
-- **Library** — `List<T>`, `HashMap<K, V>`, and the standard library
+- **Systems** — RAII, references and borrow checking, `Own@(T)`
+- **Library** — `List@(T)`, `HashMap@(K, V)`, and the standard library
 - **Interop** — variadic functions, calling C, foreign pointers, building libraries
 - **Functions as values** — first-class functions, closures, and higher-order combinators
   (`map`/`filter`/`fold`/`compose`)

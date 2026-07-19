@@ -10,10 +10,10 @@ enum InnerError:
 enum OuterError:
     OuterFailed
 
-fn inner_operation() Result<i32, InnerError>:
+fn inner_operation() Result@(i32, InnerError):
     return Result.Ok(42)
 
-fn outer_operation() Result<Result<i32, InnerError>, OuterError>:
+fn outer_operation() Result@(Result@(i32, InnerError), OuterError):
     return Result.Ok(inner_operation())
 
 fn main() i32:

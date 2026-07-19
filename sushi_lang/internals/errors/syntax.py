@@ -42,3 +42,8 @@ _add(ErrorMessage("CE6101", Severity.ERROR,
     "nested function definitions are not supported",
     Category.SYNTAX, "A function may only be defined at the top level. Use a lambda for a "
                      "local callable."))
+
+_add(ErrorMessage("CE6102", Severity.ERROR,
+    "explicit type arguments are only supported on direct function calls",
+    Category.SYNTAX, "The `@(...)` type-argument list may appear only on a call to a named "
+                     "free function, not on a method call or an indirect call."))

@@ -10,12 +10,12 @@ struct Point:
 
 # Point does NOT implement Hashable
 
-enum Option<T: Hashable>:
+enum Option@(T: Hashable):
     Some(T)
     None()
 
 fn main() i32:
     let Point p = Point(10, 20)
     # Should fail: Point doesn't satisfy Hashable constraint
-    let Option<Point> opt = Option.Some(p)
+    let Option@(Point) opt = Option.Some(p)
     return Result.Ok(0)

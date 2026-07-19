@@ -9,13 +9,13 @@ perk Hashable:
 struct NoHash:
     i32 value
 
-struct Container<T: Hashable>:
+struct Container@(T: Hashable):
     T item
 
 fn main() i32:
     let NoHash nh = NoHash(42)
 
     # This should fail with CE4006 - NoHash does not implement Hashable
-    let Container<NoHash> c = Container(nh)
+    let Container@(NoHash) c = Container(nh)
 
     return Result.Ok(0)

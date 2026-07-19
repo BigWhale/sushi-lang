@@ -4,7 +4,7 @@
 
 enum Tree:
     Leaf(string)
-    Node(Own<Tree>, Own<Tree>)
+    Node(Own@(Tree), Own@(Tree))
 
 fn count_leaves(Tree t) i32:
     match t:
@@ -28,12 +28,12 @@ fn depth(Tree t) i32:
 
 fn main() i32:
     # Build a balanced tree with 4 leaves
-    let Own<Tree> la = Own.alloc(Tree.Leaf("a"))
-    let Own<Tree> lb = Own.alloc(Tree.Leaf("b"))
-    let Own<Tree> lc = Own.alloc(Tree.Leaf("c"))
-    let Own<Tree> ld = Own.alloc(Tree.Leaf("d"))
-    let Own<Tree> left = Own.alloc(Tree.Node(la, lb))
-    let Own<Tree> right = Own.alloc(Tree.Node(lc, ld))
+    let Own@(Tree) la = Own.alloc(Tree.Leaf("a"))
+    let Own@(Tree) lb = Own.alloc(Tree.Leaf("b"))
+    let Own@(Tree) lc = Own.alloc(Tree.Leaf("c"))
+    let Own@(Tree) ld = Own.alloc(Tree.Leaf("d"))
+    let Own@(Tree) left = Own.alloc(Tree.Node(la, lb))
+    let Own@(Tree) right = Own.alloc(Tree.Node(lc, ld))
     let Tree root = Tree.Node(left, right)
 
     let i32 leaves = count_leaves(root).realise(0)

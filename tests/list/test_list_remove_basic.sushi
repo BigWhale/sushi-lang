@@ -4,7 +4,7 @@
 # Test List<T> remove method - basic functionality
 fn main() i32:
     # Create list with elements
-    let List<i32> nums = List.new()
+    let List@(i32) nums = List.new()
     nums.push(10)
     nums.push(20)
     nums.push(30)

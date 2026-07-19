@@ -3,10 +3,10 @@
 # EXPECT_STDOUT_CONTAINS: "ok = true"
 # EXPECT_NO_LEAKS: true
 
-fn mk() Maybe<string>:
+fn mk() Maybe@(string):
     return Result.Ok(Maybe.Some("xxxxxxxxxxxx{'abcd'}"))
 
 fn main() i32:
-    let Result<Maybe<string>, StdError> r = mk()
+    let Result@(Maybe@(string), StdError) r = mk()
     println("ok = {r.is_ok()}")
     return Result.Ok(0)

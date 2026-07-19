@@ -1,7 +1,7 @@
 # Test error: pop() with arguments (expects 0)
 # EXPECT_ERROR_CODE: CE2053
 fn run_test() i32:
-    let List<i32> data = List.new()
+    let List@(i32) data = List.new()
     data.push(42)
     # ERROR: pop() expects no arguments
     let i32 val = data.pop(1)??

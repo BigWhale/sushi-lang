@@ -20,7 +20,7 @@
 
 fn main() i32:
     # Create empty list with default capacity
-    let List<string> crew = List.new()
+    let List@(string) crew = List.new()
 
     # Add crew members - list grows automatically
     # Push is amortized O(1) due to exponential growth strategy
@@ -59,7 +59,7 @@ fn main() i32:
 
     # Pre-allocate capacity to avoid reallocations
     # Useful when you know the approximate size in advance
-    let List<i32> answers = List.with_capacity(10)
+    let List@(i32) answers = List.with_capacity(10)
 
     answers.push(42)
     answers.push(42)

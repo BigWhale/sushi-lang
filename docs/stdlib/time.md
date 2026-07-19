@@ -20,11 +20,11 @@ The time module provides sleep functions with various granularities. All functio
 - `usleep()` - Sleep for N microseconds
 - `nanosleep()` - Sleep with nanosecond precision
 
-All functions return `Result<i32>` with 0 on success, or remaining microseconds if interrupted by a signal.
+All functions return `Result@(i32)` with 0 on success, or remaining microseconds if interrupted by a signal.
 
 ## Functions
 
-### `sleep(i64 seconds) -> Result<i32>`
+### `sleep(i64 seconds) -> Result@(i32)`
 
 Sleep for N seconds.
 
@@ -42,11 +42,11 @@ fn main() i32:
 **Parameters:**
 - `seconds` - Number of seconds to sleep
 
-**Returns:** `Result<i32>`
+**Returns:** `Result@(i32)`
 - `0` on success
 - Remaining microseconds if interrupted by signal
 
-### `msleep(i64 milliseconds) -> Result<i32>`
+### `msleep(i64 milliseconds) -> Result@(i32)`
 
 Sleep for N milliseconds.
 
@@ -64,11 +64,11 @@ fn main() i32:
 **Parameters:**
 - `milliseconds` - Number of milliseconds to sleep
 
-**Returns:** `Result<i32>`
+**Returns:** `Result@(i32)`
 - `0` on success
 - Remaining microseconds if interrupted by signal
 
-### `usleep(i64 microseconds) -> Result<i32>`
+### `usleep(i64 microseconds) -> Result@(i32)`
 
 Sleep for N microseconds.
 
@@ -86,11 +86,11 @@ fn main() i32:
 **Parameters:**
 - `microseconds` - Number of microseconds to sleep
 
-**Returns:** `Result<i32>`
+**Returns:** `Result@(i32)`
 - `0` on success
 - Remaining microseconds if interrupted by signal
 
-### `nanosleep(i64 seconds, i64 nanoseconds) -> Result<i32>`
+### `nanosleep(i64 seconds, i64 nanoseconds) -> Result@(i32)`
 
 Sleep with nanosecond precision.
 
@@ -109,7 +109,7 @@ fn main() i32:
 - `seconds` - Number of seconds to sleep
 - `nanoseconds` - Additional nanoseconds (0-999,999,999)
 
-**Returns:** `Result<i32>`
+**Returns:** `Result@(i32)`
 - `0` on success
 - Remaining microseconds if interrupted by signal
 
@@ -169,7 +169,7 @@ foreach(i in 0..100):
 
 **Retry with backoff:**
 ```sushi
-fn retry_operation() Result<i32, StdError>:
+fn retry_operation() Result@(i32, StdError):
     foreach(attempt in 0..5):
         match try_operation():
             Result.Ok(value) ->

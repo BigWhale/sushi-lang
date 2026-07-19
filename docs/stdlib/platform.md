@@ -74,7 +74,7 @@ def parse_triple(triple: str) -> TargetPlatform:
 ```
 
 A trailing OS version number is stripped and normalized: `darwin25.0.0` becomes `darwin`
-(any `darwin<N>` form collapses to the bare `darwin` os string).
+(any `darwin@(N)` form collapses to the bare `darwin` os string).
 
 #### get_current_platform
 
@@ -204,7 +204,7 @@ from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 _platform_env = get_platform_module('env')
 
 def generate_getenv(module: ir.Module) -> None:
-    """Generate getenv function: getenv(string key) -> Maybe<string>"""
+    """Generate getenv function: getenv(string key) -> Maybe@(string)"""
     # Declare external functions
     libc_getenv = _platform_env.declare_getenv(module)
     # ... builds the sushi_getenv IR using the platform-specific declaration ...

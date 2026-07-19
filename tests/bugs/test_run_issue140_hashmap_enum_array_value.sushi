@@ -10,7 +10,7 @@ enum Status:
     Active
     Items(i32[])
 
-fn len_of(Maybe<Status> got) i32:
+fn len_of(Maybe@(Status) got) i32:
     match got:
         Maybe.Some(s) ->
             match s:
@@ -22,7 +22,7 @@ fn len_of(Maybe<Status> got) i32:
             return Result.Ok(-2)
 
 fn run() i32:
-    let HashMap<i32, Status> map = HashMap.new()
+    let HashMap@(i32, Status) map = HashMap.new()
     let i32[] xs = from([10, 20, 30])   # enum constructor must MOVE this named array arg
     map.insert(1, Status.Items(xs))
     let i32 out = len_of(map.get(1))??

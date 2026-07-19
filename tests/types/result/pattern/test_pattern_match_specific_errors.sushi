@@ -9,7 +9,7 @@ enum MyFileError:
     PermissionDenied
     AlreadyExists
 
-fn open_file(string path) Result<i32, MyFileError>:
+fn open_file(string path) Result@(i32, MyFileError):
     if (path == "missing.txt"):
         return Result.Err(MyFileError.NotFound)
     if (path == "forbidden.txt"):

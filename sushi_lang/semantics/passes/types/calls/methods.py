@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType, ForeignPtrType
 from sushi_lang.semantics.ast import MethodCall, Name
 from ..compatibility import types_compatible
@@ -173,7 +174,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
             if arg_type is not None and param.ty is not None:
                 if not types_compatible(validator, arg_type, param.ty):
                     er.emit(validator.reporter, er.ERR.CE2023, arg.loc if hasattr(arg, 'loc') else call.loc,
-                           method=call.method, expected=str(param.ty), got=str(arg_type))
+                           method=call.method, expected=display_type(param.ty), got=display_type(arg_type))
 
         # Store the inferred return type on the call node
         if perk_method.ret is not None:
@@ -254,7 +255,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
             arg_type = validator.infer_expression_type(arg)
             if arg_type is not None and not types_compatible(validator, arg_type, param.ty):
                 er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                       index=i+1, expected=str(param.ty), got=str(arg_type))
+                       index=i+1, expected=display_type(param.ty), got=display_type(arg_type))
 
     # Validate any excess arguments (if more args than params)
     for i in range(len(expected_params), len(actual_args)):

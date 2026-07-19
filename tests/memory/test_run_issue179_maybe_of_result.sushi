@@ -8,6 +8,6 @@ fn mk() string:
     return Result.Ok("xxxxxxxxxxxx{'abcd'}")
 
 fn main() i32:
-    let Maybe<Result<string, StdError>> m = Maybe.Some(mk())
+    let Maybe@(Result@(string, StdError)) m = Maybe.Some(mk())
     println("some = {m.is_some()}")
     return Result.Ok(0)

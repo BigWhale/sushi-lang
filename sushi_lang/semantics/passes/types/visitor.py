@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from . import TypeValidator
@@ -163,7 +164,7 @@ def validate_fn_field_call_args(type_validator, node, fn_ty) -> None:
     expected = fn_ty.param_types
     if len(node.args) != len(expected):
         er.emit(type_validator.reporter, er.ERR.CE2092, node.loc,
-                expected=str(fn_ty),
+                expected=display_type(fn_ty),
                 actual=f"a call with {len(node.args)} argument(s)")
         return
     from sushi_lang.semantics.passes.types.compatibility import types_compatible
@@ -174,7 +175,7 @@ def validate_fn_field_call_args(type_validator, node, fn_ty) -> None:
             continue
         if not types_compatible(type_validator, arg_ty, param_ty):
             er.emit(type_validator.reporter, er.ERR.CE2092, getattr(arg, 'loc', node.loc),
-                    expected=str(param_ty), actual=str(arg_ty))
+                    expected=display_type(param_ty), actual=display_type(arg_ty))
 
 
 class StatementValidator(RecursiveVisitor):
@@ -380,7 +381,7 @@ class ExpressionValidator(RecursiveVisitor):
                 if left_is_numeric and right_is_numeric and left_type != right_type:
                     # Mixed numeric types - require explicit cast
                     er.emit(self.type_validator.reporter, er.ERR.CE2510, node.loc,
-                           left_type=str(left_type), right_type=str(right_type))
+                           left_type=display_type(left_type), right_type=display_type(right_type))
 
         # Additional validation for bitwise operators
         if node.op in ["&", "|", "^", "<<", ">>"]:
@@ -576,7 +577,7 @@ class ExpressionValidator(RecursiveVisitor):
         arg_type = tv.infer_expression_type(arg)
         if arg_type is not None and arg_type != expected_arg:
             er.emit(tv.reporter, er.ERR.CE2006, getattr(arg, 'loc', node.loc),
-                    index=0, expected=str(expected_arg), got=str(arg_type))
+                    index=0, expected=display_type(expected_arg), got=display_type(arg_type))
 
     def visit_arrayliteral(self, node: ArrayLiteral) -> None:
         """Validate array literal."""
@@ -775,7 +776,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                         self.type_validator.reporter,
                         er.ERR.CE2035,
                         part.loc,
-                        type=str(expr_type)
+                        type=display_type(expr_type)
                     )
         return BuiltinType.STRING
 

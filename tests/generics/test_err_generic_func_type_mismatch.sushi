@@ -3,7 +3,7 @@
 # backend cast failure.
 # EXPECT_ERROR_CODE: CE2002
 
-fn identity<T>(T x) T:
+fn identity@(T)(T x) T:
     return Result.Ok(x)
 
 fn run_test() i32:

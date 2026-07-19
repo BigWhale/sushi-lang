@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List, Tuple
 
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import StructType, Type
 from sushi_lang.semantics.ast import Call
 from ..compatibility import types_compatible
@@ -160,7 +161,7 @@ def _validate_named_struct_constructor(
         arg_type = validator.infer_expression_type(arg)
         if arg_type is not None and not types_compatible(validator, arg_type, resolved_field_type):
             er.emit(validator.reporter, er.ERR.CE2083, arg.loc,
-                   field=field_name, expected=str(resolved_field_type), got=str(arg_type))
+                   field=field_name, expected=display_type(resolved_field_type), got=display_type(arg_type))
 
 
 def _validate_positional_struct_constructor(
@@ -243,7 +244,7 @@ def _validate_positional_struct_constructor(
         arg_type = validator.infer_expression_type(arg)
         if arg_type is not None and not types_compatible(validator, arg_type, resolved_field_type):
             er.emit(validator.reporter, er.ERR.CE2028, arg.loc,
-                   field_name=field_name, expected=str(resolved_field_type), got=str(arg_type))
+                   field_name=field_name, expected=display_type(resolved_field_type), got=display_type(arg_type))
 
     # Validate any excess arguments (if more args than fields)
     for i in range(len(expected_fields), len(actual_args)):

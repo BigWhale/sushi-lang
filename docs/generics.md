@@ -18,8 +18,8 @@ Complete guide to generic programming in Sushi: generic types, functions, and co
 
 Sushi provides zero-cost generics through compile-time monomorphization:
 
-- **Generic structs** - `Pair<T, U>`, `Box<T>`
-- **Generic enums** - `Result<T>`, `Maybe<T>`
+- **Generic structs** - `Pair@(T, U)`, `Box@(T)`
+- **Generic enums** - `Result@(T)`, `Maybe@(T)`
 - **Generic functions** - Type parameters inferred from usage
 - **Extension methods** - Add methods to a type
 - **Zero runtime overhead** - All generic code specialized at compile time
@@ -29,12 +29,12 @@ Sushi provides zero-cost generics through compile-time monomorphization:
 ### Single Type Parameter
 
 ```sushi
-struct Box<T>:
+struct Box@(T):
     T value
 
 fn main() i32:
-    let Box<i32> int_box = Box(value: 42)
-    let Box<string> str_box = Box(value: "Mostly Harmless")
+    let Box@(i32) int_box = Box(value: 42)
+    let Box@(string) str_box = Box(value: "Mostly Harmless")
 
     println("Int: {int_box.value}")
     println("String: {str_box.value}")
@@ -45,13 +45,13 @@ fn main() i32:
 ### Multiple Type Parameters
 
 ```sushi
-struct Pair<T, U>:
+struct Pair@(T, U):
     T first
     U second
 
 fn main() i32:
-    let Pair<i32, string> p1 = Pair(first: 42, second: "answer")
-    let Pair<bool, f64> p2 = Pair(first: true, second: 3.14)
+    let Pair@(i32, string) p1 = Pair(first: 42, second: "answer")
+    let Pair@(bool, f64) p2 = Pair(first: true, second: 3.14)
 
     println("First: {p1.first}, Second: {p1.second}")
     println("Flag: {p2.first}")
@@ -62,12 +62,12 @@ fn main() i32:
 ### Generic Struct with Arrays
 
 ```sushi
-struct Container<T>:
+struct Container@(T):
     T[] items
     i32 capacity
 
 fn main() i32:
-    let Container<string> names = Container(
+    let Container@(string) names = Container(
         items: from(["Arthur", "Ford"]),
         capacity: 10
     )
@@ -86,13 +86,13 @@ A variant's payload is written as a **bare type** — `Some(T)`, not `Some(T val
 constructed positionally:
 
 ```sushi
-enum Option<T>:
+enum Option@(T):
     Some(T)
     None()
 
 fn main() i32:
-    let Option<i32> num = Option.Some(42)
-    let Option<string> text = Option.None()
+    let Option@(i32) num = Option.Some(42)
+    let Option@(string) text = Option.None()
 
     match num:
         Option.Some(v) -> println("Value: {v}")
@@ -109,18 +109,18 @@ fn main() i32:
 
 Sushi provides two essential generic enums:
 
-**Result<T>:**
+**Result@(T):**
 ```sushi
 # Implicit return type for all functions
-fn divide(i32 a, i32 b) i32:  # Returns Result<i32>
+fn divide(i32 a, i32 b) i32:  # Returns Result@(i32)
     if (b == 0):
         return Result.Err()
     return Result.Ok(a / b)
 ```
 
-**Maybe<T>:**
+**Maybe@(T):**
 ```sushi
-fn find_first_even(i32[] numbers) Maybe<i32>:
+fn find_first_even(i32[] numbers) Maybe@(i32):
     foreach(n in numbers.iter()):
         if (n % 2 == 0):
             return Result.Ok(Maybe.Some(n))
@@ -134,7 +134,7 @@ Sushi supports generic functions with automatic type inference from call sites. 
 ### Type Parameter Syntax
 
 ```sushi
-fn identity<T>(T value) T:
+fn identity@(T)(T value) T:
     return Result.Ok(value)
 
 fn main() i32:
@@ -154,16 +154,16 @@ fn main() i32:
 ### Multiple Type Parameters
 
 ```sushi
-struct Pair<T, U>:
+struct Pair@(T, U):
     T first
     U second
 
-fn make_pair<T, U>(T first, U second) Pair<T, U>:
+fn make_pair@(T, U)(T first, U second) Pair@(T, U):
     return Result.Ok(Pair(first: first, second: second))
 
 fn main() i32:
     # T=i32, U=string inferred from arguments
-    let Pair<i32, string> p = make_pair(42, "answer").realise(Pair(first: 0, second: ""))
+    let Pair@(i32, string) p = make_pair(42, "answer").realise(Pair(first: 0, second: ""))
     println("Pair: {p.first}, {p.second}")
 
     return Result.Ok(0)
@@ -175,15 +175,15 @@ Type parameters are inferred from the function's arguments. The result type is k
 caller, so the variable still needs an explicit type annotation:
 
 ```sushi
-struct Box<T>:
+struct Box@(T):
     T value
 
-fn wrap<T>(T value) Box<T>:
+fn wrap@(T)(T value) Box@(T):
     return Result.Ok(Box(value: value))
 
 fn main() i32:
-    let Box<i32> b1 = wrap(42).realise(Box(value: 0))
-    let Box<string> b2 = wrap("hello").realise(Box(value: ""))
+    let Box@(i32) b1 = wrap(42).realise(Box(value: 0))
+    let Box@(string) b2 = wrap("hello").realise(Box(value: ""))
 
     println("Wrapped int: {b1.value}")
     println("Wrapped string: {b2.value}")
@@ -201,7 +201,7 @@ function still wraps its result in `Result.Ok`:
 perk Hashable:
     fn hash() u64
 
-fn compute_hash<T: Hashable>(T value) u64:
+fn compute_hash@(T: Hashable)(T value) u64:
     return Result.Ok(value.hash())
 
 struct Point:
@@ -242,7 +242,7 @@ extend Tag with Displayable:
     fn display() string:
         return "Tag#{self.id}"
 
-fn process<T: Hashable + Displayable>(T item) ~:
+fn process@(T: Hashable + Displayable)(T item) ~:
     let u64 h = item.hash()
     let string s = item.display()
     println("Hash: {h}, Display: {s}")
@@ -260,11 +260,11 @@ A generic function can be used as a [first-class function value](first-class-fun
 **explicit expected function type** is present. The annotation fixes which instantiation you mean:
 
 ```sushi
-fn identity<T>(T x) T:
+fn identity@(T)(T x) T:
     return Result.Ok(x)
 
 fn main() i32:
-    let fn(i32) -> i32 g = identity   # picks identity<i32>
+    let fn(i32) -> i32 g = identity   # picks identity@(i32)
     let i32 n = g(41).realise(-1)     # 41
     println(n)
     return Result.Ok(0)
@@ -274,7 +274,7 @@ The same typed binding lets you hand a generic function to a higher-order functi
 
 ```sushi
 let fn(i32) -> i32 id = identity
-let List<i32> same = map(xs, id).realise(List.new())
+let List@(i32) same = map(xs, id).realise(List.new())
 ```
 
 The requirement is the **expected type**: referencing a generic function with no expected function
@@ -288,16 +288,16 @@ still **CE2093**. Bind it to a typed local first.
    - Type arguments must appear in parameter types
 
 2. **A few inference positions are still unsupported**
-   - Named generics (`Pair<T, U>`, `List<T>`, `Maybe<T>`), array elements (`T[]`, `T[N]`), and
+   - Named generics (`Pair@(T, U)`, `List@(T)`, `Maybe@(T)`), array elements (`T[]`, `T[N]`), and
      function-typed parameters (`fn(T) -> U`) all infer their type parameters
    - A **bare-parameter** lambda argument (`|x| ...`) to a generic cannot be inferred (its type
      would come from the type parameter being inferred — circular); use a typed lambda
      (`|i32 x| ...`) or a function reference instead
    - A nested generic of an enclosing type parameter (e.g. `first(singleton(x))` where
-     `singleton(x): List<T>` inside a `<T>` function) still fails inference
+     `singleton(x): List@(T)` inside a `<T>` function) still fails inference
 
 3. **No explicit type arguments**
-   - Cannot write `identity<i32>(42)`
+   - Cannot write `identity@(i32)(42)`
    - Must rely on inference from arguments
 
 ## Extension Methods
@@ -359,17 +359,17 @@ You can extend a user-defined generic struct. The method may return one of the s
 type parameters or a concrete type:
 
 ```sushi
-struct Box<T>:
+struct Box@(T):
     T value
 
-extend Box<T> unwrap() T:
+extend Box@(T) unwrap() T:
     return self.value
 
-extend Box<T> describe() string:
+extend Box@(T) describe() string:
     return "Box holding {self.value}"
 
 fn main() i32:
-    let Box<i32> b = Box(value: 42)
+    let Box@(i32) b = Box(value: 42)
 
     println("Unwrapped: {b.unwrap()}")
     println(b.describe())
@@ -379,10 +379,10 @@ fn main() i32:
 
 !!! warning "Limitations of generic extension methods"
     Generic extension methods are restricted. The following are **not** currently supported
-    and will fail to compile: extending the built-in collections (`extend List<T> ...`),
+    and will fail to compile: extending the built-in collections (`extend List@(T) ...`),
     extending array types (`extend T[] ...`), methods that return the blank type (`~`),
     methods that take a generic parameter, and methods that permute multiple type parameters
-    (for example `extend Pair<T, U> swap() Pair<U, T>`). Prefer ordinary generic functions
+    (for example `extend Pair@(T, U) swap() Pair@(U, T)`). Prefer ordinary generic functions
     for those cases.
 
 ## Nested Generics
@@ -391,11 +391,11 @@ Sushi supports nested generic types.
 
 ### Two Levels
 
-A function returning `Maybe<i32>` is implicitly wrapped to `Result<Maybe<i32>>`, so you match
+A function returning `Maybe@(i32)` is implicitly wrapped to `Result@(Maybe@(i32))`, so you match
 the outer `Result` and then the inner `Maybe`:
 
 ```sushi
-fn parse_optional(string s) Maybe<i32>:
+fn parse_optional(string s) Maybe@(i32):
     if (s == "42"):
         return Result.Ok(Maybe.Some(42))
     return Result.Ok(Maybe.None())
@@ -415,7 +415,7 @@ fn main() i32:
 
 ```sushi
 fn main() i32:
-    let Maybe<Maybe<Maybe<i32>>> deeply_nested = Maybe.Some(Maybe.Some(Maybe.Some(42)))
+    let Maybe@(Maybe@(Maybe@(i32))) deeply_nested = Maybe.Some(Maybe.Some(Maybe.Some(42)))
 
     match deeply_nested:
         Maybe.Some(level2) ->
@@ -436,8 +436,8 @@ fn main() i32:
 use <collections/hashmap>
 
 fn main() i32:
-    # List<Maybe<i32>>
-    let List<Maybe<i32>> optionals = List.new()
+    # List@(Maybe@(i32))
+    let List@(Maybe@(i32)) optionals = List.new()
     optionals.push(Maybe.Some(1))
     optionals.push(Maybe.None())
     optionals.push(Maybe.Some(3))
@@ -447,9 +447,9 @@ fn main() i32:
             Maybe.Some(v) -> println("Value: {v}")
             Maybe.None() -> println("None")
 
-    # HashMap<string, List<i32>>
-    let HashMap<string, List<i32>> groups = HashMap.new()
-    let List<i32> evens = List.new()
+    # HashMap@(string, List@(i32))
+    let HashMap@(string, List@(i32)) groups = HashMap.new()
+    let List@(i32) evens = List.new()
     evens.push(2)
     groups.insert("evens", evens)
     println("Groups: {groups.len()}")
@@ -467,18 +467,18 @@ Generics are resolved at compile time through monomorphization.
 Generic code is specialized for each concrete type used:
 
 ```sushi
-struct Box<T>:
+struct Box@(T):
     T value
 
-extend Box<T> describe() string:
+extend Box@(T) describe() string:
     return "Box holding {self.value}"
 
 fn main() i32:
-    let Box<i32> b1 = Box(value: 42)
-    let Box<string> b2 = Box(value: "hello")
+    let Box@(i32) b1 = Box(value: 42)
+    let Box@(string) b2 = Box(value: "hello")
 
-    println(b1.describe())  # Specialized describe() for Box<i32>
-    println(b2.describe())  # Specialized describe() for Box<string>
+    println(b1.describe())  # Specialized describe() for Box@(i32)
+    println(b2.describe())  # Specialized describe() for Box@(string)
 
     return Result.Ok(0)
 ```
@@ -491,7 +491,7 @@ The compiler generates a distinct specialization for each instantiation — roug
 The compiler automatically detects which generic instantiations are needed from call sites:
 
 ```sushi
-fn largest<T>(T a, T b) T:
+fn largest@(T)(T a, T b) T:
     if (a > b):
         return Result.Ok(a)
     return Result.Ok(b)
@@ -518,9 +518,9 @@ fn main() i32:
 Each unique instantiation generates separate code:
 
 ```sushi
-let Box<i32> b1 = Box(value: 1)       # Box<i32> code
-let Box<i64> b2 = Box(value: 2)       # Box<i64> code
-let Box<string> b3 = Box(value: "3")  # Box<string> code
+let Box@(i32) b1 = Box(value: 1)       # Box@(i32) code
+let Box@(i64) b2 = Box(value: 2)       # Box@(i64) code
+let Box@(string) b3 = Box(value: "3")  # Box@(string) code
 ```
 
 **Best practices:**
@@ -539,7 +539,7 @@ constraints on generic structs and enums are not yet available.)
 perk Hashable:
     fn hash() u64
 
-fn compute_hash<T: Hashable>(T value) u64:
+fn compute_hash@(T: Hashable)(T value) u64:
     return Result.Ok(value.hash())
 ```
 
@@ -549,7 +549,7 @@ Use `+` to require multiple perks. Perk methods return bare values, so they are 
 without `??`:
 
 ```sushi
-fn process<T: Hashable + Displayable>(T item) ~:
+fn process@(T: Hashable + Displayable)(T item) ~:
     let u64 h = item.hash()
     let string s = item.display()
     println("Hash: {h}, Display: {s}")
@@ -567,7 +567,7 @@ function:
 perk Describable:
     fn describe() string
 
-struct Pair<T, U>:
+struct Pair@(T, U):
     T first
     U second
 
@@ -578,22 +578,22 @@ extend Robot with Describable:
     fn describe() string:
         return "Robot {self.name}"
 
-fn make_pair<T, U>(T first, U second) Pair<T, U>:
+fn make_pair@(T, U)(T first, U second) Pair@(T, U):
     return Result.Ok(Pair(first: first, second: second))
 
-fn announce<T: Describable>(T item) ~:
+fn announce@(T: Describable)(T item) ~:
     println(item.describe())
     return Result.Ok(~)
 
 fn main() i32:
-    let Pair<i32, string> p = make_pair(42, "answer").realise(Pair(first: 0, second: ""))
+    let Pair@(i32, string) p = make_pair(42, "answer").realise(Pair(first: 0, second: ""))
     println("Pair: {p.first}, {p.second}")
 
     let Robot marvin = Robot(name: "Marvin")
     announce(marvin)
 
     # Nested generics in a List
-    let List<Pair<i32, string>> pairs = List.new()
+    let List@(Pair@(i32, string)) pairs = List.new()
     pairs.push(Pair(first: 1, second: "one"))
     pairs.push(Pair(first: 2, second: "two"))
     println("Stored pairs: {pairs.len()}")
@@ -607,12 +607,12 @@ fn main() i32:
 
 ```sushi
 # Good: clear intent
-struct KeyValue<Key, Value>:
+struct KeyValue@(Key, Value):
     Key key
     Value value
 
 # Acceptable: single letter for simple cases
-struct Box<T>:
+struct Box@(T):
     T value
 ```
 
@@ -620,28 +620,28 @@ struct Box<T>:
 
 ```sushi
 # Document with concrete types
-# Example: make_pair(42, "answer") returns Pair<i32, string>
-fn make_pair<T, U>(T first, U second) Pair<T, U>:
+# Example: make_pair(42, "answer") returns Pair@(i32, string)
+fn make_pair@(T, U)(T first, U second) Pair@(T, U):
     return Result.Ok(Pair(first: first, second: second))
 ```
 
 ### 3. Prefer Generic Functions Over Generic Extension Methods
 
 Generic functions are more capable than generic extension methods (which cannot extend the
-built-in collections; see the warning above). When you need behavior over `List<T>`, write a
+built-in collections; see the warning above). When you need behavior over `List@(T)`, write a
 function:
 
 ```sushi
-fn list_is_empty<T>(List<T> list) bool:
+fn list_is_empty@(T)(List@(T) list) bool:
     return Result.Ok(list.len() == 0)
 ```
 
 ### 4. Test Multiple Instantiations
 
 ```sushi
-let Box<i32> b1 = Box(value: 42)
-let Box<string> b2 = Box(value: "test")
-let Box<bool> b3 = Box(value: true)
+let Box@(i32) b1 = Box(value: 42)
+let Box@(string) b2 = Box(value: "test")
+let Box@(bool) b3 = Box(value: true)
 ```
 
 ---

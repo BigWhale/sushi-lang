@@ -26,7 +26,7 @@ fn check(string s) string:
         return Result.Err(StdError.Error)
     return Result.Ok("ok:{s}")
 
-fn process<...Ts: Display>(...Ts args) ~:
+fn process@(...Ts: Display)(...Ts args) ~:
     expand(a in args):
         let string shown = a.display()
         let string checked = check(shown)??

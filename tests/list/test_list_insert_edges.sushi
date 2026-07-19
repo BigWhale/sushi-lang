@@ -4,7 +4,7 @@
 # Test List<T> insert method - edge cases
 fn main() i32:
     # Test 1: Insert at beginning (index 0)
-    let List<i32> nums1 = List.new()
+    let List@(i32) nums1 = List.new()
     nums1.push(2)
     nums1.push(3)
 
@@ -25,7 +25,7 @@ fn main() i32:
             return Result.Ok(3)
 
     # Test 2: Insert at end (append-like, index == len)
-    let List<i32> nums2 = List.new()
+    let List@(i32) nums2 = List.new()
     nums2.push(1)
     nums2.push(2)
 
@@ -50,7 +50,7 @@ fn main() i32:
             return Result.Ok(7)
 
     # Test 3: Insert into empty list at index 0
-    let List<i32> nums3 = List.new()
+    let List@(i32) nums3 = List.new()
 
     match nums3.insert(0, 42):
         Result.Ok(_) ->
@@ -73,7 +73,7 @@ fn main() i32:
             return Result.Ok(11)
 
     # Test 4: Insert triggers capacity growth
-    let List<i32> nums4 = List.with_capacity(2)
+    let List@(i32) nums4 = List.with_capacity(2)
     nums4.push(1)
     nums4.push(2)
 

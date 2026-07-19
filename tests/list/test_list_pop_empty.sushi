@@ -3,7 +3,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # Test popping from empty List returns Maybe.None
 fn main() i32:
-    let List<i32> empty = List.new()
+    let List@(i32) empty = List.new()
 
     # Pop from empty list
     match empty.pop():

@@ -267,8 +267,24 @@ class ExpressionScanner:
 
         generic_func = self.generic_funcs[function_name]
 
-        # Infer type arguments from call site
-        type_args = self._infer_type_args_from_call(call, generic_func)
+        # Explicit `@(...)` type args (issue #137) override inference. If the arity
+        # is wrong we collect nothing here and let Pass 2 report CE2062.
+        explicit = call.type_args
+        if explicit:
+            from sushi_lang.semantics.generics.explicit_type_args import (
+                resolve_explicit_type_args,
+                check_explicit_type_arg_arity,
+            )
+            if check_explicit_type_arg_arity(generic_func, len(explicit)) is not None:
+                return
+            type_args = resolve_explicit_type_args(
+                explicit,
+                self.type_inferrer.struct_table,
+                self.type_inferrer.enum_table,
+            )
+        else:
+            # Infer type arguments from call site
+            type_args = self._infer_type_args_from_call(call, generic_func)
 
         if type_args is not None:
             # Successfully inferred - record instantiation

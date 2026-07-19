@@ -5,7 +5,7 @@
 # EXPECT_STDOUT_EXACT: "110\n"
 fn run() i32:
     let i32 base = 100
-    let List<fn(i32) -> i32> fns = List.new()
+    let List@(fn(i32) -> i32) fns = List.new()
     fns.push(|i32 x| x + base)
     let fn(i32) -> i32 g = fns.get(0)??
     let i32 r = g(10)??

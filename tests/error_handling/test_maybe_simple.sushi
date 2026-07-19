@@ -5,7 +5,7 @@
 
 fn main() i32:
     # Explicitly typed variable should work
-    let Maybe<i32> val = Maybe.Some(42)
+    let Maybe@(i32) val = Maybe.Some(42)
 
     # Use the variable to avoid warning
     match val:

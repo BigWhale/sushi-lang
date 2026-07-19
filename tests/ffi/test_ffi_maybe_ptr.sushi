@@ -4,7 +4,7 @@ unsafe external "C" as libc because "allocate and free a raw buffer":
     fn malloc(i64 n) ptr = "malloc"
     fn free(ptr p) ~ = "free"
 
-fn find(i64 n) Maybe<ptr>:
+fn find(i64 n) Maybe@(ptr):
     let ptr p = libc.malloc(n)
     return Result.Ok(Maybe.Some(p))
 
@@ -13,7 +13,7 @@ fn release(ptr p) ~:
     println("released")
     return Result.Ok(~)
 
-fn check(Maybe<ptr> m) ~:
+fn check(Maybe@(ptr) m) ~:
     match m:
         Maybe.Some(p) -> release(p)
         Maybe.None() -> println("none")

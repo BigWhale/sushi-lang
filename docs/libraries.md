@@ -357,7 +357,7 @@ Current limitations of the library system:
 
    **Perk implementations also ship** (concrete impls only): a library's own
    `extend <ConcreteType> with <Perk>:` block for a shipped perk crosses the boundary, so a
-   consumer can instantiate e.g. `pick_bigger<T: Doubler>` at `i32` without writing
+   consumer can instantiate e.g. `pick_bigger@(T: Doubler)` at `i32` without writing
    `extend i32 with Doubler` itself. The impl's bodies are not re-compiled at the consumer - its
    signatures register for constraint checking and dispatch, the method symbols are declared, and
    the definitions link from the library bitcode (where they carry weak linkage). Precedence:
@@ -385,7 +385,7 @@ Current limitations of the library system:
      namespace, or a private helper whose signature exposes a foreign `ptr`, still cannot be
      exported - foreign bindings cannot be re-declared at the consumer (see CE5002). Wrap the
      foreign detail behind a private helper with a C-ABI-free signature.
-   - **Generic-target perk impls do not ship**: `extend <Generic<T>> with <Perk>` is not supported
+   - **Generic-target perk impls do not ship**: `extend <Generic@(T)> with <Perk>` is not supported
      in-program, so only concrete-target impls cross the boundary.
    - **Native variadics (`...T`) are not exportable**: a v1 native variadic collects into a runtime
      `T[]` inside one concrete function (no template to monomorphize), so public export is rejected

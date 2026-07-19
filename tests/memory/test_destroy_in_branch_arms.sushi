@@ -9,7 +9,7 @@
 use <collections/hashmap>
 
 fn main() i32:
-    let HashMap<string, i32> map = HashMap.new()
+    let HashMap@(string, i32) map = HashMap.new()
     map.insert("a", 1)
     if (map.len() > 5):
         map.destroy()

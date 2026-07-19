@@ -17,7 +17,7 @@ fn fails() i32 | MyErr:
     return Result.Err(MyErr.Boom)
 
 fn probe() i32 | MyErr:
-    let Result<string, StdError> r = mk()
+    let Result@(string, StdError) r = mk()
     let i32[] big = from([0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3])
     println("ok = {r.is_ok()} big = {big.len()}")
     let i32 v = fails()??

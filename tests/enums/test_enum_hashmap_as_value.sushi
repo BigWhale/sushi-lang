@@ -19,12 +19,12 @@ fn priority_score(Priority p) i32:
             return Result.Ok(n)
 
 fn main() i32:
-    let HashMap<string, Priority> tasks = HashMap.new()
+    let HashMap@(string, Priority) tasks = HashMap.new()
     tasks.insert("email", Priority.Low())
     tasks.insert("meeting", Priority.Medium())
     tasks.insert("deploy", Priority.High(100))
 
-    let Maybe<Priority> p = tasks.get("deploy")
+    let Maybe@(Priority) p = tasks.get("deploy")
     match p:
         Maybe.Some(prio) ->
             let i32 score = priority_score(prio).realise(0)

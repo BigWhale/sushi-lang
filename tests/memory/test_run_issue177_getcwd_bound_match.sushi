@@ -11,7 +11,7 @@ fn read_cwd() string | ProcessError:
     return Result.Ok(cwd)
 
 fn main() i32:
-    let Result<string, ProcessError> r = read_cwd()
+    let Result@(string, ProcessError) r = read_cwd()
     match r:
         Result.Ok(p) -> println("cwd = {p}")
         Result.Err(_) -> println("err")

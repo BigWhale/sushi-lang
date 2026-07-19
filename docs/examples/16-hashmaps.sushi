@@ -21,7 +21,7 @@ use <collections/hashmap>
 
 fn main() i32:
     # Create empty hash map with default capacity
-    let HashMap<string, i32> ages = HashMap.new()
+    let HashMap@(string, i32) ages = HashMap.new()
 
     # Insert key-value pairs - automatically resizes when needed
     ages.insert("Arthur", 42)

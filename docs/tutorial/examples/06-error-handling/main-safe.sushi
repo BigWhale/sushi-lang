@@ -16,7 +16,7 @@ fn main() i32:
     println("realise fallback: {value}")
 
     # Pattern C: if (result): for a simple ok/err split.
-    let Result<i32, StdError> r = risky(true)
+    let Result@(i32, StdError) r = risky(true)
     if (r):
         println("if ok: {r.realise(0)}")
     else:

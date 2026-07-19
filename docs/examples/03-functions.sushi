@@ -59,7 +59,7 @@ fn main() i32:
     # Result<T, E> can be used in boolean context:
     # - if (result) checks for Ok
     # - if (!result) or else checks for Err
-    let Result<i32, StdError> result = divide_pangalactic(100, 5)
+    let Result@(i32, StdError) result = divide_pangalactic(100, 5)
 
     if (result):
         # Use .realise() inside the Ok branch to extract the value
@@ -69,7 +69,7 @@ fn main() i32:
 
     # Demonstrate error path handling.
     # This function call will fail due to division by zero.
-    let Result<i32, StdError> failed = divide_pangalactic(42, 0)
+    let Result@(i32, StdError) failed = divide_pangalactic(42, 0)
 
     if (failed):
         println("This won't print")

@@ -11,10 +11,10 @@
 use <collections/hashmap>
 
 struct Holder:
-    HashMap<string, i32> m
+    HashMap@(string, i32) m
 
 fn main() i32:
-    let HashMap<string, i32> map = HashMap.new()
+    let HashMap@(string, i32) map = HashMap.new()
     map.insert("alpha-{'x'}", 1)
     map.insert("beta-{'y'}", 2)
     let Holder h = Holder(map)

@@ -52,7 +52,7 @@ fn main() i32:
 
 def test_warning_in_method_call_receiver_reported_once(tmp_path):
     """The same duplication on the warning path (CW2511, `??` in main)."""
-    stderr = _compile(tmp_path, """fn mk() Maybe<i32>:
+    stderr = _compile(tmp_path, """fn mk() Maybe@(i32):
     return Result.Ok(Maybe.Some(1))
 
 fn main() i32:

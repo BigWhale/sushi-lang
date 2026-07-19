@@ -16,6 +16,7 @@ from typing import Dict, Tuple, Set, TYPE_CHECKING
 from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
 from sushi_lang.semantics.typesys import Type, EnumType, EnumVariantInfo, StructType
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     pass
@@ -130,7 +131,7 @@ class TypeMonomorphizer:
                 self.monomorphizer.reporter,
                 er.ERR.CE2001,  # Use generic type error for now
                 None,
-                name=f"{generic.name}<{', '.join(str(t) for t in type_args)}>"
+                name=f"{generic.name}@({', '.join(display_type(t) for t in type_args)})"
             )
             # Return a dummy enum to continue compilation
             return EnumType(name=f"{generic.name}<error>", variants=())
@@ -251,7 +252,7 @@ class TypeMonomorphizer:
                 self.monomorphizer.reporter,
                 er.ERR.CE2001,  # Use generic type error for now
                 None,
-                name=f"{generic.name}<{', '.join(str(t) for t in type_args)}>"
+                name=f"{generic.name}@({', '.join(display_type(t) for t in type_args)})"
             )
             # Return a dummy struct to continue compilation
             return StructType(name=f"{generic.name}<error>", fields=())

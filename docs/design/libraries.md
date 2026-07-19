@@ -143,7 +143,7 @@ a template is registered only if its name is not already present.
 Structs are registered before enums (an enum variant payload may reference a struct).
 Generic *function* registration happens before generic struct/enum registration, and
 all of it happens before Pass 1.5 (instantiation collection), so the consumer's own
-`Box<i32>` usages are discovered and monomorphized in the normal pass.
+`Box@(i32)` usages are discovered and monomorphized in the normal pass.
 
 ### 4.3 Type-pack (`...Ts`) functions
 
@@ -152,7 +152,7 @@ the pack parameter) exactly like any other generic function, so it is collected 
 `generic_functions` and monomorphized per (arity, type-tuple) at the consumer's call
 site through the same path as 4.2. `tests/libs/helpers/format_lib.sushi` +
 `tests/libs/test_lib_pack.sushi` exercise this: the library ships `perk Display` and
-`show_all<...Ts: Display>`; the consumer supplies `Display` impls for `i32`/`string`
+`show_all@(...Ts: Display)`; the consumer supplies `Display` impls for `i32`/`string`
 and calls with zero and two arguments.
 
 ### 4.4 Concrete perk implementations (C4a)
@@ -299,7 +299,7 @@ source did not change.
 
 ## 7. What does NOT cross the boundary
 
-- **Generic-target perk impls** (`extend List<T> with SomePerk:`) — unsupported
+- **Generic-target perk impls** (`extend List@(T) with SomePerk:`) — unsupported
   **in-program** already (Sushi has no mechanism for a perk impl generic over its
   target type), so naturally nothing ships across `.slib` either. `_extract_templates`
   filters these out explicitly (`isinstance(impl.target_type, GenericTypeRef)` skip).
@@ -314,9 +314,9 @@ this is "untested." It is not — verified directly for this document. A library
 exporting
 
 ```sushi
-enum Tree<T>:
+enum Tree@(T):
     Leaf(T)
-    Node(Own<Tree<T>>)
+    Node(Own@(Tree@(T)))
 ```
 
 (no `public` keyword — every concrete/generic type ships, §3) compiles as a `.slib`,
@@ -353,7 +353,7 @@ were never updated afterward. See §8 below for the disagreement summary.
 ## Disagreements found while writing this document
 
 - **CLAUDE.md Known Limitation #12**, "whether it crosses a `.slib` boundary is
-  untested" (recursive generic enum via `Own<Tree<T>>`): false as written — verified
+  untested" (recursive generic enum via `Own@(Tree@(T))`): false as written — verified
   in §7 above to work today, both in-program and across a library boundary.
 - **`tests/libs/helpers/generic_types_lib.sushi`**, comment claiming a recursive
   generic enum "infinite-loops the monomorphizer's type substitutor... even for a

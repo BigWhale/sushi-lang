@@ -7,7 +7,7 @@ struct Point:
 
 fn main() i32:
     let Point p = Point(10, 20)
-    let Own<Point> ptr = Own.alloc(p)
+    let Own@(Point) ptr = Own.alloc(p)
     let Point loaded = ptr.get()
     println("Point: ({loaded.x}, {loaded.y})")
     let i32 result = loaded.x + loaded.y

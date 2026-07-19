@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import List, Union, Tuple, Optional, TYPE_CHECKING
 from lark import Tree, Token
 from sushi_lang.semantics.ast import Expr, Call, MethodCall, Name, Spread
+from sushi_lang.semantics.ast_builder.types.generics import parse_type_list
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, find_tree_recursive, first_name, ice, expect
 from sushi_lang.internals.report import span_of
 
@@ -72,6 +73,22 @@ def extract_call_args(call_node: Tree, ast_builder: 'ASTBuilder') -> Tuple[List[
     return args, field_names
 
 
+def extract_call_type_args(call_node: Tree, ast_builder: 'ASTBuilder'):
+    """Extract explicit call-site type arguments from a `call` node.
+
+    Present only when the call was written `foo@(T, U)(...)`; the grammar puts a
+    `type_list` child directly under `call` in that case. Returns
+    (type_args, type_args_loc), or (None, None) for a plain call.
+    """
+    if not (call_node and call_node.children):
+        return None, None
+    type_list_node = first_tree(call_node.children, "type_list")
+    if type_list_node is None:
+        return None, None
+    type_args = parse_type_list(type_list_node, ast_builder)
+    return (type_args or None), span_of(type_list_node)
+
+
 def call_from_parts(name_tok_or_str: Union[Token, str], call_tail: Tree, ast_builder: 'ASTBuilder') -> Call:
     """Build Call from name and call tail."""
     if isinstance(name_tok_or_str, Token):
@@ -82,7 +99,10 @@ def call_from_parts(name_tok_or_str: Union[Token, str], call_tail: Tree, ast_bui
         ice(call_tail, "invalid callee in call")
 
     args, field_names = extract_call_args(call_tail, ast_builder)
-    return Call(callee=callee, args=args, field_names=field_names, loc=span_of(call_tail))
+    type_args, type_args_loc = extract_call_type_args(call_tail, ast_builder)
+    return Call(callee=callee, args=args, field_names=field_names,
+                type_args=type_args, type_args_loc=type_args_loc,
+                loc=span_of(call_tail))
 
 
 def method_call_from_parts(receiver: Expr, method_call_node: Tree, ast_builder: 'ASTBuilder') -> MethodCall:

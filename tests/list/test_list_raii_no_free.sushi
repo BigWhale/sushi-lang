@@ -7,7 +7,7 @@
 # correctness against leaks is confirmed separately with the `leaks` tool.
 
 fn build() i32:
-    let List<i32> data = List.new()
+    let List@(i32) data = List.new()
     data.push(10)
     data.push(20)
     data.push(30)

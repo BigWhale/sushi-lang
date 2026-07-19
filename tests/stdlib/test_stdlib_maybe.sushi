@@ -9,14 +9,14 @@
 
 fn main() i32:
     # Test is_some() with Some variant
-    let Maybe<i32> some_val = Maybe.Some(42)
+    let Maybe@(i32) some_val = Maybe.Some(42)
     if (some_val.is_some()):
         println("✓ is_some() on Some(42) = true")
     else:
         println("✗ is_some() on Some(42) = false (FAIL)")
 
     # Test is_some() with None variant
-    let Maybe<i32> none_val = Maybe.None()
+    let Maybe@(i32) none_val = Maybe.None()
     if (some_val.is_some()):
         println("✓ is_some() on None() = false... wait")
 
@@ -46,16 +46,16 @@ fn main() i32:
         println("✗ realise(99) on None() = {val2} (FAIL)")
 
     # Test with string type
-    let Maybe<string> some_str = Maybe.Some("Mostly Harmless")
+    let Maybe@(string) some_str = Maybe.Some("Mostly Harmless")
     let string str1 = some_str.realise("default")
     println("✓ Maybe<string> realise: {str1}")
 
-    let Maybe<string> none_str = Maybe.None()
+    let Maybe@(string) none_str = Maybe.None()
     let string str2 = none_str.realise("default")
     println("✓ Maybe<string> realise on None: {str2}")
 
     # Test with bool type
-    let Maybe<bool> some_bool = Maybe.Some(true)
+    let Maybe@(bool) some_bool = Maybe.Some(true)
     if (some_bool.is_some()):
         println("✓ Maybe<bool> is_some() works")
 
@@ -64,12 +64,12 @@ fn main() i32:
         println("✓ Maybe<bool> realise works")
 
     # Test with f64 type
-    let Maybe<f64> some_float = Maybe.Some(3.14)
+    let Maybe@(f64) some_float = Maybe.Some(3.14)
     let f64 f1 = some_float.realise(0.0)
     println("✓ Maybe<f64> realise: {f1}")
 
     # Test expect() with Some variant (should NOT panic)
-    let Maybe<i32> some_val2 = Maybe.Some(100)
+    let Maybe@(i32) some_val2 = Maybe.Some(100)
     let i32 expected_val = some_val2.expect("Should not panic!")
     if (expected_val == 100):
         println("✓ expect() on Some(100) returned 100")

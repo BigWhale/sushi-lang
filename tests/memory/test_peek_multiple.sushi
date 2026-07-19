@@ -13,7 +13,7 @@ fn main() i32:
     println(num)
 
     # Multiple &peek borrows of the same variable - should be allowed
-    let Result<i32, StdError> sum_result = sum_two(&peek num, &peek num)
+    let Result@(i32, StdError) sum_result = sum_two(&peek num, &peek num)
     let i32 result = sum_result.realise(0)
 
     if (result == 84):

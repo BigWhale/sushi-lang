@@ -12,11 +12,11 @@ use <lib/runtime_lib>
 
 fn main() i32:
     # Call library functions that use println()
-    let Result<~, StdError> r1 = greet("World")
+    let Result@(~, StdError) r1 = greet("World")
     if (not r1):
         return Result.Ok(1)
 
-    let Result<~, StdError> r2 = say_goodbye()
+    let Result@(~, StdError) r2 = say_goodbye()
     if (not r2):
         return Result.Ok(1)
 

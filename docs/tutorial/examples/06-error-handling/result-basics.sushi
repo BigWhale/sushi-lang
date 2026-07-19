@@ -7,13 +7,13 @@ fn halve(i32 n) i32:
 
 fn main() i32:
     # if (result): runs the Ok branch; else runs the Err branch.
-    let Result<i32, StdError> even = halve(84)
+    let Result@(i32, StdError) even = halve(84)
     if (even):
         println("84 halved is {even.realise(0)}")
     else:
         println("84 was odd?!")
 
-    let Result<i32, StdError> odd = halve(7)
+    let Result@(i32, StdError) odd = halve(7)
     if (odd):
         println("7 halved is {odd.realise(0)}")
     else:

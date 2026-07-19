@@ -4,7 +4,7 @@
 # Test List<T> insert method - basic functionality
 fn main() i32:
     # Create list with some elements
-    let List<i32> nums = List.new()
+    let List@(i32) nums = List.new()
     nums.push(1)
     nums.push(2)
     nums.push(4)

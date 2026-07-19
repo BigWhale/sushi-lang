@@ -7,13 +7,13 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_CONTAINS: "s = hi"
 
-fn tag<T>(T v) i32:
+fn tag@(T)(T v) i32:
     return Result.Ok((v.hash() as i32) & 1)
 
 fn add_one(i32 n) i32:
     return Result.Ok(n + 1)
 
-fn box<T>(T v) T:
+fn box@(T)(T v) T:
     let i32 t = add_one(tag(v)??)??
     println("t = {t}")
     return Result.Ok(v)

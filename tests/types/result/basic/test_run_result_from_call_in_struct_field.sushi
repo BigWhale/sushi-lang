@@ -8,7 +8,7 @@
 # EXPECT_STDOUT_CONTAINS: "ok = true"
 
 struct Holder:
-    Result<string, StdError> r
+    Result@(string, StdError) r
 
 fn mk() string:
     return Result.Ok("hi")

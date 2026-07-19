@@ -19,7 +19,7 @@ extend i32 with Display:
 enum Box:
     Val(i32)
 
-fn show<...Ts: Display>(...Ts vs) ~:
+fn show@(...Ts: Display)(...Ts vs) ~:
     expand(a in vs):
         println(a.display())
         match Box.Val(7):

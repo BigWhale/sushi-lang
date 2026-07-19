@@ -5,7 +5,7 @@
 use <collections/hashmap>
 fn main() i32:
     # Create empty HashMap with string keys
-    let HashMap<string, i32> ages = HashMap.new()
+    let HashMap@(string, i32) ages = HashMap.new()
 
     # Insert multiple entries
     ages.insert("Arthur", 30)

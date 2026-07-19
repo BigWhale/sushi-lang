@@ -27,7 +27,7 @@ extend string with Display:
     fn display() string:
         return Result.Ok(self)
 
-fn print_all<...Ts: Display>(...Ts args) ~:
+fn print_all@(...Ts: Display)(...Ts args) ~:
     return Result.Ok(~)
 
 fn main() i32:
@@ -45,7 +45,7 @@ extend i32 with Display:
     fn display() string:
         return Result.Ok("int")
 
-fn print_all<...Ts: Display>(...Ts args) ~:
+fn print_all@(...Ts: Display)(...Ts args) ~:
     return Result.Ok(~)
 
 fn main() i32:
