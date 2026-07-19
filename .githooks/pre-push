@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Pre-push quality gate: runs the same blocking checks CI does, so a push that
+# would fail CI is stopped locally instead. Mirrors .github/workflows/test.yml
+# stages 0 (lint/mypy) and 1 (pytest).
+#
+# Install (once per clone):   git config core.hooksPath .githooks
+# Bypass in an emergency:     git push --no-verify
+set -u
+
+# Run from the repository top level regardless of where the push was invoked.
+TOPLEVEL="$(git rev-parse --show-toplevel)" || exit 1
+cd "$TOPLEVEL" || exit 1
+
+fail=0
+run() {
+  local label="$1"; shift
+  echo "== pre-push: $label =="
+  if ! "$@"; then
+    echo "!! pre-push: $label FAILED"
+    fail=1
+  fi
+}
+
+# Ratcheted mypy package list -- keep in sync with test.yml.
+MYPY_PKGS=(sushi_lang/internals sushi_lang/compiler sushi_lang/packager sushi_lang/sushi_stdlib)
+
+run "ruff"   uv run ruff check sushi_lang
+run "mypy"   uv run mypy "${MYPY_PKGS[@]}"
+# Force the local tree onto sys.path so the checkout being pushed is what gets
+# tested (matters when this repo is checked out as a git worktree).
+run "pytest" env PYTHONPATH="$TOPLEVEL" uv run pytest -q
+
+if [ "$fail" -ne 0 ]; then
+  echo ""
+  echo "pre-push: blocking push -- fix the failures above or use 'git push --no-verify' to override."
+  exit 1
+fi
+echo "pre-push: all checks passed."
+exit 0
