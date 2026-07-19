@@ -140,7 +140,7 @@ fn main() i32:
         "collections/hashmap.md",
         """use <collections/hashmap>
 fn main() i32:
-    let HashMap<i32, string> m = HashMap.new()
+    let HashMap@(i32, string) m = HashMap.new()
     m.insert(1, "one")
     let string v = m.get(1).realise("none")
     println("hashmap {v}")
@@ -152,7 +152,7 @@ fn main() i32:
         "collections/list",
         "collections/list.md",
         """fn main() i32:
-    let List<i32> l = List.new()
+    let List@(i32) l = List.new()
     l.push(42)
     println("list {l.len()}")
     l.free()
@@ -173,10 +173,10 @@ fn main() i32:
         "collections/iter.md",
         """use <collections/iter>
 fn main() i32:
-    let List<i32> xs = List.new()
+    let List@(i32) xs = List.new()
     xs.push(1)
     xs.push(2)
-    let List<i32> ys = map(xs, |i32 x| x + 1).realise(List.new())
+    let List@(i32) ys = map(xs, |i32 x| x + 1).realise(List.new())
     println("iter {ys.len()}")
     return Result.Ok(0)
 """,
@@ -185,7 +185,7 @@ fn main() i32:
         "maybe",
         "maybe.md",
         """fn main() i32:
-    let Maybe<i32> m = Maybe.Some(42)
+    let Maybe@(i32) m = Maybe.Some(42)
     let i32 v = m.realise(0)
     println("maybe {v} {m.is_some()}")
     return Result.Ok(0)
@@ -195,7 +195,7 @@ fn main() i32:
         "result",
         "result.md",
         """fn main() i32:
-    let Result<i32, StdError> r = Result.Ok(42)
+    let Result@(i32, StdError) r = Result.Ok(42)
     let i32 v = r.realise(0)
     println("result {v}")
     return Result.Ok(0)

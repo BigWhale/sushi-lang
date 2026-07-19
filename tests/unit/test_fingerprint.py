@@ -175,14 +175,14 @@ def test_definition_signature_with_generic_type_params():
     every incremental build exporting a generic function a CE0000 ICE."""
     from sushi_lang.compiler.fingerprint import _definition_signature
     from sushi_lang.semantics.ast import BoundedTypeParam
-    program, _ = parse_to_ast("public fn identity<T>(T x) T:\n    return Result.Ok(x)\n")
+    program, _ = parse_to_ast("public fn identity@(T)(T x) T:\n    return Result.Ok(x)\n")
     sig = _definition_signature(program.functions[0])
     assert "<T>" in sig
 
     # A constraint is part of the signature (a constraint change must invalidate).
     program2, _ = parse_to_ast(
         "perk Hashable:\n    fn hash() u64\n\n"
-        "public fn identity<T: Hashable>(T x) T:\n    return Result.Ok(x)\n"
+        "public fn identity@(T: Hashable)(T x) T:\n    return Result.Ok(x)\n"
     )
     sig2 = _definition_signature(program2.functions[0])
     assert sig2 != sig
@@ -192,8 +192,8 @@ def test_definition_signature_with_generic_type_params():
 def test_fingerprint_generic_struct_and_enum_do_not_crash(tmp_path):
     """Generic struct/enum type_params went through the same broken join."""
     src = (
-        "struct Wrap<T>:\n    T inner\n\n"
-        "enum Slot<T>:\n    Filled(T)\n    Empty\n" + CLEAN
+        "struct Wrap@(T):\n    T inner\n\n"
+        "enum Slot@(T):\n    Filled(T)\n    Empty\n" + CLEAN
     )
     unit = _unit_with_ast(tmp_path, src)
     plain = _unit_with_ast(tmp_path, CLEAN, name="plain")

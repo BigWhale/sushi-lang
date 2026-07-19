@@ -15,7 +15,8 @@ import pytest
 from lark import Lark
 from lark.exceptions import UnexpectedInput
 
-from sushi_lang.internals.parser import GRAMMAR_PATH, ChainedPostlexer
+from sushi_lang.internals.parser import GRAMMAR_PATH
+from sushi_lang.internals.indenter import LangIndenter
 
 
 def _parser() -> Lark:
@@ -25,7 +26,7 @@ def _parser() -> Lark:
         parser="lalr",
         propagate_positions=True,
         maybe_placeholders=False,
-        postlex=ChainedPostlexer(),
+        postlex=LangIndenter(),
         lexer="basic",
     )
 
@@ -41,12 +42,12 @@ def parser() -> Lark:
 
 ACCEPT_NEW = [
     # Constrained type-pack, value pack param, expand statement together.
-    "fn f<...Ts: Display>(...Ts args) ~:\n"
+    "fn f@(...Ts: Display)(...Ts args) ~:\n"
     "    expand(a in args):\n"
     "        println(a)\n"
     "    return Result.Ok(~)\n",
     # Unconstrained type-pack.
-    "fn g<...Ts>(...Ts xs) ~:\n"
+    "fn g@(...Ts)(...Ts xs) ~:\n"
     "    return Result.Ok(~)\n",
     # A bare expand statement inside an otherwise normal function.
     "fn h(i32[] items) ~:\n"
@@ -70,7 +71,7 @@ ACCEPT_REGRESSION = [
     "fn log_all(string prefix, ...i32 values) ~:\n"
     "    return Result.Ok(~)\n",
     # Ordinary single generic type parameter (no ellipsis).
-    "fn id<T>(T x) T:\n"
+    "fn id@(T)(T x) T:\n"
     "    return Result.Ok(x)\n",
     # Ordinary runtime foreach loop (shares the ``in`` keyword with expand).
     "fn loop(i32[] xs) ~:\n"
@@ -96,7 +97,7 @@ REJECT = [
     "        println(a)\n"
     "    return Result.Ok(~)\n",
     # Ellipsis type-pack marker with no pack name.
-    "fn f<...>(...i32 xs) ~:\n"
+    "fn f@(...)(...i32 xs) ~:\n"
     "    return Result.Ok(~)\n",
     # expand missing the ``in`` keyword.
     "fn f(i32[] items) ~:\n"
@@ -118,7 +119,7 @@ def test_rejects_malformed(parser: Lark, src: str) -> None:
 
 def test_type_pack_tree_shape(parser: Lark) -> None:
     """type_param of a pack carries the ELLIPSIS token as its first child."""
-    src = "fn g<...Ts: Display>(...Ts xs) ~:\n    return Result.Ok(~)\n"
+    src = "fn g@(...Ts: Display)(...Ts xs) ~:\n    return Result.Ok(~)\n"
     tree = parser.parse(src)
     type_params = next(tree.find_data("type_param"))
     # children: ELLIPSIS token, NAME token, perk_constraints subtree

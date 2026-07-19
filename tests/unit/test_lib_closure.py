@@ -27,12 +27,12 @@ const i32 SCALE = 3
 fn scale_up(i32 x) i32:
     return Result.Ok(x * SCALE)
 
-fn pick_first<T>(T a, T b) T:
+fn pick_first@(T)(T a, T b) T:
     let T chosen = b
     chosen := a
     return Result.Ok(chosen)
 
-public fn compute<T>(T a, T b) T:
+public fn compute@(T)(T a, T b) T:
     let i32 boost = scale_up(2)??
     let T chosen = pick_first(a, b)??
     if (boost == 6):
@@ -44,7 +44,7 @@ EXTERN_LIB = """\
 unsafe external "C" as libc because "test fixture":
     fn strlen(string s) i64 = "strlen"
 
-public fn measure<T>(T a, string s) T:
+public fn measure@(T)(T a, string s) T:
     let i64 n = libc.strlen(s)
     if (n > 0):
         return Result.Ok(a)
@@ -113,7 +113,7 @@ def test_ptr_exposing_private_helper_still_rejected(tmp_path):
         "fn touch(ptr p) i32:\n"
         "    return Result.Ok(1)\n"
         "\n"
-        "public fn leaky<T>(T a) T:\n"
+        "public fn leaky@(T)(T a) T:\n"
         "    let i32 x = touch(a)??\n"
         "    return Result.Ok(a)\n"
     )
@@ -162,7 +162,7 @@ def _build_consumer(tmp_path: Path, env: dict[str, str]) -> Path:
 
 @pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
 def test_closure_links_and_runs_multi_unit(tmp_path):
-    """Two consumer units instantiate compute<T>; the private helper, private
+    """Two consumer units instantiate compute@(T); the private helper, private
     generic, and constant all resolve across the incremental link."""
     build, env = _build_lib(tmp_path, CLOSURE_LIB)
     assert build.returncode == 0, f"Library build failed:\n{build.stderr}"

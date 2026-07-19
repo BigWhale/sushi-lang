@@ -82,7 +82,7 @@ def _infer(generic_func, arg_types):
 
 
 # ---------------------------------------------------------------------------
-# pack-only generic: fn f<...Ts>(...Ts args)
+# pack-only generic: fn f@(...Ts)(...Ts args)
 # ---------------------------------------------------------------------------
 
 def _pack_only():
@@ -112,7 +112,7 @@ def test_has_pack_value_param():
 
 
 # ---------------------------------------------------------------------------
-# leading param + pack: fn f<T, ...Ts>(T head, ...Ts rest)
+# leading param + pack: fn f@(T, ...Ts)(T head, ...Ts rest)
 # ---------------------------------------------------------------------------
 
 def _leading_plus_pack():
@@ -144,7 +144,7 @@ def test_leading_plus_pack_too_few_args():
 
 
 # ---------------------------------------------------------------------------
-# non-pack generic delegates unchanged: fn f<T, U>(T a, U b)
+# non-pack generic delegates unchanged: fn f@(T, U)(T a, U b)
 # ---------------------------------------------------------------------------
 
 def _non_pack():
@@ -186,7 +186,7 @@ extend i32 display() string:
 extend string display() string:
     return Result.Ok(self)
 
-fn print_all<...Ts: Display>(...Ts args) ~:
+fn print_all@(...Ts: Display)(...Ts args) ~:
     return Result.Ok(~)
 
 fn main() i32:

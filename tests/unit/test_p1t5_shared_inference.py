@@ -45,7 +45,7 @@ def _collect(src: str):
 
 
 _IDENTITY = """
-fn identity<T>(T value) T:
+fn identity@(T)(T value) T:
     return Result.Ok(value)
 """
 

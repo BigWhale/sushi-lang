@@ -50,7 +50,7 @@ CHANNELS = [
         "CE6001", True, id="unexpected_token",
     ),
     pytest.param(
-        "fn main() i32:\n    let i32 x = @@@\n    return Result.Ok(0)\n",
+        "fn main() i32:\n    let i32 x = ```\n    return Result.Ok(0)\n",
         "CE6002", True, id="unexpected_characters",
     ),
     pytest.param(
@@ -72,7 +72,7 @@ CHANNELS = [
     ),
     pytest.param(
         "fn main() i32:\n"
-        "    let Result<i32, StdError> r = Result.Ok(1)\n"
+        "    let Result@(i32, StdError) r = Result.Ok(1)\n"
         "    let bool ok = r.is_ok(1)\n"
         "    return Result.Ok(0)\n",
         "CE2016", True, id="result_method_arity",

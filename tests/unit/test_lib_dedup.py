@@ -29,7 +29,7 @@ LIB_SOURCE = """\
 perk Ord:
     fn gt(i32 other) bool
 
-public fn max_of<T: Ord>(T a, T b) T:
+public fn max_of@(T: Ord)(T a, T b) T:
     if (a > b):
         return Result.Ok(a)
     return Result.Ok(b)
