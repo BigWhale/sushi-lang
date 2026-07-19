@@ -15,9 +15,9 @@ advanced features and compiler internals.
 
 **Core language reference:**
 - [Language Reference](language-reference.md) - Complete syntax and semantics reference
-- [Standard Library](standard-library.md) - Built-in types (`Result<T>`, `Maybe<T>`, `List<T>`, `HashMap<K,V>`)
-- [Error Handling](error-handling.md) - `Result<T>`, `Maybe<T>`, and the `??` operator
-- [Memory Management](memory-management.md) - RAII, references, borrowing, and `Own<T>`
+- [Standard Library](standard-library.md) - Built-in types (`Result@(T)`, `Maybe@(T)`, `List@(T)`, `HashMap@(K,V)`)
+- [Error Handling](error-handling.md) - `Result@(T)`, `Maybe@(T)`, and the `??` operator
+- [Memory Management](memory-management.md) - RAII, references, borrowing, and `Own@(T)`
 - [Generics](generics.md) - Generic types, functions, and monomorphization
 - [Perks](perks.md) - Traits/interfaces for polymorphic behavior with static dispatch
 - [Foreign Function Interface](ffi.md) - Calling external C functions via `unsafe external` (the `ptr` type, the Result-exemption, the safe-wrapper pattern)
@@ -84,7 +84,7 @@ nori remove my-package                     # Remove a package
 ### Quick Syntax
 
 ```sushi
-# Functions return Result<T>
+# Functions return Result@(T)
 fn add(i32 a, i32 b) i32:
     return Result.Ok(a + b)
 
@@ -99,7 +99,7 @@ match result:
     Result.Err() -> println("Failed")
 
 # Generics
-struct Pair<T, U>:
+struct Pair@(T, U):
     T first
     U second
 ```

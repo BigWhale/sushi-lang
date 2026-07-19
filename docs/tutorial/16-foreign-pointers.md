@@ -26,7 +26,7 @@ so every `ptr` in a running program traces back to a C function that returned it
 single fact is the wall everything else leans on.
 
 Here is the full life of a handle — born in `malloc`, carried through a safe wrapper's
-`Result<ptr>`, and handed back to `free`:
+`Result@(ptr)`, and handed back to `free`:
 
 ```sushi
 --8<-- "docs/tutorial/examples/16-foreign-pointers/borrow-bytes.sushi"
@@ -39,7 +39,7 @@ returned to the universe
 ```
 
 Note what the wrapper buys you: `borrow_bytes` is ordinary Sushi, so its callers get the
-error channel back (`Result.Ok`/`Result.Err`, `match`, all of it). `Maybe<ptr>` works the
+error channel back (`Result.Ok`/`Result.Err`, `match`, all of it). `Maybe@(ptr)` works the
 same way. But be precise about what it does *not* buy: wrapping a handle in `Result` adds
 error handling, **not** RAII or null-checking. The `free` is still your job — guarantee 2
 is restored by hand, in `give_back`, or not at all.
@@ -59,7 +59,7 @@ operation that would treat it as a value with behavior:
 |---|---|
 | `a == b` (or `<`, arithmetic, `not`, `~`) | `CE5010` — no comparable identity, no arithmetic |
 | `p.hash()` (or any method) | `CE5011` — an opaque handle has no methods |
-| `HashMap<i32, ptr>`, `List<ptr>`, `MyBox<ptr>` | `CE5012` — only `Result<ptr, E>` and `Maybe<ptr>` carry a `ptr` |
+| `HashMap@(i32, ptr)`, `List@(ptr)`, `MyBox@(ptr)` | `CE5012` — only `Result@(ptr, E)` and `Maybe@(ptr)` carry a `ptr` |
 | `println("{p}")` | `CE2035` — no string form |
 | `0 as ptr`, `p as i64` | `CE2014` — no forging, no laundering into an integer |
 
@@ -94,7 +94,7 @@ against the wrapper forever.
 Two compile-time rules keep `ptr` boxed into the unsafe realm:
 
 **A `public fn` may not expose `ptr`** — not as a parameter, not as a return type, not
-tucked inside `Result<ptr, E>` (`CE5008`). What a unit exports must be Sushi-shaped:
+tucked inside `Result@(ptr, E)` (`CE5008`). What a unit exports must be Sushi-shaped:
 digested values, or wrapper structs like `Towel`. Struct fields *may* carry a `ptr` across
 units — that is the deliberate escape hatch, and it is safe because a `ptr` is inert
 outside its home unit (the `libc` namespace it came from isn't even visible there).
@@ -117,7 +117,7 @@ found every file that can possibly touch a raw foreign pointer.
   dereference, no arithmetic, and no `null` literal anywhere in the language.
 - A `ptr` value can **only** be born from an external call — no cast or literal produces
   one — so a program without `unsafe external` blocks cannot have one at runtime.
-- **Holding is safe**: variables, private params/returns, `Result<ptr, E>`, `Maybe<ptr>`,
+- **Holding is safe**: variables, private params/returns, `Result@(ptr, E)`, `Maybe@(ptr)`,
   struct fields, and `ptr[]` arrays all work. Wrapping in `Result` restores the error
   channel but **not** RAII — freeing is your job.
 - **Doing is forbidden**: no comparisons or arithmetic (`CE5010`), no methods (`CE5011`),

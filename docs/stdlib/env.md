@@ -21,7 +21,7 @@ The env module provides functions for reading and modifying environment variable
 Get an environment variable value.
 
 ```sushi
-fn getenv(string key) -> Maybe<string>
+fn getenv(string key) -> Maybe@(string)
 ```
 
 **Parameters:**
@@ -53,18 +53,18 @@ use <sys/env>
 
 fn main() i32:
     # User information
-    let Maybe<string> home = getenv("HOME")
-    let Maybe<string> user = getenv("USER")
+    let Maybe@(string) home = getenv("HOME")
+    let Maybe@(string) user = getenv("USER")
 
     # System paths
-    let Maybe<string> path = getenv("PATH")
-    let Maybe<string> tmpdir = getenv("TMPDIR")
+    let Maybe@(string) path = getenv("PATH")
+    let Maybe@(string) tmpdir = getenv("TMPDIR")
 
     # Shell information
-    let Maybe<string> shell = getenv("SHELL")
+    let Maybe@(string) shell = getenv("SHELL")
 
     # Display variables
-    let Maybe<string> display = getenv("DISPLAY")
+    let Maybe@(string) display = getenv("DISPLAY")
 
     if (home.is_some()):
         println("Home: {home.realise('')}")
@@ -77,7 +77,7 @@ fn main() i32:
 Set an environment variable value.
 
 ```sushi
-fn setenv(string key, string value) -> Result<i32>
+fn setenv(string key, string value) -> Result@(i32)
 ```
 
 **Parameters:**
@@ -133,7 +133,7 @@ Both functions integrate with Sushi's error handling system:
 
 ### getenv Error Handling
 
-Since `getenv` returns `Maybe<string>`, use pattern matching or `.realise()`:
+Since `getenv` returns `Maybe@(string)`, use pattern matching or `.realise()`:
 
 ```sushi
 use <sys/env>
@@ -158,7 +158,7 @@ fn main() i32:
 
 ### setenv Error Handling
 
-Since `setenv` returns `Result<i32>`, use error propagation or pattern matching:
+Since `setenv` returns `Result@(i32)`, use error propagation or pattern matching:
 
 ```sushi
 use <sys/env>
@@ -168,7 +168,7 @@ fn main() i32:
     setenv("MY_VAR", "value")??
 
     # With explicit error handling
-    let Result<i32, StdError> set_result = setenv("MY_VAR", "value")
+    let Result@(i32, StdError) set_result = setenv("MY_VAR", "value")
     match set_result:
         Result.Ok(_) ->
             println("Variable set successfully")
@@ -207,7 +207,7 @@ use <sys/env>
 
 fn main() i32:
     # Be cautious when logging or displaying env vars
-    let Maybe<string> api_key = getenv("API_KEY")
+    let Maybe@(string) api_key = getenv("API_KEY")
 
     # Don't print sensitive values
     if (api_key.is_some()):

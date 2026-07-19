@@ -4,14 +4,14 @@
 
 # Tests Result with generic struct types
 
-struct Pair<T, U>:
+struct Pair@(T, U):
     T first
     U second
 
 enum MyError:
     Error
 
-fn make_pair() Result<Pair<i32, string>, MyError>:
+fn make_pair() Result@(Pair@(i32, string), MyError):
     return Result.Ok(Pair(42, "answer"))
 
 fn main() i32:

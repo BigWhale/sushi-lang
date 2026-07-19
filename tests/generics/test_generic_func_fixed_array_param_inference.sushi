@@ -2,7 +2,7 @@
 # Inference unifies a T[3] parameter position against a concrete i32[3] argument.
 # EXPECT_STDOUT_EXACT: "10\n"
 
-fn head3<T>(T[3] arr) T:
+fn head3@(T)(T[3] arr) T:
     return Result.Ok(arr[0])
 
 fn run_test() i32:

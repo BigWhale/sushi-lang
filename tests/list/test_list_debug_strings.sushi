@@ -1,7 +1,7 @@
-# EXPECT_STDOUT_CONTAINS: List<string> {
+# EXPECT_STDOUT_CONTAINS: List@(string) {
 # EXPECT_STDOUT_CONTAINS: charlie
 fn main() i32:
-    let List<string> names = List.new()
+    let List@(string) names = List.new()
 
     # Push some strings
     names.push("alice")

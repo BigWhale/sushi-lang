@@ -17,11 +17,11 @@ extend Point with Hashable:
         return hx + hy
 
 # Generic struct with perk constraint
-struct Container<T: Hashable>:
+struct Container@(T: Hashable):
     T value
 
 fn main() i32:
     # This should work: Point implements Hashable
-    let Container<Point> c = Container(Point(10, 20))
+    let Container@(Point) c = Container(Point(10, 20))
     println(c.value.x)
     return Result.Ok(0)

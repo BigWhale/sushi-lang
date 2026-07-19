@@ -6,7 +6,7 @@
 
 use <collections/hashmap>
 fn main() i32:
-    let HashMap<i32, string> map = HashMap.new()
+    let HashMap@(i32, string) map = HashMap.new()
     map.insert(1, "one")
     map.insert(2, "two")
     map.insert(3, "three")

@@ -13,7 +13,7 @@ fn main() i32:
     println(num)
 
     # Passing &poke where &peek is expected should work (safe downgrade)
-    let Result<i32, StdError> result = read_value(&poke num)
+    let Result@(i32, StdError) result = read_value(&poke num)
     let i32 val = result.realise(0)
 
     if (val == 42):

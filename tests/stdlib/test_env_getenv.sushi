@@ -7,13 +7,13 @@ use <sys/env>
 
 fn main() i32:
     # Test 1: Get HOME environment variable (should exist on all systems)
-    let Maybe<string> home = getenv("HOME")
+    let Maybe@(string) home = getenv("HOME")
     match home:
         Maybe.Some(path) -> println("HOME is set to: {path}")
         Maybe.None() -> println("ERROR: HOME not set (unexpected)")
 
     # Test 2: Get a non-existent environment variable
-    let Maybe<string> missing = getenv("NONEXISTENT_VAR_12345")
+    let Maybe@(string) missing = getenv("NONEXISTENT_VAR_12345")
     match missing:
         Maybe.Some(value) -> println("ERROR: NONEXISTENT_VAR_12345 should not exist: {value}")
         Maybe.None() -> println("Correctly returned None for non-existent variable")
@@ -27,13 +27,13 @@ fn main() i32:
     println("Non-existent variable with default: {missing_default}")
 
     # Test 5: Using is_some() and is_none()
-    let Maybe<string> path_var = getenv("PATH")
+    let Maybe@(string) path_var = getenv("PATH")
     if (path_var.is_some()):
         println("PATH exists")
     else:
         println("ERROR: PATH should exist")
 
-    let Maybe<string> fake_var = getenv("FAKE_VAR_999")
+    let Maybe@(string) fake_var = getenv("FAKE_VAR_999")
     if (fake_var.is_none()):
         println("FAKE_VAR_999 correctly does not exist")
     else:

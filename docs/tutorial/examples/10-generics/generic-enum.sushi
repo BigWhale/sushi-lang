@@ -1,10 +1,10 @@
-enum Tree<T>:
+enum Tree@(T):
     Leaf(T)
     Empty()
 
 fn main() i32:
-    let Tree<i32> number = Tree.Leaf(42)
-    let Tree<string> nothing = Tree.Empty()
+    let Tree@(i32) number = Tree.Leaf(42)
+    let Tree@(string) nothing = Tree.Empty()
 
     match number:
         Tree.Leaf(v) -> println("A leaf holding {v}")

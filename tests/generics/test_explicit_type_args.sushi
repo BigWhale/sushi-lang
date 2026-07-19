@@ -1,0 +1,11 @@
+# EXPECT_STDOUT_EXACT: "5 hi\n"
+# EXPECT_RUNTIME_EXIT: 0
+# Explicit call-site type arguments (issue #137): identity@(i32)(5).
+fn identity@(T)(T x) T:
+    return Result.Ok(x)
+
+fn main() i32:
+    let i32 a = identity@(i32)(5).realise(-1)
+    let string s = identity@(string)("hi").realise("?")
+    println("{a} {s}")
+    return Result.Ok(0)

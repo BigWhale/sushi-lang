@@ -25,7 +25,7 @@ struct Config:
 # Test 1: Basic Maybe<Struct> creation and extraction
 fn test_struct_in_maybe() i32:
     let Point p = Point(10, 20)
-    let Maybe<Point> mp = Maybe.Some(p)
+    let Maybe@(Point) mp = Maybe.Some(p)
 
     if (mp.is_some()):
         let Point extracted = mp.realise(Point(0, 0))
@@ -41,7 +41,7 @@ fn test_struct_in_control_flow() i32:
     # Declare Maybe<Struct> inside if block
     if (condition):
         let Config cfg = Config("test", 8080, true)
-        let Maybe<Config> mc = Maybe.Some(cfg)
+        let Maybe@(Config) mc = Maybe.Some(cfg)
 
         if (mc.is_some()):
             let Config extracted = mc.realise(Config("default", 0, false))
@@ -52,7 +52,7 @@ fn test_struct_in_control_flow() i32:
     let i32 i = 0
     while (i < 1):
         let Point pt = Point(5, 15)
-        let Maybe<Point> mp = Maybe.Some(pt)
+        let Maybe@(Point) mp = Maybe.Some(pt)
 
         if (mp.is_some()):
             let Point ex = mp.realise(Point(0, 0))
@@ -67,8 +67,8 @@ fn test_struct_in_control_flow() i32:
 fn test_nested_struct_in_maybe() i32:
     # Create Config with multiple field types
     let Config cfg = Config("myapp", 3000, true)
-    let Maybe<Config> mc1 = Maybe.Some(cfg)
-    let Maybe<Config> mc2 = Maybe.None()
+    let Maybe@(Config) mc1 = Maybe.Some(cfg)
+    let Maybe@(Config) mc2 = Maybe.None()
 
     # Test Some variant
     if (mc1.is_some()):
@@ -83,7 +83,7 @@ fn test_nested_struct_in_maybe() i32:
 # Test 4: Pattern matching on Maybe<Struct>
 fn test_struct_pattern_matching() i32:
     let Point p = Point(100, 200)
-    let Maybe<Point> mp = Maybe.Some(p)
+    let Maybe@(Point) mp = Maybe.Some(p)
 
     # Pattern match works with .realise()
     if (mp.is_some()):
@@ -99,9 +99,9 @@ fn test_multiple_maybe_structs() i32:
     let Point p2 = Point(3, 4)
     let Config c1 = Config("app1", 8080, true)
 
-    let Maybe<Point> mp1 = Maybe.Some(p1)
-    let Maybe<Point> mp2 = Maybe.Some(p2)
-    let Maybe<Config> mc1 = Maybe.Some(c1)
+    let Maybe@(Point) mp1 = Maybe.Some(p1)
+    let Maybe@(Point) mp2 = Maybe.Some(p2)
+    let Maybe@(Config) mc1 = Maybe.Some(c1)
 
     # Test multiple extractions
     let Point ex1 = mp1.realise(Point(0, 0))

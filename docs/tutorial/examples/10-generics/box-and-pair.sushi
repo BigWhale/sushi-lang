@@ -1,19 +1,19 @@
-struct Box<T>:
+struct Box@(T):
     T value
 
-struct Pair<T, U>:
+struct Pair@(T, U):
     T first
     U second
 
 fn main() i32:
-    let Box<i32> answer = Box(value: 42)
-    let Box<string> greeting = Box(value: "Mostly Harmless")
+    let Box@(i32) answer = Box(value: 42)
+    let Box@(string) greeting = Box(value: "Mostly Harmless")
 
     println("Box of i32 holds {answer.value}")
     println("Box of string holds {greeting.value}")
 
-    let Pair<string, i32> named = Pair(first: "Arthur", second: 42)
-    let Pair<string, i32> reordered = Pair(second: 42, first: "Arthur")
+    let Pair@(string, i32) named = Pair(first: "Arthur", second: 42)
+    let Pair@(string, i32) reordered = Pair(second: 42, first: "Arthur")
 
     println("{named.first} is {named.second}")
     println("{reordered.first} is still {reordered.second}")

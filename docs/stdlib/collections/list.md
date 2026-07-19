@@ -7,39 +7,39 @@ Generic growable array with automatic memory management.
 ## Import
 
 ```sushi
-# List<T> is built-in - no import required
+# List@(T) is built-in - no import required
 ```
 
 ## Overview
 
-`List<T>` is a dynamically-sized array that grows automatically as elements are added. It provides:
+`List@(T)` is a dynamically-sized array that grows automatically as elements are added. It provides:
 - **Zero-capacity start**: Lazy allocation until first push
 - **Exponential growth**: Doubles capacity for amortized O(1) push
-- **Type-safe access**: `.get()` returns `Maybe<T>` for safe bounds checking
+- **Type-safe access**: `.get()` returns `Maybe@(T)` for safe bounds checking
 - **Iterator support**: Works with foreach loops
 - **RAII cleanup**: Automatic recursive element destruction
 
-`List<T>` is an owning type: assigning it, or passing it by value to a function, **moves**
+`List@(T)` is an owning type: assigning it, or passing it by value to a function, **moves**
 it (the source binding can no longer be used; the destination now owns and frees it). Borrow
-it with `&peek List<T>` / `&poke List<T>` to use it without transferring ownership. There is no
+it with `&peek List@(T)` / `&poke List@(T)` to use it without transferring ownership. There is no
 direct `list[i]` indexing operator (unlike `T[]` arrays) — use `.get(i)` for safe access.
 
 ## Construction
 
-### `List.new() -> List<T>`
+### `List.new() -> List@(T)`
 
 Create empty list (zero capacity, lazy allocation).
 
 ```sushi
-let List<i32> nums = List.new()
+let List@(i32) nums = List.new()
 ```
 
-### `List.with_capacity(i32 n) -> List<T>`
+### `List.with_capacity(i32 n) -> List@(T)`
 
 Create list with pre-allocated capacity.
 
 ```sushi
-let List<string> names = List.with_capacity(100)
+let List@(string) names = List.with_capacity(100)
 ```
 
 ## Query Methods
@@ -71,7 +71,7 @@ if (list.is_empty()):
 
 ## Access Methods
 
-### `.get(i32 index) -> Maybe<T>`
+### `.get(i32 index) -> Maybe@(T)`
 
 Get element at index (bounds-checked). The list keeps the element — `.get()` does not remove
 it. If `T` is an owning type (e.g. `string`, a struct/enum holding heap data), the returned
@@ -85,7 +85,7 @@ match list.get(0):
         println("Index out of bounds")
 ```
 
-### `.pop() -> Maybe<T>`
+### `.pop() -> Maybe@(T)`
 
 Remove and return last element. Unlike `.get()`, this moves the element out — the list no
 longer owns it.
@@ -109,14 +109,14 @@ list.push(42)
 list.push(100)
 ```
 
-### `.insert(i32 index, T element) -> Result<~>`
+### `.insert(i32 index, T element) -> Result@(~)`
 
 Insert element at index (shifts elements right). Returns `Result.Err` if `index` is out of
-bounds — unlike `.push()`/`.get()`/`.pop()`/`.remove()`, this is the one `List<T>` method that
-can fail, so it returns a `Result` instead of `~` or `Maybe<T>`.
+bounds — unlike `.push()`/`.get()`/`.pop()`/`.remove()`, this is the one `List@(T)` method that
+can fail, so it returns a `Result` instead of `~` or `Maybe@(T)`.
 
 ```sushi
-let List<i32> nums = List.new()
+let List@(i32) nums = List.new()
 nums.push(2)
 nums.push(3)
 nums.push(4)
@@ -135,7 +135,7 @@ nums.insert(nums.len(), 100)
 
 **Bounds:** `0 <= index <= len`
 
-### `.remove(i32 index) -> Maybe<T>`
+### `.remove(i32 index) -> Maybe@(T)`
 
 Remove and return element at index (shifts elements left).
 
@@ -181,7 +181,7 @@ list.shrink_to_fit()  # Capacity = len
 
 ## Iteration
 
-### `.iter() -> Iterator<T>`
+### `.iter() -> Iterator@(T)`
 
 Create iterator for foreach loops.
 
@@ -223,7 +223,7 @@ list.debug()
 Output (one element per line):
 
 ```
-List<i32> {
+List@(i32) {
   len: 3, capacity: 4
   [0] 1
   [1] 2
@@ -250,7 +250,7 @@ List<i32> {
 ## Best Practices
 
 - Use `.with_capacity()` when final size is known to avoid reallocations
-- Use `.get()` for safe access, returns `Maybe<T>` instead of panicking
+- Use `.get()` for safe access, returns `Maybe@(T)` instead of panicking
 - Call `.free()` to reclaim memory early if list is no longer needed
 - Use `.shrink_to_fit()` after batch operations to reduce memory footprint
 - Prefer `.pop()` over `.remove(len-1)` for last element

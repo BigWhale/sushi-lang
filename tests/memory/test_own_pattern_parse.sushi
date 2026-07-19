@@ -1,7 +1,7 @@
 # Test Own pattern with recursive enum types
 enum Expr:
     IntLit(i32)
-    BinOp(Own<Expr>, Own<Expr>, string)
+    BinOp(Own@(Expr), Own@(Expr), string)
 
 fn test_pattern(Expr expr) i32:
     match expr:

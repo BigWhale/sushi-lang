@@ -21,12 +21,12 @@ fn scale_up(i32 x) i32:
     return Result.Ok(a.total + z)
 
 # Generic private helper: ships as a template flagged private.
-fn pick_first<T>(T a, T b) T:
+fn pick_first@(T)(T a, T b) T:
     let T chosen = b
     chosen := a
     return Result.Ok(chosen)
 
-public fn compute<T>(T a, T b) T:
+public fn compute@(T)(T a, T b) T:
     let i32 boost = scale_up(2)??
     # The private struct is used directly in this template body, so the
     # consumer's monomorphized instance references it too (it ships in the

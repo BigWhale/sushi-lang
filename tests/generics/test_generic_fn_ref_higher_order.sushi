@@ -4,15 +4,15 @@
 # EXPECT_STDOUT_EXACT: "7\n"
 use <collections/iter>
 
-fn identity<T>(T x) T:
+fn identity@(T)(T x) T:
     return Result.Ok(x)
 
 fn run() i32:
     let fn(i32) -> i32 id = identity
-    let List<i32> xs = List.new()
+    let List@(i32) xs = List.new()
     xs.push(5)
     xs.push(7)
-    let List<i32> ys = map(xs, id)??
+    let List@(i32) ys = map(xs, id)??
     return Result.Ok(ys.get(1).realise(-1))
 
 fn main() i32:

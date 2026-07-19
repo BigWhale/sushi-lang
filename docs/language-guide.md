@@ -30,7 +30,7 @@ fn main() i32:
 Key points:
 - `fn` declares a function
 - `i32` is the return type (32-bit integer)
-- All functions actually return `Result<T>` - this is Sushi's approach to explicit error handling (more on this later)
+- All functions actually return `Result@(T)` - this is Sushi's approach to explicit error handling (more on this later)
 - `println` outputs text with a newline to standard output
 - The `return Result.Ok(0)` convention indicates successful program termination (exit code 0)
 
@@ -115,7 +115,7 @@ fn main() i32:
 - `.len() -> i32` - Character count (UTF-8 aware)
 - `.size() -> i32` - Byte count
 - `.is_empty() -> bool` - Check if string is empty
-- `.find(string) -> Maybe<i32>` - Find substring position
+- `.find(string) -> Maybe@(i32)` - Find substring position
 - `.split(string) -> string[]` - Split into array by delimiter
 - `.trim() -> string` - Remove leading/trailing whitespace
 - `.to_upper() -> string` - Convert to uppercase (ASCII only)
@@ -140,7 +140,7 @@ fn main() i32:
 
 ## Functions and Returns
 
-Functions are the building blocks of Sushi programs. Every function follows a consistent pattern: explicit parameter types, explicit return type, and mandatory `Result<T>` wrapping for all returns.
+Functions are the building blocks of Sushi programs. Every function follows a consistent pattern: explicit parameter types, explicit return type, and mandatory `Result@(T)` wrapping for all returns.
 
 ### Basic Functions
 
@@ -184,7 +184,7 @@ fn main() i32:
 
 **Parameter passing**:
 - **Primitives and strings**: Passed by copy (cheap, no ownership transfer)
-- **Owning types** (`T[]`, `List<T>`, `Own<T>`): Passed by move — ownership transfers to the callee,
+- **Owning types** (`T[]`, `List@(T)`, `Own@(T)`): Passed by move — ownership transfers to the callee,
   which frees the value at scope exit; using the source afterward is `CE2405` (use-after-move)
 - **Structs**: Passed by copy; a struct that owns heap memory (a dynamic-array field) is deep-copied
   so the caller and callee own independent buffers
@@ -259,9 +259,9 @@ fn main() i32:
 
 ## Error Handling
 
-### Result<T>
+### Result@(T)
 
-Sushi uses `Result<T>` as its fundamental approach to error handling. Every function in Sushi implicitly returns a `Result<T>` type, even if you declare the return type as just `T`. This design choice eliminates entire classes of bugs by making error handling explicit and impossible to ignore.
+Sushi uses `Result@(T)` as its fundamental approach to error handling. Every function in Sushi implicitly returns a `Result@(T)` type, even if you declare the return type as just `T`. This design choice eliminates entire classes of bugs by making error handling explicit and impossible to ignore.
 
 **The Philosophy**: In many languages, functions can fail silently or throw exceptions that might not be handled. Sushi takes a different approach inspired by Rust: if a function can fail, that failure is encoded in the type system. You must explicitly choose to handle errors or propagate them.
 
@@ -272,7 +272,7 @@ fn divide(i32 a, i32 b) i32:
     return Result.Ok(a / b)  # Success case
 
 fn main() i32:
-    let Result<i32, StdError> result = divide(42, 6)
+    let Result@(i32, StdError) result = divide(42, 6)
 
     # Check if successful
     if (result):
@@ -285,7 +285,7 @@ fn main() i32:
 ```
 
 **Key Concepts**:
-- When you declare a function returning `i32`, it actually returns `Result<i32>`
+- When you declare a function returning `i32`, it actually returns `Result@(i32)`
 - Success values must be wrapped: `return Result.Ok(value)`
 - Failures are signaled with: `return Result.Err(StdError.Error)`
 - You can use `Result` values directly in conditionals: `if (result)` checks for success
@@ -295,7 +295,7 @@ This approach eliminates null pointer exceptions and ensures that error cases ar
 
 ### Unwrapping with .realise()
 
-The `.realise(default)` method provides a safe way to extract values from `Result<T>`, similar to unwrapping in other languages but with a mandatory fallback value:
+The `.realise(default)` method provides a safe way to extract values from `Result@(T)`, similar to unwrapping in other languages but with a mandatory fallback value:
 
 ```sushi
 fn get_value() i32:
@@ -334,7 +334,7 @@ fn read_config() string | FileError:
     return Result.Ok(content)
 
 fn main() i32:
-    let Result<string, FileError> config = read_config()
+    let Result@(string, FileError) config = read_config()
     # Handle config...
     return Result.Ok(0)
 ```
@@ -350,7 +350,7 @@ fn main() i32:
 ```sushi
 # Without ??: verbose and error-prone
 fn process() string:
-    let Result<file> f_result = open("data.txt", FileMode.Read())
+    let Result@(file) f_result = open("data.txt", FileMode.Read())
     if (not f_result):
         return Result.Err()
     let file f = f_result.realise(...)  # How do we get a default file?
@@ -365,21 +365,21 @@ fn process() string:
 
 The `??` operator makes error handling code read almost like non-error-handling code, while maintaining full safety and explicit error propagation.
 
-### Maybe<T> for Optional Values
+### Maybe@(T) for Optional Values
 
-`Maybe<T>` is Sushi's type-safe way to represent values that might or might not exist. It replaces the dangerous practice of using sentinel values (like `-1`, `null`, or empty strings) to indicate "no value". With `Maybe<T>`, the absence of a value is encoded in the type system, making it impossible to forget to check.
+`Maybe@(T)` is Sushi's type-safe way to represent values that might or might not exist. It replaces the dangerous practice of using sentinel values (like `-1`, `null`, or empty strings) to indicate "no value". With `Maybe@(T)`, the absence of a value is encoded in the type system, making it impossible to forget to check.
 
 **The Problem with Sentinel Values**: In many languages, you might return `-1` to indicate "not found" or use `null` to mean "no value". This leads to bugs because:
 - The sentinel value might be a valid result (what if `-1` is actually in your data?)
 - You can forget to check for the sentinel value
 - Different functions might use different sentinel values
 
-**The Maybe Solution**: `Maybe<T>` has two variants:
+**The Maybe Solution**: `Maybe@(T)` has two variants:
 - `Maybe.Some(value)` - contains a value of type `T`
 - `Maybe.None()` - represents the absence of a value
 
 ```sushi
-fn find_first_even(i32[] numbers) Maybe<i32>:
+fn find_first_even(i32[] numbers) Maybe@(i32):
     foreach(n in numbers.iter()):
         if (n % 2 == 0):
             return Result.Ok(Maybe.Some(n))
@@ -387,8 +387,8 @@ fn find_first_even(i32[] numbers) Maybe<i32>:
 
 fn main() i32:
     let i32[] data = from([1, 3, 5, 8])
-    # Functions return Result<T>, so find_first_even returns Result<Maybe<i32>>
-    let Result<Maybe<i32>, StdError> result = find_first_even(data)
+    # Functions return Result@(T), so find_first_even returns Result@(Maybe@(i32))
+    let Result@(Maybe@(i32), StdError) result = find_first_even(data)
 
     match result:
         Result.Ok(found) ->
@@ -403,7 +403,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-**Key Methods on Maybe<T>**:
+**Key Methods on Maybe@(T)**:
 - `.is_some()` - returns `true` if the Maybe contains a value
 - `.is_none()` - returns `true` if the Maybe is empty
 - `.realise(default)` - extracts the value or returns the default if None
@@ -412,10 +412,10 @@ fn main() i32:
 **Common Use Cases**:
 - Search operations (return `Maybe.Some(index)` if found, `Maybe.None()` if not)
 - Optional configuration values (return `Maybe.Some(config)` or `Maybe.None()`)
-- Nullable references in data structures (use `Maybe<T>` instead of trying to represent null)
-- HashMap lookups (`.get()` returns `Maybe<V>` since the key might not exist)
+- Nullable references in data structures (use `Maybe@(T)` instead of trying to represent null)
+- HashMap lookups (`.get()` returns `Maybe@(V)` since the key might not exist)
 
-**Composing Maybe with Result**: Since functions return `Result<T>`, you often see `Result<Maybe<T>>` - a result that might be an error, or might be a success with an optional value. The type system helps you handle all cases correctly.
+**Composing Maybe with Result**: Since functions return `Result@(T)`, you often see `Result@(Maybe@(T))` - a result that might be an error, or might be a success with an optional value. The type system helps you handle all cases correctly.
 
 ## Collections
 
@@ -452,13 +452,13 @@ fn main() i32:
 
 **Memory Management**: Dynamic arrays use RAII - they're automatically deallocated when they go out of scope. The destructor recursively cleans up all elements, so arrays of structs or nested arrays are properly freed. Arrays use move semantics: when you pass a dynamic array to a function, ownership transfers unless you explicitly `.clone()` it.
 
-### List<T>
+### List@(T)
 
-`List<T>` is a generic growable collection that provides more flexibility than raw dynamic arrays. It's similar to `Vec<T>` in Rust or `ArrayList<T>` in Java:
+`List@(T)` is a generic growable collection that provides more flexibility than raw dynamic arrays. It's similar to `Vec@(T)` in Rust or `ArrayList@(T)` in Java:
 
 ```sushi
 fn main() i32:
-    let List<string> passengers = List.new()
+    let List@(string) passengers = List.new()
 
     passengers.push("Arthur")
     passengers.push("Ford")
@@ -466,7 +466,7 @@ fn main() i32:
 
     println("Passengers: {passengers.len()}")
 
-    let Maybe<string> first = passengers.get(0)
+    let Maybe@(string) first = passengers.get(0)
     match first:
         Maybe.Some(name) -> println("First: {name}")
         Maybe.None() -> println("Empty list")
@@ -475,9 +475,9 @@ fn main() i32:
 ```
 
 **Key Features**:
-- **Generic**: Works with any type - `List<i32>`, `List<string>`, `List<MyStruct>`, etc.
+- **Generic**: Works with any type - `List@(i32)`, `List@(string)`, `List@(MyStruct)`, etc.
 - **Automatic growth**: Capacity doubles when full, giving amortized O(1) push operations
-- **Safe access**: `.get()` returns `Maybe<T>` instead of crashing on invalid indices
+- **Safe access**: `.get()` returns `Maybe@(T)` instead of crashing on invalid indices
 - **Efficient**: Uses `llvm.memmove` for shifting elements during insert/remove operations
 
 **List methods**:
@@ -487,23 +487,23 @@ fn main() i32:
 - Memory: `.reserve(additional)`, `.shrink_to_fit()`, `.free()`, `.destroy()`
 - Iteration: `.iter()`, `.debug()`
 
-**When to use List vs raw arrays**: Use `List<T>` when you need frequent insertions/removals at arbitrary positions, capacity management, or want the additional safety of `Maybe<T>` returns. Use raw dynamic arrays (`T[]`) for simpler use cases where you just need push/pop at the end.
+**When to use List vs raw arrays**: Use `List@(T)` when you need frequent insertions/removals at arbitrary positions, capacity management, or want the additional safety of `Maybe@(T)` returns. Use raw dynamic arrays (`T[]`) for simpler use cases where you just need push/pop at the end.
 
-### HashMap<K, V>
+### HashMap@(K, V)
 
-`HashMap<K, V>` provides O(1) average-case key-value lookups using open addressing with linear probing:
+`HashMap@(K, V)` provides O(1) average-case key-value lookups using open addressing with linear probing:
 
 ```sushi
 use <collections/hashmap>
 
 fn main() i32:
-    let HashMap<string, i32> ages = HashMap.new()
+    let HashMap@(string, i32) ages = HashMap.new()
 
     ages.insert("Arthur", 42)
     ages.insert("Ford", 200)
     ages.insert("Trillian", 30)
 
-    let Maybe<i32> age = ages.get("Arthur")
+    let Maybe@(i32) age = ages.get("Arthur")
     match age:
         Maybe.Some(a) -> println("Arthur is {a}")
         Maybe.None() -> println("Not found")
@@ -602,7 +602,7 @@ When you pattern match, the compiler generates a switch on the discriminant, the
 **Common use cases**:
 - **State machines**: Represent different states with different associated data
 - **Error types**: Different error variants with relevant information
-- **Optional complex data**: Use `Maybe<T>` (which is an enum) for values that might not exist
+- **Optional complex data**: Use `Maybe@(T)` (which is an enum) for values that might not exist
 - **Algebraic data types**: Build sophisticated recursive data structures
 
 ## Pattern Matching
@@ -672,12 +672,12 @@ Sushi's generics system provides zero-cost abstraction through compile-time mono
 ### Generic Structs
 
 ```sushi
-struct Pair<T, U>:
+struct Pair@(T, U):
     T first
     U second
 
 fn main() i32:
-    let Pair<i32, string> data = Pair(first: 42, second: "answer")
+    let Pair@(i32, string) data = Pair(first: 42, second: "answer")
 
     println("Number: {data.first}")
     println("Label: {data.second}")
@@ -685,9 +685,9 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-**How it works**: The compiler detects that you use `Pair<i32, string>` and generates a specialized version of the struct for that type combination. There's no runtime overhead - the generated code is as efficient as if you'd written a separate struct manually.
+**How it works**: The compiler detects that you use `Pair@(i32, string)` and generates a specialized version of the struct for that type combination. There's no runtime overhead - the generated code is as efficient as if you'd written a separate struct manually.
 
-**Generic Nesting**: Sushi fully supports nested generics like `Result<Maybe<T>>`, `List<Pair<K, V>>`, or `HashMap<string, List<i32>>`. The type system correctly handles arbitrarily deep nesting.
+**Generic Nesting**: Sushi fully supports nested generics like `Result@(Maybe@(T))`, `List@(Pair@(K, V))`, or `HashMap@(string, List@(i32))`. The type system correctly handles arbitrarily deep nesting.
 
 ### Extension Methods
 
@@ -718,20 +718,20 @@ fn main() i32:
 
 **Generic Extension Methods**:
 ```sushi
-struct Box<T>:
+struct Box@(T):
     T value
 
-extend Box<T> unwrap() T:
+extend Box@(T) unwrap() T:
     return self.value
 
 fn main() i32:
-    let Box<i32> b = Box(42)
+    let Box@(i32) b = Box(42)
     let i32 value = b.unwrap()  # Uses generic extension
     println("Unwrapped: {value}")
     return Result.Ok(0)
 ```
 
-Extension methods can be generic over user-defined generic structs: the type parameter (`T`) is declared on the receiver type (`Box<T>`), and the compiler automatically instantiates the method for each concrete type used in your program. (Generic extensions on built-in generic types such as `List<T>` are not currently supported.)
+Extension methods can be generic over user-defined generic structs: the type parameter (`T`) is declared on the receiver type (`Box@(T)`), and the compiler automatically instantiates the method for each concrete type used in your program. (Generic extensions on built-in generic types such as `List@(T)` are not currently supported.)
 
 **Benefits**:
 - **Namespace organization**: Group related functionality with the types they operate on
@@ -739,7 +739,7 @@ Extension methods can be generic over user-defined generic structs: the type par
 - **Chainability**: Method syntax enables fluent chaining: `list.first().realise(0)`
 - **Zero cost**: Compiles to the same code as a regular function call
 
-**Standard Library Use**: The entire Sushi standard library is built using extension methods. String methods like `.len()`, `.find()`, and `.split()` are all extensions. Collection methods on `List<T>` and array methods are extensions. This means you can add your own methods using the same mechanism the standard library uses.
+**Standard Library Use**: The entire Sushi standard library is built using extension methods. String methods like `.len()`, `.find()`, and `.split()` are all extensions. Collection methods on `List@(T)` and array methods are extensions. This means you can add your own methods using the same mechanism the standard library uses.
 
 ## Memory Management
 
@@ -835,7 +835,7 @@ fn main() i32:
 - **Structs with arrays**: The array fields are freed, then the struct itself
 - **Arrays of structs**: Each struct is destroyed, then the array storage is freed
 - **Enums with complex data**: The discriminant determines which variant is active, then that variant's data is cleaned up
-- **Nested collections**: `List<HashMap<string, List<i32>>>` correctly frees all levels
+- **Nested collections**: `List@(HashMap@(string, List@(i32)))` correctly frees all levels
 
 **Integration with error handling**: RAII is crucial for the `??` operator. When an error is propagated, all variables in the current scope are destroyed before returning, preventing resource leaks even in error paths.
 
@@ -845,23 +845,23 @@ fn main() i32:
 - Exception safety - errors can't cause resource leaks
 - Deterministic cleanup - you know exactly when destructors run
 
-### Own<T> for Heap Allocation
+### Own@(T) for Heap Allocation
 
-`Own<T>` is Sushi's type for heap-allocated, owned values. It's essential for building recursive data structures like linked lists and trees, where a struct needs to contain an optional instance of itself:
+`Own@(T)` is Sushi's type for heap-allocated, owned values. It's essential for building recursive data structures like linked lists and trees, where a struct needs to contain an optional instance of itself:
 
 ```sushi
 struct Point:
     i32 x
     i32 y
 
-# Recursive struct: the optional next pointer is Maybe<Own<Node>>
+# Recursive struct: the optional next pointer is Maybe@(Own@(Node))
 struct Node:
     i32 value
-    Maybe<Own<Node>> next
+    Maybe@(Own@(Node)) next
 
 fn main() i32:
     # Allocate a Point on the heap, then dereference it
-    let Own<Point> ptr = Own.alloc(Point(10, 20))
+    let Own@(Point) ptr = Own.alloc(Point(10, 20))
     let Point loaded = ptr.get()
     println("Point: ({loaded.x}, {loaded.y})")
 
@@ -877,21 +877,21 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-**Why Own<T> exists**: Without `Own<T>`, you cannot create recursive types because the compiler needs to know the size of every struct at compile time. A `Node` containing another `Node` would have infinite size. `Own<T>` breaks the cycle by storing a pointer (fixed size) to heap-allocated data.
+**Why Own@(T) exists**: Without `Own@(T)`, you cannot create recursive types because the compiler needs to know the size of every struct at compile time. A `Node` containing another `Node` would have infinite size. `Own@(T)` breaks the cycle by storing a pointer (fixed size) to heap-allocated data.
 
-**Own<T> methods**:
-- `Own.alloc(value)` - Allocates `value` on the heap and returns an `Own<T>`
+**Own@(T) methods**:
+- `Own.alloc(value)` - Allocates `value` on the heap and returns an `Own@(T)`
 - `.get()` - Returns the contained value
 - `.destroy()` - Explicitly frees the heap memory (RAII calls this automatically)
 
-`Own<T>` itself is always populated. To model an *optional* owned pointer (such as the `next` field of a list node), wrap it in `Maybe<Own<T>>` and use `Maybe.Some(...)` / `Maybe.None()` together with `.is_some()` / `.is_none()`.
+`Own@(T)` itself is always populated. To model an *optional* owned pointer (such as the `next` field of a list node), wrap it in `Maybe@(Own@(T))` and use `Maybe.Some(...)` / `Maybe.None()` together with `.is_some()` / `.is_none()`.
 
-**Memory management with Own<T>**: `Own<T>` integrates with RAII - when an `Own<T>` goes out of scope, it automatically calls `.destroy()` on the contained value, freeing the heap memory. This means recursive structures are properly cleaned up when they go out of scope, even if they're deeply nested.
+**Memory management with Own@(T)**: `Own@(T)` integrates with RAII - when an `Own@(T)` goes out of scope, it automatically calls `.destroy()` on the contained value, freeing the heap memory. This means recursive structures are properly cleaned up when they go out of scope, even if they're deeply nested.
 
 **Common patterns**:
 - **Linked lists**: Each node owns the next node
 - **Trees**: Each node owns its children
-- **Optional heap data**: Use `Own<T>` instead of nullable pointers for optional heap-allocated data
+- **Optional heap data**: Use `Own@(T)` instead of nullable pointers for optional heap-allocated data
 
 ## Next Steps
 

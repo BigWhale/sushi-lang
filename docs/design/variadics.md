@@ -6,7 +6,7 @@ Status: accepted. Implemented across two PRs — `variadic-extern` (P2-2c) and
 ## Summary
 
 Sushi gains two distinct, deliberately separated variadic mechanisms, mirroring how FFI already
-separates `ptr` (unmanaged, foreign) from `Own<T>` (RAII, native):
+separates `ptr` (unmanaged, foreign) from `Own@(T)` (RAII, native):
 
 - **Foreign / unsafe world — untyped C varargs.** A bare trailing `...` is allowed **only** inside
   an `unsafe external "C"` block. It maps directly to an LLVM `var_arg=True` declaration so that
@@ -146,7 +146,7 @@ extend bool with Display:
     fn display() string:
         return "yes"
 
-fn print_all<...Ts: Display>(...Ts args) ~:
+fn print_all@(...Ts: Display)(...Ts args) ~:
     expand(a in args):
         println(a.display())
     return Result.Ok(~)

@@ -1,6 +1,6 @@
 # EXPECT_STDOUT_EXACT: "OK: Empty list returns None\n"
 fn main() i32:
-    let List<i32> data = List.new()
+    let List@(i32) data = List.new()
     data.push(42)
     data.push(100)
 

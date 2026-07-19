@@ -23,7 +23,7 @@ extend Point with Displayable:
         return "Point"
 
 # Function with multiple constraints
-fn debug_value<T: Hashable + Displayable>(T value) ~:
+fn debug_value@(T: Hashable + Displayable)(T value) ~:
     let u64 h = value.hash()
     let string s = value.display()
     println(s)

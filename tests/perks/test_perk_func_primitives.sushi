@@ -7,7 +7,7 @@ perk Hashable:
     fn hash() u64
 
 # Generic function that requires Hashable
-fn compute_hash<T: Hashable>(T value) u64:
+fn compute_hash@(T: Hashable)(T value) u64:
     return Result.Ok(value.hash())
 
 fn run_test() i32:

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, List, Optional
 
 from sushi_lang.internals.report import Span
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType, ReferenceType
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
@@ -65,8 +66,9 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
 
         if concrete_name not in validator.enum_table.by_name and concrete_name not in validator.struct_table.by_name:
             # Monomorphized type should exist after monomorphization pass
-            # If not, it means this instantiation wasn't collected
-            er.emit(validator.reporter, er.ERR.CE2001, span, name=concrete_name)
+            # If not, it means this instantiation wasn't collected. `concrete_name`
+            # stays `<>` (it is the table lookup key above); the user sees `@()`.
+            er.emit(validator.reporter, er.ERR.CE2001, span, name=display_type(type_obj))
         return
 
     # Check if this is an unknown type
@@ -80,7 +82,7 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
             # Valid enum type - this is okay
             return
         # Unknown type that's not a struct or enum
-        er.emit(validator.reporter, er.ERR.CE2001, span, name=type_obj.name)
+        er.emit(validator.reporter, er.ERR.CE2001, span, name=display_type(type_obj))
     elif isinstance(type_obj, BuiltinType) and type_obj not in validator.known_types:
         # This shouldn't happen with current builtin types, but good to check
         er.emit(validator.reporter, er.ERR.CE2001, span, name=str(type_obj))

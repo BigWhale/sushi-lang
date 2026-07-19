@@ -11,5 +11,5 @@ fn returns_a() i32 | ErrorA:
     return Result.Err(ErrorA.Variant1)
 
 fn main() i32:
-    let Result<i32, ErrorB> result = returns_a()
+    let Result@(i32, ErrorB) result = returns_a()
     return Result.Ok(0)

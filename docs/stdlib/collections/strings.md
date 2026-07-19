@@ -95,7 +95,7 @@ if (filename.ends_with(".txt")):
     println("Text file")
 ```
 
-### `.find(string needle) -> Maybe<i32>`
+### `.find(string needle) -> Maybe@(i32)`
 
 Find first occurrence position (UTF-8 character index).
 
@@ -107,7 +107,7 @@ match text.find('world'):
         println("Not found")
 ```
 
-### `.find_last(string needle) -> Maybe<i32>`
+### `.find_last(string needle) -> Maybe@(i32)`
 
 Find last occurrence position (UTF-8 character index).
 
@@ -379,10 +379,10 @@ let u8[] bytes = text.to_bytes()
 
 The inverse conversions are `u8[]` methods (core, no import):
 `bytes.to_string()` (zero-cost, assumes valid UTF-8) and
-`bytes.to_string_checked() -> Result<string, StdError>` (validates UTF-8, `Result.Err` on
+`bytes.to_string_checked() -> Result@(string, StdError)` (validates UTF-8, `Result.Err` on
 malformed input).
 
-### `.to_i32() -> Maybe<i32>`
+### `.to_i32() -> Maybe@(i32)`
 
 Parse to i32.
 
@@ -394,15 +394,15 @@ match "42".to_i32():
         println("Invalid number")
 ```
 
-### `.to_i64() -> Maybe<i64>`
+### `.to_i64() -> Maybe@(i64)`
 
 Parse to i64.
 
 ```sushi
-let Maybe<i64> result = "9223372036854775807".to_i64()
+let Maybe@(i64) result = "9223372036854775807".to_i64()
 ```
 
-### `.to_f64() -> Maybe<f64>`
+### `.to_f64() -> Maybe@(f64)`
 
 Parse to f64.
 

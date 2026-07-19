@@ -4,8 +4,8 @@
 # "I'd far rather be happy than right any day."
 
 struct Config:
-    Maybe<i32> port
-    Maybe<string> host
+    Maybe@(i32) port
+    Maybe@(string) host
 
 struct Server:
     Config config

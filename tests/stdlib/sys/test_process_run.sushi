@@ -7,7 +7,7 @@ use <sys/process>
 use <io/stdio>
 use <collections/strings>
 
-fn report(string label, Result<ProcessOutput, ProcessError> r) ~:
+fn report(string label, Result@(ProcessOutput, ProcessError) r) ~:
     match r:
         Result.Ok(out) ->
             println("{label} ok {out.exit_code} {out.stdout_text.trim()}{out.stderr_text.trim()}")

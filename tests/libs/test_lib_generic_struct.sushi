@@ -9,13 +9,13 @@
 use <lib/generic_types_lib>
 
 fn main() i32:
-    let Box<i32> bi = Box(42)
+    let Box@(i32) bi = Box(42)
     println(bi.value)
 
-    let Box<string> bs = Box("hi")
+    let Box@(string) bs = Box("hi")
     println(bs.value)
 
-    let Opt<i32> o = Opt.Yep(7)
+    let Opt@(i32) o = Opt.Yep(7)
     match o:
         Opt.Yep(v) -> println(v)
         Opt.Nope -> println(0)

@@ -7,12 +7,12 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_CONTAINS: "v = 42"
 
-enum Box<T>:
+enum Box@(T):
     Val(T)
 
 fn main() i32:
-    let Own<Box<i32>> t = Own.alloc(Box.Val(42))
-    let Box<i32> b = t.get()
+    let Own@(Box@(i32)) t = Own.alloc(Box.Val(42))
+    let Box@(i32) b = t.get()
     match b:
         Box.Val(v) -> println("v = {v}")
     t.destroy()

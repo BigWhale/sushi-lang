@@ -3,7 +3,7 @@
 # directly in an argument position, with no typed binding, is still CE2093 -- bind it to
 # a typed local first.
 # EXPECT_ERROR_CODE: CE2093
-fn identity<T>(T x) T:
+fn identity@(T)(T x) T:
     return Result.Ok(x)
 
 fn take(fn(i32) -> i32 f) i32:

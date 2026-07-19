@@ -5,7 +5,7 @@
 use <collections/hashmap>
 fn main() i32:
     # Create empty HashMap
-    let HashMap<i32, string> map = HashMap.new()
+    let HashMap@(i32, string) map = HashMap.new()
 
     # Try to insert one entry
     map.insert(42, "answer")

@@ -11,7 +11,7 @@ enum Color:
 
 fn main() i32:
     # Create a HashMap with Color enum keys and string values
-    let HashMap<Color, string> names = HashMap.new()
+    let HashMap@(Color, string) names = HashMap.new()
 
     # Insert entries with different enum variants
     names.insert(Color.Red(), "red color")
@@ -26,7 +26,7 @@ fn main() i32:
         println("✗ Expected 4 entries")
 
     # Test get with unit variant
-    let Maybe<string> result1 = names.get(Color.Red())
+    let Maybe@(string) result1 = names.get(Color.Red())
     match result1:
         Maybe.Some(name) ->
             println("Found red: {name}")
@@ -34,7 +34,7 @@ fn main() i32:
             println("✗ Red not found")
 
     # Test get with data variant
-    let Maybe<string> result2 = names.get(Color.Custom(255))
+    let Maybe@(string) result2 = names.get(Color.Custom(255))
     match result2:
         Maybe.Some(name) ->
             println("Found custom: {name}")
@@ -42,7 +42,7 @@ fn main() i32:
             println("✗ Custom(255) not found")
 
     # Test get with non-existing key
-    let Maybe<string> result3 = names.get(Color.Custom(128))
+    let Maybe@(string) result3 = names.get(Color.Custom(128))
     match result3:
         Maybe.Some(name) ->
             println("✗ Unexpected: found {name}")
@@ -58,7 +58,7 @@ fn main() i32:
     # Update existing key
     names.insert(Color.Red(), "updated red")
 
-    let Maybe<string> result4 = names.get(Color.Red())
+    let Maybe@(string) result4 = names.get(Color.Red())
     match result4:
         Maybe.Some(name) ->
             println("Updated: {name}")
@@ -66,7 +66,7 @@ fn main() i32:
             println("✗ Updated red not found")
 
     # Remove a key
-    let Maybe<string> result5 = names.remove(Color.Blue())
+    let Maybe@(string) result5 = names.remove(Color.Blue())
     match result5:
         Maybe.Some(removed) ->
             println("Removed: {removed}")

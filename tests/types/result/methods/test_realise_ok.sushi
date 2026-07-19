@@ -7,7 +7,7 @@
 enum MyError:
     Error
 
-fn get_value() Result<i32, MyError>:
+fn get_value() Result@(i32, MyError):
     return Result.Ok(42)
 
 fn main() i32:

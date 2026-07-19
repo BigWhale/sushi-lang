@@ -3,11 +3,11 @@
 # Owning T[] params move by value (#133), so each call uses its own array.
 # EXPECT_STDOUT_EXACT: "1 6 a z\n"
 
-fn first<T>(T[] arr) T:
+fn first@(T)(T[] arr) T:
     let T elem = arr.get(0)??
     return Result.Ok(elem)
 
-fn last<T>(T[] arr) T:
+fn last@(T)(T[] arr) T:
     let i32 len = arr.len()
     let T elem = arr.get(len - 1)??
     return Result.Ok(elem)

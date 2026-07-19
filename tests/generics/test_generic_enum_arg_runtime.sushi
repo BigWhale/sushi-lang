@@ -6,7 +6,7 @@ enum Color:
     Red()
     Green()
 
-fn id_of<T>(T a) T:
+fn id_of@(T)(T a) T:
     return Result.Ok(a)
 
 fn run() i32:

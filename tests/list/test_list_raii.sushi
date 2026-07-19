@@ -3,7 +3,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<T> RAII automatic cleanup on scope exit
 fn helper() i32:
-    let List<i32> temp = List.new()
+    let List@(i32) temp = List.new()
     temp.push(1)
     temp.push(2)
     temp.push(3)

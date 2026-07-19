@@ -6,12 +6,12 @@ enum Status:
     Err(string)
 
 struct Container:
-    Own<Status> status
+    Own@(Status) status
 
 # Test: multiple Own patterns in same variant
 enum Pair:
-    Both(Own<i32>, Own<i32>)
-    Single(Own<i32>)
+    Both(Own@(i32), Own@(i32))
+    Single(Own@(i32))
     Empty()
 
 fn test_multiple_own(Pair p) i32:

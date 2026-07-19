@@ -15,7 +15,7 @@ extend Status with Hashable:
             Status.Active(n) -> return n as u64
             Status.Inactive() -> return 0 as u64
 
-fn compute_hash<T: Hashable>(T value) u64:
+fn compute_hash@(T: Hashable)(T value) u64:
     return Result.Ok(value.hash())
 
 fn run_test() i32:

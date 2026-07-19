@@ -14,13 +14,13 @@
 # unwrap the Result layer before working with the Maybe<T> value.
 
 # crew is only read -- borrow it &peek so the caller keeps it across searches.
-fn find_crew_member(&peek string[] crew, string name) Maybe<i32>:
+fn find_crew_member(&peek string[] crew, string name) Maybe@(i32):
     # Search for a crew member by name and return their position
     # Returns Maybe.Some(index) if found, Maybe.None() if not found
     let i32 i = 0
 
     while (i < crew.len()):
-        let Maybe<string> member = crew.get(i)
+        let Maybe@(string) member = crew.get(i)
         if (member.is_some()):
             if (member.realise("") == name):
                 return Result.Ok(Maybe.Some(i))
@@ -34,7 +34,7 @@ fn main() i32:
     println("Crew size: {crew.len()}")
 
     # Find existing member - use match to unwrap Result<Maybe<i32>, StdError>
-    let Result<Maybe<i32>, StdError> arthur_result = find_crew_member(&peek crew, "Arthur")
+    let Result@(Maybe@(i32), StdError) arthur_result = find_crew_member(&peek crew, "Arthur")
 
     match arthur_result:
         Result.Ok(arthur_pos) ->
@@ -57,7 +57,7 @@ fn main() i32:
             println("Error searching for Arthur")
 
     # Find non-existent member
-    let Result<Maybe<i32>, StdError> vogon_result = find_crew_member(&peek crew, "Vogon")
+    let Result@(Maybe@(i32), StdError) vogon_result = find_crew_member(&peek crew, "Vogon")
 
     match vogon_result:
         Result.Ok(vogon_pos) ->
@@ -72,7 +72,7 @@ fn main() i32:
 
     # .expect(msg) unwraps Maybe.Some or triggers runtime error with message
     # Use this when you're certain the value should exist
-    let Result<Maybe<i32>, StdError> ford_result = find_crew_member(&peek crew, "Ford")
+    let Result@(Maybe@(i32), StdError) ford_result = find_crew_member(&peek crew, "Ford")
 
     match ford_result:
         Result.Ok(ford_pos) ->

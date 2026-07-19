@@ -21,7 +21,7 @@ precompiled unit that the compiler links into your binary.
 ### Time
 
 The `<time>` module gives you POSIX-precision sleep functions. They all return
-`Result<i32>` (0 on success, or the remaining microseconds if a signal interrupts the
+`Result@(i32)` (0 on success, or the remaining microseconds if a signal interrupts the
 sleep), so you unwrap them like any other `Result`. We keep the duration tiny here so the
 program returns almost instantly.
 
@@ -88,7 +88,7 @@ roll 3: d6 -> 5
 ### Files
 
 The `<io/files>` module opens files with `open(path, mode)`, which returns a
-`FileResult<file>`. Instead of the usual `Result`, file operations use a dedicated
+`FileResult@(file)`. Instead of the usual `Result`, file operations use a dedicated
 `FileResult`/`FileError` pair so you can match on specific failures like
 `FileError.NotFound()` or `FileError.PermissionDenied()`. Here we write a file under `/tmp`
 and read it straight back.

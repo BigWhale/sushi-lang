@@ -2,7 +2,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 use <collections/hashmap>
 fn main() i32:
-    let HashMap<i32[3], string> map = HashMap.new()
+    let HashMap@(i32[3], string) map = HashMap.new()
 
     let i32[3] key1 = [1, 2, 3]
     let i32[3] key2 = [4, 5, 6]
@@ -11,7 +11,7 @@ fn main() i32:
     map.insert(key1, "first")
     map.insert(key2, "second")
 
-    let Maybe<string> val1 = map.get(key3)
+    let Maybe@(string) val1 = map.get(key3)
     if (val1.is_some()):
         println(val1.realise(""))
 

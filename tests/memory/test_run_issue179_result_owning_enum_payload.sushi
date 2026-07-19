@@ -11,6 +11,6 @@ fn mk() Msg:
     return Result.Ok(Msg.Text("xxxxxxxxxxxx{'abcd'}"))
 
 fn main() i32:
-    let Result<Msg, StdError> r = mk()
+    let Result@(Msg, StdError) r = mk()
     println("ok = {r.is_ok()}")
     return Result.Ok(0)

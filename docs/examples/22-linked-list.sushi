@@ -31,25 +31,25 @@
 # Uses integer indices to reference other nodes instead of pointers
 struct Node:
     i32 value
-    Maybe<i32> next  # Index to next node in the arena
-    Maybe<i32> prev  # Index to previous node in the arena
+    Maybe@(i32) next  # Index to next node in the arena
+    Maybe@(i32) prev  # Index to previous node in the arena
 
 # Builds a doubly-linked list in an arena
 # Returns a List<Node> where nodes link to each other via indices
-fn build_list(i32[] values) List<Node>:
-    let List<Node> nodes = List.new()
+fn build_list(i32[] values) List@(Node):
+    let List@(Node) nodes = List.new()
     let i32 len = values.len()
 
     # Build all nodes with proper links
     let i32 i = 0
     while (i < len):
         # Determine next and prev indices
-        let Maybe<i32> next_idx = Maybe.None()
+        let Maybe@(i32) next_idx = Maybe.None()
         if (i < len - 1):
             # Not the last node - has next
             next_idx := Maybe.Some(i + 1)
 
-        let Maybe<i32> prev_idx = Maybe.None()
+        let Maybe@(i32) prev_idx = Maybe.None()
         if (i > 0):
             # Not the first node - has prev
             prev_idx := Maybe.Some(i - 1)
@@ -65,10 +65,10 @@ fn build_list(i32[] values) List<Node>:
 
 # Prints the list forward from a given start index
 # nodes is only read -- borrow it &peek so the caller keeps the list.
-fn print_forward(&peek List<Node> nodes, i32 start_idx) ~:
+fn print_forward(&peek List@(Node) nodes, i32 start_idx) ~:
     print("Forward: [")
 
-    let Maybe<i32> current = Maybe.Some(start_idx)
+    let Maybe@(i32) current = Maybe.Some(start_idx)
     let bool first = true
 
     # Traverse using while loop
@@ -80,7 +80,7 @@ fn print_forward(&peek List<Node> nodes, i32 start_idx) ~:
                 if (not first):
                     print(" <-> ")
                 print("{n.value}")
-                let Maybe<i32> next_idx = n.next
+                let Maybe@(i32) next_idx = n.next
                 current := next_idx
                 first := false
             Maybe.None() ->
@@ -91,10 +91,10 @@ fn print_forward(&peek List<Node> nodes, i32 start_idx) ~:
 
 # Prints the list backward from a given start index
 # nodes is only read -- borrow it &peek so the caller keeps the list.
-fn print_backward(&peek List<Node> nodes, i32 start_idx) ~:
+fn print_backward(&peek List@(Node) nodes, i32 start_idx) ~:
     print("Backward: [")
 
-    let Maybe<i32> current = Maybe.Some(start_idx)
+    let Maybe@(i32) current = Maybe.Some(start_idx)
     let bool first = true
 
     # Traverse using while loop
@@ -106,7 +106,7 @@ fn print_backward(&peek List<Node> nodes, i32 start_idx) ~:
                 if (not first):
                     print(" <-> ")
                 print("{n.value}")
-                let Maybe<i32> prev_idx = n.prev
+                let Maybe@(i32) prev_idx = n.prev
                 current := prev_idx
                 first := false
             Maybe.None() ->
@@ -117,9 +117,9 @@ fn print_backward(&peek List<Node> nodes, i32 start_idx) ~:
 
 # Calculates the sum of all values in the list
 # nodes is only read -- borrow it &peek so the caller keeps the list.
-fn sum_list(&peek List<Node> nodes, i32 start_idx) i32:
+fn sum_list(&peek List@(Node) nodes, i32 start_idx) i32:
     let i32 total = 0
-    let Maybe<i32> current = Maybe.Some(start_idx)
+    let Maybe@(i32) current = Maybe.Some(start_idx)
 
     while (current.is_some()):
         let i32 idx = current.realise(-1)
@@ -127,7 +127,7 @@ fn sum_list(&peek List<Node> nodes, i32 start_idx) i32:
         match nodes.get(idx):
             Maybe.Some(node) ->
                 total := total + node.value
-                let Maybe<i32> next_idx = node.next
+                let Maybe@(i32) next_idx = node.next
                 current := next_idx
             Maybe.None() ->
                 break
@@ -141,11 +141,11 @@ fn main() i32:
     # Build a simple list: 10 <-> 20 <-> 30
     println("=== Building list: [10, 20, 30] ===")
     let i32[] values1 = from([10, 20, 30])
-    let Result<List<Node>, StdError> list1 = build_list(values1)
+    let Result@(List@(Node), StdError) list1 = build_list(values1)
 
     if (list1):
-        let List<Node> empty_list = List.new()
-        let List<Node> list_final = list1.realise(empty_list)
+        let List@(Node) empty_list = List.new()
+        let List@(Node) list_final = list1.realise(empty_list)
         println("Nodes stored: {list_final.len()}")
         println("Head index: 0, Tail index: {list_final.len() - 1}")
         println("")
@@ -167,11 +167,11 @@ fn main() i32:
     # Build a longer list
     println("=== Building list: [5, 15, 25, 35, 45, 55] ===")
     let i32[] values2 = from([5, 15, 25, 35, 45, 55])
-    let Result<List<Node>, StdError> list2 = build_list(values2)
+    let Result@(List@(Node), StdError) list2 = build_list(values2)
 
     if (list2):
-        let List<Node> empty_list2 = List.new()
-        let List<Node> second_final = list2.realise(empty_list2)
+        let List@(Node) empty_list2 = List.new()
+        let List@(Node) second_final = list2.realise(empty_list2)
 
         println("Nodes stored: {second_final.len()}")
         println("Head index: 0, Tail index: {second_final.len() - 1}")

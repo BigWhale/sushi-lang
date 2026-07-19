@@ -12,11 +12,26 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
 
 
+def parse_type_list(type_list_node: Tree, ast_builder: 'ASTBuilder') -> List[Type]:
+    """Turn a `type_list` parse node into a list of resolved Types.
+
+    Shared by generic type instantiations (`List@(i32)`) and call-site explicit
+    type arguments (`identity@(i32)(5)`), so both positions interpret a type list
+    identically.
+    """
+    type_args: List[Type] = []
+    for child in type_list_node.children:
+        if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t" or child.data == "generic_type_t"):
+            arg_type = ast_builder._parse_type(child)
+            if arg_type is not None:
+                type_args.append(arg_type)
+    return type_args
+
+
 def parse_generic_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]:
     """Parse generic type instantiation (generic_type_t).
 
-    Syntax: NAME "<" type_list ">"
-    Examples: Result<i32>, Maybe<string>
+    Syntax: NAME "@" "(" type_list ")". Examples: Result@(i32), Maybe@(string).
     """
     # Extract base name
     name_token = first_name(node.children)
@@ -30,12 +45,7 @@ def parse_generic_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]:
     if type_list_node is None:
         return None
 
-    type_args: List[Type] = []
-    for child in type_list_node.children:
-        if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t" or child.data == "generic_type_t"):
-            arg_type = ast_builder._parse_type(child)
-            if arg_type is not None:
-                type_args.append(arg_type)
+    type_args: List[Type] = parse_type_list(type_list_node, ast_builder)
 
     if not type_args:
         return None
@@ -53,7 +63,7 @@ def parse_generic_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]:
 def parse_bounded_type_params(type_params_node: Optional[Tree]) -> Optional[List[BoundedTypeParam]]:
     """Parse type_params node and extract bounded type parameters with constraints.
 
-    Grammar: type_params: "<" type_param_list ">"
+    Grammar: type_params: "@" "(" type_param_list ")"
              type_param_list: type_param ("," type_param)*
              type_param: NAME [perk_constraints]
              perk_constraints: ":" perk_constraint_list

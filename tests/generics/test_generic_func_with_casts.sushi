@@ -1,13 +1,13 @@
 # Test generic functions with type casts involving type parameters
 # This tests body substitution where T appears in cast expressions
 
-fn numeric_identity<T>(T value) T:
+fn numeric_identity@(T)(T value) T:
     # Cast to i64 and back to T (tests generic type in cast target)
     let i64 temp = value as i64
     let T result = temp as T
     return Result.Ok(result)
 
-fn convert_to_float<T>(T value) f64:
+fn convert_to_float@(T)(T value) f64:
     # Cast generic type to f64
     let f64 result = value as f64
     return Result.Ok(result)

@@ -5,7 +5,7 @@
 
 enum StrList:
     Nil
-    Cons(string, Own<StrList>)
+    Cons(string, Own@(StrList))
 
 fn count(StrList lst) i32:
     match lst:
@@ -16,8 +16,8 @@ fn count(StrList lst) i32:
             return Result.Ok(1 + n)
 
 fn main() i32:
-    let Own<StrList> n2 = Own.alloc(StrList.Nil())
-    let Own<StrList> n1 = Own.alloc(StrList.Cons("world", n2))
+    let Own@(StrList) n2 = Own.alloc(StrList.Nil())
+    let Own@(StrList) n1 = Own.alloc(StrList.Cons("world", n2))
     let StrList lst = StrList.Cons("hello", n1)
 
     let i32 len = count(lst).realise(0)

@@ -4,7 +4,7 @@
 use <collections/strings>
 use <collections/hashmap>
 
-fn build_chain(&poke HashMap<string, string> chain, string[] words) ~:
+fn build_chain(&poke HashMap@(string, string) chain, string[] words) ~:
     let i32 i = 0
     while (i < words.len() - 1):
         let string current = words[i]
@@ -16,7 +16,7 @@ fn build_chain(&poke HashMap<string, string> chain, string[] words) ~:
 fn run_test() i32:
     let string corpus = "hello world test foo bar"
     let string[] words = corpus.split(" ")
-    let HashMap<string, string> chain = HashMap.new()
+    let HashMap@(string, string) chain = HashMap.new()
 
     build_chain(&poke chain, words)
 

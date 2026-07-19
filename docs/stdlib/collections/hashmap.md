@@ -12,21 +12,21 @@ use <collections/hashmap>
 
 ## Overview
 
-`HashMap<K, V>` is a hash table that provides fast key-value lookups. It features:
+`HashMap@(K, V)` is a hash table that provides fast key-value lookups. It features:
 - **Open addressing**: Linear probing collision resolution
 - **Auto-resize**: Grows at 0.75 load factor
 - **Power-of-two capacity**: Fast indexing via bitwise AND
-- **Type-safe access**: `.get()` returns `Maybe<V>` for safe lookups
+- **Type-safe access**: `.get()` returns `Maybe@(V)` for safe lookups
 - **RAII cleanup**: Automatic recursive cleanup of entries
 
 ## Construction
 
-### `HashMap.new() -> HashMap<K, V>`
+### `HashMap.new() -> HashMap@(K, V)`
 
 Create empty hash map (initial capacity 16).
 
 ```sushi
-let HashMap<string, i32> ages = HashMap.new()
+let HashMap@(string, i32) ages = HashMap.new()
 ```
 
 ## Methods
@@ -42,7 +42,7 @@ ages.insert("Ford", 200)
 
 **Note:** Automatically resizes at 0.75 load factor.
 
-### `.get(K key) -> Maybe<V>`
+### `.get(K key) -> Maybe@(V)`
 
 Get value for key.
 
@@ -54,7 +54,7 @@ match ages.get("Arthur"):
         println("Not found")
 ```
 
-### `.remove(K key) -> Maybe<V>`
+### `.remove(K key) -> Maybe@(V)`
 
 Remove and return value for key.
 
@@ -88,7 +88,7 @@ println("Entries: {ages.len()}")
 A `HashMap` can be iterated three ways. Each returns an iterator suitable for a `foreach`
 loop. Iteration order is unspecified.
 
-### `.keys() -> Iterator<K>`
+### `.keys() -> Iterator@(K)`
 
 Iterate over the keys.
 
@@ -97,7 +97,7 @@ foreach(name in ages.keys()):
     println(name)
 ```
 
-### `.values() -> Iterator<V>`
+### `.values() -> Iterator@(V)`
 
 Iterate over the values.
 
@@ -106,9 +106,9 @@ foreach(age in ages.values()):
     println(age)
 ```
 
-### `.entries() -> Iterator<Entry<K, V>>`
+### `.entries() -> Iterator@(Entry@(K, V))`
 
-Iterate over key-value pairs. Each `Entry<K, V>` exposes `.key` and `.value` fields.
+Iterate over key-value pairs. Each `Entry@(K, V)` exposes `.key` and `.value` fields.
 
 ```sushi
 foreach(entry in ages.entries()):
@@ -180,7 +180,7 @@ The hash function is auto-derived for all types:
 
 ## Known Limitations
 
-- Storing an owning value (a struct/enum with a dynamic-array field, `List<T>`, or `Own<T>`) as a
+- Storing an owning value (a struct/enum with a dynamic-array field, `List@(T)`, or `Own@(T)`) as a
   map value currently crashes at runtime on `get`/`free` (issue #140)
 - Keys must be hashable (implement `.hash() -> u64`)
 - `.rehash()` takes no arguments; it rebuilds at the current capacity (cannot resize to a chosen capacity)
@@ -200,7 +200,7 @@ The hash function is auto-derived for all types:
 use <collections/hashmap>
 
 fn main() i32:
-    let HashMap<string, i32> scores = HashMap.new()
+    let HashMap@(string, i32) scores = HashMap.new()
 
     # Insert entries
     scores.insert("Alice", 100)

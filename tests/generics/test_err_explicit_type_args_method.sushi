@@ -1,0 +1,6 @@
+# EXPECT_ERROR_CODE: CE6102
+# Explicit type args are not allowed on method calls (free functions only).
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let i32 n = xs.get@(i32)(0).realise(-1)
+    return Result.Ok(0)

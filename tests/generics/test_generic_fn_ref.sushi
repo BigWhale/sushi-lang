@@ -2,7 +2,7 @@
 # annotation `fn(i32) -> i32` drives the instantiation identity<i32>; call through it.
 # identity(41) + 1 = 42.
 # EXPECT_STDOUT_EXACT: "42\n"
-fn identity<T>(T x) T:
+fn identity@(T)(T x) T:
     return Result.Ok(x)
 
 fn run() i32:

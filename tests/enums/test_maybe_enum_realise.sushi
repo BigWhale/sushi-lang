@@ -8,14 +8,14 @@ enum Color:
   Blue
 
 fn main() i32:
-  let Maybe<Color> some = Maybe.Some(Color.Green)
+  let Maybe@(Color) some = Maybe.Some(Color.Green)
   let Color c = some.realise(Color.Red)
   match c:
     Color.Green -> println("got green")
     Color.Red -> println("got red")
     Color.Blue -> println("got blue")
 
-  let Maybe<Color> nothing = Maybe.None()
+  let Maybe@(Color) nothing = Maybe.None()
   let Color d = nothing.realise(Color.Blue)
   match d:
     Color.Green -> println("default green")

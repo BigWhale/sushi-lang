@@ -1,7 +1,7 @@
 # Test generic function monomorphization with multiple type parameters
 # Generic swap function should be monomorphized for various type combinations
 
-fn swap<T, U>(T first, U second) U:
+fn swap@(T, U)(T first, U second) U:
     # Use first parameter by copying it around (demonstrates generic type usage)
     # These assignments test that type substitution works in variable declarations
     let T temp = first

@@ -19,7 +19,7 @@ extend bool with Describe:
         return "bool false"
 
 # `...Ts: Describe` is a TYPE pack; `args` is the matching value pack.
-fn show_all<...Ts: Describe>(...Ts args) ~:
+fn show_all@(...Ts: Describe)(...Ts args) ~:
     expand(a in args):              # compile-time unrolled, not a runtime loop
         println(a.describe())       # `a` has the concrete per-element type
     return Result.Ok(~)

@@ -2,9 +2,9 @@
 # EXPECT_STDOUT_EXACT: "42\n"
 # EXPECT_RUNTIME_EXIT: 0
 fn main() i32:
-    let Own<i32> inner = Own.alloc(42)
-    let Own<Own<i32>> outer = Own.alloc(inner)
-    let Own<i32> unwrapped = outer.get()
+    let Own@(i32) inner = Own.alloc(42)
+    let Own@(Own@(i32)) outer = Own.alloc(inner)
+    let Own@(i32) unwrapped = outer.get()
     let i32 value = unwrapped.get()
     println(value)
     let i32 expected = 42

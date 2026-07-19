@@ -5,7 +5,7 @@
 # EXPECT_STDOUT_EXACT: "called\nv = 1\n"
 # EXPECT_RUNTIME_EXIT: 0
 
-fn mk() Maybe<i32>:
+fn mk() Maybe@(i32):
     println("called")
     return Result.Ok(Maybe.Some(1))
 

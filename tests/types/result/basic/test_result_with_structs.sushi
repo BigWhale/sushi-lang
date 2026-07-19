@@ -12,7 +12,7 @@ enum CustomError:
     InvalidAge
     InvalidName
 
-fn create_person(string name, i32 age) Result<Person, CustomError>:
+fn create_person(string name, i32 age) Result@(Person, CustomError):
     if (age < 0):
         return Result.Err(CustomError.InvalidAge)
     if (name == ""):

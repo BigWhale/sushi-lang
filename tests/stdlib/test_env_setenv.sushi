@@ -11,7 +11,7 @@ fn run_test() i32 | EnvError:
     println("Set SUSHI_TEST_VAR result: {result1}")
 
     # Test 2: Read it back to verify
-    let Maybe<string> test_var = getenv("SUSHI_TEST_VAR")
+    let Maybe@(string) test_var = getenv("SUSHI_TEST_VAR")
     match test_var:
         Maybe.Some(value) -> println("SUSHI_TEST_VAR value: {value}")
         Maybe.None() -> println("ERROR: SUSHI_TEST_VAR should be set")
@@ -33,7 +33,7 @@ fn run_test() i32 | EnvError:
     # Test 6: Set with empty value
     let i32 result4 = setenv("SUSHI_EMPTY", "")??
     println("Set SUSHI_EMPTY result: {result4}")
-    let Maybe<string> empty_var = getenv("SUSHI_EMPTY")
+    let Maybe@(string) empty_var = getenv("SUSHI_EMPTY")
     match empty_var:
         Maybe.Some(_) -> println("SUSHI_EMPTY is set to empty string (length 0)")
         Maybe.None() -> println("ERROR: SUSHI_EMPTY should be set (even if empty)")

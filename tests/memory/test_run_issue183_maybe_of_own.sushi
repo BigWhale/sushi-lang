@@ -5,7 +5,7 @@
 # EXPECT_NO_LEAKS: true
 
 fn main() i32:
-    let Own<i32> b = Own.alloc(42)
-    let Maybe<Own<i32>> m = Maybe.Some(b)
+    let Own@(i32) b = Own.alloc(42)
+    let Maybe@(Own@(i32)) m = Maybe.Some(b)
     println("some = {m.is_some()}")
     return Result.Ok(0)

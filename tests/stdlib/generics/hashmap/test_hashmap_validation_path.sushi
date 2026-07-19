@@ -10,7 +10,7 @@ struct ValidKey:
 
 fn main() i32:
     # This should succeed - ValidKey has auto-derived .hash()
-    let HashMap<ValidKey, string> map = HashMap.new()
+    let HashMap@(ValidKey, string) map = HashMap.new()
     let ValidKey p = ValidKey(1, 2)
     map.insert(p, "test")
 

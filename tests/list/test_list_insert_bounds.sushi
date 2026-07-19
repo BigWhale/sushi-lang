@@ -3,7 +3,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<T> insert method - bounds checking returns Result.Err()
 fn main() i32:
-    let List<i32> nums = List.new()
+    let List@(i32) nums = List.new()
     nums.push(1)
     nums.push(2)
     nums.push(3)

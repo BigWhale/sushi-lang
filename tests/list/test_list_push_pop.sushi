@@ -4,7 +4,7 @@
 # Test List<T> push and pop operations
 fn main() i32:
     # Create empty List
-    let List<i32> numbers = List.new()
+    let List@(i32) numbers = List.new()
 
     # Test initial state
     if (not numbers.is_empty()):

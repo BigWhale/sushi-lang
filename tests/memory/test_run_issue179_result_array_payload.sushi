@@ -8,6 +8,6 @@ fn mk() i32[]:
     return Result.Ok(from([0, 1, 2, 3, 4, 5, 6, 0]))
 
 fn main() i32:
-    let Result<i32[], StdError> r = mk()
+    let Result@(i32[], StdError) r = mk()
     println("ok = {r.is_ok()}")
     return Result.Ok(0)

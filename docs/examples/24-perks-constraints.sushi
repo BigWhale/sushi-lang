@@ -29,12 +29,12 @@ extend Ship with Describable:
         return "Ship: {self.name} (crew: {self.crew})"
 
 # Generic function with perk constraint
-fn print_description<T: Describable>(T item) ~:
+fn print_description@(T: Describable)(T item) ~:
     println(item.describe())
     return Result.Ok(~)
 
 # Another generic function
-fn get_description<T: Describable>(T item) string:
+fn get_description@(T: Describable)(T item) string:
     return Result.Ok(item.describe())
 
 fn main() i32:

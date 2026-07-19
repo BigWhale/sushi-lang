@@ -4,7 +4,7 @@ use <collections/strings>
 
 fn test_find_last_basic() ~:
     let string text = "hello world"
-    let Maybe<i32> result = text.find_last("o")
+    let Maybe@(i32) result = text.find_last("o")
 
     if (result.is_some()):
         let i32 index = result.realise(-1)
@@ -19,7 +19,7 @@ fn test_find_last_basic() ~:
 
 fn test_find_last_not_found() ~:
     let string text = "hello"
-    let Maybe<i32> result = text.find_last("x")
+    let Maybe@(i32) result = text.find_last("x")
 
     if (result.is_none()):
         println("PASS: find_last not found returns None")
@@ -30,7 +30,7 @@ fn test_find_last_not_found() ~:
 
 fn test_find_last_first_char() ~:
     let string text = "test"
-    let Maybe<i32> result = text.find_last("t")
+    let Maybe@(i32) result = text.find_last("t")
 
     if (result.is_some()):
         let i32 index = result.realise(-1)
@@ -45,7 +45,7 @@ fn test_find_last_first_char() ~:
 
 fn test_find_last_substring() ~:
     let string text = "the cat in the hat"
-    let Maybe<i32> result = text.find_last("the")
+    let Maybe@(i32) result = text.find_last("the")
 
     if (result.is_some()):
         let i32 index = result.realise(-1)
@@ -60,7 +60,7 @@ fn test_find_last_substring() ~:
 
 fn test_find_last_single_occurrence() ~:
     let string text = "unique"
-    let Maybe<i32> result = text.find_last("que")
+    let Maybe@(i32) result = text.find_last("que")
 
     if (result.is_some()):
         let i32 index = result.realise(-1)
@@ -75,7 +75,7 @@ fn test_find_last_single_occurrence() ~:
 
 fn test_find_last_empty_needle() ~:
     let string text = "test"
-    let Maybe<i32> result = text.find_last("")
+    let Maybe@(i32) result = text.find_last("")
 
     if (result.is_some()):
         let i32 index = result.realise(-1)
@@ -90,7 +90,7 @@ fn test_find_last_empty_needle() ~:
 
 fn test_find_last_empty_string() ~:
     let string text = ""
-    let Maybe<i32> result = text.find_last("x")
+    let Maybe@(i32) result = text.find_last("x")
 
     if (result.is_none()):
         println("PASS: find_last in empty string returns None")
@@ -101,7 +101,7 @@ fn test_find_last_empty_string() ~:
 
 fn test_find_last_full_match() ~:
     let string text = "hello"
-    let Maybe<i32> result = text.find_last("hello")
+    let Maybe@(i32) result = text.find_last("hello")
 
     if (result.is_some()):
         let i32 index = result.realise(-1)
@@ -116,7 +116,7 @@ fn test_find_last_full_match() ~:
 
 fn test_find_last_utf8() ~:
     let string text = "café café"
-    let Maybe<i32> result = text.find_last("café")
+    let Maybe@(i32) result = text.find_last("café")
 
     if (result.is_some()):
         let i32 index = result.realise(-1)
@@ -131,7 +131,7 @@ fn test_find_last_utf8() ~:
 
 fn test_find_last_emoji() ~:
     let string text = "🎉test🎉"
-    let Maybe<i32> result = text.find_last("🎉")
+    let Maybe@(i32) result = text.find_last("🎉")
 
     if (result.is_some()):
         let i32 index = result.realise(-1)
@@ -146,8 +146,8 @@ fn test_find_last_emoji() ~:
 
 fn test_find_last_vs_find() ~:
     let string text = "abcabc"
-    let Maybe<i32> first = text.find("abc")
-    let Maybe<i32> last = text.find_last("abc")
+    let Maybe@(i32) first = text.find("abc")
+    let Maybe@(i32) last = text.find_last("abc")
 
     if (first.is_some() and last.is_some()):
         let i32 first_idx = first.realise(-1)

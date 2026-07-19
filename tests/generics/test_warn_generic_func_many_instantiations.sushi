@@ -31,7 +31,7 @@ struct S9:
 struct S10:
     i32 j
 
-fn process<T>(T _item) ~:
+fn process@(T)(T _item) ~:
     return Result.Ok(~)
 
 fn main() i32:

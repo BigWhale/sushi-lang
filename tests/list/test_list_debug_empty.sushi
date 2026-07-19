@@ -1,6 +1,6 @@
-# EXPECT_STDOUT_EXACT: "=== Empty List Debug ===\nList<i32> {\n  len: 0, capacity: 0\n}\n\n=== After pushing one element ===\nList<i32> {\n  len: 1, capacity: 1\n  [0] 42\n}\n"
+# EXPECT_STDOUT_EXACT: "=== Empty List Debug ===\nList@(i32) {\n  len: 0, capacity: 0\n}\n\n=== After pushing one element ===\nList@(i32) {\n  len: 1, capacity: 1\n  [0] 42\n}\n"
 fn main() i32:
-    let List<i32> empty = List.new()
+    let List@(i32) empty = List.new()
 
     println("=== Empty List Debug ===")
     empty.debug()

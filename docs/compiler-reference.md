@@ -435,7 +435,7 @@ fn get_value() i32:
     return Result.Ok(42)
 
 fn main() i32:
-    let Result<i32, StdError> r = get_value()
+    let Result@(i32, StdError) r = get_value()
 
     # ERROR CE2502: realise() requires exactly 1 argument, got 0
     let i32 x = r.realise()
@@ -452,7 +452,7 @@ fn get_value() i32:
     return Result.Ok(42)
 
 fn main() i32:
-    let Result<i32, StdError> r = get_value()
+    let Result@(i32, StdError) r = get_value()
 
     # ERROR CE2503: realise() default type mismatch: expected 'i32', got 'string'
     let i32 x = r.realise("wrong")
@@ -472,7 +472,7 @@ fn get_value() i32:
     return Result.Ok(42)
 
 fn main() i32:
-    # ERROR CE2002: type mismatch: cannot assign Result<i32, StdError> to i32
+    # ERROR CE2002: type mismatch: cannot assign Result@(i32, StdError) to i32
     let i32 x = get_value()
 
     return Result.Ok(0)
@@ -486,13 +486,13 @@ fn main() i32:
 fn main() i32:
     let i32 x = 5
 
-    # ERROR CE2507: ?? can only be used with Result<T> or Maybe<T>
+    # ERROR CE2507: ?? can only be used with Result@(T) or Maybe@(T)
     let i32 y = x??
 
     return Result.Ok(0)
 ```
 
-**Fix:** Only use `??` with `Result<T>` or `Maybe<T>`.
+**Fix:** Only use `??` with `Result@(T)` or `Maybe@(T)`.
 
 #### CE2508: Using ?? Outside Result Function
 
@@ -567,7 +567,7 @@ fn get_value() i32:
     return Result.Ok(42)
 
 fn main() i32:
-    # WARNING CW2001: Unused Result<i32> value
+    # WARNING CW2001: Unused Result@(i32) value
     get_value()
 
     return Result.Ok(0)
@@ -575,7 +575,7 @@ fn main() i32:
 
 **Fix:** Handle result or explicitly discard:
 ```sushi
-let Result<i32> r = get_value()  # Store for later
+let Result@(i32) r = get_value()  # Store for later
 let i32 x = get_value().realise(0)  # Use immediately
 ```
 
@@ -595,7 +595,7 @@ fn main() i32:
 ```
 
 Direct indexing (`arr[i]`) is checked at runtime and aborts on an out-of-bounds
-access. (Use `arr.get(i)`, which returns `Maybe<i32>`, for safe access instead.)
+access. (Use `arr.get(i)`, which returns `Maybe@(i32)`, for safe access instead.)
 
 **Runtime output:**
 ```
@@ -657,10 +657,10 @@ fn main() i32:
 
 ### Test Naming Conventions
 
-- `test_<feature>.sushi` - Positive test
-- `test_warn_<feature>.sushi` - Expected warning
-- `test_err_<feature>.sushi` - Expected error
-- `test_<category>_<specific>.sushi` - Organized by category
+- `test_@(feature).sushi` - Positive test
+- `test_warn_@(feature).sushi` - Expected warning
+- `test_err_@(feature).sushi` - Expected error
+- `test_@(category)_@(specific).sushi` - Organized by category
 
 ---
 

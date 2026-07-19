@@ -1,4 +1,4 @@
-# Result<T, E>
+# Result@(T, E)
 
 [← Back to Standard Library](../standard-library.md)
 
@@ -6,9 +6,9 @@ Type-safe error handling with explicit success and error types.
 
 ## Overview
 
-`Result<T, E>` is a generic enum that represents either success (`Ok`) containing a value of type `T`, or failure (`Err`) containing an error of type `E`.
+`Result@(T, E)` is a generic enum that represents either success (`Ok`) containing a value of type `T`, or failure (`Err`) containing an error of type `E`.
 
-All functions in Sushi implicitly return `Result<T, E>` where:
+All functions in Sushi implicitly return `Result@(T, E)` where:
 - `T` is the declared return type
 - `E` is the error type (defaults to `StdError` if not specified)
 
@@ -19,7 +19,7 @@ All functions in Sushi implicitly return `Result<T, E>` where:
 ```sushi
 fn add(i32 a, i32 b) i32:
     return Result.Ok(a + b)
-# Actually returns Result<i32, StdError>
+# Actually returns Result@(i32, StdError)
 ```
 
 ### Custom Error Type
@@ -33,13 +33,13 @@ fn divide(i32 a, i32 b) i32 | MathError:
     if (b == 0):
         return Result.Err(MathError.DivisionByZero)
     return Result.Ok(a / b)
-# Returns Result<i32, MathError>
+# Returns Result@(i32, MathError)
 ```
 
 ### Explicit Syntax
 
 ```sushi
-fn foo() Result<i32, MyError>:
+fn foo() Result@(i32, MyError):
     return Result.Ok(42)
 ```
 
@@ -131,7 +131,7 @@ fn divide(i32 a, i32 b) i32 | MathError:
 Check if the Result is an Ok variant.
 
 ```sushi
-let Result<i32, MathError> result = divide(10, 2)
+let Result@(i32, MathError) result = divide(10, 2)
 if (result.is_ok()):
     println("Success!")
 ```
@@ -141,18 +141,18 @@ if (result.is_ok()):
 Check if the Result is an Err variant.
 
 ```sushi
-let Result<i32, MathError> result = divide(10, 0)
+let Result@(i32, MathError) result = divide(10, 0)
 if (result.is_err()):
     println("Division failed")
 ```
 
-### `.err() -> Maybe<E>`
+### `.err() -> Maybe@(E)`
 
 Extract the error value if present, otherwise return `Maybe.None()`.
 
 ```sushi
-let Result<i32, MathError> result = divide(10, 0)
-let Maybe<MathError> error = result.err()
+let Result@(i32, MathError) result = divide(10, 0)
+let Maybe@(MathError) error = result.err()
 
 match error:
     Maybe.Some(e) ->
@@ -166,7 +166,7 @@ match error:
 Unwrap the Ok value or panic with the given message if Err.
 
 ```sushi
-let Result<i32, MathError> result = divide(10, 2)
+let Result@(i32, MathError) result = divide(10, 2)
 let i32 value = result.expect("Division should not fail")
 # Prints "ERROR: Division should not fail" and exits if Err
 ```
@@ -178,7 +178,7 @@ let i32 value = result.expect("Division should not fail")
 Extract the Ok value or return a default value if Err.
 
 ```sushi
-let Result<i32, MathError> result = divide(10, 0)
+let Result@(i32, MathError) result = divide(10, 0)
 let i32 value = result.realise(0)  # Returns 0 on error
 ```
 
@@ -315,8 +315,8 @@ fn safe_divide(i32 a, i32 b) i32 | MathError:
     return Result.Ok(a / b)
 
 fn process() i32 | MathError:
-    let Result<i32, MathError> result = safe_divide(10, 2)
-    let Maybe<MathError> error = result.err()
+    let Result@(i32, MathError) result = safe_divide(10, 2)
+    let Maybe@(MathError) error = result.err()
 
     if (error.is_some()):
         return Result.Err(error.realise(MathError.DivisionByZero))

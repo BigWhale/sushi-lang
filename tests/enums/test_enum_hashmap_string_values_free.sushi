@@ -10,12 +10,12 @@ enum Label:
     Code(i32)
 
 fn main() i32:
-    let HashMap<i32, Label> labels = HashMap.new()
+    let HashMap@(i32, Label) labels = HashMap.new()
     labels.insert(1, Label.Name("alpha"))
     labels.insert(2, Label.Code(42))
     labels.insert(3, Label.Name("beta"))
 
-    let Maybe<Label> l = labels.get(1)
+    let Maybe@(Label) l = labels.get(1)
     match l:
         Maybe.Some(label) ->
             match label:

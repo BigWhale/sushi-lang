@@ -20,13 +20,13 @@ extend Point with Displayable:
     fn display() string:
         return "Point"
 
-fn get_hash<T: Hashable>(T value) u64:
+fn get_hash@(T: Hashable)(T value) u64:
     return Result.Ok(value.hash())
 
-fn get_display<T: Displayable>(T value) string:
+fn get_display@(T: Displayable)(T value) string:
     return Result.Ok(value.display())
 
-fn combine<T: Hashable + Displayable>(T value) ~:
+fn combine@(T: Hashable + Displayable)(T value) ~:
     let u64 h = get_hash(value)??
     let string s = get_display(value)??
     println(s)

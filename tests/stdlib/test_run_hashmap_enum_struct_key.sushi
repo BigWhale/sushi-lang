@@ -14,7 +14,7 @@ enum Key:
     Loc(Point)
 
 fn main() i32:
-    let HashMap<Key, i32> m = HashMap.new()
+    let HashMap@(Key, i32) m = HashMap.new()
     m.insert(Key.Loc(Point(1, 2)), 10)
     m.insert(Key.Loc(Point(3, 4)), 20)
 

@@ -10,27 +10,14 @@ from lark.exceptions import LarkError
 
 from sushi_lang.internals.diagnostics import SushiError
 from sushi_lang.internals.parse_errors import lark_to_diagnostic
+from sushi_lang.internals.indenter import LangIndenter
 from sushi_lang.semantics.ast_builder import ASTBuilder
 
 GRAMMAR_PATH = Path(__file__).parent.parent / "grammar.lark"
 
-
-class ChainedPostlexer:
-    """Chain generic type lexer and indenter postlexers."""
-
-    def __init__(self):
-        from sushi_lang.internals.indenter import LangIndenter
-        from sushi_lang.internals.generic_lexer import GenericTypeLexer
-
-        self.generic_lexer = GenericTypeLexer()
-        self.indenter = LangIndenter()
-        self.always_accept = self.indenter.always_accept
-
-    def process(self, stream):
-        # First split >> into > > for nested generics
-        stream = self.generic_lexer.process(stream)
-        # Then handle indentation
-        return self.indenter.process(stream)
+# The only postlexer is the indentation handler. Generics use `@(...)`, which
+# closes on a real `)`, so there is no `>>` ambiguity and no generic-type
+# postlexer to chain in front of it.
 
 
 def parse_error_hint(e: UnexpectedInput) -> Optional[str]:
@@ -60,7 +47,7 @@ def parse_to_ast(src: str, dump_parse: bool = False):
         parser="lalr",
         propagate_positions=True,
         maybe_placeholders=False,
-        postlex=ChainedPostlexer(),
+        postlex=LangIndenter(),
         lexer="basic",
     )
     try:

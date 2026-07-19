@@ -70,7 +70,7 @@ free. Touch a moved-out variable and the compiler stops you cold with **CE2405: 
 variable** — a use-after-free caught before the program ever runs. If you genuinely need two
 independent arrays, ask for one explicitly with `.clone()`.
 
-The same move rule covers every owning type — dynamic arrays, `List<T>`, and `Own<T>`. Passing one
+The same move rule covers every owning type — dynamic arrays, `List@(T)`, and `Own@(T)`. Passing one
 by value to a function moves it: the callee takes ownership and frees it at scope exit, so the caller
 must not use it afterwards. Borrow with `&peek` / `&poke` (or pass a `.clone()`) when you want to keep
 it. (One special case: `main`'s `string[] args` is a borrowed view of the process argument vector,
@@ -145,7 +145,7 @@ correctly, that two mutable aliases to the same memory is a bug.
 Sometimes you need a value on the heap *by name* — most commonly for **recursive types**,
 where a struct must contain itself (a linked-list node pointing at the next node). A struct
 can't physically embed an infinitely-nested copy of itself, so the recursive field has to be
-a pointer. `Own<T>` is that owned heap pointer.
+a pointer. `Own@(T)` is that owned heap pointer.
 
 ```sushi
 --8<-- "docs/tutorial/examples/12-memory-management/own.sushi"
@@ -160,15 +160,15 @@ Vogon #7: Prostetnic Vogon Jeltz
 
 The three methods you'll reach for:
 
-- `Own.alloc(value)` — allocate `value` on the heap and hand back an `Own<T>`.
+- `Own.alloc(value)` — allocate `value` on the heap and hand back an `Own@(T)`.
 - `.get()` — read the value back out.
 - `.destroy()` — free it by hand, right now.
 
-You rarely *need* `.destroy()`: like everything else in this chapter, an `Own<T>` is freed
+You rarely *need* `.destroy()`: like everything else in this chapter, an `Own@(T)` is freed
 automatically by RAII when it goes out of scope (`answer` in the example never gets a manual
 `.destroy()` and leaks nothing). It's there for the cases where you want to release a large
 allocation early. For an actual recursive structure, the pattern is a struct field typed
-`Maybe<Own<Node>>` — `Maybe.None()` marks the end of the chain, and Sushi stays entirely
+`Maybe@(Own@(Node))` — `Maybe.None()` marks the end of the chain, and Sushi stays entirely
 null-free.
 
 !!! note "No nulls, ever"

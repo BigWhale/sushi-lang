@@ -5,6 +5,6 @@
 # expression statement without being handled
 
 fn main() i32:
-    let Result<i32, StdError> result = Result.Ok(42)
+    let Result@(i32, StdError) result = Result.Ok(42)
     result  # Warning: unused Result<i32, StdError> (just referencing variable)
     return Result.Ok(0)

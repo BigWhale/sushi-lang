@@ -8,13 +8,13 @@
 use <collections/hashmap>
 
 struct Bag:
-    HashMap<i32, i32> m
-    List<i32> xs
+    HashMap@(i32, i32) m
+    List@(i32) xs
 
 fn main() i32:
-    let HashMap<i32, i32> map = HashMap.new()
+    let HashMap@(i32, i32) map = HashMap.new()
     map.insert(1, 10)
-    let List<i32> l = List.new()
+    let List@(i32) l = List.new()
     l.push(7)
     let Bag b = Bag(map, l)
     map.free()

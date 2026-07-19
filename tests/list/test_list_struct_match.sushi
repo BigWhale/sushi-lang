@@ -5,7 +5,7 @@ struct Node:
     i32 value
 
 fn main() i32:
-    let List<Node> nodes = List.new()
+    let List@(Node) nodes = List.new()
     let Node node1 = Node(42)
     nodes.push(node1)
 

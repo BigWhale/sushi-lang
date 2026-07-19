@@ -8,14 +8,14 @@ fn add_two(i32 x) i32:
 
 # steps is borrowed (&peek) so the caller keeps the table and can free it below; a
 # by-value List<...> would be moved into run_pipeline and freed there.
-fn run_pipeline(&peek List<fn(i32) -> i32> steps, i32 start) i32:
+fn run_pipeline(&peek List@(fn(i32) -> i32) steps, i32 start) i32:
     let i32 acc = start
     foreach(step in steps.iter()):
         acc := step(acc)??
     return Result.Ok(acc)
 
 fn main() i32:
-    let List<fn(i32) -> i32> steps = List.new()
+    let List@(fn(i32) -> i32) steps = List.new()
     steps.push(add_one)
     steps.push(add_two)
     steps.push(add_one)

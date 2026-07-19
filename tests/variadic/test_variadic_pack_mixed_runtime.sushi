@@ -16,7 +16,7 @@ extend bool with Display:
     fn display() string:
         return "b=true"
 
-fn print_all<...Ts: Display>(...Ts args) ~:
+fn print_all@(...Ts: Display)(...Ts args) ~:
     expand(a in args):
         println(a.display())
     return Result.Ok(~)

@@ -1,7 +1,7 @@
 use <collections/iter>
 
 fn main() i32:
-    let List<i32> bill = List.new()
+    let List@(i32) bill = List.new()
     bill.push(6)
     bill.push(6)
     bill.push(30)

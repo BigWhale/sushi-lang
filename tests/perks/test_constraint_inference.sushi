@@ -15,12 +15,12 @@ extend Point with Hashable:
         let u64 hy = self.y as u64
         return hx + hy
 
-struct Container<T: Hashable>:
+struct Container@(T: Hashable):
     T value
 
 fn main() i32:
     # Type inference for generic constructors not implemented yet
     # Explicit type annotation required for now
-    let Container<Point> c = Container(Point(10, 20))
+    let Container@(Point) c = Container(Point(10, 20))
     println(c.value.x)
     return Result.Ok(0)

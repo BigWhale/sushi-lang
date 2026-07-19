@@ -11,7 +11,7 @@ extend i32 with Display:
     fn display() string:
         return "i:{self}"
 
-fn show_all<...Ts: Display>(...Ts args) ~:
+fn show_all@(...Ts: Display)(...Ts args) ~:
     expand(a in args):
         let string base = a.display()
         let string line = "[{base}]"

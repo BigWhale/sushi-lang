@@ -2,18 +2,18 @@
 
 [← Back to Documentation](index.md)
 
-Comprehensive guide to error handling in Sushi using `Result<T, E>`, `Maybe<T>`, and the `??` operator.
+Comprehensive guide to error handling in Sushi using `Result@(T, E)`, `Maybe@(T)`, and the `??` operator.
 
 ## Table of Contents
 
 - [Philosophy](#philosophy)
-- [Result<T, E>](#result)
+- [Result@(T, E)](#result)
   - [Error Type Syntax](#error-type-syntax)
   - [Standard Error Enums](#standard-error-enums)
   - [Creating Results](#creating-results)
   - [Handling Results](#handling-results)
   - [Result Methods](#result-methods)
-- [Maybe<T>](#maybe)
+- [Maybe@(T)](#maybe)
 - [Error Propagation (??)](#error-propagation)
 - [Patterns and Best Practices](#patterns-and-best-practices)
 
@@ -21,15 +21,15 @@ Comprehensive guide to error handling in Sushi using `Result<T, E>`, `Maybe<T>`,
 
 Sushi makes errors explicit and impossible to ignore:
 
-1. **All functions return `Result<T, E>`** - Errors are part of the type system with explicit error types
+1. **All functions return `Result@(T, E)`** - Errors are part of the type system with explicit error types
 2. **Compiler-enforced handling** - Cannot ignore errors accidentally
 3. **No exceptions** - Control flow is always visible
 4. **Type-safe error propagation** - Error types must match for propagation
 5. **Zero runtime cost** - Compiles to efficient LLVM code
 
-## Result<T, E>
+## Result@(T, E)
 
-All functions implicitly return `Result<T, E>` where:
+All functions implicitly return `Result@(T, E)` where:
 - `T` is the declared return type (success value)
 - `E` is the error type (defaults to `StdError` if not specified)
 
@@ -47,7 +47,7 @@ All functions implicitly return `Result<T, E>` where:
 ```sushi
 fn add(i32 a, i32 b) i32:
     return Result.Ok(a + b)
-# Actually returns Result<i32, StdError>
+# Actually returns Result@(i32, StdError)
 ```
 
 #### Custom Error Type with | Syntax
@@ -61,13 +61,13 @@ fn divide(i32 a, i32 b) i32 | MathError:
     if (b == 0):
         return Result.Err(MathError.DivisionByZero)
     return Result.Ok(a / b)
-# Returns Result<i32, MathError>
+# Returns Result@(i32, MathError)
 ```
 
-#### Explicit Result<T, E> Syntax
+#### Explicit Result@(T, E) Syntax
 
 ```sushi
-fn foo() Result<i32, MyError>:
+fn foo() Result@(i32, MyError):
     return Result.Ok(42)
 ```
 
@@ -82,7 +82,7 @@ Sushi provides six built-in error types for common error conditions:
 - **ProcessError** - Process management (`Spawn`, `Exit`, `Signal`)
 - **EnvError** - Environment variables (`NotFound`, `InvalidValue`, `PermissionDenied`)
 
-See [Result<T, E> API Reference](stdlib/result.md) for complete details.
+See [Result@(T, E) API Reference](stdlib/result.md) for complete details.
 
 ### Creating Results
 
@@ -123,7 +123,7 @@ fn main() i32:
 
 ```sushi
 fn main() i32 | MathError:
-    let Result<i32, MathError> result = divide(10, 2)
+    let Result@(i32, MathError) result = divide(10, 2)
 
     if (result.is_ok()):
         # Success case
@@ -154,14 +154,14 @@ fn main() i32 | MathError:
 
 ### Result Methods
 
-Result<T, E> provides several methods for working with success and error values:
+Result@(T, E) provides several methods for working with success and error values:
 
 #### `.is_ok() -> bool` and `.is_err() -> bool`
 
 Check which variant the Result contains:
 
 ```sushi
-let Result<i32, MathError> result = divide(10, 2)
+let Result@(i32, MathError) result = divide(10, 2)
 
 if (result.is_ok()):
     println("Success!")
@@ -170,13 +170,13 @@ if (result.is_err()):
     println("Failed!")
 ```
 
-#### `.err() -> Maybe<E>`
+#### `.err() -> Maybe@(E)`
 
 Extract the error value as a Maybe:
 
 ```sushi
-let Result<i32, MathError> result = divide(10, 0)
-let Maybe<MathError> error = result.err()
+let Result@(i32, MathError) result = divide(10, 0)
+let Maybe@(MathError) error = result.err()
 
 match error:
     Maybe.Some(MathError.DivisionByZero) ->
@@ -190,14 +190,14 @@ match error:
 Unwrap the Ok value or panic with a custom message:
 
 ```sushi
-let Result<i32, MathError> result = divide(10, 2)
+let Result@(i32, MathError) result = divide(10, 2)
 let i32 value = result.expect("Division should succeed")
 # Prints "ERROR: Division should succeed" and exits if Err
 ```
 
 **Warning:** Use `.expect()` sparingly. It terminates the program on error.
 
-See [Result<T, E> API Reference](stdlib/result.md) for complete method documentation.
+See [Result@(T, E) API Reference](stdlib/result.md) for complete method documentation.
 
 ### Compiler Enforcement
 
@@ -206,25 +206,25 @@ fn get_value() i32:
     return Result.Ok(42)
 
 fn main() i32:
-    # ERROR CE2505: Cannot assign Result<i32, StdError> to i32
+    # ERROR CE2505: Cannot assign Result@(i32, StdError) to i32
     # let i32 x = get_value()
 
     # CORRECT: Use .realise()
     let i32 x = get_value().realise(0)
 
-    # CORRECT: Store as Result<T, E>
-    let Result<i32, StdError> result = get_value()
+    # CORRECT: Store as Result@(T, E)
+    let Result@(i32, StdError) result = get_value()
     let i32 y = result.realise(0)
 
-    # WARNING CW2001: Unused Result<T, E> value
+    # WARNING CW2001: Unused Result@(T, E) value
     # get_value()  # Must handle result
 
     return Result.Ok(0)
 ```
 
-## Maybe<T>
+## Maybe@(T)
 
-`Maybe<T>` represents optional values, replacing sentinel values (`-1`, `null`, empty strings) with compile-time checked optionals.
+`Maybe@(T)` represents optional values, replacing sentinel values (`-1`, `null`, empty strings) with compile-time checked optionals.
 
 ### Creating Maybe Values
 
@@ -239,7 +239,7 @@ return Result.Ok(Maybe.None())
 ### Checking Maybe Values
 
 ```sushi
-let Maybe<i32> m = find_value()
+let Maybe@(i32) m = find_value()
 
 if (m.is_some()):
     println("Has value")
@@ -253,21 +253,21 @@ if (m.is_none()):
 #### Using `.realise(default)`
 
 ```sushi
-let Maybe<i32> m = Maybe.Some(42)
+let Maybe@(i32) m = Maybe.Some(42)
 let i32 x = m.realise(0)  # x = 42
 
-let Maybe<i32> empty = Maybe.None()
+let Maybe@(i32) empty = Maybe.None()
 let i32 y = empty.realise(-1)  # y = -1
 ```
 
 #### Using `.expect(message)`
 
 ```sushi
-let Maybe<i32> m = Maybe.Some(42)
+let Maybe@(i32) m = Maybe.Some(42)
 let i32 x = m.expect("Expected value")  # x = 42
 
 # Panics at runtime if None
-let Maybe<i32> empty = Maybe.None()
+let Maybe@(i32) empty = Maybe.None()
 # let i32 y = empty.expect("Value required")  # Runtime panic!
 ```
 
@@ -286,7 +286,7 @@ match find_value():
 ### Example: Find First Even
 
 ```sushi
-fn find_first_even(i32[] numbers) Maybe<i32>:
+fn find_first_even(i32[] numbers) Maybe@(i32):
     foreach(n in numbers.iter()):
         if (n % 2 == 0):
             return Result.Ok(Maybe.Some(n))
@@ -294,7 +294,7 @@ fn find_first_even(i32[] numbers) Maybe<i32>:
 
 fn main() i32:
     let i32[] data = from([1, 3, 5, 8, 9])
-    let Maybe<i32> result = find_first_even(data).realise(Maybe.None())
+    let Maybe@(i32) result = find_first_even(data).realise(Maybe.None())
 
     match result:
         Maybe.Some(value) ->
@@ -307,19 +307,19 @@ fn main() i32:
 
 ### Result vs Maybe
 
-**Use `Result<T, E>` when:**
+**Use `Result@(T, E)` when:**
 - Operation can succeed or fail
 - Failure is an error condition with specific error types
 - Example: File I/O, parsing, validation
 
-**Use `Maybe<T>` when:**
+**Use `Maybe@(T)` when:**
 - Value might or might not exist
 - Absence is not an error
 - Example: Dictionary lookup, search, optional config
 
 ### Combining Result and Maybe
 
-Functions can return `Result<Maybe<T>, E>` for three states:
+Functions can return `Result@(Maybe@(T), E)` for three states:
 
 1. **Success with value**: `Result.Ok(Maybe.Some(value))`
 2. **Success without value**: `Result.Ok(Maybe.None())`
@@ -328,7 +328,7 @@ Functions can return `Result<Maybe<T>, E>` for three states:
 ```sushi
 use <io/files>
 
-fn load_optional_config() Maybe<string>:
+fn load_optional_config() Maybe@(string):
     match open("config.txt", FileMode.Read()):
         FileResult.Ok(f) ->
             let string content = f.read()
@@ -340,7 +340,7 @@ fn load_optional_config() Maybe<string>:
             return Result.Err(StdError.Error())  # Real error (permission, I/O)
 
 fn main() i32:
-    let Maybe<string> config = load_optional_config().realise(Maybe.None())
+    let Maybe@(string) config = load_optional_config().realise(Maybe.None())
 
     match config:
         Maybe.Some(content) ->
@@ -353,9 +353,9 @@ fn main() i32:
 
 ## Error Propagation (??)
 
-The `??` operator unwraps `Result<T, E>` or `Maybe<T>`, propagating errors automatically.
+The `??` operator unwraps `Result@(T, E)` or `Maybe@(T)`, propagating errors automatically.
 
-**Important:** For Result<T, E>, error types must match exactly. The `??` operator does not perform automatic error type conversion.
+**Important:** For Result@(T, E), error types must match exactly. The `??` operator does not perform automatic error type conversion.
 
 ### Basic Usage
 
@@ -385,11 +385,11 @@ fn read_config() string:
 
 ### How It Works
 
-For `Result<T>`:
+For `Result@(T)`:
 - `Result.Ok(value)?? → value` (unwraps)
 - `Result.Err()?? → return Result.Err()` (propagates)
 
-For `Maybe<T>`:
+For `Maybe@(T)`:
 - `Maybe.Some(value)?? → value` (unwraps)
 - `Maybe.None()?? → return Result.Err()` (propagates as error)
 
@@ -426,7 +426,7 @@ fn process_with_cleanup(bool succeed) i32:
 - Struct fields (dynamic arrays, nested structs)
 - File handles (when implemented)
 
-### Using ?? with Maybe<T>
+### Using ?? with Maybe@(T)
 
 ```sushi
 use <collections/strings>
@@ -501,7 +501,7 @@ fn main() i32:
 # Good: Clear what -1 means
 let i32 index = find_position().realise(-1)  # -1 = not found
 
-# Better: Use Maybe<T> and match
+# Better: Use Maybe@(T) and match
 match find_position():
     Maybe.Some(pos) -> println("At {pos}")
     Maybe.None() -> println("Not found")
@@ -549,7 +549,7 @@ fn mid_level() i32:
 
 fn main() i32:
     # Handle at top level
-    let Result<i32, StdError> result = mid_level()
+    let Result@(i32, StdError) result = mid_level()
 
     if (result):
         let i32 value = result.realise(0)
@@ -561,10 +561,10 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### 5. Result<Maybe<T>> for Three States
+### 5. Result@(Maybe@(T)) for Three States
 
 ```sushi
-fn lookup(HashMap<string, i32> map, string key) Maybe<i32>:
+fn lookup(HashMap@(string, i32) map, string key) Maybe@(i32):
     # Three possible states:
     # 1. Found value: Ok(Some(value))
     # 2. Key not found: Ok(None)  - not an error!
@@ -589,7 +589,7 @@ fn load_config() string:
     return Result.Ok(data)
 
 fn main() i32:
-    let Result<string, StdError> config = load_config()
+    let Result@(string, StdError) config = load_config()
     if (config):
         let string value = config.realise("")
         println("Loaded: {value}")
@@ -605,14 +605,14 @@ Common error codes related to error handling:
 
 - **CE2502**: `.realise()` wrong argument count
 - **CE2503**: `.realise()` default type mismatch
-- **CE2505**: Assigning `Result<T>` to non-Result without handling
+- **CE2505**: Assigning `Result@(T)` to non-Result without handling
 - **CE2507**: Using `??` on non-Result/non-Maybe type
 - **CE2508**: Using `??` outside Result-returning function
-- **CW2001**: Unused `Result<T>` value (warning)
+- **CW2001**: Unused `Result@(T)` value (warning)
 
 ---
 
 **See also:**
-- [Standard Library](standard-library.md) - Complete Result<T> and Maybe<T> API
+- [Standard Library](standard-library.md) - Complete Result@(T) and Maybe@(T) API
 - [Language Reference](language-reference.md) - Syntax details
 - [Examples](examples/README.md) - Error handling patterns in practice

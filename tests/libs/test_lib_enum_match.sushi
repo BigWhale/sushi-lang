@@ -6,7 +6,7 @@
 use <lib/types_lib>
 
 fn main() i32:
-    let Result<Color, StdError> r1 = get_color(0)
+    let Result@(Color, StdError) r1 = get_color(0)
     match r1:
         Result.Ok(c1) ->
             match c1:
@@ -15,7 +15,7 @@ fn main() i32:
                 Color.Blue(intensity) -> println("got blue {intensity}")
         Result.Err(_) -> return Result.Ok(1)
 
-    let Result<Color, StdError> r2 = get_color(42)
+    let Result@(Color, StdError) r2 = get_color(42)
     match r2:
         Result.Ok(c2) ->
             match c2:

@@ -10,13 +10,13 @@ fn jump(string destination, i32 fuel) string | NavError:
     return Result.Ok("Jumping to {destination}")
 
 fn main() i32:
-    let Result<string, NavError> trip = jump("Magrathea", 100)
+    let Result@(string, NavError) trip = jump("Magrathea", 100)
     if (trip):
         println(trip.realise("nowhere"))
     else:
         println("The jump failed.")
 
-    let Result<string, NavError> stranded = jump("Magrathea", 0)
+    let Result@(string, NavError) stranded = jump("Magrathea", 0)
     if (stranded):
         println(stranded.realise("nowhere"))
     else:

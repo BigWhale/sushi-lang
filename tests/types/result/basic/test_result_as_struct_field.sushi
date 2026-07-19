@@ -9,7 +9,7 @@ enum OpError:
 
 struct Operation:
     string name
-    Result<i32, OpError> result
+    Result@(i32, OpError) result
 
 fn main() i32:
     let Operation op1 = Operation("add", Result.Ok(42))

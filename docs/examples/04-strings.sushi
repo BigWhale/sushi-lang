@@ -52,7 +52,7 @@ fn main() i32:
     # Returns Maybe<i32> with the index, or Maybe.None() if not found.
     # This demonstrates safe handling of search failure.
     # Note: Single-quote strings work great for method arguments
-    let Maybe<i32> pos = message.find('Panic')
+    let Maybe@(i32) pos = message.find('Panic')
 
     match pos:
         Maybe.Some(index) ->

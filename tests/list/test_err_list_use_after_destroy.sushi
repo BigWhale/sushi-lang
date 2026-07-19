@@ -2,7 +2,7 @@
 # EXPECT_ERROR_CODE: CE2406
 # Test that compiler prevents use of List after .destroy()
 fn main() i32:
-    let List<i32> data = List.new()
+    let List@(i32) data = List.new()
     data.push(1)
     data.push(2)
     data.push(3)

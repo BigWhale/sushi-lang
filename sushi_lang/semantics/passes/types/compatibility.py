@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals.report import Span
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, ReferenceType, BorrowMode
 from sushi_lang.semantics.ast import Expr, ArrayLiteral, DynamicArrayNew, DynamicArrayFrom
 from sushi_lang.semantics.type_resolution import resolve_unknown_type, TypeResolver
@@ -56,7 +57,7 @@ def validate_assignment_compatibility(validator: 'TypeValidator', declared_type:
                 return  # Error already reported or empty array
             if not types_compatible(validator, inferred_type, declared_type):
                 b = er.emit_with(validator.reporter, er.ERR.CE2002, value_span,
-                       got=str(inferred_type), expected=str(declared_type))
+                       got=display_type(inferred_type), expected=display_type(declared_type))
                 if declared_span:
                     b.note("declared here", declared_span)
                 b.emit()
@@ -71,7 +72,7 @@ def validate_assignment_compatibility(validator: 'TypeValidator', declared_type:
     # Check for type mismatch (using types_compatible to handle struct types)
     if not types_compatible(validator, value_type, declared_type):
         b = er.emit_with(validator.reporter, er.ERR.CE2002, value_span,
-               got=str(value_type), expected=str(declared_type))
+               got=display_type(value_type), expected=display_type(declared_type))
         if declared_span:
             b.note("declared here", declared_span)
         b.emit()
@@ -90,7 +91,7 @@ def validate_return_compatibility(validator: 'TypeValidator', expected_type: Typ
     # Check for type mismatch
     if not types_compatible(validator, actual_type, expected_type):
         er.emit(validator.reporter, er.ERR.CE2003, return_span,
-               got=str(actual_type), expected=str(expected_type))
+               got=display_type(actual_type), expected=display_type(expected_type))
 
 
 def resolve_generic_type_ref(validator: 'TypeValidator', ty: Type) -> Type:

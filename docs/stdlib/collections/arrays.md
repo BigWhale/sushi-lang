@@ -32,9 +32,9 @@ let i32[5] arr = [1, 2, 3, 4, 5]
 println(arr.len())  # 5
 ```
 
-### `.get(i32 index) -> Maybe<T>`
+### `.get(i32 index) -> Maybe@(T)`
 
-Bounds-checked access (returns `Maybe<T>`).
+Bounds-checked access (returns `Maybe@(T)`).
 
 ```sushi
 match arr.get(2):
@@ -49,7 +49,7 @@ let i32 value = arr.get(2)??
 
 **Note:** Direct indexing `arr[index]` is also available but throws RE2020 runtime error on out-of-bounds.
 
-### `.iter() -> Iterator<T>`
+### `.iter() -> Iterator@(T)`
 
 Create iterator for foreach loops.
 
@@ -171,8 +171,8 @@ let string text = bytes.to_string()  # "Hi"
 ```sushi
 let i32[] arr = from([1, 2, 3])
 
-# Safe: Returns Maybe<T>
-let Maybe<i32> safe = arr.get(0)
+# Safe: Returns Maybe@(T)
+let Maybe@(i32) safe = arr.get(0)
 let i32 value = arr.get(0)??  # Error propagation
 
 # Unsafe: Direct indexing (throws RE2020 if out of bounds)
@@ -207,7 +207,7 @@ let i32 direct = arr[0]
 - Use `.clone()` sparingly (deep copy overhead)
 - Call `.free()` to reclaim memory early if array is no longer needed
 - Use `.iter()` for idiomatic iteration in foreach loops
-- Prefer `List<T>` over dynamic arrays for complex operations
+- Prefer `List@(T)` over dynamic arrays for complex operations
 
 ## Example Usage
 

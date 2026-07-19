@@ -9,7 +9,7 @@ extend Point with Hashable:
     fn hash() u64:
         return (self.x as u64) + (self.y as u64)
 
-fn fingerprint<T: Hashable>(T value) u64:
+fn fingerprint@(T: Hashable)(T value) u64:
     return Result.Ok(value.hash())
 
 fn main() i32:

@@ -5,6 +5,7 @@ from lark import Tree, Token
 from sushi_lang.semantics.ast import Expr, Name, BlankLit, MemberAccess, DotCall, TryExpr, Call
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, first_method_name, ice, unhandled
 from sushi_lang.internals.report import span_of
+from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
@@ -82,6 +83,12 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
             if call_node.data == "call":
                 if isinstance(result_expr, Name):
                     result_expr = calls.call_from_parts(result_expr.id, call_node, ast_builder)
+                elif first_tree(call_node.children, "type_list") is not None:
+                    # A `@(...)` type-arg list on anything but a direct call to a named
+                    # free function (method call, indexed/parenthesised callee) is out
+                    # of scope -- reject it rather than silently dropping the args.
+                    raise SyntaxDiagnostic("CE6102", span=span_of(call_node)) \
+                        .help("call the generic function directly, e.g. foo@(i32)(x)")
                 elif isinstance(result_expr, MemberAccess):
                     args, field_names = calls.extract_call_args(call_node, ast_builder)
                     # Note: field_names for DotCall (enum constructors) are ignored for now

@@ -9,7 +9,7 @@ fn add_one(&poke i32 x) i32:
 
 fn main() i32:
     let i32 num = 42
-    let Result<i32, StdError> result = add_one(&poke num)
+    let Result@(i32, StdError) result = add_one(&poke num)
 
     # Original variable still accessible
     println(num)

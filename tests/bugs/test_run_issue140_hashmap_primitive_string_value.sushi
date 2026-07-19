@@ -7,14 +7,14 @@
 use <collections/hashmap>
 
 fn get_num() i32:
-    let HashMap<i32, i32> nums = HashMap.new()
+    let HashMap@(i32, i32) nums = HashMap.new()
     nums.insert(1, 5)
     let i32 n = nums.get(1)??
     nums.free()
     return Result.Ok(n)
 
 fn get_word() string:
-    let HashMap<i32, string> words = HashMap.new()
+    let HashMap@(i32, string) words = HashMap.new()
     let string base = "there"
     words.insert(2, "hi-{base}")
     let string got = words.get(2)??

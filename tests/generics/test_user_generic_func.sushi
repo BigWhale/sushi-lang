@@ -6,14 +6,14 @@
 # Fixed: 2025-10-17 - StructType equality/hashing and GenericTypeRef resolution
 
 
-struct Box<T>:
+struct Box@(T):
     T value
 
-fn unbox(Box<i32> b) i32:
+fn unbox(Box@(i32) b) i32:
     return Result.Ok(b.value)
 
 fn main() i32:
-    let Box<i32> b = Box(42)
+    let Box@(i32) b = Box(42)
     let i32 val = unbox(b).realise(0)
     println(val)
     return Result.Ok(0)

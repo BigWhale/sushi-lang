@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import BuiltinType, StructType
 from sushi_lang.semantics.ast import Call, Name, Spread
 from ..compatibility import types_compatible
@@ -64,7 +65,7 @@ def validate_variadic_trailing_args(validator: 'TypeValidator', trailing: list,
                 arg_type = validator.infer_expression_type(arg)
                 if arg_type is not None and not types_compatible(validator, arg_type, array_ty):
                     er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                            index=index, expected=str(array_ty), got=str(arg_type))
+                            index=index, expected=display_type(array_ty), got=display_type(arg_type))
         else:
             propagate_enum_type_to_dotcall(validator, arg, element_ty)
             propagate_struct_type_to_dotcall(validator, arg, element_ty)
@@ -73,7 +74,7 @@ def validate_variadic_trailing_args(validator: 'TypeValidator', trailing: list,
                 arg_type = validator.infer_expression_type(arg)
                 if arg_type is not None and not types_compatible(validator, arg_type, element_ty):
                     er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                            index=index, expected=str(element_ty), got=str(arg_type))
+                            index=index, expected=display_type(element_ty), got=display_type(arg_type))
 
 
 def validate_indirect_call(validator: 'TypeValidator', call: Call, fn_ty) -> None:
@@ -86,7 +87,7 @@ def validate_indirect_call(validator: 'TypeValidator', call: Call, fn_ty) -> Non
     actual = call.args
     if len(actual) != len(expected):
         er.emit(validator.reporter, er.ERR.CE2092, call.callee.loc,
-                expected=str(fn_ty),
+                expected=display_type(fn_ty),
                 actual=f"a call with {len(actual)} argument(s)")
         return
     for arg, param_ty in zip(actual, expected, strict=False):
@@ -96,7 +97,7 @@ def validate_indirect_call(validator: 'TypeValidator', call: Call, fn_ty) -> Non
             continue
         if not types_compatible(validator, arg_ty, param_ty):
             er.emit(validator.reporter, er.ERR.CE2092, getattr(arg, 'loc', call.callee.loc),
-                    expected=str(param_ty), actual=str(arg_ty))
+                    expected=display_type(param_ty), actual=display_type(arg_ty))
 
 
 def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
@@ -120,7 +121,7 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         else:
             er.emit(validator.reporter, er.ERR.CE2092, getattr(call.callee, 'loc', call.loc),
                     expected="a function value",
-                    actual=str(callee_ty) if callee_ty is not None else "a non-function expression")
+                    actual=display_type(callee_ty) if callee_ty is not None else "a non-function expression")
         return
 
     # Check if function exists
@@ -215,7 +216,7 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
                 arg_type = validator.infer_expression_type(arg)
                 if arg_type is not None and not types_compatible(validator, arg_type, param.ty):
                     er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                           index=i + 1, expected=str(param.ty), got=str(arg_type))
+                           index=i + 1, expected=display_type(param.ty), got=display_type(arg_type))
 
         # Validate trailing variadic arguments. Two forms are accepted:
         #   - individual values, each type-checked against element type T;
@@ -266,7 +267,7 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
             arg_type = validator.infer_expression_type(arg)
             if arg_type is not None and not types_compatible(validator, arg_type, param.ty):
                 er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                       index=i+1, expected=str(param.ty), got=str(arg_type))
+                       index=i+1, expected=display_type(param.ty), got=display_type(arg_type))
 
     # Validate any excess arguments (if more args than params)
     for i in range(len(expected_params), len(actual_args)):
@@ -294,7 +295,7 @@ def validate_open_function(validator: 'TypeValidator', call: Call) -> None:
     path_type = validator.infer_expression_type(actual_args[0])
     if path_type is not None and path_type != BuiltinType.STRING:
         er.emit(validator.reporter, er.ERR.CE2006, actual_args[0].loc,
-               index=1, expected="string", got=str(path_type))
+               index=1, expected="string", got=display_type(path_type))
 
     # Validate second argument: mode (must be FileMode enum variant)
     validator.validate_expression(actual_args[1])
@@ -308,7 +309,7 @@ def validate_open_function(validator: 'TypeValidator', call: Call) -> None:
 
     if mode_type is not None and mode_type != file_mode_enum:
         er.emit(validator.reporter, er.ERR.CE2006, actual_args[1].loc,
-               index=2, expected="FileMode", got=str(mode_type))
+               index=2, expected="FileMode", got=display_type(mode_type))
 
 
 def check_stdlib_function(validator: 'TypeValidator', call: Call) -> Optional[any]:
@@ -371,7 +372,7 @@ def validate_stdlib_function(validator: 'TypeValidator', call: Call, module_and_
             arg_type = validator.infer_expression_type(arg)
             if arg_type is not None and not types_compatible(validator, arg_type, expected_type):
                 er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                       index=i+1, expected=str(expected_type), got=str(arg_type))
+                       index=i+1, expected=display_type(expected_type), got=display_type(arg_type))
         array_ty = expected_params[-1]
         element_ty = array_ty.base_type if isinstance(array_ty, DynamicArrayType) else array_ty
         validate_variadic_trailing_args(
@@ -393,7 +394,7 @@ def validate_stdlib_function(validator: 'TypeValidator', call: Call, module_and_
         arg_type = validator.infer_expression_type(arg)
         if arg_type is not None and not types_compatible(validator, arg_type, expected_type):
             er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                   index=i+1, expected=str(expected_type), got=str(arg_type))
+                   index=i+1, expected=display_type(expected_type), got=display_type(arg_type))
 
 
 def _validate_polymorphic_math(validator: 'TypeValidator', call: Call, function_name: str) -> None:
@@ -413,7 +414,7 @@ def _validate_polymorphic_math(validator: 'TypeValidator', call: Call, function_
         arg_type = validator.infer_expression_type(args[0])
         if arg_type is not None and arg_type not in (SIGNED_INTS | FLOATS):
             er.emit(validator.reporter, er.ERR.CE2006, args[0].loc,
-                   index=1, expected="signed integer or float", got=str(arg_type))
+                   index=1, expected="signed integer or float", got=display_type(arg_type))
 
     elif function_name in ("min", "max"):
         if len(args) != 2:
@@ -424,10 +425,10 @@ def _validate_polymorphic_math(validator: 'TypeValidator', call: Call, function_
         type_b = validator.infer_expression_type(args[1])
         if type_a is not None and type_a not in NUMERIC:
             er.emit(validator.reporter, er.ERR.CE2006, args[0].loc,
-                   index=1, expected="numeric type", got=str(type_a))
+                   index=1, expected="numeric type", got=display_type(type_a))
         if type_b is not None and type_b not in NUMERIC:
             er.emit(validator.reporter, er.ERR.CE2006, args[1].loc,
-                   index=2, expected="numeric type", got=str(type_b))
+                   index=2, expected="numeric type", got=display_type(type_b))
         if type_a is not None and type_b is not None and type_a != type_b:
             er.emit(validator.reporter, er.ERR.CE2006, args[1].loc,
-                   index=2, expected=str(type_a), got=str(type_b))
+                   index=2, expected=display_type(type_a), got=display_type(type_b))

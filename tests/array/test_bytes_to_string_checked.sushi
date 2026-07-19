@@ -7,49 +7,49 @@
 fn main() i32:
     # valid: "hi" + U+00E9 (é, 2-byte C3 A9)
     let u8[] good = from([104 as u8, 105 as u8, 0xC3 as u8, 0xA9 as u8])
-    let Result<string, StdError> rg = good.to_string_checked()
+    let Result@(string, StdError) rg = good.to_string_checked()
     match rg:
         Result.Ok(s) -> println("valid={s}")
         Result.Err(_) -> println("valid=ERR")
 
     # overlong encoding of '/' (C0 AF)
     let u8[] overlong = from([0xC0 as u8, 0xAF as u8])
-    let Result<string, StdError> ro = overlong.to_string_checked()
+    let Result@(string, StdError) ro = overlong.to_string_checked()
     match ro:
         Result.Ok(_) -> println("overlong=OK")
         Result.Err(_) -> println("overlong=ERR")
 
     # UTF-16 surrogate U+D800 (ED A0 80)
     let u8[] surrogate = from([0xED as u8, 0xA0 as u8, 0x80 as u8])
-    let Result<string, StdError> rs = surrogate.to_string_checked()
+    let Result@(string, StdError) rs = surrogate.to_string_checked()
     match rs:
         Result.Ok(_) -> println("surrogate=OK")
         Result.Err(_) -> println("surrogate=ERR")
 
     # valid 4-byte emoji U+1F600 (F0 9F 98 80)
     let u8[] emoji = from([0xF0 as u8, 0x9F as u8, 0x98 as u8, 0x80 as u8])
-    let Result<string, StdError> re = emoji.to_string_checked()
+    let Result@(string, StdError) re = emoji.to_string_checked()
     match re:
         Result.Ok(_) -> println("emoji=OK")
         Result.Err(_) -> println("emoji=ERR")
 
     # truncated 3-byte sequence (E2 82, missing final byte)
     let u8[] trunc = from([0xE2 as u8, 0x82 as u8])
-    let Result<string, StdError> rt = trunc.to_string_checked()
+    let Result@(string, StdError) rt = trunc.to_string_checked()
     match rt:
         Result.Ok(_) -> println("truncated=OK")
         Result.Err(_) -> println("truncated=ERR")
 
     # highest valid code point U+10FFFF (F4 8F BF BF)
     let u8[] maxv = from([0xF4 as u8, 0x8F as u8, 0xBF as u8, 0xBF as u8])
-    let Result<string, StdError> rm = maxv.to_string_checked()
+    let Result@(string, StdError) rm = maxv.to_string_checked()
     match rm:
         Result.Ok(_) -> println("maxvalid=OK")
         Result.Err(_) -> println("maxvalid=ERR")
 
     # beyond U+10FFFF (F4 90 80 80)
     let u8[] toobig = from([0xF4 as u8, 0x90 as u8, 0x80 as u8, 0x80 as u8])
-    let Result<string, StdError> rb = toobig.to_string_checked()
+    let Result@(string, StdError) rb = toobig.to_string_checked()
     match rb:
         Result.Ok(_) -> println("toobig=OK")
         Result.Err(_) -> println("toobig=ERR")

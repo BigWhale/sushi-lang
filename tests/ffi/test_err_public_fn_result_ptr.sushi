@@ -6,7 +6,7 @@ unsafe external "C" as libc because "intentional public ptr exposure":
 enum AllocError:
     OutOfMemory
 
-public fn grab() Result<ptr, AllocError>:
+public fn grab() Result@(ptr, AllocError):
     let ptr p = libc.malloc(8 as i64)
     return Result.Ok(p)
 

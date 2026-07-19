@@ -13,7 +13,7 @@ extend Color with Display:
             Color.Red() -> return "red"
             Color.Green() -> return "green"
 
-fn show_all<...Ts: Display>(...Ts args) ~:
+fn show_all@(...Ts: Display)(...Ts args) ~:
     expand(a in args):
         println(a.display())
     return Result.Ok(~)

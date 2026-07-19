@@ -5,7 +5,7 @@
 perk Display:
     fn display() string
 
-public fn show_all<...Ts: Display>(...Ts args) ~:
+public fn show_all@(...Ts: Display)(...Ts args) ~:
     expand(a in args):
         println(a.display())
     return Result.Ok(~)

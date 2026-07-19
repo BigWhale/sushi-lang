@@ -5,7 +5,7 @@
 # Maybe<T> is now a built-in generic type (no enum definition needed)
 
 fn test_maybe_some() i32:
-    let Maybe<i32> val = Maybe.Some(42)
+    let Maybe@(i32) val = Maybe.Some(42)
 
     match val:
         Maybe.Some(x) ->
@@ -14,7 +14,7 @@ fn test_maybe_some() i32:
             return Result.Ok(0)
 
 fn test_maybe_none() i32:
-    let Maybe<i32> val = Maybe.None()
+    let Maybe@(i32) val = Maybe.None()
 
     match val:
         Maybe.Some(x) ->
@@ -23,7 +23,7 @@ fn test_maybe_none() i32:
             return Result.Ok(-1)
 
 fn test_maybe_string() i32:
-    let Maybe<string> val = Maybe.Some("hello")
+    let Maybe@(string) val = Maybe.Some("hello")
 
     match val:
         Maybe.Some(s) ->
@@ -34,8 +34,8 @@ fn test_maybe_string() i32:
             return Result.Ok(0)
 
 fn test_maybe_bool() i32:
-    let Maybe<bool> val1 = Maybe.Some(true)
-    let Maybe<bool> val2 = Maybe.None()
+    let Maybe@(bool) val1 = Maybe.Some(true)
+    let Maybe@(bool) val2 = Maybe.None()
 
     let i32 result1 = 0
     match val1:

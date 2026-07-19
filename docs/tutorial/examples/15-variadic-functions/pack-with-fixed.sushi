@@ -11,7 +11,7 @@ extend string with Render:
     fn render() string:
         return self
 
-fn log<...Ts: Render>(string label, ...Ts items) ~:
+fn log@(...Ts: Render)(string label, ...Ts items) ~:
     println("{label}:")
     expand(it in items):
         println("  - {it.render()}")

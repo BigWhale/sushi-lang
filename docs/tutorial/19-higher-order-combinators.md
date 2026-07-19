@@ -16,8 +16,8 @@ actually call one, so an unused `use` costs nothing.
 
 ## map — transform every element
 
-`map(xs, f)` applies `f` to each element of a `List<T>` and collects the results into a new
-`List<U>`:
+`map(xs, f)` applies `f` to each element of a `List@(T)` and collects the results into a new
+`List@(U)`:
 
 ```sushi
 --8<-- "docs/tutorial/examples/19-higher-order-combinators/map.sushi"
@@ -115,7 +115,7 @@ for you.
 
     ```sushi
     let fn(i32) -> i32 id = identity   # fixes the instantiation
-    let List<i32> same = map(xs, id).realise(List.new())
+    let List@(i32) same = map(xs, id).realise(List.new())
     ```
 
 ## What you learned

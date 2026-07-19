@@ -1,6 +1,6 @@
 # EXPECT_STDOUT_EXACT: "=== Iterating over List<string> ===\nAlice\nBob\nCharlie\n"
 fn main() i32:
-    let List<string> names = List.new()
+    let List@(string) names = List.new()
 
     names.push("Alice")
     names.push("Bob")

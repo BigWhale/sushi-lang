@@ -5,14 +5,14 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "30\n"
 
-extend List<i32> sum_all() i32:
+extend List@(i32) sum_all() i32:
     let i32 acc = 0
     foreach(x in self.iter()):
         acc := acc + x
     return acc
 
 fn main() i32:
-    let List<i32> xs = List.new()
+    let List@(i32) xs = List.new()
     xs.push(10)
     xs.push(20)
     let i32 s = xs.sum_all()

@@ -14,7 +14,7 @@ use <lib/dead_code_lib>
 
 fn main() i32:
     # Only call used_function(), leaving unused_function_{a,b,c} uncalled
-    let Result<i32, StdError> r = used_function()
+    let Result@(i32, StdError) r = used_function()
     match r:
         Result.Ok(result) ->
             println("used_function() = {result}")

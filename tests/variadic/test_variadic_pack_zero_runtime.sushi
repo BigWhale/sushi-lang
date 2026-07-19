@@ -8,7 +8,7 @@ extend i32 with Display:
     fn display() string:
         return "int"
 
-fn print_all<...Ts: Display>(...Ts args) ~:
+fn print_all@(...Ts: Display)(...Ts args) ~:
     println("start")
     expand(a in args):
         println(a.display())

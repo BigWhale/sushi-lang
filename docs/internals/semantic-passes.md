@@ -44,7 +44,7 @@ Collect global definitions before analyzing function bodies.
 ```sushi
 const i32 MAX = 100  # Register constant
 
-struct Pair<T, U>:   # Register generic struct
+struct Pair@(T, U):   # Register generic struct
     T first
     U second
 
@@ -137,27 +137,27 @@ Detect which generic instantiations are needed.
 ### How It Works
 
 1. Traverse AST looking for generic types
-2. When `List<i32>` appears, record it
-3. When `.push()` is called on `List<i32>`, record `List<i32>.push`
+2. When `List@(i32)` appears, record it
+3. When `.push()` is called on `List@(i32)`, record `List@(i32).push`
 4. Build complete set of required instantiations
 
 ### Example
 
 ```sushi
-let List<i32> nums = List.new()  # Collect: List<i32>, List<i32>.new
-nums.push(42)                     # Collect: List<i32>.push
+let List@(i32) nums = List.new()  # Collect: List@(i32), List@(i32).new
+nums.push(42)                     # Collect: List@(i32).push
 
-let List<string> names = List.new()  # Collect: List<string>, List<string>.new
-names.push("Alice")                   # Collect: List<string>.push
+let List@(string) names = List.new()  # Collect: List@(string), List@(string).new
+names.push("Alice")                   # Collect: List@(string).push
 ```
 
 **Collected instantiations:**
-- `List<i32>`
-- `List<i32>.new()`
-- `List<i32>.push()`
-- `List<string>`
-- `List<string>.new()`
-- `List<string>.push()`
+- `List@(i32)`
+- `List@(i32).new()`
+- `List@(i32).push()`
+- `List@(string)`
+- `List@(string).new()`
+- `List@(string).push()`
 
 ## Phase 1.6: Monomorphization
 
@@ -169,7 +169,7 @@ Generate concrete types from generic definitions.
 
 ### Process
 
-1. For each collected instantiation (e.g., `List<i32>`)
+1. For each collected instantiation (e.g., `List@(i32)`)
 2. Substitute type parameters (`T` → `i32`)
 3. Create specialized struct/function
 4. Add to AST as concrete definition
@@ -178,15 +178,15 @@ Generate concrete types from generic definitions.
 
 **Generic definition:**
 ```sushi
-struct Pair<T, U>:
+struct Pair@(T, U):
     T first
     U second
 
-extend Pair<T, U> swap<T, U>() Pair<U, T>:
+extend Pair@(T, U) swap@(T, U)() Pair@(U, T):
     return Result.Ok(Pair(first: self.second, second: self.first))
 ```
 
-**After monomorphization for `Pair<i32, string>`:**
+**After monomorphization for `Pair@(i32, string)`:**
 ```sushi
 struct Pair__i32__string:
     i32 first
@@ -198,9 +198,9 @@ extend Pair__i32__string swap() Pair__string__i32:
 
 ### Name Mangling
 
-- `Pair<i32, string>` → `Pair__i32__string`
-- `List<T>` → `List__i32`, `List__string`
-- Nested: `Maybe<Maybe<i32>>` → `Maybe__Maybe__i32`
+- `Pair@(i32, string)` → `Pair__i32__string`
+- `List@(T)` → `List__i32`, `List__string`
+- Nested: `Maybe@(Maybe@(i32))` → `Maybe__Maybe__i32`
 
 ## Phase 1.7: AST Transformation
 
@@ -226,10 +226,10 @@ array_len(arr)
 
 ```sushi
 # Before:
-let Result<i32> r = get_value()
+let Result@(i32) r = get_value()
 
 # After: (type explicitly resolved)
-let Result<i32> r = get_value()  # Type: Result<i32>
+let Result@(i32) r = get_value()  # Type: Result@(i32)
 ```
 
 3. **UFCS (Uniform Function Call Syntax)**
@@ -322,7 +322,7 @@ backend. `??` on a raw foreign value therefore falls out as the existing
 
 **types/compatibility.py** - Type compatibility
 - Check if type A can be assigned to type B
-- Handle Result<T> unwrapping
+- Handle Result@(T) unwrapping
 
 **types/expressions.py** - Expression type checking
 - Binary operators (+, -, *, /, %, ==, !=, <, >, and, or)
@@ -366,7 +366,7 @@ let i32 y = x + "hello"  # ERROR CE2xxx: Cannot add i32 and string
 fn get_value() i32:
     return Result.Ok(42)
 
-# ERROR CE2505: Cannot assign Result<i32> to i32
+# ERROR CE2505: Cannot assign Result@(i32) to i32
 let i32 x = get_value()
 
 # OK: Use .realise()
@@ -483,7 +483,7 @@ Constants  Vars   Instantiate  Monomorphize  Transform    Hash     Types   Borro
 **Phase 2:**
 - CE2xxx: Type mismatch
 - CE2502: `.realise()` wrong argument count
-- CE2505: Assigning Result<T> without handling
+- CE2505: Assigning Result@(T) without handling
 
 **Phase 3:**
 - CE1007: Cannot rebind while borrowed

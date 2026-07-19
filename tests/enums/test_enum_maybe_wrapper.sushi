@@ -7,7 +7,7 @@ enum Color:
     Green
     Blue
 
-fn find_color(string name) Maybe<Color>:
+fn find_color(string name) Maybe@(Color):
     if (name == "red"):
         return Result.Ok(Maybe.Some(Color.Red()))
     if (name == "green"):
@@ -17,7 +17,7 @@ fn find_color(string name) Maybe<Color>:
     return Result.Ok(Maybe.None())
 
 fn main() i32:
-    let Maybe<Color> c1 = find_color("red").realise(Maybe.None())
+    let Maybe@(Color) c1 = find_color("red").realise(Maybe.None())
     match c1:
         Maybe.Some(Color.Red) ->
             println("Found red")
@@ -28,7 +28,7 @@ fn main() i32:
             println("FAIL: red not found")
             return Result.Ok(1)
 
-    let Maybe<Color> c2 = find_color("purple").realise(Maybe.None())
+    let Maybe@(Color) c2 = find_color("purple").realise(Maybe.None())
     match c2:
         Maybe.None ->
             println("Purple not found")

@@ -7,13 +7,13 @@ perk Ord:
 
 # Unconstrained generic: returns its first argument (uses both params so the
 # monomorphized instance has no unused-variable warning at the consumer).
-public fn first_of<T>(T a, T b) T:
+public fn first_of@(T)(T a, T b) T:
     let T chosen = b
     chosen := a
     return Result.Ok(chosen)
 
 # Constrained generic: used to prove consumer-relative constraint re-checking.
-public fn max_of<T: Ord>(T a, T b) T:
+public fn max_of@(T: Ord)(T a, T b) T:
     if (a > b):
         return Result.Ok(a)
     return Result.Ok(b)

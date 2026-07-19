@@ -8,5 +8,5 @@ fn update_value(&poke i32 x) ~:
 
 fn main(string[] args) i32:
     let i32 n = 42
-    let Result<~, StdError> r = update_value(&poke n)
+    let Result@(~, StdError) r = update_value(&poke n)
     return Result.Ok(0)

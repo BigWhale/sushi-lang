@@ -2,7 +2,7 @@
 # Test basic List<T> methods: new(), len(), is_empty(), capacity()
 fn main() i32:
     # Create empty List
-    let List<i32> crew_sizes = List.new()
+    let List@(i32) crew_sizes = List.new()
 
     # Test initial state
     let i32 size = crew_sizes.len()

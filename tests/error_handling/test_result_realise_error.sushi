@@ -4,16 +4,16 @@
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Default: Left(99)
 
-enum Either<T, U>:
+enum Either@(T, U):
     Left(T)
     Right(U)
 
-fn test_return_error() Either<i32, string>:
+fn test_return_error() Either@(i32, string):
     return Result.Err(StdError.Error)
 
 fn main() i32:
     # Use .realise() directly on function call to extract with default
-    let Either<i32, string> either_val = test_return_error().realise(Either.Left(99))
+    let Either@(i32, string) either_val = test_return_error().realise(Either.Left(99))
 
     # Verify we got the default value
     match either_val:

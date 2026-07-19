@@ -11,10 +11,10 @@ struct Point:
 # Point does NOT implement Hashable
 
 # Generic struct with perk constraint
-struct Container<T: Hashable>:
+struct Container@(T: Hashable):
     T value
 
 fn main() i32:
     # Error CE4006: Point does not implement perk Hashable
-    let Container<Point> c = Container(Point(10, 20))
+    let Container@(Point) c = Container(Point(10, 20))
     return Result.Ok(0)

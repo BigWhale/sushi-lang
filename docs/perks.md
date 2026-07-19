@@ -26,7 +26,7 @@ Perks provide a way to:
 - Achieve zero-cost abstractions through monomorphization
 
 **Key Design Principles:**
-- Perks return bare types (not `Result<T>`)
+- Perks return bare types (not `Result@(T)`)
 - Static dispatch only (no dynamic dispatch/vtables)
 - Explicit implementations required (no structural typing)
 - Full type checking at compile time
@@ -52,7 +52,7 @@ explicitly (there is no `Self` keyword) and must use an explicit `&peek` / `&pok
 borrow. The implementation and call site must use the same borrow kind.
 
 **Rules:**
-- Perk methods do not return `Result<T>` (unlike regular functions)
+- Perk methods do not return `Result@(T)` (unlike regular functions)
 - Methods can access `self` implicitly
 - Methods can take parameters including references
 - Multiple methods can be defined in a single perk
@@ -97,7 +97,7 @@ perk Hashable:
     fn hash() u64
 
 # Generic struct requiring Hashable implementation
-struct Container<T: Hashable>:
+struct Container@(T: Hashable):
     T value
 
 struct Point:
@@ -110,10 +110,10 @@ extend Point with Hashable:
 
 fn main() i32:
     # Valid: Point implements Hashable
-    let Container<Point> c = Container(Point(10, 20))
+    let Container@(Point) c = Container(Point(10, 20))
 
     # Invalid: Would fail with CE4006 if NoHash doesn't implement Hashable
-    # let Container<NoHash> bad = Container(NoHash(42))
+    # let Container@(NoHash) bad = Container(NoHash(42))
 
     return Result.Ok(0)
 ```
@@ -121,7 +121,7 @@ fn main() i32:
 ### Enum Constraints
 
 ```sushi
-enum Result<T: Displayable, E>:
+enum Result@(T: Displayable, E):
     Ok(T)
     Err(E)
 
@@ -145,7 +145,7 @@ perk Hashable:
     fn hash() u64
 
 # Generic function with perk constraint
-fn compute_hash<T: Hashable>(T value) u64:
+fn compute_hash@(T: Hashable)(T value) u64:
     return Result.Ok(value.hash())
 
 struct Point:
@@ -180,7 +180,7 @@ Primitives automatically satisfy perks when they have matching auto-derived meth
 perk Hashable:
     fn hash() u64
 
-fn compute_hash<T: Hashable>(T value) u64:
+fn compute_hash@(T: Hashable)(T value) u64:
     return Result.Ok(value.hash())
 
 fn main() i32:
@@ -211,11 +211,11 @@ perk Displayable:
     fn display() string
 
 # Multiple constraints on struct
-struct Processor<T: Hashable + Displayable>:
+struct Processor@(T: Hashable + Displayable):
     T item
 
 # Multiple constraints on function
-fn process<T: Hashable + Displayable>(T item) ~:
+fn process@(T: Hashable + Displayable)(T item) ~:
     let u64 h = item.hash()
     let string s = item.display()
     println("Hash: {h}")
@@ -277,7 +277,7 @@ extend User with Displayable:
     fn display() string:
         return "{self.name} (age {self.age})"
 
-fn print_item<T: Displayable>(T item) ~:
+fn print_item@(T: Displayable)(T item) ~:
     println(item.display())
     return Result.Ok(~)
 ```
@@ -301,7 +301,7 @@ extend Score with Comparable:
             return 1
         return 0
 
-fn find_max<T: Comparable>(T a, T b) T:
+fn find_max@(T: Comparable)(T a, T b) T:
     let i32 cmp = a.compare(&peek b)
     if (cmp >= 0):
         return Result.Ok(a)
@@ -366,7 +366,7 @@ Perk-related compiler errors:
 | CE4003 | Unknown perk | `extend Point with UnknownPerk:` |
 | CE4004 | Method signature mismatch | Wrong parameter types or return type |
 | CE4005 | Missing required method | Perk defines `hash()` but implementation lacks it |
-| CE4006 | Type doesn't implement required perk | `Container<T: Hashable>` used with type lacking Hashable |
+| CE4006 | Type doesn't implement required perk | `Container@(T: Hashable)` used with type lacking Hashable |
 | CE4007 | Method name conflict | Perk method name conflicts with existing method |
 
 ## Known Limitations
@@ -377,11 +377,11 @@ Cannot extract type parameters from complex generic types in function parameters
 
 ```sushi
 # Does NOT work - type inference limitation
-fn hash_container<T: Hashable>(Container<T> c) u64:
+fn hash_container@(T: Hashable)(Container@(T) c) u64:
     return Result.Ok(c.value.hash())
 
 # Works - simple type parameter
-fn compute_hash<T: Hashable>(T value) u64:
+fn compute_hash@(T: Hashable)(T value) u64:
     return Result.Ok(value.hash())
 ```
 
@@ -393,10 +393,10 @@ Generic functions calling other generic functions may fail to monomorphize:
 
 ```sushi
 # May not work correctly
-fn wrapper<T: Hashable>(T value) u64:
+fn wrapper@(T: Hashable)(T value) u64:
     return compute_hash(value)  # Nested generic call
 
-fn compute_hash<T: Hashable>(T value) u64:
+fn compute_hash@(T: Hashable)(T value) u64:
     return Result.Ok(value.hash())
 ```
 
@@ -408,8 +408,8 @@ Perks cannot have type parameters. Declaring one is a compile error:
 
 ```sushi
 # NOT supported
-perk Iterator<Item>:
-    fn next() Maybe<Item>
+perk Iterator@(Item):
+    fn next() Maybe@(Item)
 # CE4010: perk Iterator cannot have type parameters
 ```
 

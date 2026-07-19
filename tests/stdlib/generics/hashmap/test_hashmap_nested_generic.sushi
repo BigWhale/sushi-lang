@@ -5,7 +5,7 @@
 use <collections/hashmap>
 fn main() i32:
     # Test HashMap with Maybe<i32> values (nested generic)
-    let HashMap<string, Maybe<i32>> config = HashMap.new()
+    let HashMap@(string, Maybe@(i32)) config = HashMap.new()
 
     # Insert entries with Some and None values
     config.insert("max_connections", Maybe.Some(100))
@@ -19,7 +19,7 @@ fn main() i32:
         println("✗ Expected 3 entries")
 
     # Test get with Some value
-    let Maybe<Maybe<i32>> result1 = config.get("max_connections")
+    let Maybe@(Maybe@(i32)) result1 = config.get("max_connections")
     match result1:
         Maybe.Some(value) ->
             match value:
@@ -31,7 +31,7 @@ fn main() i32:
             println("✗ Key not found")
 
     # Test get with None value
-    let Maybe<Maybe<i32>> result2 = config.get("buffer_size")
+    let Maybe@(Maybe@(i32)) result2 = config.get("buffer_size")
     match result2:
         Maybe.Some(value) ->
             match value:
@@ -51,7 +51,7 @@ fn main() i32:
     # Update with different Maybe value
     config.insert("buffer_size", Maybe.Some(4096))
 
-    let Maybe<Maybe<i32>> result3 = config.get("buffer_size")
+    let Maybe@(Maybe@(i32)) result3 = config.get("buffer_size")
     match result3:
         Maybe.Some(value) ->
             match value:
@@ -63,7 +63,7 @@ fn main() i32:
             println("✗ Key not found")
 
     # Remove a key
-    let Maybe<Maybe<i32>> removed = config.remove("timeout")
+    let Maybe@(Maybe@(i32)) removed = config.remove("timeout")
 
     match removed:
         Maybe.Some(_) ->

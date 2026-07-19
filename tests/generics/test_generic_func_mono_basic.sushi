@@ -1,7 +1,7 @@
 # Test basic generic function monomorphization
 # Generic identity function should be monomorphized for i32 and string
 
-fn identity<T>(T value) T:
+fn identity@(T)(T value) T:
     return Result.Ok(value)
 
 fn test_identity() i32:

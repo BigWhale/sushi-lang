@@ -1,11 +1,11 @@
-struct Pair<T, U>:
+struct Pair@(T, U):
     T first
     U second
 
-fn identity<T>(T x) T:
+fn identity@(T)(T x) T:
     return Result.Ok(x)
 
-fn make_pair<T, U>(T a, U b) Pair<T, U>:
+fn make_pair@(T, U)(T a, U b) Pair@(T, U):
     return Result.Ok(Pair(first: a, second: b))
 
 fn main() i32:
@@ -14,7 +14,7 @@ fn main() i32:
 
     println("identity gives {n} and {s}")
 
-    let Pair<string, i32> p = make_pair("answer", 42).realise(Pair(first: "", second: 0))
+    let Pair@(string, i32) p = make_pair("answer", 42).realise(Pair(first: "", second: 0))
     println("make_pair built ({p.first}, {p.second})")
 
     return Result.Ok(0)

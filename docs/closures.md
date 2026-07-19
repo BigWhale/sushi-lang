@@ -77,13 +77,13 @@ fn main() i32:
 ```
 
 Result semantics are identical to `fn`: an expression body `|x| e` desugars to `return
-Result.Ok(e)`, so calling through a closure yields `Result<T, E>` and `??`/`.realise()`/`if
+Result.Ok(e)`, so calling through a closure yields `Result@(T, E)` and `??`/`.realise()`/`if
 (result)`/matching all work unchanged. The block form optionally takes a `-> T [| E]` annotation
 after the closing pipe, exactly like a `fn` declaration.
 
 Because the body is auto-wrapped in `Ok`, a fallible call inside a lambda body needs its own `??`
 at the point of use — you can't let an inner `Result` flow straight out, since the desugar would
-wrap it again (`Result<Result<T, E>, E>`) and the types won't match. That is why `compose` is
+wrap it again (`Result@(Result@(T, E), E)`) and the types won't match. That is why `compose` is
 written `|x| f(g(x)??)??` and not `|x| f(g(x)??)`.
 
 ## Capture
@@ -100,7 +100,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-An owned dynamic array, `List<T>`, or `Own<T>` is captured **by move**: the outer binding is
+An owned dynamic array, `List@(T)`, or `Own@(T)` is captured **by move**: the outer binding is
 consumed (a later use of it is CE2405, use-after-move) and the heap environment becomes the sole
 owner, freeing the value when the closure's environment is freed:
 
@@ -153,7 +153,7 @@ and any closure of that shape — capture is not part of the type. A mismatch is
 
 Tier 1 is complete, plus two Tier 2 items (T2.3/T2.4) have landed. Known gaps that remain:
 
-- **`List<T>`/`Own<T>`/dynamic-array-typed lambda *parameters* have no deep-copy** in the
+- **`List@(T)`/`Own@(T)`/dynamic-array-typed lambda *parameters* have no deep-copy** in the
   indirect-call path, so they're rejected (CE2094) — this is distinct from *capture*, which does
   move owned values (see [Capture](#capture)).
 - **No UFCS method form** (`xs.map(f)`) for the stdlib combinators — `use

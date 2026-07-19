@@ -21,7 +21,7 @@ The process module provides functions for controlling and querying process state
 Get the current working directory.
 
 ```sushi
-fn getcwd() -> Result<string>
+fn getcwd() -> Result@(string)
 ```
 
 **Returns:**
@@ -62,7 +62,7 @@ fn main() i32:
 Change the current working directory.
 
 ```sushi
-fn chdir(string path) -> Result<i32>
+fn chdir(string path) -> Result@(i32)
 ```
 
 **Parameters:**
@@ -240,7 +240,7 @@ fn main() i32:
 ```sushi
 use <sys/process>
 
-fn require_root() Result<i32, StdError>:
+fn require_root() Result@(i32, StdError):
     let i32 uid = getuid()
 
     if (uid != 0):
@@ -264,7 +264,7 @@ Spawn an external program by argv vector (PATH-searched, **no shell**), capturin
 standard output and standard error and returning its exit code.
 
 ```sushi
-fn run(string cmd, ...string args) -> Result<ProcessOutput, ProcessError>
+fn run(string cmd, ...string args) -> Result@(ProcessOutput, ProcessError)
 ```
 
 `args` is variadic: pass individual arguments directly (`run("echo", "hello")`), or forward an
@@ -534,7 +534,7 @@ Always check privileges before performing sensitive operations:
 ```sushi
 use <sys/process>
 
-fn require_non_root() Result<i32, StdError>:
+fn require_non_root() Result@(i32, StdError):
     let i32 uid = getuid()
 
     if (uid == 0):

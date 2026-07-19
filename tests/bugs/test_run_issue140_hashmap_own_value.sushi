@@ -6,7 +6,7 @@
 # EXPECT_STDOUT_EXACT: "99\n"
 use <collections/hashmap>
 
-fn val_of(Maybe<Own<i32>> got) i32:
+fn val_of(Maybe@(Own@(i32)) got) i32:
     match got:
         Maybe.Some(o) ->
             return Result.Ok(o.get())
@@ -14,8 +14,8 @@ fn val_of(Maybe<Own<i32>> got) i32:
             return Result.Ok(-2)
 
 fn run() i32:
-    let HashMap<i32, Own<i32>> map = HashMap.new()
-    let Own<i32> boxed = Own.alloc(99)   # named owning Own local -> insert must MOVE it
+    let HashMap@(i32, Own@(i32)) map = HashMap.new()
+    let Own@(i32) boxed = Own.alloc(99)   # named owning Own local -> insert must MOVE it
     map.insert(3, boxed)
     let i32 out = val_of(map.get(3))??
     map.free()

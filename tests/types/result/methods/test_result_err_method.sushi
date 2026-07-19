@@ -15,14 +15,14 @@ fn get_err() i32 | MyError:
     return Result.Err(MyError.BadInput)
 
 fn main() i32:
-    let Maybe<MyError> maybe_err1 = get_ok().err()
+    let Maybe@(MyError) maybe_err1 = get_ok().err()
     if (maybe_err1.is_none()):
         println("PASS: err returns None for Ok")
     else:
         println("FAIL: err should return None for Ok")
         return Result.Ok(1)
 
-    let Maybe<MyError> maybe_err2 = get_err().err()
+    let Maybe@(MyError) maybe_err2 = get_err().err()
     if (maybe_err2.is_some()):
         match maybe_err2:
             Maybe.Some(MyError.BadInput) ->

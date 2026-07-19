@@ -61,7 +61,7 @@ return and error types:
 
 The arrow `->` is required, and the return type is mandatory. Function types nest and compose
 like any other type — they work as parameter types, struct fields, and generic type arguments
-(`List<fn(i32) -> i32>`).
+(`List@(fn(i32) -> i32)`).
 
 ## Function values
 
@@ -84,7 +84,7 @@ functions are deferred (see [error codes](#error-codes)).
 ## Calling through a function value
 
 Call a function value exactly like a named function — `f(args)`. Because every Sushi function
-returns `Result<T, E>`, an indirect call yields the same `Result` a direct call would, so `??`,
+returns `Result@(T, E)`, an indirect call yields the same `Result` a direct call would, so `??`,
 `if (result)`, and pattern matching all work unchanged:
 
 ```sushi
@@ -112,20 +112,20 @@ fn run(Handler h, i32 v) i32:
 
 ### Lists (dispatch tables)
 
-`List<fn(...)>` is the idiomatic way to hold a collection of functions — a dispatch table you can
+`List@(fn(...))` is the idiomatic way to hold a collection of functions — a dispatch table you can
 iterate:
 
 ```sushi
-fn dispatch(List<fn(i32) -> i32> ops, i32 v) i32:
+fn dispatch(List@(fn(i32) -> i32) ops, i32 v) i32:
     let i32 acc = v
     foreach(f in ops.iter()):
         acc := f(acc)??
     return Result.Ok(acc)
 ```
 
-`.get(i)` returns `Maybe<fn(...)>` just like any element type; unwrap it (`??` / `.realise`) and
+`.get(i)` returns `Maybe@(fn(...))` just like any element type; unwrap it (`??` / `.realise`) and
 bind to a local before calling. (Raw arrays of function pointers are not expressible — the `[]`
-in `fn() -> T[]` binds to the return type `T[]` — so use `List<fn(...)>` for collections.)
+in `fn() -> T[]` binds to the return type `T[]` — so use `List@(fn(...))` for collections.)
 
 ## Custom error types
 
@@ -154,7 +154,7 @@ widened from a bare one-word pointer when closures were added; see the
 [closures guide](closures.md#how-it-compiles) for the full picture):
 
 - A Sushi `fn add(i32) i32` lowers to an LLVM function with signature
-  `Result<i32, StdError>(i32)`. Referencing it as a value builds `{f__thunk, null, null}` — a small
+  `Result@(i32, StdError)(i32)`. Referencing it as a value builds `{f__thunk, null, null}` — a small
   adapter thunk address, with `env_ptr`/`drop_ptr` null.
 - Calling through a function value is a single indirect `call`, with `env_ptr` passed as a hidden
   leading argument (ignored by the thunk for a plain reference).
@@ -188,7 +188,7 @@ v1 is intentionally the smallest useful slice, designed so each deferred piece i
 - **Closures / lambda literals now exist** — see the [Closures guide](closures.md). Tier 1 covers
   copy-capture and escaping closures; borrow capture, move-capture of owned types, and stdlib
   combinators (`List.map`/`.filter`/`.fold`) remain outstanding there.
-- **No generic-function references** (`identity<i32>`) — **CE2093**. Deferred until the
+- **No generic-function references** (`identity@(i32)`) — **CE2093**. Deferred until the
   instantiation can be forced and its mangled address taken.
 - **Extension/perk-method and FFI-extern values** are not referenceable (different ABIs).
 - **Call-through only via a `Name`.** Calling through an arbitrary expression — `(expr)()`,

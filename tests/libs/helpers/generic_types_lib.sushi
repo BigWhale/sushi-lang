@@ -10,21 +10,21 @@ perk Ord:
     fn gt(i32 other) bool
 
 # Simple generic struct container.
-struct Box<T>:
+struct Box@(T):
     T value
 
 # Generic optional enum (distinct name to avoid the builtin Maybe).
-enum Opt<T>:
+enum Opt@(T):
     Nope
     Yep(T)
 
 # Co-shipped nested generics: Holder<T> has a field of another exported generic
 # Cell<T>. Both ship as templates and must instantiate transitively.
-struct Cell<T>:
+struct Cell@(T):
     T item
 
-struct Holder<T>:
-    Cell<T> cell
+struct Holder@(T):
+    Cell@(T) cell
 
 # NOTE on recursive generic enums (e.g. `enum Tree<T>: Leaf(T), Node(Own<Tree<T>>)`):
 # an old comment here claimed instantiating one infinite-loops the monomorphizer.
@@ -35,5 +35,5 @@ struct Holder<T>:
 
 # Constrained generic struct: proves consumer-relative CE4006 re-checking for a
 # library-shipped generic TYPE template (not just a generic function).
-struct Ranked<T: Ord>:
+struct Ranked@(T: Ord):
     T value

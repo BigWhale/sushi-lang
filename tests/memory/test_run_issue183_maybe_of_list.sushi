@@ -7,10 +7,10 @@
 # EXPECT_NO_LEAKS: true
 
 fn main() i32:
-    let List<i32> tmp = List.new()
+    let List@(i32) tmp = List.new()
     tmp.push(1)
     tmp.push(2)
     tmp.push(3)
-    let Maybe<List<i32>> m = Maybe.Some(tmp)
+    let Maybe@(List@(i32)) m = Maybe.Some(tmp)
     println("some = {m.is_some()}")
     return Result.Ok(0)

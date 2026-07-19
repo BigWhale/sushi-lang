@@ -1,10 +1,10 @@
 # EXPECT_STDOUT_EXACT: "Value: Life\n"
 # EXPECT_RUNTIME_EXIT: 0
-struct Pair<T, U>:
+struct Pair@(T, U):
     T first
     U second
 
 fn main() i32:
-    let Pair<i32, string> p = Pair(42, "Life")
+    let Pair@(i32, string) p = Pair(42, "Life")
     println("Value: {p.second}")
     return Result.Ok(0)

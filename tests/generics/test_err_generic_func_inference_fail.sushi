@@ -2,10 +2,10 @@
 # EXPECT_ERROR_CODE: CE2060
 # This should fail with CE2060 when type cannot be inferred
 
-fn identity<T>(T value) T:
+fn identity@(T)(T value) T:
     return Result.Ok(value)
 
-fn ambiguous<T>() T:
+fn ambiguous@(T)() T:
     # No way to infer T from parameters
     let T result = 0 as T
     return Result.Ok(result)

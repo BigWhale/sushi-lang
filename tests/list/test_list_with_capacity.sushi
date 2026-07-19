@@ -4,7 +4,7 @@
 # Test List<T> with_capacity constructor
 fn main() i32:
     # Create list with pre-allocated capacity
-    let List<i32> reserved = List.with_capacity(100)
+    let List@(i32) reserved = List.with_capacity(100)
 
     # Should be empty but have capacity
     if (not reserved.is_empty()):

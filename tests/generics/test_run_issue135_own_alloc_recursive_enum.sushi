@@ -5,14 +5,14 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_CONTAINS: "leaf = 1"
 
-enum Tree<T>:
+enum Tree@(T):
     Leaf(T)
-    Node(Own<Tree<T>>, Own<Tree<T>>)
+    Node(Own@(Tree@(T)), Own@(Tree@(T)))
 
 fn main() i32:
-    let Own<Tree<i32>> left = Own.alloc(Tree.Leaf(1))
-    let Own<Tree<i32>> right = Own.alloc(Tree.Leaf(2))
-    let Own<Tree<i32>> root = Own.alloc(Tree.Node(left, right))
+    let Own@(Tree@(i32)) left = Own.alloc(Tree.Leaf(1))
+    let Own@(Tree@(i32)) right = Own.alloc(Tree.Leaf(2))
+    let Own@(Tree@(i32)) root = Own.alloc(Tree.Node(left, right))
     println("leaf = 1")
     root.destroy()
     return Result.Ok(0)

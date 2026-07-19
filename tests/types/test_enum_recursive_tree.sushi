@@ -3,7 +3,7 @@
 # Test recursive binary tree with Own<Tree>
 enum Tree:
     Leaf(i32)
-    Node(Own<Tree>, Own<Tree>)
+    Node(Own@(Tree), Own@(Tree))
 
 fn sum(Tree tree) i32:
     match tree:
@@ -21,10 +21,10 @@ fn run_test() i32:
     #   Leaf(5) Node
     #          /    \
     #      Leaf(3) Leaf(7)
-    let Own<Tree> leaf3 = Own.alloc(Tree.Leaf(3))
-    let Own<Tree> leaf7 = Own.alloc(Tree.Leaf(7))
-    let Own<Tree> right_node = Own.alloc(Tree.Node(leaf3, leaf7))
-    let Own<Tree> leaf5 = Own.alloc(Tree.Leaf(5))
+    let Own@(Tree) leaf3 = Own.alloc(Tree.Leaf(3))
+    let Own@(Tree) leaf7 = Own.alloc(Tree.Leaf(7))
+    let Own@(Tree) right_node = Own.alloc(Tree.Node(leaf3, leaf7))
+    let Own@(Tree) leaf5 = Own.alloc(Tree.Leaf(5))
     let Tree root = Tree.Node(leaf5, right_node)
 
     let i32 total = sum(root)??

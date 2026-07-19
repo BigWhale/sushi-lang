@@ -13,13 +13,13 @@ extend Point with Hashable:
     fn hash() u64:
         return (self.x + self.y) as u64
 
-enum Option<T: Hashable>:
+enum Option@(T: Hashable):
     Some(T)
     None()
 
 fn main() i32:
     let Point p = Point(10, 20)
-    let Option<Point> opt = Option.Some(p)
+    let Option@(Point) opt = Option.Some(p)
 
     match opt:
         Option.Some(val) ->

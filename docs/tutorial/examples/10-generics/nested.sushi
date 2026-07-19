@@ -1,10 +1,10 @@
-fn parse_count(i32 raw) Result<Maybe<i32>, StdError>:
+fn parse_count(i32 raw) Result@(Maybe@(i32), StdError):
     if (raw < 0):
         return Result.Ok(Maybe.None())
     return Result.Ok(Maybe.Some(raw))
 
 fn report(i32 raw) ~:
-    let Result<Maybe<i32>, StdError> outcome = parse_count(raw)
+    let Result@(Maybe@(i32), StdError) outcome = parse_count(raw)
     match outcome:
         Result.Ok(maybe) ->
             match maybe:

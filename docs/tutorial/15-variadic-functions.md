@@ -145,7 +145,7 @@ Because a pack function is generic, it ships across a `.slib` boundary just like
 A library can export a `printf`-style helper:
 
 ```sushi
-public fn show_all<...Ts: Display>(...Ts args) ~:
+public fn show_all@(...Ts: Display)(...Ts args) ~:
     expand(a in args):
         println(a.display())
     return Result.Ok(~)

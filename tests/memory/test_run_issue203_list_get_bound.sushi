@@ -9,13 +9,13 @@
 # EXPECT_NO_LEAKS: true
 
 fn main() i32:
-    let List<List<i32>> matrix = List.new()
-    let List<i32> row1 = List.new()
+    let List@(List@(i32)) matrix = List.new()
+    let List@(i32) row1 = List.new()
     row1.push(1)
     row1.push(2)
     matrix.push(row1)
 
-    let Maybe<List<i32>> m = matrix.get(0)
+    let Maybe@(List@(i32)) m = matrix.get(0)
     match m:
         Maybe.Some(row) -> println("len = {row.len()}")
         Maybe.None() -> println("none")

@@ -10,14 +10,14 @@ struct Vogon:
 
 fn main() i32:
     # Allocate a value on the heap.
-    let Own<i32> answer = Own.alloc(42)
+    let Own@(i32) answer = Own.alloc(42)
 
     # .get() reads the value back out.
     println("Heap-allocated answer: {answer.get()}")
 
     # Own<T> works with any type, including structs.
     let Vogon v = Vogon(7, "Prostetnic Vogon Jeltz")
-    let Own<Vogon> boxed = Own.alloc(v)
+    let Own@(Vogon) boxed = Own.alloc(v)
     let Vogon loaded = boxed.get()
     println("Vogon #{loaded.id}: {loaded.name}")
 

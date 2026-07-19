@@ -62,7 +62,7 @@ External signatures are limited to the **C-representable subset**:
 - `~` - genuine C `void`
 - `string` - auto-marshalled to/from C `char*` (below)
 
-Anything else (`Result<T,E>`, `Maybe<T>`, structs, arrays `T[]`, references,
+Anything else (`Result@(T,E)`, `Maybe@(T)`, structs, arrays `T[]`, references,
 named user types) is a hard error: **`CE5003`**. The check is a strict allowlist,
 so an unknown user type cannot slip through.
 
@@ -83,14 +83,14 @@ arises it will become an `is_null(ptr) -> bool` intrinsic, never a `null` litera
 
 ### Return types and the Result-exemption
 
-Sushi's universal rule is that **every `fn` implicitly returns `Result<T, E>`**.
+Sushi's universal rule is that **every `fn` implicitly returns `Result@(T, E)`**.
 External functions are the **single exception**: a C function returns a raw value
 with no error channel and cannot construct a Sushi `Result` across the ABI.
 
 ```sushi
-fn strlen(string s) i64 = "strlen"   # returns raw i64, NOT Result<i64, StdError>
+fn strlen(string s) i64 = "strlen"   # returns raw i64, NOT Result@(i64, StdError)
 fn malloc(i64 n) ptr    = "malloc"   # returns raw ptr (may be null)
-fn free(ptr p) ~        = "free"     # ~ here is genuine C void, NOT Result<~>
+fn free(ptr p) ~        = "free"     # ~ here is genuine C void, NOT Result@(~)
 ```
 
 Because `libc.strlen(s)` yields a plain `i64`, you **cannot** apply `??` or
@@ -205,7 +205,7 @@ fn close_handle(ptr h) ~:
 ```
 
 A wrapper may also *return* the handle it acquired - `ptr` flows through the
-implicit `Result` wrapping (and through `Maybe<ptr>`) like any other value:
+implicit `Result` wrapping (and through `Maybe@(ptr)`) like any other value:
 
 ```sushi
 fn grab() ptr:
@@ -226,7 +226,7 @@ or null-checking - freeing the handle is still your job.
 ## `ptr` is unit-confined
 
 A **`public fn` may not expose `ptr` anywhere in its signature** - not as a
-parameter, not as a return type, not inside `Result<ptr, E>` or `Maybe<ptr>`.
+parameter, not as a return type, not inside `Result@(ptr, E)` or `Maybe@(ptr)`.
 Violations are rejected at compile time with **`CE5008`**.
 
 FFI is a private implementation detail of the unit that declares the
@@ -276,12 +276,12 @@ rejects every operation that would pretend otherwise:
 |---|---|
 | `a == b`, `a < b`, arithmetic, `not`/`~`/`-` on a `ptr` | `CE5010` - no comparable identity, no arithmetic, no truthiness |
 | `p.hash()` or any method call on a `ptr` | `CE5011` - an opaque handle has no methods |
-| `HashMap<i32, ptr>`, `List<ptr>`, `Tagged<ptr>` (any generic argument) | `CE5012` - only `Result<ptr, E>` and `Maybe<ptr>` carry a `ptr` |
+| `HashMap@(i32, ptr)`, `List@(ptr)`, `Tagged@(ptr)` (any generic argument) | `CE5012` - only `Result@(ptr, E)` and `Maybe@(ptr)` carry a `ptr` |
 | `"{p}"` interpolation | `CE2035` - no string form |
 | `0 as ptr`, `p as i64` | `CE2014` - cannot be forged from or laundered into an integer |
 
 What remains is exactly the *holding* set: local variables, private function
-parameters and returns, `Result<ptr, E>`/`Maybe<ptr>`, struct fields, and
+parameters and returns, `Result@(ptr, E)`/`Maybe@(ptr)`, struct fields, and
 plain arrays (`ptr[]`). If a handle needs behavior - equality, hashing,
 methods, a place in a collection - wrap it in a concrete struct and give the
 *struct* those things; the struct is real Sushi and plays by all the rules.
@@ -303,7 +303,7 @@ intrinsic, never as `==` or a `null` literal.
 | `CE5009` | error | `ptr` is named in a unit that declares no `unsafe external` block. No danger zone, no ptr. |
 | `CE5010` | error | A `ptr` is used with an operator (comparison, arithmetic, bitwise, logical). An opaque handle has no identity or arithmetic. |
 | `CE5011` | error | A method is called on a `ptr`. Wrap the handle in a struct and extend the struct. |
-| `CE5012` | error | A `ptr` appears as a generic type argument outside `Result`/`Maybe` (e.g. `HashMap<i32, ptr>`, `List<ptr>`). |
+| `CE5012` | error | A `ptr` appears as a generic type argument outside `Result`/`Maybe` (e.g. `HashMap@(i32, ptr)`, `List@(ptr)`). |
 
 ## Linking: what can actually be resolved
 
@@ -313,7 +313,7 @@ satisfies it is the important part.
 
 Sushi links binaries by invoking the C compiler driver as `clang prog.o -o prog`
 (plus `-lm` on Linux). There is **no explicit `-lc`** and **no way to pass
-`-l<lib>` or `-L<path>`**. libc is linked anyway, for two compounding reasons:
+`-l@(lib)` or `-L@(path)`**. libc is linked anyway, for two compounding reasons:
 
 1. **The clang driver links the C runtime into every executable** by default
    (libc/libSystem plus the startup objects). This happens for any program,

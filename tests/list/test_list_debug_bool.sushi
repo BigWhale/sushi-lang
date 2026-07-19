@@ -1,6 +1,6 @@
-# EXPECT_STDOUT_EXACT: "=== List<bool> Debug ===\nList<bool> {\n  len: 3, capacity: 4\n  [0] true\n  [1] false\n  [2] true\n}\n"
+# EXPECT_STDOUT_EXACT: "=== List<bool> Debug ===\nList@(bool) {\n  len: 3, capacity: 4\n  [0] true\n  [1] false\n  [2] true\n}\n"
 fn main() i32:
-    let List<bool> flags = List.new()
+    let List@(bool) flags = List.new()
 
     # Push some booleans
     flags.push(true)

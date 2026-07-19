@@ -6,21 +6,21 @@
 # Test functions returning nested generics
 # "Forty-two!" yelled Loonquawl. "Is that all you've got to show for seven and a half million years' work?"
 
-fn compute_answer() Maybe<i32>:
+fn compute_answer() Maybe@(i32):
     return Result.Ok(Maybe.Some(42))
 
-fn wrap_in_result(Maybe<i32> maybe_val) Result<Maybe<i32>, StdError>:
+fn wrap_in_result(Maybe@(i32) maybe_val) Result@(Maybe@(i32), StdError):
     return Result.Ok(maybe_val)
 
 fn main() i32:
-    let Result<Maybe<i32>, StdError> answer_result = compute_answer()
+    let Result@(Maybe@(i32), StdError) answer_result = compute_answer()
 
     if (answer_result):
-        let Maybe<i32> maybe_answer = answer_result.realise(Maybe.None())
-        let Result<Maybe<i32>, StdError> wrapped = wrap_in_result(maybe_answer)
+        let Maybe@(i32) maybe_answer = answer_result.realise(Maybe.None())
+        let Result@(Maybe@(i32), StdError) wrapped = wrap_in_result(maybe_answer)
 
         if (wrapped):
-            let Maybe<i32> maybe_val = wrapped.realise(Maybe.None())
+            let Maybe@(i32) maybe_val = wrapped.realise(Maybe.None())
             let i32 answer = maybe_val.realise(0)
             println("{answer}")
             return Result.Ok(0)

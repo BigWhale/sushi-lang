@@ -1,7 +1,7 @@
 # Sushi Lang
 
 **Sushi** is a compiled, statically typed language with a Lark parser frontend and an LLVM
-backend. It pairs explicit error handling (`Result<T, E>`, `Maybe<T>`) and compile-time memory
+backend. It pairs explicit error handling (`Result@(T, E)`, `Maybe@(T)`) and compile-time memory
 safety (RAII, borrow checking) with zero-cost abstractions — generics, references, and extension
 methods that compile away to native code.
 
@@ -24,8 +24,8 @@ compiler internals in one place.
 
 ## Guides
 
-- [Error Handling](error-handling.md) — `Result<T, E>`, `Maybe<T>`, and the `??` operator
-- [Memory Management](memory-management.md) — RAII, references, borrowing, and `Own<T>`
+- [Error Handling](error-handling.md) — `Result@(T, E)`, `Maybe@(T)`, and the `??` operator
+- [Memory Management](memory-management.md) — RAII, references, borrowing, and `Own@(T)`
 - [Generics](generics.md) — generic types, functions, and monomorphization
 - [Perks](perks.md) — traits/interfaces for polymorphism with static dispatch
 - [First-Class Functions](first-class-functions.md) — function types and function values

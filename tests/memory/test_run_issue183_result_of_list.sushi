@@ -5,14 +5,14 @@
 # EXPECT_STDOUT_CONTAINS: "ok = true"
 # EXPECT_NO_LEAKS: true
 
-fn mk() List<i32>:
-    let List<i32> l = List.new()
+fn mk() List@(i32):
+    let List@(i32) l = List.new()
     l.push(1)
     l.push(2)
     l.push(3)
     return Result.Ok(l)
 
 fn main() i32:
-    let Result<List<i32>, StdError> r = mk()
+    let Result@(List@(i32), StdError) r = mk()
     println("ok = {r.is_ok()}")
     return Result.Ok(0)

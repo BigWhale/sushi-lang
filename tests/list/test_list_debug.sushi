@@ -1,6 +1,6 @@
-# EXPECT_STDOUT_EXACT: "=== List Debug ===\nList<i32> {\n  len: 3, capacity: 4\n  [0] 10\n  [1] 20\n  [2] 30\n}\n"
+# EXPECT_STDOUT_EXACT: "=== List Debug ===\nList@(i32) {\n  len: 3, capacity: 4\n  [0] 10\n  [1] 20\n  [2] 30\n}\n"
 fn main() i32:
-    let List<i32> numbers = List.new()
+    let List@(i32) numbers = List.new()
 
     # Push some values
     numbers.push(10)

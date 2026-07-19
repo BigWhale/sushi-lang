@@ -1,0 +1,10 @@
+# EXPECT_ERROR_CODE: CE2062
+# Wrong number of explicit type arguments.
+fn empty_list@(T)() List@(T):
+    let List@(T) xs = List.new()
+    return Result.Ok(xs)
+
+fn main() i32:
+    let List@(i32) a = empty_list@(i32, string)().realise(List.new())
+    a.destroy()
+    return Result.Ok(0)

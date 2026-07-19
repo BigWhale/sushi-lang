@@ -209,7 +209,7 @@ fn main() i32:
 ```
 - Every Sushi program starts with a `main` function
 - It returns `i32` (a 32-bit integer)
-- Actually, all functions implicitly return `Result<T>`, so a regular would return `Result<i32>`, however, 
+- Actually, all functions implicitly return `Result@(T)`, so a regular would return `Result@(i32)`, however, 
   because this is `main`, it will automatically realise this Result and return an integer back to shell.
 
 ```sushi
@@ -287,8 +287,8 @@ fn divide(i32 numerator, i32 denominator) i32:
     return Result.Ok(numerator / denominator)
 
 fn main() i32:
-    let Result<i32, StdError> result1 = divide(42, 6)
-    let Result<i32, StdError> result2 = divide(42, 0)
+    let Result@(i32, StdError) result1 = divide(42, 6)
+    let Result@(i32, StdError) result2 = divide(42, 0)
 
     # Check result1
     if (result1):

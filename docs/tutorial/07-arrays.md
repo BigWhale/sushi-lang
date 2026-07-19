@@ -57,7 +57,7 @@ overread — Sushi checks the bounds and refuses to read past the end. It's "uns
 the sense that an out-of-range index ends the program.
 
 The second is **safe access** with `.get(i)`. Instead of risking a crash, it returns a
-`Maybe<T>`: `Maybe.Some(value)` if the index is valid, or `Maybe.None()` if it isn't. You
+`Maybe@(T)`: `Maybe.Some(value)` if the index is valid, or `Maybe.None()` if it isn't. You
 met `Maybe` in [Chapter 6](06-error-handling.md); here it's how the array tells you
 "there's nothing at that index" without blowing up.
 
@@ -120,7 +120,7 @@ model, which [Chapter 12](12-memory-management.md) explores.)
   `new()`.
 - `.len()` reports the current length.
 - `arr[i]` is fast but crashes (RE2020) on a bad index; `arr.get(i)` is safe and returns
-  `Maybe<T>`.
+  `Maybe@(T)`.
 - `.push()`, `.pop()`, `.iter()`, and `.clone()` are the everyday dynamic-array methods,
   and `foreach(x in arr.iter()):` is how you loop.
 

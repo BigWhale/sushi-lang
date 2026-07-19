@@ -3,7 +3,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # Test List<T> automatic growth (2x exponential)
 fn main() i32:
-    let List<i32> growing = List.new()
+    let List@(i32) growing = List.new()
 
     # Push until growth happens multiple times
     let i32 i = 0

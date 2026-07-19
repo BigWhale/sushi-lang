@@ -1,4 +1,4 @@
-# Maybe<T>
+# Maybe@(T)
 
 [← Back to Standard Library](../standard-library.md)
 
@@ -21,7 +21,7 @@ No value present.
 Check if value is present.
 
 ```sushi
-let Maybe<i32> opt = Maybe.Some(42)
+let Maybe@(i32) opt = Maybe.Some(42)
 if (opt.is_some()):
     println("Has value")
 ```
@@ -31,7 +31,7 @@ if (opt.is_some()):
 Check if no value present.
 
 ```sushi
-let Maybe<string> opt = Maybe.None()
+let Maybe@(string) opt = Maybe.None()
 if (opt.is_none()):
     println("No value")
 ```
@@ -41,7 +41,7 @@ if (opt.is_none()):
 Extract value or return default.
 
 ```sushi
-let Maybe<i32> opt = Maybe.None()
+let Maybe@(i32) opt = Maybe.None()
 let i32 value = opt.realise(0)  # Returns 0
 ```
 
@@ -50,7 +50,7 @@ let i32 value = opt.realise(0)  # Returns 0
 Extract value or panic with message.
 
 ```sushi
-let Maybe<i32> opt = Maybe.Some(42)
+let Maybe@(i32) opt = Maybe.Some(42)
 let i32 value = opt.expect("Expected a value!")
 ```
 
@@ -59,7 +59,7 @@ let i32 value = opt.expect("Expected a value!")
 Use `??` to unwrap or propagate None:
 
 ```sushi
-fn get_first(i32[] arr) Maybe<i32>:
+fn get_first(i32[] arr) Maybe@(i32):
     let i32 first = arr.get(0)??
     return Result.Ok(Maybe.Some(first * 2))
 ```

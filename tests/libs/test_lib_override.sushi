@@ -15,7 +15,7 @@ fn get_value() i32:
 
 fn main() i32:
     # library_only() should work - it's only in the library
-    let Result<i32, StdError> r = library_only()
+    let Result@(i32, StdError) r = library_only()
     match r:
         Result.Ok(lib_val) ->
             println("library_only() = {lib_val}")

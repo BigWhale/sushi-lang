@@ -242,10 +242,10 @@ fn greet(string name) ~:
 
 ### Return Types
 
-All functions implicitly return `Result<T, E>`:
+All functions implicitly return `Result@(T, E)`:
 
 ```sushi
-fn divide(i32 a, i32 b) i32:  # Actually returns Result<i32, StdError>
+fn divide(i32 a, i32 b) i32:  # Actually returns Result@(i32, StdError)
     if (b == 0):
         return Result.Err(StdError.Error)
     return Result.Ok(a / b)
@@ -391,7 +391,7 @@ Stack-allocated, compile-time size:
 
 ```sushi
 let i32[5] arr = [1, 2, 3, 4, 5]
-let i32 first = arr.get(0)??  # .get returns Maybe<i32>; ?? unwraps it
+let i32 first = arr.get(0)??  # .get returns Maybe@(i32); ?? unwraps it
 ```
 
 ### Dynamic Arrays
@@ -596,7 +596,7 @@ fn private_helper() i32:
 Import stdlib modules with `use`:
 
 ```sushi
-# List<T> is built-in (no import needed)
+# List@(T) is built-in (no import needed)
 # HashMap requires explicit import:
 use <collections/hashmap>
 use <collections/strings> # String utilities
@@ -796,6 +796,6 @@ const i32[] DYNAMIC = from([1, 2])  # CE2015: dynamic arrays forbidden
 
 **See also:**
 - [Standard Library](standard-library.md) - Built-in types and functions
-- [Error Handling](error-handling.md) - Result<T> and Maybe<T>
+- [Error Handling](error-handling.md) - Result@(T) and Maybe@(T)
 - [Memory Management](memory-management.md) - RAII and ownership
 - [Generics](generics.md) - Generic types and functions

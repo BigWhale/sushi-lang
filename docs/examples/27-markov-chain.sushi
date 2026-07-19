@@ -34,7 +34,7 @@ fn pick_from_options(string options) string:
     return Result.Ok(choices[idx])
 
 # Build the Markov chain from word pairs (mutates the chain)
-fn build_chain(&poke HashMap<string, string> chain, string[] words) ~:
+fn build_chain(&poke HashMap@(string, string) chain, string[] words) ~:
     let i32 i = 0
     while (i < words.len() - 1):
         let string current = words[i]
@@ -51,7 +51,7 @@ fn build_chain(&poke HashMap<string, string> chain, string[] words) ~:
     return Result.Ok(~)
 
 # Generate text using the chain with improbability factor
-fn generate_text(&peek HashMap<string, string> chain, &peek string[] vocab, f64 factor, i32 count) ~:
+fn generate_text(&peek HashMap@(string, string) chain, &peek string[] vocab, f64 factor, i32 count) ~:
     let string current = vocab[0]
     let i32 c = 0
 
@@ -81,7 +81,7 @@ fn main() i32:
     let string corpus = "the ship hung in the air the way that bricks do not the ship was called the heart of gold the drive was infinite the drive was improbable the answer was forty two"
 
     # Build transition map: word -> pipe-separated list of possible next words
-    let HashMap<string, string> chain = HashMap.new()
+    let HashMap@(string, string) chain = HashMap.new()
     let string[] all_words = corpus.split(" ")
 
     # Build the chain by learning word pairs

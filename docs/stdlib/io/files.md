@@ -380,7 +380,7 @@ fn main() i32:
 Delete a file from the filesystem.
 
 ```sushi
-fn remove(string path) -> Result<i32>
+fn remove(string path) -> Result@(i32)
 ```
 
 **Parameters:**
@@ -412,7 +412,7 @@ fn main() i32:
 Rename or move a file or directory.
 
 ```sushi
-fn rename(string old_path, string new_path) -> Result<i32>
+fn rename(string old_path, string new_path) -> Result@(i32)
 ```
 
 **Parameters:**
@@ -445,7 +445,7 @@ fn main() i32:
 Create a new directory with specified permissions.
 
 ```sushi
-fn mkdir(string path, i32 mode) -> Result<i32>
+fn mkdir(string path, i32 mode) -> Result@(i32)
 ```
 
 **Parameters:**
@@ -483,7 +483,7 @@ fn main() i32:
 Remove an empty directory.
 
 ```sushi
-fn rmdir(string path) -> Result<i32>
+fn rmdir(string path) -> Result@(i32)
 ```
 
 **Parameters:**
@@ -515,7 +515,7 @@ fn main() i32:
 Copy a file's contents to a new location.
 
 ```sushi
-fn copy(string src, string dst) -> Result<i32>
+fn copy(string src, string dst) -> Result@(i32)
 ```
 
 **Parameters:**

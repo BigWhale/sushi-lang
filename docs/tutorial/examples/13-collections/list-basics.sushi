@@ -4,7 +4,7 @@
 # you push onto it, and frees itself via RAII at scope exit.
 
 fn main() i32:
-    let List<string> crew = List.new()
+    let List@(string) crew = List.new()
 
     # Append elements; the list resizes itself as needed.
     crew.push("Arthur Dent")

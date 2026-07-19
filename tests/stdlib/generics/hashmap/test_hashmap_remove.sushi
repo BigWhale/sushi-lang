@@ -2,7 +2,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 use <collections/hashmap>
 fn main() i32:
-    let HashMap<string, i32> map = HashMap.new()
+    let HashMap@(string, i32) map = HashMap.new()
 
     # Insert some values
     map.insert("alice", 30)
@@ -13,7 +13,7 @@ fn main() i32:
     println("Initial tombstones: {map.tombstone_count()}")
 
     # Remove bob
-    let Maybe<i32> removed = map.remove("bob")
+    let Maybe@(i32) removed = map.remove("bob")
     match removed:
         Maybe.Some(val) ->
             println("Removed bob with value: {val}")
@@ -24,7 +24,7 @@ fn main() i32:
     println("After removing bob - tombstones: {map.tombstone_count()}")
 
     # Try to remove again - should return None
-    let Maybe<i32> removed2 = map.remove("bob")
+    let Maybe@(i32) removed2 = map.remove("bob")
     match removed2:
         Maybe.Some(val) ->
             println("Removed bob again (unexpected!): {val}")

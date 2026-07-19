@@ -9,7 +9,7 @@ enum Status:
     Pending
 
 fn main() i32:
-    let HashMap<i32, Status> map = HashMap.new()
+    let HashMap@(i32, Status) map = HashMap.new()
 
     # Insert enum values
     let Status s1 = Status.Ok(200)

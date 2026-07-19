@@ -81,7 +81,7 @@ the perk's methods on the value.
 --8<-- "docs/tutorial/examples/11-perks-and-extensions/perk-constraint.sushi"
 ```
 
-`announce<T: Describable>(T item)` accepts a `Robot` or a `Ship` — or anything else that
+`announce@(T: Describable)(T item)` accepts a `Robot` or a `Ship` — or anything else that
 implements `Describable` — and calls `item.describe()` on it. The compiler verifies the
 constraint at the call site (and refuses to compile if you pass a type that doesn't qualify)
 and then monomorphizes a specialised `announce` for each type, exactly as in Chapter 10. The
@@ -106,7 +106,7 @@ primitives **automatically satisfy** a `Hashable` perk without you writing any
 --8<-- "docs/tutorial/examples/11-perks-and-extensions/synthetic-hash.sushi"
 ```
 
-`fingerprint<T: Hashable>` needs its argument to be hashable. For `Point` we provide an
+`fingerprint@(T: Hashable)` needs its argument to be hashable. For `Point` we provide an
 explicit `extend Point with Hashable`. But for `42` (an `i32`) and `true` (a `bool`) we
 write nothing — the compiler supplies the `Hashable` implementation from the auto-derived
 hash. The same generic function therefore works on our struct and on raw primitives alike.
@@ -126,11 +126,11 @@ will match, because the hash is deterministic.)
 Perks are deliberately simple, and it's worth knowing the edges so you don't fight the
 compiler:
 
-- **No type parameters.** You can't write `perk Iterator<Item>:`. Perks themselves are not
+- **No type parameters.** You can't write `perk Iterator@(Item):`. Perks themselves are not
   generic.
 - **No inheritance.** A perk can't require another perk (no `perk Ord: Eq`). If you need
   several capabilities, list them with `+` at the *use* site, as in
-  `fn f<T: Hashable + Displayable>(T x)`.
+  `fn f@(T: Hashable + Displayable)(T x)`.
 - **No default implementations.** Every method a perk declares must be implemented in full by
   each type; a perk can't provide a fallback body.
 

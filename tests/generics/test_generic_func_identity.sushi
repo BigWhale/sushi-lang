@@ -1,7 +1,7 @@
 # Test simple generic identity function
 # This is the most basic test of generic function body substitution
 
-fn identity<T>(T value) T:
+fn identity@(T)(T value) T:
     return Result.Ok(value)
 
 fn run_test() i32:

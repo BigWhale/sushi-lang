@@ -11,9 +11,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Dict
 
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import StructType, EnumType, UnknownType, Type
 from sushi_lang.semantics.ast import Call
 from sushi_lang.semantics.generics.name_mangling import mangle_function_name
+from sushi_lang.semantics.generics.explicit_type_args import (
+    resolve_explicit_type_args,
+    check_explicit_type_arg_arity,
+)
 from ..compatibility import types_compatible
 from ..utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
 
@@ -37,19 +42,36 @@ def validate_generic_function_call(
     # Get generic function definition
     generic_func = validator.generic_func_table.by_name[function_name]
 
-    # Infer type arguments from call site (pack-aware via the shared helper)
-    type_args = _infer_type_args_from_call_site(validator, call, generic_func)
-
-    if type_args is None:
-        # Type inference failed
-        er.emit(
-            validator.reporter,
-            er.ERR.CE2060,
-            call.callee.loc,
-            name=function_name,
-            reason="could not infer type arguments from call site"
+    explicit = call.type_args
+    if explicit:
+        # Explicit `@(...)` type args override inference (issue #137).
+        expected = check_explicit_type_arg_arity(generic_func, len(explicit))
+        if expected is not None:
+            er.emit(
+                validator.reporter,
+                er.ERR.CE2062,
+                call.type_args_loc or call.callee.loc,
+                name=function_name,
+                expected=expected,
+                got=len(explicit),
+            )
+            return
+        type_args = resolve_explicit_type_args(
+            explicit, validator.struct_table, validator.enum_table
         )
-        return
+    else:
+        # Infer type arguments from call site (pack-aware via the shared helper)
+        type_args = _infer_type_args_from_call_site(validator, call, generic_func)
+        if type_args is None:
+            # Type inference failed
+            er.emit(
+                validator.reporter,
+                er.ERR.CE2060,
+                call.callee.loc,
+                name=function_name,
+                reason="could not infer type arguments from call site"
+            )
+            return
 
     # Per-element perk-constraint check for a constrained type-pack (CE2090).
     _validate_pack_element_constraints(validator, call, generic_func, type_args)
@@ -342,7 +364,7 @@ def validate_call_arguments(
             arg_type = validator.infer_expression_type(arg)
             if arg_type is not None and not types_compatible(validator, arg_type, param.ty):
                 er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                       index=i+1, expected=str(param.ty), got=str(arg_type))
+                       index=i+1, expected=display_type(param.ty), got=display_type(arg_type))
 
     # Validate any excess arguments (if more args than params)
     for i in range(len(expected_params), len(actual_args)):

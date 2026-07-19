@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Tuple, List
 
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.ast import EnumConstructor, DotCall, MethodCall, Name, MemberAccess, Expr
 from .compatibility import types_compatible
 
@@ -63,7 +64,7 @@ def validate_result_ok_value(validator: 'TypeValidator', args: List[Expr],
         value_type = validator.infer_expression_type(args[0])
         if value_type and expected_ok_type and not types_compatible(validator, value_type, expected_ok_type):
             er.emit(validator.reporter, er.ERR.CE2031, loc,
-                   expected=str(expected_ok_type), got=str(value_type))
+                   expected=display_type(expected_ok_type), got=display_type(value_type))
 
 
 def validate_result_err_value(validator: 'TypeValidator', args: List[Expr],
@@ -92,7 +93,7 @@ def validate_result_err_value(validator: 'TypeValidator', args: List[Expr],
         # Check compatibility with expected error type
         if error_value_type and expected_err_type and not types_compatible(validator, error_value_type, expected_err_type):
             er.emit(validator.reporter, er.ERR.CE2039, loc,
-                   expected=str(expected_err_type), got=str(error_value_type))
+                   expected=display_type(expected_err_type), got=display_type(error_value_type))
 
 
 def is_result_pattern(node: Expr) -> Tuple[bool, Optional[str]]:

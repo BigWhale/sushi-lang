@@ -8,7 +8,7 @@
 # Note: Actual calls to generic functions will work in Phase 3
 # when monomorphization is implemented.
 
-fn swap<T, U>(T a, U b) ~:
+fn swap@(T, U)(T a, U b) ~:
     return Result.Ok(~)
 
 fn main() i32:

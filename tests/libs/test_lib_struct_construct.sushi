@@ -6,7 +6,7 @@ use <lib/types_lib>
 
 fn main() i32:
     let Point p = Point(5, 10)
-    let Result<i32, StdError> r = point_sum(p)
+    let Result@(i32, StdError) r = point_sum(p)
     match r:
         Result.Ok(sum) -> println(sum)
         Result.Err(_) -> return Result.Ok(1)

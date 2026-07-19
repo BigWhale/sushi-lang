@@ -61,8 +61,8 @@ def emit_hashmap_debug(
     # Get buckets pointer
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
 
-    # Print header: "HashMap<K, V> {"
-    header_str = f"HashMap<{key_type}, {value_type}> {{\n"
+    # Print header: "HashMap@(K, V) {"
+    header_str = f"HashMap@({key_type}, {value_type}) {{\n"
     emit_printf_string(codegen, builder, header_str)
 
     # Print stats: "  size: X, capacity: Y, tombstones: Z"

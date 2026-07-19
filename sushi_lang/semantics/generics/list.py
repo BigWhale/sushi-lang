@@ -10,6 +10,7 @@ from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
 import sushi_lang.internals.errors as er
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.generics.type_display import display_type
 
 
 # All supported List<T> methods
@@ -103,7 +104,7 @@ def _validate_list_element_type(
     arg_type = validator.infer_expression_type(arg)
     if arg_type is not None and not types_compatible(validator, arg_type, element_type):
         er.emit(reporter, er.ERR.CE2006, arg.loc,
-                index=arg_index + 1, expected=str(element_type), got=str(arg_type))
+                index=arg_index + 1, expected=display_type(element_type), got=display_type(arg_type))
 
 
 def parse_list_types(list_type: StructType, validator: Any) -> Optional[Type]:

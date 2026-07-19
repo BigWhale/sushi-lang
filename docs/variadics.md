@@ -136,7 +136,7 @@ extend string with Describe:
     fn describe() string:
         return "text '{self}'"
 
-fn show_all<...Ts: Describe>(...Ts args) ~:
+fn show_all@(...Ts: Describe)(...Ts args) ~:
     expand(a in args):
         println(a.describe())
     return Result.Ok(~)
@@ -154,7 +154,7 @@ heterogeneous container — the same zero-cost static-dispatch story as ordinary
 A pack can follow fixed parameters, just like `...T`:
 
 ```sushi
-fn log<...Ts: Render>(string label, ...Ts items) ~:
+fn log@(...Ts: Render)(string label, ...Ts items) ~:
     println("{label}:")
     expand(it in items):
         println("  - {it.render()}")
@@ -189,7 +189,7 @@ value:
   can **accumulate** a result, not just produce output:
 
   ```sushi
-  fn print_row<...Ts: Show>(...Ts cells) ~:
+  fn print_row@(...Ts: Show)(...Ts cells) ~:
       let string line = ""
       expand(c in cells):
           line := "{line}[{c.show()}]"
@@ -227,7 +227,7 @@ at **its own** call sites:
 perk Display:
     fn display() string
 
-public fn show_all<...Ts: Display>(...Ts args) ~:
+public fn show_all@(...Ts: Display)(...Ts args) ~:
     expand(a in args):
         println(a.display())
     return Result.Ok(~)

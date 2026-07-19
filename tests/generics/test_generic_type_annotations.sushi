@@ -6,23 +6,23 @@
 #        - Variable declarations
 #        - Function parameters
 
-enum Either<T, U>:
+enum Either@(T, U):
     Left(T)
     Right(U)
 
 # Test function with generic return type
-fn test_return_type() Either<i32, string>:
+fn test_return_type() Either@(i32, string):
     return Result.Ok(Either.Left(42))
 
 # Test variable with generic type annotation
 fn test_variable_type() i32:
-    let Either<i32, string> val = Either.Left(99)
+    let Either@(i32, string) val = Either.Left(99)
     # Test rebinding to avoid unused variable warning
     val := Either.Right("test")
     return Result.Ok(99)
 
 # Test function parameter with generic type
-fn test_parameter_type(Either<string, i32> param) i32:
+fn test_parameter_type(Either@(string, i32) param) i32:
     param := Either.Left("Left")
     match param:
         Either.Left(_) ->
@@ -35,9 +35,9 @@ fn main() i32:
     println("Testing generic type annotations")
 
     # Call the test functions to verify they compile
-    let Result<Either<i32, string>, StdError> ret = test_return_type()
-    let Result<i32, StdError> vt_result = test_variable_type()
-    let Result<i32, StdError> pt_result = test_parameter_type(Either.Right(123))
+    let Result@(Either@(i32, string), StdError) ret = test_return_type()
+    let Result@(i32, StdError) vt_result = test_variable_type()
+    let Result@(i32, StdError) pt_result = test_parameter_type(Either.Right(123))
 
     # Use the variables to avoid warnings
     if (ret):

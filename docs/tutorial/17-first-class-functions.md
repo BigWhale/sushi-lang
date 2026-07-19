@@ -56,8 +56,8 @@ Output:
 14
 ```
 
-`List<fn(i32) -> i32>` is a list whose element type is a function type. `foreach` hands you each
-stored function in turn, and `step(acc)` calls through it. (Use `List<fn(...)>` rather than a raw
+`List@(fn(i32) -> i32)` is a list whose element type is a function type. `foreach` hands you each
+stored function in turn, and `step(acc)` calls through it. (Use `List@(fn(...))` rather than a raw
 array for a collection of functions — in `fn() -> T[]` the `[]` belongs to the return type `T[]`,
 so there is no "array of functions" syntax.)
 
@@ -108,7 +108,7 @@ A function value doesn't have to sit in a plain variable to be called. You can c
 expression that produces one — a `List` element or a parenthesized expression:
 
 ```sushi
-let List<fn(i32) -> i32> table = List.new()
+let List@(fn(i32) -> i32) table = List.new()
 table.push(add_one)
 let i32 a = table.get(0)??(41)??      # call the retrieved function value
 let i32 b = (table.get(0)??)(41)??    # same, parenthesized
@@ -120,10 +120,10 @@ A **generic** function can be referenced as a value when you give the binding an
 type — the annotation fixes which instantiation you mean:
 
 ```sushi
-fn identity<T>(T x) T:
+fn identity@(T)(T x) T:
     return Result.Ok(x)
 
-let fn(i32) -> i32 g = identity      # identity<i32>, chosen by the annotation
+let fn(i32) -> i32 g = identity      # identity@(i32), chosen by the annotation
 let i32 n = g(41)??                  # 41
 ```
 
@@ -145,7 +145,7 @@ identifier.
 
 - A **function value** is a function's name used without `()` — its type is a **function type**
   `fn(params) -> return [| Error]`.
-- You can **store** function values (variables, struct fields, `List<fn(...)>`), **pass** them as
+- You can **store** function values (variables, struct fields, `List@(fn(...))`), **pass** them as
   arguments, and **call through** them; an indirect call returns a `Result` just like a direct one.
 - A plain function reference is a **bare pointer** — zero-cost, no captured state. Sushi also has
   **closures** (capturing lambda literals) — see the next chapter.

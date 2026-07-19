@@ -14,7 +14,7 @@ fn main() i32:
 
     # Test 1: getcwd() - Get current working directory
     println("Test 1: getcwd()")
-    let Result<string, ProcessError> cwd_result = getcwd()
+    let Result@(string, ProcessError) cwd_result = getcwd()
     match cwd_result:
         Result.Ok(path) ->
             println("  Current directory: {path}")
@@ -48,14 +48,14 @@ fn main() i32:
 
     # Test 4: chdir() to /tmp (should succeed on Unix-like systems)
     println("Test 4: chdir() to /tmp")
-    let Result<i32, ProcessError> chdir_result = chdir("/tmp")
+    let Result@(i32, ProcessError) chdir_result = chdir("/tmp")
     match chdir_result:
         Result.Ok(code) ->
             if (code == 0):
                 println("  ✓ chdir() to /tmp succeeded")
 
                 # Verify with getcwd()
-                let Result<string, ProcessError> new_cwd = getcwd()
+                let Result@(string, ProcessError) new_cwd = getcwd()
                 match new_cwd:
                     Result.Ok(path) ->
                         println("  New directory: {path}")
@@ -71,7 +71,7 @@ fn main() i32:
 
     # Test 5: chdir() to non-existent directory (should fail)
     println("Test 5: chdir() to non-existent directory")
-    let Result<i32, ProcessError> bad_chdir = chdir("/this/path/does/not/exist/hopefully")
+    let Result@(i32, ProcessError) bad_chdir = chdir("/this/path/does/not/exist/hopefully")
     match bad_chdir:
         Result.Ok(code) ->
             if (code == 0):
@@ -87,12 +87,12 @@ fn main() i32:
     # Test 6: Change back to original directory
     println("Test 6: Restore original directory")
     let string original_cwd = cwd_result.realise("")
-    let Result<i32, ProcessError> restore_result = chdir(original_cwd)
+    let Result@(i32, ProcessError) restore_result = chdir(original_cwd)
     match restore_result:
         Result.Ok(code) ->
             if (code == 0):
                 println("  ✓ Restored to original directory")
-                let Result<string, ProcessError> final_cwd = getcwd()
+                let Result@(string, ProcessError) final_cwd = getcwd()
                 match final_cwd:
                     Result.Ok(path) ->
                         println("  Restored path: {path}")

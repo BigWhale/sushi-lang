@@ -20,11 +20,11 @@ struct Rectangle:
     Point bottom_right
 
 # Test 4: Generic struct
-struct Box<T>:
+struct Box@(T):
     T value
 
 # Test 5: Multiple generic parameters
-struct Pair<T, U>:
+struct Pair@(T, U):
     T first
     U second
 
@@ -45,16 +45,16 @@ fn main() i32:
     println("Rectangle hash: {h3}")
 
     # Test generic struct
-    let Box<i32> box1 = Box(42)
+    let Box@(i32) box1 = Box(42)
     let u64 h4 = box1.hash()
     println("Box<i32> hash: {h4}")
 
-    let Box<string> box2 = Box("hello")
+    let Box@(string) box2 = Box("hello")
     let u64 h5 = box2.hash()
     println("Box<string> hash: {h5}")
 
     # Test pair
-    let Pair<i32, string> pair = Pair(42, "answer")
+    let Pair@(i32, string) pair = Pair(42, "answer")
     let u64 h6 = pair.hash()
     println("Pair<i32, string> hash: {h6}")
 

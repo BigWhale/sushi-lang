@@ -191,7 +191,7 @@ sushi/
 │   │   │       ├── core.py     # len, get, push, pop
 │   │   │       ├── hashing.py  # Hash function generation
 │   │   │       ├── iterators.py # Iterator creation
-│   │   │       ├── safe_access.py # .get() Maybe<T> wrapping
+│   │   │       ├── safe_access.py # .get() Maybe@(T) wrapping
 │   │   │       ├── transforms.py # fill, reverse, clone
 │   │   │       └── utf8_validate.py # u8[].to_string_checked()
 │   │   ├── primitives/          # i8..u64, f32/f64, bool
@@ -209,10 +209,10 @@ sushi/
 │       ├── codegen.py         # Generic code generation
 │       ├── enum_methods_base.py # Base for Result/Maybe
 │       ├── extensions.py      # Generic extension methods
-│       ├── maybe.py           # Maybe<T> (19KB)
-│       ├── own.py             # Own<T>
-│       ├── results.py         # Result<T>
-│       ├── hashmap/           # HashMap<K,V> implementation
+│       ├── maybe.py           # Maybe@(T) (19KB)
+│       ├── own.py             # Own@(T)
+│       ├── results.py         # Result@(T)
+│       ├── hashmap/           # HashMap@(K,V) implementation
 │       │   ├── types.py
 │       │   ├── validation.py
 │       │   ├── utils.py
@@ -221,7 +221,7 @@ sushi/
 │       │       ├── mutations.py # remove, free, rehash
 │       │       ├── debug.py   # debug printing
 │       │       └── iterators.py # iterator support
-│       └── list/              # List<T> implementation
+│       └── list/              # List@(T) implementation
 │           ├── types.py
 │           ├── validation.py
 │           ├── methods_simple.py # len, is_empty
@@ -247,8 +247,8 @@ sushi/
     │   │   │   ├── compiler/  # Built-in string ops
     │   │   │   ├── intrinsics/ # Low-level UTF-8 ops
     │   │   │   └── methods/   # High-level methods
-    │   │   ├── list.py        # List<T>
-    │   │   └── hashmap.py     # HashMap<K,V>
+    │   │   ├── list.py        # List@(T)
+    │   │   └── hashmap.py     # HashMap@(K,V)
     │   ├── io/
     │   │   ├── stdio/         # Platform-specific stdio
     │   │   │   ├── common.py
@@ -335,8 +335,8 @@ sushi/
 
 **Example:**
 ```sushi
-let List<i32> nums = List.new()  # Collect: List<i32>
-nums.push(42)                     # Collect: List<i32>.push
+let List@(i32) nums = List.new()  # Collect: List@(i32)
+nums.push(42)                     # Collect: List@(i32).push
 ```
 
 ### Phase 1.6: Monomorphization
@@ -350,10 +350,10 @@ nums.push(42)                     # Collect: List<i32>.push
 
 **Example:**
 ```
-extend Box<T> unwrap() T
+extend Box@(T) unwrap() T
     ↓
-extend Box<i32> unwrap() i32
-extend Box<string> unwrap() string
+extend Box@(i32) unwrap() i32
+extend Box@(string) unwrap() string
 ```
 
 ### Phase 1.7: AST Transformation
@@ -394,12 +394,12 @@ array_len(arr)  # Function call
 
 **Responsibilities:**
 - Type checking all expressions
-- Result<T> handling validation
+- Result@(T) handling validation
 - Pattern match exhaustiveness
 - Type compatibility checking
 
 **Modular type checking:**
-- `types/resolution.py` - Type resolution (Result<T> wrapping)
+- `types/resolution.py` - Type resolution (Result@(T) wrapping)
 - `types/propagation.py` - Type propagation to constructors
 - `types/result_validation.py` - Result.Ok/Err validation
 - `types/expressions.py` - Expression type checking
@@ -632,7 +632,7 @@ def _emit_list_value_destructor(codegen, builder, value_ptr, value_type):
 ```
 
 `generics/list/types.py` needs destructor helpers, and `destructors.py` needs to
-inspect a `List<T>`'s element type — a top-level import on either side would
+inspect a `List@(T)`'s element type — a top-level import on either side would
 cycle. Deferring the import into the function body sidesteps it.
 
 A second, narrower use of `TYPE_CHECKING`-guarded imports covers pure type
@@ -750,7 +750,7 @@ def emit_value_destructor(codegen, builder, value, llvm_type, ast_type):
     - Dynamic arrays: destroy elements, free buffer
     - Structs: destroy each field recursively
     - Enums: switch on discriminant, destroy variant data
-    - Own<T>: destroy owned value, free pointer
+    - Own@(T): destroy owned value, free pointer
     """
     # Type-aware dispatch...
 ```
@@ -814,7 +814,7 @@ above for the mechanism and a concrete example from `backend/destructors.py`.
 - Arrays: iterate and destroy elements, free buffer
 - Structs: destroy each field, free struct
 - Enums: switch on discriminant, destroy variant data
-- Own<T>: destroy owned value, free pointer
+- Own@(T): destroy owned value, free pointer
 
 ### Move Tracking
 
@@ -859,7 +859,7 @@ Located in each pass file. Example:
 
 ```python
 raise CompilerError(
-    f"CE2505: Cannot assign Result<{inner}> to {target_type} without handling. "
+    f"CE2505: Cannot assign Result@({inner}) to {target_type} without handling. "
     f"Use .realise(default) to unwrap the Result."
 )
 ```
