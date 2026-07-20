@@ -46,10 +46,11 @@ def emit_array_literal_elements(codegen: 'LLVMCodegen', element_exprs, element_t
         if isinstance(elem, (Name, MemberAccess)):
             ety = element_type if element_type is not None else _alias_element_type(codegen, elem)
             if ety is not None:
-                # #134: a bare-Name element of a MOVE type moves into the array -- mark the
-                # source moved and store it un-cloned. A MemberAccess element reads from a
-                # continuing owner (V5) and keeps the deep copy.
-                if isinstance(elem, Name) and type_moves_by_value(ety):
+                # #134: an OWNED bare-Name element of a MOVE type moves into the array -- mark
+                # the source moved and store it un-cloned. A borrow binding (#238) or a
+                # MemberAccess element (a continuing owner, V5) keeps the deep copy.
+                if (isinstance(elem, Name) and type_moves_by_value(ety)
+                        and codegen.memory.is_owned_local(elem.id)):
                     codegen.memory.mark_struct_as_moved(elem.id)
                 else:
                     value = emit_value_clone(codegen, value, ety)

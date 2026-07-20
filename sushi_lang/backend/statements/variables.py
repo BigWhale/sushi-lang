@@ -155,17 +155,20 @@ def _clone_owning_struct_alias(codegen: 'LLVMCodegen', stmt: 'Let', rhs: 'ir.Val
                     or resolved)
     if not isinstance(resolved, (StructType, EnumType)):
         return rhs
-    # #134: a bare-Name RHS of a MOVE type transfers ownership -- mark the source moved and
-    # store it un-cloned (the new binding is the sole owner).
+    from sushi_lang.backend.expressions.memory import emit_value_clone
+    # #134: a bare-Name RHS of a MOVE type transfers ownership -- but only an OWNED local
+    # moves (mark moved, store un-cloned). A borrow binding (a match/pattern binding whose
+    # real owner still frees it, #238) is CLONED so the new binding owns an independent value.
     if isinstance(stmt.value, Name) and type_moves_by_value(resolved):
-        codegen.memory.mark_struct_as_moved(stmt.value.id)
-        return rhs
+        if codegen.memory.is_owned_local(stmt.value.id):
+            codegen.memory.mark_struct_as_moved(stmt.value.id)
+            return rhs
+        return emit_value_clone(codegen, rhs, resolved)
     # Copy semantics: a string-only composite always copies; a MemberAccess source reads from
     # a continuing owner and copies (V5). A fresh RHS (not Name/MemberAccess) is left as-is.
     if not codegen.dynamic_arrays.struct_needs_cleanup(resolved):
         return rhs
     if isinstance(stmt.value, (Name, MemberAccess)):
-        from sushi_lang.backend.expressions.memory import emit_value_clone
         return emit_value_clone(codegen, rhs, resolved)
     return rhs
 
@@ -440,9 +443,11 @@ def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value'
         # and store it un-cloned. A copy composite or a MemberAccess source (V5) deep-copies
         # so the target and the still-live source each free once.
         from sushi_lang.semantics.typesys import type_moves_by_value
-        if isinstance(stmt.value, Name) and type_moves_by_value(resolved):
+        if (isinstance(stmt.value, Name) and type_moves_by_value(resolved)
+                and codegen.memory.is_owned_local(stmt.value.id)):
             codegen.memory.mark_struct_as_moved(stmt.value.id)
         elif isinstance(stmt.value, (Name, MemberAccess)):
+            # A borrow binding (#238) or a MemberAccess source is cloned, not moved.
             from sushi_lang.backend.expressions.memory import emit_value_clone
             val = emit_value_clone(codegen, val, resolved)
 
