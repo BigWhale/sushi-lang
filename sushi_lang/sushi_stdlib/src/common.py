@@ -99,6 +99,25 @@ def get_hash_emitter_factory(kind: str) -> Optional[Callable[[Type], Callable]]:
     return _hash_emitter_factories.get(kind)
 
 
+# Clone emitter factories, keyed by type kind ("struct" / "enum"). Same deferred,
+# import-order-independent pattern as the hash factories above (#134): Pass 1.8 registers
+# the clone() BuiltinMethod in semantics (semantics/generics/cloning.py), and the backend
+# types modules deposit the matching LLVM emitter factory here at import time. The factory
+# takes the concrete type and returns its emitter closure (a thin wrapper over the existing
+# emit_value_clone); lookup is deferred to emission time by _lazy_clone_emitter.
+_clone_emitter_factories: Dict[str, Callable[[Type], Callable]] = {}
+
+
+def register_clone_emitter_factory(kind: str, factory: Callable[[Type], Callable]) -> None:
+    """Register the backend factory that builds clone() emitters for a type kind."""
+    _clone_emitter_factories[kind] = factory
+
+
+def get_clone_emitter_factory(kind: str) -> Optional[Callable[[Type], Callable]]:
+    """Get the clone() emitter factory for a type kind, or None if unregistered."""
+    return _clone_emitter_factories.get(kind)
+
+
 # Type matching utilities
 def matches_fixed_array_type(target_type: Type) -> bool:
     """Check if type is a fixed array type."""

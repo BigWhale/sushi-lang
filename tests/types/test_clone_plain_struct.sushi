@@ -1,0 +1,14 @@
+# Auto-derived clone (#134): .clone() on a plain-data struct is a value copy; both
+# the original and the clone are independently usable.
+# EXPECT_STDOUT_EXACT: "a=1,2 b=1,2\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point a = Point(1, 2)
+    let Point b = a.clone()
+    println("a={a.x},{a.y} b={b.x},{b.y}")
+    return Result.Ok(0)

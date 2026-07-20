@@ -1,0 +1,27 @@
+# Auto-derived clone (#134): .clone() on an owning enum deep-copies its payload;
+# the original and the clone each own an independent buffer, freed once each.
+# EXPECT_STDOUT_EXACT: "a=3 b=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+enum Msg:
+    Text(string)
+    Arr(i32[])
+
+fn main() i32:
+    let Msg a = Msg.Arr(from([1, 2, 3]))
+    let Msg b = a.clone()
+    let i32 la = 0
+    let i32 lb = 0
+    match a:
+        Msg.Arr(xs) ->
+            la := xs.len()
+        Msg.Text(_) ->
+            la := 0
+    match b:
+        Msg.Arr(ys) ->
+            lb := ys.len()
+        Msg.Text(_) ->
+            lb := 0
+    println("a={la} b={lb}")
+    return Result.Ok(0)

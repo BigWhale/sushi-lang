@@ -362,6 +362,16 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     if result is not None:
         return result
 
+    # 14a. Auto-derived struct clone (#134)
+    result = intrinsics.try_emit_struct_clone(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
+    if result is not None:
+        return result
+
+    # 14b. Auto-derived enum clone (#134)
+    result = intrinsics.try_emit_enum_clone(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
+    if result is not None:
+        return result
+
     # 15. Primitive methods (to_str, hash, etc.)
     result = intrinsics.try_emit_primitive_method(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
     if result is not None:

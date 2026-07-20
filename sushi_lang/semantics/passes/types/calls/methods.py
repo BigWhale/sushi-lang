@@ -214,6 +214,15 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
             enum_hash_method.semantic_validator(call, receiver_type, validator.reporter)
             return
 
+    # Check for auto-derived struct/enum clone (#134) - AFTER perks. Own/List/HashMap
+    # named structs keep their own method paths and are not registered here.
+    if isinstance(receiver_type, (StructType, EnumType)) and call.method == "clone":
+        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
+        clone_method = get_builtin_method(receiver_type, "clone")
+        if clone_method is not None:
+            clone_method.semantic_validator(call, receiver_type, validator.reporter)
+            return
+
     # Look up the extension method
     method = validator.extension_table.get_method(receiver_type, call.method)
 
