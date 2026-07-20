@@ -38,6 +38,7 @@ def emit_array_literal_elements(codegen: 'LLVMCodegen', element_exprs, element_t
     """
     from sushi_lang.semantics.ast import Name, MemberAccess
     from sushi_lang.backend.expressions.memory import emit_value_clone
+    from sushi_lang.semantics.typesys import type_moves_by_value
 
     values = []
     for elem in element_exprs:
@@ -45,7 +46,13 @@ def emit_array_literal_elements(codegen: 'LLVMCodegen', element_exprs, element_t
         if isinstance(elem, (Name, MemberAccess)):
             ety = element_type if element_type is not None else _alias_element_type(codegen, elem)
             if ety is not None:
-                value = emit_value_clone(codegen, value, ety)
+                # #134: a bare-Name element of a MOVE type moves into the array -- mark the
+                # source moved and store it un-cloned. A MemberAccess element reads from a
+                # continuing owner (V5) and keeps the deep copy.
+                if isinstance(elem, Name) and type_moves_by_value(ety):
+                    codegen.memory.mark_struct_as_moved(elem.id)
+                else:
+                    value = emit_value_clone(codegen, value, ety)
         values.append(value)
     return values
 

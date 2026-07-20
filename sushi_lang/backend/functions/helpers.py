@@ -348,13 +348,14 @@ class FunctionHelpers:
                     elif self.codegen.dynamic_arrays.is_list_type(resolved):
                         self.codegen.dynamic_arrays.register_list(param.name, resolved, slot)
                     elif self.codegen.dynamic_arrays.struct_needs_cleanup(resolved):
-                        # By-value owning USER struct (#60): copy semantics, callee frees
-                        # its independent deep copy.
+                        # By-value owning USER struct (#134): the caller MOVES the value in
+                        # (bare Name) or hands over an independent copy (MemberAccess / copy
+                        # composite); either way the callee is the sole owner and frees it once.
                         self.codegen.memory.register_struct_cleanup(param.name, resolved, slot)
                 elif isinstance(resolved, EnumType):
-                    # By-value owning ENUM param (#139): the call site deep-copies an
-                    # owning-enum arg (copy semantics), so the callee owns its independent
-                    # copy and frees it at scope exit, reusing the struct-cleanup registry.
+                    # By-value owning ENUM param (#134): the caller moved the value in (or
+                    # passed an independent copy for a MemberAccess/copy source), so the callee
+                    # owns it and frees it at scope exit, reusing the struct-cleanup registry.
                     if self.codegen.dynamic_arrays.struct_needs_cleanup(resolved):
                         self.codegen.memory.register_struct_cleanup(param.name, resolved, slot)
 

@@ -1,0 +1,18 @@
+# Move-by-value (#134): moving an owning struct into another struct's constructor field
+# transfers ownership -- the wrapper owns and frees it once; the source is consumed (its
+# reuse is CE2405, see the err twin). No double-free, no leak.
+# EXPECT_STDOUT_EXACT: "n=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Buffer:
+    i32[] data
+
+struct Wrapper:
+    Buffer inner
+
+fn main() i32:
+    let Buffer a = Buffer(data: from([1, 2, 3]))
+    let Wrapper w = Wrapper(inner: a)
+    println("n={w.inner.data.len()}")
+    return Result.Ok(0)
