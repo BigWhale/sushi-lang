@@ -66,7 +66,7 @@ from sushi_lang.semantics.ast import (
     UnaryOp,
     While,
 )
-from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, Type, is_owning_type
+from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, Type, is_owning_type, type_moves_by_value
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.error_reporter import PassErrorReporter
@@ -360,6 +360,11 @@ class BorrowChecker:
             self._check_expr(stmt.value)
             # Closure move-on-bind: `let g = f` transfers a capturing closure's owned env.
             self._reconcile_closure_bind(stmt)
+            # A let-binding from a bare owning variable MOVES it (#134): `let b = a`
+            # consumes `a`, mirroring the `:=` rebind and call-argument sinks. Copy types
+            # (primitives, strings, string-only composites) are untouched; a MemberAccess
+            # or method-call RHS is not a Name, so it keeps its continuing-owner copy.
+            self._mark_moved_if_applicable(stmt.value)
             # Clear any borrows from the expression
             self._clear_borrows()
 
@@ -593,10 +598,17 @@ class BorrowChecker:
         elif isinstance(expr, DynamicArrayFrom):
             for elem in expr.elements.elements:
                 self._check_expr(elem)
+                # from([...]) is an ownership sink (#134): a bare owning element variable
+                # moves into the new dynamic array; a MemberAccess element keeps its copy.
+                self._mark_moved_if_applicable(elem)
 
         elif isinstance(expr, ArrayLiteral):
             for elem in expr.elements:
                 self._check_expr(elem)
+                # An array-literal element is an ownership sink (#134): a bare owning
+                # element variable moves into the array. A MemberAccess element keeps its
+                # continuing-owner copy (only bare Names are marked by _mark_moved).
+                self._mark_moved_if_applicable(elem)
 
         elif isinstance(expr, CastExpr):
             self._check_expr(expr.expr)
@@ -617,7 +629,10 @@ class BorrowChecker:
             for cap in (expr.captures or []):
                 if isinstance(cap.name, str) and cap.name in self.borrow_state:
                     state = self.borrow_state[cap.name]
-                    if self._type_is_owning(cap.ty):
+                    # Closure capture stays on is_owning_type, NOT the move-by-value flip
+                    # (#134 spec §3: capture is unchanged; the backend capture path is not
+                    # flipped, so an owning-struct capture copy-captures as before).
+                    if is_owning_type(cap.ty):
                         state.is_moved = True
                         state.moved_at_span = state.moved_at_span or expr.loc
 
@@ -782,18 +797,23 @@ class BorrowChecker:
         for arg in expr.args:
             if isinstance(arg, Name) and arg.id in self.borrow_state:
                 state = self.borrow_state[arg.id]
-                if self._type_is_owning(state.var_type):
+                if self._type_moves_by_value(state.var_type):
                     state.is_moved = True
                     state.moved_at_span = state.moved_at_span or arg.loc
 
-    def _type_is_owning(self, vt: Optional[Type]) -> bool:
-        """True if a value of this type carries heap ownership (so Own.alloc moves it).
+    def _type_moves_by_value(self, vt: Optional[Type]) -> bool:
+        """True if a value of this type MOVES at an ownership sink (#134).
 
-        Delegates to the shared `is_owning_type` predicate (typesys) so the borrow
-        checker and the backend RAII paths agree on what owns memory — including a
-        capturing closure value.
+        Delegates to the shared `type_moves_by_value` predicate (typesys) so the borrow
+        checker and every backend flip site agree on what moves — dynamic arrays, `List`,
+        `Own`, capturing closures, AND any struct/enum/fixed array that transitively
+        contains one. Strings and string-only composites copy (not this predicate).
+
+        NB: closure *capture* classification stays on `is_owning_type` (spec §3 pins it
+        unchanged; the backend capture path is not flipped), so that call uses the module
+        predicate directly rather than this method.
         """
-        return is_owning_type(vt)
+        return type_moves_by_value(vt)
 
     def _reconcile_closure_bind(self, stmt: Let) -> None:
         """Track capturing-closure ownership across `let` bindings.
@@ -868,7 +888,7 @@ class BorrowChecker:
                 if state.is_argv_view:
                     # Moving main's borrowed argv view would double-free process argv (N2).
                     self.err.emit(er.ERR.CE2410, expr.loc, name=expr.id)
-                elif self._type_is_owning(state.var_type):
+                elif self._type_moves_by_value(state.var_type):
                     state.is_moved = True
                     state.moved_at_span = state.moved_at_span or expr.loc
 
