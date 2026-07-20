@@ -109,6 +109,24 @@ def test_byvalue_struct_arg_moved_at_call_site(tmp_path):
     )
 
 
+def test_struct_rebind_moves_not_clones(tmp_path):
+    """`let b = a` MOVES an owning struct (#134): no implicit clone of its buffer.
+
+    Compared to the explicit `let b = a.clone()`, the plain rebind emits fewer mallocs in
+    `main` -- the deep copy of the struct's `u8[]` buffer is elided (`a` is consumed
+    instead). Before #134 the plain rebind also cloned, so the two counts were equal.
+    """
+    body = (
+        "fn main() i32:\n"
+        "    let DataBuffer a = DataBuffer(from([1 as u8, 2 as u8, 3 as u8]), 3)\n"
+        "    let DataBuffer b = {rhs}\n"
+        "    return Result.Ok(b.size)\n"
+    )
+    move_m = _count_in_function(_emit_ir(tmp_path, _STRUCT + body.format(rhs="a")), "user_main", "malloc")
+    clone_m = _count_in_function(_emit_ir(tmp_path, _STRUCT + body.format(rhs="a.clone()")), "user_main", "malloc")
+    assert move_m < clone_m, f"`let b = a` must MOVE (fewer mallocs than a.clone()): move={move_m}, clone={clone_m}"
+
+
 def test_struct_local_freed_on_every_branch_return(tmp_path):
     """if/else, each branch returns: a struct-with-array-field local is freed on every path.
 
