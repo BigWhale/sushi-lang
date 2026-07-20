@@ -196,6 +196,21 @@ def _register_inline_closure_temps(codegen: 'LLVMCodegen', arg_exprs: list, arg_
             codegen.memory.register_closure_temp(value)
 
 
+def _resolve_param_type(codegen: 'LLVMCodegen', ty):
+    """Resolve an UnknownType param name to its concrete StructType/EnumType.
+
+    Function-signature param types can still be UnknownType(name) at codegen; the move
+    predicate must see the resolved struct/enum or it wrongly treats an owning composite as
+    a copy type (deep-copying a fresh temp orphans its buffer -> leak).
+    """
+    from sushi_lang.semantics.typesys import UnknownType
+    if isinstance(ty, UnknownType):
+        return (codegen.struct_table.by_name.get(ty.name)
+                or codegen.enum_table.by_name.get(ty.name)
+                or ty)
+    return ty
+
+
 def _deep_copy_struct_value_args(codegen: 'LLVMCodegen', arg_exprs: list, args: list, func_sig) -> None:
     """Deep-copy by-value composite arguments that KEEP copy semantics, in place.
 
@@ -210,14 +225,26 @@ def _deep_copy_struct_value_args(codegen: 'LLVMCodegen', arg_exprs: list, args: 
     if func_sig is None or not func_sig.params:
         return
     from sushi_lang.semantics.typesys import ReferenceType, type_moves_by_value
+    from sushi_lang.semantics.ast import MemberAccess
     from sushi_lang.backend.expressions import memory
     for i, param in enumerate(func_sig.params):
         if i >= len(args):
             break
         if isinstance(param.ty, ReferenceType):
             continue
-        if i < len(arg_exprs) and isinstance(arg_exprs[i], Name) and type_moves_by_value(param.ty):
-            continue  # #134: bare-Name move-type arg is moved, not copied
+        arg_expr = arg_exprs[i] if i < len(arg_exprs) else None
+        if type_moves_by_value(_resolve_param_type(codegen, param.ty)):
+            # #134 move sink. A copy is needed only when the source is a CONTINUING OWNER we
+            # must detach from: a MemberAccess (V5), or a bare Name that is a borrow (a match /
+            # pattern binding whose real owner still frees it). An owned bare Name is moved
+            # (marked in _move_owning_value_args); a fresh owning temp (clone / call /
+            # constructor return) moves in as-is -- copying either would leak or double-free.
+            if isinstance(arg_expr, MemberAccess):
+                args[i] = memory.deep_copy_if_owning_struct(codegen, args[i], param.ty)
+            elif isinstance(arg_expr, Name) and not codegen.memory.is_owned_local(arg_expr.id):
+                args[i] = memory.deep_copy_if_owning_struct(codegen, args[i], param.ty)
+            continue
+        # Copy-type composite (string-only struct/enum): deep-copy so the source stays usable.
         args[i] = memory.deep_copy_if_owning_struct(codegen, args[i], param.ty)
 
 
@@ -240,7 +267,10 @@ def _move_owning_value_args(codegen: 'LLVMCodegen', expr: Call, func_sig) -> Non
         if i >= len(expr.args):
             break
         arg = expr.args[i]
-        if isinstance(arg, Name) and type_moves_by_value(param.ty):
+        # Only an OWNED bare Name is moved; a borrow (match/pattern binding) is copied
+        # instead (deep-copied in _deep_copy_struct_value_args) and must not be marked moved.
+        if (isinstance(arg, Name) and type_moves_by_value(_resolve_param_type(codegen, param.ty))
+                and codegen.memory.is_owned_local(arg.id)):
             codegen.memory.mark_struct_as_moved(arg.id)
 
 

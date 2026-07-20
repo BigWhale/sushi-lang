@@ -121,38 +121,38 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
             # Deep-copy structs with dynamic arrays to avoid double-free
             # When passing a struct with dynamic arrays to another struct constructor,
             # we must clone the dynamic array memory to avoid shared ownership
-            if isinstance(resolved_field_type, StructType):
-                # #134: a bare-Name field arg of a MOVE type (a struct with a T[]/List/Own
-                # somewhere in it) transfers ownership into the new struct -- store as-is and
-                # mark the source moved. Copy composites (string-only) and MemberAccess sources
-                # fall through to the deep copy below (V5).
-                if isinstance(arg, Name) and type_moves_by_value(resolved_field_type):
+            if isinstance(resolved_field_type, StructType) and type_moves_by_value(resolved_field_type):
+                # #134 move-type field (owning struct / List / Own): a bare Name moves the
+                # local (mark moved, store as-is); a MemberAccess source detaches from its
+                # continuing owner with one clone (#181); a fresh owning temp (constructor /
+                # call / clone) moves in as-is -- cloning it would orphan its buffer (a leak).
+                if isinstance(arg, Name):
                     codegen.memory.mark_struct_as_moved(arg.id)
-                elif codegen.dynamic_arrays.struct_needs_cleanup(resolved_field_type):
+                elif isinstance(arg, MemberAccess):
+                    from sushi_lang.backend.expressions.memory import emit_value_clone
+                    arg_value = emit_value_clone(codegen, arg_value, resolved_field_type)
+
+            elif isinstance(resolved_field_type, StructType):
+                # Copy-type composite field (string-only): clone a bare-Name / member alias so
+                # the source stays a live owner and each frees once (#147); a fresh RHS is a
+                # sole owner stored as-is.
+                if (codegen.dynamic_arrays.struct_needs_cleanup(resolved_field_type)
+                        and isinstance(arg, (Name, MemberAccess))):
                     from sushi_lang.backend.expressions import memory
                     arg_value = memory.deep_copy_struct(codegen, arg_value, resolved_field_type)
-                # A List<T>/Own<T> field owns heap behind a raw pointer, which the field scan
-                # in struct_needs_cleanup cannot see -- so the branch above never fired and the
-                # field was stored SHALLOWLY, aliasing the source. When the source is a struct-
-                # field read (a continuing owner), both it and the new struct field free the
-                # same buffer at scope exit (double-free, #181). Clone so each owns independent
-                # buffers; a fresh RHS is a sole owner stored as-is. (A bare-Name List/Own field
-                # already moved above via type_moves_by_value.)
-                elif isinstance(arg, (Name, MemberAccess)):
-                    from sushi_lang.backend.destructors import needs_cleanup
-                    if needs_cleanup(resolved_field_type):
-                        from sushi_lang.backend.expressions.memory import emit_value_clone
-                        arg_value = emit_value_clone(codegen, arg_value, resolved_field_type)
 
             # An owning enum field (a variant carrying heap, #139): a bare-Name MOVE-type arg
-            # transfers ownership (mark source moved, store as-is); a MemberAccess source reads
-            # from a continuing owner and is CLONED so each owner frees once. A fresh RHS
-            # (constructor / call) is a sole owner and stored as-is.
+            # transfers ownership (mark source moved); a MemberAccess source detaches with one
+            # clone; a fresh RHS (constructor / call) is a sole owner and moves in as-is.
             elif (isinstance(resolved_field_type, EnumType)
                   and codegen.dynamic_arrays.struct_needs_cleanup(resolved_field_type)):
                 if isinstance(arg, Name) and type_moves_by_value(resolved_field_type):
                     codegen.memory.mark_struct_as_moved(arg.id)
-                elif isinstance(arg, (Name, MemberAccess)):
+                elif isinstance(arg, MemberAccess):
+                    from sushi_lang.backend.expressions.memory import emit_value_clone
+                    arg_value = emit_value_clone(codegen, arg_value, resolved_field_type)
+                elif isinstance(arg, Name):
+                    # Copy-type enum (string-only variants): clone the alias, source stays live.
                     from sushi_lang.backend.expressions.memory import emit_value_clone
                     arg_value = emit_value_clone(codegen, arg_value, resolved_field_type)
 

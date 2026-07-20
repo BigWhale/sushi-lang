@@ -1,9 +1,8 @@
-# Regression for #181: a HashMap<K,V> as a struct field ICE'd (CE0000) in the
-# struct-constructor deep-copy path -- the clone/destructor dispatch had no HashMap<
-# branch, so the generic struct walk hit HashMap's `buckets` DynamicArrayType placeholder
-# and cloned it as a real i32[] against an Entry* value. Owning (heap) string keys
-# exercise both the deep clone (independent buffers, no double-free) and the field
-# destructor (frees every Entry key/value, no leak).
+# Regression for #181 under #134 move semantics: a HashMap@(string, i32) moved into a struct
+# field must be destroyed by the struct's cleanup (the destructor dispatch needs a HashMap<
+# branch, not the generic struct walk that mistook HashMap's `buckets` placeholder for a real
+# i32[]). Owning (heap) string keys exercise the field destructor: every Entry key/value is
+# freed exactly once, no leak (the map is a move type, so it moves in rather than cloning).
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_CONTAINS: "count = 2"
 # EXPECT_NO_LEAKS: true
@@ -18,6 +17,6 @@ fn main() i32:
     map.insert("alpha-{'x'}", 1)
     map.insert("beta-{'y'}", 2)
     let Holder h = Holder(map)
-    map.free()
+    # map was MOVED into h; h owns and frees it at scope exit (no map.free()).
     println("count = {h.m.len()}")
     return Result.Ok(0)

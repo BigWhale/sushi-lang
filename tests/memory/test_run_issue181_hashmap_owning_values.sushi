@@ -1,6 +1,7 @@
-# Regression for #181, value path: a HashMap<string,string> struct field must deep-clone
-# and destroy BOTH the owning key and the owning value of every occupied Entry. Heap
-# (interpolated) keys and values exercise the full per-entry clone + destroy walk.
+# Regression for #181 under #134 move semantics: a HashMap@(string, string) moved into a
+# struct field is owned by that struct, whose cleanup must destroy BOTH the owning key and
+# the owning value of every occupied Entry. Heap (interpolated) keys and values exercise the
+# full per-entry destroy walk (the map is a move type, so it moves in rather than cloning).
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_CONTAINS: "len = 2"
 # EXPECT_NO_LEAKS: true
@@ -15,6 +16,6 @@ fn main() i32:
     map.insert("k1-{'a'}", "v1-{'b'}")
     map.insert("k2-{'c'}", "v2-{'d'}")
     let Holder h = Holder(map)
-    map.free()
+    # map was MOVED into h; h owns and frees it at scope exit (no map.free()).
     println("len = {h.m.len()}")
     return Result.Ok(0)

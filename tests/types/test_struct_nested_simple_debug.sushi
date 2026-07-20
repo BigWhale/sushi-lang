@@ -1,6 +1,7 @@
 # EXPECT_STDOUT_EXACT: "Inner array length before: 1\nInner array value before: 42\nOuter.data array length after: 1\nOuter.data array value after: 42\nInner array length after nesting: 1\nInner array value after nesting: 42\n"
 # EXPECT_RUNTIME_EXIT: 0
-# Simplified test to debug the issue
+# EXPECT_NO_LEAKS: true
+# #134: nesting keeps the source usable by cloning it explicitly into the outer struct.
 
 struct Inner:
     i32[] values
@@ -16,8 +17,8 @@ fn run_test() i32:
     println("Inner array length before: {inner.values.len()}")
     println("Inner array value before: {inner.values.get(0)??}")
 
-    # Pass inner struct to outer constructor
-    let Outer outer = Outer(inner)
+    # Pass a clone of inner to the outer constructor so inner stays usable below.
+    let Outer outer = Outer(inner.clone())
 
     println("Outer.data array length after: {outer.data.values.len()}")
     println("Outer.data array value after: {outer.data.values.get(0)??}")

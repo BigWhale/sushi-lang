@@ -17,6 +17,6 @@ fn main() i32:
     let List@(i32) l = List.new()
     l.push(7)
     let Bag b = Bag(map, l)
-    map.free()
+    # map and l were MOVED into b; b owns and frees them at scope exit (no map.free()).
     println("ok {b.m.len()} {b.xs.len()}")
     return Result.Ok(0)

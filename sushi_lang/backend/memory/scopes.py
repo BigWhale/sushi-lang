@@ -605,6 +605,22 @@ class ScopeManager:
         the shared buffer (#140)."""
         return name in self._struct_cleanup
 
+    def is_owned_local(self, name: str) -> bool:
+        """True if `name` is a registered RAII owner in some current scope -- an owning
+        struct/enum/fixed-array, string, closure, dynamic array, List, or Own.
+
+        A move-type value that is NOT owned here is a BORROW: a match / pattern binding (e.g.
+        the `Own(x)` pointee, an enum-payload binding) that aliases memory owned elsewhere,
+        which the pattern's real owner still frees. Such a value must be COPIED, never moved,
+        when handed to a by-value sink (#134) -- moving it would double-free with the owner."""
+        if (name in self._struct_cleanup or name in self._string_cleanup
+                or name in self._closure_cleanup):
+            return True
+        da = getattr(self.codegen, 'dynamic_arrays', None)
+        if da is not None and (name in da.arrays or name in da.lists or name in da.owned_pointers):
+            return True
+        return False
+
     def unregister_string_cleanup(self, name: str) -> None:
         """Drop the innermost `name` entry from string RAII tracking (no-op if absent) (#145).
 
