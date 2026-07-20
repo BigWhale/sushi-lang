@@ -104,7 +104,7 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
         # copy at scope exit). Owning move-types (T[]/List/Own) are moved instead, not
         # copied (struct_needs_cleanup is false for them, so they pass through here).
         # Reference params (&peek/&poke) are borrows and are never copied.
-        _deep_copy_struct_value_args(codegen, args, func_sig)
+        _deep_copy_struct_value_args(codegen, expr.args, args, func_sig)
         # Move-by-value for owning params (#131): a bare owning argument (T[]/List/Own)
         # is moved into the callee, which owns and frees it. Mark the source local moved
         # so the caller's scope-exit RAII skips it (exactly one owner frees).
@@ -196,23 +196,28 @@ def _register_inline_closure_temps(codegen: 'LLVMCodegen', arg_exprs: list, arg_
             codegen.memory.register_closure_temp(value)
 
 
-def _deep_copy_struct_value_args(codegen: 'LLVMCodegen', args: list, func_sig) -> None:
-    """Deep-copy heap-owning struct arguments passed by value, in place (#60).
+def _deep_copy_struct_value_args(codegen: 'LLVMCodegen', arg_exprs: list, args: list, func_sig) -> None:
+    """Deep-copy by-value composite arguments that KEEP copy semantics, in place.
 
-    For each by-value parameter whose type is a struct that owns heap memory, replace the
-    emitted argument with an independent deep copy so the callee (which frees its copy at
-    scope exit) does not share the caller's buffer. Reference parameters are borrows and
-    are skipped. No-op when there is no signature (e.g. builtins resolved elsewhere).
+    A copy-type composite (a string-only struct, or any struct/enum with no owning
+    resource) passed by value is deep-copied so the callee owns an independent buffer.
+    A #134 move-type argument that is a bare `Name` is instead moved -- it flows to
+    `_move_owning_value_args`, which marks the source local moved -- so it is skipped
+    here (copying it would leak a second buffer the caller never frees). A move-type
+    argument that is NOT a bare Name (a `MemberAccess` source, `s.field`) keeps the copy:
+    it reads from a continuing owner (spec V5). Reference parameters are borrows, skipped.
     """
     if func_sig is None or not func_sig.params:
         return
-    from sushi_lang.semantics.typesys import ReferenceType
+    from sushi_lang.semantics.typesys import ReferenceType, type_moves_by_value
     from sushi_lang.backend.expressions import memory
     for i, param in enumerate(func_sig.params):
         if i >= len(args):
             break
         if isinstance(param.ty, ReferenceType):
             continue
+        if i < len(arg_exprs) and isinstance(arg_exprs[i], Name) and type_moves_by_value(param.ty):
+            continue  # #134: bare-Name move-type arg is moved, not copied
         args[i] = memory.deep_copy_if_owning_struct(codegen, args[i], param.ty)
 
 
@@ -224,15 +229,18 @@ def _move_owning_value_args(codegen: 'LLVMCodegen', expr: Call, func_sig) -> Non
     caller's scope-exit RAII skips it -- exactly one owner frees, no double-free. Borrows
     (`&peek x`) are Borrow nodes, not Name nodes, and reference params are not owning, so
     neither is ever marked. No-op without a signature (indirect/builtin calls).
+
+    #134: the move predicate is `type_moves_by_value`, so an owning struct/enum bare-Name
+    argument moves too (not just T[]/List/Own). String-only composites stay copy types.
     """
     if func_sig is None or not func_sig.params:
         return
-    from sushi_lang.semantics.typesys import is_owning_type
+    from sushi_lang.semantics.typesys import type_moves_by_value
     for i, param in enumerate(func_sig.params):
         if i >= len(expr.args):
             break
         arg = expr.args[i]
-        if isinstance(arg, Name) and is_owning_type(param.ty):
+        if isinstance(arg, Name) and type_moves_by_value(param.ty):
             codegen.memory.mark_struct_as_moved(arg.id)
 
 

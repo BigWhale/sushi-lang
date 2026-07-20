@@ -82,27 +82,31 @@ def test_byvalue_struct_param_freed_by_callee(tmp_path):
     assert frees >= 1, f"callee must free its by-value struct param's buffer, got {frees} frees"
 
 
-def test_byvalue_struct_arg_deep_copied_at_call_site(tmp_path):
-    """The call site deep-copies a struct arg with a `T[]` field (independent copy).
+def test_byvalue_struct_arg_moved_at_call_site(tmp_path):
+    """The call site MOVES a bare owning struct arg (#134) -- no deep copy.
 
-    Pairs with test_byvalue_struct_param_freed_by_callee: the caller clones the arg so the
-    callee's free does not double-free the caller's original. The clone is the only heap
-    allocation in the call expression's block of `main` beyond the struct construction.
+    Pairs with test_byvalue_struct_param_freed_by_callee: the callee frees the moved-in
+    value, and the caller marks the source moved so it does not free it too. Asserted
+    relatively: passing the bare Name `consume(x)` (a move) emits FEWER mallocs in `main`
+    than passing an explicit `consume(x.clone())` (a copy) -- the move elides the call-site
+    deep copy of the struct's `u8[]` buffer. Before #134 the bare-Name form also copied, so
+    the two counts were equal.
     """
-    src = _STRUCT + (
+    body = (
         "fn consume(DataBuffer d) i32:\n"
         "    return Result.Ok(d.data.len())\n"
         "\n"
         "fn main() i32:\n"
         "    let DataBuffer x = DataBuffer(from([1 as u8, 2 as u8, 3 as u8]), 3)\n"
-        "    let i32 n = consume(x).realise(0)\n"
+        "    let i32 n = consume({arg}).realise(0)\n"
         "    return Result.Ok(0)\n"
     )
-    ir_text = _emit_ir(tmp_path, src)
-    # main allocates the struct's array once (from([...])); the call-site deep copy adds
-    # a second malloc. Before the fix main had exactly one (the construction).
-    mallocs = _count_in_function(ir_text, "user_main", "malloc")
-    assert mallocs >= 2, f"call site must deep-copy the struct arg's buffer, got {mallocs} mallocs in main"
+    move_mallocs = _count_in_function(_emit_ir(tmp_path, _STRUCT + body.format(arg="x")), "user_main", "malloc")
+    clone_mallocs = _count_in_function(_emit_ir(tmp_path, _STRUCT + body.format(arg="x.clone()")), "user_main", "malloc")
+    assert move_mallocs < clone_mallocs, (
+        f"bare owning struct arg must MOVE (fewer mallocs than an explicit clone): "
+        f"move={move_mallocs}, clone={clone_mallocs}"
+    )
 
 
 def test_struct_local_freed_on_every_branch_return(tmp_path):

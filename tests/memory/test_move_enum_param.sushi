@@ -1,0 +1,22 @@
+# Move-by-value (#134): an owning enum passed by value is moved into the callee, which
+# owns and frees its payload once (no double-free, no leak).
+# EXPECT_STDOUT_EXACT: "n=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+enum Msg:
+    Text(string)
+    Arr(i32[])
+
+fn arr_len(Msg m) i32:
+    match m:
+        Msg.Arr(xs) ->
+            return Result.Ok(xs.len())
+        Msg.Text(_) ->
+            return Result.Ok(0)
+
+fn main() i32:
+    let Msg msg = Msg.Arr(from([1, 2, 3]))
+    let i32 n = arr_len(msg).realise(-1)
+    println("n={n}")
+    return Result.Ok(0)

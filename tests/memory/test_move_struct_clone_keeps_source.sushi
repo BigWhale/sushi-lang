@@ -1,0 +1,18 @@
+# Clone at a move sink (#134): passing buf.clone() hands the callee an independent copy
+# while the source buf stays owned and usable; the clone is freed by the callee and buf by
+# main -- exactly one free each (no double-free, no leak).
+# EXPECT_STDOUT_EXACT: "in=3 src=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Buffer:
+    i32[] data
+
+fn total(Buffer b) i32:
+    return Result.Ok(b.data.len())
+
+fn main() i32:
+    let Buffer buf = Buffer(data: from([1, 2, 3]))
+    let i32 n = total(buf.clone()).realise(-1)
+    println("in={n} src={buf.data.len()}")
+    return Result.Ok(0)

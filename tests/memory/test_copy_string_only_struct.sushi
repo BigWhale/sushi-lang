@@ -1,0 +1,20 @@
+# Copy semantics (#134) -- the string-distinction pin: a struct whose only owning content
+# is a string stays a COPY type. Passing it by value deep-copies (the string is cloned),
+# so the SOURCE is still usable afterward. This test fails if the move predicate is wrongly
+# built on needs_cleanup (which is true for strings).
+# EXPECT_STDOUT_EXACT: "in=hi src=hi\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Named:
+    string name
+    i32 id
+
+fn show(Named n) string:
+    return Result.Ok(n.name)
+
+fn main() i32:
+    let Named a = Named(name: "hi", id: 1)
+    let string got = show(a).realise("?")
+    println("in={got} src={a.name}")
+    return Result.Ok(0)
