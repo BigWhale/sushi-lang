@@ -90,15 +90,27 @@ fn build_tree() ~:
 
 ## Move Semantics
 
-Owning types use move semantics (ownership transfer): **dynamic arrays (`T[]`), `List@(T)`, and
-`Own@(T)`**. Passing one by value, binding it to a new name, or capturing it in a closure transfers
-ownership; the source is consumed and using it afterward is a use-after-move error (`CE2405`).
-Primitives, strings, and copyable structs are copied instead.
+Move-ness is **compositional**: a value moves iff it transitively contains an owning resource --
+a **dynamic array (`T[]`), `List@(T)`, `Own@(T)`, a capturing closure, or any struct/enum/fixed
+array holding one of those**. Passing such a value by value, binding it to a new name, putting it
+in a constructor field or array literal, or capturing it in a closure transfers ownership; the
+source is consumed and using it afterward is a use-after-move error (`CE2405`).
+
+Everything else **copies**: primitives, `string`, and *plain-data or string-only* composites (a
+`struct { string name; i32 id }` stays a copy type -- passing it by value clones the string field
+and the source stays usable). This is Rust's `Copy` tier, derived automatically from a type's shape
+rather than opted into.
+
+Every struct and enum also gets an auto-derived **`.clone()`** -- the single explicit way to copy an
+owning value: `consume(buf.clone())` hands the callee an independent copy while `buf` stays yours.
 
 ### What Moves
 
-**Dynamic arrays, `List@(T)`, `Own@(T)`:**
+**Dynamic arrays, `List@(T)`, `Own@(T)`, and owning structs/enums:**
 ```sushi
+struct Buffer:
+    i32[] data
+
 fn main() i32:
     let i32[] a = from([1, 2, 3])
     let i32[] b = a  # a moved to b
@@ -106,25 +118,43 @@ fn main() i32:
     # ERROR CE2405: cannot borrow moved variable 'a'
     # println(a.len())
 
+    # A struct/enum that owns heap moves too (it contains a T[]):
+    let Buffer buf = Buffer(data: from([1, 2, 3]))
+    let Buffer other = buf  # buf moved to other
+    # println(buf.data.len())  # ERROR CE2405: buf was moved
+
     return Result.Ok(0)
 ```
 
 ### What Copies
 
-**Primitives and strings:**
+**Primitives, strings, and string-only / plain-data composites:**
 ```sushi
+struct Named:
+    string name
+    i32 id
+
 fn main() i32:
     let i32 x = 42
     let i32 y = x  # x copied to y
-
     println(x)  # OK: x still valid
 
     let string s1 = "hello"
     let string s2 = s1  # s1 copied to s2
     println(s1)  # OK: s1 still valid
 
+    # A struct whose only owning content is a string is a COPY type:
+    let Named a = Named(name: "hi", id: 1)
+    let Named b = a  # a copied to b (the string field is cloned)
+    println(a.name)  # OK: a still valid
+
     return Result.Ok(0)
 ```
+
+To read from a struct field without consuming its owner, note that a **field read
+copies** (`take(wrapper.inner)` deep-copies `inner`; `wrapper` stays usable). Only a bare owning
+variable moves. There are no partial moves and no local borrow bindings, so reaching through an
+owner (`s.field`) still copies -- clone or borrow the whole value to avoid the copy.
 
 ### Function Arguments
 
@@ -144,9 +174,9 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-The same holds for `List@(T)` and `Own@(T)` value parameters: a bare owning argument is moved into the
-callee, which frees it exactly once at scope exit. To pass an owning value without giving it up,
-borrow it (`&peek` / `&poke`) or pass an explicit `.clone()`.
+The same holds for `List@(T)`, `Own@(T)`, and **owning struct/enum** value parameters: a bare owning
+argument is moved into the callee, which frees it exactly once at scope exit. To pass an owning value
+without giving it up, borrow it (`&peek` / `&poke`) or pass an explicit `.clone()`.
 
 > **`main`'s `args`.** The `string[] args` parameter of `main` is a borrowed view of the process
 > argument vector (its strings alias C `argv` memory), not a heap-owned array. Do not move it by
