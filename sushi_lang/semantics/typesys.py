@@ -301,6 +301,41 @@ def is_owning_type(t: Optional["Type"]) -> bool:
     return False
 
 
+def type_moves_by_value(t: Optional["Type"], _visited: Optional[set] = None) -> bool:
+    """True if a value of this type MOVES at ownership sinks (#134).
+
+    A type moves by value iff it transitively contains an owning resource
+    (is_owning_type's base cases: T[], List<T>, Own<T>, capturing closures);
+    structs/enums/fixed arrays inherit move-ness from their contents.
+
+    NOT the backend's needs_cleanup: strings need RAII but are copy types
+    (docs/design/string-representation.md), so a string-only struct copies
+    while a struct with a T[] field moves. Do not unify the two predicates.
+    """
+    if t is None:
+        return False
+    if is_owning_type(t):
+        return True
+    if isinstance(t, UnknownType):
+        return False  # Pass 2 rejects unresolved types; treat as non-moving
+    if _visited is None:
+        _visited = set()
+    if isinstance(t, StructType):
+        if t.name in _visited:
+            return False
+        _visited.add(t.name)
+        return any(type_moves_by_value(ft, _visited) for _, ft in t.fields)
+    if isinstance(t, EnumType):
+        if t.name in _visited:
+            return False
+        _visited.add(t.name)
+        return any(type_moves_by_value(at, _visited)
+                   for variant in t.variants for at in variant.associated_types)
+    if isinstance(t, ArrayType):
+        return type_moves_by_value(t.base_type, _visited)
+    return False
+
+
 @dataclass(frozen=True)
 class EnumVariantInfo:
     """Information about a single enum variant."""
