@@ -1,0 +1,15 @@
+# Auto-derived clone (#134): .clone() on an owning struct deep-copies; both the
+# original and the clone are usable and freed exactly once.
+# EXPECT_STDOUT_EXACT: "orig=3 copy=4\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Buffer:
+    i32[] data
+
+fn main() i32:
+    let Buffer a = Buffer(data: from([1, 2, 3]))
+    let Buffer b = a.clone()
+    b.data.push(9)
+    println("orig={a.data.len()} copy={b.data.len()}")
+    return Result.Ok(0)

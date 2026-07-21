@@ -1,0 +1,30 @@
+# #238 (#134 follow-up): a borrowed enum match-payload binding assigned into an existing
+# variable (:=) must be CLONED, not moved (the still-live owner keeps its copy).
+# EXPECT_STDOUT_EXACT: "n=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+enum Box:
+    Full(i32[])
+    Empty
+
+enum Wrap:
+    Has(Box)
+    No
+
+fn main() i32:
+    let Wrap w = Wrap.Has(Box.Full(from([1, 2, 3])))
+    let Box slot = Box.Empty
+    let i32 n = 0
+    match w:
+        Wrap.Has(inner) ->
+            slot := inner
+        Wrap.No ->
+            n := -2
+    match slot:
+        Box.Full(xs) ->
+            n := xs.len()
+        Box.Empty ->
+            n := -1
+    println("n={n}")
+    return Result.Ok(0)

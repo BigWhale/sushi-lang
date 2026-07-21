@@ -36,7 +36,7 @@ REFERENCE_PATTERNS = [
 # tripwire for silent loss when errors.py is split into a package.
 # 261: deleted 17 genuinely-dead speculative codes (CE0001/37/38/39/48/63/66/70/82/84/
 # 86/88/97/98, CE2022, CE3503, CE3506) that nothing emitted -- Tier 4.8 PR4 hygiene.
-REGISTRY_SIZE = 262  # Tier 6.0: -CE4008 -CE4009 (unreachable, deleted) +CE4010; +CE2062 +CE6102
+REGISTRY_SIZE = 263  # Tier 6.0: -CE4008 -CE4009 (unreachable, deleted) +CE4010; +CE2062 +CE6102; #134 +CE0127
 
 # Codes whose numeric range does not match their category. SHRINK-ONLY: never add.
 # Renumbering would break EXPECT_ERROR_CODE headers and the docs, so these stay

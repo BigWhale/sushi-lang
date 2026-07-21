@@ -1,0 +1,16 @@
+# Use-after-move (#134): an owning struct moved inside a loop body is moved on the
+# first iteration, so the second iteration's use is CE2405 (T2.1 fixed-point).
+# EXPECT_ERROR_CODE: CE2405
+# EXPECT_STDERR_CONTAINS: was moved here
+
+struct Buffer:
+    i32[] data
+
+fn consume(Buffer b) i32:
+    return Result.Ok(b.data.len())
+
+fn main() i32:
+    let Buffer buf = Buffer(data: from([1, 2, 3]))
+    foreach(i in 0..3):
+        let i32 n = consume(buf).realise(-1)
+    return Result.Ok(0)

@@ -1,0 +1,15 @@
+# Move-by-value (#134): rebinding an owning struct (let b = a) MOVES it -- b becomes the
+# sole owner and frees once, a is consumed (its reuse is CE2405, see the err twin). No
+# double-free, no leak.
+# EXPECT_STDOUT_EXACT: "b=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Buffer:
+    i32[] data
+
+fn main() i32:
+    let Buffer a = Buffer(data: from([1, 2, 3]))
+    let Buffer b = a
+    println("b={b.data.len()}")
+    return Result.Ok(0)

@@ -1,0 +1,16 @@
+# Use-after-move (#134): moving an owning struct into another struct's constructor
+# field consumes it; reusing the source afterward is CE2405.
+# EXPECT_ERROR_CODE: CE2405
+# EXPECT_STDERR_CONTAINS: was moved here
+
+struct Buffer:
+    i32[] data
+
+struct Wrapper:
+    Buffer inner
+
+fn main() i32:
+    let Buffer a = Buffer(data: from([1, 2, 3]))
+    let Wrapper w = Wrapper(inner: a)
+    let i32 n = a.data.len()
+    return Result.Ok(0)

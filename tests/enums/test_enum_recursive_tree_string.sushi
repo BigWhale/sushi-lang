@@ -1,6 +1,7 @@
 # Test recursive binary tree with string leaves; validates leaf count and depth
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "Tree leaves: 4, depth: 2\n"
+# EXPECT_NO_LEAKS: true
 
 enum Tree:
     Leaf(string)
@@ -36,7 +37,8 @@ fn main() i32:
     let Own@(Tree) right = Own.alloc(Tree.Node(lc, ld))
     let Tree root = Tree.Node(left, right)
 
-    let i32 leaves = count_leaves(root).realise(0)
+    # root is read twice: clone for the first consumer, move into the last.
+    let i32 leaves = count_leaves(root.clone()).realise(0)
     let i32 d = depth(root).realise(0)
 
     if (leaves != 4):

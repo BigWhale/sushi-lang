@@ -17,6 +17,38 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
+import itertools
+
+_EXPR_TEMP_SEQ = itertools.count()
+
+
+def _register_discarded_owning_temp(codegen: 'LLVMCodegen', expr, value) -> None:
+    """Own a discarded expression-statement result that owns heap (#134).
+
+    A bare `a.clone()` (or any owning temporary used as a statement) produces a value NO
+    other owner will free -- register it as a scope temp so scope-exit RAII frees it exactly
+    once. A bound source (Name / field read) is not a temporary and is skipped (its declared
+    owner frees it), so this never double-frees.
+    """
+    if value is None:
+        return
+    from sushi_lang.backend.expressions.memory import expression_is_temporary
+    if not expression_is_temporary(expr):
+        return
+    from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
+    from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
+    ty = infer_expr_semantic_type(codegen, expr)
+    if ty is None and getattr(expr, 'method', None) == 'clone':
+        # clone() returns the receiver's type; its inference is annotation-driven and may be
+        # absent on the call node, so fall back to the receiver.
+        ty = infer_expr_semantic_type(codegen, expr.receiver)
+    ty = resolve_named_type(codegen, ty) if ty is not None else None
+    if ty is None or not needs_cleanup(ty):
+        return
+    name = f"__expr_temp_{next(_EXPR_TEMP_SEQ)}"
+    codegen.memory.create_local(name, value.type, value, ty)
+
+
 class StatementEmitter:
     """Main statement emitter that delegates to specialized submodules."""
 
@@ -92,7 +124,8 @@ class StatementEmitter:
 
             # Expression statements - MIGRATED in Phase 4 (trivial inline)
             case ExprStmt():
-                self.codegen.expressions.emit_expr(stmt.expr)
+                value = self.codegen.expressions.emit_expr(stmt.expr)
+                _register_discarded_owning_temp(self.codegen, stmt.expr, value)
                 return
 
             # Complex loops - MIGRATED in Phase 5

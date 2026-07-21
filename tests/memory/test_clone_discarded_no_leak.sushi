@@ -1,0 +1,15 @@
+# Auto-derived clone (#134): a .clone() whose result is discarded (bare expression
+# statement) is still freed -- the unowned-temporary class (spec 3.1). The source
+# stays fully usable.
+# EXPECT_STDOUT_EXACT: "len=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Buffer:
+    i32[] data
+
+fn main() i32:
+    let Buffer a = Buffer(data: from([1, 2, 3]))
+    a.clone()
+    println("len={a.data.len()}")
+    return Result.Ok(0)

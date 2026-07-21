@@ -6,6 +6,7 @@
 # dynamic-array payload and every nested array is freed exactly once at scope exit (verified
 # leak-free with `leaks --atExit`; the stdout suite cannot see the former leak directly).
 # EXPECT_STDOUT_EXACT: "10\n"
+# EXPECT_NO_LEAKS: true
 
 enum MsgValue:
     Int(i32)
@@ -18,7 +19,7 @@ fn sum_value(MsgValue v) i32:
         MsgValue.Arr(items) ->
             let i32 total = 0
             foreach(child in items.iter()):
-                total := total + sum_value(child).realise(0)
+                total := total + sum_value(child.clone()).realise(0)
             return Result.Ok(total)
 
 fn run_test() i32:

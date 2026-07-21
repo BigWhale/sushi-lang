@@ -70,11 +70,14 @@ free. Touch a moved-out variable and the compiler stops you cold with **CE2405: 
 variable** — a use-after-free caught before the program ever runs. If you genuinely need two
 independent arrays, ask for one explicitly with `.clone()`.
 
-The same move rule covers every owning type — dynamic arrays, `List@(T)`, and `Own@(T)`. Passing one
-by value to a function moves it: the callee takes ownership and frees it at scope exit, so the caller
-must not use it afterwards. Borrow with `&peek` / `&poke` (or pass a `.clone()`) when you want to keep
-it. (One special case: `main`'s `string[] args` is a borrowed view of the process argument vector,
-not a heap-owned array — borrow it downstream, never move it by value.)
+The same move rule covers every owning type — dynamic arrays, `List@(T)`, `Own@(T)`, and **any struct
+or enum that holds one of those** (move-ness is compositional: a value moves iff it transitively owns
+heap). A plain-data or string-only struct still copies (its string field is cloned and the source
+stays usable). Passing an owning value by value to a function moves it: the callee takes ownership and
+frees it at scope exit, so the caller must not use it afterwards. Borrow with `&peek` / `&poke` (or
+pass a `.clone()` — auto-derived for every struct and enum) when you want to keep it. (One special
+case: `main`'s `string[] args` is a borrowed view of the process argument vector, not a heap-owned
+array — borrow it downstream, never move it by value.)
 
 ## References: borrowing without owning
 

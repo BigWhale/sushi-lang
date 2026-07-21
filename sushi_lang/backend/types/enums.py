@@ -21,7 +21,7 @@ import llvmlite.ir as ir
 from sushi_lang.backend.constants import INT64_BIT_WIDTH
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
-from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory
+from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory, register_clone_emitter_factory
 from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
 from sushi_lang.backend import enum_utils
 
@@ -297,3 +297,24 @@ def _emit_associated_value_hash(codegen: Any, value: ir.Value, value_type: Type)
 # Supply the enum hash() emitter to semantics/generics/hashing.py, which owns
 # hashability analysis and the registration itself.
 register_hash_emitter_factory("enum", _emit_enum_hash)
+
+
+def _emit_enum_clone(target_type: Type) -> Any:
+    """Create a clone() emitter for an enum type (#134).
+
+    A thin wrapper over the existing deep-copy `emit_value_clone` (the structural
+    inverse of the destructor), returning the clone as a bare value.
+    """
+    def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
+                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+        from sushi_lang.backend.expressions.memory import emit_value_clone
+        value = receiver_value
+        if isinstance(value.type, ir.PointerType):
+            value = codegen.builder.load(value, name="clone_recv")
+        return emit_value_clone(codegen, value, target_type)
+
+    return emitter
+
+
+# Supply the enum clone() emitter (registration lives in semantics/generics/cloning.py).
+register_clone_emitter_factory("enum", _emit_enum_clone)

@@ -278,6 +278,17 @@ class SemanticAnalyzer:
 
         register_all_array_hashes(self.structs, self.enums)
 
+        # Pass 1.8 (cont.): auto-derive clone() for every struct and enum (#134). No
+        # ordering constraint -- the clone emitter resolves nested/recursive types at
+        # emission time -- so a flat pass over both tables suffices.
+        from sushi_lang.semantics.generics.cloning import (
+            register_struct_clone_method, register_enum_clone_method
+        )
+        for struct_type in self.structs.by_name.values():
+            register_struct_clone_method(struct_type)
+        for enum_type in self.enums.by_name.values():
+            register_enum_clone_method(enum_type)
+
         # Monomorphize generic extension methods
         concrete_extension_defs = monomorphize_all_extension_methods(
             self.generic_extensions.by_type,

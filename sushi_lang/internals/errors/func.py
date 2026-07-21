@@ -111,6 +111,10 @@ _add(ErrorMessage("CE0123", Severity.ERROR,
     "no hash emitter registered for kind '{kind}'",
     Category.INTERNAL, "Pass 1.8 registered a hash() method whose LLVM emitter the backend never supplied. The backend types modules register their emitter factories at import; one of them failed to load."))
 
+_add(ErrorMessage("CE0127", Severity.ERROR,
+    "no clone emitter registered for kind '{kind}'",
+    Category.INTERNAL, "Pass 1.8 registered a clone() method whose LLVM emitter the backend never supplied. The backend types modules register their emitter factories at import; one of them failed to load."))
+
 _add(ErrorMessage("CE0124", Severity.ERROR,
     "'??' expression reached codegen without a type annotation from semantic analysis",
     Category.INTERNAL, "Pass 2 annotates every TryExpr it validates (inner type, unwrapped type, success tag). Reaching the backend without one means the expression's type was never inferred - the backend no longer re-infers types, so this is a gap in Pass 2, not a user error."))
