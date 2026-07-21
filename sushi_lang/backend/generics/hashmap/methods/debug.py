@@ -9,6 +9,7 @@ from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
 import llvmlite.ir as ir
 from ..types import get_hashmap_field_ptrs, ENTRY_EMPTY, ENTRY_OCCUPIED, ENTRY_TOMBSTONE
 from sushi_lang.semantics.generics.hashmap import extract_key_value_types
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i8_const
 from sushi_lang.backend.constants import ENTRY_KEY_INDICES, ENTRY_VALUE_INDICES, ENTRY_STATE_INDICES
 from sushi_lang.backend.generics.container_walk import emit_container_walk
@@ -61,8 +62,11 @@ def emit_hashmap_debug(
     # Get buckets pointer
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
 
-    # Print header: "HashMap@(K, V) {"
-    header_str = f"HashMap@({key_type}, {value_type}) {{\n"
+    # Print header: "HashMap@(K, V) {". Both types go through display_type, not
+    # str(): a monomorphized type's str() is its interned `<...>` identity name, so
+    # interpolating it directly leaks the retired syntax for a nested generic key
+    # or value ("HashMap@(string, List<i32>)" instead of "...List@(i32))").
+    header_str = f"HashMap@({display_type(key_type)}, {display_type(value_type)}) {{\n"
     emit_printf_string(codegen, builder, header_str)
 
     # Print stats: "  size: X, capacity: Y, tombstones: Z"

@@ -1,0 +1,16 @@
+# EXPECT_STDOUT_CONTAINS: List@(List@(i32)) {
+# EXPECT_RUNTIME_EXIT: 0
+# Regression for #236: a nested generic element type in the .debug() header used to
+# render in the retired `<...>` syntax ("List@(List<i32>) {") because the element
+# type was interpolated via str() instead of the display layer.
+fn main() i32:
+    let List@(List@(i32)) matrix = List.new()
+
+    let List@(i32) row = List.new()
+    row.push(1)
+    row.push(2)
+    matrix.push(row)
+
+    matrix.debug()
+
+    return Result.Ok(0)

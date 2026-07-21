@@ -6,6 +6,7 @@ This module contains the debug method for printing List<T> internal state.
 
 from typing import Any
 from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
+from sushi_lang.semantics.generics.type_display import display_type
 import llvmlite.ir as ir
 from .types import extract_element_type, get_list_len_ptr, get_list_capacity_ptr, get_list_data_ptr
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, ONE_I32
@@ -54,8 +55,11 @@ def emit_list_debug(
     capacity = builder.load(capacity_ptr, name="capacity")
     data_ptr = builder.load(data_ptr_ptr, name="data_ptr")
 
-    # Print header: "List@(T) {"
-    header_str = f"List@({element_type}) {{\n"
+    # Print header: "List@(T) {". The element type goes through display_type, not
+    # str(): a monomorphized type's str() is its interned `<...>` identity name, so
+    # interpolating it directly leaks the retired syntax for a nested generic
+    # element ("List@(List<i32>)" instead of "List@(List@(i32))").
+    header_str = f"List@({display_type(element_type)}) {{\n"
     emit_printf_string(codegen, builder, header_str)
 
     # Print stats: "  len: X, capacity: Y"

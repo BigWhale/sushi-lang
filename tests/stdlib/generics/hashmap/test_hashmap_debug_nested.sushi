@@ -1,0 +1,18 @@
+# EXPECT_STDOUT_CONTAINS: HashMap@(string, List@(i32)) {
+# EXPECT_RUNTIME_EXIT: 0
+# Regression for #236: a nested generic key or value type in the .debug() header
+# used to render in the retired `<...>` syntax ("HashMap@(string, List<i32>) {").
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(string, List@(i32)) buckets = HashMap.new()
+
+    let List@(i32) first = List.new()
+    first.push(1)
+    first.push(2)
+    buckets.insert("a", first)
+
+    buckets.debug()
+
+    buckets.free()
+    return Result.Ok(0)
