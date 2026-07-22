@@ -1,6 +1,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECT_STDOUT_EXACT: "emit=OK\ncompile=OK\nran exit=42\n"
+# TIMEOUT_SECONDS: 60
 #
 # ROADMAP R2.1 - object-emission spike. Proves the self-host "emit text LLVM IR,
 # then shell out to clang" path end-to-end FROM SUSHI: a Sushi program builds a
@@ -9,6 +10,13 @@
 # code. No compiler internals involved -- only string building + stdlib.
 #
 # Requires clang on PATH (the same toolchain the Sushi compiler links with).
+#
+# TIMEOUT_SECONDS is raised off the 10s default because this is the only test that
+# spawns a full clang compile AND executes its output. That default is calibrated
+# for running an already-built binary; a cold clang on a loaded CI runner competing
+# with the other parallel jobs has blown through it (a macOS job timed out here at
+# 10s and passed unchanged on re-run). The test itself takes ~1.3s cold locally, so
+# 60s is headroom for a slow runner, not a real expectation.
 use <io/stdio>
 use <io/files>
 use <sys/process>
