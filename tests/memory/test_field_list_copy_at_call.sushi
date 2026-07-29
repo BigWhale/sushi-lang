@@ -1,0 +1,22 @@
+# The List@(T) half of BUGS.md entry 1. List<i32> IS a StructType, so it reaches
+# deep_copy_if_owning_struct -- but struct_needs_cleanup scans for dynamic-array FIELDS and
+# List's are raw pointers, so the gate reports False and the value is aliased rather than
+# copied. Both the callee and `w` free the same buffer. Double free (SIGTRAP, rc=133).
+# EXPECT_STDOUT_EXACT: "n=2 src=2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct W:
+    List@(i32) items
+
+fn total(List@(i32) xs) i32:
+    return Result.Ok(xs.len())
+
+fn main() i32:
+    let List@(i32) l = List.new()
+    l.push(10)
+    l.push(20)
+    let W w = W(l)
+    let i32 n = total(w.items).realise(-1)
+    println("n={n} src={w.items.len()}")
+    return Result.Ok(0)

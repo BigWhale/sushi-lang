@@ -1,0 +1,18 @@
+# The constructor-field sink of #250. A `T[]` field arg is handled by its own branch in
+# expressions/structs.py, which moved a bare Name and did nothing at all for a MemberAccess
+# source -- so `V(w.items)` aliased the field and both `v` and `w` freed it.
+# EXPECT_STDOUT_EXACT: "dst=3 src=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct W:
+    i32[] items
+
+struct V:
+    i32[] items
+
+fn main() i32:
+    let W w = W(from([1, 2, 3]))
+    let V v = V(w.items)
+    println("dst={v.items.len()} src={w.items.len()}")
+    return Result.Ok(0)

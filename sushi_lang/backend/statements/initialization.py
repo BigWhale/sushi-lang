@@ -142,5 +142,15 @@ def initialize_dynamic_array(
         if isinstance(val.type, ir.PointerType) and codegen.types.is_dynamic_array_type(val.type.pointee):
             val = codegen.builder.load(val, name=f"{name}_init_value")
 
+        # A `MemberAccess` source (`let b = w.items`) reads from a CONTINUING owner: the
+        # struct still holds -- and still frees -- that buffer, so the new local must get
+        # its own copy or both free it at scope exit (#250). Sushi has no partial moves,
+        # so the field is never consumed. A bare Name source moves instead (handled by the
+        # array move path), and a fresh temp (call return / `??`) is already a sole owner.
+        from sushi_lang.semantics.ast import MemberAccess
+        if isinstance(constructor_expr, MemberAccess):
+            from sushi_lang.backend.expressions.memory import emit_value_clone
+            val = emit_value_clone(codegen, val, array_type)
+
         # Store the struct value into the alloca
         codegen.builder.store(val, alloca)

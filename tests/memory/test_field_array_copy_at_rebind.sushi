@@ -1,0 +1,16 @@
+# The rebind sink of #250. `_emit_dynamic_array_rebind` nullified a bare-Name source (a
+# move) but stored a MemberAccess source as-is, aliasing the field. The clone must also run
+# BEFORE the old target array is freed, since cloning reads through the source descriptor.
+# EXPECT_STDOUT_EXACT: "dst=3 src=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct W:
+    i32[] items
+
+fn main() i32:
+    let W w = W(from([1, 2, 3]))
+    let i32[] b = from([9])
+    b := w.items
+    println("dst={b.len()} src={w.items.len()}")
+    return Result.Ok(0)
