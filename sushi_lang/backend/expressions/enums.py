@@ -145,6 +145,19 @@ def emit_enum_constructor_from_method_call(
                 # Regular argument - emit normally
                 arg_value = codegen.expressions.emit_expr(arg_expr)
 
+                # A `MemberAccess` payload (`Result.Ok(w.items)`, `Maybe.Some(w.items)`,
+                # `Box.Full(w.items)`) reads from a CONTINUING owner: the struct still frees
+                # that buffer, and Sushi has no partial moves, so the enum must own an
+                # independent copy (#250). Without it the payload aliased the field and both
+                # freed it -- and because a returned Result is emitted BEFORE scope cleanup,
+                # `return Result.Ok(w.items)` also handed the caller an already-freed buffer.
+                # Cloned, never moved: moving would leave the struct's own destructor to free
+                # a buffer the enum now owns.
+                from sushi_lang.semantics.ast import MemberAccess
+                if isinstance(arg_expr, MemberAccess):
+                    from sushi_lang.backend.expressions.memory import clone_owning_source
+                    arg_value = clone_owning_source(codegen, arg_value, arg_type)
+
                 # A bare-Name owning arg (dynamic array / List<T> / Own<T> / heap-owning
                 # struct) is stored SHALLOWLY into the variant's data blob, so the enum
                 # takes ownership of the shared buffer -- move the source local so scope-exit

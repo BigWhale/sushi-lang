@@ -357,16 +357,28 @@ def deep_copy_if_owning_struct(codegen: 'LLVMCodegen', value: ir.Value, semantic
     # FIELDS) reports False. Without this the value is aliased and both the new owner and
     # the continuing one free it -- a double free, not a leak, so the leak gate stayed green.
     if type_moves_by_value(resolved):
-        # A `T[]` call argument is still the array-struct POINTER here: the call sink runs
-        # this copy (dispatcher:107) BEFORE it normalizes pointer args to values (:122).
-        # emit_value_clone is strictly value-in/value-out, so load first and hand back the
-        # cloned VALUE -- the later normalization is a no-op on a value, and cast_for_param
-        # accepts it. Container get-out callers already pass a value and skip this.
-        if (isinstance(value.type, ir.PointerType)
-                and value.type.pointee == codegen.types.ll_type(resolved)):
-            value = codegen.builder.load(value, name="owning_arg_by_value")
-        return emit_value_clone(codegen, value, resolved)
+        return clone_owning_source(codegen, value, resolved)
     return value
+
+
+def clone_owning_source(codegen: 'LLVMCodegen', value: ir.Value, semantic_type: Type) -> ir.Value:
+    """Deep-copy a value read from a CONTINUING owner, accepting a value OR a pointer.
+
+    The detach half of the #250 sinks: a `MemberAccess` source (`w.items`) hands a sink a
+    view of a buffer its owner still frees, so the sink needs an independent copy. Sushi
+    has no partial moves, so this is always a clone, never a move.
+
+    `emit_value_clone` is strictly value-in/value-out, but an owning value does not reach
+    every sink in the same shape: a `T[]` call argument is still the array-struct POINTER
+    (the call sink copies at dispatcher:107, BEFORE it normalizes pointer args to values at
+    :122), and an enum-constructor payload arrives the same way. Load those first and hand
+    back the cloned VALUE -- the later normalization is a no-op on a value, and
+    cast_for_param accepts it. Callers that already hold a value pass straight through.
+    """
+    if (isinstance(value.type, ir.PointerType)
+            and value.type.pointee == codegen.types.ll_type(semantic_type)):
+        value = codegen.builder.load(value, name="owning_src_by_value")
+    return emit_value_clone(codegen, value, semantic_type)
 
 
 def expression_is_temporary(expr) -> bool:

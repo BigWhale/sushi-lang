@@ -1,0 +1,21 @@
+# The return sink of #250. `return Result.Ok(w.items)` handed the caller the field's
+# descriptor while the callee's scope exit still freed that buffer -- a use-after-free plus
+# a double free (SIGABRT, garbage length). returns.py never cloned a MemberAccess source,
+# and _extract_return_variables only understands a bare Name so nothing was marked moved.
+# Cloning (not moving) is the fix: Sushi has no partial moves, so the struct keeps its own
+# copy and frees it, while the caller owns the returned one.
+# EXPECT_STDOUT_EXACT: "returned=3 src=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct W:
+    i32[] items
+
+fn get_it(&peek W w) i32[]:
+    return Result.Ok(w.items)
+
+fn main() i32:
+    let W w = W(from([1, 2, 3]))
+    let i32[] b = get_it(&peek w).realise(from([0]))
+    println("returned={b.len()} src={w.items.len()}")
+    return Result.Ok(0)
