@@ -1,0 +1,126 @@
+# Example 29: Move Semantics - when a value moves, and how to keep using it
+#
+# Sushi moves owning values instead of silently copying them, so an expensive
+# copy is never invisible. This example shows exactly when a move happens, what
+# the compiler says when you use a moved value, and the three ways to keep the
+# original alive.
+#
+# Key concepts covered:
+# - Which types move, and which copy
+# - The five ownership sinks that consume a value
+# - CE2405 (use-after-move) and how to read it
+# - Three escape hatches: .clone(), match, and reordering
+#
+# The rule:
+#   A value MOVES if it transitively owns heap memory - a dynamic array T[],
+#   List@(T), Own@(T), a capturing closure, or any struct/enum holding one.
+#   Everything else COPIES: primitives, string, and plain-data composites.
+
+enum Shape:
+    Poly(i32[])
+    Empty
+
+struct Canvas:
+    i32[] points
+
+fn count(&peek i32[] xs) i32:
+    return Result.Ok(xs.len())
+
+fn main() i32:
+    # ---------------------------------------------------------------
+    # 1. Copy types: use them as often as you like
+    # ---------------------------------------------------------------
+    let i32 n = 42
+    let string label = "mostly harmless"
+    let i32 doubled = n * 2
+    println("copy types stay usable: n={n} doubled={doubled} label={label}")
+
+    # ---------------------------------------------------------------
+    # 2. The five ownership sinks
+    #
+    # Passing an owning value into any of these CONSUMES it:
+    #   - a by-value function argument     take(pts)
+    #   - a let binding                    let b = pts
+    #   - a rebind                         b := pts
+    #   - a struct constructor field       Canvas(pts)
+    #   - an enum constructor payload      Shape.Poly(pts)
+    #
+    # This does NOT compile:
+    #
+    #     let i32[] pts = from([1, 2, 3])
+    #     let Shape s = Shape.Poly(pts)   # pts is moved into the enum
+    #     println("{pts.len()}")          # error: use after move
+    #
+    # error [CE2405]: cannot borrow moved variable 'pts'.
+    #   |     println("{pts.len()}")
+    #   `              -+-
+    #   = note: 'pts' was moved here
+    #
+    # The enum now owns that buffer and frees it. Reading pts afterwards would
+    # read memory the enum controls, so the compiler stops you instead.
+    # ---------------------------------------------------------------
+
+    # ---------------------------------------------------------------
+    # WORKAROUND A: .clone() - you genuinely need two independent copies
+    #
+    # The cost is explicit and visible at the call site. Every struct and enum
+    # gets a .clone() automatically, as do arrays and List@(T).
+    # ---------------------------------------------------------------
+    let i32[] pts_a = from([1, 2, 3])
+    let Shape shape_a = Shape.Poly(pts_a.clone())
+    println("A: original still usable, len={pts_a.len()}")
+    match shape_a:
+        Shape.Poly(data) -> println("A: the clone lives in the enum, len={data.len()}")
+        Shape.Empty -> println("A: empty")
+
+    # ---------------------------------------------------------------
+    # WORKAROUND B: match - you only need to READ it, through its new owner
+    #
+    # This is the cheapest option: a match binding borrows the payload, so
+    # there is no copy at all. Prefer it when you do not need a second value.
+    # ---------------------------------------------------------------
+    let i32[] pts_b = from([4, 5, 6, 7])
+    let Shape shape_b = Shape.Poly(pts_b)
+    match shape_b:
+        Shape.Poly(data) -> println("B: read through the enum, len={data.len()}")
+        Shape.Empty -> println("B: empty")
+
+    # A match binding borrows, so the same value can be read again and again.
+    match shape_b:
+        Shape.Poly(data) -> println("B: borrowed again, first={data[0]}")
+        Shape.Empty -> println("B: empty")
+
+    # ---------------------------------------------------------------
+    # WORKAROUND C: reorder - finish with the value before handing it over
+    #
+    # Often the simplest fix. Nothing is copied and nothing is borrowed.
+    # ---------------------------------------------------------------
+    let i32[] pts_c = from([8, 9])
+    println("C: used before the move, len={pts_c.len()}")
+    let Canvas canvas = Canvas(pts_c)
+    println("C: canvas owns it now, len={canvas.points.len()}")
+
+    # ---------------------------------------------------------------
+    # 3. Borrowing avoids the move entirely
+    #
+    # A &peek parameter borrows rather than consumes, so the caller keeps
+    # ownership. Reach for this before reaching for .clone().
+    # ---------------------------------------------------------------
+    let i32[] pts_d = from([1, 1, 2, 3, 5])
+    let i32 len_1 = count(&peek pts_d).realise(-1)
+    let i32 len_2 = count(&peek pts_d).realise(-1)
+    println("D: borrowed twice, no move: {len_1} and {len_2}")
+    println("D: and pts_d is still ours, first={pts_d[0]}")
+
+    # ---------------------------------------------------------------
+    # 4. Reading a FIELD copies, it does not move
+    #
+    # A struct field read is not a move: Sushi has no partial moves, so the
+    # struct keeps its own value and you get an independent copy. This is a
+    # real copy, so prefer &peek when the array is large.
+    # ---------------------------------------------------------------
+    let Canvas c2 = Canvas(from([2, 4, 6]))
+    let i32[] copied = c2.points
+    println("E: field read copies: copy={copied.len()} original={c2.points.len()}")
+
+    return Result.Ok(0)

@@ -145,6 +145,16 @@ def emit_enum_constructor_from_method_call(
                 # Regular argument - emit normally
                 arg_value = codegen.expressions.emit_expr(arg_expr)
 
+                # Some expressions hand back a POINTER to the value rather than the value
+                # itself -- notably an array `.clone()`, which is the documented escape
+                # hatch for keeping an owning value past a move. The payload is stored into
+                # the variant's byte blob verbatim, so an unnormalized pointer was written
+                # as if it were the {len, cap, data} struct and read back a garbage length.
+                # Struct constructors already do this (structs.py:93); enums did not.
+                if (isinstance(arg_value.type, ir.PointerType)
+                        and arg_value.type.pointee == codegen.types.ll_type(arg_type)):
+                    arg_value = codegen.builder.load(arg_value, name="enum_payload_by_value")
+
                 # A `MemberAccess` payload (`Result.Ok(w.items)`, `Maybe.Some(w.items)`,
                 # `Box.Full(w.items)`) reads from a CONTINUING owner: the struct still frees
                 # that buffer, and Sushi has no partial moves, so the enum must own an
