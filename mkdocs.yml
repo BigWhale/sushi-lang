@@ -124,6 +124,7 @@ nav:
       - "Variadics (design)": design/variadics.md
       - "Closures & First-Class Functions (design)": design/closures.md
       - "Libraries & Export Closure (design)": design/libraries.md
+      - "Move Semantics (design)": design/move-semantics.md
       - "Omakase Install (design)": design/omakase-install.md
       - "String Representation (design)": design/string-representation.md
   - Examples: examples/README.md

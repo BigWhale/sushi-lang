@@ -2,6 +2,88 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [Unreleased]
+
+Two breaking language changes (generic syntax, ownership), the Tier 0-6 remediation programme, and
+the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-07-07.
+
+### Breaking
+- **Generic syntax is now `@(...)`, not `<...>`** (#235). This applies to every user-facing position:
+  type references (`List@(i32)`, `Result@(T, E)`, `Maybe@(T)`, `Own@(T)`, `HashMap@(K, V)`), generic
+  struct/enum declarations (`struct Pair@(T, U):`), generic function declarations
+  (`fn id@(T)(T x) T:`), perk bounds (`@(T: Hashable + Displayable)`) and type packs
+  (`@(...Ts: Display)`). Angle brackets no longer parse as a generic anywhere, so every existing
+  source file must be updated. `use <io/stdio>` import paths are unchanged. Internally, interned type
+  names and mangled symbols keep the `<...>` form; `display_type()` renders them back to `@(...)` for
+  diagnostics, so user-visible output is consistent. The `>>`-splitting postlexer
+  (`internals/generic_lexer.py`) is deleted -- ambiguity between `>>` and a nested generic close is
+  gone by construction
+- **Move semantics are now compositional** (#134). A value moves iff it *transitively* contains an
+  owning resource -- a dynamic array, `List@(T)`, `Own@(T)`, a capturing closure, **or any
+  struct/enum/fixed array holding one of those**. Previously only the three bare owning types moved
+  and a struct wrapping one silently deep-copied, so refactoring `f(list)` into `f(Wrapper)` turned a
+  move into a hidden O(n) copy. Passing such a value by value, rebinding it, placing it in a
+  constructor field or array literal now moves it; reusing the source is `CE2405`. Plain-data and
+  string-only composites still copy. The normative spec is `docs/design/move-semantics.md`
+
+### Added
+- **Explicit call-site type arguments** (#235, closing #137 part 2): `identity@(i32)(5)`. All-or-
+  nothing (`CE2062` on a partial list; a trailing pack relaxes the count), and only on a direct call
+  to a named free function (`CE6102` on a method or indirect call). This makes a type parameter that
+  appears only in return position expressible: `fn empty_list@(T)() List@(T):`
+- **Auto-derived `.clone()` on every struct and enum** (#134) -- the explicit deep copy that
+  complements move-by-value, registered in Pass 1.8 alongside the hash derivation
+- **A syntax-error diagnostic family, `CE6001`-`CE6010`, `CE6101`, `CE6102`.** A syntax error used to
+  bypass the reporter entirely: Lark's raw dump went to stderr with no code, no span and no caret,
+  and it did not even set `has_errors`. Syntax errors now carry a code, a location, caret art, the
+  expected-token list (capped at 8) and, where one applies, a `help`
+- `CE4010`: generic perks (`perk Foo@(T):`) are rejected at declaration. They used to be silently
+  accepted and inert. `CE4008`/`CE4009` were deleted as unreachable once this landed
+- `CE0119` is now actually raised for a malformed `expand` -- a non-`Name` iterable, a name that is
+  not the function's pack parameter (both previously unrolled silently to zero statements), or an
+  `expand` in a function with no pack at all (previously a backend ICE)
+- `CE2410`: moving `main`'s `string[] args` by value is now a compile error. It is a borrowed view of
+  the process argv, so a by-value move made the callee free argv and double-free
+- `CE0125`, `CE0121`, `CE0123`, `CE0127`, `CE2016`, `CE2062`, `CE6102` registered; `RE2023` replaces
+  an unregistered `RE9999`
+- Nested generic element types now render correctly in `List.debug()` / `HashMap.debug()` headers
+  (#236) -- `List@(List@(i32)) {` rather than `List@(List<i32>) {`
+
+### Changed
+- **No Python traceback can reach a user.** Every failure -- grammar, AST builder, semantics, backend,
+  stdlib -- renders as a structured diagnostic. `--traceback` opts one back in and appends it after
+  the diagnostic. A compiler crash is a reported `CE0000` ICE and **exits 2**, not 1 (1 is the
+  warnings code, which the test harness scored as success)
+- The borrow checker now has an arm for every expression node (`CE0125` backstop). The previous
+  silent fall-through meant *no borrow checking at all* for unhandled nodes -- the root cause of a
+  bloom use-after-free that segfaulted, an unchecked range bound, and unchecked perk bodies
+- `.destroy()` through a `&poke` parameter now reaches the caller, via a cross-unit destroy-effect
+  summary. This also fixed a pre-existing false positive where a `.destroy()` in one `if` arm leaked
+  into its sibling arms
+- The incremental cache key folds in a compiler-source digest, so editing any compiler `.py` is a
+  cache miss by construction; `--clean-cache` is never needed for correctness. The cache is also safe
+  for concurrent compilers
+- `./nori` no longer swallows exit codes (#234) -- `./nori install nosuchpkg` exits 1
+
+### Fixed
+- A cluster of RAII/leak defects: `Result@(T, E)` payloads are destroyed at scope exit (a
+  `Result@(string, E)` used to leak unless the caller unwrapped it), `Own@(T)`/`List@(T)` nested
+  inside a composite are destroyed, fixed-size arrays and their elements are destroyed, `getcwd`'s
+  buffer is freed, an owning element is deep-copied out of `List.get()`, a `Result`/`Maybe` method
+  receiver is emitted exactly once, and unowned `Result`/`Maybe` temporaries are destroyed
+- `HashMap` and `List`/`Own` struct-field clone and destroy (#181)
+- `Result@(T, E)` is now an ordinary interned `EnumType` like `Maybe@(T)`; the separate `ResultType`
+  dataclass is deleted. The dual representation was the root of a Result-payload leak and of two
+  identically-printing Results comparing unequal
+- The `HashMap` probe loops are bounded, fixing a segfault on a destroyed map
+- Indexing a fixed-size array through a struct field; inferring a struct type through an array index;
+  loading a dynamic-array default in `realise()`; inferring `Own@(T)` method return types so an
+  inline `match Own.get()` resolves; propagating the element type to an inline `Own.alloc` constructor
+  argument
+- Extension and perk-impl return expressions are now type-checked
+- Quality gates: `ruff` clean at F,E,W,B and `mypy` clean over `internals`/`compiler`/`packager`/
+  `sushi_stdlib`, both blocking in CI, alongside the cross-platform malloc-interposer leak gate
+
 ## [0.10.0] - 2026-07-07
 
 The closures release. Tier 1 closures are complete, and three follow-ups land together: an

@@ -48,8 +48,7 @@ jobs:
           uv run ruff check sushi_lang
 
       # Blocking over the mypy-clean packages (the Tier 5.2 ratchet); grow this
-      # list as later waves land. fingerprint.py is excluded via pyproject until
-      # its Tier 5.3 fix.
+      # list as later waves land. Keep in sync with MYPY_PKGS in .githooks/pre-push.
       - name: Run mypy (ratcheted packages, blocking)
         if: github.event_name != 'pull_request' || steps.changes.outputs.code == 'true'
         run: |
