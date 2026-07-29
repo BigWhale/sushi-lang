@@ -5,6 +5,8 @@ FUTURE.md
 /backend/c_utils/*.o
 
 /a
+/old
+/old/*
 
 a.out
 /a.sushi
