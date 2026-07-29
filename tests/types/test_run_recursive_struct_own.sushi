@@ -1,0 +1,20 @@
+# A struct that refers to itself through a BARE `Own@(T)` -- no wrapper chain
+# (#240). This shape ICEd identically to the `Maybe@(Own@(Node))` one, which is
+# why "the trigger is the generic wrapper chain" was the wrong diagnosis: the
+# trigger is any self-referential struct, because type resolution walked struct
+# fields and the walk cycled.
+#
+# `Own@(T)` is an indirection, so the type is FINITE and must compile -- exactly
+# like Rust's `struct Node { next: Box<Node> }`. It is declaration-only on
+# purpose: with no `Maybe` there is no terminator, so a value cannot bottom out.
+# Rust accepts the same uninhabitable-but-well-formed type.
+# EXPECT_STDOUT_EXACT: "declared\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+struct Node:
+    i32 value
+    Own@(Node) next
+
+fn main() i32:
+    println("declared")
+    return Result.Ok(0)

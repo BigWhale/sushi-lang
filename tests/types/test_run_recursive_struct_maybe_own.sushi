@@ -1,0 +1,38 @@
+# A struct whose self-reference goes through a chain of generic wrappers
+# (#240). `Maybe@(Own@(Node))` is the idiomatic nullable-next pointer, and it
+# is what docs/examples/20-ownership.sushi teaches.
+#
+# This used to be a `CE0000` RecursionError on DECLARATION ALONE -- no
+# instantiation required -- because type resolution deep-walked the struct's
+# fields and the walk cycled back through the field to the struct.
+#
+# Builds and traverses a real 3-node list, so the test fails if the type
+# resolves but the list cannot actually be used.
+# EXPECT_STDOUT_EXACT: "Sum: 6\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Node:
+    i32 value
+    Maybe@(Own@(Node)) next
+
+fn sum(Node n) i32:
+    match n.next:
+        Maybe.Some(Own(nxt)) ->
+            let i32 rest = sum(nxt)??
+            return Result.Ok(n.value + rest)
+        Maybe.None() ->
+            return Result.Ok(n.value)
+
+fn run_test() i32:
+    let Node n3 = Node(3, Maybe.None())
+    let Node n2 = Node(2, Maybe.Some(Own.alloc(n3)))
+    let Node n1 = Node(1, Maybe.Some(Own.alloc(n2)))
+
+    let i32 total = sum(n1)??
+    println("Sum: {total}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

@@ -1,0 +1,23 @@
+# A struct whose self-reference goes through `List@(T)` (#240). The List owns a
+# heap buffer, so the indirection is real and the type is finite -- but declaring
+# it was a `CE0000` RecursionError, same as the `Own@(T)` shapes, because the
+# cycle was in the struct-field walk and not in any particular wrapper. This is a
+# third distinct resolution path (a generic STRUCT type argument, where
+# `Maybe@(Own@(T))` goes through a generic enum), so it is worth pinning
+# separately.
+#
+# Declaration-only on purpose. CONSTRUCTING a self-referential List is a separate,
+# still-open backend limitation -- `Tree(1, List.new())` fails with an LLVM
+# "use of undefined value '%list_cleanup_element_ptr'" because the element type is
+# still the incomplete `{}*` when list cleanup is emitted. That is downstream of
+# this fix, not part of it; do not widen this test to cover it until that is fixed.
+# EXPECT_STDOUT_EXACT: "declared\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+struct Tree:
+    i32 value
+    List@(Tree) kids
+
+fn main() i32:
+    println("declared")
+    return Result.Ok(0)

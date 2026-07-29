@@ -99,7 +99,20 @@ class StructType:
         return hash(("struct", self.name))
 
     def __eq__(self, other) -> bool:
-        return isinstance(other, StructType) and self.name == other.name and self.fields == other.fields
+        # NOMINAL identity: a named type IS its name. The name already encodes
+        # (declaration, type arguments) -- every monomorphized generic gets a unique
+        # mangled name -- and the struct table is the sole authority for the fields.
+        # This mirrors Go (`identical` compares *Named by `x.Origin().obj ==
+        # y.Origin().obj`) and Rust (`AdtDef` holds field DefIds, not field types).
+        #
+        # This used to also compare `fields`, which made identity structural through
+        # the back door while `__hash__` stayed nominal. Two instances of one type
+        # resolved to different field depths then hash-matched and compared UNEQUAL:
+        # a silent dict miss, not a crash. That produced `CE2002: cannot assign
+        # Own@(T) to Own@(T)` (#240) and is the documented root of the CE0126 class.
+        # Comparing structurally also cannot terminate for a self-referential type,
+        # which is why resolution deep-walked struct fields and hung (#240's ICE).
+        return isinstance(other, StructType) and self.name == other.name
 
     def get_field_type(self, field_name: str) -> Optional["Type"]:
         """Get the type of a field by name, or None if field doesn't exist."""
@@ -369,7 +382,14 @@ class EnumType:
         return hash(("enum", self.name))
 
     def __eq__(self, other) -> bool:
-        return isinstance(other, EnumType) and self.name == other.name and self.variants == other.variants
+        # NOMINAL identity -- see StructType.__eq__ for the full rationale.
+        #
+        # This is the exact pairing CE0126 describes: hashing on the name while
+        # comparing on the variants meant a Result interned before its payloads were
+        # resolved hash-matched a later, fully-resolved one and compared unequal --
+        # a silent cache miss and a duplicate monomorphization rather than a crash.
+        # Comparing on the name alone makes that unrepresentable.
+        return isinstance(other, EnumType) and self.name == other.name
 
     def get_variant(self, variant_name: str) -> Optional[EnumVariantInfo]:
         """Get variant info by name, or None if variant doesn't exist."""
