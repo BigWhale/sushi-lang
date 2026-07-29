@@ -364,11 +364,12 @@ _add(ErrorMessage("CE0126", Severity.ERROR,
     Category.INTERNAL,
     "Two spellings of one generic enum (Result<T, E>, Maybe<T>) mangled to the same name but "
     "carry different payload types -- one was interned before its UnknownType payloads were "
-    "resolved. str(UnknownType('Point')) and str(StructType('Point')) are both 'Point', and "
-    "EnumType hashes on the name alone but compares on the variants, so a poisoned entry "
-    "hash-matches and compares unequal: a silent cache miss and a duplicate monomorphization, "
-    "not a crash. Intern only through ensure_result_type_in_table / ensure_maybe_type_in_table, "
-    "which resolve their payloads before mangling the name."))
+    "resolved. str(UnknownType('Point')) and str(StructType('Point')) are both 'Point', so both "
+    "spellings claim the same table slot while describing different types. EnumType identity is "
+    "nominal (#240), so the two now compare EQUAL and the mismatch can no longer cause a silent "
+    "cache miss -- but the entry still describes the wrong payload, which this guard catches. "
+    "Intern only through ensure_result_type_in_table / ensure_maybe_type_in_table, which resolve "
+    "their payloads before mangling the name."))
 
 # Maybe<T> Operations (CE0092-CE0095)
 _add(ErrorMessage("CE0092", Severity.ERROR,
