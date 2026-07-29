@@ -351,6 +351,14 @@ _add(ErrorMessage("CE0091", Severity.ERROR,
     "Result type not found: {type}",
     Category.INTERNAL, "Result enum type not found in symbol table."))
 
+_add(ErrorMessage("CE0128", Severity.ERROR,
+    "circular struct dependency reached hash registration: {names}",
+    Category.INTERNAL,
+    "Pass 1.8 topologically sorts the struct graph so a nested struct's hash is registered "
+    "before its parent's. A cycle there means a by-value containment cycle survived Pass 1.75, "
+    "which reports it as CE2095 and stops the analysis -- so reaching this is a gap in that "
+    "check, not a user error. It used to be a bare ValueError rendered as CE0000."))
+
 _add(ErrorMessage("CE0126", Severity.ERROR,
     "poisoned intern of '{name}': already interned as {existing}, rebuilt as {rebuilt}",
     Category.INTERNAL,

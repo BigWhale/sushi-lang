@@ -52,11 +52,22 @@ class SymbolTableMerger:
 
         Covers constants, structs, enums, perks, and their generic counterparts:
         first-writer-wins on a name, preserving insertion order.
+
+        Declaration spans travel with the name. A StructType/EnumType is frozen and
+        carries no source position, so the TABLE is where a declaration's location
+        lives -- dropping it here silently demoted every diagnostic reported against
+        the global table to tier 1 (text only). Not every name-keyed table has spans,
+        hence the getattr.
         """
+        unit_spans = getattr(unit_table, "spans", None)
+        global_spans = getattr(global_table, "spans", None)
+
         for name, value in unit_table.by_name.items():
             if name not in global_table.by_name:
                 global_table.by_name[name] = value
                 global_table.order.append(name)
+                if unit_spans is not None and global_spans is not None and name in unit_spans:
+                    global_spans[name] = unit_spans[name]
 
     @staticmethod
     def _merge_by_type(unit_table, global_table) -> None:

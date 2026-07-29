@@ -1,0 +1,18 @@
+# An enum payload is stored inline, so a struct -> enum -> struct cycle is by
+# value throughout: sizeof(A) = 4 + sizeof(E) and sizeof(E) = tag + sizeof(A).
+#
+# The old cycle check only followed struct-typed fields, so it never crossed the
+# enum and this compiled SILENTLY. Contrast `enum Tree: Branch(Own@(Tree))`,
+# which is finite and must keep compiling.
+# EXPECT_ERROR_CODE: CE2095
+
+enum E:
+    V(A)
+
+struct A:
+    i32 value
+    E e
+
+fn main() i32:
+    println("unreachable")
+    return Result.Ok(0)

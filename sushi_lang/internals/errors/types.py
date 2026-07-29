@@ -299,3 +299,7 @@ _add(ErrorMessage("CE2093", Severity.ERROR,
 _add(ErrorMessage("CE2094", Severity.ERROR,
     "illegal closure capture: {reason}",
     Category.TYPE, "Tier 1 closures capture by value (copy) or by move (owned types). Capturing a borrow (&peek/&poke) through a closure is deferred to Tier 2. An owning or variadic function-value parameter type is also rejected in Tier 1 (the indirect-call path has no deep-copy/variadic-collapse yet)."))
+
+_add(ErrorMessage("CE2095", Severity.ERROR,
+    "recursive type '{name}' has infinite size: {chain}",
+    Category.TYPE, "A type that contains itself by value has no finite size. Every hop in the reported chain stores its target inline -- a struct field, a fixed-size array element, or an enum payload. Break the cycle with indirection: Own@(T) for a single value, or a dynamic array / List@(T) for many. Compare Rust's E0072 and Go's \"invalid recursive type\"."))

@@ -1,0 +1,16 @@
+# A struct that contains itself BY VALUE has no finite size. There is no
+# indirection to break the cycle, so sizeof(S) = 4 + sizeof(S).
+#
+# This used to escape as a bare `ValueError: Circular struct dependency
+# detected` from the hash-registration topological sort, rendered as an internal
+# CE0000 -- the wrong severity entirely, since an infinitely-sized type is
+# something the user wrote. Rust reports E0072 here, Go "invalid recursive type".
+# EXPECT_ERROR_CODE: CE2095
+
+struct S:
+    i32 value
+    S inner
+
+fn main() i32:
+    println("unreachable")
+    return Result.Ok(0)
