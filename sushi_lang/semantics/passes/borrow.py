@@ -265,13 +265,19 @@ class BorrowChecker:
     """
 
     def __init__(self, reporter: Reporter,
-                 destroy_effects: Optional[Dict[str, FrozenSet[int]]] = None):
+                 destroy_effects: Optional[Dict[str, FrozenSet[int]]] = None,
+                 enum_names: Optional[Set[str]] = None):
         self.reporter = reporter
         self.err = PassErrorReporter(reporter)
         # fn name -> the &poke param indices it destroys (#168). Computed once over EVERY
         # unit by compute_destroy_effects(), so a cross-unit callee is not a blind spot.
         # Empty means "no call destroys anything", i.e. the old intra-procedural behaviour.
         self.destroy_effects: Dict[str, FrozenSet[int]] = destroy_effects or {}
+        # Bare enum type names ("Box", "Result", "Maybe"), used to tell an enum constructor
+        # `Box.Full(a)` from an ordinary method call `xs.push(a)` -- both are DotCall nodes
+        # at this pass, and only the former is an ownership sink. Empty means "recognise
+        # none", which is exactly the pre-#134 behaviour of not marking enum payloads.
+        self.enum_names: Set[str] = enum_names or set()
         # Track borrow state per variable in current scope
         self.borrow_state: Dict[str, BorrowState] = {}
         # Track variables currently borrowed (for clearing after expressions)
@@ -575,6 +581,15 @@ class BorrowChecker:
             self._check_expr(expr.receiver)
             for arg in expr.args:
                 self._check_expr(arg)
+            # An enum constructor is an ownership sink (#134), exactly like a `from([...])`
+            # element or an array-literal element: the enum stores the payload shallowly and
+            # frees it, so a bare owning Name argument MOVES. `Box.Full(a)` reaches this pass
+            # as a DotCall, not an EnumConstructor, which is why the sink was missed -- the
+            # backend moved the payload while the checker stayed silent, so a later use of
+            # `a` read through a stale descriptor and printed plausible WRONG data.
+            if self._is_enum_constructor(expr):
+                for arg in expr.args:
+                    self._mark_moved_if_applicable(arg)
             self._maybe_mark_own_alloc_move(expr)
 
         elif isinstance(expr, BinaryOp):
@@ -594,6 +609,9 @@ class BorrowChecker:
         elif isinstance(expr, EnumConstructor):
             for arg in expr.args:
                 self._check_expr(arg)
+                # Same ownership sink as the DotCall spelling above, for whichever paths
+                # hand the checker an already-resolved EnumConstructor node.
+                self._mark_moved_if_applicable(arg)
 
         elif isinstance(expr, DynamicArrayFrom):
             for elem in expr.elements.elements:
@@ -785,6 +803,20 @@ class BorrowChecker:
         while isinstance(current, MemberAccess):
             current = current.receiver
         return current
+
+    def _is_enum_constructor(self, expr: Expr) -> bool:
+        """Is this `X.Y(args)` an enum constructor rather than a method call?
+
+        Both spellings arrive as a DotCall, so the receiver must be matched against the
+        known enum type names. Generic enums are interned under their concrete names
+        ("Result<i32, StdError>") while the receiver is written bare ("Result"), so
+        `enum_names` carries base names only. A local shadowing the type name would be a
+        Name in borrow_state; the receiver of a constructor never is.
+        """
+        receiver = getattr(expr, 'receiver', None)
+        if not isinstance(receiver, Name):
+            return False
+        return receiver.id in self.enum_names and receiver.id not in self.borrow_state
 
     def _maybe_mark_own_alloc_move(self, expr: Expr) -> None:
         """Own.alloc(x) takes ownership of an owning x; mark x moved so a later use of x

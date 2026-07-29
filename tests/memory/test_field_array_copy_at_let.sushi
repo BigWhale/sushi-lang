@@ -1,0 +1,18 @@
+# A field whose type IS an owning resource (i32[], not a struct wrapping one) read into a
+# `let` must deep-copy, exactly like the struct-typed case in
+# test_memberaccess_copy_keeps_owner.sushi. Today it aliases the field, so `b` and `w.items`
+# both free the same buffer at scope exit -- a double free (SIGTRAP, rc=133).
+# See BUGS.md entry 1: the copy helpers gate on isinstance(StructType/EnumType), so a
+# DynamicArrayType source never reaches emit_value_clone.
+# EXPECT_STDOUT_EXACT: "copy=3 src=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct W:
+    i32[] items
+
+fn main() i32:
+    let W w = W(from([1, 2, 3]))
+    let i32[] b = w.items
+    println("copy={b.len()} src={w.items.len()}")
+    return Result.Ok(0)

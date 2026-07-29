@@ -1,0 +1,23 @@
+# An array `.clone()` returns a POINTER to the array struct, but the enum-constructor
+# payload path stored whatever emit_expr handed back without normalizing it -- so the
+# variant's data blob got the pointer bit-pattern instead of the {len, cap, data} value and
+# read back a garbage length. struct constructors already normalize this (structs.py:93);
+# enum constructors did not.
+#
+# This matters because `.clone()` is THE documented escape hatch for keeping an owning
+# value after a move, so it was broken exactly where a user reaches for it.
+# EXPECT_STDOUT_EXACT: "orig=3 cloned=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+enum Shape:
+    Poly(i32[])
+    Empty
+
+fn main() i32:
+    let i32[] pts = from([1, 2, 3])
+    let Shape s = Shape.Poly(pts.clone())
+    match s:
+        Shape.Poly(d) -> println("orig={pts.len()} cloned={d.len()}")
+        Shape.Empty -> println("empty")
+    return Result.Ok(0)

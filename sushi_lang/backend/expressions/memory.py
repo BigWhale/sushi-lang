@@ -332,7 +332,7 @@ def deep_copy_if_owning_struct(codegen: 'LLVMCodegen', value: ir.Value, semantic
     Returns:
         A deep copy with independent buffers, or `value` unchanged.
     """
-    from sushi_lang.semantics.typesys import UnknownType, EnumType
+    from sushi_lang.semantics.typesys import UnknownType, EnumType, type_moves_by_value
     from sushi_lang.backend.destructors import needs_cleanup
 
     resolved = semantic_type
@@ -350,7 +350,35 @@ def deep_copy_if_owning_struct(codegen: 'LLVMCodegen', value: ir.Value, semantic
     # deep-copy, which mirrors the enum destructor's payload free.
     if isinstance(resolved, EnumType) and needs_cleanup(resolved):
         return emit_value_clone(codegen, value, resolved)
+    # A value whose type IS the owning resource -- a bare `T[]`, `List<T>` or `Own<T>` --
+    # rather than a composite CONTAINING one (#250). Neither gate above sees it: a
+    # DynamicArrayType is not a StructType, and `List<T>`/`Own<T>` are StructTypes whose
+    # buffers are raw pointers, so struct_needs_cleanup (which scans for dynamic-array
+    # FIELDS) reports False. Without this the value is aliased and both the new owner and
+    # the continuing one free it -- a double free, not a leak, so the leak gate stayed green.
+    if type_moves_by_value(resolved):
+        return clone_owning_source(codegen, value, resolved)
     return value
+
+
+def clone_owning_source(codegen: 'LLVMCodegen', value: ir.Value, semantic_type: Type) -> ir.Value:
+    """Deep-copy a value read from a CONTINUING owner, accepting a value OR a pointer.
+
+    The detach half of the #250 sinks: a `MemberAccess` source (`w.items`) hands a sink a
+    view of a buffer its owner still frees, so the sink needs an independent copy. Sushi
+    has no partial moves, so this is always a clone, never a move.
+
+    `emit_value_clone` is strictly value-in/value-out, but an owning value does not reach
+    every sink in the same shape: a `T[]` call argument is still the array-struct POINTER
+    (the call sink copies at dispatcher:107, BEFORE it normalizes pointer args to values at
+    :122), and an enum-constructor payload arrives the same way. Load those first and hand
+    back the cloned VALUE -- the later normalization is a no-op on a value, and
+    cast_for_param accepts it. Callers that already hold a value pass straight through.
+    """
+    if (isinstance(value.type, ir.PointerType)
+            and value.type.pointee == codegen.types.ll_type(semantic_type)):
+        value = codegen.builder.load(value, name="owning_src_by_value")
+    return emit_value_clone(codegen, value, semantic_type)
 
 
 def expression_is_temporary(expr) -> bool:

@@ -100,6 +100,14 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
                     if arg_value.type.pointee == expected_struct_type:
                         arg_value = codegen.builder.load(arg_value)
 
+                # A `MemberAccess` source (`V(w.items)`) is NOT a move: it reads from a
+                # CONTINUING owner that still frees that buffer, and Sushi has no partial
+                # moves, so the new struct must own an independent copy or both free it
+                # (#250). Only a bare Name below is consumed.
+                if isinstance(arg, MemberAccess):
+                    from sushi_lang.backend.expressions.memory import emit_value_clone
+                    arg_value = emit_value_clone(codegen, arg_value, field_type)
+
                 field_values.append(arg_value)
 
                 # Mark the source variable as moved to prevent double-free

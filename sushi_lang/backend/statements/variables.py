@@ -145,7 +145,9 @@ def _clone_owning_struct_alias(codegen: 'LLVMCodegen', stmt: 'Let', rhs: 'ir.Val
     (#147). A constructor, call return, or array `.get()`/index get-out (already deep-copied
     at the access site) is a fresh sole owner and is returned unchanged.
     """
-    from sushi_lang.semantics.typesys import StructType, EnumType, UnknownType, type_moves_by_value
+    from sushi_lang.semantics.typesys import (
+        StructType, EnumType, UnknownType, type_moves_by_value, is_owning_type
+    )
     from sushi_lang.semantics.ast import Name, MemberAccess
 
     resolved = semantic_type
@@ -153,9 +155,19 @@ def _clone_owning_struct_alias(codegen: 'LLVMCodegen', stmt: 'Let', rhs: 'ir.Val
         resolved = (codegen.struct_table.by_name.get(resolved.name)
                     or codegen.enum_table.by_name.get(resolved.name)
                     or resolved)
+    # A type that IS the owning resource -- a bare `T[]`, `List<T>` or `Own<T>` -- rather
+    # than a composite CONTAINING one (#250). A `T[]` is not a StructType at all, and
+    # `List<T>`/`Own<T>` are StructTypes that the struct_needs_cleanup gate below reports
+    # False for (it scans for dynamic-array FIELDS; theirs are raw pointers). So neither
+    # reaches the MemberAccess clone below. A MemberAccess source reads from a CONTINUING
+    # owner and must detach with its own copy, else the binding and the owning struct both
+    # free the same buffer at scope exit. A bare Name of these types already moves via the
+    # array/List move path, so it is deliberately not handled here.
+    from sushi_lang.backend.expressions.memory import emit_value_clone
+    if is_owning_type(resolved) and isinstance(stmt.value, MemberAccess):
+        return emit_value_clone(codegen, rhs, resolved)
     if not isinstance(resolved, (StructType, EnumType)):
         return rhs
-    from sushi_lang.backend.expressions.memory import emit_value_clone
     # #134: a bare-Name RHS of a MOVE type transfers ownership -- but only an OWNED local
     # moves (mark moved, store un-cloned). A borrow binding (a match/pattern binding whose
     # real owner still frees it, #238) is CLONED so the new binding owns an independent value.
@@ -361,12 +373,23 @@ def _emit_dynamic_array_rebind(
         dst: The destination type.
     """
     from llvmlite import ir
-    from sushi_lang.semantics.ast import Name
+    from sushi_lang.semantics.ast import Name, MemberAccess
 
     # Extract variable name from target (must be Name for this function)
     if not isinstance(stmt.target, Name):
         raise_internal_error("CE0022", type=f"Expected Name target, got {type(stmt.target)}")
     var_name = stmt.target.id
+
+    # A `MemberAccess` source (`b := w.items`) reads from a CONTINUING owner -- the struct
+    # still frees that buffer -- so the target must take an independent copy or both free
+    # it (#250). Only the bare-Name source below is consumed. Cloned BEFORE the old-array
+    # destructor runs: cloning reads the source buffer, so a source aliasing the buffer
+    # about to be freed would otherwise be a use-after-free.
+    if isinstance(stmt.value, MemberAccess):
+        from sushi_lang.backend.expressions.memory import emit_value_clone
+        semantic_type = codegen.memory.find_semantic_type(var_name)
+        if semantic_type is not None:
+            val = emit_value_clone(codegen, val, semantic_type)
 
     # Dynamic array rebind - need to clean up old array first to prevent memory leaks
     # Clean up the old array's memory before rebinding
