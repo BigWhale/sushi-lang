@@ -1,0 +1,37 @@
+# A generic-enum constructor nested inside a built-in method's argument.
+#
+# `realise(default)` takes the payload type T, but Pass 2 never pushed T into
+# that argument, so the `Maybe.None()` buried inside it was never annotated with
+# its concrete enum type and the backend reported its own missing annotation:
+#
+#   error [CE0113]: Generic enum constructor Maybe.None() requires type
+#   annotation. Found monomorphized instance Maybe<Own<Leafy>>. [...]
+#
+# The same constructor in a `let` with an annotation, or as a plain function
+# argument, was already propagated -- it was specifically the built-in
+# Maybe/Result method arguments that had no propagation at all.
+# EXPECT_STDOUT_EXACT: "value=true\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+struct Leafy:
+    i32 x
+
+struct Holder:
+    i32 value
+    Maybe@(Own@(Leafy)) next
+
+fn run_test() i32:
+    let Leafy l = Leafy(9)
+    let Holder h = Holder(1, Maybe.Some(Own.alloc(l)))
+    let Maybe@(Own@(Holder)) m = Maybe.Some(Own.alloc(h))
+
+    # Maybe.None() is two constructors deep inside realise()'s argument
+    let Own@(Holder) o = m.realise(Own.alloc(Holder(0, Maybe.None())))
+
+    let Maybe@(Own@(Holder)) again = Maybe.Some(o)
+    println("value={again.is_some()}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

@@ -1,0 +1,16 @@
+# A FIXED array of self is by value -- `S[3]` stores three inline `S`, so
+# sizeof(S) = 4 + 3 * sizeof(S). It is every bit as infinite as a bare `S`
+# field, but the old cycle check only looked for a directly struct-typed field
+# and this compiled SILENTLY.
+#
+# A dynamic `S[]` is the opposite case and must keep compiling: it is a heap
+# buffer, i.e. real indirection.
+# EXPECT_ERROR_CODE: CE2095
+
+struct S:
+    i32 value
+    S[3] kids
+
+fn main() i32:
+    println("unreachable")
+    return Result.Ok(0)

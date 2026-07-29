@@ -22,6 +22,7 @@ from collections import defaultdict, deque
 from typing import List, Set, Dict
 from sushi_lang.internals.report import Reporter
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.errors import raise_internal_error
 
 
 def register_all_struct_hashes(struct_table: StructTable) -> None:
@@ -110,12 +111,14 @@ def topological_sort_structs(struct_table: StructTable) -> List[str]:
             if in_degree[dependent] == 0:
                 queue.append(dependent)
 
-    # Check for cycles (shouldn't happen with Sushi's type system)
+    # Unreachable by construction: Pass 1.75 (semantics/passes/infinite_types.py)
+    # reports any by-value containment cycle as CE2095 and stops the analysis before
+    # this pass runs. A cycle here is a gap in that check, so it fails loud as a
+    # registered internal diagnostic rather than the bare ValueError it used to be
+    # (which surfaced as a CE0000 "this is a compiler bug" with no explanation).
     if len(result) != len(struct_table.by_name):
-        # Some structs not processed - indicates circular dependency
-        # This shouldn't happen since Sushi doesn't support recursive structs
         unprocessed = set(struct_table.by_name.keys()) - set(result)
-        raise ValueError(f"Circular struct dependency detected: {unprocessed}")
+        raise_internal_error("CE0128", names=", ".join(sorted(unprocessed)))
 
     return result
 

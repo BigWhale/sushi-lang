@@ -264,6 +264,15 @@ class SemanticAnalyzer:
         resolve_struct_field_types(self.structs, self.enums)
         resolve_enum_variant_types(self.structs, self.enums)
 
+        # Pass 1.75: reject types that contain themselves by value (CE2095).
+        # Field types are concrete from here, and this must precede Pass 1.8:
+        # hash registration topologically sorts the struct graph, so a cycle would
+        # surface there as an internal error rather than as a user diagnostic.
+        # Stop afterwards -- every later pass assumes finitely-sized types.
+        from sushi_lang.semantics.passes.infinite_types import check_infinite_size_types
+        if check_infinite_size_types(self.structs, self.enums, self.reporter):
+            return
+
         # Pass 1.8: Register hash methods for all hashable structs, enums, and arrays
         # This runs AFTER type resolution so nested struct/enum types are fully resolved
         # Works for both generic and non-generic types (after monomorphization)

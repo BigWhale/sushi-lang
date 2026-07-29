@@ -159,6 +159,18 @@ def _propagate_to_struct_args(validator: 'TypeValidator', node: Expr,
     if not node.args:
         return
 
+    # Named construction (`Holder(next: Maybe.None(), value: 0)`) is order
+    # independent, so match on the name rather than the position.
+    field_names = getattr(node, "field_names", None)
+    if field_names:
+        by_name = dict(struct_type.fields)
+        # strict=False: a name/argument count mismatch is a user arity error that
+        # constructor validation reports properly. Propagation must not raise on it.
+        for name, arg in zip(field_names, node.args, strict=False):
+            if name in by_name:
+                propagate_types_to_value(validator, arg, by_name[name])
+        return
+
     # Match constructor arguments to struct fields
     # Both Call and DotCall nodes have args attribute
     # struct_type.fields is a tuple of (field_name, field_type) tuples
@@ -243,15 +255,25 @@ def _propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
     elif isinstance(node, Call) and hasattr(node.callee, 'id'):
         struct_name = node.callee.id
 
+        if not isinstance(struct_type, StructType):
+            return
+
         # Check if this is a generic struct constructor
-        if (struct_name in validator.generic_struct_table.by_name and
-            isinstance(struct_type, StructType)):
+        if struct_name in validator.generic_struct_table.by_name:
             # Update the Call node's callee id to use the concrete type name
             # This allows validate_struct_constructor to find the right struct
             # e.g., Box -> Box<i32>
             node.callee.id = struct_type.name
 
             # Recursively propagate to constructor arguments
+            _propagate_to_struct_args(validator, node, struct_type)
+
+        # A CONCRETE struct constructor still has to hand its field types down.
+        # This branch used to cover generic structs only, so a constructor nested
+        # inside a propagating context -- `Own.alloc(Holder(0, Maybe.None()))` --
+        # stopped here, and the `Maybe.None()` never learned its enum type. The
+        # backend then reported its own missing annotation as CE0113.
+        elif struct_name == struct_type.name:
             _propagate_to_struct_args(validator, node, struct_type)
 
 

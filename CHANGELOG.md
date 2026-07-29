@@ -27,6 +27,12 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   string-only composites still copy. The normative spec is `docs/design/move-semantics.md`
 
 ### Added
+- **`CE2095`: a type that contains itself by value has no finite size** (#240). Reported with the
+  cycle chain (`A refers to B refers to A`), the way Rust reports `E0072` and Go reports "invalid
+  recursive type". Indirection stays legal (`Own@(T)`, a dynamic `T[]`, `List@(T)`); a *fixed*
+  `T[N]` is by value and is rejected. `struct S: S inner` used to escape as a bare `ValueError`
+  rendered as `CE0000`, and the fixed-array and struct-to-enum-payload cycles compiled silently.
+  A pure-enum cycle is still `CE2052`, which is more specific
 - **Explicit call-site type arguments** (#235, closing #137 part 2): `identity@(i32)(5)`. All-or-
   nothing (`CE2062` on a partial list; a trailing pack relaxes the count), and only on a direct call
   to a named free function (`CE6102` on a method or indirect call). This makes a type parameter that
@@ -66,6 +72,24 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
 - `./nori` no longer swallows exit codes (#234) -- `./nori install nosuchpkg` exits 1
 
 ### Fixed
+- **Recursive structs compile** (#240). A struct referring to itself through any indirection --
+  `Own@(Node)`, `Maybe@(Own@(Node))`, `List@(Node)`, `Node[]` -- was a `CE0000` `RecursionError` on
+  *declaration alone*, which broke `docs/examples/20-ownership.sushi` and the linked-list pattern it
+  teaches. The root cause was type identity, not the wrapper chain the issue named: `StructType` and
+  `EnumType` hashed on the name but compared on the fields/variants, so two instances of one type
+  resolved to different depths hash-matched and compared *unequal*, and resolution deep-walked struct
+  fields to make structural equality agree. That walk cannot terminate on a cyclic type. The same
+  defect was visible with no recursion at all (`CE2002: cannot assign Own@(T) to Own@(T)`) and is the
+  root of the `CE0126` class. Named types are now identified nominally, as in Go and Rust; see
+  `docs/design/type-identity.md`
+- Reading a field straight off `Own@(T).get()` (`o.get().x`) reported `CE0069`, an internal-error
+  code, for ordinary user code. Binding the value first already worked
+- A generic-enum constructor nested inside a concrete-struct constructor
+  (`Own.alloc(Holder(0, Maybe.None()))`) was never given its type and reached the backend as
+  `CE0113`. Type propagation into constructor arguments only recursed for *generic* structs, so how
+  deep it went depended on whether an intermediate type happened to be generic
+- Declaration spans were dropped when per-unit symbol tables merged into the global table, silently
+  demoting every diagnostic reported against it to tier 1 (no file:line:col, no caret)
 - A cluster of RAII/leak defects: `Result@(T, E)` payloads are destroyed at scope exit (a
   `Result@(string, E)` used to leak unless the caller unwrapped it), `Own@(T)`/`List@(T)` nested
   inside a composite are destroyed, fixed-size arrays and their elements are destroyed, `getcwd`'s

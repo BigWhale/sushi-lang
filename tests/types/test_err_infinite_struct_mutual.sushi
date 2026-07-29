@@ -1,0 +1,16 @@
+# Two structs that contain each other by value. The cycle is longer than one
+# hop, so the diagnostic has to trace the chain (A refers to B refers to A)
+# rather than just naming the struct it happened to notice first.
+# EXPECT_ERROR_CODE: CE2095
+
+struct A:
+    i32 value
+    B b
+
+struct B:
+    i32 value
+    A a
+
+fn main() i32:
+    println("unreachable")
+    return Result.Ok(0)

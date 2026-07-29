@@ -351,16 +351,25 @@ _add(ErrorMessage("CE0091", Severity.ERROR,
     "Result type not found: {type}",
     Category.INTERNAL, "Result enum type not found in symbol table."))
 
+_add(ErrorMessage("CE0128", Severity.ERROR,
+    "circular struct dependency reached hash registration: {names}",
+    Category.INTERNAL,
+    "Pass 1.8 topologically sorts the struct graph so a nested struct's hash is registered "
+    "before its parent's. A cycle there means a by-value containment cycle survived Pass 1.75, "
+    "which reports it as CE2095 and stops the analysis -- so reaching this is a gap in that "
+    "check, not a user error. It used to be a bare ValueError rendered as CE0000."))
+
 _add(ErrorMessage("CE0126", Severity.ERROR,
     "poisoned intern of '{name}': already interned as {existing}, rebuilt as {rebuilt}",
     Category.INTERNAL,
     "Two spellings of one generic enum (Result<T, E>, Maybe<T>) mangled to the same name but "
     "carry different payload types -- one was interned before its UnknownType payloads were "
-    "resolved. str(UnknownType('Point')) and str(StructType('Point')) are both 'Point', and "
-    "EnumType hashes on the name alone but compares on the variants, so a poisoned entry "
-    "hash-matches and compares unequal: a silent cache miss and a duplicate monomorphization, "
-    "not a crash. Intern only through ensure_result_type_in_table / ensure_maybe_type_in_table, "
-    "which resolve their payloads before mangling the name."))
+    "resolved. str(UnknownType('Point')) and str(StructType('Point')) are both 'Point', so both "
+    "spellings claim the same table slot while describing different types. EnumType identity is "
+    "nominal (#240), so the two now compare EQUAL and the mismatch can no longer cause a silent "
+    "cache miss -- but the entry still describes the wrong payload, which this guard catches. "
+    "Intern only through ensure_result_type_in_table / ensure_maybe_type_in_table, which resolve "
+    "their payloads before mangling the name."))
 
 # Maybe<T> Operations (CE0092-CE0095)
 _add(ErrorMessage("CE0092", Severity.ERROR,

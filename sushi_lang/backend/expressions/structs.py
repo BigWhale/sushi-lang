@@ -17,7 +17,7 @@ from sushi_lang.semantics.typesys import (
     UnknownType, StructType, EnumType, ArrayType, DynamicArrayType, ReferenceType, BuiltinType,
     type_moves_by_value,
 )
-from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.internals.errors import InternalCompilerError, raise_internal_error
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -317,6 +317,75 @@ def try_get_struct_alloca(codegen: 'LLVMCodegen', receiver_expr: Expr) -> Option
         return None
 
 
+def _resolve_to_struct(codegen: 'LLVMCodegen', ty) -> Optional[StructType]:
+    """Resolve a semantic type to a concrete StructType, or None if it is not one."""
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+
+    if isinstance(ty, StructType):
+        return ty
+    if isinstance(ty, UnknownType):
+        return codegen.struct_table.by_name.get(ty.name)
+    if isinstance(ty, GenericTypeRef):
+        type_args_str = ", ".join(str(arg) for arg in ty.type_args)
+        return codegen.struct_table.by_name.get(f"{ty.base_name}<{type_args_str}>")
+    return None
+
+
+def _infer_get_element_struct(codegen: 'LLVMCodegen',
+                              expr: Expr) -> Optional[StructType]:
+    """Struct type produced by a `.get()` call, or None if this is not one.
+
+    Two receivers yield a struct out of `.get()`:
+
+    - a dynamic array `T[]`, whose element is T
+    - an `Own@(T)`, whose pointee is T
+
+    Only the array case existed, and only for a bare `Name` receiver, so
+    `o.get().x` on an `Own@(T)` reported CE0069 ("cannot infer struct type from
+    DotCall: get") -- an internal-error code for ordinary user code. Binding the
+    value first already worked, so the gap was purely in the chained spelling.
+
+    Mirrors what Pass 2 already infers rather than inventing a second rule, the
+    same way the IndexAccess arm below mirrors infer_index_access_type.
+    """
+    if getattr(expr, "method", None) != "get":
+        return None
+
+    receiver = expr.receiver
+
+    # A bare name: read the semantic type recorded for the local.
+    receiver_type = None
+    if isinstance(receiver, Name):
+        receiver_type = codegen.memory.find_semantic_type(receiver.id)
+
+    if isinstance(receiver_type, ReferenceType):
+        receiver_type = receiver_type.referenced_type
+
+    if isinstance(receiver_type, DynamicArrayType):
+        element_struct = _resolve_to_struct(codegen, receiver_type.base_type)
+        if element_struct is not None:
+            return element_struct
+        if isinstance(receiver_type.base_type, UnknownType):
+            raise_internal_error("CE0020", type=receiver_type.base_type.name)
+        raise_internal_error("CE0043", type=str(receiver_type.base_type))
+
+    # Own@(T): the receiver is itself the `Own<T>` struct, so fall back to the
+    # general struct inference, which also covers a non-Name receiver.
+    own_struct = _resolve_to_struct(codegen, receiver_type)
+    if own_struct is None:
+        try:
+            own_struct = infer_struct_type(codegen, receiver)
+        except InternalCompilerError:
+            # Not a struct receiver at all; let the caller report its own code.
+            return None
+
+    if own_struct.name.startswith("Own<"):
+        from sushi_lang.semantics.generics.own import get_own_element_type
+        return _resolve_to_struct(codegen, get_own_element_type(own_struct))
+
+    return None
+
+
 def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
     """Infer the struct type of an expression.
 
@@ -390,45 +459,17 @@ def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
 
     elif isinstance(expr, MethodCall):
         # Infer struct type from method call return type
-        # For array.get() methods, get receiver type from semantic types
-        if expr.method == "get" and isinstance(expr.receiver, Name):
-            receiver_name = expr.receiver.id
-            receiver_type = codegen.memory.find_semantic_type(receiver_name)
-
-            if receiver_type and isinstance(receiver_type, DynamicArrayType):
-                element_type = receiver_type.base_type
-
-                # Resolve UnknownType to StructType
-                if isinstance(element_type, UnknownType):
-                    if element_type.name not in codegen.struct_table.by_name:
-                        raise_internal_error("CE0020", type=element_type.name)
-                    return codegen.struct_table.by_name[element_type.name]
-                elif isinstance(element_type, StructType):
-                    return element_type
-                else:
-                    raise_internal_error("CE0043", type=str(element_type))
+        inferred = _infer_get_element_struct(codegen, expr)
+        if inferred is not None:
+            return inferred
 
         raise_internal_error("CE0068", method=expr.method)
 
     elif isinstance(expr, DotCall):
-        # DotCall: unified X.Y(args) - handle array.get() method calls
-        # For array.get() methods, get receiver type from semantic types
-        if expr.method == "get" and isinstance(expr.receiver, Name):
-            receiver_name = expr.receiver.id
-            receiver_type = codegen.memory.find_semantic_type(receiver_name)
-
-            if receiver_type and isinstance(receiver_type, DynamicArrayType):
-                element_type = receiver_type.base_type
-
-                # Resolve UnknownType to StructType
-                if isinstance(element_type, UnknownType):
-                    if element_type.name not in codegen.struct_table.by_name:
-                        raise_internal_error("CE0020", type=element_type.name)
-                    return codegen.struct_table.by_name[element_type.name]
-                elif isinstance(element_type, StructType):
-                    return element_type
-                else:
-                    raise_internal_error("CE0043", type=str(element_type))
+        # DotCall: unified X.Y(args)
+        inferred = _infer_get_element_struct(codegen, expr)
+        if inferred is not None:
+            return inferred
 
         raise_internal_error("CE0069", method=expr.method)
 

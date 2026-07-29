@@ -1,0 +1,50 @@
+# Two spellings of ONE nominal type must be the same type (#240).
+#
+# NOTHING here is recursive -- this is the plain, non-recursive half of the same
+# bug, and it failed on its own with:
+#
+#   error [CE2002]: type mismatch: cannot assign Own@(Holder) to Own@(Holder)
+#
+# `Own<Holder>` was interned once as a type ARGUMENT of `Maybe@(...)` (carrying
+# an unresolved pointee) and once for the bare `Own@(Holder)` annotation
+# (carrying a fully expanded one). `StructType.__hash__` was name-only but
+# `__eq__` compared fields, so the two hash-matched and compared unequal.
+#
+# Both halves are load-bearing:
+#   - `Holder` needs a field that itself needs resolving (`Maybe@(Own@(Leafy))`);
+#     a struct of plain primitives resolves to the same depth either way and
+#     hides the bug.
+#   - `Own<Holder>` needs to reach the checker by BOTH routes; using only the
+#     annotation, or only the `Maybe` type argument, also hides it.
+# EXPECT_STDOUT_EXACT: "held=true\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+struct Leafy:
+    i32 x
+
+struct Holder:
+    i32 value
+    Maybe@(Own@(Leafy)) next
+
+fn run_test() i32:
+    let Leafy l = Leafy(9)
+    let Holder h = Holder(1, Maybe.Some(Own.alloc(l)))
+
+    # route 1: Own<Holder> interned as a type argument
+    let Maybe@(Own@(Holder)) m = Maybe.Some(Own.alloc(h))
+
+    # route 2: Own<Holder> from a bare annotation -- this is the line that failed
+    let Holder fallback = Holder(0, Maybe.None())
+    let Own@(Holder) o = m.realise(Own.alloc(fallback))
+
+    # Consume `o` by MOVING it, not by dereferencing. `o.get()` would be the
+    # natural spelling but it crashes at runtime whenever the pointee has an
+    # owning field -- a separate, pre-existing defect that also reproduces on an
+    # unpatched tree, and one this test must not be coupled to.
+    let Maybe@(Own@(Holder)) again = Maybe.Some(o)
+    println("held={again.is_some()}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

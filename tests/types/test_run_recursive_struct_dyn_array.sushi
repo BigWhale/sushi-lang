@@ -1,0 +1,22 @@
+# Guard against CE2095 over-rejecting. A DYNAMIC `Node[]` is a heap buffer, so
+# it is real indirection and the type is finite -- unlike the fixed `S[3]` in
+# test_err_infinite_struct_fixed_array.sushi, which is stored inline.
+#
+# The two differ by one `isinstance` in the by-value cycle walk, so this pins the
+# distinction: broaden that walk to cover DynamicArrayType and this test starts
+# failing with CE2095.
+#
+# Declaration-only, for the same reason as
+# test_run_recursive_struct_list.sushi: constructing a self-referential
+# container is a separate, still-open backend limitation (the element type is an
+# incomplete `{}*` when cleanup is emitted).
+# EXPECT_STDOUT_EXACT: "declared\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+struct Node:
+    i32 value
+    Node[] kids
+
+fn main() i32:
+    println("declared")
+    return Result.Ok(0)
