@@ -1,0 +1,17 @@
+# Use-after-move (#134): an enum-constructor payload is an ownership sink, exactly like a
+# `from([...])` element (borrow.py DynamicArrayFrom) and an array-literal element. The
+# backend already moved it (move_owning_arg_into_container), but the borrow checker did not
+# mark it, so this compiled clean and read through a stale descriptor -- printing plausible
+# WRONG data (a[0] == 2, not 1) with exit 0 once the enum's scope had freed the buffer.
+# EXPECT_ERROR_CODE: CE2405
+# EXPECT_STDERR_CONTAINS: was moved here
+
+enum Box:
+    Full(i32[])
+    Empty
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let Box b = Box.Full(a)
+    println("{a.len()}")
+    return Result.Ok(0)

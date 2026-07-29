@@ -321,6 +321,16 @@ class SemanticAnalyzer:
             unit.ast for unit in compilation_order if unit.ast is not None
         )
 
+        # Enum type names for the borrow checker's ownership-sink test, stripped to their
+        # base name: a monomorphized generic enum is interned as "Result<i32, StdError>"
+        # while its constructor is written `Result.Ok(...)`.
+        enum_base_names = {
+            name.split('<', 1)[0]
+            for table in (getattr(self.enums, 'by_name', {}) or {},
+                          getattr(self.generic_enums, 'by_name', None) or self.generic_enums or {})
+            for name in table
+        }
+
         for unit in compilation_order:
             if unit.ast is None:
                 continue
@@ -346,8 +356,13 @@ class SemanticAnalyzer:
             LambdaLifter(self.structs, self.funcs, unit.ast,
                          annotate=type_validator._validate_function).run()
 
-            # Pass 3: borrow checking (unit-specific reporter)
-            borrow_checker = BorrowChecker(unit_reporter, destroy_effects=destroy_effects)
+            # Pass 3: borrow checking (unit-specific reporter). Enum names let the checker
+            # recognise `Box.Full(a)` as an ownership sink -- it is a DotCall here, the same
+            # node shape as a method call, so it needs the type names to tell them apart.
+            # Base names only: a generic enum is interned as "Result<i32, StdError>" but the
+            # constructor receiver is written bare ("Result").
+            borrow_checker = BorrowChecker(unit_reporter, destroy_effects=destroy_effects,
+                                           enum_names=enum_base_names)
             borrow_checker.run(unit.ast)
 
             # Merge unit reporter results into main reporter
