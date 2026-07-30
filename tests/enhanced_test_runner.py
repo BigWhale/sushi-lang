@@ -9,6 +9,7 @@ Provides two-phase testing:
 Supports test metadata for specifying expected runtime behavior.
 """
 
+import atexit
 import re
 import subprocess
 import signal
@@ -88,6 +89,166 @@ def paint(message: str) -> str:
     if not COLOR:
         return message
     return message.replace("✓", tint("✓", GREEN)).replace("✗", tint("✗", RED))
+
+
+# --- sticky progress bar -----------------------------------------------------
+
+def _clock(seconds: float) -> str:
+    """Format a duration as MM:SS (or HH:MM:SS past an hour), matching tqdm."""
+    seconds = int(max(0.0, seconds))
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
+
+
+class StickyBar:
+    """A progress bar pinned in place, with results scrolling upward beneath it.
+
+    Layout, established once at startup:
+
+        rows 1..bar_row-1     earlier output, left alone
+        row  bar_row          the bar -- OUTSIDE the scroll region, so it never moves
+        rows bar_row+1..end   the scroll region: results appear here and scroll up,
+                              vanishing under the bar
+
+    Getting there takes three steps in order, and skipping any one of them was a bug
+    in the first attempt:
+
+    1. **Scroll first.** Emit AREA+1 newlines so the terminal scrolls existing content
+       up into scrollback and hands back genuinely blank rows. Setting a scroll region
+       over rows that still hold text just overwrites that text.
+    2. **Anchor the bar where the text was**, i.e. at the row the cursor reached after
+       the scroll -- not at row 1. A bar at row 1 is both wrong and destructive.
+    3. **Set the region below it**, so the terminal does the scrolling. Nothing needs
+       to track how much room is left; running out of room *is* the region scrolling.
+
+    The scroll region is terminal state, not process state: leaving it set breaks the
+    user's shell until `reset`. Every exit path restores it -- the context manager, an
+    atexit hook, and SIGINT/SIGTERM -- and restoring twice is harmless.
+
+    Only used on a TTY. Everything else (CI, pipes, --json, --verbose) keeps tqdm.
+    """
+
+    MIN_ROWS = 10        # below this, plain scrolling beats a sticky layout
+    MAX_AREA = 12        # results viewport; the bar sits directly above it
+
+    def __init__(self, total: int, desc: str = "Running tests", stream=None):
+        self.total = max(1, total)
+        self.desc = desc
+        self.out = stream or sys.stdout
+        self.n = 0
+        self.start = time.monotonic()
+        self.rows, self.cols = self._size()
+        self.area = min(self.MAX_AREA, self.rows - 3)
+        self.bar_row = self.rows - self.area
+        self._active = False
+        self._prev_handlers: Dict[int, object] = {}
+
+    def _size(self) -> Tuple[int, int]:
+        """Terminal size, asked of the stream's own fd.
+
+        NOT shutil.get_terminal_size: that consults $COLUMNS first and silently falls
+        back to 80x24, which is why the bar rendered 80 columns wide in a much wider
+        window. os.get_terminal_size(fd) asks the device.
+        """
+        try:
+            size = os.get_terminal_size(self.out.fileno())
+            return size.lines, size.columns
+        except (OSError, AttributeError, ValueError):
+            fallback = shutil.get_terminal_size(fallback=(80, 24))
+            return fallback.lines, fallback.columns
+
+    @classmethod
+    def usable(cls, stream=None) -> bool:
+        stream = stream or sys.stdout
+        if not stream.isatty() or os.environ.get("SUSHI_TEST_PLAIN"):
+            return False
+        try:
+            return os.get_terminal_size(stream.fileno()).lines >= cls.MIN_ROWS
+        except (OSError, AttributeError, ValueError):
+            return False
+
+    # -- lifecycle ------------------------------------------------------------
+
+    def __enter__(self) -> "StickyBar":
+        # 1. Scroll existing content up into scrollback, creating blank rows. The
+        #    cursor ends on the last row; nothing on screen has been destroyed.
+        self.out.write("\n" * (self.area + 1))
+        # 2. Anchor the bar at the row the text had reached before that scroll.
+        # 3. Confine scrolling to the rows beneath it, and drop the cursor in.
+        self.out.write(f"\033[{self.bar_row + 1};{self.rows}r")
+        self.out.write(f"\033[{self.bar_row + 1};1H")
+        self.out.flush()
+        self._active = True
+        atexit.register(self.close)
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                self._prev_handlers[sig] = signal.signal(sig, self._on_signal)
+            except (ValueError, OSError):
+                pass  # not the main thread, or unsupported -- atexit still covers us
+        self.render()
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
+    def _on_signal(self, signum, frame):
+        self.close()
+        previous = self._prev_handlers.get(signum)
+        if callable(previous):
+            previous(signum, frame)
+        elif previous == signal.SIG_DFL:
+            signal.signal(signum, signal.SIG_DFL)
+            os.kill(os.getpid(), signum)
+
+    def close(self) -> None:
+        """Reset the scroll region and park the cursor below the bar. Idempotent."""
+        if not self._active:
+            return
+        self._active = False
+        self.out.write("\033[r")                     # full-screen scrolling again
+        self.out.write(f"\033[{self.rows};1H\n")     # cursor to the last row
+        self.out.flush()
+        for sig, previous in self._prev_handlers.items():
+            try:
+                signal.signal(sig, previous)
+            except (ValueError, OSError, TypeError):
+                pass
+        self._prev_handlers.clear()
+
+    # -- drawing --------------------------------------------------------------
+
+    def _bar_text(self) -> str:
+        """The bar, sized to fill the terminal width exactly."""
+        frac = self.n / self.total
+        elapsed = time.monotonic() - self.start
+        remaining = (elapsed / self.n) * (self.total - self.n) if self.n else 0.0
+        left = f"{self.desc}: {frac * 100:3.0f}%|"
+        right = f"| {self.n}/{self.total} [{_clock(elapsed)}<{_clock(remaining)}]"
+        # One column short of the full width: filling the last cell makes some
+        # terminals wrap to the next line, which would push the bar into the region.
+        width = max(4, self.cols - len(left) - len(right) - 1)
+        filled = int(width * frac)
+        return f"{left}{'█' * filled}{' ' * (width - filled)}{right}"
+
+    def render(self) -> None:
+        """Redraw the bar on its own row without disturbing the cursor in the region."""
+        if not self._active:
+            return
+        self.out.write(
+            f"\0337\033[{self.bar_row};1H\033[2K{tint(self._bar_text(), BOLD)}\0338"
+        )
+        self.out.flush()
+
+    def update(self, step: int = 1) -> None:
+        self.n = min(self.total, self.n + step)
+        self.render()
+
+    def write(self, block: str) -> None:
+        """Print a block into the scrolling region beneath the bar."""
+        self.out.write(block + "\n")
+        self.out.flush()
+        self.render()
 
 
 def stdout_contains(stdout: str, expected: str) -> bool:
@@ -220,35 +381,44 @@ class TestRunner:
             future_to_test = {executor.submit(self.run_single_test, test_file): test_file.name
                              for test_file in test_files}
 
+            # Sticky bar on an interactive terminal, tqdm everywhere else. Both expose
+            # update()/close(), and _emit() routes result blocks through whichever is
+            # live, so the collection loop below does not care which one it got.
             if show_progress:
-                self._pbar = tqdm(total=len(test_files), desc="Running tests", unit="test",
-                                  bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]")
+                if StickyBar.usable():
+                    self._pbar = StickyBar(len(test_files)).__enter__()
+                else:
+                    self._pbar = tqdm(total=len(test_files), desc="Running tests", unit="test",
+                                      bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]")
             pbar = self._pbar
 
-            # Collect results as they complete
-            for future in as_completed(future_to_test):
-                test_name = future_to_test[future]
-                try:
-                    result = future.result()
-                    results[test_name] = result
-                    if not self.json_output and (self.verbose or not result.total_success):
-                        self._print_test_result(result)
-                except Exception as e:
-                    if not self.json_output:
-                        self._emit(f"ERROR: Test {test_name} crashed: {e}")
-                    results[test_name] = TestResult(
-                        name=test_name,
-                        category="error",
-                        compilation_success=False,
-                        compilation_message=f"Test runner exception: {e}",
-                        skipped_runtime=True
-                    )
+            try:
+                # Collect results as they complete
+                for future in as_completed(future_to_test):
+                    test_name = future_to_test[future]
+                    try:
+                        result = future.result()
+                        results[test_name] = result
+                        if not self.json_output and (self.verbose or not result.total_success):
+                            self._print_test_result(result)
+                    except Exception as e:
+                        if not self.json_output:
+                            self._emit(f"ERROR: Test {test_name} crashed: {e}")
+                        results[test_name] = TestResult(
+                            name=test_name,
+                            category="error",
+                            compilation_success=False,
+                            compilation_message=f"Test runner exception: {e}",
+                            skipped_runtime=True
+                        )
+                    if show_progress:
+                        pbar.update(1)
+            finally:
+                # The scroll region is terminal state; it has to come back even if the
+                # loop raises, or the caller's shell is left broken.
                 if show_progress:
-                    pbar.update(1)
-
-            if show_progress:
-                pbar.close()
-                self._pbar = None
+                    pbar.close()
+                    self._pbar = None
 
         end_time = time.time()
 
