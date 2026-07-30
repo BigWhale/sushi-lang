@@ -1,0 +1,19 @@
+# Issue #239: a built-in STRING method is shadowable too, and this shape failed worse than
+# silently. `extend string len()` did not merely lose the dispatch: with
+# `use <collections/strings>` present it collided at LINK time --
+# `CE0007: ... Linking globals named 'string_len': symbol multiply defined!` -- because the
+# extension emits the same symbol the stdlib unit already defines. Without the import it was
+# a CE0096 internal error instead. Neither is a user-level diagnostic.
+#
+# CE2097 rejects it in Pass 1.8's wake, before any of that can happen.
+# EXPECT_ERROR_CODE: CE2097
+
+use <collections/strings>
+
+extend string len() i32:
+    return 999
+
+fn main() i32:
+    let string s = "hi"
+    println(s.len())
+    return Result.Ok(0)

@@ -1,0 +1,18 @@
+# Issue #239: CE2097 must cover every shadowable built-in, not just the struct/enum
+# auto-derived pair. `extend i32 hash()` compiled clean and the built-in won every dispatch
+# -- `n.hash()` printed the FxHash, never `1`. Same for `extend i32 to_str()`, which printed
+# `5` rather than "shadowed".
+#
+# The first cut of this check keyed on get_builtin_method, which is populated for primitives
+# by the BACKEND at import time -- so from a semantics pass it answered differently depending
+# on what else the process had imported. The seam (semantics/generics/builtin_methods.py)
+# assembles the semantics-side predicates instead, which are deterministic.
+# EXPECT_ERROR_CODE: CE2097
+
+extend i32 hash() u64:
+    return 1 as u64
+
+fn main() i32:
+    let i32 n = 5
+    println(n.hash())
+    return Result.Ok(0)

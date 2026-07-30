@@ -298,23 +298,6 @@ class SemanticAnalyzer:
         for enum_type in self.enums.by_name.values():
             register_enum_clone_method(enum_type)
 
-        # An extension method that collides with an auto-derived builtin can never run
-        # (#239). The auto-derived method wins both in validation
-        # (passes/types/calls/methods.py consults it before the extension lookup) and in
-        # codegen (the dispatcher's auto-derived steps precede the extension fallback),
-        # so `extend P hash()` used to compile, emit a body, and then be silently dead --
-        # the same shadowing hazard CE4007 exists to prevent. Hard error instead.
-        #
-        # This must run AFTER Pass 1.8: the condition is "an auto-derived builtin exists
-        # for this exact (type, name)", never "the name is hash or clone". A type Pass 1.8
-        # skipped -- an unhashable struct, say -- has no builtin to shadow, and extending
-        # it is perfectly legal.
-        #
-        # Perk implementations are NOT affected: `extend T with Perk` is an ExtendWithDef
-        # collected into PerkImplementationTable, a different table entirely, and it
-        # legitimately overrides the auto-derived method (it wins at dispatch).
-        self._check_extension_shadows_builtin()
-
         # Monomorphize generic extension methods
         concrete_extension_defs = monomorphize_all_extension_methods(
             self.generic_extensions.by_type,
@@ -325,15 +308,39 @@ class SemanticAnalyzer:
         # Store monomorphized ExtendDef nodes for backend codegen
         for (_target_type_name, _method_name, _type_args), extend_def in concrete_extension_defs.items():
             self.monomorphized_extensions.append(extend_def)
-            # Add to extension table for method lookup during type validation
+            # Add to extension table for method lookup during type validation.
+            # The spans come along so a diagnostic about a monomorphized generic extension
+            # (CE2097) can still point at the source `extend Box@(T) ...` that produced it.
             from sushi_lang.semantics.passes.collect import ExtensionMethod
             extension_method = ExtensionMethod(
                 target_type=extend_def.target_type,
                 name=extend_def.name,
                 params=extend_def.params,
-                ret_type=extend_def.ret
+                ret_type=extend_def.ret,
+                loc=getattr(extend_def, "loc", None),
+                name_span=getattr(extend_def, "name_span", None),
             )
             self.extensions.add_method(extension_method)
+
+        # An extension method that collides with a BUILT-IN can never run (#239). Every
+        # layer -- validation (passes/types/calls/methods.py), inference
+        # (passes/types/method_registry.py) and codegen (the dispatcher) -- resolves the
+        # built-in before the extension fallback, so such a method is compiled and then
+        # silently dead. That is the hazard class CE4007 exists to prevent, and the
+        # CW3505 rule applies: if it cannot possibly do what the user wrote, it is an
+        # error, not a warning.
+        #
+        # Placement is load-bearing at BOTH ends. After Pass 1.8, because that is what
+        # registers the struct/enum hash/clone. After the generic-extension merge loop
+        # just above, because a monomorphized `extend Box@(i32) hash()` only enters the
+        # extension table there -- running earlier is exactly why that shape went
+        # uncovered.
+        #
+        # Perk implementations are NOT affected, by construction rather than by a
+        # condition: `extend T with Perk` is an ExtendWithDef collected into
+        # PerkImplementationTable and never enters ExtensionTable. They are the sanctioned
+        # way to replace a built-in and win at every layer deliberately.
+        self._check_extension_shadows_builtin()
 
         # Phase 1 & 2: Run scope and type analysis on all units with global context
         # Unlike single-file mode, we need to analyze all units together since they can reference each other
@@ -403,59 +410,42 @@ class SemanticAnalyzer:
 
 
     def _check_extension_shadows_builtin(self) -> None:
-        """Reject an extension method that collides with an auto-derived builtin (CE2097).
+        """Reject an extension method that collides with a built-in (CE2097).
 
-        Keyed on whether a builtin is registered for this exact (target type, method
-        name) pair -- never on the bare method name -- so a type Pass 1.8 skipped can
-        still be extended with a `hash()` of its own. Must therefore run after Pass 1.8.
+        Keyed on `builtin_method_exists` for this exact (target type, method name) pair --
+        never on the bare method name -- so a type that carries no such built-in can still
+        be extended with a `hash()` of its own. Must run after Pass 1.8 (which registers
+        the struct/enum pair) AND after the generic-extension merge, or a monomorphized
+        `extend Box@(i32) hash()` is never examined.
 
-        Tier 2: one primary location, at the extension declaration. The auto-derived
-        method has no source span of its own, so the note says so in the established
-        wording (compare CE0004/CE0005 for a compiler-predefined name).
+        Tier 2: one primary location, at the extension declaration. A built-in has no
+        source span, so the note uses the house idiom for a compiler-predefined name
+        ("defined by the compiler" -- see collect/utils.py:note_first_declaration).
         """
         if self.extensions is None:
             return
 
         from sushi_lang.internals import errors as er
+        from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
         from sushi_lang.semantics.generics.type_display import display_type
-        from sushi_lang.semantics.typesys import EnumType, StructType
-        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
 
         for target_type, methods in self.extensions.by_type.items():
-            # Struct/enum receivers ONLY, and deliberately so. This pass runs in
-            # semantics, and only the struct/enum hash/clone are registered there (by
-            # Pass 1.8, just above). The other entries in the same registry are not
-            # dependable from here:
-            #
-            # - PRIMITIVE and string builtins are registered by the BACKEND at import
-            #   time. After importing only semantics, get_builtin_method(I32, "hash") is
-            #   None; after importing sushi_lang.backend.codegen_llvm it is a real
-            #   BuiltinMethod. Keying on them from here would make the diagnostic depend
-            #   on whether the backend happened to be imported in this process -- same
-            #   source, different answer.
-            # - ARRAY hashes are registered in semantics, but register_all_array_hashes
-            #   only collects array types reachable from a struct field or enum variant,
-            #   so `i32[]` carries a hash in one program and not in another.
-            #
-            # Primitives do have the same silent-shadowing bug (`extend i32 hash()`
-            # compiles and is then never called); fixing it needs a check that does not
-            # read a backend-populated registry from a semantics pass. Out of scope here.
-            if not isinstance(target_type, (StructType, EnumType)):
-                continue
             for method_name, method in methods.items():
-                if get_builtin_method(target_type, method_name) is None:
+                if not builtin_method_exists(target_type, method_name):
                     continue
+                shown = f"{display_type(target_type)}.{method_name}"
                 er.emit_with(
                     self.reporter, er.ERR.CE2097,
                     method.name_span or method.loc,
                     name=method_name, type=display_type(target_type),
                 ).note(
-                    f"'{method_name}()' is auto-derived for every struct and enum, "
-                    "and is defined by the compiler"
+                    f"'{shown}()' is defined by the compiler"
                 ).help(
-                    f"the auto-derived '{method_name}()' wins every dispatch, so this "
-                    "extension can never run -- rename it, or move it into a perk "
-                    "implementation ('extend ... with <Perk>'), which does override it"
+                    "a built-in method is always chosen before an extension method, so "
+                    f"this one could never be called -- rename it, or provide "
+                    f"'{method_name}()' through a perk implementation "
+                    f"('extend {display_type(target_type)} with <Perk>'), which does "
+                    "take precedence"
                 ).emit()
 
     def _build_library_registry(self) -> None:

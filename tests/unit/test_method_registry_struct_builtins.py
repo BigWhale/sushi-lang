@@ -245,35 +245,16 @@ fn main() i32:
     assert "CE2097" in [item.code for item in reporter.items]
 
 
-def test_ce2097_is_deliberately_struct_and_enum_only(analyze):
-    """`extend i32 hash()` is NOT CE2097 -- and widening it there is not a one-liner.
+def test_ce2097_covers_a_primitive_receiver(analyze):
+    """CE2097 reaches every shadowable built-in, not just the struct/enum pair.
 
-    Primitives really do have the same silent-shadowing bug (the auto-derived hash wins
-    at runtime and the extension is never called), but the check that would catch it
-    cannot be this one. Primitive and string builtins are registered by the BACKEND at
-    import time, not by Pass 1.8: after importing only semantics
-    `get_builtin_method(BuiltinType.I32, "hash")` is None, and after importing
-    sushi_lang.backend.codegen_llvm it is a real BuiltinMethod. A semantics pass keying
-    on them would answer differently for the same source depending on what else the
-    process had imported -- and this very test would be flaky, since the pytest session
-    imports the backend elsewhere.
-
-    Array receivers are excluded for a related reason: register_all_array_hashes only
-    collects array types reachable from a struct field or enum variant, so `i32[]`
-    carries a hash in one program and not in another.
-
-    So this is a pin, not an endorsement. Widening CE2097 to primitives needs a check
-    that does not read a backend-populated registry from semantics.
+    An earlier cut of the check was narrowed to StructType/EnumType because it keyed on
+    get_builtin_method, which for primitives is populated by the BACKEND at import time --
+    so from a semantics pass it answered differently depending on what else the process
+    had imported. The seam (semantics/generics/builtin_methods.py) reads the
+    semantics-side predicates instead, so the narrowing is gone and the answer is
+    deterministic. Asserted with the backend deliberately NOT relied upon.
     """
-    # Make the backend registrations present, so the test asserts the guard rather
-    # than an accident of import order.
-    import sushi_lang.backend.types.primitives  # noqa: F401
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-
-    assert get_builtin_method(BuiltinType.I32, "hash") is not None, (
-        "premise: the backend registers a hash for i32 -- without it this test is vacuous"
-    )
-
     reporter = analyze("""
 extend i32 hash() u64:
     return 1 as u64
@@ -281,6 +262,45 @@ extend i32 hash() u64:
 fn main() i32:
     let i32 n = 10
     println(n.hash())
+    return Result.Ok(0)
+""")
+    assert "CE2097" in [item.code for item in reporter.items]
+
+
+def test_ce2097_covers_a_monomorphized_generic_extension(analyze):
+    """The ordering hole: these enter the extension table after Pass 1.8, so the check
+    has to run after the merge loop, not immediately after 1.8."""
+    reporter = analyze("""
+struct Box@(T):
+    T value
+
+extend Box@(i32) hash() u64:
+    return 1 as u64
+
+fn main() i32:
+    let Box@(i32) b = Box(7)
+    println(b.hash())
+    return Result.Ok(0)
+""")
+    assert "CE2097" in [item.code for item in reporter.items]
+
+
+def test_ce2097_leaves_a_non_colliding_extension_alone(analyze):
+    """The corpus shape: a name no built-in family carries stays perfectly legal."""
+    reporter = analyze("""
+struct Point:
+    i32 x
+
+extend Point describe() i32:
+    return self.x
+
+extend i32 squared() i32:
+    return self * self
+
+fn main() i32:
+    let Point p = Point(3)
+    println(p.describe())
+    println(p.x.squared())
     return Result.Ok(0)
 """)
     assert "CE2097" not in [item.code for item in reporter.items]
