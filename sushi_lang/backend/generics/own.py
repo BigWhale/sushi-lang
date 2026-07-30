@@ -192,7 +192,7 @@ def emit_builtin_own_method(
                 # Deep teardown via the general recursive destructor (same as the RAII
                 # path), so manual destroy of a nested Own<Own<T>> frees every level.
                 from sushi_lang.backend.destructors import emit_value_destructor
-                emit_value_destructor(codegen, codegen.builder, slot, own_type)
+                emit_value_destructor(codegen, slot, own_type)
                 codegen.dynamic_arrays.mark_own_destroyed(var_name)
                 return ir.Constant(codegen.types.i32, 0)
         # Temporary / non-Name receiver: shallow single free of the loaded value.

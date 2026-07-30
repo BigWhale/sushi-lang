@@ -226,9 +226,9 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
         new_result = codegen.runtime.strings.emit_string_concat(result, string_value)
         if free_intermediates:
             if result_fresh:
-                emit_string_destructor_from_value(codegen, codegen.builder, result)
+                emit_string_destructor_from_value(codegen, result)
             if sv_fresh:
-                emit_string_destructor_from_value(codegen, codegen.builder, string_value)
+                emit_string_destructor_from_value(codegen, string_value)
         result = new_result
         result_fresh = True  # a concat output is always a fresh heap buffer
 

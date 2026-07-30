@@ -26,7 +26,6 @@ if TYPE_CHECKING:
 
 def emit_value_destructor(
     codegen: LLVMCodegen,
-    builder: ir.IRBuilder,
     value_ptr: ir.Value,
     value_type: Type
 ) -> None:
@@ -43,7 +42,6 @@ def emit_value_destructor(
 
     Args:
         codegen: The main codegen instance (for accessing types, free, etc.)
-        builder: The LLVM IR builder to emit code with
         value_ptr: Pointer to the value to destroy (not the value itself)
         value_type: The Sushi type of the value
     """
@@ -58,7 +56,7 @@ def emit_value_destructor(
     # closure drop_ptr (ownership can't be told from the uniform `string` type alone).
     if isinstance(value_type, BuiltinType):
         if value_type == BuiltinType.STRING:
-            emit_string_destructor(codegen, builder, value_ptr)
+            emit_string_destructor(codegen, value_ptr)
             return
         if value_type in (BuiltinType.STDIN, BuiltinType.STDOUT,
                           BuiltinType.STDERR, BuiltinType.FILE):
@@ -74,13 +72,13 @@ def emit_value_destructor(
     # destructor function and calls it at the self-referential position, so cleanup
     # terminates via runtime recursion instead of unbounded compile-time inlining (#139).
     elif isinstance(value_type, (DynamicArrayType, ArrayType, StructType, EnumType)):
-        _emit_composite_destructor(codegen, builder, value_ptr, value_type)
+        _emit_composite_destructor(codegen, value_ptr, value_type)
 
     # Function values (closures): free the heap environment through the runtime-guarded
     # drop pointer. Capture is erased from the type, so ownership is resolved at runtime:
     # a non-capturing value carries drop_ptr = null, making the free a no-op.
     elif isinstance(value_type, FunctionType):
-        emit_function_value_destructor(codegen, builder, value_ptr)
+        emit_function_value_destructor(codegen, value_ptr)
 
 
 def _select_inline_destructor(value_type: Type):
@@ -129,7 +127,6 @@ def _dtor_symbol(value_type: Type) -> str:
 
 def _emit_composite_destructor(
     codegen: LLVMCodegen,
-    builder: ir.IRBuilder,
     value_ptr: ir.Value,
     value_type: Type,
 ) -> None:
@@ -142,6 +139,11 @@ def _emit_composite_destructor(
     again -- so the cleanup recurses at runtime over the actual data and terminates,
     rather than recursing unbounded at compile time (the original #139 crash).
     """
+    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
+    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
+    # for its own function, so reading it is what keeps this body and the loop helpers
+    # it calls emitting into the SAME function (#257).
+    builder = codegen.builder
     key = _dtor_type_key(value_type)
     stack = codegen._dtor_inprogress
 
@@ -153,7 +155,7 @@ def _emit_composite_destructor(
 
     stack.append(key)
     try:
-        _select_inline_destructor(value_type)(codegen, builder, value_ptr, value_type)
+        _select_inline_destructor(value_type)(codegen, value_ptr, value_type)
     finally:
         stack.pop()
 
@@ -166,6 +168,16 @@ def _get_or_emit_dtor_func(codegen: LLVMCodegen, value_type: Type) -> ir.Functio
     body resolves to a call to this same function (terminating the emission). The body is
     built with a fresh in-progress stack seeded with this type's key, so the recursion
     point becomes a self-call while unrelated nested types still inline.
+
+    This body is emitted LAZILY, in the middle of emitting some other function, so
+    `codegen.builder` and `codegen.func` are pointed at that other function -- and the
+    destructor helpers reach for them (emit_container_walk builds its loop through
+    `codegen.builder`; the List emitters append blocks through `codegen.func`). Both are
+    therefore swapped to this function for the duration and restored afterwards, exactly as
+    `_get_or_emit_clone_func` and the closure env destructor in runtime/closures.py already
+    do. Without the swap the element loop was appended to the *caller's* function while the
+    element-destructor call went into this one, so the emitted IR referenced a value defined
+    in another function and would not parse (#257).
     """
     key = _dtor_type_key(value_type)
     funcs = codegen._dtor_funcs
@@ -187,18 +199,20 @@ def _get_or_emit_dtor_func(codegen: LLVMCodegen, value_type: Type) -> ir.Functio
     )
 
     saved = codegen._dtor_inprogress
+    saved_builder, saved_func = codegen.builder, codegen.func
     codegen._dtor_inprogress = [key]
+    codegen.builder, codegen.func = fb, fn
     try:
-        _select_inline_destructor(value_type)(codegen, fb, typed_ptr, value_type)
+        _select_inline_destructor(value_type)(codegen, typed_ptr, value_type)
     finally:
         codegen._dtor_inprogress = saved
+        codegen.builder, codegen.func = saved_builder, saved_func
     fb.ret_void()
     return fn
 
 
 def emit_function_value_destructor(
     codegen: LLVMCodegen,
-    builder: ir.IRBuilder,
     value_ptr: ir.Value
 ) -> None:
     """Free a closure's heap environment via its type-erased drop pointer.
@@ -208,13 +222,17 @@ def emit_function_value_destructor(
     stores a null drop, so this is a guarded no-op for it (the whole point of the
     data-driven drop slot: ownership cannot be told from the `fn(...)` type alone).
     """
+    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
+    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
+    # for its own function, so reading it is what keeps this body and the loop helpers
+    # it calls emitting into the SAME function (#257).
+    builder = codegen.builder
     fat = builder.load(value_ptr, name="closure_val")
-    emit_function_value_destructor_from_value(codegen, builder, fat)
+    emit_function_value_destructor_from_value(codegen, fat)
 
 
 def emit_function_value_destructor_from_value(
     codegen: LLVMCodegen,
-    builder: ir.IRBuilder,
     fat: ir.Value
 ) -> None:
     """Free a closure's heap environment given the SSA fat value directly.
@@ -226,6 +244,11 @@ def emit_function_value_destructor_from_value(
     no alloca -- only the SSA fat value produced by emit_lambda. The value is produced
     before any branch, so it dominates every early-exit block.
     """
+    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
+    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
+    # for its own function, so reading it is what keeps this body and the loop helpers
+    # it calls emitting into the SAME function (#257).
+    builder = codegen.builder
     drop_ptr = builder.extract_value(fat, 2, name="closure_drop")
     env_ptr = builder.extract_value(fat, 1, name="closure_env")
 
@@ -240,7 +263,6 @@ def emit_function_value_destructor_from_value(
 
 def emit_string_destructor(
     codegen: LLVMCodegen,
-    builder: ir.IRBuilder,
     value_ptr: ir.Value
 ) -> None:
     """Runtime-guarded free of a string's heap buffer via the owned bit (#145).
@@ -251,13 +273,17 @@ def emit_string_destructor(
     variants free correctly through the ordinary recursive destructor, with no per-container
     special-casing (the bit travels with the value).
     """
+    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
+    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
+    # for its own function, so reading it is what keeps this body and the loop helpers
+    # it calls emitting into the SAME function (#257).
+    builder = codegen.builder
     fat = builder.load(value_ptr, name="string_val")
-    emit_string_destructor_from_value(codegen, builder, fat)
+    emit_string_destructor_from_value(codegen, fat)
 
 
 def emit_string_destructor_from_value(
     codegen: LLVMCodegen,
-    builder: ir.IRBuilder,
     fat: ir.Value
 ) -> None:
     """Owned-bit-guarded free given the SSA fat value directly (`if owned: free(data)`) (#145).
@@ -267,6 +293,11 @@ def emit_string_destructor_from_value(
     next concat. A borrowed part (owned bit set but aliasing another owner) must NOT be
     passed here; only genuinely fresh temporaries.
     """
+    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
+    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
+    # for its own function, so reading it is what keeps this body and the loop helpers
+    # it calls emitting into the SAME function (#257).
+    builder = codegen.builder
     owned = builder.extract_value(fat, 2, name="string_owned")
     is_owned = builder.icmp_unsigned("!=", owned, ir.Constant(owned.type, 0))
     with builder.if_then(is_owned):
@@ -277,7 +308,6 @@ def emit_string_destructor_from_value(
 
 def _emit_dynamic_array_destructor(
     codegen: LLVMCodegen,
-    builder: ir.IRBuilder,
     value_ptr: ir.Value,
     value_type: DynamicArrayType
 ) -> None:
@@ -286,6 +316,11 @@ def _emit_dynamic_array_destructor(
     Frees the data pointer and recursively destroys elements if needed.
     """
     # Load the dynamic array struct
+    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
+    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
+    # for its own function, so reading it is what keeps this body and the loop helpers
+    # it calls emitting into the SAME function (#257).
+    builder = codegen.builder
     data_ptr_ptr = builder.gep(value_ptr, [
         ZERO_I32,
         make_i32_const(DA_DATA_INDEX)
@@ -331,7 +366,7 @@ def _emit_dynamic_array_destructor(
             element_ptr = builder.gep(data_ptr, [i_val], name="element_ptr")
 
             # Recursively destroy this element
-            emit_value_destructor(codegen, builder, element_ptr, value_type.base_type)
+            emit_value_destructor(codegen, element_ptr, value_type.base_type)
 
             # Increment loop counter
             i_next = builder.add(i_val, ONE_I32, name="i_next")
@@ -349,7 +384,6 @@ def _emit_dynamic_array_destructor(
 
 def _emit_fixed_array_destructor(
     codegen: LLVMCodegen,
-    builder: ir.IRBuilder,
     value_ptr: ir.Value,
     value_type: 'ArrayType'
 ) -> None:
@@ -364,6 +398,11 @@ def _emit_fixed_array_destructor(
     an array type, so a runtime index cannot be used directly. Kept a loop rather than unrolled so
     a large N does not blow up the IR.
     """
+    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
+    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
+    # for its own function, so reading it is what keeps this body and the loop helpers
+    # it calls emitting into the SAME function (#257).
+    builder = codegen.builder
     if not field_needs_cleanup(codegen, value_type.base_type):
         return
 
@@ -387,7 +426,7 @@ def _emit_fixed_array_destructor(
     builder.position_at_end(body_bb)
     i_val = builder.load(loop_i, name="i_val")
     element_ptr = builder.gep(first_elem, [i_val], name="fixed_element_ptr")
-    emit_value_destructor(codegen, builder, element_ptr, value_type.base_type)
+    emit_value_destructor(codegen, element_ptr, value_type.base_type)
     builder.store(builder.add(i_val, ONE_I32, name="i_next"), loop_i)
     builder.branch(cond_bb)
 
@@ -396,7 +435,6 @@ def _emit_fixed_array_destructor(
 
 def _emit_struct_destructor(
     codegen: LLVMCodegen,
-    builder: ir.IRBuilder,
     value_ptr: ir.Value,
     value_type: StructType
 ) -> None:
@@ -405,6 +443,11 @@ def _emit_struct_destructor(
     Handles Own<T> specially, otherwise recursively destroys each field.
     """
     # Check if this is Own<T> which needs special handling
+    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
+    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
+    # for its own function, so reading it is what keeps this body and the loop helpers
+    # it calls emitting into the SAME function (#257).
+    builder = codegen.builder
     if value_type.name.startswith("Own<"):
         # Own<T> has a single pointer field - free it and destroy the value
         ptr_field_ptr = builder.gep(value_ptr, [
@@ -428,7 +471,7 @@ def _emit_struct_destructor(
                 from sushi_lang.semantics.generics.own import get_own_element_type
                 owned_type = get_own_element_type(value_type)
                 # Recursively destroy the owned value
-                emit_value_destructor(codegen, builder, owned_ptr, owned_type)
+                emit_value_destructor(codegen, owned_ptr, owned_type)
 
             # Free the pointer itself
             void_ptr = builder.bitcast(owned_ptr, ir.PointerType(ir.IntType(INT8_BIT_WIDTH)))
@@ -439,13 +482,13 @@ def _emit_struct_destructor(
         # with a raw T* rather than a DynamicArrayType field -- so the generic field loop
         # below would free nothing. Destroy live elements then free the buffer, keeping
         # this in lockstep with _clone_list_value (issue #140).
-        _emit_list_value_destructor(codegen, builder, value_ptr, value_type)
+        _emit_list_value_destructor(codegen, value_ptr, value_type)
     elif value_type.name.startswith("HashMap<"):
         # HashMap<K, V> keeps its owning keys/values in an LLVM-only Entry<K, V> buffer
         # that the generic field loop cannot see (the semantic `buckets` field is an i32[]
         # placeholder). Destroy every occupied Entry then free the bucket buffer, in
         # lockstep with _clone_hashmap_value (issue #181).
-        _emit_hashmap_value_destructor(codegen, builder, value_ptr, value_type)
+        _emit_hashmap_value_destructor(codegen, value_ptr, value_type)
     else:
         # Regular struct: recursively destroy each field
         for i, (field_name, field_type) in enumerate(value_type.fields):
@@ -455,12 +498,11 @@ def _emit_struct_destructor(
                     ZERO_I32,
                     make_i32_const(i)
                 ], name=f"field_{field_name}_ptr")
-                emit_value_destructor(codegen, builder, field_ptr, field_type)
+                emit_value_destructor(codegen, field_ptr, field_type)
 
 
 def _emit_list_value_destructor(
     codegen: LLVMCodegen,
-    builder: ir.IRBuilder,
     value_ptr: ir.Value,
     value_type: StructType
 ) -> None:
@@ -472,6 +514,11 @@ def _emit_list_value_destructor(
     generic emit_value_destructor rather than the by-name scope destructor -- is freed
     exactly once, symmetric with _clone_list_value (issue #140).
     """
+    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
+    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
+    # for its own function, so reading it is what keeps this body and the loop helpers
+    # it calls emitting into the SAME function (#257).
+    builder = codegen.builder
     from sushi_lang.backend.generics.list.types import extract_element_type
 
     element_type = extract_element_type(value_type, codegen)
@@ -489,7 +536,7 @@ def _emit_list_value_destructor(
             list_len = builder.load(len_ptr, name="list_len")
 
             def destroy_element(element_ptr: ir.Value, _index: ir.Value) -> None:
-                emit_value_destructor(codegen, builder, element_ptr, element_type)
+                emit_value_destructor(codegen, element_ptr, element_type)
 
             emit_container_walk(codegen, data_ptr, list_len, destroy_element,
                                 prefix="list_cleanup")
@@ -501,7 +548,6 @@ def _emit_list_value_destructor(
 
 def _emit_hashmap_value_destructor(
     codegen: LLVMCodegen,
-    builder: ir.IRBuilder,
     value_ptr: ir.Value,
     value_type: StructType
 ) -> None:
@@ -513,6 +559,11 @@ def _emit_hashmap_value_destructor(
     emit_destroy_all_entries, symmetric with _clone_hashmap_value (issue #181). null_guard
     on the entry walk handles an already-emptied map.
     """
+    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
+    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
+    # for its own function, so reading it is what keeps this body and the loop helpers
+    # it calls emitting into the SAME function (#257).
+    builder = codegen.builder
     from sushi_lang.backend.generics.hashmap.types import (
         get_hashmap_field_ptrs, get_entry_type
     )
@@ -540,7 +591,6 @@ def _emit_hashmap_value_destructor(
 
 def _emit_enum_destructor(
     codegen: LLVMCodegen,
-    builder: ir.IRBuilder,
     value_ptr: ir.Value,
     value_type: EnumType
 ) -> None:
@@ -549,6 +599,11 @@ def _emit_enum_destructor(
     Creates a switch statement to handle cleanup for each variant with associated data.
     """
     # Load discriminant tag (first field of enum struct)
+    # The AMBIENT builder is the whole backend's convention (1388 uses across 78
+    # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
+    # for its own function, so reading it is what keeps this body and the loop helpers
+    # it calls emitting into the SAME function (#257).
+    builder = codegen.builder
     tag_ptr = builder.gep(value_ptr, [ZERO_I32, ZERO_I32], name="enum_tag_ptr")
     tag = builder.load(tag_ptr, name="enum_tag")
 
@@ -609,7 +664,7 @@ def _emit_enum_destructor(
                     field_ptr = builder.bitcast(field_i8_ptr, ir.PointerType(field_llvm_type), name=f"field_{j}_ptr")
 
                     # Recursively destroy this field
-                    emit_value_destructor(codegen, builder, field_ptr, assoc_type)
+                    emit_value_destructor(codegen, field_ptr, assoc_type)
 
                 # Update offset for next field
                 offset += codegen.types.get_type_size_bytes(assoc_type)

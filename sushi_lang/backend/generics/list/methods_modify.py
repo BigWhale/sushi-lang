@@ -328,7 +328,7 @@ def _emit_destroy_elements_loop(codegen: Any, data_ptr: ir.Value, count: ir.Valu
     from sushi_lang.backend.generics.container_walk import emit_container_walk
 
     def destroy(element_ptr: ir.Value, _index: ir.Value) -> None:
-        emit_value_destructor(codegen, codegen.builder, element_ptr, element_type)
+        emit_value_destructor(codegen, element_ptr, element_type)
 
     emit_container_walk(codegen, data_ptr, count, destroy, prefix="destroy")
 

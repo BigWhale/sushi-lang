@@ -459,7 +459,7 @@ class DynamicArrayManager:
         # Pass the variable slot (address of the Own<T> struct); the recursive
         # destructor geps field 0, recurses into the payload, then frees.
         own_slot = self.codegen.memory.find_local_slot(var_name)
-        emit_value_destructor(self.codegen, self.builder, own_slot, own_type)
+        emit_value_destructor(self.codegen, own_slot, own_type)
 
     def _emit_array_destructor(self, name: str) -> None:
         """Generate destructor code for a dynamic array.
@@ -477,7 +477,7 @@ class DynamicArrayManager:
 
         # Use the general destructor for the array struct
         from sushi_lang.backend.destructors import emit_value_destructor
-        emit_value_destructor(self.codegen, self.builder, descriptor.llvm_alloca, DynamicArrayType(descriptor.element_type))
+        emit_value_destructor(self.codegen, descriptor.llvm_alloca, DynamicArrayType(descriptor.element_type))
 
     def _update_array_fields(self, name: str, length: int, capacity: int, data_ptr: ir.Value) -> None:
         """Update the len, cap, and data fields of a dynamic array struct.
@@ -641,4 +641,4 @@ class DynamicArrayManager:
             struct_alloca: The alloca (pointer) holding the struct value.
         """
         from sushi_lang.backend.destructors import emit_value_destructor
-        emit_value_destructor(self.codegen, self.builder, struct_alloca, struct_type)
+        emit_value_destructor(self.codegen, struct_alloca, struct_type)

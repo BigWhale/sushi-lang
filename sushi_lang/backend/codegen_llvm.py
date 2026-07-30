@@ -329,7 +329,7 @@ class LLVMCodegen:
             emit_free(self.builder, self, data_ptr)
         from sushi_lang.backend.destructors import emit_string_destructor_from_value
         for fat_value in value_temps:
-            emit_string_destructor_from_value(self, self.builder, fat_value)
+            emit_string_destructor_from_value(self, fat_value)
 
     def get_realloc_func(self) -> ir.Function:
         """Get or declare realloc function."""

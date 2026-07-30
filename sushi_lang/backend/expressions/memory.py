@@ -499,7 +499,7 @@ def destroy_enum_temp(codegen: 'LLVMCodegen', expr_ast, enum_value: ir.Value,
     # there would allocate per iteration and grow the stack without bound.
     slot = codegen.memory.entry_alloca(enum_value.type, "enum_temp_slot")
     codegen.builder.store(enum_value, slot)
-    emit_value_destructor(codegen, codegen.builder, slot, resolved)
+    emit_value_destructor(codegen, slot, resolved)
 
 
 def move_owning_arg_into_container(codegen: 'LLVMCodegen', arg_ast) -> None:
