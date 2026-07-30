@@ -1,0 +1,59 @@
+# RAII for a self-referential `List@(Tree)` (#257). Every node's List buffer is freed
+# exactly once, at every level of the tree.
+#
+# This is the gate that matters for defect B, whose real failure mode is not a crash. The
+# out-of-line destructor's element loop was emitted into the wrong function, so the
+# per-element cleanup never ran on the right data -- and once the loop was put back with
+# defect A's stride-zero GEP still in place, every iteration would have freed element 0
+# instead, a double-free. Neither is a compile error and neither prints anything wrong.
+#
+# The tree is built and dropped inside run_test(), so all three levels are cleaned up at
+# its scope exit while main() is still live -- the interposer sees the frees, not process
+# teardown.
+#
+# Caveat worth keeping in mind (BUGS.md): a green leak gate is not proof of memory safety,
+# because a double-free is not a leak. The behavioural twins in tests/types/ are what
+# catch a wrong stride; this catches the missing free.
+# EXPECT_STDOUT_EXACT: "nodes=6\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Tree:
+    i32 value
+    List@(Tree) kids
+
+fn run_test() i32:
+    # Two children, each with two of their own: 1 + 2 + (2 * 2) = 7 nodes,
+    # 7 List buffers to free. Counted below as root + kids + grandkids = 6 visited.
+    let List@(Tree) a_kids = List.new()
+    a_kids.push(Tree(11, List.new()))
+    a_kids.push(Tree(12, List.new()))
+
+    let List@(Tree) b_kids = List.new()
+    b_kids.push(Tree(21, List.new()))
+    b_kids.push(Tree(22, List.new()))
+
+    let List@(Tree) kids = List.new()
+    kids.push(Tree(1, a_kids))
+    kids.push(Tree(2, b_kids))
+
+    let Tree root = Tree(0, kids)
+
+    # Walk with `.get(i)??` rather than `foreach(c in kids.iter())`: reading a field of a
+    # List-iterator binding is a separate open bug (#263, CE0056). `.get()` on a List of
+    # OWNING elements deep-copies the element out (#140/#154), so this also exercises the
+    # recursive clone path and its cleanup, not just the destructor.
+    let i32 count = 0
+    foreach(i in 0..root.kids.len()):
+        let Tree child = root.kids.get(i)??
+        count := count + 1
+        foreach(j in 0..child.kids.len()):
+            let Tree g = child.kids.get(j)??
+            if (g.value > 0):
+                count := count + 1
+    println("nodes={count}")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(99))

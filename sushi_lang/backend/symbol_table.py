@@ -5,6 +5,7 @@ from LLVM modules. It's the first phase of the two-phase linking process that
 resolves symbol conflicts between the main program, user libraries, and stdlib.
 """
 from __future__ import annotations
+import re
 from dataclasses import dataclass
 from enum import Enum
 
@@ -96,6 +97,12 @@ class SymbolTable:
         self.module_name = module_name
         self.source = source
         self.symbols: dict[str, SymbolInfo] = {}  # symbol_name -> SymbolInfo
+        # Module-level identified-type declarations (`%Point = type {i32, i32}`).
+        # These live on the MODULE, not on any symbol, so a per-symbol ir_text never
+        # carries them -- but since #257 a user struct is an identified type, so a merged
+        # module that omits the declaration leaves `%Point` opaque and every insertvalue
+        # through it fails to parse. Collected here so the merger can re-emit them.
+        self.type_defs: set[str] = set()
 
     def add_symbol(self, symbol: SymbolInfo) -> None:
         """Add a symbol to the table."""
@@ -168,6 +175,25 @@ def _get_linkage_name(linkage_value: int) -> str:
     return linkage_names.get(linkage_value, f"unknown({linkage_value})")
 
 
+# A module-level identified-type declaration: `%Point = type { i32, i32 }` or
+# `%"List<i32>" = type { ... }`. Anchored at column 0, which is what distinguishes a
+# declaration from a *use* inside an indented instruction.
+_TYPE_DEF_RE = re.compile(r'^(%[A-Za-z_$.][\w$.]*|%"[^"]*") = type .+$', re.MULTILINE)
+
+
+def _extract_module_type_defs(module: llvm.ModuleRef) -> set[str]:
+    """Collect a module's identified-type declarations from its printed IR.
+
+    Needed since #257 made every user struct an LLVM identified type: the declaration is
+    module-level state that no per-symbol `str(func)` includes, so without re-emitting it
+    the merged module has `%Point` opaque and `insertvalue %Point ...` will not parse.
+
+    Read from the printed text rather than an API call because llvmlite's ModuleRef exposes
+    no identified-type iterator.
+    """
+    return {m.group(0).strip() for m in _TYPE_DEF_RE.finditer(str(module))}
+
+
 def extract_symbol_table(
     module: llvm.ModuleRef,
     module_name: str,
@@ -184,6 +210,7 @@ def extract_symbol_table(
         SymbolTable with all symbols from the module.
     """
     table = SymbolTable(module_name, source)
+    table.type_defs = _extract_module_type_defs(module)
 
     # Extract function symbols
     for func in module.functions:

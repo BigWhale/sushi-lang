@@ -1,0 +1,44 @@
+# The `Node[]` twin of test_run_recursive_struct_list_children.sushi (#257).
+#
+# Same reason for three distinct child values: defect A's stride-zero element GEP is
+# invisible with one element. This shape reached the failure at a different place from
+# the List one -- eagerly, in emit_struct_constructor's insert_value, rather than as a
+# malformed-IR parse error -- so both are pinned.
+#
+# `.iter()` on a dynamic-array FIELD is a separate open limitation (CE0072: "iter() on a
+# complex dynamic array expression"), so this walks by index. The List twin can use
+# .iter() because a List field supports it.
+# EXPECT_STDOUT_CONTAINS: "root: 1"
+# EXPECT_STDOUT_CONTAINS: "kids: 3"
+# EXPECT_STDOUT_CONTAINS: "each: 10 20 30"
+# EXPECT_STDOUT_CONTAINS: "sum: 61"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Node:
+    i32 value
+    Node[] kids
+
+fn run_test() i32:
+    let Node[] kids = from([
+        Node(10, from([])),
+        Node(20, from([])),
+        Node(30, from([]))
+    ])
+
+    let Node root = Node(1, kids)
+    println("root: {root.value}")
+    println("kids: {root.kids.len()}")
+
+    # Index each element: a zero-stride GEP would print "10 10 10".
+    println("each: {root.kids[0].value} {root.kids[1].value} {root.kids[2].value}")
+
+    let i32 acc = root.value
+    foreach(i in 0..root.kids.len()):
+        acc := acc + root.kids[i].value
+    println("sum: {acc}")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(99))

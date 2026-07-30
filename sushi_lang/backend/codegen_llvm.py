@@ -81,7 +81,16 @@ class LLVMCodegen:
             perk_impl_table: Optional perk implementation table for method resolution.
             const_table: Optional constant table for constant evaluation.
         """
-        self.module: ir.Module = ir.Module(name=module_name)
+        # A context of our OWN, not llvmlite's process-wide global_context. User structs
+        # are emitted as LLVM *identified* types (#257), and identified types are registered
+        # per Context -- on the global one they would leak between compilations in a single
+        # process (which the test suite does constantly), so a second `struct Tree` would
+        # find the first one's type already non-opaque and silently inherit its layout.
+        # Every module this codegen creates shares this context: the type cache is
+        # whole-program and is deliberately NOT reset per unit, so a per-unit module must be
+        # able to declare the same identified types.
+        self.llvm_context: ir.Context = ir.Context()
+        self.module: ir.Module = ir.Module(name=module_name, context=self.llvm_context)
         self.struct_table = struct_table or StructTable()
         self.enum_table = enum_table or EnumTable()
         from sushi_lang.semantics.passes.collect import FunctionTable, PerkImplementationTable, ConstantTable
@@ -96,7 +105,8 @@ class LLVMCodegen:
         self.external_sigs = {}
 
         # Initialize specialized subsystems following SOLID principles
-        self.types = LLVMTypeSystem(struct_table=self.struct_table, enum_table=self.enum_table)
+        self.types = LLVMTypeSystem(struct_table=self.struct_table, enum_table=self.enum_table,
+                                    context=self.llvm_context)
         self.utils = LLVMUtils(self)
         self.runtime = LLVMRuntime(self)
         self.memory = ScopeManager(self)
@@ -680,7 +690,10 @@ class LLVMCodegen:
         saved_constants = self.constants.copy()
         saved_ast_constants = self.ast_constants.copy()
 
-        self.module = ir.Module(name=f"unit_{target_unit.name}")
+        # Same context as every other module of this compilation -- the type cache persists
+        # across units, so this module must be able to declare the identified struct types
+        # the cache already handed out (#257).
+        self.module = ir.Module(name=f"unit_{target_unit.name}", context=self.llvm_context)
         self.funcs = {}
         self.constants = {}
         self.ast_constants = {}

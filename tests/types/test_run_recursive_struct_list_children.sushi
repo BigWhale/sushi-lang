@@ -1,0 +1,44 @@
+# A self-referential `List@(Tree)` with SEVERAL children, read back by value (#257).
+#
+# The child count is the point. Defect A left the element type as the incomplete `{}`,
+# which makes the element GEP `getelementptr {}, {}* %data` -- stride ZERO. A
+# single-element container cannot tell stride 0 from stride sizeof(Tree): every index
+# lands on element 0 and the test still passes. Three DISTINCT child values do not, so
+# a wrong stride shows up as a wrong sum rather than as silence.
+# EXPECT_STDOUT_CONTAINS: "root: 1"
+# EXPECT_STDOUT_CONTAINS: "kids: 3"
+# EXPECT_STDOUT_CONTAINS: "each: 10 20 30"
+# EXPECT_STDOUT_CONTAINS: "sum: 61"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Tree:
+    i32 value
+    List@(Tree) kids
+
+fn run_test() i32:
+    let List@(Tree) kids = List.new()
+    kids.push(Tree(10, List.new()))
+    kids.push(Tree(20, List.new()))
+    kids.push(Tree(30, List.new()))
+
+    let Tree root = Tree(1, kids)
+    println("root: {root.value}")
+    println("kids: {root.kids.len()}")
+
+    # Read each element individually: a zero-stride GEP would print "10 10 10".
+    # Bound with `let ... = .get(i)??` rather than `foreach(c in kids.iter())` because
+    # reading a field of a List-iterator binding is a separate open bug (#263, CE0056)
+    # that reproduces with no recursion at all.
+    let Tree c0 = root.kids.get(0)??
+    let Tree c1 = root.kids.get(1)??
+    let Tree c2 = root.kids.get(2)??
+    println("each: {c0.value} {c1.value} {c2.value}")
+
+    let i32 acc = root.value + c0.value + c1.value + c2.value
+    println("sum: {acc}")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(99))

@@ -119,9 +119,11 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     # does not raise CE0017 (issue #131). Mirrors the self-by-value reconcile in
     # emit_method_call; fires only on an exact pointer-to-value-struct mismatch, so a
     # &peek/&poke pointer param (PointerType != struct) never triggers it.
+    # BaseStructType so a user struct's identified type (#257) still reconciles here; it is
+    # a sibling of LiteralStructType, not a subclass.
     args = [
         codegen.builder.load(v, name="arg_by_value")
-        if isinstance(p.type, ir.LiteralStructType) and v.type == ir.PointerType(p.type)
+        if isinstance(p.type, ir.types.BaseStructType) and v.type == ir.PointerType(p.type)
         else v
         for v, p in zip(args, params, strict=True)
     ]
@@ -470,8 +472,10 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     # arg.type and this never misfires. The by-value `self` is a shallow copy sharing
     # the caller's `data*`; the extension callee never registers it for RAII cleanup
     # (its body is emitted with fn_def=None), so there is no double-free.
+    # BaseStructType: covers a user struct's identified type (#257) as well as the
+    # anonymous fat pointers.
     if (emitted_args
-            and isinstance(params[0].type, ir.LiteralStructType)
+            and isinstance(params[0].type, ir.types.BaseStructType)
             and emitted_args[0].type == ir.PointerType(params[0].type)):
         emitted_args[0] = codegen.builder.load(emitted_args[0], name="self_by_value")
 

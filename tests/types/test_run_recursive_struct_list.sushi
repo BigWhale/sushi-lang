@@ -6,18 +6,20 @@
 # `Maybe@(Own@(T))` goes through a generic enum), so it is worth pinning
 # separately.
 #
-# Declaration-only on purpose. CONSTRUCTING a self-referential List is a separate,
-# still-open backend limitation -- `Tree(1, List.new())` fails with an LLVM
-# "use of undefined value '%list_cleanup_element_ptr'" because the element type is
-# still the incomplete `{}*` when list cleanup is emitted. That is downstream of
-# this fix, not part of it; do not widen this test to cover it until that is fixed.
-# EXPECT_STDOUT_EXACT: "declared\n"
+# Widened from declaration-only to CONSTRUCTION by #257, which fixed the two
+# backend defects behind `Tree(1, List.new())`: the struct's LLVM type was a
+# LiteralStructType placeholder that could never be back-filled (so the element
+# stayed the incomplete `{}*`), and the out-of-line destructor's element loop was
+# emitted through the ambient builder into the wrong function.
+# EXPECT_STDOUT_EXACT: "v=1 n=0\n"
 # EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
 
 struct Tree:
     i32 value
     List@(Tree) kids
 
 fn main() i32:
-    println("declared")
+    let Tree root = Tree(1, List.new())
+    println("v={root.value} n={root.kids.len()}")
     return Result.Ok(0)

@@ -56,7 +56,12 @@ def get_element_size_constant(codegen: 'LLVMCodegen', element_type: ir.Type) -> 
 
     # Struct types: Use LLVM's GEP trick to get actual size with padding
     # getelementptr(null, 1) gives offset of second element = size of one element
-    elif isinstance(element_type, ir.LiteralStructType):
+    #
+    # BaseStructType, not LiteralStructType: a user struct is an *identified* type
+    # (`%Tree`, #257), which is a SIBLING of LiteralStructType rather than a subclass. The
+    # narrower check sent every user-struct element to the CE0079 below -- and this is the
+    # element-size path for `T[]`, so it fired on the first recursive `Node[]`.
+    elif isinstance(element_type, ir.types.BaseStructType):
         # Create a null pointer of type element_type*
         null_ptr = ir.Constant(ir.PointerType(element_type), None)
         # GEP to get pointer to element [1]
@@ -96,12 +101,18 @@ def calculate_llvm_type_size(llvm_type: 'ir.Type') -> int:
         return 4
     elif isinstance(llvm_type, ir.DoubleType):
         return 8
-    elif isinstance(llvm_type, ir.LiteralStructType):
+    elif isinstance(llvm_type, ir.types.BaseStructType):
         # String fat pointer {i8*, i32, i8 owned}: use the ALIGNED sizeof (16), not the raw
         # field sum (13). The owned byte at offset 12 must survive a round-trip through an
         # enum/Result/Maybe payload, whose data array is sized from this (#145).
+        #
+        # This sniff stays on the LITERAL type deliberately: a string is an anonymous fat
+        # pointer, never a named one, so a user struct that happens to be shaped
+        # {i8*, i32, i8} must NOT be mistaken for one. The general field-sum below covers
+        # every struct, identified (#257) or literal.
         els = llvm_type.elements
-        if (len(els) == 3 and isinstance(els[0], ir.PointerType)
+        if (isinstance(llvm_type, ir.LiteralStructType)
+                and len(els) == 3 and isinstance(els[0], ir.PointerType)
                 and isinstance(els[1], ir.IntType) and els[1].width == 32
                 and isinstance(els[2], ir.IntType) and els[2].width == 8):
             return 16

@@ -30,7 +30,8 @@ class ModuleMerger:
     def merge(
         self,
         resolved_symbols: dict[str, 'SymbolInfo'],
-        module_name: str = "merged"
+        module_name: str = "merged",
+        module_type_defs: set[str] | None = None
     ) -> llvm.ModuleRef:
         """Build new module from resolved symbols.
 
@@ -39,6 +40,11 @@ class ModuleMerger:
         Args:
             resolved_symbols: Map of symbol_name -> chosen SymbolInfo.
             module_name: Name for the new module.
+            module_type_defs: Identified-type declarations gathered from the SOURCE
+                modules (`%Point = type {i32, i32}`). Required since #257 made user structs
+                identified types: the declaration is module-level state, so no per-symbol
+                `ir_text` carries it, and a merged module without it leaves the type opaque
+                and fails to parse at the first `insertvalue`/`alloca` through it.
 
         Returns:
             New LLVM module with deduplicated symbols.
@@ -46,9 +52,11 @@ class ModuleMerger:
         Raises:
             RuntimeError: If the merged IR fails to parse.
         """
-        # Collect all type definitions from all symbol IR texts
-        # We need to do this because type definitions must come before uses
+        # Type definitions must come before uses. Union the source modules' declarations
+        # with any that happen to be embedded in a symbol's own text.
         type_defs = self._extract_type_definitions(resolved_symbols)
+        if module_type_defs:
+            type_defs |= module_type_defs
 
         # Build IR text by concatenating all symbol definitions
         ir_parts = [
