@@ -1,0 +1,43 @@
+# Two levels of self-reference: a `Tree` whose children have children (#257).
+#
+# This is the shape that actually exercises the RECURSION, not just the type. Cleaning up
+# a one-level tree never re-enters the element destructor, so the out-of-line
+# `__sushi_dtor_Tree` self-call -- the whole reason such destructors are emitted
+# out-of-line (#139) rather than inlined -- is never taken. Only a grandchild forces it.
+#
+# It is also where defect B was worst: the element loop and the element-destructor call
+# were emitted into two DIFFERENT functions, so the recursion never ran at all.
+# EXPECT_STDOUT_CONTAINS: "root: 1"
+# EXPECT_STDOUT_CONTAINS: "l1: 2"
+# EXPECT_STDOUT_CONTAINS: "l2: 3"
+# EXPECT_STDOUT_CONTAINS: "total: 6"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Tree:
+    i32 value
+    List@(Tree) kids
+
+fn run_test() i32:
+    # Depth 3: root(1) -> mid(2) -> leaf(3)
+    let List@(Tree) grandkids = List.new()
+    grandkids.push(Tree(3, List.new()))
+
+    let List@(Tree) kids = List.new()
+    kids.push(Tree(2, grandkids))
+
+    let Tree root = Tree(1, kids)
+
+    let Tree mid = root.kids.get(0)??
+    let Tree leaf = mid.kids.get(0)??
+    println("root: {root.value}")
+    println("l1: {mid.value}")
+    println("l2: {leaf.value}")
+
+    let i32 total = root.value + mid.value + leaf.value
+    println("total: {total}")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(99))

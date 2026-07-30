@@ -348,7 +348,7 @@ def emit_hashmap_remove(
     # returned Maybe.Some, so it must NOT be destroyed. Without this, a heap-owning
     # key (e.g. a string) is leaked when its entry becomes a tombstone.
     from sushi_lang.backend.destructors import emit_value_destructor
-    emit_value_destructor(codegen, builder, entry_key_ptr, key_type)
+    emit_value_destructor(codegen, entry_key_ptr, key_type)
 
     # Mark entry as Tombstone
     builder.store(ir.Constant(codegen.types.i8, ENTRY_TOMBSTONE), state_ptr)

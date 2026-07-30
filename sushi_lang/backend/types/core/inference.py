@@ -119,6 +119,10 @@ class TypeInference:
         Returns:
             True if the type is a string fat pointer struct, False otherwise.
         """
+        # LiteralStructType on purpose (#257): a string is an ANONYMOUS fat pointer, never a
+        # named type. Widening this to BaseStructType would make a user struct shaped
+        # {i8*, i32, i8} answer True and be treated as a string -- the shape-collision class
+        # that giving user structs their own identified types removes.
         if not isinstance(llvm_type, ir.LiteralStructType):
             return False
 
@@ -146,6 +150,10 @@ class TypeInference:
         Returns:
             True if the type is a dynamic array struct, False otherwise.
         """
+        # LiteralStructType on purpose (#257): a dynamic array is an ANONYMOUS descriptor.
+        # This is the sharpest case of the shape collision -- `struct S: i32 a; i32 b; ptr p`
+        # is exactly {i32, i32, T*}, and while user structs were literal it answered True
+        # here and was handled as a dynamic array. Do not widen.
         if not isinstance(llvm_type, ir.LiteralStructType):
             return False
 

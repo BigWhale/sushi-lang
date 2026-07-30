@@ -290,7 +290,7 @@ class ScopeManager:
             return
         from sushi_lang.backend.destructors import emit_function_value_destructor_from_value
         for fat in fat_values:
-            emit_function_value_destructor_from_value(self.codegen, builder, fat)
+            emit_function_value_destructor_from_value(self.codegen, fat)
 
     def emit_closure_temp_cleanup_all(self) -> None:
         """Emit the guarded env free for every live inline-closure temp across all open scopes.
@@ -574,12 +574,12 @@ class ScopeManager:
     def _emit_closure_free(self, slot: ir.AllocaInstr) -> None:
         """Emit the runtime-guarded env free for a function-value local (`if drop: drop(env)`)."""
         from sushi_lang.backend.destructors import emit_function_value_destructor
-        emit_function_value_destructor(self.codegen, self.codegen.builder, slot)
+        emit_function_value_destructor(self.codegen, slot)
 
     def _emit_string_free(self, slot: ir.AllocaInstr) -> None:
         """Emit the owned-bit-guarded free for a string local (`if owned: free(data)`) (#145)."""
         from sushi_lang.backend.destructors import emit_string_destructor
-        emit_string_destructor(self.codegen, self.codegen.builder, slot)
+        emit_string_destructor(self.codegen, slot)
 
     def emit_string_cleanup_all(self) -> None:
         """Emit the guarded free for every live string local across all open scopes.

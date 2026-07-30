@@ -39,6 +39,7 @@ class TypeMapper:
         cache: TypeCache,
         struct_table: StructTable,
         enum_table: EnumTable,
+        context: 'ir.Context | None' = None,
     ):
         """Initialize type mapper with caching and type tables.
 
@@ -46,10 +47,13 @@ class TypeMapper:
             cache: TypeCache for struct/enum caching
             struct_table: Struct table for resolving struct types
             enum_table: Enum table for resolving enum types
+            context: LLVM context owning the identified struct types (#257). Must be the
+                context of the modules this compilation emits.
         """
         self.cache = cache
         self.struct_table = struct_table
         self.enum_table = enum_table
+        self.context = context if context is not None else ir.Context()
 
         # LLVM primitive types
         self.i8: ir.IntType = ir.IntType(INT8_BIT_WIDTH)
@@ -230,26 +234,47 @@ class TypeMapper:
         if cached is not None:
             return cached
 
-        # Special handling for HashMap<K, V>
+        # The generic BUILTIN containers are anonymous LAYOUT DESCRIPTORS, not nominal
+        # types, and each has a hand-written LLVM shape that other backend code builds
+        # directly (`{T*}` in generics/own.py, `{K, V, u8}` in generics/hashmap/types.py).
+        # They must keep matching those, so they stay literal and never take the identified
+        # path below (#257) -- an identified `%Own<i32>` would not equal the `{i32*}` that
+        # emit_own_alloc constructs, which is exactly the CE0017 wall this hit.
         if struct_type.name.startswith("HashMap<"):
             return self._create_hashmap_struct_type(struct_type)
 
-        # Special handling for List<T>
         if struct_type.name.startswith("List<"):
             return self._create_list_struct_type(struct_type)
 
-        # For recursive structs, cache a placeholder first to break the cycle
-        llvm_struct = ir.LiteralStructType([])
+        if struct_type.name.startswith("Own<") or struct_type.name.startswith("Entry<"):
+            return self._create_builtin_literal_struct_type(struct_type)
+
+        # A user struct is an LLVM *identified* type: `%Name = type {...}`. That is what
+        # makes a self-reference expressible (#257) -- `set_body` fills the type IN PLACE,
+        # so a pointer taken to it during the field walk below stays valid and resolves to
+        # the finished layout.
+        #
+        # This used to cache an empty `ir.LiteralStructType([])` placeholder, walk the
+        # fields, then cache a NEW literal built from them. A literal struct type is a
+        # structural VALUE, so there is nothing to fill in: re-caching replaced the cache
+        # entry, but the `{}` the walk had already embedded into `{i32, i32, {}*}` stayed
+        # empty forever. `struct Tree: List@(Tree) kids` came out as
+        # `{i32, {i32, i32, {}*}}`, so every element GEP through it had stride ZERO and a
+        # freshly computed `Tree[]` disagreed with the struct's own field type.
+        #
+        # `struct_type.name` is used verbatim, including the `<...>` of an interned generic
+        # name (`Pair<i32, bool>`). It must NOT be sanitised or shortened: the name is the
+        # identity, so two monomorphizations that collided on one identified type would
+        # silently share a layout.
+        llvm_struct = self.context.get_identified_type(struct_type.name)
         self.cache.cache_struct(struct_type.name, llvm_struct)
 
-        # Compute field types (may recursively reference the cached struct)
+        # Compute field types (a self-reference resolves to the opaque handle above)
         field_types = []
         for _field_name, field_type in struct_type.fields:
             field_types.append(self.ll_type(field_type))
 
-        # Replace placeholder with actual struct type
-        llvm_struct = ir.LiteralStructType(field_types)
-        self.cache.cache_struct(struct_type.name, llvm_struct)
+        llvm_struct.set_body(*field_types)
         return llvm_struct
 
     def _create_hashmap_struct_type(self, struct_type: StructType) -> ir.LiteralStructType:
@@ -290,6 +315,26 @@ class TypeMapper:
 
         element_type = extract_element_type(struct_type, wrapper)
         llvm_struct = get_list_llvm_type(wrapper, element_type)
+
+        self.cache.cache_struct(struct_type.name, llvm_struct)
+        return llvm_struct
+
+    def _create_builtin_literal_struct_type(self, struct_type: StructType) -> ir.LiteralStructType:
+        """Map a generic BUILTIN container's declared fields to a literal LLVM struct.
+
+        Used for `Own<T>` (`{T*}` -- its single field is already a semantic PointerType) and
+        the user-facing `Entry<K, V>` (`{K, V}`). Both have a hand-written LLVM shape that
+        other backend code constructs directly -- generics/own.py's emit_own_alloc and
+        generics/hashmap/types.py's get_user_entry_type -- so they must stay LITERAL and
+        keep matching it. Promoting them to identified types (#257) made every
+        `Own<T>` construction a CE0017: `{i32*}` is not `%"Own<i32>"`.
+
+        This is the pre-#257 behaviour of the generic path, minus the placeholder dance:
+        these types are never self-referential (`Own<T>` names its pointee only through the
+        pointer), so they never needed a tie-the-knot handle in the first place.
+        """
+        field_types = [self.ll_type(field_type) for _name, field_type in struct_type.fields]
+        llvm_struct = ir.LiteralStructType(field_types)
 
         self.cache.cache_struct(struct_type.name, llvm_struct)
         return llvm_struct

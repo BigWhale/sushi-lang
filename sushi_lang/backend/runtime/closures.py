@@ -160,7 +160,7 @@ def get_or_create_env_drop(codegen: "LLVMCodegen", env_struct) -> ir.Function:
                     from sushi_lang.backend.generics.list.methods_destroy import emit_list_destroy
                     emit_list_destroy(codegen, field_ptr, fty)
                 else:
-                    emit_value_destructor(codegen, b, field_ptr, fty)
+                    emit_value_destructor(codegen, field_ptr, fty)
         finally:
             codegen.builder, codegen.func = saved_builder, saved_func
 

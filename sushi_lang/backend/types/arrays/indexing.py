@@ -104,6 +104,11 @@ def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
     from sushi_lang.backend.types.arrays.bounds import emit_bounds_check
 
     array_type = array_slot.type.pointee
+    # The LiteralStructType arms here and in the element-GEP below stay literal on purpose
+    # (#257). This is a two-way discrimination between a FIXED array (ir.ArrayType) and a
+    # DYNAMIC array's anonymous {i32, i32, T*} descriptor -- the only two things an indexable
+    # slot can hold. A user struct is never indexed with `[]`, and since #257 it is an
+    # identified type, so it cannot reach either arm by shape coincidence.
     if isinstance(array_type, ir.ArrayType):
         size_value = ir.Constant(codegen.i32, array_type.count)
         emit_bounds_check(codegen, index_value, size_value, prefix="array")

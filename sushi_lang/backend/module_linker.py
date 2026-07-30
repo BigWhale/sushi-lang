@@ -128,6 +128,11 @@ class TwoPhaseLinker:
         resolver = SymbolResolver(symbol_tables)
         resolved = resolver.resolve(reachable)
 
-        # Phase 4: Merge into new module
+        # Phase 4: Merge into new module. The identified-type declarations travel
+        # separately from the symbols because they are module-level state (#257).
+        module_type_defs: set[str] = set()
+        for table in symbol_tables:
+            module_type_defs |= table.type_defs
+
         merger = ModuleMerger(self.target_triple, self.data_layout)
-        return merger.merge(resolved, "sushi_linked")
+        return merger.merge(resolved, "sushi_linked", module_type_defs)

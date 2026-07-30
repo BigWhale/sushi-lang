@@ -1,0 +1,40 @@
+# RAII for a self-referential `Node[]` (#257) -- the dynamic-array twin of
+# test_recursive_struct_list_leak.sushi.
+#
+# Same reasoning: the per-element cleanup of a recursive container is emitted out-of-line
+# so it terminates (#139), and both of #257's defects broke that cleanup silently rather
+# than loudly. A nested tree means the destructor's self-call is actually taken, so every
+# level's heap buffer has to be accounted for.
+#
+# Walks by index because `.iter()` on a dynamic-array field is a separate open limitation
+# (CE0072).
+# EXPECT_STDOUT_EXACT: "nodes=6\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Node:
+    i32 value
+    Node[] kids
+
+fn run_test() i32:
+    let Node[] kids = from([
+        Node(1, from([Node(11, from([])), Node(12, from([]))])),
+        Node(2, from([Node(21, from([])), Node(22, from([]))]))
+    ])
+
+    let Node root = Node(0, kids)
+
+    let i32 count = 0
+    foreach(i in 0..root.kids.len()):
+        count := count + 1
+        foreach(j in 0..root.kids[i].kids.len()):
+            # Read the grandchild through both indices: this is the level that only exists
+            # if the recursive element type has a real stride.
+            if (root.kids[i].kids[j].value > 0):
+                count := count + 1
+    println("nodes={count}")
+
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(99))

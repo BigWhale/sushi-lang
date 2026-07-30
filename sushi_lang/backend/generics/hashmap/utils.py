@@ -415,8 +415,8 @@ def emit_destroy_all_entries(
     def destroy(entry_ptr: ir.Value, _index: ir.Value) -> None:
         key_ptr = builder.gep(entry_ptr, ENTRY_KEY_INDICES, name="key_ptr")
         value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="value_ptr")
-        emit_value_destructor(codegen, builder, key_ptr, key_type)
-        emit_value_destructor(codegen, builder, value_ptr, value_type)
+        emit_value_destructor(codegen, key_ptr, key_type)
+        emit_value_destructor(codegen, value_ptr, value_type)
 
     emit_container_walk(
         codegen, buckets_data, capacity, destroy,

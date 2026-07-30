@@ -378,7 +378,7 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
             element_ptr = codegen.builder.gep(old_data_ptr, [i_val], name="element_ptr")
 
             # Recursively destroy this element
-            emit_value_destructor(codegen, codegen.builder, element_ptr, element_semantic_type)
+            emit_value_destructor(codegen, element_ptr, element_semantic_type)
 
             # Increment loop counter
             i_next = codegen.builder.add(i_val, one, name="i_next")
@@ -445,7 +445,7 @@ def emit_dynamic_array_destroy(codegen: 'LLVMCodegen', array_value: ir.Value, ar
         # Use the general recursive destructor which handles element cleanup and buffer freeing
         # This automatically handles nested structures, enums, arrays, etc.
         from sushi_lang.backend.destructors import emit_value_destructor
-        emit_value_destructor(codegen, codegen.builder, array_value, array_semantic_type)
+        emit_value_destructor(codegen, array_value, array_semantic_type)
 
     # Reset all struct fields to zero/null
     zero = ir.Constant(codegen.types.i32, 0)

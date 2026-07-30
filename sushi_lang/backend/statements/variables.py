@@ -350,7 +350,10 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
           isinstance(dst.pointee, ir.IntType) and
           dst.pointee.width == 8):
         codegen.builder.store(val, slot)
-    elif isinstance(dst, ir.LiteralStructType):
+    elif isinstance(dst, ir.types.BaseStructType):
+        # BaseStructType: a user struct is an identified type (#257), a sibling of
+        # LiteralStructType rather than a subclass, so the narrower check sent every
+        # user-struct rebind to the else branch below instead of _emit_struct_rebind.
         # Check if this is a dynamic array
         if codegen.types.is_dynamic_array_type(dst):
             _emit_dynamic_array_rebind(codegen, stmt, slot, val, dst)

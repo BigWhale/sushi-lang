@@ -60,6 +60,9 @@ class LLVMUtils:
 
         # Check for Result<T> enum type: {i32 tag, [N x i8] data}
         # For Result, check if tag == 0 (Ok variant)
+        # LiteralStructType on purpose (#257): enums keep their anonymous
+        # {i32 tag, [N x i8]} layout -- only user STRUCTS became identified types. A user
+        # struct shaped {i32, [N x i8]} must not be read as a Result here.
         if isinstance(ty, ir.LiteralStructType) and len(ty.elements) == 2:
             # Check if first element is i32 (tag) and second is an array (data)
             if isinstance(ty.elements[0], ir.IntType) and ty.elements[0].width == 32:
@@ -285,8 +288,10 @@ class LLVMUtils:
         if isinstance(dst, ir.ArrayType):
             return self._cast_to_array(v, dst)
 
-        # Struct type checks (exact match required - no conversion between different struct types)
-        if isinstance(dst, ir.LiteralStructType) and isinstance(v.type, ir.LiteralStructType):
+        # Struct type checks (exact match required - no conversion between different struct
+        # types). BaseStructType so a user struct's identified type (#257) reports the
+        # specific "cannot convert struct to struct" diagnostic rather than the generic one.
+        if isinstance(dst, ir.types.BaseStructType) and isinstance(v.type, ir.types.BaseStructType):
             # If both are structs and structurally identical, no cast needed (caught by fast path above)
             # If they differ, this is a type error that shouldn't happen after semantic analysis
             raise_internal_error("CE0017", src=str(v.type), dst=str(dst))
@@ -434,7 +439,11 @@ class LLVMUtils:
             return ir.Constant(llvm_type, [element_zero] * llvm_type.count)
 
         # Struct types -> {0, 0, ...}
-        if isinstance(llvm_type, ir.LiteralStructType):
+        # BaseStructType covers both the anonymous fat pointers and a user struct's
+        # *identified* type (`%Tree`, #257), which is a sibling of LiteralStructType, not a
+        # subclass. Narrower, this fell through to the ir.Undefined below and every user
+        # struct was zero-initialised with undef -- garbage, and silent.
+        if isinstance(llvm_type, ir.types.BaseStructType):
             field_zeros = [self.get_zero_value(field_type) for field_type in llvm_type.elements]
             return ir.Constant(llvm_type, field_zeros)
 

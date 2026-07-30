@@ -6,17 +6,20 @@
 # distinction: broaden that walk to cover DynamicArrayType and this test starts
 # failing with CE2095.
 #
-# Declaration-only, for the same reason as
-# test_run_recursive_struct_list.sushi: constructing a self-referential
-# container is a separate, still-open backend limitation (the element type is an
-# incomplete `{}*` when cleanup is emitted).
-# EXPECT_STDOUT_EXACT: "declared\n"
+# Widened from declaration-only to CONSTRUCTION by #257. The dynamic-array shape
+# failed differently from the List one -- `TypeError: Can only insert
+# {i32, i32, {}*} at [1] in {i32, {i32, i32, {}*}}` -- because the struct's own
+# LLVM type had captured the empty `{}` placeholder while a freshly computed
+# `Node[]` had the resolved element, so the two disagreed at the constructor.
+# EXPECT_STDOUT_EXACT: "v=1 n=0\n"
 # EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
 
 struct Node:
     i32 value
     Node[] kids
 
 fn main() i32:
-    println("declared")
+    let Node root = Node(1, from([]))
+    println("v={root.value} n={root.kids.len()}")
     return Result.Ok(0)

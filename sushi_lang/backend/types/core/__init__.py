@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect import StructTable, EnumTable
     from sushi_lang.semantics.typesys import Type as Ty
-    from llvmlite import ir
+
+from llvmlite import ir
 
 from sushi_lang.backend.types.core.caching import TypeCache
 from sushi_lang.backend.types.core.sizing import TypeSizing
@@ -32,12 +33,17 @@ class LLVMTypeSystem:
         self,
         struct_table: StructTable | None = None,
         enum_table: EnumTable | None = None,
+        context: 'ir.Context | None' = None,
     ):
         """Initialize the unified type system.
 
         Args:
             struct_table: Optional struct table for resolving struct types
             enum_table: Optional enum table for resolving enum types
+            context: LLVM context that owns the identified struct types (#257). Should be
+                the context of every module this compilation emits. Defaults to a fresh
+                one rather than llvmlite's process-wide global_context, so two compilations
+                in one process cannot see each other's struct layouts.
         """
         from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 
@@ -47,7 +53,8 @@ class LLVMTypeSystem:
         # Initialize subsystems
         self.cache = TypeCache()
         self.sizing = TypeSizing(self.struct_table, self.enum_table)
-        self.mapper = TypeMapper(self.cache, self.struct_table, self.enum_table)
+        self.mapper = TypeMapper(self.cache, self.struct_table, self.enum_table,
+                                 context or ir.Context())
         self.inference = TypeInference(
             self.mapper.i8,
             self.mapper.i32,

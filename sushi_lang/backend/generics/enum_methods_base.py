@@ -228,7 +228,7 @@ def _emit_owning_realise(
             codegen.builder.store(payload, result_slot)
             if not borrowed_default:
                 # We adopted the default temporary and are not returning it.
-                emit_value_destructor(codegen, codegen.builder, default_slot, owned_type)
+                emit_value_destructor(codegen, default_slot, owned_type)
         with else_block:
             fallback = codegen.builder.load(default_slot, name="realise_default")
             if borrowed_default:

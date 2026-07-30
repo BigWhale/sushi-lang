@@ -11,6 +11,16 @@ and of the value it computes: this helper emits blocks, it does not produce a
 result. Callbacks may append blocks of their own (emit_value_destructor does), so
 the loop always branches from `codegen.builder.block` as it stands *after* a
 callback returns, never from the block it positioned at before.
+
+This emits through the AMBIENT `codegen.builder`, never a builder passed in. A caller
+emitting an out-of-line function body must therefore SWAP `codegen.builder` (and
+`codegen.func`) for the duration, the way `_get_or_emit_dtor_func`,
+`_get_or_emit_clone_func` and the closure env destructor in runtime/closures.py do --
+not thread its own builder down. Threading it was #257's second defect: the loop
+blocks went to the caller's function while the callback's body went to the
+out-of-line one, so the IR referenced a value defined in another function. Threading
+a builder here would not have been enough either, since the element GEP goes through
+`gep_utils`, which reaches for the ambient builder as well.
 """
 
 from typing import Any, Callable, Optional
