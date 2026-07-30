@@ -10,6 +10,7 @@ Supports test metadata for specifying expected runtime behavior.
 """
 
 import atexit
+import io
 import re
 import subprocess
 import signal
@@ -111,16 +112,22 @@ class StickyBar:
         rows bar_row+1..end   the scroll region: the whole lower screen. Results
                               appear here and scroll up, vanishing under the bar
 
-    Getting there takes three steps in order, and skipping any one of them was a bug
-    in the first attempt:
+    The bar is placed where the cursor already is, and the screen is scrolled ONLY
+    when that would leave too little room:
 
-    1. **Scroll first.** Emit AREA+1 newlines so the terminal scrolls existing content
-       up into scrollback and hands back genuinely blank rows. Setting a scroll region
-       over rows that still hold text just overwrites that text.
-    2. **Anchor the bar where the text was**, i.e. at the row the cursor reached after
-       the scroll -- not at row 1. A bar at row 1 is both wrong and destructive.
-    3. **Set the region below it**, so the terminal does the scrolling. Nothing needs
-       to track how much room is left; running out of room *is* the region scrolling.
+    - >= MIN_VIEWPORT rows free below the cursor: the bar goes on the current row and
+      nothing scrolls. Whatever is on screen stays exactly where it is.
+    - fewer than that: emit MIN_VIEWPORT newlines, which scrolls the content up by
+      just enough and lands the bar on the row the text had reached. (The arithmetic
+      works out to exactly MIN_VIEWPORT newlines whatever the starting row: to reach
+      the bottom takes `rows - cur`, and the further `cur - (rows - MIN_VIEWPORT)`
+      scrolls the screen, and those sum to MIN_VIEWPORT.)
+
+    Either way the viewport is everything below the bar, so it grows with the window.
+
+    Placing the bar requires knowing where the cursor is, which only the terminal
+    knows -- hence the DSR query in `_cursor_row`. If it fails or times out, the
+    conservative branch (scroll) is taken, which is always safe.
 
     The scroll region is terminal state, not process state: leaving it set breaks the
     user's shell until `reset`. Every exit path restores it -- the context manager, an
@@ -129,8 +136,7 @@ class StickyBar:
     Only used on a TTY. Everything else (CI, pipes, --json, --verbose) keeps tqdm.
     """
 
-    MIN_ROWS = 10        # below this, plain scrolling beats a sticky layout
-    CONTEXT_ROWS = 3     # rows kept above the bar; the viewport takes all the rest
+    MIN_VIEWPORT = 15    # rows of results wanted below the bar before scrolling
 
     def __init__(self, total: int, desc: str = "Running tests", stream=None):
         self.total = max(1, total)
@@ -139,13 +145,58 @@ class StickyBar:
         self.n = 0
         self.start = time.monotonic()
         self.rows, self.cols = self._size()
-        # The viewport takes the whole lower screen: everything below the bar. Only
-        # CONTEXT_ROWS are kept above it, enough that the bar does not sit flush
-        # against the top edge.
-        self.bar_row = self.CONTEXT_ROWS
-        self.area = self.rows - self.bar_row
+        # Geometry is settled in __enter__: it depends on where the cursor is, which
+        # is only meaningful once the caller has finished printing its preamble.
+        self.bar_row = self.rows - self.MIN_VIEWPORT
+        self.area = self.MIN_VIEWPORT
         self._active = False
         self._prev_handlers: Dict[int, object] = {}
+
+    def _cursor_row(self) -> Optional[int]:
+        """Current cursor row via DSR (`ESC[6n`), or None if the terminal won't say.
+
+        The terminal replies `ESC[{row};{col}R` on stdin, so stdin has to be put in
+        raw mode to read it before a newline arrives. Guarded three ways, because a
+        terminal that never answers would otherwise hang the whole run: stdin must be
+        a TTY, the read is on a short select() timeout, and the reply length is
+        capped. Any failure returns None and the caller scrolls instead.
+        """
+        try:
+            fd = sys.stdin.fileno()
+            if not sys.stdin.isatty():
+                return None
+            import select
+            import termios
+            import tty
+        except (AttributeError, ValueError, ImportError, io.UnsupportedOperation):
+            return None
+
+        try:
+            saved = termios.tcgetattr(fd)
+        except termios.error:
+            return None
+        try:
+            tty.setraw(fd)
+            self.out.write("\033[6n")
+            self.out.flush()
+            reply = ""
+            while len(reply) < 16:
+                if not select.select([fd], [], [], 0.2)[0]:
+                    return None
+                reply += os.read(fd, 1).decode("ascii", errors="replace")
+                if reply.endswith("R"):
+                    break
+            else:
+                return None
+            match = re.search(r"\[(\d+);(\d+)R$", reply)
+            return int(match.group(1)) if match else None
+        except (OSError, termios.error):
+            return None
+        finally:
+            try:
+                termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+            except termios.error:
+                pass
 
     def _size(self) -> Tuple[int, int]:
         """Terminal size, asked of the stream's own fd.
@@ -167,18 +218,25 @@ class StickyBar:
         if not stream.isatty() or os.environ.get("SUSHI_TEST_PLAIN"):
             return False
         try:
-            return os.get_terminal_size(stream.fileno()).lines >= cls.MIN_ROWS
+            return os.get_terminal_size(stream.fileno()).lines >= cls.MIN_VIEWPORT + 3
         except (OSError, AttributeError, ValueError):
             return False
 
     # -- lifecycle ------------------------------------------------------------
 
     def __enter__(self) -> "StickyBar":
-        # 1. Scroll existing content up into scrollback, creating blank rows. The
-        #    cursor ends on the last row; nothing on screen has been destroyed.
-        self.out.write("\n" * (self.area + 1))
-        # 2. Anchor the bar at the row the text had reached before that scroll.
-        # 3. Confine scrolling to the rows beneath it, and drop the cursor in.
+        cur = self._cursor_row()
+        if cur is not None and self.rows - cur >= self.MIN_VIEWPORT:
+            # Enough room already: put the bar on the current row, scroll nothing.
+            self.bar_row = cur
+        else:
+            # Too little room (or the terminal would not say): scroll the content up
+            # by exactly enough, which leaves the bar on the row the text reached.
+            self.out.write("\n" * self.MIN_VIEWPORT)
+            self.bar_row = self.rows - self.MIN_VIEWPORT
+        self.area = self.rows - self.bar_row
+
+        # Confine scrolling to the rows beneath the bar, and drop the cursor in.
         self.out.write(f"\033[{self.bar_row + 1};{self.rows}r")
         self.out.write(f"\033[{self.bar_row + 1};1H")
         self.out.flush()
