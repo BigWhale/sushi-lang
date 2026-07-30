@@ -1,0 +1,14 @@
+# Issue #239: `to_bits()` is the receiver-dependent case -- f32 yields u32, f64 yields u64 --
+# and with primitive inference dead it was the worst-behaved of the three. It did not even
+# ICE: `let u32 b = pi.to_bits()` on an f64 compiled clean and SILENTLY TRUNCATED the 64-bit
+# IEEE-754 pattern to 32 bits, printing 1374389535 (the low half of 0x40091EB851EB851F).
+# Silent data loss in a method whose entire purpose is exact bit reinterpretation.
+#
+# A per-(method, receiver) return-type table is what makes this expressible at all.
+# EXPECT_ERROR_CODE: CE2002
+
+fn main() i32:
+    let f64 pi = 3.14
+    let u32 b = pi.to_bits()
+    println(b)
+    return Result.Ok(0)

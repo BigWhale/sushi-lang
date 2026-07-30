@@ -1,0 +1,19 @@
+# Issue #239: the generic-monomorph hole was pure ordering. `_check_extension_shadows_builtin`
+# ran immediately after Pass 1.8, but monomorphized generic extension methods are merged into
+# the extension table a few lines LATER -- so `extend Box@(i32) hash()` was never examined.
+# It compiled, and `b.hash()` printed the auto-derived FNV hash rather than `1`.
+#
+# The check now runs after that merge loop, so a concrete instantiation of a generic
+# extension is covered exactly like a plain one.
+# EXPECT_ERROR_CODE: CE2097
+
+struct Box@(T):
+    T value
+
+extend Box@(i32) hash() u64:
+    return 1 as u64
+
+fn main() i32:
+    let Box@(i32) b = Box(7)
+    println(b.hash())
+    return Result.Ok(0)

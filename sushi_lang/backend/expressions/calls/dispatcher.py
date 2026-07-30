@@ -281,23 +281,35 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     This function implements UFCS (Uniform Function Call Syntax) for extension methods.
     Method calls are rewritten as function calls with the receiver as the first argument.
 
-    The dispatching logic checks for built-in methods in the following order:
+    Every built-in is resolved BEFORE the user-extension fallback, which is why an extension
+    method whose name collides with a built-in can never run -- Pass 2 rejects one as CE2097
+    rather than letting it be emitted and never called. The same precedence is implemented in
+    validation and inference; see docs/design/method-resolution.md.
+
+    The steps below mirror the numbered comments in the body -- keep them in step:
+    0. FFI foreign namespace calls (libc.strlen(...))
     1. Enum constructors (e.g., Color.Red(), Result.Ok())
     2. Struct constructors (e.g., Own.alloc())
     3. stdio methods (stdin/stdout/stderr)
     4. File methods
-    5. Result<T> methods
-    6. Maybe<T> methods
+    5. Result<T, E> and Maybe<T> methods (is_ok, is_some, realise, expect, ...)
     7. Own<T> instance methods (get, destroy)
     8. HashMap<K, V> methods (new, insert, get, etc.)
     9. List<T> methods (new, push, pop, get, etc.)
+    9.5 Primitive static reinterpret (f64.from_bits / f32.from_bits)
     10. Array methods (both fixed and dynamic)
     11. String methods
-    12. Perk methods (extend Type with Perk) - BEFORE auto-derived
+    12. Perk methods (extend Type with Perk) - BEFORE auto-derived, deliberately: a perk
+        implementation is the sanctioned way to replace a built-in
     13. Auto-derived struct hash
     14. Auto-derived enum hash
-    15. Primitive methods (numeric types, bool)
-    16. Extension methods (user-defined)
+    14a. Auto-derived struct clone (#134)
+    14b. Auto-derived enum clone (#134)
+    15. Primitive methods (to_str, hash, to_bits)
+    16. Extension methods (user-defined) -- the fallback
+
+    (There is no step 6: Result and Maybe were merged into step 5 and the numbering was left
+    alone rather than renumbering every comment.)
 
     Args:
         codegen: The LLVM code generator.

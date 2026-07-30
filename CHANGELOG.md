@@ -27,6 +27,19 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   string-only composites still copy. The normative spec is `docs/design/move-semantics.md`
 
 ### Added
+- **`CE2097`: an extension method cannot shadow a built-in** (#239). Every layer of method
+  resolution -- validation, inference and code generation -- picks a built-in *before* falling back
+  to extension methods, so a colliding extension is compiled and then never called. It is not
+  lower-priority, it is unreachable, which is the bar the `CW3505` note sets for erroring rather
+  than warning. Verified silently dead beforehand: `extend P hash()` returned the compiler's FNV
+  hash, `extend i32 to_str()` printed `5` rather than the user's string, `extend Box@(i32) hash()`
+  was never even examined, and `extend string len()` collided at *link* time with the stdlib symbol
+  (`CE0007`). The check covers every built-in family -- the compiler-derived `hash()`/`clone()`, the
+  primitive and string methods, the array methods, and the `Result`/`Maybe`/`Own`/`List`/`HashMap`
+  methods -- keying on whether a built-in genuinely exists for that exact (type, name) pair, never
+  on the bare method name. Perk implementations are the sanctioned override and are unaffected:
+  they take precedence at every layer by design. The rule is now written down in
+  `docs/design/method-resolution.md`
 - **`CE2096`: an in-place array method cannot target a constant** (#248). `.fill()` and `.reverse()`
   mutate their receiver, and a constant is emitted as a `global_constant` -- i.e. `.rodata` -- so a
   store through its address would be undefined behaviour rather than a diagnostic. Both used to be a
@@ -92,6 +105,29 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   emit into two functions at once
 
 ### Fixed
+- **Built-in method calls have a return type again** (#239). A method call whose type Pass 2 cannot
+  infer is not reported -- `validate_assignment_compatibility` treats an unknown value type as
+  nothing to check -- so the annotation goes unvalidated and the mismatch surfaces in the backend as
+  a `CE0017` internal error. Three families were affected, for three different reasons:
+    - **struct/enum `.hash()` / `.clone()`**: `METHOD_TYPE_REGISTRY` had no checker for a plain
+      `StructType`/`EnumType` at all. The new one is registered *ahead* of the container checkers
+      (`check_result_methods` claims any method name on a `Result@(T, E)` receiver, and those carry
+      an auto-derived `clone()`), and declines `Own@(T)`/`List@(T)`/`HashMap@(K, V)`, whose
+      registered hash Pass 2 validation rejects anyway.
+    - **every primitive method**: a regression. The inference path read the builtin-method registry,
+      which the *backend* populates at import time -- and the pipeline imports codegen lazily, after
+      semantic analysis, so it is empty when Pass 2 asks. It had been dead since the commit that
+      removed the last `semantics -> backend` import, which was also what had accidentally been
+      warming that registry. `let u32 b = f64val.to_bits()` did not even ICE: it compiled and
+      silently truncated the 64-bit IEEE-754 pattern to 32 bits. Primitive return types now come
+      from a semantics-side table keyed per (method, receiver), since `to_bits` is
+      receiver-dependent (`f32 -> u32`, `f64 -> u64`).
+    - **`string.to_str()` / `string.hash()`**: `infer_method_type` is first-match-wins, and the
+      string checker matched on the receiver type alone -- so it claimed every method name on a
+      `string`, and a claim whose inferrer then returns `None` ends the chain instead of falling
+      through. Each checker now claims only what it can actually type.
+
+  A perk implementation of the same name still wins at inference, matching validation and dispatch
 - **A self-referential container field can be constructed, not just declared** (#257).
   `struct Tree: List@(Tree) kids` declared since #240 but `Tree(1, List.new())` was a `CE0000`
   ICE, so half the feature was unreachable; the `Node[]` spelling failed the same way with a

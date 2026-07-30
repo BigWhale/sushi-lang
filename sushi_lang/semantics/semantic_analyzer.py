@@ -308,15 +308,39 @@ class SemanticAnalyzer:
         # Store monomorphized ExtendDef nodes for backend codegen
         for (_target_type_name, _method_name, _type_args), extend_def in concrete_extension_defs.items():
             self.monomorphized_extensions.append(extend_def)
-            # Add to extension table for method lookup during type validation
+            # Add to extension table for method lookup during type validation.
+            # The spans come along so a diagnostic about a monomorphized generic extension
+            # (CE2097) can still point at the source `extend Box@(T) ...` that produced it.
             from sushi_lang.semantics.passes.collect import ExtensionMethod
             extension_method = ExtensionMethod(
                 target_type=extend_def.target_type,
                 name=extend_def.name,
                 params=extend_def.params,
-                ret_type=extend_def.ret
+                ret_type=extend_def.ret,
+                loc=getattr(extend_def, "loc", None),
+                name_span=getattr(extend_def, "name_span", None),
             )
             self.extensions.add_method(extension_method)
+
+        # An extension method that collides with a BUILT-IN can never run (#239). Every
+        # layer -- validation (passes/types/calls/methods.py), inference
+        # (passes/types/method_registry.py) and codegen (the dispatcher) -- resolves the
+        # built-in before the extension fallback, so such a method is compiled and then
+        # silently dead. That is the hazard class CE4007 exists to prevent, and the
+        # CW3505 rule applies: if it cannot possibly do what the user wrote, it is an
+        # error, not a warning.
+        #
+        # Placement is load-bearing at BOTH ends. After Pass 1.8, because that is what
+        # registers the struct/enum hash/clone. After the generic-extension merge loop
+        # just above, because a monomorphized `extend Box@(i32) hash()` only enters the
+        # extension table there -- running earlier is exactly why that shape went
+        # uncovered.
+        #
+        # Perk implementations are NOT affected, by construction rather than by a
+        # condition: `extend T with Perk` is an ExtendWithDef collected into
+        # PerkImplementationTable and never enters ExtensionTable. They are the sanctioned
+        # way to replace a built-in and win at every layer deliberately.
+        self._check_extension_shadows_builtin()
 
         # Phase 1 & 2: Run scope and type analysis on all units with global context
         # Unlike single-file mode, we need to analyze all units together since they can reference each other
@@ -384,6 +408,45 @@ class SemanticAnalyzer:
             for extend_def in self.monomorphized_extensions:
                 type_validator._validate_extension_method(extend_def)
 
+
+    def _check_extension_shadows_builtin(self) -> None:
+        """Reject an extension method that collides with a built-in (CE2097).
+
+        Keyed on `builtin_method_exists` for this exact (target type, method name) pair --
+        never on the bare method name -- so a type that carries no such built-in can still
+        be extended with a `hash()` of its own. Must run after Pass 1.8 (which registers
+        the struct/enum pair) AND after the generic-extension merge, or a monomorphized
+        `extend Box@(i32) hash()` is never examined.
+
+        Tier 2: one primary location, at the extension declaration. A built-in has no
+        source span, so the note uses the house idiom for a compiler-predefined name
+        ("defined by the compiler" -- see collect/utils.py:note_first_declaration).
+        """
+        if self.extensions is None:
+            return
+
+        from sushi_lang.internals import errors as er
+        from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
+        from sushi_lang.semantics.generics.type_display import display_type
+
+        for target_type, methods in self.extensions.by_type.items():
+            for method_name, method in methods.items():
+                if not builtin_method_exists(target_type, method_name):
+                    continue
+                shown = f"{display_type(target_type)}.{method_name}"
+                er.emit_with(
+                    self.reporter, er.ERR.CE2097,
+                    method.name_span or method.loc,
+                    name=method_name, type=display_type(target_type),
+                ).note(
+                    f"'{shown}()' is defined by the compiler"
+                ).help(
+                    "a built-in method is always chosen before an extension method, so "
+                    f"this one could never be called -- rename it, or provide "
+                    f"'{method_name}()' through a perk implementation "
+                    f"('extend {display_type(target_type)} with <Perk>'), which does "
+                    "take precedence"
+                ).emit()
 
     def _build_library_registry(self) -> None:
         """Build LibraryRegistry from loaded library manifests.

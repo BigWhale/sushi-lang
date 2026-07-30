@@ -743,7 +743,33 @@ Extension methods can be generic over user-defined generic structs: the type par
 - **Chainability**: Method syntax enables fluent chaining: `list.first().realise(0)`
 - **Zero cost**: Compiles to the same code as a regular function call
 
-**Standard Library Use**: The entire Sushi standard library is built using extension methods. String methods like `.len()`, `.find()`, and `.split()` are all extensions. Collection methods on `List@(T)` and array methods are extensions. This means you can add your own methods using the same mechanism the standard library uses.
+**You cannot override a built-in method**: a method the compiler defines is always chosen before an extension method of the same name, so an extension that collides with one would be compiled and then never called. Sushi rejects it outright rather than letting it sit there looking like it works:
+
+```sushi
+extend i32 hash() u64:      # error [CE2097]: extension method 'hash()' conflicts
+    return 1 as u64         #                 with the built-in 'i32.hash()'
+```
+
+This covers every built-in family: the `hash()` and `clone()` the compiler derives for every struct and enum, the primitive and string methods (`to_str`, `to_bits`, `len`, `trim`, ...), the array methods, and the methods of `Result`, `Maybe`, `Own`, `List` and `HashMap`. Pick a different name, or use a perk.
+
+**Perks are the way to replace a built-in**: a perk implementation takes precedence at every layer, by design.
+
+```sushi
+perk Hashable:
+    fn hash() u64
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Hashable:       # allowed -- this is the supported override
+    fn hash() u64:
+        return 999999 as u64
+```
+
+**Standard Library Use**: much of the Sushi standard library is exposed through this same method-call syntax. String methods like `.len()`, `.find()` and `.split()`, the collection methods on `List@(T)`, and the array methods all reach you as `receiver.method(...)`. They are built-in providers rather than ordinary extensions, though, which is why the names above are reserved -- your own extensions live alongside them, not on top of them.
+
+The full precedence chain and its rationale are in [docs/design/method-resolution.md](design/method-resolution.md).
 
 ## Memory Management
 

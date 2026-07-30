@@ -1,0 +1,26 @@
+# Issue #239: CE2097 (extension shadows an auto-derived builtin) keys on whether an
+# auto-derived builtin actually EXISTS for this (type, name) pair -- never on the bare
+# method name. `Row` carries a foreign `ptr` field, so can_struct_be_hashed() rejects it
+# and Pass 1.8 registers NO hash for it; nothing shadows anything, and the user's own
+# `hash()` is the only one there is. It must still compile, dispatch to the extension,
+# and run. A name-based CE2097 would break this program.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "7"
+
+unsafe external "C" as libc because "the test needs a struct field the compiler cannot hash":
+    fn malloc(i64 size) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+
+struct Row:
+    ptr handle
+    i32 id
+
+extend Row hash() u64:
+    return self.id as u64
+
+fn main() i32:
+    let ptr h = libc.malloc(8 as i64)
+    let Row r = Row(h, 7)
+    println(r.hash())
+    libc.free(h)
+    return Result.Ok(0)

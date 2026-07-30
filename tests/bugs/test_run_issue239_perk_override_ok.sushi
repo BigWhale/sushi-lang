@@ -1,0 +1,27 @@
+# Issue #239: CE2097 must never touch a perk implementation. A perk is the SANCTIONED way to
+# replace a built-in -- it wins at all three layers deliberately (validation, inference,
+# codegen) -- and it is what CE2097's help text points users at. Rejecting one would remove
+# the only escape hatch, since Sushi has no opt-out from auto-derivation.
+#
+# This holds by construction rather than by a condition in the check: `extend T with Perk`
+# parses to an ExtendWithDef, lands in program.perk_impls, and is collected into
+# PerkImplementationTable -- it never enters ExtensionTable, which is what the check walks.
+# Pinned here so a future refactor that merges the two tables trips over it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "424242"
+
+perk Hashable:
+    fn hash() u64
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Hashable:
+    fn hash() u64:
+        return 424242 as u64
+
+fn main() i32:
+    let Point p = Point(10, 20)
+    println(p.hash())
+    return Result.Ok(0)

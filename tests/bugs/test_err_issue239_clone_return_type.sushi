@@ -1,0 +1,15 @@
+# Issue #239: the auto-derived `.clone()` had the same inference hole as `.hash()` --
+# METHOD_TYPE_REGISTRY had no checker for a plain StructType, so `p.clone()` inferred None
+# and the annotation was never checked against it. `.clone()` returns the receiver type
+# itself, so binding it to an `i32` is an ordinary CE2002.
+# EXPECT_ERROR_CODE: CE2002
+
+struct P:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let P p = P(1, 2)
+    let i32 c = p.clone()
+    println(c)
+    return Result.Ok(0)

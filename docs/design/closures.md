@@ -548,7 +548,9 @@ concrete consumer wants the fluent method form.
 
 - **Builtin names cannot be shadowed.** The backend dispatcher checks List provider methods
   (`push`/`get`/`iter`/…) *before* the user-extension fallback, so a user `extend List@(T) push()` is
-  unreachable. Only non-builtin names route to the extension path.
+  unreachable. Only non-builtin names route to the extension path. This is not specific to `List` --
+  it is the general precedence rule, now enforced as **CE2097** across every built-in family. See
+  [method-resolution.md](method-resolution.md) for the full chain and the perk override route.
 - **Receiver ABI reconciliation.** A List-backed receiver shares the dynamic-array `{i32, i32, T*}`
   layout and is passed by pointer, but `self` is declared by value; the dispatch site loads the
   header to reconcile (safe because extension bodies never register `self` for cleanup, so the

@@ -307,3 +307,7 @@ _add(ErrorMessage("CE2095", Severity.ERROR,
 _add(ErrorMessage("CE2096", Severity.ERROR,
     "cannot call '{method}()' on constant '{name}': constants are immutable",
     Category.TYPE, "A constant is emitted as a read-only global (.rodata), so a method that mutates its receiver in place cannot target one -- the store would be undefined behaviour rather than a diagnostic. Copy the constant into a local first and mutate that."))
+
+_add(ErrorMessage("CE2097", Severity.ERROR,
+    "extension method '{name}()' conflicts with the built-in '{type}.{name}()'",
+    Category.TYPE, "Method resolution always considers built-in methods before extension methods -- during type validation, during type inference, and again during code generation -- so an extension method whose name collides with one is compiled and then never called. The built-in families are: the hash() and clone() the compiler derives for every struct and enum; the primitive and string methods (to_str, hash, to_bits, len, trim, ...); the array methods; and the methods of the built-in containers Result, Maybe, Own, List and HashMap. A perk implementation is the supported way to replace a built-in: it takes precedence at every layer, by design."))
