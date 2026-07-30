@@ -17,6 +17,7 @@ from sushi_lang.semantics.typesys import (
     UnknownType, StructType, EnumType, ArrayType, DynamicArrayType, ReferenceType, BuiltinType,
     type_moves_by_value,
 )
+from sushi_lang.backend.expressions.names import resolve_name_semantic_type
 from sushi_lang.internals.errors import InternalCompilerError, raise_internal_error
 
 if TYPE_CHECKING:
@@ -403,12 +404,17 @@ def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
         TypeError: If the type cannot be inferred or is not a struct.
     """
     if isinstance(expr, Name):
-        # Look up the variable's Sushi type
+        # Scope-aware lookup. `codegen.variable_types` is a FLAT map, so a `match` arm
+        # binding that shadows an outer variable overwrites the outer entry and never
+        # restores it (the outer struct is then read through the inner type's field
+        # indices for the rest of the function), and a `foreach` binding never reaches
+        # it at all (so the outer type wins inside the loop). Both are silent wrong
+        # data, not a crash. `resolve_name_semantic_type` consults the scoped table
+        # first and falls back to the flat one, so shadowing resolves correctly.
         var_name = expr.id
-        if var_name not in codegen.variable_types:
+        var_type = resolve_name_semantic_type(codegen, var_name)
+        if var_type is None:
             raise_internal_error("CE0056", name=var_name)
-
-        var_type = codegen.variable_types[var_name]
 
         # Unwrap ReferenceType to get the underlying type
         if isinstance(var_type, ReferenceType):

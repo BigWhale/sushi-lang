@@ -473,6 +473,10 @@ def _emit_hashmap_foreach(
     codegen.loop_stack.append((cond_bb, end_bb, codegen.memory._scope_depth + 1))
     codegen.memory.push_scope()
 
+    # The item binding is a read-only BORROW of the map's entry, exactly as the array path
+    # at _emit_array_foreach is: the shallow-loaded key/value aliases the buffers the map's
+    # own destructor frees, so `register_cleanup=False` below keeps the map the sole owner.
+    # Registering the binding as a second owner double-freed every owning key/value type.
     if is_entries:
         # Construct user-facing Entry<K, V> struct {key, value} from internal {key, value, state}
         user_entry_llvm = get_user_entry_type(codegen, key_type, value_type)
@@ -489,7 +493,8 @@ def _emit_hashmap_foreach(
         entry_val = codegen.builder.insert_value(entry_val, value_val, 1, name="entry_with_value")
 
         element_ll_type = user_entry_llvm
-        codegen.memory.create_local(node.item_name, element_ll_type, entry_val, element_type)
+        codegen.memory.create_local(node.item_name, element_ll_type, entry_val, element_type,
+                                    register_cleanup=False)
         # Register type for field access (entry.key, entry.value)
         codegen.variable_types[node.item_name] = element_type
     else:
@@ -498,7 +503,8 @@ def _emit_hashmap_foreach(
         element_value = codegen.builder.load(element_ptr, name=node.item_name)
 
         element_ll_type = codegen.types.ll_type(element_type)
-        codegen.memory.create_local(node.item_name, element_ll_type, element_value, element_type)
+        codegen.memory.create_local(node.item_name, element_ll_type, element_value, element_type,
+                                    register_cleanup=False)
 
     # Emit the foreach body
     _emit_block(codegen, node.body)
