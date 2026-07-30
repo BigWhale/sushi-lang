@@ -53,11 +53,27 @@ static int g_ready;
 /* ---- outstanding-balance side table (tracked blocks only) ---------------- */
 #define TAB_CAP  (1u << 16)
 #define TAB_MASK (TAB_CAP - 1u)
-#define TOMB     ((uintptr_t) - 1)
 
-static struct { uintptr_t key; size_t size; } g_tab[TAB_CAP];
+/* Slot states. A freed slot KEEPS its key and becomes ST_DEAD rather than being
+ * overwritten with a tombstone sentinel: that is what makes a second free of the
+ * same pointer distinguishable from a free of memory we never tracked. The old
+ * scheme lost the key on removal, so both cases probed to an empty slot and were
+ * reported identically -- i.e. the gate was structurally unable to see a
+ * double-free, which is the failure mode of the whole #238/#250/#256/#277 family.
+ * ST_DEAD also keeps the probe chain intact exactly as the tombstone did. */
+#define ST_EMPTY 0u
+#define ST_LIVE  1u
+#define ST_DEAD  2u
+
+/* tab_remove outcomes. */
+#define RM_UNTRACKED   0
+#define RM_FREED       1
+#define RM_DOUBLE_FREE 2
+
+static struct { uintptr_t key; size_t size; unsigned char state; } g_tab[TAB_CAP];
 static long g_live_bytes;
 static long g_live_blocks;
+static long g_double_frees;
 static atomic_flag g_lock = ATOMIC_FLAG_INIT;
 
 static void lock(void)   { while (atomic_flag_test_and_set_explicit(&g_lock, memory_order_acquire)) {} }
@@ -70,11 +86,15 @@ static size_t slot(uintptr_t key) {
 static void tab_insert(uintptr_t key, size_t size) {
     lock();
     size_t i = slot(key);
+    /* Prefer reclaiming this key's own ST_DEAD slot: the allocator commonly hands
+     * back an address it just freed, and reviving that slot is what keeps a later
+     * legitimate free from being misread as a double free. */
     for (unsigned n = 0; n < TAB_CAP; n++) {
-        uintptr_t k = g_tab[i].key;
-        if (k == 0 || k == TOMB) {
+        unsigned char st = g_tab[i].state;
+        if (st == ST_EMPTY || st == ST_DEAD) {
             g_tab[i].key = key;
             g_tab[i].size = size;
+            g_tab[i].state = ST_LIVE;
             g_live_bytes += (long)size;
             g_live_blocks += 1;
             break;
@@ -84,26 +104,39 @@ static void tab_insert(uintptr_t key, size_t size) {
     unlock();
 }
 
-/* Remove key if present; returns 1 and *outsize when found. */
+/* Classify a free of `key`: untracked, a normal first free, or a double free.
+ * On RM_FREED the block is debited and *outsize set. On RM_DOUBLE_FREE nothing is
+ * debited -- the block was already debited by the first free, so the balance stays
+ * correct and the caller reports the event separately. */
 static int tab_remove(uintptr_t key, size_t *outsize) {
-    int found = 0;
+    int outcome = RM_UNTRACKED;
     lock();
     size_t i = slot(key);
     for (unsigned n = 0; n < TAB_CAP; n++) {
-        uintptr_t k = g_tab[i].key;
-        if (k == 0) break;
-        if (k == key) {
-            if (outsize) *outsize = g_tab[i].size;
-            g_live_bytes -= (long)g_tab[i].size;
-            g_live_blocks -= 1;
-            g_tab[i].key = TOMB;
-            found = 1;
+        unsigned char st = g_tab[i].state;
+        if (st == ST_EMPTY) break;          /* never used: probe chain ends here */
+        if (g_tab[i].key == key) {
+            if (st == ST_DEAD) {
+                outcome = RM_DOUBLE_FREE;
+            } else {
+                if (outsize) *outsize = g_tab[i].size;
+                g_live_bytes -= (long)g_tab[i].size;
+                g_live_blocks -= 1;
+                g_tab[i].state = ST_DEAD;   /* key retained on purpose */
+                outcome = RM_FREED;
+            }
             break;
         }
         i = (i + 1) & TAB_MASK;
     }
     unlock();
-    return found;
+    return outcome;
+}
+
+/* Async-signal-safe stderr write: no malloc, no stdio buffering. */
+static void emit(const char *s, size_t n) {
+    ssize_t w = write(2, s, n);
+    (void)w;
 }
 
 /* ---- real allocator resolution ------------------------------------------- */
@@ -239,7 +272,16 @@ void *WRAP(realloc)(void *p, size_t n) {
     }
 #endif
     size_t oldsize = 0;
-    int had = p ? tab_remove((uintptr_t)p, &oldsize) : 0;
+    int rm = p ? tab_remove((uintptr_t)p, &oldsize) : RM_UNTRACKED;
+    if (rm == RM_DOUBLE_FREE) {
+        /* realloc of an already-freed block: same defect class as a double free,
+         * counted the same way. Nothing was debited, so the balance is unchanged. */
+        lock();
+        g_double_frees += 1;
+        unlock();
+        emit("SUSHI_LEAKCHECK: DOUBLE_FREE (realloc of freed block)\n", 54);
+    }
+    int had = (rm == RM_FREED);
     void *np = real_realloc(p, n);
     if (!np) {
         if (had) tab_insert((uintptr_t)p, oldsize); /* realloc failed; keep old */
@@ -255,7 +297,19 @@ void WRAP(free)(void *p) {
     if (in_boot(p)) return; /* bootstrap arena: never handed to the real free */
 #endif
     if (!g_ready) init_reals();
-    tab_remove((uintptr_t)p, NULL); /* adjusts counters if tracked */
+    if (tab_remove((uintptr_t)p, NULL) == RM_DOUBLE_FREE) {
+        lock();
+        g_double_frees += 1;
+        unlock();
+        emit("SUSHI_LEAKCHECK: DOUBLE_FREE\n", 29);
+        /* Deliberately WITHHOLD the pointer from the real allocator. Handing it
+         * over aborts the process, which kills the destructor before it can report
+         * -- the runner then sees no report line and scores the run as a SKIP, so
+         * the most severe defect the gate can encounter used to be the one it was
+         * least able to report. Withholding costs one leaked block in an already
+         * broken program and buys an attributable failure. */
+        return;
+    }
     real_free(p);
 }
 
@@ -276,14 +330,19 @@ __attribute__((destructor)) static void report(void) {
     lock();
     long bytes = g_live_bytes;
     long blocks = g_live_blocks;
+    long doubles = g_double_frees;
     unlock();
-    if (bytes < 0) bytes = 0;
+    /* A negative balance means more was debited than credited -- an over-free the
+     * double-free detector did not attribute (e.g. a free of an interior pointer,
+     * or a tracked block whose insert lost the table race). It is reported, not
+     * clamped away: clamping is what let over-freeing masquerade as a clean run.
+     * `leaked` keeps its non-negative meaning so existing consumers are unaffected. */
+    long over = 0;
+    if (bytes < 0) { over = -bytes; bytes = 0; }
     if (blocks < 0) blocks = 0;
-    char buf[96];
+    char buf[160];
     int n = snprintf(buf, sizeof(buf),
-                     "SUSHI_LEAKCHECK: leaked=%ld blocks=%ld\n", bytes, blocks);
-    if (n > 0) {
-        ssize_t w = write(2, buf, (size_t)n); /* stderr; keep stdout pristine */
-        (void)w;
-    }
+                     "SUSHI_LEAKCHECK: leaked=%ld blocks=%ld double_frees=%ld over_freed=%ld\n",
+                     bytes, blocks, doubles, over);
+    if (n > 0) emit(buf, (size_t)n); /* stderr; keep stdout pristine */
 }

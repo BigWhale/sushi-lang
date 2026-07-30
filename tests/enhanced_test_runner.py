@@ -501,7 +501,22 @@ class TestRunner:
             proc.communicate()
             return self._skip_leak_check(test_name, SKIP_TIMED_OUT)
 
-        match = re.search(r"SUSHI_LEAKCHECK: leaked=(\d+) blocks=(\d+)", stderr or "")
+        # A run killed by a signal is a FAILURE, never a skip. The allocator aborts on
+        # heap corruption it detects itself, and that abort pre-empts the interposer's
+        # destructor -- so the run produces no report line. Treating "no report" as the
+        # only outcome here made the most severe defect the gate can meet (a double free
+        # the interposer did not attribute) score as a skip, i.e. not a failure. Checked
+        # before the report match, because such a run has no report to match.
+        if proc.returncode is not None and proc.returncode < 0:
+            self.leaks_checked.append(test_name)
+            signame = signal.Signals(-proc.returncode).name
+            return False, (f"✗ Leak check: killed by {signame} under the interposer "
+                           f"(heap corruption -- the allocator aborted)")
+
+        match = re.search(
+            r"SUSHI_LEAKCHECK: leaked=(\d+) blocks=(\d+)"
+            r"(?: double_frees=(\d+) over_freed=(\d+))?",
+            stderr or "")
         if not match:
             # No report: the interposer failed to load or the program bypassed its
             # destructor (e.g. _exit). Skip rather than silently pass.
@@ -509,7 +524,18 @@ class TestRunner:
 
         leaked = int(match.group(1))
         blocks = int(match.group(2))
+        # Optional so an older interposer binary still parses; a stale build reports
+        # zero rather than crashing the runner, and the mtime rule rebuilds it anyway.
+        doubles = int(match.group(3) or 0)
+        over = int(match.group(4) or 0)
         self.leaks_checked.append(test_name)
+        # Over-freeing outranks leaking: it is memory-unsafe where a leak is merely
+        # wasteful, and a double free frequently shows a zero balance (the second free
+        # debits nothing), so reporting leaks first would report the milder symptom.
+        if doubles:
+            return False, f"✗ Leak check: {doubles} double free(s)"
+        if over:
+            return False, f"✗ Leak check: over-freed {over} bytes (unattributed)"
         if leaked == 0:
             return True, "✓ Leak check: no leaks"
         return False, f"✗ Leak check: leaked {leaked} bytes in {blocks} blocks"
