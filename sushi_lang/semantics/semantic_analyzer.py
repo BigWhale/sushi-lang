@@ -418,9 +418,30 @@ class SemanticAnalyzer:
 
         from sushi_lang.internals import errors as er
         from sushi_lang.semantics.generics.type_display import display_type
+        from sushi_lang.semantics.typesys import EnumType, StructType
         from sushi_lang.sushi_stdlib.src.common import get_builtin_method
 
         for target_type, methods in self.extensions.by_type.items():
+            # Struct/enum receivers ONLY, and deliberately so. This pass runs in
+            # semantics, and only the struct/enum hash/clone are registered there (by
+            # Pass 1.8, just above). The other entries in the same registry are not
+            # dependable from here:
+            #
+            # - PRIMITIVE and string builtins are registered by the BACKEND at import
+            #   time. After importing only semantics, get_builtin_method(I32, "hash") is
+            #   None; after importing sushi_lang.backend.codegen_llvm it is a real
+            #   BuiltinMethod. Keying on them from here would make the diagnostic depend
+            #   on whether the backend happened to be imported in this process -- same
+            #   source, different answer.
+            # - ARRAY hashes are registered in semantics, but register_all_array_hashes
+            #   only collects array types reachable from a struct field or enum variant,
+            #   so `i32[]` carries a hash in one program and not in another.
+            #
+            # Primitives do have the same silent-shadowing bug (`extend i32 hash()`
+            # compiles and is then never called); fixing it needs a check that does not
+            # read a backend-populated registry from a semantics pass. Out of scope here.
+            if not isinstance(target_type, (StructType, EnumType)):
+                continue
             for method_name, method in methods.items():
                 if get_builtin_method(target_type, method_name) is None:
                     continue
