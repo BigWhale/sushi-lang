@@ -155,9 +155,8 @@ def _try_function_value_local(codegen: 'LLVMCodegen', name: str):
     of three pointer fields (e.g. three `ptr` fields), so shape sniffing would misfire.
     """
     from sushi_lang.semantics.typesys import FunctionType
-    try:
-        slot = codegen.memory.find_local_slot(name)
-    except KeyError:
+    slot = codegen.memory.try_find_local_slot(name)
+    if slot is None:
         return None
     sem_ty = codegen.memory.find_semantic_type(name)
     if not isinstance(sem_ty, FunctionType):

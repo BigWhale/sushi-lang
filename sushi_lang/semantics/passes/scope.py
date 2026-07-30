@@ -444,8 +444,13 @@ class ScopeAnalyzer:
                 elif expr.id in ['open']:
                     # Built-in global functions don't need to be tracked as variables
                     pass
-                # Check if it's a constant
-                elif expr.id in self.constants.by_name:
+                # Check if it's a constant. A local of the same name shadows it and is
+                # a plain variable read -- same rule as the function-name arm below.
+                # Without the shadowing guard the local was never marked used (a bogus
+                # CW1001) and the backend read the CONSTANT, so a shadowing local of a
+                # different length was `CE0017: cannot convert '[3 x i32]' to
+                # '[4 x i32]'` (found while fixing #248).
+                elif expr.id in self.constants.by_name and not self._is_bound_local(expr.id):
                     # Constants don't need to be tracked as variables
                     pass
                 # Check if it's a math module constant (PI, E, TAU)

@@ -303,3 +303,7 @@ _add(ErrorMessage("CE2094", Severity.ERROR,
 _add(ErrorMessage("CE2095", Severity.ERROR,
     "recursive type '{name}' has infinite size: {chain}",
     Category.TYPE, "A type that contains itself by value has no finite size. Every hop in the reported chain stores its target inline -- a struct field, a fixed-size array element, or an enum payload. Break the cycle with indirection: Own@(T) for a single value, or a dynamic array / List@(T) for many. Compare Rust's E0072 and Go's \"invalid recursive type\"."))
+
+_add(ErrorMessage("CE2096", Severity.ERROR,
+    "cannot call '{method}()' on constant '{name}': constants are immutable",
+    Category.TYPE, "A constant is emitted as a read-only global (.rodata), so a method that mutates its receiver in place cannot target one -- the store would be undefined behaviour rather than a diagnostic. Copy the constant into a local first and mutate that."))

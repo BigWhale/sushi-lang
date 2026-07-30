@@ -54,8 +54,12 @@ def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
     # For array indexing, we need to get the array slot directly from the variable
     # rather than loading the array value
     if isinstance(expr.array, Name):
-        # Get the array slot directly from memory manager
-        array_slot = codegen.memory.find_local_slot(expr.array.id)
+        # Local alloca, or the global backing an array constant (#248) -- indexing a
+        # constant directly used to be a CE0000 ICE because this consulted only locals.
+        from sushi_lang.backend.expressions.names import resolve_name_slot
+        array_slot = resolve_name_slot(codegen, expr.array.id)
+        if array_slot is None:
+            raise_internal_error("CE0055", name=expr.array.id)
 
         # For reference parameters, the slot contains a pointer to the actual array
         # We need to load that pointer to get the array's address

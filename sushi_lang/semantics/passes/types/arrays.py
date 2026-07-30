@@ -33,10 +33,40 @@ u8[] Specific Methods:
 """
 
 from typing import Any
-from sushi_lang.semantics.ast import MethodCall, IntLit
+from sushi_lang.semantics.ast import MethodCall, IntLit, Name
 from sushi_lang.semantics.typesys import Type, ArrayType, DynamicArrayType, BuiltinType, IteratorType
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
+
+
+# Array methods that mutate their receiver in place. A constant is emitted as a
+# read-only global, so these cannot target one (CE2096).
+_MUTATING_ARRAY_METHODS = frozenset({"fill", "reverse"})
+
+
+def _reject_mutation_of_constant(call: MethodCall, reporter: Any, validator: Any) -> bool:
+    """Reject an in-place array method whose receiver is a global constant.
+
+    Returns True if the call was rejected. Without this the backend would GEP into a
+    `global_constant = true` global and store through it -- undefined behaviour in
+    .rodata, not a diagnostic (found while fixing #248, where every one of these shapes
+    was a CE0000 ICE instead).
+
+    A local of the same name shadows the constant and is freely mutable, so
+    `variable_types` is checked first -- the same local-wins rule the backend's
+    resolve_name_slot follows.
+    """
+    if call.method not in _MUTATING_ARRAY_METHODS or validator is None:
+        return False
+    if not isinstance(call.receiver, Name):
+        return False
+    name = call.receiver.id
+    if name in getattr(validator, 'variable_types', {}):
+        return False
+    if name not in validator.const_table.by_name:
+        return False
+    er.emit(reporter, er.ERR.CE2096, call.loc, method=call.method, name=name)
+    return True
 
 
 def _is_integer_type(type_: Type) -> bool:
@@ -265,6 +295,9 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
         validator: Optional type validator for checking argument types.
     """
     method_name = call.method
+
+    if _reject_mutation_of_constant(call, reporter, validator):
+        return
 
     if method_name == "len":
         if isinstance(array_type, ArrayType):

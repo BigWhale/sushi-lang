@@ -99,6 +99,15 @@ def emit_array_method(
             case "fill":
                 # Fixed array fill: fill all elements with a value
                 # Need to get pointer to the array variable for in-place modification
+                #
+                # Deliberately NOT routed through resolve_name_slot (#248), unlike every
+                # other address site. fill/reverse WRITE through the pointer, and a
+                # constant's global carries `global_constant = true` -- i.e. .rodata, so
+                # the store would be undefined behaviour (a likely SIGBUS) rather than a
+                # diagnostic. Pass 2 rejects a mutating method on a constant receiver
+                # with CE2096, so a constant never reaches here; keeping this on the
+                # locals-only lookup means it cannot start writing to .rodata even if
+                # that check is ever bypassed.
                 from sushi_lang.semantics.ast import Name
                 if isinstance(expr.receiver, Name):
                     array_ptr = codegen.memory.find_local_slot(expr.receiver.id)
@@ -112,6 +121,7 @@ def emit_array_method(
             case "reverse":
                 # Fixed array reverse: reverse in-place
                 # Need to get pointer to the array variable for in-place modification
+                # Locals-only by design -- see the note under "fill" above.
                 from sushi_lang.semantics.ast import Name
                 if isinstance(expr.receiver, Name):
                     array_ptr = codegen.memory.find_local_slot(expr.receiver.id)

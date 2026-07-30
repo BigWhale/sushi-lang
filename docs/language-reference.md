@@ -771,9 +771,45 @@ const i32 BASE = 10
 const i32[3] VALUES = [BASE, BASE * 2, BASE * 3]  # [10, 20, 30]
 ```
 
+An array constant is used directly — no copy into a local is needed. Reads compile to a
+`getelementptr` on the read-only global, so they cost nothing:
+
+```sushi
+const i32[3] PRIMES = [2, 3, 5]
+
+fn main() i32:
+    println(PRIMES[0])                  # 2
+    println("second: {PRIMES[1]}")      # in interpolation too
+    println(PRIMES.len())               # 3
+
+    let Maybe@(i32) m = PRIMES.get(0)   # safe access
+    println(m.realise(0))               # 2
+
+    foreach(p in PRIMES.iter()):        # iteration
+        println(p)
+
+    return Result.Ok(0)
+```
+
+A local may shadow an array constant, and the local wins:
+
+```sushi
+const i32[3] PRIMES = [2, 3, 5]
+
+fn local_wins() i32:
+    let i32[4] PRIMES = [7, 8, 9, 10]
+    return Result.Ok(PRIMES[0])         # 7, and .fill()/.reverse() work on it
+```
+
 **Restrictions:**
 - Array must be fixed-size (`T[N]`), not dynamic (`T[]`)
 - All elements must be compile-time constant expressions
+- **Immutable**: `.fill()` and `.reverse()` mutate their receiver in place, so calling either on a
+  constant is **CE2096**. The constant lives in read-only memory; copy it into a local and mutate
+  that. (A local shadowing the constant is freely mutable.)
+- **`string` elements are not supported yet**: a `const string[N]` never emits its global, so every
+  use of it fails with `CE0055` — including copying it into a local
+  ([issue #260](https://github.com/BigWhale/sushi-lang/issues/260))
 
 ### Restrictions
 
