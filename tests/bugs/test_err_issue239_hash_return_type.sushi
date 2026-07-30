@@ -1,0 +1,17 @@
+# Issue #239: `.hash()` is auto-derived for every struct in Pass 1.8 and deposited in the
+# BuiltinMethodRegistry, but METHOD_TYPE_REGISTRY had no checker for a plain StructType --
+# so visit_methodcall inferred None for `p.hash()`, validate_assignment_compatibility took
+# its `value_type is None: return` early exit, and the bad annotation sailed into codegen.
+# It crashed there with `CE0017: cannot convert value of type 'i64' to '{i8*, i32, i8}'`.
+# `.hash()` returns u64, so binding it to a `string` is an ordinary CE2002.
+# EXPECT_ERROR_CODE: CE2002
+
+struct P:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let P p = P(1, 2)
+    let string h = p.hash()
+    println(h)
+    return Result.Ok(0)

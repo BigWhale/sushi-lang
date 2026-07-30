@@ -1,0 +1,19 @@
+# Issue #239: an extension method that collides with an auto-derived builtin can never
+# run. Both validation (passes/types/calls/methods.py) and codegen (backend dispatcher)
+# consult the auto-derived hash/clone BEFORE the extension fallback, so `extend P hash()`
+# used to be accepted, emitted, and then silently never called -- the auto-derived u64
+# hash won every dispatch. Silently shadowing user code is the CE4007 hazard class, so
+# this is now a hard error: CE2097.
+# EXPECT_ERROR_CODE: CE2097
+
+struct P:
+    i32 x
+    i32 y
+
+extend P hash() u64:
+    return self.x as u64
+
+fn main() i32:
+    let P p = P(1, 2)
+    println(p.hash())
+    return Result.Ok(0)

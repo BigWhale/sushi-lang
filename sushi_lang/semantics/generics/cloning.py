@@ -32,7 +32,10 @@ from sushi_lang.semantics.generics.type_display import display_type
 
 # Named StructTypes that own heap through their own registries/method paths; a top-level
 # .clone() on these must fall through, not route through the auto-derived struct clone.
-_CONTAINER_PREFIXES = ("Own<", "List<", "HashMap<")
+# Also the one authority on "is this named struct a container?" for method-type inference
+# (passes/types/method_registry.py) -- Pass 1.8's hash registration has no such exclusion,
+# so a List<i32> monomorph does carry a registered hash that Pass 2 nonetheless rejects.
+CONTAINER_PREFIXES = ("Own<", "List<", "HashMap<")
 
 
 def _validate_struct_clone(call: MethodCall, target_type: Type, reporter: Any) -> None:
@@ -88,7 +91,7 @@ def _register_clone_method(target_type: Type, kind: str, validator, description:
 
 def register_struct_clone_method(struct_type: StructType) -> None:
     """Register the auto-derived clone() method for a user struct type."""
-    if struct_type.name.startswith(_CONTAINER_PREFIXES):
+    if struct_type.name.startswith(CONTAINER_PREFIXES):
         return  # Own/List/HashMap keep their own method paths
     _register_clone_method(
         struct_type, "struct", _validate_struct_clone,

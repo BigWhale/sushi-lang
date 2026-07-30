@@ -27,6 +27,15 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   string-only composites still copy. The normative spec is `docs/design/move-semantics.md`
 
 ### Added
+- **`CE2097`: an extension method cannot shadow an auto-derived builtin** (#239). Both type
+  validation and code generation consult the auto-derived `hash()`/`clone()` *before* falling back
+  to extension methods, so `extend P hash() u64` used to compile, emit a body, and then never be
+  called -- `p.hash()` silently returned the auto-derived FNV hash. Silently shadowing user code is
+  the hazard class `CE4007` exists to prevent, so it is now a hard error. The check keys on whether
+  a builtin is actually registered for that exact (type, name) pair, never on the bare method name:
+  a type Pass 1.8 skipped -- an unhashable struct, say -- has nothing to shadow and can still carry
+  a `hash()` of its own. Perk implementations are unaffected; `extend T with Perk` lives in a
+  different table and legitimately overrides the auto-derived method
 - **`CE2096`: an in-place array method cannot target a constant** (#248). `.fill()` and `.reverse()`
   mutate their receiver, and a constant is emitted as a `global_constant` -- i.e. `.rodata` -- so a
   store through its address would be undefined behaviour rather than a diagnostic. Both used to be a
@@ -92,6 +101,17 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   emit into two functions at once
 
 ### Fixed
+- **The auto-derived `.hash()` / `.clone()` have a return type again** (#239). Pass 1.8 derives them
+  for every struct and enum, but `METHOD_TYPE_REGISTRY` registered no checker for a plain
+  `StructType`/`EnumType` -- so `p.hash()` inferred `None`, `validate_assignment_compatibility` took
+  its `value_type is None: return` early exit, and a wrong annotation was never checked at all.
+  `let string h = p.hash()` reached codegen and crashed it with
+  `CE0017: cannot convert value of type 'i64' to '{i8*, i32, i8}'`; it is an ordinary `CE2002` now.
+  The new checker is registered *ahead* of the container checkers, because `check_result_methods`
+  claims any method name on a `Result@(T, E)` receiver and those carry an auto-derived `clone()`
+  too; and it declines an `Own@(T)`/`List@(T)`/`HashMap@(K, V)` receiver, because Pass 1.8's hash
+  registration has no container exclusion and would otherwise make inference disagree with
+  validation. A perk implementation of the same name still wins, matching dispatch
 - **A self-referential container field can be constructed, not just declared** (#257).
   `struct Tree: List@(Tree) kids` declared since #240 but `Tree(1, List.new())` was a `CE0000`
   ICE, so half the feature was unreachable; the `Node[]` spelling failed the same way with a

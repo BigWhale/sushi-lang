@@ -307,3 +307,7 @@ _add(ErrorMessage("CE2095", Severity.ERROR,
 _add(ErrorMessage("CE2096", Severity.ERROR,
     "cannot call '{method}()' on constant '{name}': constants are immutable",
     Category.TYPE, "A constant is emitted as a read-only global (.rodata), so a method that mutates its receiver in place cannot target one -- the store would be undefined behaviour rather than a diagnostic. Copy the constant into a local first and mutate that."))
+
+_add(ErrorMessage("CE2097", Severity.ERROR,
+    "extension method '{name}()' on '{type}' conflicts with the auto-derived '{name}()'",
+    Category.TYPE, "Every struct and enum gets an auto-derived hash() and clone(). Both type validation and code generation consult the auto-derived method before falling back to extension methods, so an extension method of the same name would be compiled and then never called. Rename it, or implement a perk instead -- a perk implementation legitimately overrides the auto-derived method."))

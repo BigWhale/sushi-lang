@@ -1,0 +1,16 @@
+# Issue #239: an EnumType receiver had the same hole as a StructType one -- Pass 1.8
+# auto-derives `.hash()` for every enum too, but METHOD_TYPE_REGISTRY registered no
+# checker for a plain EnumType, so `c.hash()` inferred None and the annotation went
+# unchecked all the way to codegen. `.hash()` returns u64, so a `string` is CE2002.
+# EXPECT_ERROR_CODE: CE2002
+
+enum Colour:
+    Red
+    Green
+    Blue
+
+fn main() i32:
+    let Colour c = Colour.Red
+    let string h = c.hash()
+    println(h)
+    return Result.Ok(0)

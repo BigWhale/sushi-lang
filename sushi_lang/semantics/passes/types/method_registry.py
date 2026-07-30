@@ -186,6 +186,33 @@ class PrimitiveMethodInferrer:
 
 
 @dataclass
+class StructEnumBuiltinInferrer:
+    """Type inferrer for the auto-derived struct/enum builtins (hash, clone).
+
+    Pass 1.8 auto-derives `.hash()` and `.clone()` for every struct and enum and
+    deposits them in the builtin-method registry, but no checker here claimed a plain
+    StructType/EnumType -- so `p.hash()` inferred None, validate_assignment_compatibility
+    took its `value_type is None: return` early exit, and a wrong annotation reached
+    codegen and crashed it with CE0017 rather than reporting CE2002 (#239).
+
+    Same shape as PrimitiveMethodInferrer: read the return type straight off the
+    registered BuiltinMethod. It emits NO diagnostics -- infer_expression_type runs many
+    times per node, so a diagnostic here would duplicate. Arity is the BuiltinMethod's
+    own semantic_validator's job, invoked once from passes/types/calls/methods.py.
+    """
+    receiver_type: 'Type'
+    method_name: str
+    validator: 'TypeValidator'
+
+    def infer_return_type(self) -> Optional['Type']:
+        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
+        method = get_builtin_method(self.receiver_type, self.method_name)
+        if method is not None:
+            return method.return_type
+        return None
+
+
+@dataclass
 class StdioMethodInferrer:
     """Type inferrer for stdio methods (stdin, stdout, stderr)."""
     receiver_type: BuiltinType
@@ -429,6 +456,43 @@ def check_file_methods(receiver_type, method_name, validator):
     if receiver_type == BuiltinType.FILE:
         return FileMethodInferrer(method_name, validator)
     return None
+
+
+# Registration ORDER is load-bearing here, twice over.
+#
+# It must sit BEFORE the container checkers below: infer_method_type returns as soon as a
+# checker yields an inferrer, even if that inferrer then returns None. check_result_methods
+# claims ANY method name on a `Result<` receiver, so from a later position this checker
+# would be unreachable for Result/Maybe -- and those DO carry an auto-derived clone
+# (register_enum_clone_method has no container exclusion).
+#
+# It must also use check_primitive_methods' guard shape -- claim only a (type, name) that
+# is genuinely registered -- so it never swallows List<i32>.get, HashMap<..>.insert, etc.
+@METHOD_TYPE_REGISTRY.register_checker
+def check_struct_enum_builtin_methods(receiver_type, method_name, validator):
+    """Claim the auto-derived struct/enum builtins (hash, clone) -- and nothing else."""
+    if not isinstance(receiver_type, (StructType, EnumType)):
+        return None
+
+    # Own/List/HashMap are named StructTypes that keep their own method paths. This
+    # matters concretely for `hash`: register_all_struct_hashes walks EVERY hashable
+    # struct with no container exclusion, so a List<i32> monomorph really does carry a
+    # registered hash -- while Pass 2 validation reports CE2008 for it. Without this
+    # guard, inference and validation would disagree.
+    from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
+    if receiver_type.name.startswith(CONTAINER_PREFIXES):
+        return None
+
+    # Perk implementations win at codegen (dispatcher step 12, before the auto-derived
+    # step 13), so inference must let them win too.
+    if validator.perk_impl_table.get_method(receiver_type, method_name) is not None:
+        return None
+
+    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
+    if get_builtin_method(receiver_type, method_name) is None:
+        return None
+
+    return StructEnumBuiltinInferrer(receiver_type, method_name, validator)
 
 
 @METHOD_TYPE_REGISTRY.register_checker

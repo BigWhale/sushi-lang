@@ -298,6 +298,23 @@ class SemanticAnalyzer:
         for enum_type in self.enums.by_name.values():
             register_enum_clone_method(enum_type)
 
+        # An extension method that collides with an auto-derived builtin can never run
+        # (#239). The auto-derived method wins both in validation
+        # (passes/types/calls/methods.py consults it before the extension lookup) and in
+        # codegen (the dispatcher's auto-derived steps precede the extension fallback),
+        # so `extend P hash()` used to compile, emit a body, and then be silently dead --
+        # the same shadowing hazard CE4007 exists to prevent. Hard error instead.
+        #
+        # This must run AFTER Pass 1.8: the condition is "an auto-derived builtin exists
+        # for this exact (type, name)", never "the name is hash or clone". A type Pass 1.8
+        # skipped -- an unhashable struct, say -- has no builtin to shadow, and extending
+        # it is perfectly legal.
+        #
+        # Perk implementations are NOT affected: `extend T with Perk` is an ExtendWithDef
+        # collected into PerkImplementationTable, a different table entirely, and it
+        # legitimately overrides the auto-derived method (it wins at dispatch).
+        self._check_extension_shadows_builtin()
+
         # Monomorphize generic extension methods
         concrete_extension_defs = monomorphize_all_extension_methods(
             self.generic_extensions.by_type,
@@ -384,6 +401,41 @@ class SemanticAnalyzer:
             for extend_def in self.monomorphized_extensions:
                 type_validator._validate_extension_method(extend_def)
 
+
+    def _check_extension_shadows_builtin(self) -> None:
+        """Reject an extension method that collides with an auto-derived builtin (CE2097).
+
+        Keyed on whether a builtin is registered for this exact (target type, method
+        name) pair -- never on the bare method name -- so a type Pass 1.8 skipped can
+        still be extended with a `hash()` of its own. Must therefore run after Pass 1.8.
+
+        Tier 2: one primary location, at the extension declaration. The auto-derived
+        method has no source span of its own, so the note says so in the established
+        wording (compare CE0004/CE0005 for a compiler-predefined name).
+        """
+        if self.extensions is None:
+            return
+
+        from sushi_lang.internals import errors as er
+        from sushi_lang.semantics.generics.type_display import display_type
+        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
+
+        for target_type, methods in self.extensions.by_type.items():
+            for method_name, method in methods.items():
+                if get_builtin_method(target_type, method_name) is None:
+                    continue
+                er.emit_with(
+                    self.reporter, er.ERR.CE2097,
+                    method.name_span or method.loc,
+                    name=method_name, type=display_type(target_type),
+                ).note(
+                    f"'{method_name}()' is auto-derived for every struct and enum, "
+                    "and is defined by the compiler"
+                ).help(
+                    f"the auto-derived '{method_name}()' wins every dispatch, so this "
+                    "extension can never run -- rename it, or move it into a perk "
+                    "implementation ('extend ... with <Perk>'), which does override it"
+                ).emit()
 
     def _build_library_registry(self) -> None:
         """Build LibraryRegistry from loaded library manifests.
