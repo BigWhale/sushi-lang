@@ -3,6 +3,7 @@
 # Comprehensive test for move semantics vs copy semantics across different types
 # Move semantics should ONLY apply to dynamic arrays
 # All other types (primitives, strings, fixed arrays, structs) should be copied
+# EXPECT_NO_LEAKS: true
 
 fn main() i32:
     # Test 1: Primitive types should be COPIED, not moved

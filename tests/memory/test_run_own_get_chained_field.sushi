@@ -11,6 +11,7 @@
 # chained spelling.
 # EXPECT_STDOUT_EXACT: "x=9\ny=9\n"
 # EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
 
 struct Leafy:
     i32 x

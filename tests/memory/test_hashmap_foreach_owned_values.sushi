@@ -1,0 +1,29 @@
+# HashMap iteration binds the map's own element as an OWNER.
+#
+# `statements/loops.py` creates the array/List foreach binding with
+# `register_cleanup=False` (a borrow, correct), but the HashMap arms (:492, :501) omit the
+# flag, so it defaults True. The binding is registered in the string/struct cleanup
+# registry and freed at loop-scope exit; `m.free()` then frees it again.
+#
+# Every existing HashMap iteration test uses string LITERALS, whose `owned` bit is 0, so
+# the second free is a no-op and the bug is invisible. One interpolated value is enough.
+# This file covers `.values()`. Iteration order is unspecified, so the stdout assertion is a
+# CONTAINS on the count; the real content is EXPECT_NO_LEAKS + exit 0.
+# MM.md S2 row 4; no upstream issue.
+# EXPECT_STDOUT_CONTAINS: seen=3
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(i32, string) m = HashMap.new()
+    foreach(n in 0..3):
+        m.insert(n, "value {n}")
+    let i32 seen = 0
+    foreach(v in m.values()):
+        println(v)
+        seen := seen + 1
+    println("seen={seen}")
+    m.free()
+    return Result.Ok(0)

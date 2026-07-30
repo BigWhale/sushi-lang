@@ -2,6 +2,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # Test poke to peek coercion
 # &poke T can be passed where &peek T is expected
+# EXPECT_NO_LEAKS: true
 
 fn read_value(&peek i32 x) i32:
     return Result.Ok(x)

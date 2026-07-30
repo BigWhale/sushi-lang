@@ -3,6 +3,7 @@
 # Test to verify nested struct RAII cleanup
 # If cleanup works: memory stays low
 # If cleanup broken: memory grows linearly
+# EXPECT_NO_LEAKS: true
 
 struct Inner:
     i32[] values

@@ -5,6 +5,7 @@
 # element, not shallow-copy it. Before the fix the cloned element shared the source
 # element's heap buffer, so both arrays freed it at scope exit and the process aborted
 # (double-free, exit 133). Covers an owning struct; the sibling test covers an owning enum.
+# EXPECT_NO_LEAKS: true
 
 struct Buf:
     i32[] data

@@ -1,0 +1,23 @@
+# Sink matrix (foreach binding -> sinks): a borrowed `foreach` binding over owning elements handed to the `List.push` sink.
+#
+# The invariant (docs/design/move-semantics.md S3): at every by-value ownership sink a
+# bare OWNED Name moves, and anything that reads from a CONTINUING owner -- a borrowed
+# pattern binding, a MemberAccess, an Own@(T).get() deref -- is CLONED so each owner
+# frees exactly once. Only the call-argument sink implements this today; see MM.md S2.1.
+#
+# A `foreach` binding is created with register_cleanup=False (a borrow), exactly
+# like a match binding -- so handing it to a sink has the same requirement.
+# EXPECT_STDOUT_EXACT: "dst=1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Buf:
+    i32[] data
+
+fn main() i32:
+    let Buf[] src = from([Buf(from([1, 2, 3]))])
+    let List@(Buf) dst = List.new()
+    foreach(p in src.iter()):
+        dst.push(p)
+    println("dst={dst.len()}")
+    return Result.Ok(0)

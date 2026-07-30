@@ -1,0 +1,45 @@
+# A `match` binding that shadows an outer struct corrupts it AFTER the arm.
+#
+# `statements/matching.py:502` writes `codegen.variable_types[binding] = binding_type` and
+# nothing ever restores it at arm exit, so the OUTER variable is read through the inner
+# type's field indices for the rest of the function. Here `child.x` (A's index 0) is read
+# at B's index for `x`, which is 1 -- yielding A.y.
+#
+# Silent wrong data, exit 0, no diagnostic. This is the mirror of #279: a foreach binding
+# corrupts INSIDE the loop (it never writes the flat table, so the outer type wins), a
+# match binding corrupts AFTER the arm (it writes and never pops). Both are
+# `infer_struct_type`'s flat-table lookup; both want `resolve_name_semantic_type`, which
+# is already scope-aware. MM.md S2 row 10.
+# Named test_warn_ because CW1002 is unavoidable here -- shadowing IS the subject. The
+# runtime directives below are honoured because the file declares them explicitly;
+# before this branch a test_warn_ file was compilation-only and this defect could not
+# be asserted at all.
+# EXPECT_ERROR_CODE: CW1002
+# EXPECT_STDOUT_EXACT: "before=111 inside=888 after=111\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct A:
+    i32 x
+    i32 y
+
+struct B:
+    i32 p
+    i32 x
+
+enum E:
+    Has(B)
+    No
+
+fn main() i32:
+    let A child = A(111, 222)
+    let E e = E.Has(B(777, 888))
+    let i32 before = child.x
+    let i32 inside = 0
+    match e:
+        E.Has(child) ->
+            inside := child.x
+        E.No ->
+            inside := -1
+    println("before={before} inside={inside} after={child.x}")
+    return Result.Ok(0)

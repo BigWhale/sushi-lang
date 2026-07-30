@@ -1,0 +1,19 @@
+# Assigning an owning value THROUGH a field (`h.data := a`) is an ownership sink, but
+# `_emit_field_rebind` is a raw GEP + store: no clone, no move marking, and the old field
+# value is never destroyed. So `a` and `h.data` alias one buffer and both free it, while
+# the buffer `h.data` used to hold is leaked. The borrow checker cannot help either --
+# `borrow.py` gates move marking on `isinstance(stmt.target, Name)`, so a field target is
+# never considered a sink at all. MM.md S2 row 2; no upstream issue.
+# EXPECT_STDOUT_EXACT: "h=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Holder:
+    i32[] data
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let Holder h = Holder(from([9]))
+    h.data := a
+    println("h={h.data.len()}")
+    return Result.Ok(0)

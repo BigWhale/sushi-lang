@@ -1,6 +1,7 @@
 # Test automatic cleanup of Own@(T) variables (RAII)
 # This test verifies that Own@(T) variables are automatically destroyed
 # at function exit without explicit .destroy() calls
+# EXPECT_NO_LEAKS: true
 
 fn main() i32:
     let Own@(i32) ptr1 = Own.alloc(42)

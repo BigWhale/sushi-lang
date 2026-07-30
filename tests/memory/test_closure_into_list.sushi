@@ -1,0 +1,19 @@
+# A capturing closure pushed into a `List`.
+#
+# `move_owning_arg_into_container` (`backend/expressions/memory.py:522-527`)
+# re-implements `is_owned_local`'s registry union by hand and omits `_closure_cleanup`.
+# So the closure local is NOT recognised as an owner, is not marked moved, and both the
+# List's element destructor and the local's scope-exit cleanup free the same heap
+# environment. Its docstring claims to cover "every owning local kind"; it names five and
+# covers four. MM.md S2 row 6 / S6.1(2); no upstream issue.
+# EXPECT_STDOUT_EXACT: "n=1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let i32 k = 5
+    let fn(i32) -> i32 f = |i32 x| x + k
+    let List@(fn(i32) -> i32) fs = List.new()
+    fs.push(f)
+    println("n={fs.len()}")
+    return Result.Ok(0)

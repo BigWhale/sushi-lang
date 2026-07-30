@@ -3,6 +3,7 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test RAII for struct rebinding - cleanup of old value before assignment
+# EXPECT_NO_LEAKS: true
 
 struct Container:
     i32[] numbers

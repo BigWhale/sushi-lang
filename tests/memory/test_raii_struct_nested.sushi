@@ -3,6 +3,7 @@
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # Test RAII for nested structs with dynamic array fields
+# EXPECT_NO_LEAKS: true
 
 struct Inner:
     i32[] values

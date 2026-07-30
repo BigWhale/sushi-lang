@@ -5,6 +5,7 @@
 # named `Maybe` binding whose payload owns heap, the success path returned a shallow alias of
 # that payload, so the result and the binding both freed the same buffer at scope exit
 # (double-free, exit 133). A borrowed receiver's payload must be cloned.
+# EXPECT_NO_LEAKS: true
 
 struct Buf:
     i32[] data

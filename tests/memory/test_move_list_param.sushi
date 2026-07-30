@@ -2,6 +2,7 @@
 # frees it once; the caller does NOT free it again (no double-free at runtime).
 # EXPECT_STDOUT_EXACT: "sum=60\n"
 # EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
 
 fn total(List@(i32) xs) i32:
     let i32 acc = 0

@@ -6,6 +6,7 @@
 # The exact twin of the Tier-2 move bug (test_move_in_branch_arms); the fix simply never
 # covered the destroy flag. MUST COMPILE.
 # EXPECT_STDOUT_EXACT: "done\n"
+# EXPECT_NO_LEAKS: true
 use <collections/hashmap>
 
 fn main() i32:

@@ -3,6 +3,7 @@
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: 8080
 # EXPECTED_OUTPUT: 8180
+# EXPECT_NO_LEAKS: true
 
 struct Config:
     i32 port

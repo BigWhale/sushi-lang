@@ -3,6 +3,7 @@
 # directly).
 # EXPECT_STDOUT_EXACT: "a=3\nb=3\ndirect=3\n"
 # EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
 
 fn peek_len(&peek i32[] arr) i32:
     return Result.Ok(arr.len())

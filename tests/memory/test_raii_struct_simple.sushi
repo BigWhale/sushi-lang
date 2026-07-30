@@ -5,6 +5,7 @@
 # Test RAII for structs with dynamic array fields
 # This test verifies that dynamic arrays inside structs are
 # automatically cleaned up when the struct goes out of scope
+# EXPECT_NO_LEAKS: true
 
 struct Container:
     i32[] numbers

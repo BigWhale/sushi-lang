@@ -1,0 +1,29 @@
+# Sink matrix (MemberAccess -> container sinks): a `MemberAccess` of a field that owns heap handed to the `HashMap.insert` sink.
+#
+# The invariant (docs/design/move-semantics.md S3): at every by-value ownership sink a
+# bare OWNED Name moves, and anything that reads from a CONTINUING owner -- a borrowed
+# pattern binding, a MemberAccess, an Own@(T).get() deref -- is CLONED so each owner
+# frees exactly once. Only the call-argument sink implements this today; see MM.md S2.1.
+#
+# A MemberAccess and an Own@(T).get() deref both read through a CONTINUING owner,
+# so a container that stores the value shallowly must clone it (spec S3 row 6/7).
+# The container sinks route through move_owning_arg_into_container, which has a
+# move branch and NO clone branch -- so the value is aliased (MM.md S3.2).
+# EXPECT_STDOUT_EXACT: "m=1 src=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/hashmap>
+
+struct Buf:
+    i32[] data
+
+struct Holder:
+    Buf inner
+
+fn main() i32:
+    let Holder h = Holder(Buf(from([1, 2, 3])))
+    let HashMap@(i32, Buf) m = HashMap.new()
+    m.insert(1, h.inner)
+    println("m={m.len()} src={h.inner.data.len()}")
+    m.free()
+    return Result.Ok(0)

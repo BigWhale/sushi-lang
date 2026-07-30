@@ -3,6 +3,7 @@
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: 0
 # EXPECTED_OUTPUT: 10
+# EXPECT_NO_LEAKS: true
 
 struct Point:
     i32 x

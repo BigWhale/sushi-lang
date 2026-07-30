@@ -3,6 +3,7 @@
 # stays live and using it afterwards must compile. If the summary over-approximated (e.g.
 # "any &poke param may be destroyed"), this would be a false CE2406.
 # EXPECT_STDOUT_EXACT: "len = 2\n"
+# EXPECT_NO_LEAKS: true
 use <collections/hashmap>
 
 fn touch(&poke HashMap@(string, i32) m) ~:

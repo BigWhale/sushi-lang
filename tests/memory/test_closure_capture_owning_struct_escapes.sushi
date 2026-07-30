@@ -1,0 +1,29 @@
+# A closure that captures a struct CONTAINING an owning field, and then outlives it.
+#
+# `runtime/closures.py` gates both move-capture (:212) and the env destructor's field set
+# (:149) on `is_owning_type`, which is the NON-transitive predicate: it answers False for
+# `struct W { i32[] }`. Every other sink uses `type_moves_by_value`, which answers True.
+# So the env shallow-stores the fat pointer, nobody marks `w` moved, and `w.items` is
+# freed when `make()` returns -- leaving the escaped closure holding a dangling pointer.
+#
+# This fails in the QUIET direction: no crash, exit 0, and `.len()` still reads 3 out of
+# the copied struct header. Indexing is what exposes it. MM.md S3.1; no upstream issue.
+# `docs/design/move-semantics.md:198-201` required an audit of every `is_owning_type`
+# call site before this split shipped; this is the site that audit would have caught.
+# EXPECT_STDOUT_EXACT: "clobber=8 v=222\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct W:
+    i32[] items
+
+fn make() fn(i32) -> i32:
+    let W w = W(from([111, 222, 333]))
+    return Result.Ok(|i32 n| n + w.items[1])
+
+fn main() i32:
+    let fn(i32) -> i32 f = make().realise(|i32 n| n)
+    # Churn the heap so a freed buffer is unlikely to still hold its old contents.
+    let i32[] clobber = from([7, 7, 7, 7, 7, 7, 7, 7])
+    println("clobber={clobber.len()} v={f(0).realise(-1)}")
+    return Result.Ok(0)

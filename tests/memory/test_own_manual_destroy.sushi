@@ -1,6 +1,7 @@
 # Test explicit manual cleanup with Own@(T).destroy()
 # This test demonstrates that manual .destroy() prevents RAII double-free
 # The Own@(T) is explicitly destroyed, so RAII should skip it
+# EXPECT_NO_LEAKS: true
 
 fn main() i32:
     let Own@(i32) ptr1 = Own.alloc(10)

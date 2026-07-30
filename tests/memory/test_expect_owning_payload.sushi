@@ -1,0 +1,21 @@
+# `.expect()` must handle payload ownership the way `.realise()` already does.
+#
+# `_emit_owning_realise` (`backend/generics/enum_methods_base.py:193-238`) decides
+# clone-vs-adopt via `_expression_is_borrow`. Its siblings `_emit_result_expect`
+# (`generics/results.py:77-187`) and `_emit_maybe_expect` (`generics/maybe.py:81-189`)
+# return the unpacked value through a phi with no ownership reasoning at all -- so the
+# binding and the still-live Maybe both own the payload.
+#
+# The two `expect` implementations are the same 110-line function with identifiers
+# renamed. The discriminator is the last line of this file's twin: swap `.expect()` for
+# `.realise()` and the identical program exits 0. MM.md S2 row 7 / S6.1(3); no issue.
+# EXPECT_STDOUT_EXACT: "s=a1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let i32 k = 1
+    let Maybe@(string) m = Maybe.Some("a{k}")
+    let string s = m.expect("payload missing")
+    println("s={s}")
+    return Result.Ok(0)
