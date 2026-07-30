@@ -474,19 +474,29 @@ fn main() i32:
   a `List@(T)`, a dynamic array, or a struct with owned fields), the source variable is
   *moved* into the new `Own` and may not be used afterwards (use-after-move is `CE2405`).
   Primitives are copied, so passing an `i32` variable leaves it usable.
-- **`get()` borrows.** It yields a non-owning view of the payload; the binding is never a
-  second owner, so the container remains responsible for freeing it. This makes nested
-  owners such as `Own@(Own@(T))` safe: the outer owner frees every level exactly once.
+- **`get()` reads through the pointer, and a by-value sink copies.** `get()` is a dereference:
+  it hands back a *view* of the payload, which the `Own` keeps owning. At an ownership sink —
+  a `let` binding, a by-value argument, a constructor field, a rebind, an enum payload, a
+  `return` — that view is deep-copied, so the destination is an independent owner and each
+  side frees exactly once. This is the same rule a struct-field read follows (`let x = s.field`);
+  see `docs/design/move-semantics.md` §3, *"ownership sinks move; reads from a continuing owner
+  copy"*. Reading straight through a get-out (`o.get().field`) is not a sink and copies nothing.
+  Deep-copying a payload that owns nothing is free, so only owning payloads pay.
 
 ```sushi
 fn main() i32:
     let Own@(i32) inner = Own.alloc(42)
     let Own@(Own@(i32)) outer = Own.alloc(inner)  # inner is moved into outer
-    let Own@(i32) borrowed = outer.get()          # borrow, not a new owner
-    let i32 value = borrowed.get()
-    println(value)                               # 42
+    let Own@(i32) copied = outer.get()            # an independent copy; outer stays valid
+    let i32 value = copied.get()
+    println(value)                                # 42
     return Result.Ok(0)
 ```
+
+  The copy is what makes nested owners such as `Own@(Own@(T))` safe. Sushi has no `let`-borrow
+  bindings yet (`let &peek T x = ...` is not expressible), so a binding cannot *be* a view — it
+  is an owner or nothing. Until those land, copying is the only safe reading of a get-out at a
+  sink; the alternative would be a hard error with `.clone()` as the sole escape hatch.
 
 ## Manual Memory Management
 

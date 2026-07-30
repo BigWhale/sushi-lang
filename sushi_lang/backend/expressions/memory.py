@@ -381,13 +381,58 @@ def clone_owning_source(codegen: 'LLVMCodegen', value: ir.Value, semantic_type: 
     return emit_value_clone(codegen, value, semantic_type)
 
 
-def expression_is_temporary(expr) -> bool:
+def is_own_get_call(codegen: 'LLVMCodegen', expr) -> bool:
+    """Is `expr` an `Own@(T).get()` -- a read THROUGH a pointer whose owner stays live?
+
+    `Own` is a smart pointer, not a collection: `get()` is a dereference, it hands back a bare
+    `T` (not a `Maybe@(T)`), and `emit_own_get` loads the pointee without copying it. So the
+    value is a view of storage the receiver still frees, exactly like a `MemberAccess` field
+    read -- see `expression_reads_continuing_owner`.
+
+    Resolved through the same `infer_generic_struct_type` the emitter uses
+    (`calls/utils.py`), so this predicate and `try_emit_own_method` cannot disagree about what
+    is an `Own` receiver. That helper is AST-only and emits no IR, which is what makes it safe
+    to call from a predicate. The `Own<` gate keeps the array / `List` / `HashMap` `.get()`
+    methods out: those already deep-copy at the access site, so they really do return a value
+    nobody else owns.
+
+    A receiver that is neither a `Name` nor a `MemberAccess` (`f().get()`) does not resolve and
+    answers False. The `Own` temporary in that shape has no owner either way, so it is a
+    pre-existing gap rather than one this predicate introduces.
+    """
+    if getattr(expr, "method", None) != "get":
+        return False
+    receiver = getattr(expr, "receiver", None)
+    if receiver is None:
+        return False
+    from sushi_lang.backend.expressions.calls.utils import infer_generic_struct_type
+    own_type = infer_generic_struct_type(codegen, receiver, "Own<")
+    return isinstance(own_type, StructType) and own_type.name.startswith("Own<")
+
+
+def expression_reads_continuing_owner(codegen: 'LLVMCodegen', expr) -> bool:
+    """Does `expr` hand a sink a view of storage another owner still frees?
+
+    The by-value sinks' shared test. `docs/design/move-semantics.md` section 3 splits every
+    source into "ownership sinks move; reads from a continuing owner copy", and this is the
+    second half: a `MemberAccess` (`w.items`) and an `Own@(T).get()` (`o.get()`) both reach
+    through a live owner into storage it keeps, so a sink taking one of them by value must
+    detach with its own deep copy. Sushi has no partial moves, so this is never a move.
+
+    A bare `Name` is deliberately absent: it is the *first* half of the rule and each sink
+    splits it itself -- an owned local moves, a borrow binding (#238) copies.
+    """
+    from sushi_lang.semantics.ast import MemberAccess
+    return isinstance(expr, MemberAccess) or is_own_get_call(codegen, expr)
+
+
+def expression_is_temporary(codegen: 'LLVMCodegen', expr) -> bool:
     """Does `expr` produce a value that NO other owner will free?
 
-    A bare name or a struct-field read hands back a shallow view of storage some other owner
-    still frees; anything else (constructor, call return, container get-out) is a temporary
-    that nobody owns. Same clone-vs-adopt discipline the `let` binding uses in
-    `statements/variables.py`.
+    A bare name, a struct-field read, or an `Own@(T).get()` deref hands back a shallow view of
+    storage some other owner still frees; anything else (constructor, call return, container
+    get-out) is a temporary that nobody owns. Same clone-vs-adopt discipline the `let` binding
+    uses in `statements/variables.py`.
 
     This is the single definition, and it must stay single. `.realise()` reads it as "the
     receiver is a temporary, so I ADOPT its payload"; the non-extracting consumers below read
@@ -398,10 +443,14 @@ def expression_is_temporary(expr) -> bool:
     owns.** The array `.get()`, `HashMap.get()` and `List.get()` all deep-copy an owning element
     before wrapping it, and `List.pop()` removes the element outright. A container that wrapped
     its element SHALLOWLY would hand back a temporary the container still frees, and this
-    predicate would then be wrong about it -- which is precisely what #203 was.
+    predicate would then be wrong about it -- which is precisely what #203 was, and what #256
+    was for `Own@(T)`: `emit_own_get` loads the pointee uncopied, so `match o.get():` destroyed
+    the container's own payload. `Own` does not keep the invariant, so it is named here instead.
     """
     from sushi_lang.semantics.ast import Name, MemberAccess
-    return not isinstance(expr, (Name, MemberAccess))
+    if isinstance(expr, (Name, MemberAccess)):
+        return False
+    return not is_own_get_call(codegen, expr)
 
 
 def destroy_enum_temp(codegen: 'LLVMCodegen', expr_ast, enum_value: ir.Value,
@@ -425,7 +474,7 @@ def destroy_enum_temp(codegen: 'LLVMCodegen', expr_ast, enum_value: ir.Value,
         emit_value_destructor, needs_cleanup, resolve_named_type
     )
 
-    if not expression_is_temporary(expr_ast):
+    if not expression_is_temporary(codegen, expr_ast):
         return
 
     # `needs_cleanup` is table-free: an unresolved UnknownType answers False, which is exactly

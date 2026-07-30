@@ -219,13 +219,12 @@ def _deep_copy_struct_value_args(codegen: 'LLVMCodegen', arg_exprs: list, args: 
     A #134 move-type argument that is a bare `Name` is instead moved -- it flows to
     `_move_owning_value_args`, which marks the source local moved -- so it is skipped
     here (copying it would leak a second buffer the caller never frees). A move-type
-    argument that is NOT a bare Name (a `MemberAccess` source, `s.field`) keeps the copy:
-    it reads from a continuing owner (spec V5). Reference parameters are borrows, skipped.
+    argument that is NOT a bare Name but reads from a continuing owner (`s.field`,
+    `own.get()`) keeps the copy (spec V5). Reference parameters are borrows, skipped.
     """
     if func_sig is None or not func_sig.params:
         return
     from sushi_lang.semantics.typesys import ReferenceType, type_moves_by_value
-    from sushi_lang.semantics.ast import MemberAccess
     from sushi_lang.backend.expressions import memory
     for i, param in enumerate(func_sig.params):
         if i >= len(args):
@@ -235,11 +234,12 @@ def _deep_copy_struct_value_args(codegen: 'LLVMCodegen', arg_exprs: list, args: 
         arg_expr = arg_exprs[i] if i < len(arg_exprs) else None
         if type_moves_by_value(_resolve_param_type(codegen, param.ty)):
             # #134 move sink. A copy is needed only when the source is a CONTINUING OWNER we
-            # must detach from: a MemberAccess (V5), or a bare Name that is a borrow (a match /
-            # pattern binding whose real owner still frees it). An owned bare Name is moved
-            # (marked in _move_owning_value_args); a fresh owning temp (clone / call /
-            # constructor return) moves in as-is -- copying either would leak or double-free.
-            if isinstance(arg_expr, MemberAccess):
+            # must detach from: a MemberAccess or an Own.get() deref (V5), or a bare Name that
+            # is a borrow (a match / pattern binding whose real owner still frees it). An owned
+            # bare Name is moved (marked in _move_owning_value_args); a fresh owning temp
+            # (clone / call / constructor return) moves in as-is -- copying either would leak
+            # or double-free.
+            if memory.expression_reads_continuing_owner(codegen, arg_expr):
                 args[i] = memory.deep_copy_if_owning_struct(codegen, args[i], param.ty)
             elif isinstance(arg_expr, Name) and not codegen.memory.is_owned_local(arg_expr.id):
                 args[i] = memory.deep_copy_if_owning_struct(codegen, args[i], param.ty)

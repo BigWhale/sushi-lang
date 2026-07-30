@@ -61,7 +61,7 @@ def initialize_array_literal(
         # Emit the element expression
         element_value = codegen.expressions.emit_expr(element_expr)
 
-        if element_owns_heap and not memory.expression_is_temporary(element_expr):
+        if element_owns_heap and not memory.expression_is_temporary(codegen, element_expr):
             element_value = memory.emit_value_clone(codegen, element_value, resolved_element)
 
         # Create GEP to the array element: array[0][i]

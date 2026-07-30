@@ -72,6 +72,18 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
 - `./nori` no longer swallows exit codes (#234) -- `./nori install nosuchpkg` exits 1
 
 ### Fixed
+- **`Own@(T).get()` no longer hands a borrow to an ownership sink** (#256). `get()` is a
+  dereference: it loads the payload uncopied, so the value is a view of storage the `Own` still
+  frees. Nothing downstream knew that, so every by-value sink took a second owner of the same heap
+  and both freed it. `let Holder back = o.get()`, `takes(o.get())` and `return Result.Ok(o.get())`
+  died with SIGTRAP, and `match o.get():` on an owning enum freed the container's payload outright
+  via the unowned-temporary path (#159). A `.get()` source is now treated exactly like a
+  `MemberAccess` field read — cloned at the sink, per `docs/design/move-semantics.md` §3 (*"ownership
+  sinks move; reads from a continuing owner copy"*) — which also retires the narrow name-based
+  exception #106 added at the `let` sink, the only sink that knew. Reading straight through a
+  get-out (`o.get().field`) takes no owner and still copies nothing. Deep-copying a payload that
+  owns nothing is free, so only owning payloads pay; nested `Own@(Own@(T))` now costs one copy per
+  level at a sink, the same residual copy §3.1 already accepts for `s.field` and on the same terms
 - **Recursive structs compile** (#240). A struct referring to itself through any indirection --
   `Own@(Node)`, `Maybe@(Own@(Node))`, `List@(Node)`, `Node[]` -- was a `CE0000` `RecursionError` on
   *declaration alone*, which broke `docs/examples/20-ownership.sushi` and the linked-list pattern it

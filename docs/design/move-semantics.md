@@ -112,6 +112,7 @@ also refuses to move out of an index.
 | `return x` of a local | moved out (backend) | unchanged | already correct (`returns.py`) |
 | closure capture | move (T1.5) | unchanged | already correct |
 | **`s.field` / `MemberAccess` source** in any of the above | cloned | **stays cloned** | read from a continuing owner; Sushi has no partial moves |
+| **`own.get()` deref source** in any of the above | aliased (#256 bug) | **cloned** | same row as `s.field`: `Own` is a smart pointer, `get()` reaches *through* a live owner. Cloned at the SINK, not at the access site — `get()` returns bare `T` (not `Maybe@(T)`), so `o.get().field` chains, and a copy there would belong to no owner and leak |
 | container get-out (`list.get(i)??`, `arr[i]`) | cloned (#203/#185) | **stays cloned** | V5 rule; the guard tests must stay green |
 | struct-field read (`let x = s.field`) | cloned | **stays cloned** | same |
 | `match` / `foreach` bindings | borrow | unchanged | |
@@ -121,9 +122,13 @@ also refuses to move out of an index.
 ### 3.1 The deliberate residual copy, and its implications
 
 A `MemberAccess` source (`take(s.field)`, `from([s.field])`, `let x = s.field`) keeps the silent
-deep copy. Be honest about what this means: **the #134 trap survives in field-access form** —
-after the flip, `f(list)` moves but `f(wrapper.list)` still silently deep-copies. The hidden-cost
-surface is *narrowed* (to expressions that visibly reach through an owner), not eliminated.
+deep copy, and since #256 an `Own@(T).get()` deref (`take(o.get())`, `let x = o.get()`) is on the
+same footing. Be honest about what this means: **the #134 trap survives in field-access and deref
+form** — after the flip, `f(list)` moves but `f(wrapper.list)` and `f(owned.get())` still silently
+deep-copy. The hidden-cost surface is *narrowed* (to expressions that visibly reach through an
+owner), not eliminated. **The two forms — field access and deref — retire together** under the
+upgrade path below: one rule, one rationale, and both gated on the same missing feature
+(`let`-borrow bindings), so the warning and the hard error should cover both in one change.
 
 **Why copy anyway.** Rust's alternative is a hard error ("cannot move out of a field"), forcing
 explicit `.clone()` or a borrow — ergonomic in Rust only because reference *bindings* exist

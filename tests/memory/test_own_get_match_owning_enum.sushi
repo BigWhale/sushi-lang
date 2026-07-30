@@ -1,0 +1,26 @@
+# The non-sink half of #256: `destroy_enum_temp` (#159) frees an unbound
+# Result/Maybe/enum temporary whose payload nobody extracts. It decides via
+# `expression_is_temporary`, which classified `o.get()` as a temporary nobody
+# owns -- so the match DESTROYED the container's payload outright, then `o`
+# freed it again at scope exit (SIGABRT, exit 134).
+#
+# This is why the fix is a correction to that predicate rather than a copy
+# inside the get() emitter: no sink is involved here, so no amount of sink
+# work would have reached it.
+# EXPECT_STDOUT_EXACT: "A len=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+enum E:
+    A(i32[])
+    B
+
+fn run_test() i32:
+    let Own@(E) o = Own.alloc(E.A(from([1, 2, 3])))
+    match o.get():
+        E.A(v) -> println("A len={v.len()}")
+        E.B() -> println("B")
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(99))

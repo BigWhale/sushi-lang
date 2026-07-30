@@ -41,6 +41,8 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
     Raises:
         TypeError: If field count doesn't match or unsupported array constructor type.
     """
+    from sushi_lang.backend.expressions import memory
+
     struct_name = expr.callee.id
     struct_type = codegen.struct_table.by_name[struct_name]
 
@@ -100,13 +102,12 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
                     if arg_value.type.pointee == expected_struct_type:
                         arg_value = codegen.builder.load(arg_value)
 
-                # A `MemberAccess` source (`V(w.items)`) is NOT a move: it reads from a
-                # CONTINUING owner that still frees that buffer, and Sushi has no partial
-                # moves, so the new struct must own an independent copy or both free it
-                # (#250). Only a bare Name below is consumed.
-                if isinstance(arg, MemberAccess):
-                    from sushi_lang.backend.expressions.memory import emit_value_clone
-                    arg_value = emit_value_clone(codegen, arg_value, field_type)
+                # A read from a CONTINUING owner (`V(w.items)`, `V(o.get())`) is NOT a move:
+                # the owner still frees that buffer, and Sushi has no partial moves, so the
+                # new struct must own an independent copy or both free it (#250/#256). Only a
+                # bare Name below is consumed.
+                if memory.expression_reads_continuing_owner(codegen, arg):
+                    arg_value = memory.emit_value_clone(codegen, arg_value, field_type)
 
                 field_values.append(arg_value)
 
@@ -131,38 +132,39 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
             # we must clone the dynamic array memory to avoid shared ownership
             if isinstance(resolved_field_type, StructType) and type_moves_by_value(resolved_field_type):
                 # #134 move-type field (owning struct / List / Own): an OWNED bare Name moves
-                # the local (mark moved, store as-is). A borrow binding (#238) or a MemberAccess
-                # source detaches from its continuing owner with one clone (#181). A fresh owning
-                # temp (constructor / call / clone) moves in as-is -- cloning would orphan it.
+                # the local (mark moved, store as-is). A borrow binding (#238), a MemberAccess
+                # source or an Own.get() deref detaches from its continuing owner with one
+                # clone (#181/#256). A fresh owning temp (constructor / call / clone) moves in
+                # as-is -- cloning would orphan it.
                 if isinstance(arg, Name) and codegen.memory.is_owned_local(arg.id):
                     codegen.memory.mark_struct_as_moved(arg.id)
-                elif isinstance(arg, (Name, MemberAccess)):
-                    from sushi_lang.backend.expressions.memory import emit_value_clone
-                    arg_value = emit_value_clone(codegen, arg_value, resolved_field_type)
+                elif (isinstance(arg, Name)
+                        or memory.expression_reads_continuing_owner(codegen, arg)):
+                    arg_value = memory.emit_value_clone(codegen, arg_value, resolved_field_type)
 
             elif isinstance(resolved_field_type, StructType):
-                # Copy-type composite field (string-only): clone a bare-Name / member alias so
-                # the source stays a live owner and each frees once (#147); a fresh RHS is a
-                # sole owner stored as-is.
+                # Copy-type composite field (string-only): clone a bare-Name / continuing-owner
+                # alias so the source stays a live owner and each frees once (#147); a fresh
+                # RHS is a sole owner stored as-is.
                 if (codegen.dynamic_arrays.struct_needs_cleanup(resolved_field_type)
-                        and isinstance(arg, (Name, MemberAccess))):
-                    from sushi_lang.backend.expressions import memory
+                        and (isinstance(arg, Name)
+                             or memory.expression_reads_continuing_owner(codegen, arg))):
                     arg_value = memory.deep_copy_struct(codegen, arg_value, resolved_field_type)
 
             # An owning enum field (a variant carrying heap, #139): a bare-Name MOVE-type arg
-            # transfers ownership (mark source moved); a MemberAccess source detaches with one
-            # clone; a fresh RHS (constructor / call) is a sole owner and moves in as-is.
+            # transfers ownership (mark source moved); a continuing-owner read detaches with
+            # one clone; a fresh RHS (constructor / call) is a sole owner and moves in as-is.
             elif (isinstance(resolved_field_type, EnumType)
                   and codegen.dynamic_arrays.struct_needs_cleanup(resolved_field_type)):
                 # An OWNED bare Name of a move-type enum moves; a borrow binding (#238), a
-                # MemberAccess source, or a copy-type (string-only) enum alias is cloned so the
-                # source stays a live owner.
+                # MemberAccess / Own.get() source, or a copy-type (string-only) enum alias is
+                # cloned so the source stays a live owner.
                 if (isinstance(arg, Name) and type_moves_by_value(resolved_field_type)
                         and codegen.memory.is_owned_local(arg.id)):
                     codegen.memory.mark_struct_as_moved(arg.id)
-                elif isinstance(arg, (Name, MemberAccess)):
-                    from sushi_lang.backend.expressions.memory import emit_value_clone
-                    arg_value = emit_value_clone(codegen, arg_value, resolved_field_type)
+                elif (isinstance(arg, Name)
+                        or memory.expression_reads_continuing_owner(codegen, arg)):
+                    arg_value = memory.emit_value_clone(codegen, arg_value, resolved_field_type)
 
             # A `string` field: when the arg ALIASES an existing owner (a bare-Name local /
             # param, or a struct-field read), CLONE it so the struct gets an independent buffer
@@ -170,9 +172,10 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
             # borrow checker does not flag a string reused across two constructors, which a move
             # (shallow share) would double-free. A fresh RHS (literal / interpolation / method /
             # call) is a sole owner with no other owner to alias, so it is stored as-is.
-            elif resolved_field_type == BuiltinType.STRING and isinstance(arg, (Name, MemberAccess)):
-                from sushi_lang.backend.expressions.memory import emit_value_clone
-                arg_value = emit_value_clone(codegen, arg_value, BuiltinType.STRING)
+            elif (resolved_field_type == BuiltinType.STRING
+                  and (isinstance(arg, Name)
+                       or memory.expression_reads_continuing_owner(codegen, arg))):
+                arg_value = memory.emit_value_clone(codegen, arg_value, BuiltinType.STRING)
 
             # Cast to the expected field type
             llvm_field_type = codegen.types.ll_type(field_type)
