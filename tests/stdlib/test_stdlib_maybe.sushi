@@ -1,10 +1,10 @@
 # EXPECT_STDOUT_CONTAINS: ✓ is_some() on Some(42) = true
 # EXPECT_STDOUT_CONTAINS: ✓ realise(99) on None() = 99
-# EXPECT_STDOUT_CONTAINS: ✓ Maybe<f64> realise: 3.14
-# EXPECT_STDOUT_CONTAINS: All Maybe<T> stdlib tests passed!
+# EXPECT_STDOUT_CONTAINS: ✓ Maybe@(f64) realise: 3.14
+# EXPECT_STDOUT_CONTAINS: All Maybe@(T) stdlib tests passed!
 # EXPECT_RUNTIME_EXIT: 0
-# TEST: Maybe<T> stdlib methods
-# Tests all 4 Maybe<T> methods with stdlib implementation
+# TEST: Maybe@(T) stdlib methods
+# Tests all 4 Maybe@(T) methods with stdlib implementation
 
 
 fn main() i32:
@@ -48,25 +48,25 @@ fn main() i32:
     # Test with string type
     let Maybe@(string) some_str = Maybe.Some("Mostly Harmless")
     let string str1 = some_str.realise("default")
-    println("✓ Maybe<string> realise: {str1}")
+    println("✓ Maybe@(string) realise: {str1}")
 
     let Maybe@(string) none_str = Maybe.None()
     let string str2 = none_str.realise("default")
-    println("✓ Maybe<string> realise on None: {str2}")
+    println("✓ Maybe@(string) realise on None: {str2}")
 
     # Test with bool type
     let Maybe@(bool) some_bool = Maybe.Some(true)
     if (some_bool.is_some()):
-        println("✓ Maybe<bool> is_some() works")
+        println("✓ Maybe@(bool) is_some() works")
 
     let bool b1 = some_bool.realise(false)
     if (b1):
-        println("✓ Maybe<bool> realise works")
+        println("✓ Maybe@(bool) realise works")
 
     # Test with f64 type
     let Maybe@(f64) some_float = Maybe.Some(3.14)
     let f64 f1 = some_float.realise(0.0)
-    println("✓ Maybe<f64> realise: {f1}")
+    println("✓ Maybe@(f64) realise: {f1}")
 
     # Test expect() with Some variant (should NOT panic)
     let Maybe@(i32) some_val2 = Maybe.Some(100)
@@ -76,5 +76,5 @@ fn main() i32:
     else:
         println("✗ expect() on Some(100) returned {expected_val} (FAIL)")
 
-    println("All Maybe<T> stdlib tests passed!")
+    println("All Maybe@(T) stdlib tests passed!")
     return Result.Ok(0)

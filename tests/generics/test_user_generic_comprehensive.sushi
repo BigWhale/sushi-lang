@@ -1,8 +1,8 @@
-# EXPECT_STDOUT_EXACT: "Test 1: Pair<i32, string> - 42 and hello\nTest 2: Pair<f64, i32> - 3.14 and 100\nTest 3: Mixed with Result - 200 300\n"
+# EXPECT_STDOUT_EXACT: "Test 1: Pair@(i32, string) - 42 and hello\nTest 2: Pair@(f64, i32) - 3.14 and 100\nTest 3: Mixed with Result - 200 300\n"
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
-# EXPECTED_OUTPUT: Test 1: Pair<i32, string> - 42 and hello
-# EXPECTED_OUTPUT: Test 2: Pair<f64, i32> - 3.14 and 100
+# EXPECTED_OUTPUT: Test 1: Pair@(i32, string) - 42 and hello
+# EXPECTED_OUTPUT: Test 2: Pair@(f64, i32) - 3.14 and 100
 # EXPECTED_OUTPUT: Test 3: Mixed with Result - 200 300
 
 # Comprehensive test of user-defined generic enums
@@ -19,23 +19,23 @@ fn create_float_int_pair(f64 x, i32 y) Pair@(f64, i32):
     return Result.Ok(Pair.Both(x, y))
 
 fn main() i32:
-    # Test 1: Pair<i32, string>
+    # Test 1: Pair@(i32, string)
     let Result@(Pair@(i32, string), StdError) r1 = create_int_string_pair(42, "hello")
     let Pair@(i32, string) p1 = r1.realise(Pair.Left(0))
     match p1:
         Pair.Both(a, b) ->
-            println("Test 1: Pair<i32, string> - {a} and {b}")
+            println("Test 1: Pair@(i32, string) - {a} and {b}")
         Pair.Left(a) ->
             println("Test 1: Left {a}")
         Pair.Right(b) ->
             println("Test 1: Right {b}")
 
-    # Test 2: Pair<f64, i32>
+    # Test 2: Pair@(f64, i32)
     let Result@(Pair@(f64, i32), StdError) r2 = create_float_int_pair(3.14, 100)
     let Pair@(f64, i32) p2 = r2.realise(Pair.Left(0.0))
     match p2:
         Pair.Both(x, y) ->
-            println("Test 2: Pair<f64, i32> - {x} and {y}")
+            println("Test 2: Pair@(f64, i32) - {x} and {y}")
         Pair.Left(x) ->
             println("Test 2: Left {x}")
         Pair.Right(y) ->

@@ -7,7 +7,7 @@
 # EXPECTED_OUTPUT: Neither
 
 # Test user-defined generic enum with multiple type parameters
-# Demonstrates that Pair<T, U> works as described in GENERICS.md
+# Demonstrates that Pair@(T, U) works as described in GENERICS.md
 
 enum Pair@(T, U):
     Both(T, U)
@@ -28,7 +28,7 @@ fn describe_pair_int_string(Pair@(i32, string) p) ~:
     return Result.Ok(~)
 
 fn main() i32:
-    # Create different variants of Pair<i32, string>
+    # Create different variants of Pair@(i32, string)
     let Pair@(i32, string) p1 = Pair.Both(42, "Thanks for all the fish.")
     let Pair@(i32, string) p2 = Pair.Left(100)
     let Pair@(i32, string) p3 = Pair.Right("So long!")

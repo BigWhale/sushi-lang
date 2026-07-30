@@ -1,5 +1,5 @@
 # Guards PLAN.md T2.5: a recursive generic enum whose recursion passes through an
-# opaque Own<T> pointer (enum Tree<T>: Node(Own<Tree<T>>)) used to blow the Python
+# opaque Own@(T) pointer (enum Tree@(T): Node(Own@(Tree@(T)))) used to blow the Python
 # stack in the monomorphizer, because monomorphize_enum wrote its cache entry only
 # AFTER substituting every field, so the self-referential field re-entered forever.
 #
@@ -10,8 +10,8 @@
 # and matches. (CLAUDE.md limitation #12.)
 #
 # Leak-gated again (#162 fixed): the destructor used to drop the inner free, ~12 B per
-# recursion level. needs_cleanup() answered False for Own<T>/List<T> -- their only fields
-# are raw pointers -- so the Node(Own<Tree<T>>) variant was omitted from the destructor's
+# recursion level. needs_cleanup() answered False for Own@(T)/List@(T) -- their only fields
+# are raw pointers -- so the Node(Own@(Tree@(T))) variant was omitted from the destructor's
 # discriminant switch entirely, and nothing freed the payload.
 # EXPECT_STDOUT_EXACT: "leaf\nnode\n"
 # EXPECT_NO_LEAKS: true

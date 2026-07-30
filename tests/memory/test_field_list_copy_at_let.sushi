@@ -1,4 +1,4 @@
-# The List@(T)-at-let half of #250. List<i32> IS a StructType, so it reaches
+# The List@(T)-at-let half of #250. List@(i32) IS a StructType, so it reaches
 # _clone_owning_struct_alias -- but the struct_needs_cleanup gate there reports False for
 # it (that predicate scans for dynamic-array FIELDS; List's buffers are raw pointers), so
 # the MemberAccess clone below it was never reached and the binding aliased the field.

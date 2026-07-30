@@ -1,4 +1,4 @@
-# Generic higher-order function: fold<T, U>(List<T>, U, fn(U, T) -> U) with a capturing
+# Generic higher-order function: fold<T, U>(List@(T), U, fn(U, T) -> U) with a capturing
 # combiner. Two type params both inferred from the args (U from `init` and the fn). Sum
 # [1,2,3] onto base 100 -> 106.
 # EXPECT_STDOUT_EXACT: "106\n"

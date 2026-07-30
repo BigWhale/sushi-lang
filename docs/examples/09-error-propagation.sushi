@@ -1,7 +1,7 @@
 # Example 09: Error Propagation with ??
 #
 # This example demonstrates the ?? operator for automatic error propagation.
-# The ?? operator provides a clean way to handle Result<T> values by either
+# The ?? operator provides a clean way to handle Result@(T) values by either
 # unwrapping the Ok value or immediately propagating the Err up the call stack.
 #
 # Key concepts covered:

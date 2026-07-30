@@ -15,7 +15,7 @@ fn main() i32:
     # count returns how many non-overlapping times a needle appears.
     println("count of n: {entry.count('n')}")
 
-    # find returns Maybe<i32>: Some(index) or None.
+    # find returns Maybe@(i32): Some(index) or None.
     match entry.find('Panic'):
         Maybe.Some(pos) ->
             println("Found 'Panic' at {pos}")

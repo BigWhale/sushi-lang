@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_EXACT: "Point hash: 14687699039417897699\nPerson hash: 1392282333807035681\nRectangle hash: 12303218980686071687\nBox<i32> hash: 14496698863873933525\nBox<string> hash: 8050410067543246890\nPair<i32, string> hash: 11154612224293470462\nAll hash tests passed!\n"
+# EXPECT_STDOUT_EXACT: "Point hash: 14687699039417897699\nPerson hash: 1392282333807035681\nRectangle hash: 12303218980686071687\nBox@(i32) hash: 14496698863873933525\nBox@(string) hash: 8050410067543246890\nPair@(i32, string) hash: 11154612224293470462\nAll hash tests passed!\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Comprehensive hash test covering all supported scenarios
 # Tests basic primitives, mixed types, nested structs, and generic structs
@@ -47,16 +47,16 @@ fn main() i32:
     # Test generic struct
     let Box@(i32) box1 = Box(42)
     let u64 h4 = box1.hash()
-    println("Box<i32> hash: {h4}")
+    println("Box@(i32) hash: {h4}")
 
     let Box@(string) box2 = Box("hello")
     let u64 h5 = box2.hash()
-    println("Box<string> hash: {h5}")
+    println("Box@(string) hash: {h5}")
 
     # Test pair
     let Pair@(i32, string) pair = Pair(42, "answer")
     let u64 h6 = pair.hash()
-    println("Pair<i32, string> hash: {h6}")
+    println("Pair@(i32, string) hash: {h6}")
 
     println("All hash tests passed!")
     return Result.Ok(0)

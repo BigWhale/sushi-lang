@@ -1,7 +1,7 @@
 # EXPECT_STDOUT_EXACT: "Autogrow tests passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# Test List<T> automatic growth (2x exponential)
+# Test List@(T) automatic growth (2x exponential)
 fn main() i32:
     let List@(i32) growing = List.new()
 

@@ -1,4 +1,4 @@
-# Double nesting test - Maybe<Maybe<i32>>
+# Double nesting test - Maybe@(Maybe@(i32))
 # Tests same generic nested within itself
 # "The ships hung in the sky in much the same way that bricks don't."
 

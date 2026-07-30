@@ -2,7 +2,7 @@
 # EXPECT_STDOUT_EXACT: "PASS: Nested Result works\n"
 # EXPECT_STDERR_EMPTY: true
 
-# Tests nested Result<Result<T, E1>, E2> (edge case)
+# Tests nested Result@(Result@(T, E1), E2) (edge case)
 
 enum InnerError:
     InnerFailed

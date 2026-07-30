@@ -6,7 +6,7 @@
 # EXPECT_STDOUT_CONTAINS: "All nested user-defined generic tests passed"
 # EXPECT_RUNTIME_EXIT: 0
 # Test HashMap with nested user-defined generic structs
-# Use case: Container<Pair<i32, string>> as key/value types
+# Use case: Container@(Pair@(i32, string)) as key/value types
 
 use <collections/hashmap>
 struct Pair@(T, U):
@@ -17,7 +17,7 @@ struct Container@(T):
     T value
 
 fn main() i32:
-    # Test 1: Container<i32> as key
+    # Test 1: Container@(i32) as key
     println("Starting Test #1")
     let HashMap@(Container@(i32), string) map1 = HashMap.new()
 
@@ -28,7 +28,7 @@ fn main() i32:
         Maybe.Some(val) -> println("Found: {val}")
         Maybe.None() -> println("ERROR: Should have found value")
 
-    # Test 2: Nested Container<Container<i32>> as key
+    # Test 2: Nested Container@(Container@(i32)) as key
     println("Starting Test #2")
     let HashMap@(Container@(Container@(i32)), string) map2 = HashMap.new()
 
@@ -41,7 +41,7 @@ fn main() i32:
         Maybe.Some(val) -> println("Nested found: {val}")
         Maybe.None() -> println("ERROR: Should have found nested value")
 
-    # Test 3: Pair<i32, string> as key
+    # Test 3: Pair@(i32, string) as key
     println("Starting Test #3")
     let HashMap@(Pair@(i32, string), bool) map3 = HashMap.new()
 
@@ -52,7 +52,7 @@ fn main() i32:
         Maybe.Some(found) -> println("Pair key works: {found}")
         Maybe.None() -> println("ERROR: Should have found pair")
 
-    # Test 4: Container<Pair<i32, string>> as nested generic struct key
+    # Test 4: Container@(Pair@(i32, string)) as nested generic struct key
     println("Starting Test #4")
     let HashMap@(Container@(Pair@(i32, string)), i32) map4 = HashMap.new()
 
@@ -65,7 +65,7 @@ fn main() i32:
         Maybe.Some(num) -> println("Nested generic struct key: {num}")
         Maybe.None() -> println("ERROR: Should have found nested generic struct")
 
-    # Test 5: Pair<Container<i32>, Container<string>> - deeply nested generics
+    # Test 5: Pair@(Container@(i32), Container@(string)) - deeply nested generics
     println("Starting Test #5")
     let HashMap@(Pair@(Container@(i32), Container@(string)), bool) map5 = HashMap.new()
 

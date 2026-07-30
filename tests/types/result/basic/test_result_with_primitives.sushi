@@ -2,7 +2,7 @@
 # EXPECT_STDOUT_EXACT: "PASS: i32 works\nPASS: string works\nPASS: bool works\n"
 # EXPECT_STDERR_EMPTY: true
 
-# Tests Result<T, E> with primitive types
+# Tests Result@(T, E) with primitive types
 
 fn test_i32() i32:
     return Result.Ok(42)

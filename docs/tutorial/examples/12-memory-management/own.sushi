@@ -1,6 +1,6 @@
-# Own<T>: an owned heap allocation.
+# Own@(T): an owned heap allocation.
 #
-# Own<T> is Sushi's tool for putting a value on the heap explicitly.
+# Own@(T) is Sushi's tool for putting a value on the heap explicitly.
 # You need it for recursive types (a struct that contains itself),
 # and it cleans up after itself via RAII - just like everything else.
 
@@ -15,7 +15,7 @@ fn main() i32:
     # .get() reads the value back out.
     println("Heap-allocated answer: {answer.get()}")
 
-    # Own<T> works with any type, including structs.
+    # Own@(T) works with any type, including structs.
     let Vogon v = Vogon(7, "Prostetnic Vogon Jeltz")
     let Own@(Vogon) boxed = Own.alloc(v)
     let Vogon loaded = boxed.get()

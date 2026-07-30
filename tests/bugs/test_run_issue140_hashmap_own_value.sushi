@@ -1,4 +1,4 @@
-# Issue #140: HashMap with an Own<T> value. Own<T> owns a heap allocation, so get
+# Issue #140: HashMap with an Own@(T) value. Own@(T) owns a heap allocation, so get
 # returning a shallow copy double-freed the pointer at map.free(). _clone_own_value now
 # mallocs a fresh pointee and recursively clones it.
 # https://github.com/BigWhale/sushi-lang/issues/140

@@ -1,5 +1,5 @@
 # Consumer instantiates library generic struct/enum templates at its own types:
-# Box<T> at i32 and string, and the Opt<T> enum at i32 - all monomorphized
+# Box@(T) at i32 and string, and the Opt@(T) enum at i32 - all monomorphized
 # locally from templates shipped in the .slib (P2-5 Phase 1 / C3).
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_CONTAINS: "42"

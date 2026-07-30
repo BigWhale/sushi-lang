@@ -4,7 +4,7 @@
 
 use <collections/hashmap>
 fn main() i32:
-    # Test HashMap with Maybe<i32> values (nested generic)
+    # Test HashMap with Maybe@(i32) values (nested generic)
     let HashMap@(string, Maybe@(i32)) config = HashMap.new()
 
     # Insert entries with Some and None values

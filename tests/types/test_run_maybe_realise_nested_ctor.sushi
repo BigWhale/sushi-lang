@@ -5,7 +5,7 @@
 # its concrete enum type and the backend reported its own missing annotation:
 #
 #   error [CE0113]: Generic enum constructor Maybe.None() requires type
-#   annotation. Found monomorphized instance Maybe<Own<Leafy>>. [...]
+#   annotation. Found monomorphized instance Maybe@(Own@(Leafy)). [...]
 #
 # The same constructor in a `let` with an annotation, or as a plain function
 # argument, was already propagated -- it was specifically the built-in

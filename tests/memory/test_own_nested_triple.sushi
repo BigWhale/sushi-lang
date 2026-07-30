@@ -1,4 +1,4 @@
-# Test Own<Own<Own<T>>> - triple-nested owned pointers.
+# Test Own@(Own@(Own@(T))) - triple-nested owned pointers.
 # Each Own.alloc moves its owning argument; the deep destructor frees every level
 # exactly once (issue #106).
 # EXPECT_STDOUT_EXACT: "7\n"

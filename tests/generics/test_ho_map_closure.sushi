@@ -1,5 +1,5 @@
-# Generic higher-order function: map<T, U>(List<T>, fn(T) -> U) applied with a CAPTURING
-# closure (captures `factor`). Exercises Gap C (infer T from List<i32>, U from the fn
+# Generic higher-order function: map<T, U>(List@(T), fn(T) -> U) applied with a CAPTURING
+# closure (captures `factor`). Exercises Gap C (infer T from List@(i32), U from the fn
 # return) + Gap A (substitute fn(T)->U during monomorphization) + the closures indirect
 # call. [1,2,3] * 10 -> [10,20,30]; element 2 is 30.
 # EXPECT_STDOUT_EXACT: "30\n"

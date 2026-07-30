@@ -66,13 +66,13 @@ and LLVM-powered code generation.
 
 **Key Features:**
 - Static type system with explicit casting
-- Generic types with compile-time monomorphization (`Result<T, E>`,
-  `Maybe<T>`, `List<T>`, `HashMap<K, V>`, user-defined structs, enums, and functions)
+- Generic types with compile-time monomorphization (`Result@(T, E)`,
+  `Maybe@(T)`, `List@(T)`, `HashMap@(K, V)`, user-defined structs, enums, and functions)
 - Generic functions with automatic type inference and perk constraints
 - Perks (traits/interfaces) for polymorphic behavior with static dispatch
 - Error propagation operator (`??`) for ergonomic error handling
 - References (`&peek`/`&poke`) with compile-time borrow checking
-- `Own<T>` heap allocation for recursive types (linked lists, trees)
+- `Own@(T)` heap allocation for recursive types (linked lists, trees)
 - Extension methods for zero-cost method chaining
 - Closures / lambdas (`|x| expr`) with RAII-managed, move-semantics captures
 - First-class functions (`fn(i32) -> i32` values, passable and callable)
@@ -129,8 +129,8 @@ fn main() i32:
   and semantics
 - [Standard Library](https://bigwhale.github.io/sushi-lang/standard-library/) - Built-in types and
   functions
-- [Error Handling](https://bigwhale.github.io/sushi-lang/error-handling/) - `Result<T>`,
-  `Maybe<T>`, and `??` operator
+- [Error Handling](https://bigwhale.github.io/sushi-lang/error-handling/) - `Result@(T)`,
+  `Maybe@(T)`, and `??` operator
 - [Memory Management](https://bigwhale.github.io/sushi-lang/memory-management/) - RAII, references,
   and ownership
 - [Generics](https://bigwhale.github.io/sushi-lang/generics/) - Generic types and compile-time
@@ -151,7 +151,7 @@ fn main() i32:
 
 ### Explicit Error Handling
 
-All functions return `Result<T>` for type-safe error handling:
+All functions return `Result@(T)` for type-safe error handling:
 
 ```sushi
 fn divide(i32 a, i32 b) i32:
@@ -200,12 +200,12 @@ fn check(Status s) ~:
 Type-safe generics with zero runtime overhead:
 
 ```sushi
-struct Pair<T, U>:
+struct Pair@(T, U):
     T first
     U second
 
 fn main() i32:
-    let Pair<i32, string> p = Pair(first: 42, second: "answer")
+    let Pair@(i32, string) p = Pair(first: 42, second: "answer")
     println("{p.second}: {p.first}")
     return Result.Ok(0)
 ```
@@ -240,10 +240,10 @@ struct Point:
 
 extend Point with Hashable:
     fn hash() u64:
-        return self.x as u64 + self.y as u64
+        return (self.x as u64) + (self.y as u64)
 
 # Generic function with perk constraint
-fn compute_hash<T: Hashable>(T value) u64:
+fn compute_hash@(T: Hashable)(T value) u64:
     return Result.Ok(value.hash())
 
 fn main() i32:
@@ -269,7 +269,7 @@ extend string with Display:
     fn display() string:
         return self
 
-fn print_all<...Ts: Display>(...Ts args) ~:
+fn print_all@(...Ts: Display)(...Ts args) ~:
     expand(a in args):          # compile-time unrolled, not a runtime loop
         println(a.display())
     return Result.Ok(~)

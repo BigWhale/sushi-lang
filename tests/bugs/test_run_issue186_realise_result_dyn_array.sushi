@@ -1,4 +1,4 @@
-# Regression for #186: .realise() on a Result<i32[], E> was an ICE -- CE0017, "cannot convert value of
+# Regression for #186: .realise() on a Result@(i32[], E) was an ICE -- CE0017, "cannot convert value of
 # type '{i32, i32, i32*}*' to '{i32, i32, i32*}'". emit_enum_realise wants the payload as a VALUE, but
 # the default expression from([0]) is emitted by emit_dynamic_array_from, which returns an alloca --
 # a POINTER. The coercion ladder handles int/int and float/float, and falls off the end into the ICE.

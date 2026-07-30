@@ -1,4 +1,4 @@
-# Regression for #162: a recursive Own<Tree<T>> leaked ~12 B per level (measured 12/36/60 at
+# Regression for #162: a recursive Own@(Tree@(T)) leaked ~12 B per level (measured 12/36/60 at
 # depths 1/3/5 -- linear in depth, so the whole chain was dropped, not a fixed overhead).
 # tests/generics/test_run_own_recursive_generic.sushi is the depth-1 form, now leak-gated again.
 # EXPECT_RUNTIME_EXIT: 0

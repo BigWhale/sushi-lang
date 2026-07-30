@@ -1,4 +1,4 @@
-# Test CE2507: ?? operator requires Result<T> type
+# Test CE2507: ?? operator requires Result@(T) type
 # EXPECT_ERROR_CODE: CE2507
 # Expected: CE2507 error
 

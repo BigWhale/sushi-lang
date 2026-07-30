@@ -13,17 +13,17 @@ fn read_cwd() string | ProcessError:
   return Result.Ok(cwd)
 
 fn main() i32:
-  # Inline match on a builtin returning Result<string>.
+  # Inline match on a builtin returning Result@(string).
   match getcwd():
     Result.Ok(path) -> println("cwd branch: {path}")
     Result.Err(_) -> println("cwd err branch")
 
-  # Inline match on a builtin returning Maybe<string> (None branch is taken here).
+  # Inline match on a builtin returning Maybe@(string) (None branch is taken here).
   match getenv("NoSuchVar_Sushi"):
     Maybe.Some(v) -> println("env has: {v}")
     Maybe.None() -> println("env none branch")
 
-  # Inline match on a string method returning Maybe<i32> (.find_last, was CE0055).
+  # Inline match on a string method returning Maybe@(i32) (.find_last, was CE0055).
   let string s = "hello"
   match s.find_last("l"):
     Maybe.Some(idx) -> println("last l at {idx}")

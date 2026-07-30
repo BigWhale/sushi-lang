@@ -3,7 +3,7 @@
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Status: success
 
-# Test that Result<T> works in struct fields
+# Test that Result@(T) works in struct fields
 
 struct Response:
     Result@(i32, StdError) status_code

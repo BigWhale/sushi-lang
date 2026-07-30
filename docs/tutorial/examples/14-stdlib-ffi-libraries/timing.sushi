@@ -3,7 +3,7 @@ use <time>
 fn main() i32:
     println("Improbability drive warming up...")
 
-    # Sleep functions return Result<i32>; .realise(default) unwraps safely.
+    # Sleep functions return Result@(i32); .realise(default) unwraps safely.
     let i32 r = msleep(5 as i64).realise(-1)
 
     if (r == 0):

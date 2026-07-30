@@ -1,7 +1,7 @@
 # EXPECT_STDOUT_EXACT: "Boolean list tests passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# Test List<bool> with boolean elements
+# Test List@(bool) with boolean elements
 fn main() i32:
     let List@(bool) flags = List.new()
 

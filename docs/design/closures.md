@@ -505,13 +505,13 @@ multi-file compile.) The lambda-lift pass (Pass 2.5, `passes/lambda_lift.py`) is
 
 `extend List@(T) map@(U)(fn(T)->U f) List@(U)` cannot be expressed today. A *same-type* combinator
 (`extend List@(T) map(fn(T)->T f) List@(T)`) already works (Gap D closed this half); only a
-*type-changing* method — one that needs its own method-level type parameter `<U>` — is blocked.
+*type-changing* method — one that needs its own method-level type parameter `@(U)` — is blocked.
 Four pieces are missing:
 
 1. **Grammar** (`grammar.lark:36`): `extend_def` is `NAME "(" [parameters] ")" type ...` — no
    `[type_params]` slot after the method name (contrast `function_def` at `:45`, which has one).
-   `xs.map(f)` (inference-only call, no explicit `<U>` — Sushi has no method type-arg syntax) already
-   *parses*; only the **definition** needs the slot. `<` after a method NAME in `extend_suffix` is
+   `xs.map(f)` (inference-only call, no explicit `@(U)` — Sushi has no method type-arg syntax) already
+   *parses*; only the **definition** needs the slot. `@(` after a method NAME in `extend_suffix` is
    unambiguous, so this is low-risk, but still needs the LALR acceptance-gate (run the grammar
    through the parser generator, as with the lambda `|`).
 2. **AST/collect**: `ExtendDef` (`ast.py:135`) has no `type_params` field; collect

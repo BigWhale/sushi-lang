@@ -10,7 +10,7 @@
 # of following the chain.
 #
 # Key concepts covered:
-# - HashMap<string, string> for transition storage
+# - HashMap@(string, string) for transition storage
 # - Random number generation with rand(), rand_range(), rand_f64()
 # - String manipulation with split() and array indexing
 # - Seeding RNG with srand() for reproducibility

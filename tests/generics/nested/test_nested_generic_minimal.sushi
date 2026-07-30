@@ -1,5 +1,5 @@
 # Minimal nested generic test
-# Verifies that Result<Maybe<i32>> compiles and can be declared
+# Verifies that Result@(Maybe@(i32)) compiles and can be declared
 # The Answer to the Ultimate Question is 42
 
 fn main() i32:

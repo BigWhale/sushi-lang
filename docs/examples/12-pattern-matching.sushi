@@ -56,7 +56,7 @@ fn main() i32:
     let JourneyStatus s3 = JourneyStatus.Arrived("Magrathea")
     let JourneyStatus s4 = JourneyStatus.Lost()
 
-    # Process each status - function calls don't need ?? since they return Result<~>
+    # Process each status - function calls don't need ?? since they return Result@(~)
     describe_status(s1)
     describe_status(s2)
     describe_status(s3)

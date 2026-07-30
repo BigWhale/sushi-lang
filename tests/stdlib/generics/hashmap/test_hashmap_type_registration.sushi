@@ -1,4 +1,4 @@
-# Test that HashMap<K, V> is recognized as a valid generic type
+# Test that HashMap@(K, V) is recognized as a valid generic type
 # This test verifies type registration only (no methods needed yet)
 
 use <collections/hashmap>

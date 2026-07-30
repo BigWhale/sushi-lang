@@ -1,7 +1,7 @@
 # EXPECT_STDOUT_EXACT: "with_capacity tests passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# Test List<T> with_capacity constructor
+# Test List@(T) with_capacity constructor
 fn main() i32:
     # Create list with pre-allocated capacity
     let List@(i32) reserved = List.with_capacity(100)

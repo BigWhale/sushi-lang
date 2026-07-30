@@ -1,5 +1,5 @@
-# Regression for #184: a Result<T,E> must be usable as a List element.
-# It used to fail with CE0045, 'generic type Result<string, StdError> not found in enum or
+# Regression for #184: a Result@(T,E) must be usable as a List element.
+# It used to fail with CE0045, 'generic type Result@(string, StdError) not found in enum or
 # struct table'. Result was explicitly skipped by the monomorphizer (semantic_analyzer.py),
 # so its concrete EnumType was never interned and the List element type could not resolve.
 # EXPECT_RUNTIME_EXIT: 0

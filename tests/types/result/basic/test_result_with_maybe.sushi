@@ -1,8 +1,8 @@
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_EXACT: "PASS: Result<Maybe<T>, E> Some works\nPASS: Result<Maybe<T>, E> None works\nPASS: Result<Maybe<T>, E> Err works\n"
+# EXPECT_STDOUT_EXACT: "PASS: Result@(Maybe@(T), E) Some works\nPASS: Result@(Maybe@(T), E) None works\nPASS: Result@(Maybe@(T), E) Err works\n"
 # EXPECT_STDERR_EMPTY: true
 
-# Tests Result<Maybe<T>, E> combination
+# Tests Result@(Maybe@(T), E) combination
 
 enum MyError:
     Error
@@ -22,7 +22,7 @@ fn main() i32:
             match maybe_val:
                 Maybe.Some(n) ->
                     if (n == 42):
-                        println("PASS: Result<Maybe<T>, E> Some works")
+                        println("PASS: Result@(Maybe@(T), E) Some works")
                     else:
                         println("FAIL: Wrong value")
                         return Result.Ok(1)
@@ -36,7 +36,7 @@ fn main() i32:
     match find_value("none"):
         Result.Ok(maybe_val) ->
             if (maybe_val.is_none()):
-                println("PASS: Result<Maybe<T>, E> None works")
+                println("PASS: Result@(Maybe@(T), E) None works")
             else:
                 println("FAIL: Should be None")
                 return Result.Ok(1)
@@ -49,6 +49,6 @@ fn main() i32:
             println("FAIL: Should get Err")
             return Result.Ok(1)
         Result.Err(MyError.Error) ->
-            println("PASS: Result<Maybe<T>, E> Err works")
+            println("PASS: Result@(Maybe@(T), E) Err works")
 
     return Result.Ok(0)

@@ -21,7 +21,7 @@ fn create_sequence(i32 count) u8[]:
     return Result.Ok(seq)
 
 fn run_test() i32:
-    # Test 1: Direct initialization from function call returning Result<i32[]>
+    # Test 1: Direct initialization from function call returning Result@(i32[])
     # This now works without the two-step workaround!
     let i32[] numbers = create_numbers()??
     println("Test 1: numbers.len() = {numbers.len()}")

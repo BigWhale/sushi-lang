@@ -1,5 +1,5 @@
 # Regression for #179 on the ?? propagation path, in a NON-main function, with the Err path
-# actually taken. Carries two owners of distinct weight -- the Result<string> (16 B) and an
+# actually taken. Carries two owners of distinct weight -- the Result@(string) (16 B) and an
 # unrelated bare i32[32] (128 B) -- so the byte count alone says which the error path frees.
 # It frees the array: CLAUDE.md's 'RAII-safe with automatic cleanup on error path' holds.
 # EXPECT_RUNTIME_EXIT: 0

@@ -3,7 +3,7 @@ enum JumpError:
     DivisionByZero
     NegativeInput
 
-# `fn name(...) T | JumpError` means Result<T, JumpError>.
+# `fn name(...) T | JumpError` means Result@(T, JumpError).
 fn safe_divide(i32 a, i32 b) i32 | JumpError:
     if (b == 0):
         return Result.Err(JumpError.DivisionByZero)

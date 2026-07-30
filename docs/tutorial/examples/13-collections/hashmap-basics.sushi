@@ -1,6 +1,6 @@
-# HashMap<K, V>: key-value lookups in O(1) average time.
+# HashMap@(K, V): key-value lookups in O(1) average time.
 #
-# Unlike List<T>, HashMap needs an explicit import.
+# Unlike List@(T), HashMap needs an explicit import.
 
 use <collections/hashmap>
 
@@ -14,7 +14,7 @@ fn main() i32:
 
     println("Entries: {ages.len()}")
 
-    # .get() returns Maybe<V>, so a missing key is handled, not fatal.
+    # .get() returns Maybe@(V), so a missing key is handled, not fatal.
     match ages.get("Arthur"):
         Maybe.Some(age) ->
             println("Arthur is {age}")

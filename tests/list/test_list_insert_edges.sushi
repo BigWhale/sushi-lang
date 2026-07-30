@@ -1,7 +1,7 @@
 # EXPECT_STDOUT_EXACT: "Insert at beginning succeeded\nInsert at end succeeded\nInsert into empty list succeeded\nInsert with growth succeeded\nEdge cases test passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# Test List<T> insert method - edge cases
+# Test List@(T) insert method - edge cases
 fn main() i32:
     # Test 1: Insert at beginning (index 0)
     let List@(i32) nums1 = List.new()

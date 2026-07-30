@@ -1,16 +1,16 @@
-# Example 16: HashMap<K, V>
+# Example 16: HashMap@(K, V)
 #
-# This example demonstrates Sushi's HashMap<K, V> generic hash table, which
+# This example demonstrates Sushi's HashMap@(K, V) generic hash table, which
 # provides O(1) average-case lookups using open addressing with linear
 # probing and automatic resizing at 0.75 load factor.
 #
 # Key concepts covered:
-# - Generic hash table HashMap<K, V> with compile-time type specialization
+# - Generic hash table HashMap@(K, V) with compile-time type specialization
 # - HashMap creation with .new()
 # - Inserting key-value pairs with .insert()
-# - Safe lookups with .get() returning Maybe<V>
+# - Safe lookups with .get() returning Maybe@(V)
 # - Checking key existence with .contains_key()
-# - Removing entries with .remove() returning Maybe<V>
+# - Removing entries with .remove() returning Maybe@(V)
 # - Automatic resizing when load factor exceeds 0.75
 # - Auto-derived .hash() for all types enables HashMap usage
 #
@@ -32,7 +32,7 @@ fn main() i32:
 
     println("Number of crew members: {ages.len()}")
 
-    # Safe lookup with .get() - returns Maybe<V>
+    # Safe lookup with .get() - returns Maybe@(V)
     match ages.get("Arthur"):
         Maybe.Some(age) ->
             println("Arthur's age: {age}")
@@ -53,7 +53,7 @@ fn main() i32:
         Maybe.None() ->
             println("Not found")
 
-    # Remove entry - returns Maybe<V> with the old value
+    # Remove entry - returns Maybe@(V) with the old value
     match ages.remove("Zaphod"):
         Maybe.Some(age) ->
             println("Removed Zaphod (age {age})")

@@ -1,4 +1,4 @@
-# Move-by-value: an Own<T> parameter is moved into the callee, which owns and frees
+# Move-by-value: an Own@(T) parameter is moved into the callee, which owns and frees
 # the heap box exactly once (the caller must not free it again).
 # EXPECT_STDOUT_EXACT: "boxed=42\n"
 # EXPECT_RUNTIME_EXIT: 0

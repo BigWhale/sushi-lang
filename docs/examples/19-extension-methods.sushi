@@ -9,7 +9,7 @@
 # - Defining extension methods with the extend keyword
 # - Adding methods to primitive types (i32, string)
 # - Using self to refer to the instance
-# - Extension methods return bare types (not Result<T>)
+# - Extension methods return bare types (not Result@(T))
 # - Zero-cost transformation: x.method(args) becomes method(x, args)
 # - Combining extension methods with pattern matching
 #

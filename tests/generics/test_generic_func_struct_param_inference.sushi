@@ -1,6 +1,6 @@
 # Test: Generic function with nested generic struct parameters
 # Type inference extracts both type parameters from a named generic parameter
-# (e.g., Pair<A, B> binds A and B from the argument's concrete type).
+# (e.g., Pair@(A, B) binds A and B from the argument's concrete type).
 
 struct Pair@(T, U):
     T first

@@ -1,6 +1,6 @@
-# Regression for #184: a Result<T,E> returned from a CALL must be storable in a struct field.
+# Regression for #184: a Result@(T,E) returned from a CALL must be storable in a struct field.
 # It used to fail with a diagnostic that compares a type to itself:
-#   error [CE2083]: field 'r' expects type 'Result<string, StdError>', got 'Result<string, StdError>'
+#   error [CE2083]: field 'r' expects type 'Result@(string, StdError)', got 'Result@(string, StdError)'
 # The same shape built by direct construction -- Holder(r: Result.Ok("hi")) -- always compiled.
 # The annotation resolved Result to one representation (ResultType) and a call's return type
 # to another (the interned EnumType), and the two were not ==.

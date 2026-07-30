@@ -1,17 +1,17 @@
-# Example 08: Maybe<T> Optional Values
+# Example 08: Maybe@(T) Optional Values
 #
-# This example demonstrates Sushi's Maybe<T> type for type-safe optionals.
-# Maybe<T> eliminates the need for sentinel values (like -1 or null) by
+# This example demonstrates Sushi's Maybe@(T) type for type-safe optionals.
+# Maybe@(T) eliminates the need for sentinel values (like -1 or null) by
 # explicitly encoding the presence or absence of a value in the type system.
 #
 # Key concepts covered:
 # - Maybe.Some(value) and Maybe.None() variants
 # - Pattern matching on both Result and Maybe values
 # - Utility methods: .is_some(), .is_none(), .realise(default), .expect(msg)
-# - Nested Result<Maybe<T>> handling with explicit pattern matching
+# - Nested Result@(Maybe@(T)) handling with explicit pattern matching
 #
-# Note: All functions return Result<T, E>, so we use match statements to
-# unwrap the Result layer before working with the Maybe<T> value.
+# Note: All functions return Result@(T, E), so we use match statements to
+# unwrap the Result layer before working with the Maybe@(T) value.
 
 # crew is only read -- borrow it &peek so the caller keeps it across searches.
 fn find_crew_member(&peek string[] crew, string name) Maybe@(i32):
@@ -33,12 +33,12 @@ fn main() i32:
     let string[] crew = from(["Arthur", "Ford", "Zaphod", "Trillian", "Marvin"])
     println("Crew size: {crew.len()}")
 
-    # Find existing member - use match to unwrap Result<Maybe<i32>, StdError>
+    # Find existing member - use match to unwrap Result@(Maybe@(i32), StdError)
     let Result@(Maybe@(i32), StdError) arthur_result = find_crew_member(&peek crew, "Arthur")
 
     match arthur_result:
         Result.Ok(arthur_pos) ->
-            # Now we have Maybe<i32>, match again to extract the value
+            # Now we have Maybe@(i32), match again to extract the value
             match arthur_pos:
                 Maybe.Some(pos) ->
                     println("Found Arthur at position {pos}")

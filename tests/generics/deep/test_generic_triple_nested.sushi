@@ -3,7 +3,7 @@
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: 42
 
-# Test triple-nested generics: Result<Maybe<Result<i32>>>
+# Test triple-nested generics: Result@(Maybe@(Result@(i32)))
 # "Deep Thought computed for seven and a half million years"
 
 fn main() i32:

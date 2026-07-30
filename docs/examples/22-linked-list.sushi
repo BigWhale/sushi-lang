@@ -1,7 +1,7 @@
 # Example 22: Doubly Linked List (Arena-Based)
 #
 # This example demonstrates a doubly-linked list using the arena/index
-# approach - storing all nodes in a List<T> and using integer indices
+# approach - storing all nodes in a List@(T) and using integer indices
 # instead of pointers for links.
 #
 # A doubly linked list is a data structure where each node contains:
@@ -12,8 +12,8 @@
 # Key concepts covered:
 # - Arena allocation pattern (nodes in contiguous memory)
 # - Using indices instead of pointers to avoid ownership issues
-# - List<T> for dynamic node storage
-# - Maybe<i32> for optional indices (None = no link)
+# - List@(T) for dynamic node storage
+# - Maybe@(i32) for optional indices (None = no link)
 # - While loops for traversal
 # - Safe implementation without unsafe code or raw pointers
 # - Bidirectional traversal without ownership conflicts
@@ -35,7 +35,7 @@ struct Node:
     Maybe@(i32) prev  # Index to previous node in the arena
 
 # Builds a doubly-linked list in an arena
-# Returns a List<Node> where nodes link to each other via indices
+# Returns a List@(Node) where nodes link to each other via indices
 fn build_list(i32[] values) List@(Node):
     let List@(Node) nodes = List.new()
     let i32 len = values.len()
@@ -195,13 +195,13 @@ fn main() i32:
 
     # Explain the approach
     println("=== Arena Allocation Benefits ===")
-    println("1. All nodes stored contiguously in List<Node>")
+    println("1. All nodes stored contiguously in List@(Node)")
     println("2. Links are indices (i32), not pointers")
     println("3. No ownership conflicts - indices are copyable")
     println("4. Memory safe - bounds checking on access")
     println("5. Cache-friendly - sequential memory layout")
     println("6. No unsafe code needed")
-    println("7. Automatic cleanup via List<T> RAII")
+    println("7. Automatic cleanup via List@(T) RAII")
     println("")
     println("This pattern works for any graph-like structure:")
     println("- Doubly-linked lists")

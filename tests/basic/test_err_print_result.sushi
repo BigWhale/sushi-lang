@@ -1,4 +1,4 @@
-# Error test: cannot print Result<T> directly
+# Error test: cannot print Result@(T) directly
 # EXPECT_ERROR_CODE: CE2037
 # Expected: CE2037 error
 

@@ -1,5 +1,5 @@
-# Regression for #179: a Result<T, E> whose payload owns heap was NEVER destroyed at scope
-# exit, while a Maybe<T> in the same position was. Result reaches the backend as a ResultType
+# Regression for #179: a Result@(T, E) whose payload owns heap was NEVER destroyed at scope
+# exit, while a Maybe@(T) in the same position was. Result reaches the backend as a ResultType
 # (or a GenericTypeRef from an annotation), and every RAII predicate keyed on EnumType, so the
 # local was registered in no cleanup registry at all. This is the issue's 15-byte repro.
 # EXPECT_RUNTIME_EXIT: 0

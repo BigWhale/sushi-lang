@@ -1,11 +1,11 @@
-# EXPECT_STDOUT_EXACT: "Test 1 passed: Maybe<Result<i32>>\nTest 2 passed: Result<Maybe<string>>\nTest 3 passed: Triple nested Maybe\nAll tests passed!\n"
+# EXPECT_STDOUT_EXACT: "Test 1 passed: Maybe@(Result@(i32))\nTest 2 passed: Result@(Maybe@(string))\nTest 3 passed: Triple nested Maybe\nAll tests passed!\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Test nested generic enum constructor literals
 # Regression test for ISSUES.md #13: "undefined name: Result" error
 # "Time is an illusion. Lunchtime doubly so."
 
 fn main() i32:
-    # Test 1: Maybe<Result<i32>> with literal constructor
+    # Test 1: Maybe@(Result@(i32)) with literal constructor
     # The Answer to the Ultimate Question
     let Maybe@(Result@(i32, StdError)) outer1 = Maybe.Some(Result.Ok(42))
     if (outer1.is_some()):
@@ -13,7 +13,7 @@ fn main() i32:
         if (inner1):
             let i32 val = inner1.realise(0)
             if (val == 42):
-                println("Test 1 passed: Maybe<Result<i32>>")
+                println("Test 1 passed: Maybe@(Result@(i32))")
             else:
                 return Result.Ok(1)
         else:
@@ -21,7 +21,7 @@ fn main() i32:
     else:
         return Result.Ok(3)
 
-    # Test 2: Result<Maybe<string>> with literal constructor
+    # Test 2: Result@(Maybe@(string)) with literal constructor
     # "Mostly Harmless" - Earth's entry in the Guide
     let Result@(Maybe@(string), StdError) outer2 = Result.Ok(Maybe.Some("Mostly Harmless"))
     if (outer2):
@@ -29,7 +29,7 @@ fn main() i32:
         if (inner2.is_some()):
             let string val = inner2.realise("")
             if (val == "Mostly Harmless"):
-                println("Test 2 passed: Result<Maybe<string>>")
+                println("Test 2 passed: Result@(Maybe@(string))")
             else:
                 return Result.Ok(4)
         else:
@@ -37,7 +37,7 @@ fn main() i32:
     else:
         return Result.Ok(6)
 
-    # Test 3: Triple nesting Maybe<Maybe<Maybe<i32>>>
+    # Test 3: Triple nesting Maybe@(Maybe@(Maybe@(i32)))
     # Deep Thought computed for 7.5 million years
     let Maybe@(Maybe@(Maybe@(i32))) triple = Maybe.Some(Maybe.Some(Maybe.Some(42)))
     if (triple.is_some()):

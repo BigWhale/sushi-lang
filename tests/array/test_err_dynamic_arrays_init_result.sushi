@@ -1,13 +1,13 @@
 # ERROR TEST: CE2505
 # EXPECT_ERROR_CODE: CE2002
-# Test that directly assigning Result<T[]> to T[] without unwrapping is an error
+# Test that directly assigning Result@(T[]) to T[] without unwrapping is an error
 
 fn create_array() i32[]:
     let i32[] arr = from([1, 2, 3])
     return Result.Ok(arr)
 
 fn run_test() i32:
-    # This should fail: trying to assign Result<i32[]> to i32[] without ??
+    # This should fail: trying to assign Result@(i32[]) to i32[] without ??
     let i32[] numbers = create_array()
 
     return Result.Ok(0)

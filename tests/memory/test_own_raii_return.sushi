@@ -1,5 +1,5 @@
 # Test RAII cleanup before explicit return statements
-# Own<T> variables should be destroyed before the return
+# Own@(T) variables should be destroyed before the return
 
 fn test_early_return(bool condition) i32:
     let Own@(i32) ptr = Own.alloc(42)

@@ -1,4 +1,4 @@
-# collections/iter -- opt-in higher-order combinators over List<T>.
+# collections/iter -- opt-in higher-order combinators over List@(T).
 #
 # The first Sushi-source stdlib module: it ships as bundled .sushi source and is
 # merged as a compilation unit when imported (`use <collections/iter>`). The
@@ -11,7 +11,7 @@
 # lambda (`|i32 x| ...`) or a plain function reference -- a bare-param lambda
 # (`|x| ...`) cannot be inferred against a generic parameter.
 
-# map: apply `f` to every element, collecting the results into a new List<U>.
+# map: apply `f` to every element, collecting the results into a new List@(U).
 fn map@(T, U)(List@(T) xs, fn(T) -> U f) List@(U):
     let List@(U) out = List.new()
     foreach(x in xs.iter()):

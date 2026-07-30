@@ -12,7 +12,7 @@ enum Pair@(T, U):
     Neither()
 
 fn main() i32:
-    # Create a Pair<i32, string>
+    # Create a Pair@(i32, string)
     let Pair@(i32, string) p = Pair.Both(42, "Thanks for all the fish.")
 
     # Pattern match to extract values

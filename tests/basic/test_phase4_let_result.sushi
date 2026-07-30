@@ -1,7 +1,7 @@
 # EXPECT_STDOUT_EXACT: "42\n"
 # TEST_TYPE: compilation
 # Test for Phase 4.2 - Let Statement Validation
-# This test checks if we can declare variables with Result<T> type
+# This test checks if we can declare variables with Result@(T) type
 # and then use those variables in expressions
 
 
@@ -9,7 +9,7 @@ fn get_value() i32:
     return Result.Ok(42)
 
 fn main() i32:
-    # This should work - declaring a Result<i32> variable
+    # This should work - declaring a Result@(i32) variable
     let Result@(i32, StdError) result = get_value()
 
     # This should work - using the variable with .realise()

@@ -2,7 +2,7 @@
 # EXPECT_STDOUT_EXACT: "PASS: Parsed red correctly\nPASS: InvalidColor error works\n"
 # EXPECT_STDERR_EMPTY: true
 
-# Tests Result<T, E> where T is an enum
+# Tests Result@(T, E) where T is an enum
 
 enum Color:
     Red

@@ -1,4 +1,4 @@
-# First-class functions: a List<fn(i32) -> i32> dispatch table, iterated with
+# First-class functions: a List@(fn(i32) -> i32) dispatch table, iterated with
 # foreach and called through each element. 10 -> +1 -> +2 = 13.
 # EXPECT_STDOUT_EXACT: "13\n"
 fn add_one(i32 x) i32:

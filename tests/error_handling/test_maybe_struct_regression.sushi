@@ -1,6 +1,6 @@
 # EXPECT_STDOUT_EXACT: "test_struct_in_maybe: 1\ntest_struct_in_control_flow: 1\ntest_nested_struct_in_maybe: 1\ntest_struct_pattern_matching: 1\ntest_multiple_maybe_structs: 1\nAll tests passed: 5\n"
 # EXPECT_RUNTIME_EXIT: 0
-# Regression test for Maybe<StructType> support
+# Regression test for Maybe@(StructType) support
 # Issues #2 and #3 from ISSUES.md claimed this didn't work - this test proves it does
 #
 # TEST_TYPE: runtime
@@ -22,7 +22,7 @@ struct Config:
     i32 port
     bool enabled
 
-# Test 1: Basic Maybe<Struct> creation and extraction
+# Test 1: Basic Maybe@(Struct) creation and extraction
 fn test_struct_in_maybe() i32:
     let Point p = Point(10, 20)
     let Maybe@(Point) mp = Maybe.Some(p)
@@ -34,11 +34,11 @@ fn test_struct_in_maybe() i32:
 
     return Result.Ok(0)
 
-# Test 2: Maybe<Struct> declared inside control flow (Issue #3)
+# Test 2: Maybe@(Struct) declared inside control flow (Issue #3)
 fn test_struct_in_control_flow() i32:
     let bool condition = true
 
-    # Declare Maybe<Struct> inside if block
+    # Declare Maybe@(Struct) inside if block
     if (condition):
         let Config cfg = Config("test", 8080, true)
         let Maybe@(Config) mc = Maybe.Some(cfg)
@@ -48,7 +48,7 @@ fn test_struct_in_control_flow() i32:
             if (extracted.port == 8080 and extracted.enabled):
                 return Result.Ok(1)
 
-    # Declare Maybe<Struct> inside while block
+    # Declare Maybe@(Struct) inside while block
     let i32 i = 0
     while (i < 1):
         let Point pt = Point(5, 15)
@@ -80,7 +80,7 @@ fn test_nested_struct_in_maybe() i32:
 
     return Result.Ok(0)
 
-# Test 4: Pattern matching on Maybe<Struct>
+# Test 4: Pattern matching on Maybe@(Struct)
 fn test_struct_pattern_matching() i32:
     let Point p = Point(100, 200)
     let Maybe@(Point) mp = Maybe.Some(p)
@@ -93,7 +93,7 @@ fn test_struct_pattern_matching() i32:
 
     return Result.Ok(0)
 
-# Test 5: Multiple Maybe<Struct> variables in same scope
+# Test 5: Multiple Maybe@(Struct) variables in same scope
 fn test_multiple_maybe_structs() i32:
     let Point p1 = Point(1, 2)
     let Point p2 = Point(3, 4)

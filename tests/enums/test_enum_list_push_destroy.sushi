@@ -1,5 +1,5 @@
-# Test storing enum values in a List<EnumType>.
-# Regression test for issue #33: List.destroy() on a List<EnumType> used to
+# Test storing enum values in a List@(EnumType).
+# Regression test for issue #33: List.destroy() on a List@(EnumType) used to
 # crash the compiler with "'IntType' object has no attribute 'gep'" because the
 # destroy-elements loop passed the loaded element value (not a pointer) to
 # emit_value_destructor().

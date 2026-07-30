@@ -1,6 +1,6 @@
 # EXPECT_STDOUT_EXACT: "test_is_some: 1\ntest_realise: 130\ntest_expect_some: 42\n"
 # EXPECT_RUNTIME_EXIT: 0
-# Test Maybe<T> extension methods
+# Test Maybe@(T) extension methods
 # Tests: .is_some(), .is_none(), .realise(), .expect()
 
 fn test_is_some() i32:

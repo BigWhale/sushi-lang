@@ -1,4 +1,4 @@
-# Regression for #199: .realise() evaluated its receiver TWICE when the receiver was a Maybe<T>.
+# Regression for #199: .realise() evaluated its receiver TWICE when the receiver was a Maybe@(T).
 # The backend dispatcher tried the Result handler first; it gated on the METHOD NAME, emitted the
 # receiver's IR to infer its type, discovered the receiver was a Maybe, returned None -- and left the
 # emitted instructions stranded. The Maybe handler then emitted the receiver all over again.
