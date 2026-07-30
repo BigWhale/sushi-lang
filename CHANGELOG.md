@@ -75,8 +75,41 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   cache miss by construction; `--clean-cache` is never needed for correctness. The cache is also safe
   for concurrent compilers
 - `./nori` no longer swallows exit codes (#234) -- `./nori install nosuchpkg` exits 1
+- **A user-declared struct is emitted as an LLVM identified type** (`%Point = type {i32, i32}`)
+  rather than an anonymous literal (#257). Internal, with no surface-language effect, but it
+  changes the shape of emitted IR and two rules follow from it. `IdentifiedStructType` is a
+  *sibling* of `LiteralStructType`, not a subclass, so an `isinstance(..., ir.LiteralStructType)`
+  check now means specifically "an anonymous fat pointer" -- use `ir.types.BaseStructType` for
+  "any struct". That distinction also removes a latent shape collision: while user structs were
+  literal, a `struct S: i32 a; i32 b; ptr p` matched `is_dynamic_array_type`'s `{i32, i32, T*}`
+  sniff. The identified types live in a context owned by the codegen, not llvmlite's
+  process-wide `global_context`, so two compilations in one process cannot inherit each other's
+  layouts; symbol tables now also carry their module's type declarations so the `.slib` merge
+  path re-emits them
+- `destructors.py` no longer threads an explicit `builder` parameter through its 12 emitters
+  (#257). The ambient `codegen.builder` is the backend's convention -- 1388 uses across 78 files
+  -- and this was the only file imposing a second one, which is what let an out-of-line body
+  emit into two functions at once
 
 ### Fixed
+- **A self-referential container field can be constructed, not just declared** (#257).
+  `struct Tree: List@(Tree) kids` declared since #240 but `Tree(1, List.new())` was a `CE0000`
+  ICE, so half the feature was unreachable; the `Node[]` spelling failed the same way with a
+  different message. The issue described one root cause; there were **two**, and the `List`
+  shape hit both. (1) A struct's LLVM type tied its recursive knot by caching an empty
+  `LiteralStructType([])` placeholder and re-caching a new literal after walking the fields —
+  which cannot work, because a literal struct type is a structural *value* with nothing to
+  fill in, so the `{}` the walk had already embedded stayed empty forever and every element
+  GEP through it had stride **zero**. User structs are now LLVM *identified* types
+  (`%Tree = type {i32, {i32, i32, %Tree*}}`), whose `set_body` fills in place so the knot
+  ties itself; `List`/`HashMap`/`Own`/`Entry` stay literal, being anonymous layout
+  descriptors whose shape other backend code builds directly. (2) An out-of-line destructor
+  body is emitted lazily, mid-emission of another function, and threaded its own builder
+  down while the helpers it calls reach for the *ambient* `codegen.builder`/`codegen.func` —
+  so the element loop landed in the caller's function and the element-destructor call in the
+  destructor, referencing a value defined elsewhere. Both are now swapped for the duration,
+  as the clone twin and the closure env destructor already did. Fixing either alone was
+  unsafe: (2) without (1) would have replaced a compile error with a **double-free**
 - **An array constant is usable directly** (#248): `PRIMES[0]`, `.len()`, `.get()`, `.iter()` and
   `.hash()` all worked only after copying the constant into a local, and were otherwise
   `CE0000: KeyError: 'undefined name: PRIMES'` -- so the documented feature was half-usable. The

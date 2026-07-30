@@ -409,9 +409,46 @@ let i32 temp = 5 + 3
 let i32 x = add_one(&peek temp).realise(0)
 ```
 
+## Recursive Types
+
+A type may refer to itself through any **indirection** — `Own@(T)`, `Maybe@(Own@(T))`,
+`List@(T)`, or a dynamic `T[]`. All of them can be declared, constructed, read, nested and
+dropped, and RAII frees every level exactly once.
+
+A by-value self-reference has no finite size and is rejected with **CE2095**; a *fixed* `T[N]`
+counts as by-value, a *dynamic* `T[]` does not.
+
+### Recursion through a container
+
+The container owns its elements, so a tree needs no explicit heap allocation:
+
+```sushi
+struct Tree:
+    i32 value
+    List@(Tree) kids
+
+fn main() i32:
+    let List@(Tree) kids = List.new()
+    kids.push(Tree(2, List.new()))
+    kids.push(Tree(3, List.new()))
+
+    # The List is moved into the Tree, which now owns it
+    let Tree root = Tree(1, kids)
+    println("root: {root.value}, kids: {root.kids.len()}")
+
+    let Tree first = root.kids.get(0).realise(Tree(0, List.new()))
+    println("first child: {first.value}")
+
+    return Result.Ok(0)
+```
+
+`Node[] kids` works the same way, built with `from([...])`. When `root` goes out of scope its
+destructor walks the children, recursing into each one's own children, and frees every buffer.
+
 ## Own@(T) for Heap Allocation
 
-`Own@(T)` provides explicit heap allocation for recursive types.
+`Own@(T)` provides explicit heap allocation for recursive types, and is the right choice for a
+single owned successor rather than a collection of them.
 
 ### Creating Owned Values
 
