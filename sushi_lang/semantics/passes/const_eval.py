@@ -43,6 +43,7 @@ from sushi_lang.semantics.ast import (
 )
 from sushi_lang.semantics.typesys import Type, BuiltinType
 from sushi_lang.semantics.passes.collect import ConstantTable
+from sushi_lang.semantics.generics.type_display import display_type
 
 
 @dataclass
@@ -363,7 +364,7 @@ class ConstantEvaluator:
             return ConstantValue(value.value, to_type)
 
         else:
-            er.emit(self.reporter, er.ERR.CE0111, span, from_type=str(from_type), to_type=str(to_type))
+            er.emit(self.reporter, er.ERR.CE0111, span, from_type=display_type(from_type), to_type=display_type(to_type))
             return None
 
     # Helper methods for arithmetic/bitwise operations

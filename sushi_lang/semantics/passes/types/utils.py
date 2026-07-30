@@ -85,7 +85,7 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
         er.emit(validator.reporter, er.ERR.CE2001, span, name=display_type(type_obj))
     elif isinstance(type_obj, BuiltinType) and type_obj not in validator.known_types:
         # This shouldn't happen with current builtin types, but good to check
-        er.emit(validator.reporter, er.ERR.CE2001, span, name=str(type_obj))
+        er.emit(validator.reporter, er.ERR.CE2001, span, name=display_type(type_obj))
     elif isinstance(type_obj, ArrayType):
         # Blank type cannot be used as array base type
         if type_obj.base_type == BuiltinType.BLANK:

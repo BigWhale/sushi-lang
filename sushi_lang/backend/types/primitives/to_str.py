@@ -21,6 +21,7 @@ from sushi_lang.sushi_stdlib.src.common import register_builtin_method, BuiltinM
 from sushi_lang.sushi_stdlib.src import conversions, ir_common
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.generics.type_display import display_type
 
 
 # Validation function for to_str() method
@@ -28,7 +29,7 @@ def _validate_to_str(call: MethodCall, target_type: Type, reporter: Any) -> None
     """Validate to_str() method call on primitive types."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{target_type}.to_str", expected=0, got=len(call.args))
+               name=f"{display_type(target_type)}.to_str", expected=0, got=len(call.args))
 
 
 # Type conversion specifications - maps builtin type to (is_signed, bit_width) or conversion function

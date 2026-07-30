@@ -98,7 +98,7 @@ def validate_generic_function_call(
             call.callee.loc,
             name=function_name,
             mangled=mangled_name,
-            type_args=str(type_args)
+            type_args=", ".join(display_type(t) for t in type_args)
         )
         return
 
@@ -289,7 +289,7 @@ def _validate_pack_element_constraints(
                     er.ERR.CE2090,
                     call.callee.loc,
                     index=elem_index,
-                    ty=str(elem_ty),
+                    ty=display_type(elem_ty),
                     perk=perk_name,
                 )
 

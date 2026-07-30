@@ -21,6 +21,7 @@ from sushi_lang.semantics.typesys import (
 )
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
+from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from . import TypeValidator
@@ -160,7 +161,7 @@ def resolve_variable_type(validator: 'TypeValidator',
         if declared_type.base_name == "HashMap" and len(declared_type.type_args) >= 1:
             key_type = declared_type.type_args[0]
             if isinstance(key_type, DynamicArrayType):
-                er.emit(validator.reporter, er.ERR.CE2058, type_span, key_type=str(key_type))
+                er.emit(validator.reporter, er.ERR.CE2058, type_span, key_type=display_type(key_type))
 
         # General case: Monomorphized generic → concrete EnumType/StructType
         # Build type name: Maybe<i32> -> "Maybe<i32>", HashMap<string, i32> -> "HashMap<string, i32>"

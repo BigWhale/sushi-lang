@@ -77,6 +77,7 @@ from .inference import (
     infer_index_access_type,
     infer_dynamic_array_from_type
 )
+from sushi_lang.semantics.generics.type_display import display_type
 
 
 class TypeValidator:
@@ -212,7 +213,7 @@ class TypeValidator:
                 continue
             if not types_compatible(self, got_ty, exp_ty):
                 er.emit(self.reporter, er.ERR.CE2006, arg.loc,
-                        index=index, expected=str(exp_ty), got=str(got_ty))
+                        index=index, expected=display_type(exp_ty), got=display_type(got_ty))
         # Trailing variadic args: each must be C-ABI representable (CE5005).
         # Record the inferred types so the backend can apply C promotion.
         if is_variadic:
@@ -222,7 +223,7 @@ class TypeValidator:
                 variadic_types.append(got_ty)
                 if got_ty is not None and not _is_c_abi_type(got_ty):
                     er.emit(self.reporter, er.ERR.CE5005, arg.loc,
-                            type=str(got_ty), name=fq_name)
+                            type=display_type(got_ty), name=fq_name)
             node.variadic_arg_types = variadic_types
 
     def _validate_constant(self, const: ConstDef) -> None:

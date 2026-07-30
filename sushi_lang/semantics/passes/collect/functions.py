@@ -36,6 +36,7 @@ from sushi_lang.semantics.generics.types import (
 )
 
 from .utils import extract_type_param_names, param_from_node
+from sushi_lang.semantics.generics.type_display import display_type
 
 
 def is_explicit_result_type(ty: Optional[Type]) -> bool:
@@ -611,7 +612,7 @@ class FunctionCollector:
                 BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64
             }
             if ret_ty not in valid_integer_types:
-                er.emit(self.r, ERR.CE0106, ret_span, type=str(ret_ty))
+                er.emit(self.r, ERR.CE0106, ret_span, type=display_type(ret_ty))
 
         self.funcs.order.append(name)
         self.funcs.by_name[name] = sig
@@ -817,7 +818,7 @@ class FunctionCollector:
             existing = self.generic_extensions.get_method(base_type_name, name)
             if existing is not None:
                 er.emit_with(self.r, ERR.CE0101, name_span,
-                       name=f"extension method '{name}' for '{base_type_name}<...>'") \
+                       name=f"extension method '{name}' for '{base_type_name}@(...)'") \
                     .note("first defined here", existing.name_span).emit()
                 return
 
@@ -852,7 +853,7 @@ class FunctionCollector:
                 existing = self.extensions.get_method(resolved_type, name)
                 if existing is not None:
                     er.emit_with(self.r, ERR.CE0101, name_span,
-                           name=f"extension method '{name}' for '{resolved_type}'") \
+                           name=f"extension method '{name}' for '{display_type(resolved_type)}'") \
                         .note("first defined here", existing.name_span).emit()
                     return
 

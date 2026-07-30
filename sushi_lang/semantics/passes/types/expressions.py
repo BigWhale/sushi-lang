@@ -19,6 +19,7 @@ from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, IntLit, RangeExpr
 from sushi_lang.semantics.type_predicates import is_numeric_type
 from .compatibility import is_valid_cast
+from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from . import TypeValidator
@@ -42,7 +43,7 @@ def validate_array_literal(validator: 'TypeValidator', expr: ArrayLiteral) -> No
             element_type = validator.infer_expression_type(element)
             if element_type is not None and element_type != first_element_type:
                 er.emit(validator.reporter, er.ERR.CE2013, element.loc,
-                       expected=str(first_element_type), got=str(element_type))
+                       expected=display_type(first_element_type), got=display_type(element_type))
 
 
 def validate_index_access(validator: 'TypeValidator', expr: IndexAccess) -> None:
@@ -57,14 +58,14 @@ def validate_index_access(validator: 'TypeValidator', expr: IndexAccess) -> None
     index_type = validator.infer_expression_type(expr.index)
     if index_type is not None and index_type != BuiltinType.I32:
         er.emit(validator.reporter, er.ERR.CE2002, expr.index.loc,
-               got=str(index_type), expected=str(BuiltinType.I32))
+               got=display_type(index_type), expected=display_type(BuiltinType.I32))
 
     # Check that array expression is actually an array type
     array_type = validator.infer_expression_type(expr.array)
     if array_type is not None and not isinstance(array_type, (ArrayType, DynamicArrayType)):
         # If we can infer the type and it's not an array, that's a type error
         er.emit(validator.reporter, er.ERR.CE2002, expr.array.loc,
-               got=str(array_type), expected="array type")
+               got=display_type(array_type), expected="array type")
 
     # Compile-time bounds checking for fixed arrays with constant indices
     if isinstance(array_type, ArrayType) and isinstance(expr.index, IntLit):
@@ -119,7 +120,7 @@ def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None
     # Check if the cast is valid
     if not is_valid_cast(source_type, target_type):
         er.emit(validator.reporter, er.ERR.CE2014, expr.loc,
-               source=str(source_type), target=str(target_type))
+               source=display_type(source_type), target=display_type(target_type))
 
 
 def validate_range_expression(validator: 'TypeValidator', expr: 'RangeExpr') -> None:
@@ -140,12 +141,12 @@ def validate_range_expression(validator: 'TypeValidator', expr: 'RangeExpr') -> 
     # Check that start is integer type (i8, i16, i32, i64, u8, u16, u32, u64)
     if start_type is not None and not is_numeric_type(start_type):
         er.emit(validator.reporter, er.ERR.CE2072, expr.start.loc,
-               got=str(start_type), expected="integer type")
+               got=display_type(start_type), expected="integer type")
 
     # Check that end is integer type
     if end_type is not None and not is_numeric_type(end_type):
         er.emit(validator.reporter, er.ERR.CE2072, expr.end.loc,
-               got=str(end_type), expected="integer type")
+               got=display_type(end_type), expected="integer type")
 
     # Note: We accept any integer type (i8, i16, i32, i64, u8, u16, u32, u64)
     # but the backend will cast to i32 for iteration. Type compatibility
@@ -210,7 +211,7 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
 
             if not is_result_like and not is_maybe_like:
                 # Not a supported enum pattern
-                er.emit(validator.reporter, er.ERR.CE2507, expr.loc, got=str(inner_type))
+                er.emit(validator.reporter, er.ERR.CE2507, expr.loc, got=display_type(inner_type))
                 return
 
             # Extract variant info for annotation
@@ -228,7 +229,7 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
                 error_tag = None
         else:
             # Not a Result-like or Maybe-like enum
-            er.emit(validator.reporter, er.ERR.CE2507, expr.loc, got=str(inner_type))
+            er.emit(validator.reporter, er.ERR.CE2507, expr.loc, got=display_type(inner_type))
             return
 
     # Check if enclosing function returns a result-like enum
@@ -308,9 +309,9 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
         outer_resolved = resolve_unknown_type(outer_err_type, structs, enums)
         if inner_resolved != outer_resolved:
             er.emit(validator.reporter, er.ERR.CE2511, expr.loc,
-                    ok_type=str(outer_ok_type),
-                    inner_err=str(inner_err_type),
-                    outer_err=str(outer_err_type))
+                    ok_type=display_type(outer_ok_type),
+                    inner_err=display_type(inner_err_type),
+                    outer_err=display_type(outer_err_type))
             return
 
     # Validation passed - annotate AST

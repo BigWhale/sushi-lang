@@ -28,6 +28,7 @@ from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import Type, BuiltinType
 import llvmlite.ir as ir
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.type_display import display_type
 
 
 # ==============================================================================
@@ -119,7 +120,7 @@ def _validate_read_bytes(call: MethodCall, reporter: Any, validator: Any = None)
         arg_type = validator.infer_expression_type(call.args[0])
         if arg_type is not None and arg_type != BuiltinType.I32:
             er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
-                   index=1, expected="i32", got=str(arg_type))
+                   index=1, expected="i32", got=display_type(arg_type))
 
 
 def _validate_write(call: MethodCall, stream_name: str, reporter: Any, validator: Any = None) -> None:
@@ -135,7 +136,7 @@ def _validate_write(call: MethodCall, stream_name: str, reporter: Any, validator
         arg_type = validator.infer_expression_type(call.args[0])
         if arg_type is not None and arg_type != BuiltinType.STRING:
             er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
-                   index=1, expected="string", got=str(arg_type))
+                   index=1, expected="string", got=display_type(arg_type))
 
 
 def _validate_write_bytes(call: MethodCall, stream_name: str, reporter: Any, validator: Any = None) -> None:
@@ -154,7 +155,7 @@ def _validate_write_bytes(call: MethodCall, stream_name: str, reporter: Any, val
         expected_type = DynamicArrayType(BuiltinType.U8)
         if arg_type is not None and arg_type != expected_type:
             er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
-                   index=1, expected="u8[]", got=str(arg_type))
+                   index=1, expected="u8[]", got=display_type(arg_type))
 
 
 def is_builtin_stdio_method(method_name: str) -> bool:
@@ -179,7 +180,7 @@ def validate_builtin_stdio_method_with_validator(call: MethodCall, stdio_type: B
         else:
             # Invalid method on stdin
             er.emit(reporter, er.ERR.CE2008, call.loc,
-                   name=f"{stdio_type}.{method_name}")
+                   name=f"{display_type(stdio_type)}.{method_name}")
     elif stdio_type == BuiltinType.STDOUT:
         if method_name == "write":
             _validate_write(call, "stdout", reporter, validator)
@@ -188,7 +189,7 @@ def validate_builtin_stdio_method_with_validator(call: MethodCall, stdio_type: B
         else:
             # Invalid method on stdout
             er.emit(reporter, er.ERR.CE2008, call.loc,
-                   name=f"{stdio_type}.{method_name}")
+                   name=f"{display_type(stdio_type)}.{method_name}")
     elif stdio_type == BuiltinType.STDERR:
         if method_name == "write":
             _validate_write(call, "stderr", reporter, validator)
@@ -197,7 +198,7 @@ def validate_builtin_stdio_method_with_validator(call: MethodCall, stdio_type: B
         else:
             # Invalid method on stderr
             er.emit(reporter, er.ERR.CE2008, call.loc,
-                   name=f"{stdio_type}.{method_name}")
+                   name=f"{display_type(stdio_type)}.{method_name}")
 
 
 def get_builtin_stdio_method_return_type(method_name: str, stdio_type: BuiltinType) -> Type | None:

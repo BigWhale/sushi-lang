@@ -438,7 +438,7 @@ class ExpressionValidator(RecursiveVisitor):
         for p in node.params:
             if is_owning_type(p.ty):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
-                        reason=f"lambda parameter '{p.name}' has an owning type '{p.ty}'; "
+                        reason=f"lambda parameter '{p.name}' has an owning type '{display_type(p.ty)}'; "
                                f"owning function-value parameters are deferred to Tier 2")
 
         # Validate the body with the lambda's params in scope (captures already are).

@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Optional
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType, IteratorType
 from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, DynamicArrayFrom, Expr, RangeExpr
+from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from . import TypeValidator
@@ -36,7 +37,7 @@ def infer_array_literal_type(validator: 'TypeValidator', expr: ArrayLiteral) -> 
         if element_type is not None and element_type != first_element_type:
             # Type mismatch in array literal elements
             er.emit(validator.reporter, er.ERR.CE2013, element.loc,
-                   expected=str(first_element_type), got=str(element_type))
+                   expected=display_type(first_element_type), got=display_type(element_type))
             # Continue checking other elements
 
     return ArrayType(base_type=first_element_type, size=len(expr.elements))

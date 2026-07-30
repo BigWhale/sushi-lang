@@ -80,6 +80,7 @@ from .methods.parse import (
     emit_string_to_i64,
     emit_string_to_f64,
 )
+from sushi_lang.semantics.generics.type_display import display_type
 
 
 # ==============================================================================
@@ -164,7 +165,7 @@ def _validate_method_signature(call: MethodCall, spec: MethodSpec, reporter: Any
             if arg_type is not None and arg_type != expected_type:
                 expected_name = "string" if expected_type == BuiltinType.STRING else "int"
                 er.emit(reporter, er.ERR.CE2006, arg.loc,
-                       index=i+1, expected=expected_name, got=str(arg_type))
+                       index=i+1, expected=expected_name, got=display_type(arg_type))
 
 
 def is_builtin_string_method(method_name: str) -> bool:

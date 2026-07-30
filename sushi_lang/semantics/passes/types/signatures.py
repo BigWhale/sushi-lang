@@ -23,6 +23,7 @@ from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
 from .utils import validate_type_name, validate_and_register_parameters
 from .perks import validate_perk_implementation, check_no_conflicts_with_regular_methods
+from sushi_lang.semantics.generics.type_display import display_type
 
 
 def _check_public_fn_ptr_fence(self, func: FuncDef) -> None:
@@ -83,7 +84,7 @@ def validate_function(self, func: FuncDef) -> None:
         if not isinstance(resolved_err_type, EnumType):
             # Error type must be an enum, not a struct or primitive
             self.err.emit(er.ERR.CE2084, func.ret_span,
-                         type_name=str(func.err_type))
+                         type_name=display_type(func.err_type))
 
     # Validate function body
     self._validate_block(func.body)

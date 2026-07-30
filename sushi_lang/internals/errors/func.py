@@ -105,7 +105,7 @@ _add(ErrorMessage("CE0121", Severity.ERROR,
 
 _add(ErrorMessage("CE0122", Severity.ERROR,
     "generic type '{name}' is infinitely recursive - monomorphization exceeded the maximum depth",
-    Category.TYPE, "A generic type instantiation nests without bound (e.g. a type parameter that grows on each self-reference), so monomorphization cannot terminate. A finite self-reference through an opaque pointer (Own<T>) is fine; an ever-growing type argument is not."))
+    Category.TYPE, "A generic type instantiation nests without bound (e.g. a type parameter that grows on each self-reference), so monomorphization cannot terminate. A finite self-reference through an opaque pointer (Own@(T)) is fine; an ever-growing type argument is not."))
 
 _add(ErrorMessage("CE0123", Severity.ERROR,
     "no hash emitter registered for kind '{kind}'",

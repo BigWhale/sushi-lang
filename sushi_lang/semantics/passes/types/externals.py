@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, List
 from sushi_lang.internals.report import Reporter
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
+from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Program, ExternalBlock, ExternalDecl
@@ -146,10 +147,10 @@ def _validate_block_signatures(reporter: Reporter, block: 'ExternalBlock') -> No
         for param in decl.params:
             if param.ty is not None and not _is_c_abi_type(param.ty):
                 er.emit(reporter, er.ERR.CE5003, param.type_span or decl.loc,
-                        type=str(param.ty))
+                        type=display_type(param.ty))
         if decl.ret is not None and not _is_c_abi_type(decl.ret):
             er.emit(reporter, er.ERR.CE5003, decl.ret_span or decl.loc,
-                    type=str(decl.ret))
+                    type=display_type(decl.ret))
 
 
 def _signature_notes(decl: 'ExternalDecl') -> List[str]:

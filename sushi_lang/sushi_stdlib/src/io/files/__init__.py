@@ -24,6 +24,7 @@ from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import Type, BuiltinType, IteratorType, DynamicArrayType
 import llvmlite.ir as ir
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.type_display import display_type
 
 
 # ===========================
@@ -133,7 +134,7 @@ def _validate_write(call: MethodCall, reporter: Any, validator: Any = None) -> N
         arg_type = validator.infer_expression_type(call.args[0])
         if arg_type is not None and arg_type != BuiltinType.STRING:
             er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
-                   index=1, expected="string", got=str(arg_type))
+                   index=1, expected="string", got=display_type(arg_type))
 
 
 def _validate_writeln(call: MethodCall, reporter: Any, validator: Any = None) -> None:
@@ -149,7 +150,7 @@ def _validate_writeln(call: MethodCall, reporter: Any, validator: Any = None) ->
         arg_type = validator.infer_expression_type(call.args[0])
         if arg_type is not None and arg_type != BuiltinType.STRING:
             er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
-                   index=1, expected="string", got=str(arg_type))
+                   index=1, expected="string", got=display_type(arg_type))
 
 
 def _validate_read_bytes(call: MethodCall, reporter: Any, validator: Any = None) -> None:
@@ -165,7 +166,7 @@ def _validate_read_bytes(call: MethodCall, reporter: Any, validator: Any = None)
         arg_type = validator.infer_expression_type(call.args[0])
         if arg_type is not None and arg_type != BuiltinType.I32:
             er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
-                   index=1, expected="i32", got=str(arg_type))
+                   index=1, expected="i32", got=display_type(arg_type))
 
 
 def _validate_write_bytes(call: MethodCall, reporter: Any, validator: Any = None) -> None:
@@ -182,7 +183,7 @@ def _validate_write_bytes(call: MethodCall, reporter: Any, validator: Any = None
         expected_type = DynamicArrayType(BuiltinType.U8)
         if arg_type is not None and arg_type != expected_type:
             er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
-                   index=1, expected="u8[]", got=str(arg_type))
+                   index=1, expected="u8[]", got=display_type(arg_type))
 
 
 def _validate_seek(call: MethodCall, reporter: Any, validator: Any = None) -> None:
@@ -200,7 +201,7 @@ def _validate_seek(call: MethodCall, reporter: Any, validator: Any = None) -> No
         arg_type = validator.infer_expression_type(call.args[0])
         if arg_type is not None and arg_type != BuiltinType.I64:
             er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
-                   index=1, expected="i64", got=str(arg_type))
+                   index=1, expected="i64", got=display_type(arg_type))
 
     # Validate second argument is SeekFrom enum
     if validator:
@@ -209,7 +210,7 @@ def _validate_seek(call: MethodCall, reporter: Any, validator: Any = None) -> No
         if arg_type is not None:
             if not isinstance(arg_type, EnumType) or arg_type.name != "SeekFrom":
                 er.emit(reporter, er.ERR.CE2006, call.args[1].loc,
-                       index=2, expected="SeekFrom", got=str(arg_type))
+                       index=2, expected="SeekFrom", got=display_type(arg_type))
 
 
 def _validate_tell(call: MethodCall, reporter: Any) -> None:

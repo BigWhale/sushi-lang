@@ -6,7 +6,7 @@ the key invariant: a type with no generic brackets displays exactly as `str(ty)`
 """
 from __future__ import annotations
 
-from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.generics.type_display import display_type, display_type_name
 from sushi_lang.semantics.typesys import (
     ArrayType,
     BuiltinType,
@@ -102,3 +102,25 @@ def test_fallback_leaves_unsafe_names_untouched():
     assert display_type(StructType(name="Point", fields=[])) == "Point"
     weird = StructType(name="Weird<i32", fields=[])
     assert display_type(weird) == "Weird<i32"
+
+
+# --------------------------------------------------------------------------- #
+# display_type_name -- the string-level entry point, for diagnostics that hold an
+# already-interned name and no Type object (CE0122's recursion chain, CE0101, ...).
+
+def test_display_type_name_converts_interned_names():
+    assert display_type_name("List<i32>") == "List@(i32)"
+    assert display_type_name("Result<List<i32>, StdError>") == "Result@(List@(i32), StdError)"
+
+
+def test_display_type_name_passes_through_bracket_free_names():
+    assert display_type_name("Point") == "Point"
+    assert display_type_name("i32") == "i32"
+
+
+def test_display_type_name_refuses_ambiguous_input():
+    # Unbalanced brackets and function-ish names are returned untouched rather
+    # than corrupted -- the `->` guard was previously unpinned.
+    assert display_type_name("Weird<i32") == "Weird<i32"
+    assert display_type_name("fn(i32) -> i32") == "fn(i32) -> i32"
+    assert display_type_name("List<fn(i32) -> i32>") == "List<fn(i32) -> i32>"

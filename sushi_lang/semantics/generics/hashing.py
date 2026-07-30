@@ -43,6 +43,7 @@ from sushi_lang.sushi_stdlib.src.common import (
     get_hash_emitter_factory,
     register_builtin_method,
 )
+from sushi_lang.semantics.generics.type_display import display_type
 
 
 # --------------------------------------------------------------------------
@@ -246,7 +247,7 @@ def _validate_struct_hash(call: MethodCall, target_type: Type, reporter: Any) ->
     """
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-                name=f"{target_type}.hash", expected=0, got=len(call.args))
+                name=f"{display_type(target_type)}.hash", expected=0, got=len(call.args))
 
 
 def _validate_enum_hash(call: MethodCall, target_type: Type, reporter: Any) -> None:
@@ -256,7 +257,7 @@ def _validate_enum_hash(call: MethodCall, target_type: Type, reporter: Any) -> N
     """
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-                name=f"{target_type}.hash", expected=0, got=len(call.args))
+                name=f"{display_type(target_type)}.hash", expected=0, got=len(call.args))
 
 
 def _validate_array_hash(call: MethodCall, target_type: Type, reporter: Any) -> None:
@@ -268,7 +269,7 @@ def _validate_array_hash(call: MethodCall, target_type: Type, reporter: Any) -> 
     """
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-                name=f"{target_type}.hash", expected=0, got=len(call.args))
+                name=f"{display_type(target_type)}.hash", expected=0, got=len(call.args))
 
     if isinstance(target_type, (ArrayType, DynamicArrayType)):
         element_type = target_type.base_type
