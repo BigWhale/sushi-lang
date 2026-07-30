@@ -1,0 +1,31 @@
+# #256 as filed: `Own@(T).get()` reads THROUGH a live owner, so the value it
+# yields is a view of storage `o` still frees. Binding it registers a second
+# owner of the same inner Own@(Leafy), and both free it -- SIGTRAP (exit 133),
+# before stdout is ever flushed.
+#
+# The owning field is load-bearing: swap `next` for a plain i32 and the same
+# program has always run correctly, so this is not about `.get()` in general.
+#
+# Fixed by treating an Own.get() source like a MemberAccess read at every
+# by-value sink (move-semantics.md section 3: "reads from a continuing owner copy").
+# EXPECT_STDOUT_EXACT: "value=1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Leafy:
+    i32 x
+
+struct Holder:
+    i32 value
+    Maybe@(Own@(Leafy)) next
+
+fn run_test() i32:
+    let Leafy l = Leafy(9)
+    let Holder h = Holder(1, Maybe.Some(Own.alloc(l)))
+    let Own@(Holder) o = Own.alloc(h)
+    let Holder back = o.get()
+    println("value={back.value}")
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(99))

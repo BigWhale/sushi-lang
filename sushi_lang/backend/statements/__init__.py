@@ -33,7 +33,7 @@ def _register_discarded_owning_temp(codegen: 'LLVMCodegen', expr, value) -> None
     if value is None:
         return
     from sushi_lang.backend.expressions.memory import expression_is_temporary
-    if not expression_is_temporary(expr):
+    if not expression_is_temporary(codegen, expr):
         return
     from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
     from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type

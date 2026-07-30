@@ -75,11 +75,13 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
         # Register Own<T> and List<T> variables for RAII cleanup
         if isinstance(semantic_type, StructType) and hasattr(codegen, 'dynamic_arrays'):
             if codegen.dynamic_arrays.is_own_type(semantic_type):
-                # Own.get() yields a NON-owning borrow that aliases the container's
-                # payload. Binding it must not create a second RAII owner, or the
-                # container and the binding would both free the same pointer (#106).
-                if getattr(stmt.value, 'method', None) != 'get':
-                    codegen.dynamic_arrays.register_own(stmt.name, semantic_type, slot)
+                # Registered unconditionally. #106 used to skip an `Own.get()` RHS here, to
+                # stop the binding becoming a second owner of the container's payload -- but
+                # that name-based guard reached one sink and one type, while the same alias
+                # was live at every other sink (#256). The RHS is now DEEP-COPIED below like
+                # any read from a continuing owner, so the binding owns an independent value
+                # and must be registered; skipping it would strand the copy.
+                codegen.dynamic_arrays.register_own(stmt.name, semantic_type, slot)
             elif codegen.dynamic_arrays.is_list_type(semantic_type):
                 codegen.dynamic_arrays.register_list(stmt.name, semantic_type, slot)
 
@@ -140,15 +142,15 @@ def _clone_owning_struct_alias(codegen: 'LLVMCodegen', stmt: 'Let', rhs: 'ir.Val
     Move types (#134): `let b = a` where `a` is an owning struct/enum (a T[]/List/Own
     somewhere in it) MOVES -- the source is marked moved so only the new binding frees, and
     the RHS is stored un-cloned (mirrors the T[]/List/Own rebind). Copy composites (string-
-    only structs/enums) and a `let inner = outer.field` MemberAccess source (a read from a
-    continuing owner, spec V5) keep the deep copy so each of the two live owners frees once
-    (#147). A constructor, call return, or array `.get()`/index get-out (already deep-copied
-    at the access site) is a fresh sole owner and is returned unchanged.
+    only structs/enums) and a read from a continuing owner -- `let inner = outer.field` or
+    `let inner = own.get()`, spec V5 -- keep the deep copy so each of the two live owners
+    frees once (#147/#256). A constructor, call return, or array `.get()`/index get-out
+    (already deep-copied at the access site) is a fresh sole owner and is returned unchanged.
     """
     from sushi_lang.semantics.typesys import (
         StructType, EnumType, UnknownType, type_moves_by_value, is_owning_type
     )
-    from sushi_lang.semantics.ast import Name, MemberAccess
+    from sushi_lang.semantics.ast import Name
 
     resolved = semantic_type
     if isinstance(resolved, UnknownType):
@@ -163,8 +165,10 @@ def _clone_owning_struct_alias(codegen: 'LLVMCodegen', stmt: 'Let', rhs: 'ir.Val
     # owner and must detach with its own copy, else the binding and the owning struct both
     # free the same buffer at scope exit. A bare Name of these types already moves via the
     # array/List move path, so it is deliberately not handled here.
-    from sushi_lang.backend.expressions.memory import emit_value_clone
-    if is_owning_type(resolved) and isinstance(stmt.value, MemberAccess):
+    from sushi_lang.backend.expressions.memory import (
+        emit_value_clone, expression_reads_continuing_owner
+    )
+    if is_owning_type(resolved) and expression_reads_continuing_owner(codegen, stmt.value):
         return emit_value_clone(codegen, rhs, resolved)
     if not isinstance(resolved, (StructType, EnumType)):
         return rhs
@@ -176,11 +180,11 @@ def _clone_owning_struct_alias(codegen: 'LLVMCodegen', stmt: 'Let', rhs: 'ir.Val
             codegen.memory.mark_struct_as_moved(stmt.value.id)
             return rhs
         return emit_value_clone(codegen, rhs, resolved)
-    # Copy semantics: a string-only composite always copies; a MemberAccess source reads from
-    # a continuing owner and copies (V5). A fresh RHS (not Name/MemberAccess) is left as-is.
+    # Copy semantics: a string-only composite always copies; a MemberAccess / Own.get() source
+    # reads from a continuing owner and copies (V5). A fresh RHS is left as-is.
     if not codegen.dynamic_arrays.struct_needs_cleanup(resolved):
         return rhs
-    if isinstance(stmt.value, (Name, MemberAccess)):
+    if isinstance(stmt.value, Name) or expression_reads_continuing_owner(codegen, stmt.value):
         return emit_value_clone(codegen, rhs, resolved)
     return rhs
 
@@ -442,7 +446,7 @@ def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value'
         val: The new value to store.
     """
     from sushi_lang.semantics.typesys import StructType, EnumType, UnknownType
-    from sushi_lang.semantics.ast import Name, MemberAccess
+    from sushi_lang.semantics.ast import Name
 
     # Extract variable name from target (must be Name for this function)
     if not isinstance(stmt.target, Name):
@@ -463,15 +467,19 @@ def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value'
         # Destroy the old value's heap so it does not leak when overwritten (#139).
         codegen.dynamic_arrays.emit_struct_field_cleanup(var_name, resolved, slot)
         # #134: a bare-Name RHS of a MOVE type transfers ownership -- mark the source moved
-        # and store it un-cloned. A copy composite or a MemberAccess source (V5) deep-copies
-        # so the target and the still-live source each free once.
+        # and store it un-cloned. A copy composite, or a read from a continuing owner
+        # (`s.field` / `own.get()`, V5), deep-copies so the target and the still-live source
+        # each free once.
         from sushi_lang.semantics.typesys import type_moves_by_value
+        from sushi_lang.backend.expressions.memory import (
+            emit_value_clone, expression_reads_continuing_owner
+        )
         if (isinstance(stmt.value, Name) and type_moves_by_value(resolved)
                 and codegen.memory.is_owned_local(stmt.value.id)):
             codegen.memory.mark_struct_as_moved(stmt.value.id)
-        elif isinstance(stmt.value, (Name, MemberAccess)):
-            # A borrow binding (#238) or a MemberAccess source is cloned, not moved.
-            from sushi_lang.backend.expressions.memory import emit_value_clone
+        elif (isinstance(stmt.value, Name)
+                or expression_reads_continuing_owner(codegen, stmt.value)):
+            # A borrow binding (#238) or a continuing-owner read is cloned, not moved.
             val = emit_value_clone(codegen, val, resolved)
 
     # Store the new value

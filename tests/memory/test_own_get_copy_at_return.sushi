@@ -1,0 +1,28 @@
+# The return sink of #256, reached through `Result.Ok` (the enum-payload sink).
+# Worse than an alias: the Result is emitted BEFORE scope cleanup, so `o` frees
+# the inner Own@(Leafy) on the way out and the caller receives a pointer that is
+# already free -- the same use-after-free shape #250 had at this sink.
+# EXPECT_STDOUT_EXACT: "v=1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Leafy:
+    i32 x
+
+struct Holder:
+    i32 value
+    Maybe@(Own@(Leafy)) next
+
+fn make() Holder:
+    let Leafy l = Leafy(9)
+    let Holder h = Holder(1, Maybe.Some(Own.alloc(l)))
+    let Own@(Holder) o = Own.alloc(h)
+    return Result.Ok(o.get())
+
+fn run_test() i32:
+    let Holder g = make()??
+    println("v={g.value}")
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(99))

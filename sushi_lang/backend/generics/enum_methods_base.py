@@ -179,7 +179,7 @@ def emit_enum_realise(
     return result
 
 
-def _expression_is_borrow(expr) -> bool:
+def _expression_is_borrow(codegen: 'LLVMCodegen', expr) -> bool:
     """Does `expr` name storage that keeps owning its heap after we read it?
 
     The inverse of `expression_is_temporary`, which is the single definition -- `.realise()`
@@ -187,7 +187,7 @@ def _expression_is_borrow(expr) -> bool:
     outright (#159), so the two must agree on every AST node or a payload is adopted and freed.
     """
     from sushi_lang.backend.expressions.memory import expression_is_temporary
-    return not expression_is_temporary(expr)
+    return not expression_is_temporary(codegen, expr)
 
 
 def _emit_owning_realise(
@@ -211,8 +211,8 @@ def _emit_owning_realise(
     field holds the *other* variant's bytes (`Err`'s payload, `None`'s uninitialised slot)
     reinterpreted as `T`, so cloning or destroying through it would walk a bogus pointer.
     """
-    borrowed_receiver = _expression_is_borrow(call.receiver)
-    borrowed_default = _expression_is_borrow(call.args[0])
+    borrowed_receiver = _expression_is_borrow(codegen, call.receiver)
+    borrowed_default = _expression_is_borrow(codegen, call.args[0])
 
     # The default is evaluated unconditionally (its expression may have side effects), so
     # park it in a slot: the success path needs a pointer to destroy it through.

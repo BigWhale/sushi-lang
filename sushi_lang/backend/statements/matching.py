@@ -114,7 +114,7 @@ def _register_temp_scrutinee(codegen: 'LLVMCodegen', scrutinee: 'Expr', scrutine
     from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
     from sushi_lang.semantics.typesys import EnumType
 
-    if not expression_is_temporary(scrutinee):
+    if not expression_is_temporary(codegen, scrutinee):
         return False
 
     # `needs_cleanup` is table-free -- an unresolved UnknownType answers False, which is how a

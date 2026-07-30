@@ -6,9 +6,11 @@ INLINE EMISSION ONLY. Own<T> methods work on-demand for all types.
 Implemented methods:
 - alloc(value: T) -> Own<T>: Allocate heap memory and store value. Takes ownership of
   an owning argument (the source variable is moved, so RAII will not double-free it).
-- get() -> T: Borrow the owned value. Returns the payload by value; the binding is a
-  NON-owning view of the container's payload and is never registered for RAII cleanup,
-  so a nested Own<Own<T>> is not double-freed (issue #106).
+- get() -> T: Dereference. Loads the payload UNCOPIED, so the value is a view of storage
+  this Own still frees -- the pointer analogue of a MemberAccess field read. Every by-value
+  sink therefore deep-copies it (`expression_reads_continuing_owner`), which is what keeps
+  a nested Own<Own<T>> from being double-freed (#106) and what #256 was missing at the five
+  sinks the #106 guard never reached.
 - destroy() -> ~: Free the allocated memory (RAII), recursing into the payload.
 
 The Own<T> type is a generic struct for unique ownership of heap data:
@@ -82,13 +84,21 @@ def emit_own_get(codegen: Any, own_value: ir.Value, element_type: Type) -> ir.Va
     2. Load value from pointer
     3. Return the value
 
+    The load is deliberately SHALLOW. Copying here would fix every ownership sink at a
+    stroke and break the one shape that has always been correct: `o.get().field` takes no
+    owner, so the copy would belong to nobody and leak (#256, pinned by
+    `tests/memory/test_own_get_field_read_no_leak.sushi`). The other container get-outs can
+    copy at the access site because they return `Maybe@(T)` and cannot be chained; `Own`
+    returns bare `T`. So the copy lives at the sinks instead -- see
+    `expression_reads_continuing_owner` in `backend/expressions/memory.py`.
+
     Args:
         codegen: LLVM codegen instance
         own_value: The Own<T> struct value
         element_type: The type T
 
     Returns:
-        The owned value of type T
+        The owned value of type T -- a VIEW of the pointee, not a copy
     """
     # Extract pointer from struct field 0
     ptr = codegen.builder.extract_value(own_value, 0, name="own_ptr")
