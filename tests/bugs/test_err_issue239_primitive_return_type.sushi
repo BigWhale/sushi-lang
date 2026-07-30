@@ -1,0 +1,17 @@
+# Issue #239: primitive method return-type inference was DEAD, and had been since commit
+# 7dc04567 removed the last semantics->backend import from the validation path. That import
+# was also the accidental side effect that populated the builtin-method registry before
+# Pass 2 ran, so check_primitive_methods has been reading an EMPTY registry ever since --
+# it returned no inferrer, nothing typed the call, and the mismatch reached codegen:
+# `CE0017: cannot convert value of type '{i8*, i32, i8}' to 'i32'`.
+#
+# No test caught it because tests/unit/test_primitive_methods.py imports the backend itself
+# (warming the registry) and only asserts method NAMES, never return types. This test goes
+# through the real compile path, where the registry is cold. `.to_str()` returns string.
+# EXPECT_ERROR_CODE: CE2002
+
+fn main() i32:
+    let i32 n = 5
+    let i32 bad = n.to_str()
+    println(bad)
+    return Result.Ok(0)

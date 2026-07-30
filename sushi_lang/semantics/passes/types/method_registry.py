@@ -169,20 +169,21 @@ class StringMethodInferrer:
 class PrimitiveMethodInferrer:
     """Type inferrer for built-in primitive methods (to_str, hash, to_bits).
 
-    Looks up the return type from the builtin-method registry, which is keyed by the
-    primitive BuiltinType. Handles the numeric/bool primitives; string has its own
-    checker (StringMethodInferrer) registered ahead of this one.
+    Reads the semantics-side table in `generics/primitives.py`, NOT the builtin-method
+    registry. The registry is populated by the backend at import time and the pipeline
+    imports codegen lazily, after semantic analysis -- so during Pass 2 it is empty, and
+    this inferrer silently returned None for every primitive method call (#239). Every
+    other family here already reads a semantics-side table; this one was the exception.
+
+    Covers `string` too, which used to be excluded -- see check_string_methods.
     """
     receiver_type: 'Type'
     method_name: str
     validator: 'TypeValidator'
 
     def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-        method = get_builtin_method(self.receiver_type, self.method_name)
-        if method is not None:
-            return method.return_type
-        return None
+        from sushi_lang.semantics.generics.primitives import primitive_method_return_type
+        return primitive_method_return_type(self.receiver_type, self.method_name)
 
 
 @dataclass
@@ -420,28 +421,34 @@ def check_array_methods(receiver_type, method_name, validator):
 
 @METHOD_TYPE_REGISTRY.register_checker
 def check_string_methods(receiver_type, method_name, validator):
-    if receiver_type == BuiltinType.STRING:
+    # Claim only the names this family actually handles. Matching on the receiver type
+    # alone used to claim EVERY method name on a string -- and because infer_method_type
+    # is first-match-wins, a claim whose inferrer then returns None ends the chain rather
+    # than falling through. That is why `string.to_str()` and `string.hash()` stayed
+    # un-inferred even with a warm registry: they are primitive methods, they are not in
+    # METHOD_SPECS, and check_primitive_methods never got a turn (#239).
+    from sushi_lang.sushi_stdlib.src.collections.strings import is_builtin_string_method
+    if receiver_type == BuiltinType.STRING and is_builtin_string_method(method_name):
         return StringMethodInferrer(method_name, validator)
     return None
 
 
-_PRIMITIVE_INFER_TYPES = {
-    BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-    BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-    BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL,
-}
-
-
 @METHOD_TYPE_REGISTRY.register_checker
 def check_primitive_methods(receiver_type, method_name, validator):
-    # String is handled by check_string_methods (registered earlier). Only numeric/bool
-    # primitives are handled here; return an inferrer only when the method is actually
-    # registered for this type so we don't shadow other checkers for unrelated names.
-    if receiver_type in _PRIMITIVE_INFER_TYPES:
-        from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-        if get_builtin_method(receiver_type, method_name) is not None:
-            return PrimitiveMethodInferrer(receiver_type, method_name, validator)
-    return None
+    # Every primitive INCLUDING string: to_str/hash exist on string too, and
+    # check_string_methods (registered earlier) now declines the names it cannot type.
+    # Claim only a (receiver, method) pair the semantics-side table actually carries, so
+    # unrelated names fall through to the extension lookup.
+    from sushi_lang.semantics.generics.primitives import has_primitive_method
+    if not has_primitive_method(receiver_type, method_name):
+        return None
+    # Perk implementations win at validation (calls/methods.py resolves perks before
+    # primitives) and at codegen (dispatcher step 12 before step 15), so inference must
+    # let them win too -- otherwise Pass 2 types the call as the built-in's return type
+    # while the backend calls the perk body. Same guard the struct/enum checker carries.
+    if validator.perk_impl_table.get_method(receiver_type, method_name) is not None:
+        return None
+    return PrimitiveMethodInferrer(receiver_type, method_name, validator)
 
 
 @METHOD_TYPE_REGISTRY.register_checker

@@ -12,7 +12,11 @@ method to one side only and it goes red.
 
 import pytest
 
-from sushi_lang.semantics.generics.primitives import PRIMITIVE_METHOD_TYPES
+from sushi_lang.semantics.generics.primitives import (
+    PRIMITIVE_METHOD_RETURNS,
+    PRIMITIVE_METHOD_TYPES,
+    primitive_method_return_type,
+)
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.sushi_stdlib.src.common import get_builtin_method
 
@@ -58,3 +62,68 @@ def test_to_bits_is_float_only():
     """to_bits() exposes an IEEE-754 encoding, so it must not exist on integers."""
     assert PRIMITIVE_METHOD_TYPES["to_bits"] == frozenset({BuiltinType.F32, BuiltinType.F64})
     assert get_builtin_method(BuiltinType.I32, "to_bits") is None
+
+
+# ---------------------------------------------------------------------------
+# Return types (#239)
+#
+# The tests above assert method NAMES only, and they warm the registry themselves with the
+# backend import at the top of this file. Both properties held perfectly while primitive
+# return-type inference was dead for eight weeks: Pass 2 reads the semantics-side table, and
+# in the real pipeline the registry is still empty when it does. These pin the axis that
+# actually broke, on the table Pass 2 actually reads.
+# ---------------------------------------------------------------------------
+
+
+def test_returns_table_is_the_authority_for_carriers():
+    """PRIMITIVE_METHOD_TYPES is a derived view, so the two cannot disagree."""
+    assert set(PRIMITIVE_METHOD_RETURNS) == set(PRIMITIVE_METHOD_TYPES)
+    for name, returns in PRIMITIVE_METHOD_RETURNS.items():
+        assert frozenset(returns) == PRIMITIVE_METHOD_TYPES[name]
+
+
+@pytest.mark.parametrize("prim_type", ALL_PRIMITIVES)
+def test_to_str_returns_string_everywhere(prim_type):
+    assert primitive_method_return_type(prim_type, "to_str") is BuiltinType.STRING
+
+
+@pytest.mark.parametrize("prim_type", ALL_PRIMITIVES)
+def test_hash_returns_u64_everywhere(prim_type):
+    assert primitive_method_return_type(prim_type, "hash") is BuiltinType.U64
+
+
+def test_to_bits_width_follows_the_receiver():
+    """The receiver-dependent case, and the reason the table is keyed per (method, type).
+
+    `let u32 b = f64val.to_bits()` used to compile and silently truncate the 64-bit pattern.
+    """
+    assert primitive_method_return_type(BuiltinType.F32, "to_bits") is BuiltinType.U32
+    assert primitive_method_return_type(BuiltinType.F64, "to_bits") is BuiltinType.U64
+    assert primitive_method_return_type(BuiltinType.I32, "to_bits") is None
+
+
+def test_string_carries_the_primitive_methods():
+    """string is a primitive here too -- excluding it left string.to_str()/hash() dead."""
+    assert primitive_method_return_type(BuiltinType.STRING, "to_str") is BuiltinType.STRING
+    assert primitive_method_return_type(BuiltinType.STRING, "hash") is BuiltinType.U64
+
+
+def test_unknown_pairs_return_none():
+    assert primitive_method_return_type(BuiltinType.I32, "nope") is None
+    assert primitive_method_return_type(BuiltinType.BOOL, "to_bits") is None
+
+
+@pytest.mark.parametrize("method_name", sorted(PRIMITIVE_METHOD_TYPES))
+def test_semantics_return_type_matches_the_backend_registration(method_name):
+    """The semantics table and the backend's BuiltinMethod must agree on the return type.
+
+    Same two-tables-one-truth contract the name tests enforce, on the return-type axis.
+    """
+    for prim_type in PRIMITIVE_METHOD_TYPES[method_name]:
+        registered = get_builtin_method(prim_type, method_name)
+        assert registered is not None, f"{prim_type}.{method_name}() is not registered"
+        assert registered.return_type == primitive_method_return_type(prim_type, method_name), (
+            f"{prim_type}.{method_name}(): semantics says "
+            f"{primitive_method_return_type(prim_type, method_name)}, "
+            f"the backend registers {registered.return_type}"
+        )

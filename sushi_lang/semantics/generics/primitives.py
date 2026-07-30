@@ -31,14 +31,24 @@ _ALL_PRIMITIVES = frozenset({
     BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL, BuiltinType.STRING,
 })
 
-# to_bits() exposes the raw IEEE-754 encoding, so it exists on floats only.
-_FLOAT_PRIMITIVES = frozenset({BuiltinType.F32, BuiltinType.F64})
+# method name -> {receiver type: return type}.
+#
+# Keyed per (method, RECEIVER) because to_bits() is receiver-dependent: it exposes the raw
+# IEEE-754 encoding, so f32 yields u32 and f64 yields u64. A method-keyed table could not
+# express that, and the width is the whole point of the method -- `let u32 b = f64val.to_bits()`
+# used to compile and silently truncate the pattern to 32 bits.
+#
+# This is the sole authority for both questions ("which types carry it" and "what does it
+# return"); PRIMITIVE_METHOD_TYPES below is a derived view, so the two cannot drift.
+PRIMITIVE_METHOD_RETURNS: dict[str, dict[BuiltinType, BuiltinType]] = {
+    "to_str": dict.fromkeys(sorted(_ALL_PRIMITIVES, key=str), BuiltinType.STRING),
+    "hash": dict.fromkeys(sorted(_ALL_PRIMITIVES, key=str), BuiltinType.U64),
+    "to_bits": {BuiltinType.F32: BuiltinType.U32, BuiltinType.F64: BuiltinType.U64},
+}
 
-# Method name -> the primitive types that carry it.
+# Method name -> the primitive types that carry it. Derived; do not edit independently.
 PRIMITIVE_METHOD_TYPES: dict[str, frozenset] = {
-    "to_str": _ALL_PRIMITIVES,
-    "hash": _ALL_PRIMITIVES,
-    "to_bits": _FLOAT_PRIMITIVES,
+    name: frozenset(returns) for name, returns in PRIMITIVE_METHOD_RETURNS.items()
 }
 
 
@@ -56,6 +66,19 @@ def has_primitive_method(target_type: Type, method_name: str) -> bool:
     """
     carriers = PRIMITIVE_METHOD_TYPES.get(method_name)
     return carriers is not None and target_type in carriers
+
+
+def primitive_method_return_type(target_type: Type, method_name: str) -> Type | None:
+    """Return type of a builtin primitive method call, or None if this pair has none.
+
+    Pass 2 must answer this WITHOUT the builtin-method registry. The registry carries the
+    same methods, but it is populated by `backend/types/primitives/` at import time and the
+    pipeline imports codegen lazily, AFTER semantic analysis -- so during Pass 2 it is empty.
+    Reading it from here is what left every primitive return type un-inferred (#239): a
+    missing inference is silent, because validate_assignment_compatibility treats an
+    unknown value type as "nothing to check".
+    """
+    return PRIMITIVE_METHOD_RETURNS.get(method_name, {}).get(target_type)
 
 
 def validate_primitive_method(call: MethodCall, target_type: Type, reporter: Any) -> None:
