@@ -237,7 +237,11 @@ def run_single_test(test_file: Path, bin_dir: Path, verbose: bool = False) -> tu
         return test_name, False, expected_exit_code, -1, f"TEST ERROR: {e}"
 
 def main():
-    parser = argparse.ArgumentParser(description="Run Sushi language compiler tests")
+    # allow_abbrev=False: with --leaks deleted, argparse would otherwise accept it as a
+    # unique prefix of --leaks-only and silently narrow a full run to the 96-test leak
+    # subset. A removed flag has to fail, not quietly mean something else.
+    parser = argparse.ArgumentParser(description="Run Sushi language compiler tests",
+                                     allow_abbrev=False)
     parser.add_argument("-v", "--verbose", action="store_true",
                        help="Show detailed output for each test")
     parser.add_argument("-j", "--jobs", type=int, default=4,
@@ -250,17 +254,15 @@ def main():
                        help="Output results in JSON format")
     parser.add_argument("--skip-build", action="store_true",
                        help="Skip building stdlib and test helpers")
-    parser.add_argument("--leaks", action="store_true",
-                       help="Enforce EXPECT_NO_LEAKS assertions (implies --enhanced)")
     parser.add_argument("--leaks-only", action="store_true",
-                       help="Run only the tests declaring EXPECT_NO_LEAKS (implies --leaks)")
+                       help="Run only the tests declaring EXPECT_NO_LEAKS (implies --enhanced)")
 
     args = parser.parse_args()
 
-    # The leak gate lives in the enhanced runner; the basic one never executes binaries.
+    # --enhanced enforces EXPECT_NO_LEAKS; --leaks-only just narrows the selection to
+    # the annotated subset. The leak gate lives in the enhanced runner, which is the
+    # only one that executes binaries at all.
     if args.leaks_only:
-        args.leaks = True
-    if args.leaks:
         args.enhanced = True
 
     # Before either runner: a warm cache can outlive a codegen change (see purge_unit_caches).
@@ -283,8 +285,6 @@ def main():
                 sys.argv.append("--json")
             if args.skip_build:
                 sys.argv.append("--skip-build")
-            if args.leaks:
-                sys.argv.append("--leaks")
             if args.leaks_only:
                 sys.argv.append("--leaks-only")
             return enhanced_test_runner.main()
