@@ -1,8 +1,11 @@
 # Ownership Conventions: One Authority for Every Consuming Use
 
-*Design doc, 2026-07-30. Status: **proposed**. Supersedes the ad-hoc "ownership sink" handling
-described in `docs/design/move-semantics.md` §3, which stays accurate as a statement of the
-intended rule and inaccurate as a description of the implementation.*
+*Design doc, 2026-07-30. Status: **accepted, not yet implemented**. Supersedes the ad-hoc "ownership
+sink" handling described in `docs/design/move-semantics.md` §3, which stays accurate as a statement
+of the intended rule and inaccurate as a description of the implementation.*
+
+*The one language question this design raised — what a `match`/`foreach` binding is — is settled in
+§8: **a read-only borrow**. It is not an open question; §4.3's table is final.*
 
 ---
 
@@ -133,21 +136,42 @@ tier, derived structurally rather than opted into.
 |  | PLAIN | COPY | MOVE |
 |---|---|---|---|
 | OWNED | ADOPT | COPY | **MOVE** |
-| BORROWED | ADOPT | COPY | **COPY** |
+| BORROWED | ADOPT | COPY | **ERROR — CE2411** |
 | THROUGH_OWNER | ADOPT | COPY | **COPY** |
 | FRESH | ADOPT | ADOPT | ADOPT |
 
 The single cell that every shipped bug in this family got wrong is **(BORROWED, MOVE)**. #238 fixed
 it at three positions, #250 at five, #256 at six, #277 reports it at one more; it is currently wrong
-at eight. The table also makes the omission that caused #250 unmissable: `THROUGH_OWNER × MOVE`
-must copy whether the field's type *is* the resource (`i32[]`) or merely *contains* one.
+at eight. Per §8 it is not a code-generation question at all — it is rejected. The table also makes
+the omission that caused #250 unmissable: `THROUGH_OWNER × MOVE` must copy whether the field's type
+*is* the resource (`i32[]`) or merely *contains* one.
 
-> **Open question — resolve before implementing.** The `(BORROWED, MOVE)` cell above says COPY,
-> which is the safe, implementable-today answer. If Sushi instead decides a pattern binding is a
-> **true borrow**, that cell becomes a diagnostic ("cannot consume a borrowed binding", the analogue
-> of Rust's "cannot move out of"), which needs `let`-borrow bindings (#252) to be ergonomic. See
-> §8. That is one cell's worth of difference in this design and roughly eight tests' worth of
-> difference in what "green" means.
+Note the two owning rows are deliberately **not** symmetric. `BORROWED` is rejected;
+`THROUGH_OWNER` copies. The difference is that a borrowed binding has a *shorter* lifetime than its
+owner and a visible alternative at the use site (`.clone()`), whereas making every owning field read
+an error would force `.clone()` on every `s.field` with no escape until `let`-borrow bindings exist.
+That is #242, and it stays deferred — deliberately, not by omission.
+
+### 4.4 The rejected cell
+
+Consuming a borrowed binding whose type owns heap is **CE2411** (new; must be registered in the
+module owning the CE24xx borrow/reference range — CE2410 is the last one taken).
+
+```
+error [CE2411]: cannot consume 'p': it is a borrowed binding
+  |             t := Shape.Poly(p)
+  `                             -+
+  = note: 'p' borrows the payload of 's', which still owns it
+    demo.sushi:8:11
+  = help: clone it to take an independent value: `p.clone()`
+```
+
+It is a **relational** error, so it carries a second location per the tier-3 rule in `CLAUDE.md`:
+the use, and the binding site it borrows from. Rendering it with one location is a bug.
+
+**Mutating through a binding needs no new code.** A binding is a `&peek` borrow, so a write through
+one is already **CE2408** ("cannot modify through &peek reference"). That closes #253 in the
+"reject it" direction rather than the "silently discard it" one.
 
 ## 5. The seam
 
@@ -254,31 +278,78 @@ empty. A missing clone arm then becomes a missing method on a handler, not a sil
 This also collapses the 8 independent `isinstance` type-kind ladders and the 13 sites that spell
 `("Own<", "List<", "HashMap<")` by hand, of which `CONTAINER_PREFIXES` currently serves 2.
 
-## 8. The open decision
+## 8. Decided: a binding is a read-only borrow
 
-Everything above is settled except one cell, and it is a language question, not an implementation
-one: **what is a `match` / `foreach` binding?**
+**A `match` payload binding and a `foreach` loop binding are read-only borrows of storage their
+scrutinee or container still owns.** Reads are free and copy nothing. Writing through one is
+**CE2408**. Consuming one whose type owns heap is **CE2411**, with `.clone()` as the escape.
 
-Today it is none of the three coherent answers. The borrow checker models it as an untyped local
-(`BorrowState(name=binding)` with no `var_type`, so it can never be marked moved and this bug class
-is undiagnosable in principle). Codegen creates it as a non-owning borrow
+### 8.1 What it is today
+
+None of the coherent answers. The borrow checker models it as an untyped local
+(`BorrowState(name=binding)` with no `var_type`, so `type_moves_by_value(None)` is always False and
+this bug class is undiagnosable *in principle*). Codegen creates it as a non-owning borrow
 (`register_cleanup=False`). Eight consuming uses read "absent from every cleanup registry" as "free
 to take". It is in fact a shallow byte-copy of an owner's fat pointer — which is why mutation
 through it is silently discarded (#253), re-wrapping it double-frees (#277), and shadowing through
 it reads the wrong field index (#279).
 
-| | (A) true borrow | (B) owned copy | (C) binding modes |
-|---|---|---|---|
-| mutation through it | writes land — fixes #253 | legal and locally visible | per mode |
-| `(BORROWED, MOVE)` cell | **diagnostic** | **COPY** | per mode |
-| cost | zero-copy | a deep copy per arm entry | zero |
-| blocked on | `let`-borrow bindings (#252) | nothing | pattern-mode inference |
+### 8.2 Why, from precedent
 
-(A) is the honest endpoint and the one every current document already claims. (B) is implementable
-today and makes the whole matrix correct immediately. The recommendation is **(A) staged, with (B)
-as the interim**: ship the table in §4.3 as written, then tighten `(BORROWED, MOVE)` to a diagnostic
-once `let`-borrow bindings land. Both are semantics-tightening only — no working program changes
-meaning — so the interim costs nothing but a deep copy.
+| language | binding is | mutate through it | take ownership out |
+|---|---|---|---|
+| **Rust** | chosen by the scrutinee form — `match x` moves, `match &x` borrows, `match &mut x` borrows mutably (RFC 2005 match ergonomics) | yes, via `&mut` | yes, via `match x`; partially moves the scrutinee |
+| **Zig** | copy; `\|*item\|` gives a pointer | only with the explicit `*` | n/a |
+| **C#** | copy, and **readonly** — assigning a `foreach` variable is compile error CS1656 | no; `foreach (ref var x in span)` was added later as an opt-in | n/a |
+| **Swift** | copy (value semantics + COW); `borrowing` / `consuming` made explicit for `~Copyable` types | local only, discarded | explicit `consuming` |
+| **Go** | copy | local only, **silently discarded** | n/a |
+| **OCaml / Haskell** | immutable binding | impossible by construction | n/a |
+
+Two things fall out.
+
+**Nobody deliberately chose Sushi's current behaviour.** Every language that copies either makes the
+binding immutable (C#, the ML family) or has value semantics so the copy is what the user already
+expects (Swift, Go). A binding that *looks* mutable, *is* a copy, and silently discards the write is
+the one combination no design picked. Go is closest, and its loop-variable semantics were considered
+enough of a footgun to change scoping in 1.22.
+
+**Every language that lets you mutate through the binding makes you ask for it** — Rust's `&mut`,
+Zig's `*`, C#'s `ref`. None makes it the silent default, because it is an aliasing hazard.
+
+C# is the closest precedent for the choice made here: a mainstream language that hit this exact
+problem, made the binding read-only with a compile error on mutation, and added the mutable opt-in
+later, only where it was demonstrably needed.
+
+### 8.3 Cost, stated honestly
+
+This is **not** purely semantics-tightening. It breaks source compatibility: the call-argument
+position currently copies a borrowed binding and works, so `eat(p)` becomes `eat(p.clone())`. No
+program silently changes behaviour — every break is a compile error — but programs that compile
+today will stop.
+
+The blast radius is smaller than it sounds, because only `(BORROWED, MOVE)` is affected:
+
+```sushi
+foreach(i in 0..10):              # PLAIN    -- unaffected
+foreach(n in numbers.iter()):     # i32      -- unaffected
+match name_opt:
+    Maybe.Some(s) -> println(s)   # string is a COPY type -- unaffected
+```
+
+Only a binding whose payload transitively owns heap is rejected — and essentially every program that
+hands one to a consuming use today is already double-freeing.
+
+### 8.4 What is NOT decided
+
+**How to opt into a mutable binding**, if it is ever wanted. Zig and Sushi's own `&peek`/`&poke`
+vocabulary point at the binding site (`Shape.Poly(&poke p)`); Rust points at the scrutinee
+(`match &mut x`). Deferred on purpose, exactly as C# deferred `ref`: ship read-only, and let real
+code demonstrate the need. Nothing in this design forecloses either spelling.
+
+This decision was previously described as blocked on `let`-borrow bindings (#252). It is not. #242
+needs them because a hard error on owning-`MemberAccess` would force `.clone()` on every field read
+with no alternative; a binding is different — only *consuming* it is rejected, and `.clone()` at the
+use site is the escape, which is exactly what Rust requires (`match &x { Some(v) => take(v.clone()) }`).
 
 ## 9. Risks
 
