@@ -27,6 +27,11 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   string-only composites still copy. The normative spec is `docs/design/move-semantics.md`
 
 ### Added
+- **`CE2096`: an in-place array method cannot target a constant** (#248). `.fill()` and `.reverse()`
+  mutate their receiver, and a constant is emitted as a `global_constant` -- i.e. `.rodata` -- so a
+  store through its address would be undefined behaviour rather than a diagnostic. Both used to be a
+  `CE0000` ICE; a naive address fallback would have turned that into a runtime SIGBUS instead. Copy
+  into a local and mutate that; a local *shadowing* a constant is freely mutable
 - **`CE2095`: a type that contains itself by value has no finite size** (#240). Reported with the
   cycle chain (`A refers to B refers to A`), the way Rust reports `E0072` and Go reports "invalid
   recursive type". Indirection stays legal (`Own@(T)`, a dynamic `T[]`, `List@(T)`); a *fixed*
@@ -72,6 +77,28 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
 - `./nori` no longer swallows exit codes (#234) -- `./nori install nosuchpkg` exits 1
 
 ### Fixed
+- **An array constant is usable directly** (#248): `PRIMES[0]`, `.len()`, `.get()`, `.iter()` and
+  `.hash()` all worked only after copying the constant into a local, and were otherwise
+  `CE0000: KeyError: 'undefined name: PRIMES'` -- so the documented feature was half-usable. The
+  cause was an asymmetry inside name resolution, not a missing fallback: `emit_name` had always known
+  about global constants, but every path that needed a name's *address* went straight to the
+  local-alloca table. Copying into a local worked precisely because it is the only shape that never
+  asks for the address. `backend/expressions/names.py` now owns both halves (`resolve_name_slot`,
+  `resolve_name_semantic_type`) and six sites route through them, so the two cannot drift again.
+  Reads compile to a `getelementptr` on the read-only global -- no copy, so constants stay zero-cost.
+  Fixed with it: constants **shadowed locals** rather than the reverse, so with a `const i32[3] X` in
+  scope a local `let i32[4] X` read the constant (`CE0017`) while `X[0]` read the local, and the
+  scope pass never marked the shadowing local used (a bogus `CW1001`). Mutating a constant is now
+  `CE2096`. Two adjacent gaps found here are filed separately: `const string[N]` never emits its
+  global at all (#260), and `arr[i] := v` is unsupported and ICEs for locals too (#261)
+- **`find_local_slot` fails as a diagnostic, not a bare `KeyError`** (#248). A name the semantic
+  passes already accepted must resolve in the backend; when it did not, the `KeyError` reached the
+  top-level guard as an anonymous `CE0000`, which is how five separate missed sites all reported
+  identically with nothing naming the gap. It now raises the registered `CE0055`, with
+  `try_find_local_slot` as the interrogative form for callers that have a real answer for "not a
+  local" -- a global constant, a function reference, a struct field. `tests/unit/`
+  `test_find_local_slot_invariant.py` gates it from the AST, so a future caller cannot quietly opt
+  back out by catching `KeyError`
 - **`Own@(T).get()` no longer hands a borrow to an ownership sink** (#256). `get()` is a
   dereference: it loads the payload uncopied, so the value is a view of storage the `Own` still
   frees. Nothing downstream knew that, so every by-value sink took a second owner of the same heap
