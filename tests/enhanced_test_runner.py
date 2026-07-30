@@ -46,6 +46,50 @@ SKIP_TIMED_OUT = "interposer run timed out"
 SKIP_NO_REPORT = "no interposer report"
 
 
+# --- terminal color ----------------------------------------------------------
+# Presentation only. Two rules keep it from leaking anywhere it would do harm:
+# every color decision lives in this block, and glyph painting happens at the
+# print site rather than where a message is built -- so the ~25 message
+# constructors stay plain strings and nothing serialized to --json, matched
+# against, or written to a log file ever carries an escape code.
+
+def _color_enabled() -> bool:
+    """Whether to emit SGR codes.
+
+    Honours NO_COLOR (no-color.org) and FORCE_COLOR, and defaults to off when
+    stdout is not a TTY. The last part matters here: suite output is routinely
+    piped through grep while triaging, and a piped run has to stay greppable.
+    """
+    if os.environ.get("NO_COLOR"):
+        return False
+    if os.environ.get("FORCE_COLOR"):
+        return True
+    return sys.stdout.isatty()
+
+
+COLOR = _color_enabled()
+
+RESET = "\033[0m"
+BOLD = "\033[1m"
+RED = "\033[31m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+
+
+def tint(text: object, *codes: str) -> str:
+    """Wrap `text` in the given SGR codes; a no-op when color is disabled."""
+    if not COLOR or not codes:
+        return str(text)
+    return f"{''.join(codes)}{text}{RESET}"
+
+
+def paint(message: str) -> str:
+    """Color the status glyphs inside an already-composed message."""
+    if not COLOR:
+        return message
+    return message.replace("✓", tint("✓", GREEN)).replace("✗", tint("✗", RED))
+
+
 def stdout_contains(stdout: str, expected: str) -> bool:
     """
     Substring match for EXPECT_STDOUT_CONTAINS, with one exception.
@@ -611,17 +655,17 @@ class TestRunner:
 
     def _print_test_result(self, result: TestResult) -> None:
         """Print result for a single test."""
-        status = "PASS" if result.total_success else "FAIL"
+        status = tint("PASS", GREEN) if result.total_success else tint("FAIL", RED, BOLD)
         print(f"[{status}] {result.name}")
 
         if not result.compilation_success or self.verbose:
-            print(f"  Compilation: {result.compilation_message}")
+            print(f"  Compilation: {paint(result.compilation_message)}")
 
         if not result.skipped_runtime:
             if not result.runtime_success or self.verbose:
-                print(f"  Runtime: {result.runtime_message}")
+                print(f"  Runtime: {paint(result.runtime_message)}")
         elif self.verbose:
-            print(f"  Runtime: Skipped")
+            print("  Runtime: Skipped")
 
     def _print_summary(self, results: Dict[str, TestResult], duration: float) -> None:
         """Print test summary."""
@@ -666,18 +710,20 @@ class TestRunner:
             }
             print(json.dumps(json_output, indent=2))
         else:
-            print(f"\nTest Results ({duration:.2f}s):")
+            print(f"\n{tint(f'Test Results ({duration:.2f}s):', BOLD)}")
             print(f"  Total tests: {total_tests}")
             print(f"  Compilation tests: {compilation_tests}")
             print(f"  Runtime tests: {runtime_tests}")
-            print(f"  Passed: {passed_tests}")
-            print(f"  Failed: {failed_tests}")
+            print(f"  Passed: {tint(passed_tests, GREEN) if passed_tests else passed_tests}")
+            print(f"  Failed: {tint(failed_tests, RED, BOLD) if failed_tests else tint(0, GREEN)}")
             if self.leaks_checked:
-                print(f"  Leak checks: {len(self.leaks_checked)}")
+                print(f"  Leak checks: {tint(len(self.leaks_checked), GREEN)}")
             if self.leaks_skipped:
                 # Group by reason: the old line hardcoded "no leak checker on <platform>",
                 # which was already a lie for the timeout and no-report cases.
-                print(f"  Leak checks SKIPPED: {len(self.leaks_skipped)}")
+                # Yellow, not plain: a skipped leak assertion is not a passing one, and
+                # this line exists precisely so that cannot be read as a clean run.
+                print(f"  Leak checks SKIPPED: {tint(len(self.leaks_skipped), YELLOW, BOLD)}")
                 by_reason: Dict[str, List[str]] = {}
                 for name, reason in sorted(self.leaks_skipped):
                     by_reason.setdefault(reason, []).append(name)
@@ -685,22 +731,20 @@ class TestRunner:
                     shown = ", ".join(names[:5])
                     if len(names) > 5:
                         shown += f", ... (+{len(names) - 5} more)"
-                    print(f"    {len(names)} x {reason}: {shown}")
+                    print(f"    {tint(f'{len(names)} x {reason}', YELLOW)}: {shown}")
 
             if failed_tests == 0:
-                print("\nAll tests passed! ✓")
+                print("\n" + tint("All tests passed! ✓", GREEN, BOLD))
             else:
-                print(f"\n{failed_tests} test(s) failed! ✗")
+                print("\n" + tint(f"{failed_tests} test(s) failed! ✗", RED, BOLD))
 
                 # Show failed test details
-                print("\nFailed tests:")
+                print("\n" + tint("Failed tests:", BOLD))
                 for name, result in results.items():
                     if not result.total_success:
-                        print(f"  {name}: ", end="")
-                        if not result.compilation_success:
-                            print("Compilation failed")
-                        elif not result.runtime_success:
-                            print("Runtime failed")
+                        reason = ("Compilation failed" if not result.compilation_success
+                                  else "Runtime failed")
+                        print(f"  {name}: {tint(reason, RED)}")
 
 
 def main():
