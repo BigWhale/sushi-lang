@@ -4,18 +4,18 @@
 # - Function definitions with parameters and return types
 # - Multiple parameter passing
 # - Blank type (~) for functions with no return value
-# - Result<T, E> for explicit error handling
+# - Result@(T, E) for explicit error handling
 # - Function calls and .realise() for unwrapping
 # - Error returns using Result.Err(error_value)
 #
-# Every function in Sushi implicitly returns Result<T, E>, enabling
+# Every function in Sushi implicitly returns Result@(T, E), enabling
 # consistent error handling. Functions must explicitly return
 # Result.Ok(value) or Result.Err(error_value) on all code paths.
 
 # Function with two parameters returning i32.
 # Parameters are declared as: <type> <name>
 # Return type comes after the closing parenthesis.
-# All return types are implicitly wrapped in Result<T, E>.
+# All return types are implicitly wrapped in Result@(T, E).
 fn calculate_answer(i32 a, i32 b) i32:
     let i32 result = a * b
     # Must explicitly wrap return value in Result.Ok()
@@ -49,14 +49,14 @@ fn main() i32:
     println("Calculated answer: {answer}")
 
     # Call blank-returning functions.
-    # These still return Result<~, StdError> but we often don't need to check them.
+    # These still return Result@(~, StdError) but we often don't need to check them.
     # The Result is discarded if not assigned to a variable.
     greet("Arthur")
     greet("Ford")
     greet("Zaphod")
 
     # Proper error handling: store Result and check it.
-    # Result<T, E> can be used in boolean context:
+    # Result@(T, E) can be used in boolean context:
     # - if (result) checks for Ok
     # - if (!result) or else checks for Err
     let Result@(i32, StdError) result = divide_pangalactic(100, 5)

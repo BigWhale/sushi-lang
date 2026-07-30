@@ -1,4 +1,4 @@
-# Regression: matching on an indexed element of a Maybe<T>[] / Result<T,E>[]
+# Regression: matching on an indexed element of a Maybe@(T)[] / Result@(T,E)[]
 # array used to silently drop the arm's pattern binding and crash with the
 # internal CE0055 ("unknown variable or constant"). The backend could not
 # re-derive the scrutinee's concrete enum type for an IndexAccess scrutinee.

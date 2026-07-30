@@ -1,7 +1,7 @@
 # EXPECT_STDOUT_EXACT: "Push/pop tests passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# Test List<T> push and pop operations
+# Test List@(T) push and pop operations
 fn main() i32:
     # Create empty List
     let List@(i32) numbers = List.new()

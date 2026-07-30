@@ -23,6 +23,7 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.sushi_stdlib.src.common import register_builtin_method, BuiltinMethod
 from sushi_lang.backend.types.hash_utils import FNV1A_OFFSET_BASIS, emit_fnv1a_combine
+from sushi_lang.semantics.generics.type_display import display_type
 
 
 # Hash algorithm constants
@@ -34,7 +35,7 @@ def _validate_hash(call: MethodCall, target_type: Type, reporter: Any) -> None:
     """Validate hash() method call on primitive types."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{target_type}.hash", expected=0, got=len(call.args))
+               name=f"{display_type(target_type)}.hash", expected=0, got=len(call.args))
 
 
 def _emit_generic_hash(prim_type: BuiltinType) -> Any:

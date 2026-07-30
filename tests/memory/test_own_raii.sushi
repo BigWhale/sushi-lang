@@ -1,5 +1,5 @@
-# Test automatic cleanup of Own<T> variables (RAII)
-# This test verifies that Own<T> variables are automatically destroyed
+# Test automatic cleanup of Own@(T) variables (RAII)
+# This test verifies that Own@(T) variables are automatically destroyed
 # at function exit without explicit .destroy() calls
 
 fn main() i32:

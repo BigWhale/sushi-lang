@@ -3,7 +3,7 @@
 # Test setenv() function for setting environment variables
 use <sys/env>
 
-# setenv() returns Result<i32, EnvError>, and Sushi matches error types strictly, so a
+# setenv() returns Result@(i32, EnvError), and Sushi matches error types strictly, so a
 # function that propagates it with ?? must declare EnvError as its own error type.
 fn run_test() i32 | EnvError:
     # Test 1: Set a new environment variable

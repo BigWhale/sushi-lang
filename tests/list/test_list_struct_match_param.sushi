@@ -1,5 +1,5 @@
 # EXPECT_STDOUT_EXACT: "1020"
-# Test pattern matching on List<Struct>.get() with parameter
+# Test pattern matching on List@(Struct).get() with parameter
 
 struct Node:
     i32 value

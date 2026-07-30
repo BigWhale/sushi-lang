@@ -1,4 +1,4 @@
-# T1.5 (item 1): move-capture of an owned Own<T>. The allocation is moved into the
+# T1.5 (item 1): move-capture of an owned Own@(T). The allocation is moved into the
 # closure's heap environment, which owns and frees it. Reading it back (`boxed.get()`)
 # dispatches through the env-field member-access receiver path. f(8) = 8 + 42 = 50.
 # EXPECT_STDOUT_EXACT: "50\n"

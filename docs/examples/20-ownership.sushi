@@ -1,11 +1,11 @@
-# Example 20: Own<T> for Heap Allocation
+# Example 20: Own@(T) for Heap Allocation
 #
-# This example demonstrates Own<T>, Sushi's type for explicit heap allocation.
-# Own<T> is essential for creating recursive data structures like linked lists
+# This example demonstrates Own@(T), Sushi's type for explicit heap allocation.
+# Own@(T) is essential for creating recursive data structures like linked lists
 # and trees, where a type needs to contain itself.
 #
 # Key concepts covered:
-# - Using Own<T> for heap allocation
+# - Using Own@(T) for heap allocation
 # - Creating recursive data structures (linked lists)
 # - Own.alloc(value) - allocate value on heap
 # - Own.null() - create null pointer
@@ -13,26 +13,26 @@
 # - .get() - dereference pointer to get value
 # - Automatic RAII cleanup (no manual .destroy() needed)
 #
-# Own<T> features:
+# Own@(T) features:
 # - Zero-cost abstraction (compiles to raw pointers)
 # - Automatic memory management via RAII
 # - Compile-time move semantics
 # - Required for recursive types (struct containing itself)
 #
-# Note: Own<T> pointers are automatically freed when they go out of scope,
+# Note: Own@(T) pointers are automatically freed when they go out of scope,
 # preventing memory leaks without garbage collection overhead.
 
 struct Point:
     i32 x
     i32 y
 
-# Recursive struct with Maybe<Own<T>> for optional next pointer
+# Recursive struct with Maybe@(Own@(T)) for optional next pointer
 struct Node:
     i32 value
     Maybe@(Own@(Node)) next
 
 fn main() i32:
-    # Demonstrate Own<T> for heap allocation
+    # Demonstrate Own@(T) for heap allocation
 
     # Allocate a Point on the heap
     let Point p = Point(10, 20)
@@ -43,8 +43,8 @@ fn main() i32:
     println("Point: ({loaded.x}, {loaded.y})")
 
     # Create a simple linked list node
-    # Use Maybe<Own<Node>> for nullable next pointers
-    # (Demonstrating Own<T> with struct that has Maybe<Own<T>> field)
+    # Use Maybe@(Own@(Node)) for nullable next pointers
+    # (Demonstrating Own@(T) with struct that has Maybe@(Own@(T)) field)
     let Node head = Node(1, Maybe.None())
     println("Linked list head: {head.value}")
 
@@ -52,7 +52,7 @@ fn main() i32:
     if (head.next.is_some()):
         println("List has more nodes")
 
-    # Own<T> values are automatically freed when they go out of scope (RAII)
+    # Own@(T) values are automatically freed when they go out of scope (RAII)
     # No need to manually call .destroy()
 
     return Result.Ok(0)

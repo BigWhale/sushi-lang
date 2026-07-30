@@ -1,4 +1,4 @@
-# Generic higher-order function: filter<T>(List<T>, fn(T) -> bool) with a capturing
+# Generic higher-order function: filter<T>(List@(T), fn(T) -> bool) with a capturing
 # predicate (captures `threshold`). Keeps elements > 2 from [1,2,3,4] -> [3,4], len 2.
 # EXPECT_STDOUT_EXACT: "2\n"
 fn filter@(T)(List@(T) xs, fn(T) -> bool pred) List@(T):

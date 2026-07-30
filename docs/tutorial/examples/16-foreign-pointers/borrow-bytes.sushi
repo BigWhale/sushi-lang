@@ -1,5 +1,5 @@
 # A foreign handle's whole life: born in an external call, carried through
-# Result<ptr>, handed back to C. Holding it is safe; only C can act on it.
+# Result@(ptr), handed back to C. Holding it is safe; only C can act on it.
 unsafe external "C" as libc because "borrowing memory from the universe":
     fn malloc(i64 n) ptr = "malloc"
     fn free(ptr p) ~ = "free"

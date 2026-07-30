@@ -59,4 +59,4 @@ _add(ErrorMessage("CE5011", Severity.ERROR,
 
 _add(ErrorMessage("CE5012", Severity.ERROR,
     "foreign `ptr` cannot be a type argument of '{base}'",
-    Category.FFI, "Only Result<ptr, E> and Maybe<ptr> support carrying a foreign `ptr`. Other generic containers (HashMap, List, user-defined generics) cannot store an opaque handle. Wrap the pointer in a concrete struct and store that instead."))
+    Category.FFI, "Only Result@(ptr, E) and Maybe@(ptr) support carrying a foreign `ptr`. Other generic containers (HashMap, List, user-defined generics) cannot store an opaque handle. Wrap the pointer in a concrete struct and store that instead."))

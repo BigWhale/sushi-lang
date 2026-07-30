@@ -4,7 +4,7 @@ fn main() i32:
     # Direct indexing: fast, but throws RE2020 at runtime if out of bounds.
     println("Captain (sort of): {crew[2]}")
 
-    # Safe access: .get(i) returns Maybe<string> instead of crashing.
+    # Safe access: .get(i) returns Maybe@(string) instead of crashing.
     match crew.get(1):
         Maybe.Some(name) ->
             println("Index 1 is {name}.")

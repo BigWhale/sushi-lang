@@ -2,7 +2,7 @@
 # EXPECT_STDOUT_EXACT: "PASS: Fixed array in Result works\nPASS: Dynamic array in Result works\n"
 # EXPECT_STDERR_EMPTY: true
 
-# Tests Result<T, E> with array types
+# Tests Result@(T, E) with array types
 
 enum MyError:
     Error

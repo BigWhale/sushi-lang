@@ -1,4 +1,4 @@
-# Regression for #179, nested: Maybe<Result<string>>. The enum destructor recurses through
+# Regression for #179, nested: Maybe@(Result@(string)). The enum destructor recurses through
 # needs_cleanup(), which answered False for a Result.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_CONTAINS: "some = true"

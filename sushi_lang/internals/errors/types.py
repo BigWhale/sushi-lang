@@ -77,7 +77,7 @@ _add(ErrorMessage("CE2015", Severity.ERROR,
 
 _add(ErrorMessage("CE2016", Severity.ERROR,
     "method '{method}' expects {expected} argument(s), got {got}",
-    Category.TYPE, "Built-in Result<T, E> and Maybe<T> methods take a fixed number of arguments."))
+    Category.TYPE, "Built-in Result@(T, E) and Maybe@(T) methods take a fixed number of arguments."))
 
 # Dynamic array-specific errors (compile-time only)
 
@@ -136,8 +136,8 @@ _add(ErrorMessage("CE2036", Severity.ERROR,
     Category.TYPE, "Empty Ok() is not allowed. Use Ok(value) for regular returns or Ok(~) for blank type returns."))
 
 _add(ErrorMessage("CE2037", Severity.ERROR,
-    "cannot print Result<T> directly (use .realise() to unwrap first)",
-    Category.TYPE, "Result<T> must be explicitly handled before printing. Use .realise(default) to extract the value."))
+    "cannot print Result@(T) directly (use .realise() to unwrap first)",
+    Category.TYPE, "Result@(T) must be explicitly handled before printing. Use .realise(default) to extract the value."))
 
 _add(ErrorMessage("CE2038", Severity.ERROR,
     "empty interpolation in string literal",
@@ -193,25 +193,25 @@ _add(ErrorMessage("CE2051", Severity.ERROR,
     Category.TYPE, "Struct hashing limitation or error."))
 
 _add(ErrorMessage("CE2052", Severity.ERROR,
-    "recursive enum '{name}' requires Own<T> indirection (example: enum IntList: Cons(i32, Own<IntList>))",
-    Category.TYPE, "Direct recursion in enums without Own<T> creates infinite size types."))
+    "recursive enum '{name}' requires Own@(T) indirection (example: enum IntList: Cons(i32, Own@(IntList)))",
+    Category.TYPE, "Direct recursion in enums without Own@(T) creates infinite size types."))
 
-# List<T> method errors
+# List@(T) method errors
 _add(ErrorMessage("CE2053", Severity.ERROR,
-    "List<T>.{method}() expects {expected} argument(s), got {got}",
+    "List@(T).{method}() expects {expected} argument(s), got {got}",
     Category.TYPE, "List method called with incorrect number of arguments."))
 
-# HashMap<K, V> type errors
+# HashMap@(K, V) type errors
 _add(ErrorMessage("CE2054", Severity.ERROR,
-    "HashMap<K, V> key type '{key_type}' does not support hashing (missing .hash() method)",
+    "HashMap@(K, V) key type '{key_type}' does not support hashing (missing .hash() method)",
     Category.TYPE, "HashMap keys must support hashing. Use types that have .hash() method (primitives, strings, structs with hashable fields, enums, arrays)."))
 
 _add(ErrorMessage("CE2055", Severity.ERROR,
-    "HashMap<K, V> key type '{key_type}' does not support equality comparison",
+    "HashMap@(K, V) key type '{key_type}' does not support equality comparison",
     Category.TYPE, "HashMap keys must support equality comparison (==). This is required for collision resolution."))
 
 _add(ErrorMessage("CE2058", Severity.ERROR,
-    "HashMap<K, V> key type '{key_type}' is not comparable (dynamic arrays cannot be HashMap keys)",
+    "HashMap@(K, V) key type '{key_type}' is not comparable (dynamic arrays cannot be HashMap keys)",
     Category.TYPE, "Dynamic arrays are not allowed as HashMap keys due to memory management constraints. Use fixed-size arrays instead (e.g., i32[3] instead of i32[])."))
 
 # Array indexing errors (CE2056-CE2057)
@@ -276,8 +276,8 @@ _add(ErrorMessage("CE2084", Severity.ERROR,
     Category.TYPE, "Custom error types (fn foo() T | E) must be enums. Structs and primitives are not allowed as error types."))
 
 _add(ErrorMessage("CE2085", Severity.ERROR,
-    "cannot use '| {err_type}' syntax with explicit Result<T, E> return type",
-    Category.TYPE, "When using explicit Result<T, E> syntax, the error type is already specified. Remove the '| ErrorType' syntax or use implicit return type."))
+    "cannot use '| {err_type}' syntax with explicit Result@(T, E) return type",
+    Category.TYPE, "When using explicit Result@(T, E) syntax, the error type is already specified. Remove the '| ErrorType' syntax or use implicit return type."))
 
 # CE2086-CE2089 reserved for future extensions
 _add(ErrorMessage("CE2090", Severity.ERROR,

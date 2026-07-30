@@ -2,7 +2,7 @@
 # TEST_TYPE: runtime
 # EXPECT_STDOUT_EXACT: "valid=hié\noverlong=ERR\nsurrogate=ERR\nemoji=OK\ntruncated=ERR\nmaxvalid=OK\ntoobig=ERR\n"
 #
-# u8[].to_string_checked() -> Result<string, StdError> validates UTF-8
+# u8[].to_string_checked() -> Result@(string, StdError) validates UTF-8
 # (Unicode Table 3-7: rejects overlong, surrogates, and > U+10FFFF).
 fn main() i32:
     # valid: "hi" + U+00E9 (é, 2-byte C3 A9)

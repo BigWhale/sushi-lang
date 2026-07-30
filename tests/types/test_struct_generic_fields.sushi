@@ -3,7 +3,7 @@
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: Point created successfully
 
-# Test that generic types (Maybe<T>, Result<T>) work as struct field types
+# Test that generic types (Maybe@(T), Result@(T)) work as struct field types
 
 
 struct Point:

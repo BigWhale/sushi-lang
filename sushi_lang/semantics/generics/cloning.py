@@ -28,6 +28,7 @@ from sushi_lang.sushi_stdlib.src.common import (
     get_clone_emitter_factory,
     register_builtin_method,
 )
+from sushi_lang.semantics.generics.type_display import display_type
 
 # Named StructTypes that own heap through their own registries/method paths; a top-level
 # .clone() on these must fall through, not route through the auto-derived struct clone.
@@ -38,14 +39,14 @@ def _validate_struct_clone(call: MethodCall, target_type: Type, reporter: Any) -
     """Validate clone() method call on struct types (arity 0, like hash)."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-                name=f"{target_type}.clone", expected=0, got=len(call.args))
+                name=f"{display_type(target_type)}.clone", expected=0, got=len(call.args))
 
 
 def _validate_enum_clone(call: MethodCall, target_type: Type, reporter: Any) -> None:
     """Validate clone() method call on enum types (arity 0, like hash)."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-                name=f"{target_type}.clone", expected=0, got=len(call.args))
+                name=f"{display_type(target_type)}.clone", expected=0, got=len(call.args))
 
 
 def _lazy_clone_emitter(kind: str, target_type: Type):

@@ -1,4 +1,4 @@
-# Issue #140: HashMap with a List<T> value. get now deep-copies the List buffer out
+# Issue #140: HashMap with a List@(T) value. get now deep-copies the List buffer out
 # (_clone_list_value) and map.free frees it via the symmetric List branch added to the
 # recursive destructor -- previously a List value leaked (no crash) because the generic
 # struct destructor freed nothing for it.

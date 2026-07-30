@@ -276,7 +276,7 @@ Organize tests in logical directories:
 tests/
   constants/          # Constant expression tests
   generics/           # Generic type tests
-  error_handling/     # Result<T> and Maybe<T> tests
+  error_handling/     # Result@(T) and Maybe@(T) tests
   stdlib/             # Standard library tests
 ```
 

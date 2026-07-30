@@ -2,7 +2,7 @@ fn main() i32:
     let List@(i32) data = List.new()
     data.push(100)
 
-    # let Maybe<i32> foo = data.get(0)
+    # let Maybe@(i32) foo = data.get(0)
     # match foo:
     match data.get(0):
         Maybe.Some(val) ->

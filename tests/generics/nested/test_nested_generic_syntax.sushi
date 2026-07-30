@@ -1,5 +1,5 @@
 # Test that nested generic syntax parses correctly
-# Verifies: Result<Maybe<i32>> now works without requiring a space before >>
+# Verifies: Result@(Maybe@(i32)) now works without requiring a space before >>
 # "In the beginning the Universe was created. This has made a lot of people very angry."
 
 fn main() i32:

@@ -145,7 +145,7 @@ the trade-off that buys you the speed.
 
 ## What you learned
 
-- Generic **structs** and **enums** take type parameters in `<...>` and use them where a
+- Generic **structs** and **enums** take type parameters in `@(...)` and use them where a
   concrete type would go; named-argument construction still works.
 - Generic enum variants list **bare** payload types (`Leaf(T)`); you name the payload in the
   matching pattern.

@@ -1,7 +1,7 @@
 # EXPECT_STDOUT_EXACT: "Negative index correctly rejected\nOut of bounds index correctly rejected\nInsert at len succeeded (append)\nBounds checking test passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# Test List<T> insert method - bounds checking returns Result.Err()
+# Test List@(T) insert method - bounds checking returns Result.Err()
 fn main() i32:
     let List@(i32) nums = List.new()
     nums.push(1)

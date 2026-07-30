@@ -4,7 +4,7 @@
 # EXPECTED_OUTPUT: 42
 
 # Enhanced runtime test for nested generics
-# Tests Result<Maybe<T>> in a realistic scenario
+# Tests Result@(Maybe@(T)) in a realistic scenario
 # "I always thought something was fundamentally wrong with the universe."
 
 fn parse_answer(string s) Maybe@(i32):

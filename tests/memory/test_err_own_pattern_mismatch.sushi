@@ -1,11 +1,11 @@
 # Test error: using Own(...) pattern on non-Own field
 # EXPECT_ERROR_CODE: CE2048
 enum Container:
-    Box(i32)  # Regular i32, not Own<i32>
+    Box(i32)  # Regular i32, not Own@(i32)
 
 fn test(Container c) i32:
     match c:
-        Container.Box(Own(value)) ->  # ERROR: Box contains i32, not Own<i32>
+        Container.Box(Own(value)) ->  # ERROR: Box contains i32, not Own@(i32)
             return Result.Ok(value)
     return Result.Ok(0)
 

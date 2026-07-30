@@ -2,7 +2,7 @@
 # EXPECT_STDOUT_EXACT: "PASS: err returns None for Ok\nPASS: err returns Some(error) for Err\n"
 # EXPECT_STDERR_EMPTY: true
 
-# Tests err method that returns Maybe<E>
+# Tests err method that returns Maybe@(E)
 
 enum MyError:
     BadInput

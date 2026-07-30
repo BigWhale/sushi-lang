@@ -5,7 +5,7 @@
 # - String length and size operations
 # - Empty string checking
 # - String interpolation for building strings
-# - Substring search with Maybe<T>
+# - Substring search with Maybe@(T)
 # - String splitting into arrays
 # - Whitespace trimming
 # - Single-quote strings in method arguments
@@ -15,8 +15,8 @@
 # - Single quotes ('...'): Plain literals, no interpolation
 #
 # Sushi strings are UTF-8 encoded. String concatenation is done via
-# interpolation, not the + operator. Many string methods return Result<T>
-# or Maybe<T> for safe error handling.
+# interpolation, not the + operator. Many string methods return Result@(T)
+# or Maybe@(T) for safe error handling.
 
 use <collections/strings>
 
@@ -49,7 +49,7 @@ fn main() i32:
     println(full_message)
 
     # String.find(substring) searches for the first occurrence.
-    # Returns Maybe<i32> with the index, or Maybe.None() if not found.
+    # Returns Maybe@(i32) with the index, or Maybe.None() if not found.
     # This demonstrates safe handling of search failure.
     # Note: Single-quote strings work great for method arguments
     let Maybe@(i32) pos = message.find('Panic')

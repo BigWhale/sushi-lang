@@ -5,7 +5,7 @@
 #
 #   error [CE2002]: type mismatch: cannot assign Own@(Holder) to Own@(Holder)
 #
-# `Own<Holder>` was interned once as a type ARGUMENT of `Maybe@(...)` (carrying
+# `Own@(Holder)` was interned once as a type ARGUMENT of `Maybe@(...)` (carrying
 # an unresolved pointee) and once for the bare `Own@(Holder)` annotation
 # (carrying a fully expanded one). `StructType.__hash__` was name-only but
 # `__eq__` compared fields, so the two hash-matched and compared unequal.
@@ -14,7 +14,7 @@
 #   - `Holder` needs a field that itself needs resolving (`Maybe@(Own@(Leafy))`);
 #     a struct of plain primitives resolves to the same depth either way and
 #     hides the bug.
-#   - `Own<Holder>` needs to reach the checker by BOTH routes; using only the
+#   - `Own@(Holder)` needs to reach the checker by BOTH routes; using only the
 #     annotation, or only the `Maybe` type argument, also hides it.
 # EXPECT_STDOUT_EXACT: "held=true\n"
 # EXPECT_RUNTIME_EXIT: 0
@@ -30,10 +30,10 @@ fn run_test() i32:
     let Leafy l = Leafy(9)
     let Holder h = Holder(1, Maybe.Some(Own.alloc(l)))
 
-    # route 1: Own<Holder> interned as a type argument
+    # route 1: Own@(Holder) interned as a type argument
     let Maybe@(Own@(Holder)) m = Maybe.Some(Own.alloc(h))
 
-    # route 2: Own<Holder> from a bare annotation -- this is the line that failed
+    # route 2: Own@(Holder) from a bare annotation -- this is the line that failed
     let Holder fallback = Holder(0, Maybe.None())
     let Own@(Holder) o = m.realise(Own.alloc(fallback))
 

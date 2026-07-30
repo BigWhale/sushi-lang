@@ -6,7 +6,7 @@ enum Container:
 
 fn test_error(Container c) i32:
     match c:
-        Container.Box(Own(value)) ->  # ERROR: i32 is not Own<T>
+        Container.Box(Own(value)) ->  # ERROR: i32 is not Own@(T)
             return Result.Ok(value)
         Container.Empty() ->
             return Result.Ok(0)

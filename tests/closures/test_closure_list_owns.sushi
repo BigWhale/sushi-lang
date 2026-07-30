@@ -1,4 +1,4 @@
-# T1.5: a List<fn(...)> owns the closures stored in it. Two capturing closures are
+# T1.5: a List@(fn(...)) owns the closures stored in it. Two capturing closures are
 # pushed (each with its own heap environment); List.free() recursively destroys the
 # elements, freeing each closure's environment through its type-erased drop pointer.
 # The list is the sole owner, so there is exactly one free per environment.

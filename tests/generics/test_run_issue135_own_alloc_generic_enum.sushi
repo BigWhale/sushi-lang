@@ -1,5 +1,5 @@
 # Regression for #135 (residual): Own.alloc(<inline generic-enum constructor>) failed with
-# CE0113 because Own<T>'s field is T* (a PointerType) and propagate_types_to_value has no
+# CE0113 because Own@(T)'s field is T* (a PointerType) and propagate_types_to_value has no
 # PointerType branch, so the expected element type was dropped and resolved_enum_type was
 # never set on the constructor. The original #135 infinite loop was already fixed; this is
 # the different bug the repro now surfaces.

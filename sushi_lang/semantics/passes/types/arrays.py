@@ -81,14 +81,14 @@ def _validate_fixed_array_len(call: MethodCall, array_type: ArrayType, reporter:
     """Validate len() method call on fixed arrays."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{array_type}.len", expected=0, got=len(call.args))
+               name=f"{display_type(array_type)}.len", expected=0, got=len(call.args))
 
 
 def _validate_fixed_array_get(call: MethodCall, array_type: ArrayType, reporter: Any, validator: Any = None) -> None:
     """Validate get(index) method call on fixed arrays."""
     if len(call.args) != 1:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{array_type}.get", expected=1, got=len(call.args))
+               name=f"{display_type(array_type)}.get", expected=1, got=len(call.args))
         return
 
     # Validate argument is any integer type using the validator if available
@@ -114,21 +114,21 @@ def _validate_dynamic_array_len(call: MethodCall, array_type: DynamicArrayType, 
     """Validate len() method call on dynamic arrays."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{array_type}.len", expected=0, got=len(call.args))
+               name=f"{display_type(array_type)}.len", expected=0, got=len(call.args))
 
 
 def _validate_dynamic_array_capacity(call: MethodCall, array_type: DynamicArrayType, reporter: Any) -> None:
     """Validate capacity() method call on dynamic arrays."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{array_type}.capacity", expected=0, got=len(call.args))
+               name=f"{display_type(array_type)}.capacity", expected=0, got=len(call.args))
 
 
 def _validate_dynamic_array_get(call: MethodCall, array_type: DynamicArrayType, reporter: Any, validator: Any = None) -> None:
     """Validate get(index) method call on dynamic arrays."""
     if len(call.args) != 1:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{array_type}.get", expected=1, got=len(call.args))
+               name=f"{display_type(array_type)}.get", expected=1, got=len(call.args))
         return
 
     # Validate argument is any integer type using the validator if available
@@ -144,7 +144,7 @@ def _validate_dynamic_array_push(call: MethodCall, array_type: DynamicArrayType,
     """Validate push(element) method call on dynamic arrays."""
     if len(call.args) != 1:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{array_type}.push", expected=1, got=len(call.args))
+               name=f"{display_type(array_type)}.push", expected=1, got=len(call.args))
         return
 
     # Validate argument type matches array element type
@@ -165,28 +165,28 @@ def _validate_dynamic_array_pop(call: MethodCall, array_type: DynamicArrayType, 
     """Validate pop() method call on dynamic arrays."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{array_type}.pop", expected=0, got=len(call.args))
+               name=f"{display_type(array_type)}.pop", expected=0, got=len(call.args))
 
 
 def _validate_dynamic_array_destroy(call: MethodCall, array_type: DynamicArrayType, reporter: Any) -> None:
     """Validate destroy() method call on dynamic arrays."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{array_type}.destroy", expected=0, got=len(call.args))
+               name=f"{display_type(array_type)}.destroy", expected=0, got=len(call.args))
 
 
 def _validate_dynamic_array_free(call: MethodCall, array_type: DynamicArrayType, reporter: Any) -> None:
     """Validate free() method call on dynamic arrays."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{array_type}.free", expected=0, got=len(call.args))
+               name=f"{display_type(array_type)}.free", expected=0, got=len(call.args))
 
 
 def _validate_array_iter(call: MethodCall, array_type: ArrayType | DynamicArrayType, reporter: Any) -> None:
     """Validate iter() method call on arrays (both fixed and dynamic)."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{array_type}.iter", expected=0, got=len(call.args))
+               name=f"{display_type(array_type)}.iter", expected=0, got=len(call.args))
 
 
 def _validate_byte_array_to_string(call: MethodCall, array_type: DynamicArrayType, reporter: Any) -> None:
@@ -205,7 +205,7 @@ def _validate_byte_array_to_string(call: MethodCall, array_type: DynamicArrayTyp
 
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{array_type}.to_string", expected=0, got=len(call.args))
+               name=f"{display_type(array_type)}.to_string", expected=0, got=len(call.args))
 
 
 def _validate_byte_array_to_string_checked(call: MethodCall, array_type: DynamicArrayType, reporter: Any) -> None:
@@ -220,21 +220,21 @@ def _validate_byte_array_to_string_checked(call: MethodCall, array_type: Dynamic
 
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{array_type}.to_string_checked", expected=0, got=len(call.args))
+               name=f"{display_type(array_type)}.to_string_checked", expected=0, got=len(call.args))
 
 
 def _validate_dynamic_array_clone(call: MethodCall, array_type: DynamicArrayType, reporter: Any) -> None:
     """Validate clone() method call on dynamic arrays."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{array_type}.clone", expected=0, got=len(call.args))
+               name=f"{display_type(array_type)}.clone", expected=0, got=len(call.args))
 
 
 def _validate_fixed_array_fill(call: MethodCall, array_type: ArrayType, reporter: Any, validator: Any = None) -> None:
     """Validate fill(value) method call on fixed arrays."""
     if len(call.args) != 1:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{array_type}.fill", expected=1, got=len(call.args))
+               name=f"{display_type(array_type)}.fill", expected=1, got=len(call.args))
         return
 
     # Validate argument type matches array element type
@@ -250,7 +250,7 @@ def _validate_dynamic_array_fill(call: MethodCall, array_type: DynamicArrayType,
     """Validate fill(value) method call on dynamic arrays."""
     if len(call.args) != 1:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{array_type}.fill", expected=1, got=len(call.args))
+               name=f"{display_type(array_type)}.fill", expected=1, got=len(call.args))
         return
 
     # Validate argument type matches array element type
@@ -266,14 +266,14 @@ def _validate_fixed_array_reverse(call: MethodCall, array_type: ArrayType, repor
     """Validate reverse() method call on fixed arrays."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{array_type}.reverse", expected=0, got=len(call.args))
+               name=f"{display_type(array_type)}.reverse", expected=0, got=len(call.args))
 
 
 def _validate_dynamic_array_reverse(call: MethodCall, array_type: DynamicArrayType, reporter: Any) -> None:
     """Validate reverse() method call on dynamic arrays."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{array_type}.reverse", expected=0, got=len(call.args))
+               name=f"{display_type(array_type)}.reverse", expected=0, got=len(call.args))
 
 
 # LLVM emission functions
@@ -383,7 +383,7 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
         # hash() - available on both fixed and dynamic arrays (no arguments)
         if call.args:
             er.emit(reporter, er.ERR.CE2009, call.loc,
-                   name=f"{array_type}.hash", expected=0, got=len(call.args))
+                   name=f"{display_type(array_type)}.hash", expected=0, got=len(call.args))
 
     elif method_name == "fill":
         # fill(value) - available on both fixed and dynamic arrays

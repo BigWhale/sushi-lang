@@ -1,4 +1,4 @@
-# Test generic enum Either<T, U>: left/right variants with generic type inference
+# Test generic enum Either@(T, U): left/right variants with generic type inference
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "Right: 42\n"
 

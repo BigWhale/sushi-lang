@@ -14,6 +14,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, EnumType
 from sushi_lang.semantics.ast import EnumConstructor, DotCall, Name
 from ..compatibility import types_compatible
+from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from .. import TypeValidator
@@ -207,7 +208,7 @@ def validate_constructor_arguments(
         arg_type = validator.infer_expression_type(arg)
         if arg_type is not None and not types_compatible(validator, arg_type, resolved_type):
             er.emit(validator.reporter, er.ERR.CE2049, arg.loc,
-                   variant=variant_name, expected=str(resolved_type), got=str(arg_type))
+                   variant=variant_name, expected=display_type(resolved_type), got=display_type(arg_type))
 
     # Validate any excess arguments (if more args than expected)
     for i in range(len(expected_types), len(actual_args)):

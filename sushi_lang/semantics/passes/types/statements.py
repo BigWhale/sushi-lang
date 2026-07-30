@@ -80,6 +80,7 @@ from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .utils import validate_type_name
 from .compatibility import validate_assignment_compatibility, types_compatible
 from .expressions import validate_boolean_condition
+from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from . import TypeValidator
@@ -314,7 +315,7 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
     if actual_type != expr_type:
         # Type mismatch in rebind statement
         er.emit(validator.reporter, er.ERR.CE2002, stmt.loc,
-               expected=str(actual_type), got=str(expr_type))
+               expected=display_type(actual_type), got=display_type(expr_type))
 
 
 def validate_if_statement(validator: 'TypeValidator', stmt: If) -> None:
@@ -351,7 +352,7 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
         return  # Error already emitted during expression validation
 
     if not isinstance(iterable_type, IteratorType):
-        er.emit(validator.reporter, er.ERR.CE2033, stmt.iterable.loc, got=str(iterable_type))
+        er.emit(validator.reporter, er.ERR.CE2033, stmt.iterable.loc, got=display_type(iterable_type))
         return
 
     # Get the element type from the iterator
@@ -373,7 +374,7 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
         # Check type compatibility
         if not types_compatible(validator, declared_type, element_type):
             er.emit(validator.reporter, er.ERR.CE2034, stmt.item_type_span,
-                   expected=str(element_type), got=str(declared_type))
+                   expected=display_type(element_type), got=display_type(declared_type))
             return
 
         # Use declared type

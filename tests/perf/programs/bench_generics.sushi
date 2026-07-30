@@ -29,7 +29,7 @@ fn main() i32:
     let u64 b = identity(11 as u64).realise(0 as u64)
     let i16 sh = identity(3 as i16).realise(0 as i16)
 
-    # Distinct Pair<T, U> / Triple<A, B, C> instantiations.
+    # Distinct Pair@(T, U) / Triple@(A, B, C) instantiations.
     let Pair@(i32, i32) p1 = Pair(1, 2)
     let Pair@(i64, u32) p2 = Pair(3 as i64, 4 as u32)
     let Pair@(u64, i16) p3 = Pair(5 as u64, 6 as i16)

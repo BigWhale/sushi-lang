@@ -1,5 +1,5 @@
 # EXPECT_STDOUT_EXACT: "Yay\n"
-# Test Result<T> with different return types
+# Test Result@(T) with different return types
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 1
 

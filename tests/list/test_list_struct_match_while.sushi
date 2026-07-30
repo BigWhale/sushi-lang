@@ -1,5 +1,5 @@
 # EXPECT_STDOUT_EXACT: "Value: 10\nValue: 20\n"
-# Test pattern matching on List<Struct>.get() inside while loop
+# Test pattern matching on List@(Struct).get() inside while loop
 
 struct Node:
     i32 value

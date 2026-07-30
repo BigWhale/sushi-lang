@@ -1,14 +1,14 @@
-# Example 07: Result<T, E> Error Handling
+# Example 07: Result@(T, E) Error Handling
 #
 # Demonstrates:
-# - Result<T, E> as the foundation of error handling in Sushi
+# - Result@(T, E) as the foundation of error handling in Sushi
 # - Multiple error conditions with explicit Result.Err(error_value) returns
 # - Boolean context checking (if (result) for Ok, else for Err)
 # - Safe unwrapping with .realise(default_value)
-# - Difference between storing Result<T, E> vs unwrapping immediately
+# - Difference between storing Result@(T, E) vs unwrapping immediately
 # - Chaining result checks and handling
 #
-# Every function in Sushi implicitly returns Result<T, E>. This enables
+# Every function in Sushi implicitly returns Result@(T, E). This enables
 # explicit, type-safe error handling without exceptions. Functions must
 # handle all error paths and return Result.Ok() or Result.Err(error_value).
 
@@ -43,12 +43,12 @@ fn calculate_hyperspace_jump(i32 distance, i32 fuel) i32:
     return Result.Ok(distance * 2)
 
 fn main() i32:
-    # Pattern 1: Store Result<T, E> and check it explicitly.
+    # Pattern 1: Store Result@(T, E) and check it explicitly.
     # This is the most explicit approach, allowing separate handling
-    # of Ok and Err cases. Result<T, E> can be used in boolean context.
+    # of Ok and Err cases. Result@(T, E) can be used in boolean context.
     let Result@(i32, StdError) jump1 = calculate_hyperspace_jump(1000, 50)
 
-    # Result<T, E> in boolean context: if (result) checks for Ok.
+    # Result@(T, E) in boolean context: if (result) checks for Ok.
     # Inside the Ok branch, use .realise() to extract the value safely.
     if (jump1):
         let i32 result = jump1.realise(0)
@@ -60,10 +60,10 @@ fn main() i32:
     # Pattern 2: Unwrap immediately with .realise(default).
     # .realise(default) extracts the Ok value or returns default if Err.
     # This is convenient when you want a fallback value rather than
-    # branching logic. No Result<T, E> variable is stored.
+    # branching logic. No Result@(T, E) variable is stored.
     let i32 jump2_result = calculate_hyperspace_jump(2000, 100).realise(-1)
 
-    # After .realise(), you have a plain value (not Result<T, E>).
+    # After .realise(), you have a plain value (not Result@(T, E)).
     # Check the sentinel value to detect if it was an error.
     if (jump2_result == -1):
         println("Second jump failed, using default")

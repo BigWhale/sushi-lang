@@ -21,6 +21,7 @@ from typing import Any
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import BuiltinType, Type
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.type_display import display_type
 
 
 # Every primitive that carries to_str() and hash().
@@ -61,4 +62,4 @@ def validate_primitive_method(call: MethodCall, target_type: Type, reporter: Any
     """Validate a builtin primitive method call. All three take no arguments."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-                name=f"{target_type}.{call.method}", expected=0, got=len(call.args))
+                name=f"{display_type(target_type)}.{call.method}", expected=0, got=len(call.args))

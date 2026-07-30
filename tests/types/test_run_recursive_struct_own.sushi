@@ -5,7 +5,7 @@
 # fields and the walk cycled.
 #
 # `Own@(T)` is an indirection, so the type is FINITE and must compile -- exactly
-# like Rust's `struct Node { next: Box<Node> }`. It is declaration-only on
+# like Rust's `struct Node { next: Box@(Node) }`. It is declaration-only on
 # purpose: with no `Maybe` there is no terminator, so a value cannot bottom out.
 # Rust accepts the same uninhabitable-but-well-formed type.
 # EXPECT_STDOUT_EXACT: "declared\n"

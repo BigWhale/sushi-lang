@@ -1,7 +1,7 @@
 # EXPECT_STDOUT_EXACT: "Clear tests passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# Test List<T> clear method
+# Test List@(T) clear method
 fn main() i32:
     let List@(i32) data = List.new()
     data.push(1)

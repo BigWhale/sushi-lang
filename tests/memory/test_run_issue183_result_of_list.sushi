@@ -1,4 +1,4 @@
-# Regression for #183 + #179 together: Result<List<i32>>. Needed BOTH fixes -- the Ok payload
+# Regression for #183 + #179 together: Result@(List@(i32)). Needed BOTH fixes -- the Ok payload
 # arrives as a GenericTypeRef('List', (i32,)), an unresolved reference that every cleanup
 # predicate fell through to False on, and List itself was gated out by needs_cleanup.
 # EXPECT_RUNTIME_EXIT: 0

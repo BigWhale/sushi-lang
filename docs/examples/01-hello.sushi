@@ -3,17 +3,17 @@
 # Demonstrates:
 # - Basic program structure with main() function
 # - Standard output using println()
-# - Result<T> return type (implicit wrapper around all return types)
+# - Result@(T) return type (implicit wrapper around all return types)
 # - Exit code conventions (0 = success)
 #
 # This is the simplest valid Sushi program. Every executable program
 # must have a main() function that returns i32. Behind the scenes,
-# all function return types are wrapped in Result<T> for explicit
+# all function return types are wrapped in Result@(T) for explicit
 # error handling.
 
 fn main() i32:
     # Every Sushi program starts with a main function that returns i32.
-    # The i32 return type is implicitly wrapped as Result<i32>.
+    # The i32 return type is implicitly wrapped as Result@(i32).
     # This allows consistent error handling across all functions.
 
     # println() outputs a line to stdout with a newline.

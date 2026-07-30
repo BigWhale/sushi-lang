@@ -1,4 +1,4 @@
-# Regression: matching directly on a `??`-unwrapped call that yields Maybe<T>
+# Regression: matching directly on a `??`-unwrapped call that yields Maybe@(T)
 # was rejected with a false CE2048 ("match scrutinee must be an enum type")
 # because the scrutinee inferred to a GenericTypeRef rather than a concrete
 # EnumType. validate_match_scrutinee now resolves generic enum refs to their

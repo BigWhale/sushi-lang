@@ -1,4 +1,4 @@
-# Consumer instantiates the library's constrained generic struct Ranked<T: Ord>
+# Consumer instantiates the library's constrained generic struct Ranked@(T: Ord)
 # at a type with no Ord impl. The constraint is re-checked relative to the
 # consumer's perk impls during struct monomorphization, so it must reject this
 # with CE4006 - proving consumer-relative constraint re-checking applies to a

@@ -11,6 +11,7 @@ from sushi_lang.semantics.typesys import EnumType, Type
 from sushi_lang.semantics.generics.hashing import can_enum_be_hashed, register_enum_hash_method
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.generics.type_display import display_type
 
 
 def is_builtin_result_method(method_name: str) -> bool:
@@ -156,7 +157,7 @@ def _validate_result_expect(
     arg_type = validator.infer_expression_type(message_arg)
     if arg_type is not None and arg_type != BuiltinType.STRING:
         er.emit(reporter, er.ERR.CE2503, message_arg.loc,
-               expected="string", got=str(arg_type))
+               expected="string", got=display_type(arg_type))
 
 
 def validate_result_realise_method_with_validator(
@@ -233,7 +234,7 @@ def validate_result_realise_method_with_validator(
     arg_type = validator.infer_expression_type(default_arg)
     if arg_type is not None and not validator._types_compatible(arg_type, t_type):
         er.emit(reporter, er.ERR.CE2503, default_arg.loc,
-               expected=str(t_type), got=str(arg_type))
+               expected=display_type(t_type), got=display_type(arg_type))
 
 
 def is_result_enum(t: Any) -> bool:

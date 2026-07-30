@@ -14,8 +14,8 @@ from sushi_lang.internals.errors.registry import (
 
 
 _add(ErrorMessage("CW2001", Severity.WARNING,
-    "unused Result<T> value (use .realise() or if statement to handle the result)",
-    Category.TYPE, "Result<T> values should be explicitly handled to avoid losing error information."))
+    "unused Result@(T) value (use .realise() or if statement to handle the result)",
+    Category.TYPE, "Result@(T) values should be explicitly handled to avoid losing error information."))
 
 _add(ErrorMessage("CW2511", Severity.WARNING,
     "?? operator used in main function (consider explicit error handling for clarity)",

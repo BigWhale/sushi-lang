@@ -1,7 +1,7 @@
 # EXPECT_STDOUT_EXACT: "Removed first element successfully\nRemoved last element successfully\nRemoved only element successfully\nNegative index correctly rejected\nOut of bounds index correctly rejected\nEmpty list removal correctly rejected\nEdge cases test passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# Test List<T> remove method - edge cases
+# Test List@(T) remove method - edge cases
 fn main() i32:
     # Test 1: Remove first element
     let List@(i32) nums1 = List.new()

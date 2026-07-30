@@ -243,7 +243,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
 
     if method is None:
         # Method doesn't exist for this type
-        er.emit(validator.reporter, er.ERR.CE2008, call.loc, name=f"{receiver_type}.{call.method}")
+        er.emit(validator.reporter, er.ERR.CE2008, call.loc, name=f"{display_type(receiver_type)}.{call.method}")
         return
 
     # Validate argument count (receiver is implicit, so compare explicit args)
@@ -252,7 +252,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
 
     if len(actual_args) != len(expected_params):
         er.emit(validator.reporter, er.ERR.CE2009, call.loc,
-               name=f"{receiver_type}.{call.method}", expected=len(expected_params), got=len(actual_args))
+               name=f"{display_type(receiver_type)}.{call.method}", expected=len(expected_params), got=len(actual_args))
 
     # Validate each argument type against corresponding parameter type
     for i, (arg, param) in enumerate(zip(actual_args, expected_params, strict=False)):

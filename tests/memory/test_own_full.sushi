@@ -1,7 +1,7 @@
 # EXPECT_STDOUT_EXACT: "Value: 42\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Test RAII automatic cleanup with usage
-# The Own<T> should be automatically destroyed at function exit
+# The Own@(T) should be automatically destroyed at function exit
 fn main() i32:
     let Own@(i32) ptr = Own.alloc(42)
     let i32 value = ptr.get()

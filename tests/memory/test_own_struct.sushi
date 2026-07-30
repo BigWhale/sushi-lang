@@ -1,6 +1,6 @@
 # EXPECT_STDOUT_EXACT: "Point: (10, 20)\n"
 # EXPECT_RUNTIME_EXIT: 0
-# Test Own<struct> - heap-allocated user-defined struct
+# Test Own@(struct) - heap-allocated user-defined struct
 struct Point:
     i32 x
     i32 y

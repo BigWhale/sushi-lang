@@ -1,4 +1,4 @@
-# FFI: a `public fn` may not return a foreign `ptr` (implicit Result<ptr, E> wrapping).
+# FFI: a `public fn` may not return a foreign `ptr` (implicit Result@(ptr, E) wrapping).
 # EXPECT_ERROR_CODE: CE5008
 unsafe external "C" as libc because "intentional public ptr exposure":
     fn malloc(i64 n) ptr = "malloc"

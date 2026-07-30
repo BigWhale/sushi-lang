@@ -1,4 +1,4 @@
-# Positive control for #181: non-owning HashMap<i32,i32> and List<i32> struct fields
+# Positive control for #181: non-owning HashMap@(i32,i32) and List@(i32) struct fields
 # still compile, run, and don't leak -- guards against a fix that mishandles the
 # non-owning clone/destroy fast path.
 # EXPECT_RUNTIME_EXIT: 0

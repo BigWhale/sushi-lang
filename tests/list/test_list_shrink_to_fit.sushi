@@ -1,7 +1,7 @@
 # EXPECT_STDOUT_EXACT: "shrink_to_fit tests passed!\n"
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# Test List<T> shrink_to_fit method
+# Test List@(T) shrink_to_fit method
 fn main() i32:
     # Create list with excess capacity
     let List@(i32) data = List.with_capacity(100)

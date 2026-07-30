@@ -294,7 +294,7 @@ still **CE2093**. Bind it to a typed local first.
      would come from the type parameter being inferred — circular); use a typed lambda
      (`|i32 x| ...`) or a function reference instead
    - A nested generic of an enclosing type parameter (e.g. `first(singleton(x))` where
-     `singleton(x): List@(T)` inside a `<T>` function) still fails inference
+     `singleton(x): List@(T)` inside a `@(T)` function) still fails inference
 
 3. **No explicit type arguments**
    - Cannot write `identity@(i32)(42)`

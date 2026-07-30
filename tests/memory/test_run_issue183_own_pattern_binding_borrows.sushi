@@ -1,11 +1,11 @@
 # Regression for the double-free uncovered while fixing #162/#183.
 #
 # `Own(tail)` in a match arm unwraps the Own and binds its POINTEE. That binding is a
-# borrow -- the Own<T> still owns the heap block and frees it at scope exit -- but
+# borrow -- the Own@(T) still owns the heap block and frees it at scope exit -- but
 # _extract_own_pattern registered it as an owner, so the pointee was freed twice.
 #
 # It was latent, not harmless-by-design: the enum destructor used to no-op on an Own
-# payload (needs_cleanup answered False for Own<T>, whose only field is a raw pointer),
+# payload (needs_cleanup answered False for Own@(T), whose only field is a raw pointer),
 # so the bogus second free destroyed nothing. Making that destructor real turned the
 # double-registration into an abort (mfm_free / EXC_BREAKPOINT).
 #

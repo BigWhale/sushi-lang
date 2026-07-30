@@ -16,6 +16,7 @@ from sushi_lang.semantics.typesys import EnumType, UnknownType, StructType
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ast import Match, Pattern, WildcardPattern, OwnPattern, Block, Expr
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
+from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from . import TypeValidator
@@ -72,7 +73,7 @@ def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optiona
         )
 
     if not isinstance(scrutinee_type, EnumType):
-        er.emit(validator.reporter, er.ERR.CE2048, stmt.scrutinee.loc, got=str(scrutinee_type))
+        er.emit(validator.reporter, er.ERR.CE2048, stmt.scrutinee.loc, got=display_type(scrutinee_type))
         return None
 
     return scrutinee_type
@@ -238,7 +239,7 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
 
             if not isinstance(resolved_type, EnumType):
                 # Nested pattern requires enum type
-                er.emit(validator.reporter, er.ERR.CE2048, binding.loc, got=str(resolved_type))
+                er.emit(validator.reporter, er.ERR.CE2048, binding.loc, got=display_type(resolved_type))
                 return False
 
             # Validate nested pattern's enum name matches
@@ -277,7 +278,7 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
 
             if not is_own_type:
                 er.emit(validator.reporter, er.ERR.CE2048, binding.loc,
-                       got=f"Own(...) pattern requires Own<T> type, got {resolved_type}")
+                       got=f"Own(...) pattern requires Own@(T) type, got {display_type(resolved_type)}")
                 return False
 
             # Validate inner pattern if it's a nested pattern
@@ -290,7 +291,7 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
                         element_type = resolved_type.type_args[0]
                     else:
                         er.emit(validator.reporter, er.ERR.CE2048, binding.loc,
-                               got=f"Invalid Own<T> type arguments: {resolved_type}")
+                               got=f"Invalid Own@(T) type arguments: {display_type(resolved_type)}")
                         return False
                 elif isinstance(resolved_type, StructType):
                     # After monomorphization: extract from fields
@@ -299,7 +300,7 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
                         element_type = own_module.get_own_element_type(resolved_type)
                     except (TypeError, IndexError):
                         er.emit(validator.reporter, er.ERR.CE2048, binding.loc,
-                               got=f"Invalid Own<T> type structure: {resolved_type}")
+                               got=f"Invalid Own@(T) type structure: {display_type(resolved_type)}")
                         return False
 
                 # Resolve element type if it's UnknownType
@@ -309,7 +310,7 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
                 # Validate inner pattern is an enum pattern
                 if not isinstance(element_type, EnumType):
                     er.emit(validator.reporter, er.ERR.CE2048, binding.inner_pattern.loc,
-                           got=f"Nested pattern inside Own(...) requires enum type, got {element_type}")
+                           got=f"Nested pattern inside Own(...) requires enum type, got {display_type(element_type)}")
                     return False
 
                 # Validate inner nested pattern

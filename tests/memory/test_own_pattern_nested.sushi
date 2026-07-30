@@ -1,5 +1,5 @@
 # Test Own patterns with nested enum patterns inside
-# This tests Own(EnumPattern) syntax without requiring Own<enum> recursion
+# This tests Own(EnumPattern) syntax without requiring Own@(enum) recursion
 
 enum Status:
     Ok(i32)

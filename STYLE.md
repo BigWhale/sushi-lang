@@ -429,14 +429,14 @@ An expression-body lambda `|x| e` desugars to `return Result.Ok(e)`, so the body
 value is **auto-wrapped in `Ok`**. The rule that falls out of this: **every fallible
 call inside a lambda body needs its own `??` at the point of use.** A lambda body
 must never let an inner `Result` pass through -- the desugar would wrap it a second
-time (`Result<Result<T, E>, E>`), which fails to typecheck.
+time (`Result@(Result@(T, E), E)`), which fails to typecheck.
 
 ```sushi
 # Good - each fallible call is unwrapped at its point of use
 let compose = |x| f(g(x)??)??       # body value is V; desugars to Result.Ok(V)
 
-# Wrong - body yields Result<V, E>; the desugar wraps it again into
-# Result<Result<V, E>, E>, which mismatches the declared fn(T) -> V
+# Wrong - body yields Result@(V, E); the desugar wraps it again into
+# Result@(Result@(V, E), E), which mismatches the declared fn(T) -> V
 let compose = |x| f(g(x)??)
 ```
 

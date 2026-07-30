@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_EXACT: "=== List<f64> Debug ===\nList@(f64) {\n  len: 3, capacity: 4\n  [0] 3.141590\n  [1] 2.718280\n  [2] 1.414210\n}\n"
+# EXPECT_STDOUT_EXACT: "=== List@(f64) Debug ===\nList@(f64) {\n  len: 3, capacity: 4\n  [0] 3.141590\n  [1] 2.718280\n  [2] 1.414210\n}\n"
 fn main() i32:
     let List@(f64) doubles = List.new()
 
@@ -6,7 +6,7 @@ fn main() i32:
     doubles.push(2.71828)
     doubles.push(1.41421)
 
-    println("=== List<f64> Debug ===")
+    println("=== List@(f64) Debug ===")
     doubles.debug()
 
     return Result.Ok(0)

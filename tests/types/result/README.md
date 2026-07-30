@@ -1,12 +1,12 @@
-# Result<T, E> Test Suite
+# Result@(T, E) Test Suite
 
-Comprehensive test suite for the new `Result<T, E>` type system with typed error parameters.
+Comprehensive test suite for the new `Result@(T, E)` type system with typed error parameters.
 
 ## Test Organization
 
 ```
 tests/types/result/
-├── basic/           # Basic Result<T, E> functionality (12 tests)
+├── basic/           # Basic Result@(T, E) functionality (12 tests)
 ├── pattern/         # Pattern matching tests (7 tests)
 ├── propagation/     # Error propagation (??) tests (6 tests)
 ├── methods/         # Method tests (9 tests)
@@ -21,20 +21,20 @@ tests/types/result/
 
 ### 1. Basic Functionality (basic/)
 
-Tests fundamental `Result<T, E>` construction and usage:
+Tests fundamental `Result@(T, E)` construction and usage:
 
 - `test_result_ok_construction.sushi` - Creating Result.Ok(value)
 - `test_result_err_construction.sushi` - Creating Result.Err(error)
 - `test_result_with_primitives.sushi` - Result with i32, string, bool
 - `test_result_with_structs.sushi` - Result with custom structs
 - `test_result_with_enums.sushi` - Result where T is enum
-- `test_result_nested.sushi` - Nested Result<Result<T, E1>, E2>
+- `test_result_nested.sushi` - Nested Result@(Result@(T, E1), E2)
 - `test_result_with_arrays.sushi` - Result with fixed and dynamic arrays
-- `test_result_with_generic_struct.sushi` - Result with generic structs (Pair<T, U>)
+- `test_result_with_generic_struct.sushi` - Result with generic structs (Pair@(T, U))
 - `test_result_function_return.sushi` - Result as function return type
 - `test_result_as_struct_field.sushi` - Result as struct field
 - `test_result_multiple_variants.sushi` - Error enum with many variants
-- `test_result_with_maybe.sushi` - Result<Maybe<T>, E> combination
+- `test_result_with_maybe.sushi` - Result@(Maybe@(T), E) combination
 
 ### 2. Pattern Matching (pattern/)
 
@@ -61,14 +61,14 @@ Tests error propagation operator (??):
 
 ### 4. Methods (methods/)
 
-Tests Result<T, E> methods:
+Tests Result@(T, E) methods:
 
 - `test_realise_ok.sushi` - .realise(default) on Ok
 - `test_realise_err.sushi` - .realise(default) on Err
 - `test_is_ok.sushi` - .is_ok() method
 - `test_is_err.sushi` - .is_err() method
 - `test_expect_ok.sushi` - .expect(msg) on Ok
-- `test_err_method.sushi` - .err() returns Maybe<E>
+- `test_err_method.sushi` - .err() returns Maybe@(E)
 - `test_realise_with_structs.sushi` - realise with struct defaults
 - `test_chained_methods.sushi` - Chaining multiple methods
 - `test_result_in_loop.sushi` - Methods used in loops
@@ -98,7 +98,7 @@ Tests expected compiler warnings:
 
 Tests expected compilation failures:
 
-- `test_err_missing_error_type.sushi` - ERROR: Result<T> requires 2 params
+- `test_err_missing_error_type.sushi` - ERROR: Result@(T) requires 2 params
 - `test_err_wrong_ok_type.sushi` - ERROR: Ok type mismatch
 - `test_err_wrong_err_type.sushi` - ERROR: Err type mismatch
 - `test_err_propagation_type_mismatch.sushi` - ERROR: cannot propagate different error types
@@ -148,7 +148,7 @@ enum ProcessError:
 ## Running Tests
 
 ```bash
-# Run all Result<T, E> tests
+# Run all Result@(T, E) tests
 python tests/run_tests.py --filter "tests/types/result"
 
 # Run specific category
@@ -208,10 +208,10 @@ These tests are written BEFORE implementation to guide the development process:
 enum DbError:
     ConnectionFailed
 
-fn connect() Result<i32, DbError>:
+fn connect() Result@(i32, DbError):
     return Result.Err(DbError.ConnectionFailed)
 
-fn query() Result<string, DbError>:
+fn query() Result@(string, DbError):
     let i32 conn = connect()??  # Error propagates with type preserved
     return Result.Ok("data")
 ```
@@ -229,7 +229,7 @@ match open_file("test.txt"):
 ### Manual Error Type Conversion
 
 ```sushi
-fn convert_errors() Result<i32, AppError>:
+fn convert_errors() Result@(i32, AppError):
     match file_operation():
         Result.Ok(data) -> Result.Ok(42)
         Result.Err(FileError.NotFound) -> Result.Err(AppError.IoFailure)
@@ -255,4 +255,4 @@ These tests align with the RES.md implementation phases:
 - Stdlib tests: 8
 - Edge case tests: 15
 
-This comprehensive suite ensures robust implementation of the Result<T, E> type system.
+This comprehensive suite ensures robust implementation of the Result@(T, E) type system.

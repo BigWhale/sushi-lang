@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_EXACT: "=== List<bool> Debug ===\nList@(bool) {\n  len: 3, capacity: 4\n  [0] true\n  [1] false\n  [2] true\n}\n"
+# EXPECT_STDOUT_EXACT: "=== List@(bool) Debug ===\nList@(bool) {\n  len: 3, capacity: 4\n  [0] true\n  [1] false\n  [2] true\n}\n"
 fn main() i32:
     let List@(bool) flags = List.new()
 
@@ -7,7 +7,7 @@ fn main() i32:
     flags.push(false)
     flags.push(true)
 
-    println("=== List<bool> Debug ===")
+    println("=== List@(bool) Debug ===")
     flags.debug()
 
     return Result.Ok(0)

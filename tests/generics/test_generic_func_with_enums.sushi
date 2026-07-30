@@ -1,4 +1,4 @@
-# Test generic functions using generic enum types (Maybe<T>)
+# Test generic functions using generic enum types (Maybe@(T))
 # This tests body substitution with generic enum instantiation and pattern matching
 
 fn make_maybe_some@(T)(T value) i32:
@@ -25,13 +25,13 @@ fn run_test() i32:
     if (status2 != 0):
         return Result.Ok(11)
 
-    # Test pattern matching on Maybe<i32>
+    # Test pattern matching on Maybe@(i32)
     let Maybe@(i32) m1 = Maybe.Some(42)
     let i32 val1 = unwrap_or(m1, 0)??
     if (val1 != 42):
         return Result.Ok(1)
 
-    # Test pattern matching on Maybe<string>
+    # Test pattern matching on Maybe@(string)
     let Maybe@(string) m2 = Maybe.Some("test")
     let string val2 = unwrap_or(m2, "default")??
     if (val2 != "test"):

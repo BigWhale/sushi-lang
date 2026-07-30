@@ -23,6 +23,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.sushi_stdlib.src.common import register_builtin_method, BuiltinMethod
+from sushi_lang.semantics.generics.type_display import display_type
 
 
 # Validation function for to_bits() method
@@ -30,7 +31,7 @@ def _validate_to_bits(call: MethodCall, target_type: Type, reporter: Any) -> Non
     """Validate to_bits() method call on float primitive types (takes no arguments)."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
-                name=f"{target_type}.to_bits", expected=0, got=len(call.args))
+                name=f"{display_type(target_type)}.to_bits", expected=0, got=len(call.args))
 
 
 def _emit_to_bits(prim_type: BuiltinType) -> Any:

@@ -2,7 +2,7 @@
 # EXPECT_STDOUT_EXACT: "PASS: Struct in Ok works\nPASS: InvalidName error works\n"
 # EXPECT_STDERR_EMPTY: true
 
-# Tests Result<T, E> with struct types
+# Tests Result@(T, E) with struct types
 
 struct Person:
     string name

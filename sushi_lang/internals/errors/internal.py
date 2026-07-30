@@ -183,7 +183,7 @@ _add(ErrorMessage("CE0045", Severity.ERROR,
     Category.INTERNAL, "Generic type instantiation not found - monomorphization failure."))
 
 _add(ErrorMessage("CE0047", Severity.ERROR,
-    "failed to create Maybe<{type}> enum type",
+    "failed to create Maybe@({type}) enum type",
     Category.INTERNAL, "Maybe type instantiation failed during codegen."))
 
 
@@ -311,34 +311,34 @@ _add(ErrorMessage("CE0079", Severity.ERROR,
     "unsupported element type for size calculation: {type}",
     Category.INTERNAL, "Cannot calculate element size for this type."))
 
-# Own<T> Operations (CE0080-CE0082)
+# Own@(T) Operations (CE0080-CE0082)
 _add(ErrorMessage("CE0080", Severity.ERROR,
-    "unknown Own<T> method: {method}",
-    Category.INTERNAL, "Own<T> method not implemented."))
+    "unknown Own@(T) method: {method}",
+    Category.INTERNAL, "Own@(T) method not implemented."))
 
 _add(ErrorMessage("CE0081", Severity.ERROR,
-    "Own<T> field 'value' has unexpected type: {type}",
-    Category.INTERNAL, "Own<T> internal structure does not match expected layout."))
+    "Own@(T) field 'value' has unexpected type: {type}",
+    Category.INTERNAL, "Own@(T) internal structure does not match expected layout."))
 
 
-# List<T> Operations (CE0083-CE0084)
+# List@(T) Operations (CE0083-CE0084)
 _add(ErrorMessage("CE0083", Severity.ERROR,
-    "unknown List<T> method: {method}",
-    Category.INTERNAL, "List<T> method not implemented."))
+    "unknown List@(T) method: {method}",
+    Category.INTERNAL, "List@(T) method not implemented."))
 
 
-# HashMap<K,V> Operations (CE0085-CE0088)
+# HashMap@(K,V) Operations (CE0085-CE0088)
 _add(ErrorMessage("CE0085", Severity.ERROR,
-    "unknown HashMap<K, V> method: {method}",
+    "unknown HashMap@(K, V) method: {method}",
     Category.INTERNAL, "HashMap method not implemented."))
 
 
 _add(ErrorMessage("CE0087", Severity.ERROR,
-    "expected HashMap<K, V> type, got {type}",
+    "expected HashMap@(K, V) type, got {type}",
     Category.INTERNAL, "Type mismatch: expected HashMap but got different type."))
 
 
-# Result<T> Operations (CE0089-CE0091)
+# Result@(T) Operations (CE0089-CE0091)
 _add(ErrorMessage("CE0089", Severity.ERROR,
     "Result enum missing Ok variant: {enum}",
     Category.INTERNAL, "Result-like enum does not have Ok variant."))
@@ -362,7 +362,7 @@ _add(ErrorMessage("CE0128", Severity.ERROR,
 _add(ErrorMessage("CE0126", Severity.ERROR,
     "poisoned intern of '{name}': already interned as {existing}, rebuilt as {rebuilt}",
     Category.INTERNAL,
-    "Two spellings of one generic enum (Result<T, E>, Maybe<T>) mangled to the same name but "
+    "Two spellings of one generic enum (Result@(T, E), Maybe@(T)) mangled to the same name but "
     "carry different payload types -- one was interned before its UnknownType payloads were "
     "resolved. str(UnknownType('Point')) and str(StructType('Point')) are both 'Point', so both "
     "spellings claim the same table slot while describing different types. EnumType identity is "
@@ -371,7 +371,7 @@ _add(ErrorMessage("CE0126", Severity.ERROR,
     "Intern only through ensure_result_type_in_table / ensure_maybe_type_in_table, which resolve "
     "their payloads before mangling the name."))
 
-# Maybe<T> Operations (CE0092-CE0095)
+# Maybe@(T) Operations (CE0092-CE0095)
 _add(ErrorMessage("CE0092", Severity.ERROR,
     "Maybe enum missing Some variant: {enum}",
     Category.INTERNAL, "Maybe-like enum does not have Some variant."))
@@ -381,8 +381,8 @@ _add(ErrorMessage("CE0093", Severity.ERROR,
     Category.INTERNAL, "Maybe.Some variant has incorrect number of associated types."))
 
 _add(ErrorMessage("CE0094", Severity.ERROR,
-    "unknown Maybe<T> method: {method}",
-    Category.INTERNAL, "Maybe<T> method not implemented."))
+    "unknown Maybe@(T) method: {method}",
+    Category.INTERNAL, "Maybe@(T) method not implemented."))
 
 _add(ErrorMessage("CE0095", Severity.ERROR,
     "expect() expects 1 argument, got {got}",

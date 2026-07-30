@@ -1,4 +1,4 @@
-# Test that calling .realise() on Result<~> is an error
+# Test that calling .realise() on Result@(~) is an error
 # EXPECT_ERROR_CODE: CE2506
 
 

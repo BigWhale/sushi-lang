@@ -1,4 +1,4 @@
-# T1.5 (item 1): move-capture of an owned List<T>. The list is moved into the closure's
+# T1.5 (item 1): move-capture of an owned List@(T). The list is moved into the closure's
 # heap environment, which owns it and frees it via the env destructor at scope exit.
 # Reading it back in the body (`xs.len()`) dispatches through the env-field member-access
 # receiver path. xs has one element, so f(5) = 5 + 1 = 6.

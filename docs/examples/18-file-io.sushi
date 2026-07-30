@@ -1,7 +1,7 @@
 # Example 18: File I/O
 #
 # This example demonstrates file operations in Sushi, including reading from and
-# writing to files. File operations in Sushi return FileResult<file>, which must
+# writing to files. File operations in Sushi return FileResult@(file), which must
 # be handled using pattern matching to deal with potential errors.
 #
 # Key concepts covered:

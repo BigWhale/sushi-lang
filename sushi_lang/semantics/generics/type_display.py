@@ -14,6 +14,12 @@ mangling, or table keys.
 
 Invariant: for any type that carries no generic `<...>`, `display_type(ty) == str(ty)`,
 so routing a non-generic site through it is always safe.
+
+`display_type_name(name)` is the string-level counterpart, for the few diagnostic
+sites that hold an already-interned name and no `Type` object.
+
+`tests/unit/test_diagnostics_use_display_type.py` is the CI gate: it fails if a
+diagnostic interpolates a type without going through one of these two.
 """
 from __future__ import annotations
 
@@ -42,7 +48,7 @@ def display_type(ty) -> str:
         if ty.generic_base is not None and ty.generic_args is not None:
             args = ", ".join(display_type(a) for a in ty.generic_args)
             return f"{ty.generic_base}@({args})"
-        return _fallback_name(ty.name)
+        return display_type_name(ty.name)
 
     if isinstance(ty, GenericTypeRef):
         args = ", ".join(display_type(a) for a in ty.type_args)
@@ -79,17 +85,21 @@ def display_type(ty) -> str:
         return f"pack({', '.join(display_type(t) for t in ty.types)})"
 
     if isinstance(ty, UnknownType):
-        return _fallback_name(ty.name)
+        return display_type_name(ty.name)
 
     # BuiltinType, TypeParameter, ForeignPtrType, BorrowMode, and anything else
     # carry no generic brackets -- their str() is already the display form.
     return str(ty)
 
 
-def _fallback_name(name: str) -> str:
+def display_type_name(name: str) -> str:
     """Best-effort `@(...)` for a bare identity name lacking structured metadata.
 
-    Only reached on the narrow gap where `monomorphize/transformer.py` rebuilds a
+    The string-level counterpart to `display_type`, for the diagnostic sites that
+    only ever hold an already-interned *name* (`CE0122`'s recursion chain, the
+    duplicate-function and perk-target codes) and have no `Type` object to render.
+
+    Also covers the narrow gap where `monomorphize/transformer.py` rebuilds a
     Struct/Enum dropping `generic_base`/`generic_args`, or a `<...>`-bearing
     `UnknownType`. A well-formed identity name has balanced brackets and no `->`,
     so a straight bracket swap is correct (and nests: `Result<List<i32>>` ->

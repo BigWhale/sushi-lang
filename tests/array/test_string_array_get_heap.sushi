@@ -1,5 +1,5 @@
 # Regression test for issue #24: .get() on a dynamic array of strings (string[]).
-# The heap-allocated element is wrapped in Maybe<string> and unwrapped. This used
+# The heap-allocated element is wrapped in Maybe@(string) and unwrapped. This used
 # to corrupt the heap on glibc (SIGABRT, "sysmalloc: corrupted top size") because
 # string[] was allocated using the 12-byte string data size while GEP strides by
 # the 16-byte alloc size; i32[] was unaffected.

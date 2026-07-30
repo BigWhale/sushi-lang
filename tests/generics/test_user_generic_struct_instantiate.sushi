@@ -17,8 +17,8 @@ fn test_box(Box@(i32) b) i32:
 
 fn main() i32:
     # These instantiations should be detected:
-    # - Pair<i32, string>
-    # - Box<i32>
+    # - Pair@(i32, string)
+    # - Box@(i32)
     let Pair@(i32, string) p = Pair(42, "Mostly Harmless")
     let Box@(i32) b = Box(100)
     let i32 sum = test_pair(p).realise(0) + test_box(b).realise(0)

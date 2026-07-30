@@ -3,7 +3,7 @@
 # TEST_TYPE: runtime
 # EXPECTED_OUTPUT: 42
 
-# Test HashMap with nested generic values: HashMap<string, Maybe<i32>>
+# Test HashMap with nested generic values: HashMap@(string, Maybe@(i32))
 # "The Babel fish is small, yellow, leech-like, and probably the oddest thing in the Universe"
 
 use <collections/hashmap>

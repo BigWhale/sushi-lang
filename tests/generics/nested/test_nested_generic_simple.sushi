@@ -1,4 +1,4 @@
-# Simple nested generic test - Result<Maybe<i32>>
+# Simple nested generic test - Result@(Maybe@(i32))
 # Demonstrates that nested generics compile and can be used with conditionals
 # "Don't Panic!" - The Hitchhiker's Guide to the Galaxy
 
