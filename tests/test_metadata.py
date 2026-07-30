@@ -26,8 +26,9 @@ class TestMetadata:
     # Enforced on the compilation path, not the runtime path.
     expect_error_code: Optional[List[str]] = None
 
-    # Opt-in leak assertion. Only honoured when the runner is invoked with --leaks;
-    # the default suite never pays the cost of a leak checker.
+    # Opt-in leak assertion, enforced by every enhanced run that executes the test.
+    # --leaks-only narrows the selection to the tests carrying it; it does not decide
+    # whether it is honoured.
     expect_no_leaks: bool = False
 
     # Test behavior flags
@@ -260,23 +261,23 @@ def get_test_category(test_file: Path) -> str:
         return 'success'
 
 
-def should_run_runtime_test(test_file: Path, metadata: TestMetadata,
-                            leaks_mode: bool = False) -> bool:
+def should_run_runtime_test(test_file: Path, metadata: TestMetadata) -> bool:
     """
     Determine if a test should have its compiled binary executed.
 
     Reduces to "run everything that is not test_err_ / test_warn_", because
     _apply_category_defaults marks every runnable test as requires_runtime.
 
-    The one exception is leaks_mode: a test_warn_ test compiles successfully and does
-    produce a binary, so a warning test that declares EXPECT_NO_LEAKS is executed
-    under --leaks. Shadowing is a warned-but-legal construct, so this is the only way
-    to leak-check it.
+    The one exception is a warning test that declares EXPECT_NO_LEAKS: it compiles
+    successfully and does produce a binary, and executing that binary is the only way
+    to leak-check a warned-but-legal construct such as shadowing an owning binding.
+    This used to be additionally gated on a leaks_mode argument, back when leak
+    assertions were enforced only under --leaks; enforcement is now unconditional, so
+    the declaration alone decides.
 
     Args:
         test_file: Path to the test file
         metadata: Parsed test metadata
-        leaks_mode: True when the runner was invoked with --leaks
 
     Returns:
         True if the test should be executed after compilation
@@ -287,6 +288,6 @@ def should_run_runtime_test(test_file: Path, metadata: TestMetadata,
         return False
 
     if category == 'warning':
-        return leaks_mode and metadata.expect_no_leaks
+        return metadata.expect_no_leaks
 
     return metadata.requires_runtime

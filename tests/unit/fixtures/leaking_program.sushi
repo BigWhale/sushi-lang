@@ -1,0 +1,20 @@
+# A program that deliberately leaks, used by tests/unit/test_leak_gate_wiring.py.
+#
+# It is NOT named test_*.sushi on purpose: the suite discovers tests/**/test_*.sushi,
+# so a leak-annotated failing program under that glob would make the suite permanently
+# red. The unit test copies it under a temporary name and runs the harness on the copy.
+#
+# The leak is a raw libc malloc that is never freed: ptr is exempt from RAII, so the
+# 4096 bytes are outstanding at exit and the malloc-interposer reports them. Using FFI
+# rather than a compiler bug keeps the fixture stable -- it leaks by construction, not
+# because some RAII path is currently broken.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_CONTAINS: "leak fixture ran"
+
+unsafe external "C" as libc because "the leak is the point; this fixture must leak":
+    fn malloc(i64 size) ptr = "malloc"
+
+fn main() i32:
+    libc.malloc(4096 as i64)
+    println("leak fixture ran")
+    return Result.Ok(0)

@@ -100,6 +100,9 @@ jobs:
   # Stage 2: leak gate on both platforms, after pytest and before the full suites.
   # Uses the malloc-interposer (tests/leakcheck), which runs in hosted CI on both
   # Linux and macOS (unlike `leaks`, which cannot attach on the hosted macOS runner).
+  # --leaks-only is a SELECTOR, not a stronger check: the stage 3 full suites enforce
+  # EXPECT_NO_LEAKS too. This stage exists to fail in ~1 minute over the 96 annotated
+  # tests instead of ~7 over all 1293.
   leaks-linux:
     needs: pytest
     if: github.event_name != 'push'

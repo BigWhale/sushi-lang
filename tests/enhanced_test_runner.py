@@ -38,6 +38,13 @@ RUNTIME_QUARANTINE: set[str] = set()
 
 _NUMERIC = re.compile(r"-?\d+")
 
+# Why a leak assertion was not evaluated. A skip is never a pass, so the reason has to
+# survive as far as the summary; these constants are what _check_leaks records and what
+# the summary groups by, so the two can never drift apart.
+SKIP_NOT_BUILT = "interposer not built"
+SKIP_TIMED_OUT = "interposer run timed out"
+SKIP_NO_REPORT = "no interposer report"
+
 
 def stdout_contains(stdout: str, expected: str) -> bool:
     """
@@ -82,7 +89,7 @@ class TestResult:
 class TestRunner:
     """Enhanced test runner with compilation and runtime testing."""
 
-    def __init__(self, tests_dir: Path, mode: str = "full", verbose: bool = False, parallel_jobs: int = 4, json_output: bool = False, leaks: bool = False, leaks_only: bool = False):
+    def __init__(self, tests_dir: Path, mode: str = "full", verbose: bool = False, parallel_jobs: int = 4, json_output: bool = False, leaks_only: bool = False):
         """
         Initialize the test runner.
 
@@ -92,17 +99,21 @@ class TestRunner:
             verbose: Enable verbose output
             parallel_jobs: Number of parallel test jobs
             json_output: Output results in JSON format
-            leaks: Enforce EXPECT_NO_LEAKS assertions (needs a platform leak checker)
-            leaks_only: Run only the tests that declare EXPECT_NO_LEAKS
+            leaks_only: Run only the tests that declare EXPECT_NO_LEAKS. A pure
+                selector -- EXPECT_NO_LEAKS is enforced on every run either way.
         """
         self.tests_dir = tests_dir
         self.mode = mode
         self.verbose = verbose
         self.parallel_jobs = parallel_jobs
         self.json_output = json_output
-        self.leaks = leaks
         self.leaks_only = leaks_only
-        self.leaks_skipped: List[str] = []
+        # Every leak assertion that produced a verdict, and every one that could not
+        # (as (test name, reason)). Both are lists because they are appended from the
+        # worker threads, and list.append is atomic. "Passed" is not evidence a check
+        # ran -- reporting the count is what makes the difference visible.
+        self.leaks_checked: List[str] = []
+        self.leaks_skipped: List[Tuple[str, str]] = []
         self.temp_dir = None
 
     def __enter__(self):
@@ -236,9 +247,9 @@ class TestRunner:
         if (self.mode in ("runtime", "full") and
             compilation_success and
             test_name not in RUNTIME_QUARANTINE and
-            should_run_runtime_test(test_file, metadata, leaks_mode=self.leaks)):
+            should_run_runtime_test(test_file, metadata)):
 
-            runtime_success, runtime_message = self._run_runtime_test(test_file, metadata)
+            runtime_success, runtime_message = self._run_runtime_test(test_name, test_file, metadata)
             result.runtime_success = runtime_success
             result.runtime_message = runtime_message
             # Recalculate total success after runtime test
@@ -345,11 +356,12 @@ class TestRunner:
             )
         return True, "✓ Compilation: diagnostics matched"
 
-    def _run_runtime_test(self, test_file: Path, metadata: TestMetadata) -> Tuple[bool, str]:
+    def _run_runtime_test(self, test_name: str, test_file: Path, metadata: TestMetadata) -> Tuple[bool, str]:
         """
         Run runtime phase for a test.
 
         Args:
+            test_name: Test file name, used to attribute a skipped leak check
             test_file: Path to the test file
             metadata: Test metadata with runtime expectations
 
@@ -394,10 +406,10 @@ class TestRunner:
             # Validate runtime behavior
             success, message = self._validate_runtime_result(result, metadata)
 
-            # Leak assertion, opt-in per test and gated on --leaks. Runs the binary a
-            # second time under the platform leak checker.
-            if self.leaks and metadata.expect_no_leaks:
-                leak_ok, leak_message = self._check_leaks(binary_path, metadata)
+            # Leak assertion: opt-in per test, enforced whenever the test runs. Runs the
+            # binary a second time under the malloc-interposer.
+            if metadata.expect_no_leaks:
+                leak_ok, leak_message = self._check_leaks(test_name, binary_path, metadata)
                 message += "\n" + leak_message
                 if leak_ok is False:
                     success = False
@@ -415,7 +427,17 @@ class TestRunner:
         except Exception as e:
             return False, f"✗ Runtime: Exception: {e}"
 
-    def _check_leaks(self, binary_path: Path, metadata: TestMetadata) -> Tuple[Optional[bool], str]:
+    def _skip_leak_check(self, test_name: str, reason: str) -> Tuple[None, str]:
+        """Record a leak assertion that could not be evaluated, and describe it.
+
+        The single place a skip is produced, so the recorded reason and the reported
+        one are the same string by construction.
+        """
+        self.leaks_skipped.append((test_name, reason))
+        return None, f"- Leak check skipped: {reason}"
+
+    def _check_leaks(self, test_name: str, binary_path: Path,
+                     metadata: TestMetadata) -> Tuple[Optional[bool], str]:
         """
         Re-run a binary under the malloc-interposer and assert it leaks nothing.
 
@@ -425,16 +447,21 @@ class TestRunner:
         allocations made by the program's own code (backend + merged stdlib), so it
         works identically on both platforms and in hosted CI.
 
+        Args:
+            test_name: Test file name, recorded when the assertion has to be skipped
+            binary_path: The already-compiled binary to re-run
+            metadata: Test metadata (args / stdin / env / cwd / timeout)
+
         Returns:
             (True, msg)  no leaks
             (False, msg) leaks found -- the test fails
             (None, msg)  interposer unavailable / no report -- the assertion is
-                         SKIPPED, recorded, and reported. Never a silent pass.
+                         SKIPPED, recorded against test_name, and reported. Never a
+                         silent pass.
         """
         shim = leakcheck_lib_path(self.tests_dir.parent)
         if not shim.exists():
-            self.leaks_skipped.append(binary_path.name)
-            return None, f"- Leak check skipped: interposer not built ({shim.name})"
+            return self._skip_leak_check(test_name, SKIP_NOT_BUILT)
 
         if sys.platform == "darwin":
             preload = {"DYLD_INSERT_LIBRARIES": str(shim)}
@@ -472,18 +499,17 @@ class TestRunner:
             except (ProcessLookupError, PermissionError):
                 pass
             proc.communicate()
-            self.leaks_skipped.append(binary_path.name)
-            return None, "- Leak check skipped: interposer run timed out"
+            return self._skip_leak_check(test_name, SKIP_TIMED_OUT)
 
         match = re.search(r"SUSHI_LEAKCHECK: leaked=(\d+) blocks=(\d+)", stderr or "")
         if not match:
             # No report: the interposer failed to load or the program bypassed its
             # destructor (e.g. _exit). Skip rather than silently pass.
-            self.leaks_skipped.append(binary_path.name)
-            return None, "- Leak check skipped: no interposer report"
+            return self._skip_leak_check(test_name, SKIP_NO_REPORT)
 
         leaked = int(match.group(1))
         blocks = int(match.group(2))
+        self.leaks_checked.append(test_name)
         if leaked == 0:
             return True, "✓ Leak check: no leaks"
         return False, f"✗ Leak check: leaked {leaked} bytes in {blocks} blocks"
@@ -605,7 +631,12 @@ class TestRunner:
                 "failed": failed_tests,
                 "duration_seconds": round(duration, 2),
                 "failed_tests": failed_test_list,
+                "leak_checks_run": len(self.leaks_checked),
                 "leak_checks_skipped": len(self.leaks_skipped),
+                "leak_checks_skipped_detail": [
+                    {"name": name, "reason": reason}
+                    for name, reason in sorted(self.leaks_skipped)
+                ],
             }
             print(json.dumps(json_output, indent=2))
         else:
@@ -615,9 +646,20 @@ class TestRunner:
             print(f"  Runtime tests: {runtime_tests}")
             print(f"  Passed: {passed_tests}")
             print(f"  Failed: {failed_tests}")
+            if self.leaks_checked:
+                print(f"  Leak checks: {len(self.leaks_checked)}")
             if self.leaks_skipped:
-                print(f"  Leak checks SKIPPED: {len(self.leaks_skipped)} "
-                      f"(no leak checker on {sys.platform})")
+                # Group by reason: the old line hardcoded "no leak checker on <platform>",
+                # which was already a lie for the timeout and no-report cases.
+                print(f"  Leak checks SKIPPED: {len(self.leaks_skipped)}")
+                by_reason: Dict[str, List[str]] = {}
+                for name, reason in sorted(self.leaks_skipped):
+                    by_reason.setdefault(reason, []).append(name)
+                for reason, names in sorted(by_reason.items()):
+                    shown = ", ".join(names[:5])
+                    if len(names) > 5:
+                        shown += f", ... (+{len(names) - 5} more)"
+                    print(f"    {len(names)} x {reason}: {shown}")
 
             if failed_tests == 0:
                 print("\nAll tests passed! ✓")
@@ -637,7 +679,10 @@ class TestRunner:
 
 def main():
     """Main entry point for the enhanced test runner."""
-    parser = argparse.ArgumentParser(description="Enhanced Sushi language test runner")
+    # allow_abbrev=False for the same reason as in run_tests.py: --leaks is gone and
+    # must not resolve as a prefix of --leaks-only.
+    parser = argparse.ArgumentParser(description="Enhanced Sushi language test runner",
+                                     allow_abbrev=False)
 
     parser.add_argument(
         "--mode",
@@ -677,20 +722,13 @@ def main():
     )
 
     parser.add_argument(
-        "--leaks",
-        action="store_true",
-        help="Enforce EXPECT_NO_LEAKS assertions (macOS: leaks --atExit)"
-    )
-
-    parser.add_argument(
         "--leaks-only",
         action="store_true",
-        help="Run only the tests declaring EXPECT_NO_LEAKS (implies --leaks)"
+        help="Run only the tests declaring EXPECT_NO_LEAKS (the assertion itself is "
+             "always enforced)"
     )
 
     args = parser.parse_args()
-    if args.leaks_only:
-        args.leaks = True
 
     tests_dir = Path(__file__).parent
     project_root = tests_dir.parent
@@ -707,7 +745,10 @@ def main():
             if not args.json:
                 print("Failed to build test helpers, aborting tests")
             return 1
-        if args.leaks and not build_leakcheck(project_root, args.verbose):
+        # Unconditional: EXPECT_NO_LEAKS is enforced by every enhanced run, so the
+        # interposer is as much a prerequisite as the stdlib. Gating this on a flag is
+        # what turned a fresh checkout's 96 leak assertions into 96 silent skips.
+        if not build_leakcheck(project_root, args.verbose):
             if not args.json:
                 print("Failed to build leak-check interposer, aborting tests")
             return 1
@@ -716,7 +757,7 @@ def main():
     libs_bin_dir = tests_dir / "libs" / "bin"
     os.environ["SUSHI_LIB_PATH"] = str(libs_bin_dir)
 
-    with TestRunner(tests_dir, args.mode, args.verbose, args.jobs, args.json, args.leaks, args.leaks_only) as runner:
+    with TestRunner(tests_dir, args.mode, args.verbose, args.jobs, args.json, args.leaks_only) as runner:
         results = runner.run_all_tests(filter_pattern=args.filter)
 
     # Exit with appropriate code
