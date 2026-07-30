@@ -1,17 +1,9 @@
 # EXPECT_STDOUT_EXACT: "Starting memory leak test...\nAllocating 5MB per iteration, 20 iterations = 100MB total\nIf RAII works, memory usage stays constant after first allocation\nCompleted iteration 0/20\nCompleted iteration 5/20\nCompleted iteration 10/20\nCompleted iteration 15/20\nMemory leak test completed!\nIf you saw stable memory usage, RAII is working correctly!\n"
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
-# EXPECT_RUNTIME_EXIT: 0
 # Memory leak test for RAII - allocates large arrays repeatedly
 # If RAII works correctly, memory usage should remain stable
-#
-# To monitor memory usage while running this test:
-#   ./test_raii_memory_leak &
-#   PID=$!
-#   while kill -0 $PID 2>/dev/null; do ps -o rss= -p $PID; sleep 0.1; done
-#
-# Or use time command to see max resident set size:
-#   /usr/bin/time -l ./test_raii_memory_leak 2>&1 | grep "maximum resident set size"
+# EXPECT_NO_LEAKS: true
 
 struct LargeContainer:
     i32[] data1

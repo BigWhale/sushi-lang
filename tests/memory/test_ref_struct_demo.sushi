@@ -3,6 +3,7 @@
 # Demo: Zero-cost struct borrowing with references
 # This test demonstrates that we can now pass structs by reference
 # and access their fields without copying the entire struct.
+# EXPECT_NO_LEAKS: true
 
 struct Config:
     string host

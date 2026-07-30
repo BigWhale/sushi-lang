@@ -2,6 +2,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # Test: Mutable references with struct types
 # Should compile and run successfully
+# EXPECT_NO_LEAKS: true
 
 struct Point:
     i32 x

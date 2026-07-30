@@ -1,0 +1,23 @@
+# Sink matrix (match binding -> every sink): a borrowed enum-payload `match` binding of type `i32[]` handed to the `Maybe.Some(...)` payload sink.
+#
+# The invariant (docs/design/move-semantics.md S3): at every by-value ownership sink a
+# bare OWNED Name moves, and anything that reads from a CONTINUING owner -- a borrowed
+# pattern binding, a MemberAccess, an Own@(T).get() deref -- is CLONED so each owner
+# frees exactly once. Only the call-argument sink implements this today; see MM.md S2.1.
+# EXPECT_STDOUT_EXACT: "some\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+enum Shape:
+    Poly(i32[])
+    Empty
+
+fn main() i32:
+    let Shape s = Shape.Poly(from([1, 2, 3]))
+    let Maybe@(i32[]) m = Maybe.None()
+    match s:
+        Shape.Poly(p) ->
+            m := Maybe.Some(p)
+            println("some")
+        Shape.Empty -> println("empty")
+    return Result.Ok(0)

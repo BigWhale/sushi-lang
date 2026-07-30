@@ -2,6 +2,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # Test: Try to borrow a struct field
 # This should currently fail with CE2404
+# EXPECT_NO_LEAKS: true
 
 struct Config:
     i32 port

@@ -2,6 +2,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # Test multiple &peek borrows of the same variable
 # Multiple read-only borrows should work simultaneously
+# EXPECT_NO_LEAKS: true
 
 fn triple_read(&peek i32 a, &peek i32 b, &peek i32 c) i32:
     return Result.Ok(a + b + c)

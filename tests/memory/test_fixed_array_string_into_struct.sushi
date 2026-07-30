@@ -1,0 +1,24 @@
+# `emit_value_clone` has no `ArrayType` arm; `emit_value_destructor` does.
+#
+# `backend/expressions/memory.py:586` dispatches on (DynamicArrayType, StructType,
+# EnumType) -- the module does not even IMPORT `ArrayType` -- while
+# `backend/destructors.py:74` includes it. `needs_cleanup(ArrayType)` recurses into the
+# element, so the struct clone's gate PASSES for a `string[2]` field and then hands it to
+# a clone that is a no-op passthrough. The clone's own docstring calls itself the "exact
+# structural inverse" of the destructor and warns "clone fewer buffers -> double-free".
+#
+# Interpolated (owned) strings are load-bearing: literals have owned=0 and never free.
+# MM.md S2 row 5 / S6.1(1); no upstream issue.
+# EXPECT_STDOUT_EXACT: "n=a1 src=a1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Names:
+    string[2] items
+
+fn main() i32:
+    let i32 k = 1
+    let string[2] arr = ["a{k}", "b{k}"]
+    let Names n = Names(arr)
+    println("n={n.items[0]} src={arr[0]}")
+    return Result.Ok(0)

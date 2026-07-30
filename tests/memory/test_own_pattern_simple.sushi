@@ -1,4 +1,5 @@
 # Test Own pattern with non-recursive types
+# EXPECT_NO_LEAKS: true
 enum Container:
     Box(Own@(i32))
     Empty()

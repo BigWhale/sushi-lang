@@ -5,6 +5,7 @@
 # (the #139/#157 shape, a variant carrying a dynamic array) must deep-copy each element's
 # heap payload. Before the fix the clone shallow-shared the payload and the process
 # aborted at scope exit (double-free, exit 133).
+# EXPECT_NO_LEAKS: true
 
 enum Msg:
     Num(i32)

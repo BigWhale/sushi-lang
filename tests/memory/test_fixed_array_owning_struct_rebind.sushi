@@ -1,0 +1,22 @@
+# A fixed array of owning STRUCTS rebound by value.
+#
+# `type_moves_by_value(ArrayType(owning, N))` answers True and
+# `tests/unit/test_move_predicate_sync.py` pins that -- but no sink consumes the answer
+# for a fixed array, so the value neither moves nor deep-copies: it is aliased. The unit
+# test passes while the language does the opposite.
+#
+# Four documents (`docs/design/move-semantics.md:35`, `docs/memory-management.md:94`,
+# `CLAUDE.md:536`, `CHANGELOG.md:23`) state that a fixed array holding an owning value
+# moves. MM.md S2 row 11 / S4.1; no upstream issue.
+# EXPECT_STDOUT_EXACT: "cs=1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Buffer:
+    i32[] data
+
+fn main() i32:
+    let Buffer[2] bs = [Buffer(from([1])), Buffer(from([2]))]
+    let Buffer[2] cs = bs
+    println("cs={cs[0].data.len()}")
+    return Result.Ok(0)

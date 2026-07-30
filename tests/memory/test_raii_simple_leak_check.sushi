@@ -2,6 +2,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # Simple memory leak check - allocate and free in a tight loop
 # If RAII works, memory should stay constant
+# EXPECT_NO_LEAKS: true
 
 struct Container:
     i32[] data

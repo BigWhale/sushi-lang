@@ -6,6 +6,7 @@
 # dynamic-array field, not shallow-share the buffer. Before the fix, both `first_buf`
 # and the array element `buffers[0]` owned the same heap allocation, so RAII freed it
 # twice and the process aborted (double-free).
+# EXPECT_NO_LEAKS: true
 
 struct DataBuffer:
     u8[] data

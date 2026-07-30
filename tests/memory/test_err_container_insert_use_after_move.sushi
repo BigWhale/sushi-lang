@@ -1,0 +1,21 @@
+# Storing an owning value in a container is an ownership sink, so using the source
+# afterwards must be CE2405.
+#
+# The backend already treats it as a move (`move_owning_arg_into_container` marks the
+# source moved, so scope exit does not free it), but semantics never marks it:
+# `borrow.py:572-593` marks only `Own.alloc` and enum constructors among method calls. So
+# `l.push(a)` followed by `a.len()` compiles clean and reads through a pointer the List
+# owns -- and once the List is destroyed, the same read is a use-after-free that returns
+# whatever the allocator left behind.
+#
+# `docs/design/move-semantics.md:120` claims this sink is "already move-shaped". It is
+# move-shaped in codegen only. MM.md S2 row 8 / S8.1; no upstream issue.
+# EXPECT_ERROR_CODE: CE2405
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let List@(i32[]) l = List.new()
+    l.push(a)
+    # `a` was moved into the List -- this read is a use-after-move.
+    println("a={a.len()}")
+    return Result.Ok(0)

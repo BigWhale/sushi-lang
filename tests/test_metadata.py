@@ -226,9 +226,31 @@ def _apply_category_defaults(test_file: Path, metadata: TestMetadata) -> None:
     """
     filename = test_file.name
 
-    if filename.startswith('test_err_') or filename.startswith('test_warn_'):
+    # test_err_* never produces a binary, so there is nothing to run.
+    if filename.startswith('test_err_'):
         metadata.test_type = 'compilation_only'
         metadata.requires_runtime = False
+        return
+
+    # test_warn_* DOES produce a binary -- the warning exit code says nothing about
+    # whether the program runs correctly. The category supplies a default, and an
+    # explicit directive overrides it: otherwise a defect that only shows at runtime is
+    # unassertable whenever the same program also warns, and "it warns" silently becomes
+    # "its behaviour is nobody's business". Shadowing is the motivating case (CW1002 is
+    # unavoidable in a program whose whole subject is a shadowed binding).
+    if filename.startswith('test_warn_'):
+        declares_runtime = (metadata.expect_runtime_exit is not None
+                            or metadata.expect_stdout_exact is not None
+                            or metadata.expect_stdout_contains is not None
+                            or metadata.expect_no_leaks)
+        if not declares_runtime:
+            metadata.test_type = 'compilation_only'
+            metadata.requires_runtime = False
+            return
+        metadata.test_type = 'runtime'
+        metadata.requires_runtime = True
+        if metadata.expect_runtime_exit is None:
+            metadata.expect_runtime_exit = 0
         return
 
     if filename.startswith('test_run_'):
