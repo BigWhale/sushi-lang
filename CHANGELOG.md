@@ -25,6 +25,12 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   move into a hidden O(n) copy. Passing such a value by value, rebinding it, placing it in a
   constructor field or array literal now moves it; reusing the source is `CE2405`. Plain-data and
   string-only composites still copy. The normative spec is `docs/design/move-semantics.md`
+- **The test harness flag `--leaks` is removed** (#241). There are two modes now, not three:
+  `--enhanced` runs everything and enforces everything it declares, and `--leaks-only` selects just
+  the leak-annotated subset for CI's fast pre-gate. Both apply the identical check, so the flag that
+  used to mean "also enforce leak assertions" no longer names anything. `--leaks` is an argparse
+  error rather than a silent alias, and both harness parsers set `allow_abbrev=False` so it cannot
+  resolve as a prefix of `--leaks-only` and quietly narrow a 1293-test run to 96
 
 ### Added
 - **`CE2097`: an extension method cannot shadow a built-in** (#239). Every layer of method
@@ -128,6 +134,16 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
       through. Each checker now claims only what it can actually type.
 
   A perk implementation of the same name still wins at inference, matching validation and dispatch
+- **`EXPECT_NO_LEAKS` is enforced by `--enhanced`** (#241). It was gated on the separate `--leaks`
+  flag, so a plain `--enhanced` run skipped all 96 leak-annotated tests in silence -- no check, no
+  skip notice, nothing in the summary -- and a leaking program passed the full suite. The issue
+  described the `--enhanced` check as "weaker" than `--leaks-only`; it did not run at all. The
+  interposer is now built on every enhanced run (gating that too meant a fresh checkout degraded to
+  96 "not built" skips), a skipped assertion is recorded against the **test** name rather than the
+  throwaway temp-binary name that maps back to nothing, and the summary groups skips by reason
+  instead of claiming a hardcoded "no leak checker on `<platform>`" that was already wrong for the
+  timeout and no-report cases. The two `test_warn_shadow_owning_*` tests, which `--enhanced` did not
+  execute at all, now run. Cost of the new default: the full suite goes from 343s to 400s
 - **A self-referential container field can be constructed, not just declared** (#257).
   `struct Tree: List@(Tree) kids` declared since #240 but `Tree(1, List.new())` was a `CE0000`
   ICE, so half the feature was unreachable; the `Node[]` spelling failed the same way with a

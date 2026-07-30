@@ -27,7 +27,9 @@ close this gap.
 
 ### When NOT to add a stdout assertion
 
-- `test_err_*` and `test_warn_*` files — these test compilation failure/warnings only; never run in enhanced mode.
+- `test_err_*` and `test_warn_*` files — these test compilation failure/warnings only, and their binaries are
+  not executed in enhanced mode. The one exception is a `test_warn_*` file carrying `EXPECT_NO_LEAKS`, which
+  is executed so the leak assertion can be evaluated.
 - Tests with no print statements (compilation-only is sufficient).
 - Tests that produce nondeterministic output: HashMap/`.keys()`/`.values()`/`.entries()` iteration order, pointer
   addresses, RAII debug addresses, platform-specific float formatting. For those, either choose a stable substring
@@ -112,6 +114,33 @@ Validates that stderr produces no output.
 - Common for happy path tests
 - Values: `true`, `yes`, `1` (case-insensitive)
 
+#### EXPECT_NO_LEAKS
+
+Asserts the compiled binary leaks no heap memory. The runner re-runs the binary under the
+malloc-interposer (`tests/leakcheck/leakcheck.c`, preloaded via `DYLD_INSERT_LIBRARIES` on
+macOS / `LD_PRELOAD` on Linux); the interposer prints its outstanding byte balance at exit
+and any non-zero balance fails the test.
+
+```sushi
+# EXPECT_NO_LEAKS: true
+```
+
+- Values: `true`, `yes`, `1` (case-insensitive). The **bare** form with no colon --
+  `# EXPECT_NO_LEAKS` -- also means true.
+- **Enforced by every `--enhanced` run** that executes the test. It is not opt-in at the
+  command line; the directive is the opt-in.
+- `--leaks-only` selects *only* the tests carrying this directive and runs the identical
+  check. It is a faster gate over the same assertion, not a stronger one.
+- Only allocations made by the program's own code are counted (backend output plus the
+  merged stdlib), so a correct RAII program nets exactly zero -- there is no baseline to
+  subtract.
+- If the interposer cannot be built, fails to load, or the run times out, the assertion is
+  **skipped and reported** (with the test name and the reason in the summary), never
+  silently passed. A skip does not fail the run.
+- A `test_warn_*` test may carry it: warning tests are not normally executed, but one that
+  declares a leak assertion is, because that is the only way to leak-check a
+  warned-but-legal construct such as shadowing an owning binding.
+
 ### Compilation Diagnostics Directives
 
 #### EXPECT_ERROR_CODE
@@ -176,6 +205,32 @@ Provide standard input to the compiled binary.
 
 - Supports escape sequences
 - Useful for testing interactive programs
+
+#### TEST_ENV
+
+Set environment variables for the compiled binary.
+
+```sushi
+# TEST_ENV: HOME=/home/trillian
+# TEST_ENV: USER=trillian
+```
+
+- One `KEY=VALUE` per directive; repeat the directive to set several variables
+- Merged over the runner's own environment (the test's values win)
+- Also applied to the `EXPECT_NO_LEAKS` re-run, so both runs see the same environment
+- Use it instead of baking the developer's host environment into an expected-stdout
+  snapshot: a test that prints `getenv("HOME")` is otherwise unreproducible
+
+#### TEST_CWD
+
+Run the compiled binary in a specific working directory.
+
+```sushi
+# TEST_CWD: /
+```
+
+- Makes `getcwd()`-style output host-independent
+- Also applied to the `EXPECT_NO_LEAKS` re-run
 
 ## Test File Naming Conventions
 
@@ -298,6 +353,15 @@ python tests/run_tests.py
 python tests/run_tests.py --enhanced
 ```
 
+### Leak-annotated subset only
+
+```bash
+python tests/run_tests.py --leaks-only
+```
+
+Runs just the tests declaring `EXPECT_NO_LEAKS`, with the same enforcement `--enhanced` applies. Implies
+`--enhanced`; used in CI as a fast gate ahead of the full suites.
+
 ### Filter specific tests
 
 ```bash
@@ -317,7 +381,9 @@ When a test runs in enhanced mode:
    - Stdout matches `EXPECT_STDOUT_EXACT` (if specified)
    - Stderr contains `EXPECT_STDERR_CONTAINS` strings
    - Stderr is empty if `EXPECT_STDERR_EMPTY: true`
-5. **Result reporting**: Pass/fail with detailed error messages
+5. **Leak check** (if `EXPECT_NO_LEAKS` is declared): re-runs the binary under the malloc-interposer and
+   fails the test on any outstanding allocation
+6. **Result reporting**: Pass/fail with detailed error messages
 
 ## Common Pitfalls
 

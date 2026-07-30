@@ -306,17 +306,25 @@ See [the variadics design doc](https://bigwhale.github.io/sushi-lang/design/vari
 # Run test suite
 python tests/run_tests.py
 
-# Run with runtime validation
+# Run with runtime validation, enforcing every EXPECT_* directive
 python tests/run_tests.py --enhanced
+
+# Run only the leak-annotated subset (the same check, a faster gate)
+python tests/run_tests.py --leaks-only
 
 # Filter specific tests
 python tests/run_tests.py --filter hashmap
 ```
 
+`--enhanced` executes each compiled binary and enforces the `# EXPECT_*` directives it
+declares, including `EXPECT_NO_LEAKS`: the binary is re-run under a malloc-interposer
+(`tests/leakcheck`) and any outstanding allocation fails the test. `--leaks-only` runs the
+same check over just the tests carrying that directive.
+
 CI (GitHub Actions) additionally runs `ruff` and `mypy` (blocking over a growing set of
-type-checked packages, informational over the full tree) as a lint gate, and a cross-platform
-leak-detection gate (`tests/run_tests.py --leaks-only`, backed by a malloc-interposer in
-`tests/leakcheck`) on both Linux and macOS before the full suite runs.
+type-checked packages, informational over the full tree) as a lint gate, and the
+cross-platform leak gate (`tests/run_tests.py --leaks-only`) on both Linux and macOS before
+the full suites run.
 
 ## Examples
 
