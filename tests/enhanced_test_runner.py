@@ -159,6 +159,9 @@ class TestRunner:
         self.leaks_checked: List[str] = []
         self.leaks_skipped: List[Tuple[str, str]] = []
         self.temp_dir = None
+        # The live tqdm bar, or None. Set only while the bar is on screen, so _emit
+        # can tell whether output has to be routed around it.
+        self._pbar = None
 
     def __enter__(self):
         """Create temporary directory for test binaries."""
@@ -218,8 +221,9 @@ class TestRunner:
                              for test_file in test_files}
 
             if show_progress:
-                pbar = tqdm(total=len(test_files), desc="Running tests", unit="test",
-                           bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]")
+                self._pbar = tqdm(total=len(test_files), desc="Running tests", unit="test",
+                                  bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]")
+            pbar = self._pbar
 
             # Collect results as they complete
             for future in as_completed(future_to_test):
@@ -231,7 +235,7 @@ class TestRunner:
                         self._print_test_result(result)
                 except Exception as e:
                     if not self.json_output:
-                        print(f"ERROR: Test {test_name} crashed: {e}")
+                        self._emit(f"ERROR: Test {test_name} crashed: {e}")
                     results[test_name] = TestResult(
                         name=test_name,
                         category="error",
@@ -244,6 +248,7 @@ class TestRunner:
 
             if show_progress:
                 pbar.close()
+                self._pbar = None
 
         end_time = time.time()
 
@@ -653,19 +658,38 @@ class TestRunner:
         full_message = summary + "\n" + "\n".join(f"  {msg}" for msg in messages)
         return success, full_message
 
+    def _emit(self, block: str) -> None:
+        """Write a block of output without corrupting a live progress bar.
+
+        tqdm draws its bar with a carriage return and no trailing newline, so a plain
+        print lands in the middle of it -- the bar stays on screen and the message is
+        appended to it. `tqdm.write` erases the bar, writes, and redraws it below.
+        """
+        if self._pbar is not None:
+            self._pbar.write(block)
+        else:
+            print(block)
+
     def _print_test_result(self, result: TestResult) -> None:
-        """Print result for a single test."""
+        """Print result for a single test.
+
+        Composed into ONE block and emitted once. Results arrive from a thread pool,
+        so emitting line by line would let two failing tests interleave, and would
+        make tqdm tear down and redraw the bar between every line.
+        """
         status = tint("PASS", GREEN) if result.total_success else tint("FAIL", RED, BOLD)
-        print(f"[{status}] {result.name}")
+        lines = [f"[{status}] {result.name}"]
 
         if not result.compilation_success or self.verbose:
-            print(f"  Compilation: {paint(result.compilation_message)}")
+            lines.append(f"  Compilation: {paint(result.compilation_message)}")
 
         if not result.skipped_runtime:
             if not result.runtime_success or self.verbose:
-                print(f"  Runtime: {paint(result.runtime_message)}")
+                lines.append(f"  Runtime: {paint(result.runtime_message)}")
         elif self.verbose:
-            print("  Runtime: Skipped")
+            lines.append("  Runtime: Skipped")
+
+        self._emit("\n".join(lines))
 
     def _print_summary(self, results: Dict[str, TestResult], duration: float) -> None:
         """Print test summary."""
