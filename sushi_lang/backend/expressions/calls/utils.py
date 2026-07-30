@@ -11,6 +11,7 @@ from llvmlite import ir
 from sushi_lang.semantics.ast import Name, Call, Expr, MemberAccess, MethodCall, DotCall
 from sushi_lang.semantics.typesys import EnumType, StructType
 from sushi_lang.internals.diagnostics import InternalCompilerError
+from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -141,9 +142,17 @@ def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Valu
     semantic_type = None
 
     if isinstance(receiver, Name):
-        slot = codegen.memory.find_local_slot(receiver.id)
+        # Local alloca, or the global backing a constant (#248): `PRIMES.hash()` and
+        # `PRIMES.iter()` reached here and died on a constant receiver. The semantic
+        # type has to come from the const table too -- a constant was never declared as
+        # a local, so the memory manager has no type recorded for it.
+        from sushi_lang.backend.expressions.names import (
+            resolve_name_semantic_type, resolve_name_slot)
+        slot = resolve_name_slot(codegen, receiver.id)
+        if slot is None:
+            raise_internal_error("CE0055", name=receiver.id)
         slot_type = slot.type.pointee
-        semantic_type = codegen.memory.find_semantic_type(receiver.id)
+        semantic_type = resolve_name_semantic_type(codegen, receiver.id)
 
         # Check if this is a reference parameter
         if type_utils.is_reference_parameter(codegen, receiver.id):
@@ -284,7 +293,16 @@ def emit_receiver_as_pointer(codegen: 'LLVMCodegen', receiver: Expr) -> Optional
     from sushi_lang.backend.expressions import type_utils
 
     if isinstance(receiver, Name):
-        slot = codegen.memory.find_local_slot(receiver.id)
+        # Local alloca, or the global backing a constant (#248). `len` and `get` are
+        # also builtin List/HashMap method names, so the List/HashMap probes in
+        # calls/generics.py run first and asked for the address of `PRIMES` before the
+        # array dispatcher was ever reached. Handing them a constant's global is safe:
+        # both gate on the receiver's semantic type being a `List<`/`HashMap<`, so an
+        # array constant falls through to the array dispatcher untouched.
+        from sushi_lang.backend.expressions.names import resolve_name_slot
+        slot = resolve_name_slot(codegen, receiver.id)
+        if slot is None:
+            return None
         # Check if this is a reference parameter - if so, load the pointer
         if type_utils.is_reference_parameter(codegen, receiver.id):
             return codegen.builder.load(slot, name=f"{receiver.id}_ref_ptr")

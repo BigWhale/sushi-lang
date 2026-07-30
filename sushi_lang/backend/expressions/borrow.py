@@ -50,23 +50,22 @@ def emit_borrow(codegen: 'LLVMCodegen', expr: Borrow) -> ir.Value:
     from sushi_lang.semantics.typesys import ReferenceType
 
     if isinstance(expr.expr, Name):
-        # Original logic: borrow a variable
+        # Original logic: borrow a variable. Only a local is borrowable, and
+        # find_local_slot raises CE0055 itself if the name is not one -- which is exactly
+        # what the `except KeyError` here used to re-raise by hand.
         var_name = expr.expr.id
-        try:
-            slot = codegen.memory.find_local_slot(var_name)
+        slot = codegen.memory.find_local_slot(var_name)
 
-            # Check if this variable is itself a reference parameter
-            if hasattr(codegen, 'variable_types') and var_name in codegen.variable_types:
-                semantic_type = codegen.variable_types[var_name]
-                if isinstance(semantic_type, ReferenceType):
-                    # For reference parameters, the slot stores a pointer to the actual variable
-                    # We need to load that pointer to get the actual variable's address
-                    return codegen.builder.load(slot, name=f"{var_name}_ref_ptr")
+        # Check if this variable is itself a reference parameter
+        if hasattr(codegen, 'variable_types') and var_name in codegen.variable_types:
+            semantic_type = codegen.variable_types[var_name]
+            if isinstance(semantic_type, ReferenceType):
+                # For reference parameters, the slot stores a pointer to the actual variable
+                # We need to load that pointer to get the actual variable's address
+                return codegen.builder.load(slot, name=f"{var_name}_ref_ptr")
 
-            # For regular variables, just return the slot
-            return slot  # Return the pointer directly (zero-cost)
-        except KeyError:
-            raise_internal_error("CE0055", name=var_name)
+        # For regular variables, just return the slot
+        return slot  # Return the pointer directly (zero-cost)
 
     elif isinstance(expr.expr, MemberAccess):
         # New logic: borrow a struct field

@@ -1,0 +1,40 @@
+# Regression test for #248: using an array constant DIRECTLY, with no local copy.
+# Every shape below was CE0000 (KeyError: 'undefined name: PRIMES') because the backend
+# resolved a name's address through the local-alloca table only, which has no constants.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "first: 2"
+# EXPECT_STDOUT_CONTAINS: "second: 3"
+# EXPECT_STDOUT_CONTAINS: "interpolated: 5"
+# EXPECT_STDOUT_CONTAINS: "len: 3"
+# EXPECT_STDOUT_CONTAINS: "get: 2"
+# EXPECT_STDOUT_CONTAINS: "sum: 10"
+# EXPECT_STDOUT_CONTAINS: "flag: 1"
+# EXPECT_STDOUT_CONTAINS: "third: 5"
+
+const i32[3] PRIMES = [2, 3, 5]
+const bool[2] FLAGS = [true, false]
+
+fn third() i32:
+    # The read works in an ordinary function too, not just in main().
+    return Result.Ok(PRIMES[2])
+
+fn main() i32:
+    let i32 first = PRIMES[0]
+    println("first: {first}")
+    println("second: {PRIMES[1]}")
+    println("interpolated: {PRIMES[2]}")
+
+    println("len: {PRIMES.len()}")
+
+    let Maybe@(i32) maybe_first = PRIMES.get(0)
+    println("get: {maybe_first.realise(0)}")
+
+    let i32 total = 0
+    foreach(p in PRIMES.iter()):
+        total := total + p
+    println("sum: {total}")
+
+    println("flag: {FLAGS[0]}")   # bools print as 1/0, not true/false
+    println("third: {third().realise(0)}")
+
+    return Result.Ok(0)

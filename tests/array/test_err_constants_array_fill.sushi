@@ -1,0 +1,10 @@
+# A constant is immutable: fill() mutates in place, so it cannot target one.
+# The constant's global is emitted with `global_constant = true`, i.e. it lives in
+# .rodata -- writing through its address is undefined behaviour, not just a type error.
+# EXPECT_ERROR_CODE: CE2096
+
+const i32[3] PRIMES = [2, 3, 5]
+
+fn main() i32:
+    PRIMES.fill(1)
+    return Result.Ok(0)

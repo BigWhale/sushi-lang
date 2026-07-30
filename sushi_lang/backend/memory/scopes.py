@@ -303,12 +303,35 @@ class ScopeManager:
         for scope_list in self._closure_temp_cleanup:
             self._free_closure_temp_list(scope_list)
 
+    def try_find_local_slot(self, name: str) -> Optional[ir.AllocaInstr]:
+        """Local variable slot for `name`, or None if it is not a local at all.
+
+        The interrogative form of find_local_slot, for callers that have a real answer
+        for "not a local": a global constant, a top-level function reference, a struct
+        field. Those callers used to wrap find_local_slot in `except KeyError`, which
+        made "this name is a global" and "the scope stack is corrupt" the same event.
+
+        Args:
+            name: The variable name to search for.
+
+        Returns:
+            The alloca instruction for the variable, or None if it is not a local.
+        """
+        if name in self._locals and self._locals[name]:
+            return self._locals[name][-1][1]
+        return None
+
     def find_local_slot(self, name: str) -> ir.AllocaInstr:
         """Find local variable slot by name in scope stack (O(1) lookup).
 
         Uses flat cache for O(1) lookup time instead of O(n) scope traversal.
         Correctly handles variable shadowing by returning the most recent
         (innermost scope) declaration.
+
+        This is the ASSERTIVE form: the caller believes `name` IS a local, and a miss is
+        an internal-invariant violation (the semantic passes already accepted the name).
+        Callers that legitimately need to ask -- because a global constant or a top-level
+        function is an acceptable answer -- use try_find_local_slot instead.
 
         Args:
             name: The variable name to search for.
@@ -317,11 +340,15 @@ class ScopeManager:
             The alloca instruction for the variable.
 
         Raises:
-            KeyError: If the variable is not found in any scope.
+            InternalCompilerError: CE0055, if the variable is not found in any scope.
+                This used to be a bare `KeyError`, which the top-level guard rendered as
+                an anonymous CE0000 -- so #248's five missed address sites all reported
+                as "internal compiler error: KeyError" with nothing naming the gap.
         """
-        if name in self._locals and self._locals[name]:
-            return self._locals[name][-1][1]
-        raise KeyError(f"undefined name: {name}")
+        slot = self.try_find_local_slot(name)
+        if slot is not None:
+            return slot
+        raise_internal_error("CE0055", name=name)
 
     def find_semantic_type(self, name: str) -> Optional['Type']:
         """Find semantic type for a variable by name in scope stack (O(1) lookup).

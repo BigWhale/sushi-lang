@@ -283,12 +283,13 @@ def emit_fixed_array_hash_direct(codegen: Any, expr: Any, receiver_value: ir.Val
     """
     from sushi_lang.semantics.ast import Name
 
-    # Get the semantic type from the variable table.
+    # Get the semantic type of the receiver -- a local or a global constant (#248).
     # The receiver's semantic type must be resolvable here -- semantic analysis
     # guarantees a resolved Name receiver for .hash(). Falling back to an i32 array
     # would silently produce a wrong hash, so a missing type is a compiler bug.
     if isinstance(expr.receiver, Name):
-        array_type = codegen.variable_types.get(expr.receiver.id)
+        from sushi_lang.backend.expressions.names import resolve_name_semantic_type
+        array_type = resolve_name_semantic_type(codegen, expr.receiver.id)
         if array_type is None:
             raise_internal_error("CE0056", name=expr.receiver.id)
     else:

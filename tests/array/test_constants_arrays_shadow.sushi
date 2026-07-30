@@ -1,0 +1,21 @@
+# A local named like an array constant SHADOWS it -- the local always wins.
+# This is the regression risk of the #248 fix: the shared name-to-address resolver must
+# try locals before global constants. Resolving the other way round would read the
+# constant and silently produce wrong values rather than crash.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "constant: 2"
+# EXPECT_STDOUT_CONTAINS: "shadowed: 7"
+# EXPECT_STDOUT_CONTAINS: "shadowed len: 4"
+
+const i32[3] PRIMES = [2, 3, 5]
+
+fn shadowed() i32:
+    let i32[4] PRIMES = [7, 8, 9, 10]
+    println("shadowed: {PRIMES[0]}")
+    println("shadowed len: {PRIMES.len()}")
+    return Result.Ok(PRIMES[0])
+
+fn main() i32:
+    println("constant: {PRIMES[0]}")
+    let i32 s = shadowed().realise(0)
+    return Result.Ok(s - 7)

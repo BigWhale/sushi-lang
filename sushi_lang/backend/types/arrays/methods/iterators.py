@@ -30,8 +30,13 @@ def emit_fixed_array_iter(codegen: 'LLVMCodegen', call: MethodCall, receiver_val
 
     # Get pointer to the array (either from slot or allocate)
     if isinstance(call.receiver, Name):
-        # Get the array slot directly from memory manager
-        array_slot = codegen.memory.find_local_slot(call.receiver.id)
+        # Local alloca, or the global backing an array constant (#248). The iterator
+        # struct holds a data pointer, so `foreach(p in PRIMES.iter())` reads straight
+        # out of .rodata -- no copy.
+        from sushi_lang.backend.expressions.names import resolve_name_slot
+        array_slot = resolve_name_slot(codegen, call.receiver.id)
+        if array_slot is None:
+            raise_internal_error("CE0055", name=call.receiver.id)
     else:
         # For complex expressions, allocate temporary storage
         array_slot = codegen.builder.alloca(receiver_type)
@@ -45,9 +50,11 @@ def emit_fixed_array_iter(codegen: 'LLVMCodegen', call: MethodCall, receiver_val
     # Initialize with: {0, array_length, data_ptr}
     from sushi_lang.semantics.typesys import IteratorType, ArrayType as SushiArrayType
 
-    # Determine element type from semantic information
+    # Determine element type from semantic information (a constant's type lives in the
+    # const table, not in either locals table -- #248)
     if isinstance(call.receiver, Name):
-        semantic_type = codegen.memory.find_semantic_type(call.receiver.id)
+        from sushi_lang.backend.expressions.names import resolve_name_semantic_type
+        semantic_type = resolve_name_semantic_type(codegen, call.receiver.id)
         if isinstance(semantic_type, SushiArrayType):
             element_semantic_type = semantic_type.base_type
         else:

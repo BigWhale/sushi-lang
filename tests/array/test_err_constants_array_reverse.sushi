@@ -1,0 +1,8 @@
+# A constant is immutable: reverse() mutates in place, so it cannot target one.
+# EXPECT_ERROR_CODE: CE2096
+
+const i32[3] PRIMES = [2, 3, 5]
+
+fn main() i32:
+    PRIMES.reverse()
+    return Result.Ok(0)

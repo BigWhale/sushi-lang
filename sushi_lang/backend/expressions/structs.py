@@ -273,21 +273,21 @@ def try_get_struct_alloca(codegen: 'LLVMCodegen', receiver_expr: Expr) -> Option
         The alloca instruction or pointer if receiver is accessible, None otherwise.
     """
     if isinstance(receiver_expr, Name):
-        # Simple variable access: look up alloca
-        try:
-            slot = codegen.memory.find_local_slot(receiver_expr.id)
-
-            # Check if this is a reference parameter
-            from sushi_lang.backend.expressions.type_utils import is_reference_parameter
-            if is_reference_parameter(codegen, receiver_expr.id):
-                # For reference parameters, the slot contains a pointer to the struct
-                # Load the pointer from the slot to get the actual struct pointer
-                return codegen.builder.load(slot, name=f"{receiver_expr.id}_ptr")
-            else:
-                # For regular variables, return the alloca directly
-                return slot
-        except KeyError:
+        # Simple variable access: look up alloca. "Not a local" is a real answer here --
+        # this function's contract is to return None for an inaccessible receiver.
+        slot = codegen.memory.try_find_local_slot(receiver_expr.id)
+        if slot is None:
             return None
+
+        # Check if this is a reference parameter
+        from sushi_lang.backend.expressions.type_utils import is_reference_parameter
+        if is_reference_parameter(codegen, receiver_expr.id):
+            # For reference parameters, the slot contains a pointer to the struct
+            # Load the pointer from the slot to get the actual struct pointer
+            return codegen.builder.load(slot, name=f"{receiver_expr.id}_ptr")
+        else:
+            # For regular variables, return the alloca directly
+            return slot
     elif isinstance(receiver_expr, MemberAccess):
         # Nested struct access: recursively get base alloca, then GEP through fields
         base_alloca = try_get_struct_alloca(codegen, receiver_expr.receiver)
