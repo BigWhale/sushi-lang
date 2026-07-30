@@ -108,8 +108,8 @@ class StickyBar:
 
         rows 1..bar_row-1     earlier output, left alone
         row  bar_row          the bar -- OUTSIDE the scroll region, so it never moves
-        rows bar_row+1..end   the scroll region: results appear here and scroll up,
-                              vanishing under the bar
+        rows bar_row+1..end   the scroll region: the whole lower screen. Results
+                              appear here and scroll up, vanishing under the bar
 
     Getting there takes three steps in order, and skipping any one of them was a bug
     in the first attempt:
@@ -130,7 +130,7 @@ class StickyBar:
     """
 
     MIN_ROWS = 10        # below this, plain scrolling beats a sticky layout
-    MAX_AREA = 12        # results viewport; the bar sits directly above it
+    CONTEXT_ROWS = 3     # rows kept above the bar; the viewport takes all the rest
 
     def __init__(self, total: int, desc: str = "Running tests", stream=None):
         self.total = max(1, total)
@@ -139,8 +139,11 @@ class StickyBar:
         self.n = 0
         self.start = time.monotonic()
         self.rows, self.cols = self._size()
-        self.area = min(self.MAX_AREA, self.rows - 3)
-        self.bar_row = self.rows - self.area
+        # The viewport takes the whole lower screen: everything below the bar. Only
+        # CONTEXT_ROWS are kept above it, enough that the bar does not sit flush
+        # against the top edge.
+        self.bar_row = self.CONTEXT_ROWS
+        self.area = self.rows - self.bar_row
         self._active = False
         self._prev_handlers: Dict[int, object] = {}
 
