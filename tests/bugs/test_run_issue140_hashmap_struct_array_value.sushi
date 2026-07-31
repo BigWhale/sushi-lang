@@ -1,31 +1,33 @@
-# Issue #140: HashMap with an owning value (struct containing a dynamic array) crashed
-# (exit 133 / SIGTRAP) on get + free -- HashMap.get returned a shallow copy that aliased
-# the still-owned map entry, double-freeing the shared buffer at map.free(). emit_value_clone
-# now hands out an independent deep copy from get.
+
+# Issue #140: a HashMap can hold a struct value with a `T[]` field -- `insert` MOVES a named
+# owning local in, and `free` destroys the entry exactly once.
 # https://github.com/BigWhale/sushi-lang/issues/140
+#
+# The read is a BORROW since #242, so the get-out is bound and read in place rather than
+# passed by value to a helper (that would be CE2411 -- a second owner of the map's entry).
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_NO_LEAKS: true
+
 use <collections/hashmap>
 
 struct Items:
     i32[] data
-
-fn len_of(Maybe@(Items) got) i32:
-    match got:
-        Maybe.Some(it) ->
-            return Result.Ok(it.data.len())
-        Maybe.None ->
-            return Result.Ok(-2)
 
 fn run() i32:
     let HashMap@(i32, Items) map = HashMap.new()
     let i32[] xs = from([1, 2, 3])
     let Items it = Items(xs)      # named owning local -> insert must MOVE it (no double-free)
     map.insert(7, it)
-    let i32 out = len_of(map.get(7))??
+    let i32 out = -2
+    match map.get(7):
+        Maybe.Some(found) ->
+            out := found.data.len()
+        Maybe.None ->
+            out := -2
     map.free()
     return Result.Ok(out)
 
 fn main() i32:
-    println(run().realise(99))
+    println(run().realise(0))
     return Result.Ok(0)

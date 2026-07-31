@@ -1,9 +1,12 @@
-# The enum-constructor payload sink of #250, in its general (user enum) form. The return
-# case (test_field_array_copy_at_return.sushi) is the same sink reached through Result.Ok,
-# since a return wraps its value in an enum constructor -- this pins the shape directly,
-# with no return involved, so a regression is attributed to the constructor and not to
-# returns.py. move_owning_arg_into_container only moves a bare Name, so a MemberAccess
-# payload was previously neither moved nor cloned and aliased the field.
+# Sink matrix, the (BORROWED, MOVE) cell reached through a read: a `T[]` field read at the enum-payload sink.
+#
+# The read BORROWS (#242): the owner keeps the value and still frees it, so the sink may not
+# take it and `.clone()` is the escape. Written WITHOUT the clone this file is CE2411, and
+# `tests/memory/test_err_consume_read_*.sushi` pins that half.
+#
+# This used to compile with no clone, because the compiler inserted one for you: the
+# provenance was THROUGH_OWNER, which COPIED. Deleting that cell is the point of #242 -- every
+# deep copy in a Sushi program is now one the user wrote.
 # EXPECT_STDOUT_EXACT: "boxed=3\nsrc=3\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
@@ -17,7 +20,7 @@ enum Box:
 
 fn main() i32:
     let W w = W(from([1, 2, 3]))
-    let Box bx = Box.Full(w.items)
+    let Box bx = Box.Full(w.items.clone())
     match bx:
         Box.Full(data) -> println("boxed={data.len()}")
         Box.Empty -> println("boxed=0")

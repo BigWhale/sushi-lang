@@ -5,9 +5,14 @@ Every shipped bug in the move/clone family lives in this grid, and until
 consuming uses fused deciding with emitting, so the decision was never a value. This
 file is the reason the decision is now a value.
 
-The grid is 4 x 3 = 12 cells and every one is asserted below. A cell asserted here and
+The grid is 3 x 3 = 9 cells and every one is asserted below. A cell asserted here and
 implemented differently at a position is a bug at that position, not a disagreement --
 which is the whole point of having one table.
+
+It was 4 x 3 until #242. `Provenance.THROUGH_OWNER` copied where BORROWED rejects, and
+the only reason for the asymmetry was that a user could not bind a borrow and so had no
+escape from the rejection. Let-borrow bindings supply the escape, so the two rows became
+one row and the compiler inserts no deep copy at a read.
 """
 from __future__ import annotations
 
@@ -19,6 +24,7 @@ from sushi_lang.semantics.ownership import (
     Provenance,
     TypeClass,
     classify,
+    is_get_out_container,
     is_own_type,
     type_class_of,
 )
@@ -46,18 +52,15 @@ STR = BuiltinType.STRING
 # docs/design/ownership-conventions.md section 4.3. Written out longhand on purpose: a
 # test that recomputed the table from the same dict it is checking would assert nothing.
 EXPECTED = {
-    (Provenance.OWNED,         TypeClass.PLAIN): Ownership.ADOPT,
-    (Provenance.OWNED,         TypeClass.COPY):  Ownership.COPY,
-    (Provenance.OWNED,         TypeClass.MOVE):  Ownership.MOVE,
-    (Provenance.BORROWED,      TypeClass.PLAIN): Ownership.ADOPT,
-    (Provenance.BORROWED,      TypeClass.COPY):  Ownership.COPY,
-    (Provenance.BORROWED,      TypeClass.MOVE):  Ownership.REJECT,
-    (Provenance.THROUGH_OWNER, TypeClass.PLAIN): Ownership.ADOPT,
-    (Provenance.THROUGH_OWNER, TypeClass.COPY):  Ownership.COPY,
-    (Provenance.THROUGH_OWNER, TypeClass.MOVE):  Ownership.COPY,
-    (Provenance.FRESH,         TypeClass.PLAIN): Ownership.ADOPT,
-    (Provenance.FRESH,         TypeClass.COPY):  Ownership.ADOPT,
-    (Provenance.FRESH,         TypeClass.MOVE):  Ownership.ADOPT,
+    (Provenance.OWNED,    TypeClass.PLAIN): Ownership.ADOPT,
+    (Provenance.OWNED,    TypeClass.COPY):  Ownership.COPY,
+    (Provenance.OWNED,    TypeClass.MOVE):  Ownership.MOVE,
+    (Provenance.BORROWED, TypeClass.PLAIN): Ownership.ADOPT,
+    (Provenance.BORROWED, TypeClass.COPY):  Ownership.COPY,
+    (Provenance.BORROWED, TypeClass.MOVE):  Ownership.REJECT,
+    (Provenance.FRESH,    TypeClass.PLAIN): Ownership.ADOPT,
+    (Provenance.FRESH,    TypeClass.COPY):  Ownership.ADOPT,
+    (Provenance.FRESH,    TypeClass.MOVE):  Ownership.ADOPT,
 }
 
 
@@ -87,15 +90,19 @@ def test_borrowed_move_is_the_rejected_cell():
     assert rejected == [(Provenance.BORROWED, TypeClass.MOVE)]
 
 
-def test_owning_rows_are_deliberately_asymmetric():
-    """BORROWED is rejected; THROUGH_OWNER copies. Not an oversight -- section 4.3.
+def test_the_compiler_inserts_no_deep_copy_at_a_read():
+    """A read through a live owner is a BORROW, and consuming one is rejected (#242).
 
-    A borrowed binding has a shorter lifetime than its owner and a visible alternative at
-    the use site. Making every owning field read an error would force `.clone()` on every
-    `s.field` with no escape until let-borrow bindings exist -- that is #242, deferred.
+    There is no cell that copies an owning value, so every deep copy of one in a Sushi
+    program is a `.clone()` the user wrote. `Provenance.THROUGH_OWNER` used to hold the
+    other answer; it no longer exists, and this asserts nothing brings it back under a
+    different name.
     """
     assert classify(Provenance.BORROWED, TypeClass.MOVE) is Ownership.REJECT
-    assert classify(Provenance.THROUGH_OWNER, TypeClass.MOVE) is Ownership.COPY
+    copying = [c for c, o in EXPECTED.items()
+               if o is Ownership.COPY and c[1] is TypeClass.MOVE]
+    assert copying == []
+    assert [p.name for p in Provenance] == ["OWNED", "BORROWED", "FRESH"]
 
 
 def test_fresh_never_copies():
@@ -232,20 +239,46 @@ def test_recursive_type_terminates():
     assert type_class_of(node) is TypeClass.MOVE
 
 
-# --- Own detection -----------------------------------------------------------------
+# --- Get-out detection ---------------------------------------------------------------
 
 def test_is_own_type():
-    """`Own@(T).get()` is a deref through a live owner; every other `.get()` is not.
-
-    `Own` hands back the pointee uncopied, so its result is THROUGH_OWNER. Array / List /
-    HashMap `.get()` deep-copy at the access site, so theirs is FRESH. Confusing the two
-    was #256.
-    """
+    """`Own@(T)` alone, by name. One arm of `is_get_out_container` since #242."""
     assert is_own_type(GenericTypeRef(base_name="Own", type_args=[I32]))
     assert is_own_type(StructType(name="Own<i32>", fields=()))
     assert not is_own_type(GenericTypeRef(base_name="List", type_args=[I32]))
     assert not is_own_type(StructType(name="Owner", fields=()))  # prefix, not the type
     assert not is_own_type(None)
+
+
+def test_is_get_out_container():
+    """Every container keeps the element its `.get()` hands back, so every one is a view.
+
+    Until #242 only `Own` was -- the others deep-copied at the read, and confusing the two
+    was #256. Deleting the reader-side copies made all four the same question.
+
+    Keyed on the receiver's TYPE, never on the method name: a user extension method called
+    `get` returns a fresh value, and reading it as a container get-out would report a
+    false CE2411.
+    """
+    for ty in (GenericTypeRef(base_name="Own", type_args=[I32]),
+               GenericTypeRef(base_name="List", type_args=[I32]),
+               GenericTypeRef(base_name="HashMap", type_args=[STR, I32]),
+               StructType(name="Own<i32>", fields=()),
+               StructType(name="List<i32>", fields=()),
+               StructType(name="HashMap<string, i32>", fields=()),
+               DynamicArrayType(base_type=I32),
+               ArrayType(base_type=I32, size=3)):
+        assert is_get_out_container(ty), ty
+
+    for ty in (None, I32, STR,
+               _struct("Holder", ("data", DynamicArrayType(base_type=I32))),
+               StructType(name="Owner", fields=())):     # prefix, not the type
+        assert not is_get_out_container(ty), ty
+
+    # A borrow of a container is still a container.
+    assert is_get_out_container(
+        ReferenceType(referenced_type=GenericTypeRef(base_name="List", type_args=[I32]),
+                      mutability=BorrowMode.PEEK))
 
 
 def test_consuming_use_set_is_the_documented_eleven():

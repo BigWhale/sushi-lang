@@ -1,0 +1,25 @@
+# `let` BINDS. It does not take ownership (#242).
+#
+# `p` is a borrowed `match` payload binding of type `i32[]`. `let i32[] q = p` therefore
+# BINDS: `q` names the same buffer, the enum keeps owning it, and neither `q` nor `p` frees
+# it. Reading through the binding is free, which is what the length print asserts.
+#
+# This file asserted CE2411 until #242, because `let` was one of the eleven consuming uses.
+# Making it a binding supplies the escape that lets every OTHER position reject a borrow --
+# `test_err_consume_read_let_then_consume.sushi` pins that the binding is still not consumable.
+# EXPECT_STDOUT_EXACT: "q=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+enum Shape:
+    Poly(i32[])
+    Empty
+
+fn main() i32:
+    let Shape s = Shape.Poly(from([1, 2, 3]))
+    match s:
+        Shape.Poly(p) ->
+            let i32[] q = p
+            println("q={q.len()}")
+        Shape.Empty -> println("empty")
+    return Result.Ok(0)

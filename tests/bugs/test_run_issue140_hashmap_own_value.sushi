@@ -1,26 +1,30 @@
-# Issue #140: HashMap with an Own@(T) value. Own@(T) owns a heap allocation, so get
-# returning a shallow copy double-freed the pointer at map.free(). _clone_own_value now
-# mallocs a fresh pointee and recursively clones it.
+
+# Issue #140: a HashMap can hold an `Own@(T)` value -- `insert` MOVES a named owning local
+# in, and `free` destroys the entry exactly once.
 # https://github.com/BigWhale/sushi-lang/issues/140
+#
+# The read is a BORROW since #242, so the get-out is bound and read in place rather than
+# passed by value to a helper. Passing it by value would hand the callee a second owner of
+# the map's entry, which is CE2411.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "99\n"
-use <collections/hashmap>
+# EXPECT_NO_LEAKS: true
 
-fn val_of(Maybe@(Own@(i32)) got) i32:
-    match got:
-        Maybe.Some(o) ->
-            return Result.Ok(o.get())
-        Maybe.None ->
-            return Result.Ok(-2)
+use <collections/hashmap>
 
 fn run() i32:
     let HashMap@(i32, Own@(i32)) map = HashMap.new()
     let Own@(i32) boxed = Own.alloc(99)   # named owning Own local -> insert must MOVE it
     map.insert(3, boxed)
-    let i32 out = val_of(map.get(3))??
+    let i32 out = -2
+    match map.get(3):
+        Maybe.Some(o) ->
+            out := o.get()
+        Maybe.None ->
+            out := -2
     map.free()
     return Result.Ok(out)
 
 fn main() i32:
-    println(run().realise(99))
+    println(run().realise(0))
     return Result.Ok(0)

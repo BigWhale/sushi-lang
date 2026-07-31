@@ -156,3 +156,17 @@ def emit_list_is_empty(codegen: Any, list_ptr: ir.Value) -> ir.Value:
 
     # Convert i1 to i8
     return codegen.builder.zext(is_zero, codegen.types.i8)
+
+
+def emit_list_clone(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
+    """Emit `list.clone()` -- an independent `List@(T)` with its own buffer and elements.
+
+    The explicit escape from CE2411 (#242). A read of a `List` borrows, so a position that
+    takes ownership rejects it, and this is what the diagnostic tells the user to write.
+
+    Routed through the seam's `copy_out`, which is the ONE deep clone in the backend, so
+    `.clone()` duplicates exactly what the destructor frees. The seam also accepts a
+    pointer, which is the shape a List receiver arrives in.
+    """
+    from sushi_lang.backend.ownership import copy_out
+    return copy_out(codegen, list_ptr, list_type)

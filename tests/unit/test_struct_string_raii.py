@@ -52,7 +52,7 @@ def test_byvalue_struct_string_arg_cloned_at_call_site(tmp_path):
     clone the caller's original and the callee's copy share one heap buffer and double-free
     (SIGABRT). The clone-if-owned helper emits a `malloc` directly in `main` (the `.upper()`
     buffer malloc lives inside the string runtime fn, not inlined here). Before the fix
-    `deep_copy_struct` cloned only array/nested-struct fields, so `main` had zero mallocs.
+    the old struct copy cloned only array/nested-struct fields, so `main` had zero mallocs.
     """
     src = _STRUCT + (
         "fn consume(P d) i32:\n"

@@ -44,7 +44,60 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
-__all__ = ["ConsumingUse", "consume", "copy_out", "resolver_for"]
+__all__ = ["ConsumingUse", "bind", "consume", "copy_out", "relinquish", "resolver_for"]
+
+
+def relinquish(codegen: 'LLVMCodegen', name: str) -> None:
+    """State that a local NAMES storage it does not own, so no exit path frees it.
+
+    The counterpart of `bind()`'s REJECT answer for a caller that registered the local
+    before the seam could speak. `emit_let` does not need this -- it defers registration
+    until `bind()` answers -- but `initialize_dynamic_array` must create and register the
+    array descriptor before it can emit the initializer that decides.
+
+    Routed through the seam for the same reason as `copy_out`: the primitive it uses is a
+    transfer primitive, and the no-bypass gate is a grep. Calling `mark_as_moved` directly
+    would state that a MOVE happened, which is false here -- nothing was transferred,
+    because the binding never owned anything.
+    """
+    da = getattr(codegen, "dynamic_arrays", None)
+    if da is not None:
+        da.mark_as_moved(name)
+    codegen.memory.mark_struct_as_moved(name)
+
+
+def bind(codegen: 'LLVMCodegen', source, value: ir.Value,
+         target_type: Optional[Type]) -> tuple[ir.Value, bool]:
+    """Bind a `let` to its initializer, and say whether the binding OWNS the value.
+
+    A `let` BINDS. It does not take ownership (#242). The binding inherits the source's
+    provenance, so this is `consume()` with ONE answer mapped differently:
+
+        MOVE   -> the source owned it; mark it moved. The binding owns.
+        COPY   -> the source keeps owning; store a deep copy. The binding owns.
+        ADOPT  -> nothing owned it. The binding owns.
+        REJECT -> the source is a BORROW of storage something else still owns. Store the
+                  value as-is, and the binding owns NOTHING. `consume()` cannot reach this
+                  answer -- there it is CE0129 -- because a position that takes ownership
+                  has no way to satisfy the requirement from a borrow.
+
+    The rule still has exactly one implementation: both functions ask `classify()`. What
+    differs is what the caller does with REJECT, not what the table says.
+
+    Returns:
+        (the value to store, whether the caller must register the local for cleanup).
+    """
+    provenance = _provenance_of(source, ConsumingUse.LET)
+    decision = classify(provenance, type_class_of(target_type, resolver_for(codegen)))
+
+    if decision is Ownership.MOVE:
+        _mark_moved(codegen, source)
+        return value, True
+    if decision is Ownership.COPY:
+        return _clone(codegen, value, target_type), True
+    if decision is Ownership.ADOPT:
+        return value, True
+    return value, False
 
 
 def consume(codegen: 'LLVMCodegen', source, value: ir.Value,

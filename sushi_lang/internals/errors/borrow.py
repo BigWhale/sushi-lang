@@ -55,5 +55,5 @@ _add(ErrorMessage("CE2408", Severity.ERROR,
     Category.BORROW, "&peek references are read-only. Use &poke for mutable access."))
 
 _add(ErrorMessage("CE2411", Severity.ERROR,
-    "cannot consume '{name}': it is a borrowed binding",
-    Category.BORROW, "A `match` payload binding and a `foreach` loop binding are read-only borrows of storage the scrutinee or the container still owns, so a position that takes ownership cannot have it. Reading through the binding is free; clone it to take an independent value: `{name}.clone()`. Only a binding whose type transitively owns heap (a dynamic array, List, Own, HashMap or a capturing closure) is affected -- a primitive or string binding is unrestricted."))
+    "cannot consume '{name}': another owner keeps this value",
+    Category.BORROW, "A borrow names storage something else owns and still frees, so a position that takes ownership cannot have it. Three shapes borrow: a `match` payload binding, a `foreach` loop binding, and every read THROUGH a live owner -- a field read (`h.inner`), an index (`rows[i]`) and a container get-out (`c.get(0)??`, `own.get()`). Reading through a borrow is free; clone it to take an independent value: `{name}.clone()`. Only a value whose type transitively owns heap (a dynamic array, List, Own, HashMap or a capturing closure) is affected -- a primitive or string borrow is unrestricted."))

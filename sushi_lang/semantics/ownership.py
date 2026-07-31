@@ -82,16 +82,16 @@ class Provenance(Enum):
     The half only semantics can compute.
     """
 
-    OWNED = "owned"                  # a registered owner in this scope: a `let` local or
-                                     # a by-value parameter
-    BORROWED = "borrowed"            # names storage owned elsewhere, for a SHORTER
-                                     # lifetime: a match payload binding, a foreach
-                                     # binding, a &peek/&poke parameter
-    THROUGH_OWNER = "through_owner"  # reads THROUGH a still-live owner: `s.field`,
-                                     # `own.get()`
-    FRESH = "fresh"                  # nothing owns it yet: a constructor, a call result,
-                                     # `.clone()`, a literal, a container get-out (which
-                                     # already deep-copied at the read)
+    OWNED = "owned"        # a registered owner in this scope: a `let` local or a
+                           # by-value parameter
+    BORROWED = "borrowed"  # names storage owned elsewhere, for a SHORTER lifetime: a
+                           # match payload binding, a foreach binding, a &peek/&poke
+                           # parameter, a `let` bound from any of these, and every read
+                           # THROUGH a still-live owner -- `s.field`, `own.get()`, and a
+                           # container get-out
+    FRESH = "fresh"        # nothing owns it yet: a constructor, a call result,
+                           # `.clone()`, a literal, a `List.pop()` (which REMOVES the
+                           # element, so the container stops owning it)
 
 
 class TypeClass(Enum):
@@ -123,27 +123,24 @@ class Ownership(Enum):
 # Per section 8 it is not a code-generation question at all -- consuming a borrowed
 # binding of an owning type is rejected, and `.clone()` is the escape.
 #
-# The two owning rows are deliberately NOT symmetric. BORROWED is rejected;
-# THROUGH_OWNER copies. A borrowed binding has a SHORTER lifetime than its owner and a
-# visible alternative at the use site; making every owning field read an error would
-# force `.clone()` on every `s.field` with no escape until let-borrow bindings exist.
-# That is #242, and it stays deferred -- deliberately, not by omission.
+# There used to be a fourth provenance, THROUGH_OWNER, for a read through a still-live
+# owner -- `s.field`, `own.get()`, a container get-out. It COPIED where BORROWED rejects,
+# and the asymmetry had one reason: a user who could not bind a borrow had no escape from
+# a rejection, so every `s.field` would have needed a `.clone()`. #242 supplies the escape,
+# so the two rows are now the same row and the compiler inserts no deep copy at a read.
+# Every deep copy in a Sushi program is one the user wrote as `.clone()`.
 _TABLE: dict[tuple[Provenance, TypeClass], Ownership] = {
-    (Provenance.OWNED,         TypeClass.PLAIN): Ownership.ADOPT,
-    (Provenance.OWNED,         TypeClass.COPY):  Ownership.COPY,
-    (Provenance.OWNED,         TypeClass.MOVE):  Ownership.MOVE,
+    (Provenance.OWNED,    TypeClass.PLAIN): Ownership.ADOPT,
+    (Provenance.OWNED,    TypeClass.COPY):  Ownership.COPY,
+    (Provenance.OWNED,    TypeClass.MOVE):  Ownership.MOVE,
 
-    (Provenance.BORROWED,      TypeClass.PLAIN): Ownership.ADOPT,
-    (Provenance.BORROWED,      TypeClass.COPY):  Ownership.COPY,
-    (Provenance.BORROWED,      TypeClass.MOVE):  Ownership.REJECT,
+    (Provenance.BORROWED, TypeClass.PLAIN): Ownership.ADOPT,
+    (Provenance.BORROWED, TypeClass.COPY):  Ownership.COPY,
+    (Provenance.BORROWED, TypeClass.MOVE):  Ownership.REJECT,
 
-    (Provenance.THROUGH_OWNER, TypeClass.PLAIN): Ownership.ADOPT,
-    (Provenance.THROUGH_OWNER, TypeClass.COPY):  Ownership.COPY,
-    (Provenance.THROUGH_OWNER, TypeClass.MOVE):  Ownership.COPY,
-
-    (Provenance.FRESH,         TypeClass.PLAIN): Ownership.ADOPT,
-    (Provenance.FRESH,         TypeClass.COPY):  Ownership.ADOPT,
-    (Provenance.FRESH,         TypeClass.MOVE):  Ownership.ADOPT,
+    (Provenance.FRESH,    TypeClass.PLAIN): Ownership.ADOPT,
+    (Provenance.FRESH,    TypeClass.COPY):  Ownership.ADOPT,
+    (Provenance.FRESH,    TypeClass.MOVE):  Ownership.ADOPT,
 }
 
 
@@ -238,10 +235,10 @@ def is_own_type(ty: Optional[Type]) -> bool:
 
     The ir-free twin of the backend's `is_own_get_call` receiver test. `Own` is a smart
     pointer, not a collection: `get()` is a dereference that hands back a bare `T` without
-    copying, so the result is a view of storage the receiver still frees -- THROUGH_OWNER,
-    exactly like a field read. Every other container's `get()` deep-copies at the access
-    site and so returns something nobody else owns (FRESH). `Own` is the one that does not
-    keep that invariant, which is what #256 was.
+    copying. That made it the one container whose get-out was a view while every other
+    one deep-copied at the read, which is what #256 was. Since #242 every container reads
+    the same way, so this is now one arm of `is_get_out_container` rather than a rule of
+    its own.
     """
     if ty is None:
         return False
@@ -251,3 +248,32 @@ def is_own_type(ty: Optional[Type]) -> bool:
         return ty.base_name == "Own"
     name = getattr(ty, "name", None)
     return isinstance(name, str) and name.startswith("Own<")
+
+
+# The generic containers whose `.get()` reads out of storage the receiver keeps. The
+# interned names carry `<...>`, never `@(...)` -- see `semantics/generics/type_display.py`.
+_GET_OUT_PREFIXES = ("Own<", "List<", "HashMap<")
+
+
+def is_get_out_container(ty: Optional[Type]) -> bool:
+    """Does `.get()` on a receiver of this type return a VIEW of what the receiver owns?
+
+    True for an array, a `List@(T)`, a `HashMap@(K, V)` and an `Own@(T)`. Each keeps the
+    element and still frees it, so what `get()` hands back is a borrow.
+
+    Until #242 every container except `Own` deep-copied at the read, so the answer was
+    "only `Own`" and this predicate was `is_own_type`. Deleting the reader-side copies
+    made all four the same, and this is the one place that says so. Keyed on the TYPE, not
+    on the method name: a user extension method that happens to be called `get` is not a
+    container read, and classifying it as one would report a false CE2411.
+    """
+    if ty is None:
+        return False
+    if isinstance(ty, ReferenceType):
+        ty = ty.referenced_type
+    if isinstance(ty, (ArrayType, DynamicArrayType)):
+        return True
+    if isinstance(ty, GenericTypeRef):
+        return ty.base_name in ("Own", "List", "HashMap")
+    name = getattr(ty, "name", None)
+    return isinstance(name, str) and name.startswith(_GET_OUT_PREFIXES)

@@ -414,42 +414,8 @@ class ScopeManager:
             if name not in self._types:
                 self._types[name] = []
             self._types[name].append((self._scope_depth, semantic_ty))
-
-            # Track struct / enum variables that need cleanup.
-            # Resolve a named / generic reference first -- UnknownType('Box'),
-            # GenericTypeRef('List', (i32,)), GenericTypeRef('Result', (T, E)) -- to the concrete
-            # struct/enum it names. The branches below dispatch on the resolved class, so an
-            # unresolved local is registered in NO cleanup registry and its payload leaks (#179).
-            from sushi_lang.semantics.typesys import StructType, EnumType, ArrayType, FunctionType, BuiltinType
-            from sushi_lang.backend.destructors import resolve_named_type
-            semantic_ty = resolve_named_type(self.codegen, semantic_ty)
-            if not register_cleanup:
-                pass  # borrow-like binding: aliases memory owned elsewhere, do not free
-            elif isinstance(semantic_ty, (StructType, EnumType)):
-                # An enum local whose active variant owns heap (a dynamic-array / string /
-                # closure / owning-struct payload) is freed at scope exit like a struct
-                # local, reusing the struct-cleanup registry so both the fall-through
-                # (pop_scope) and early-exit (emit_struct_cleanup) paths free it through
-                # the recursion-safe emit_value_destructor. #143 lifted CE2059 (enum may
-                # hold T[]) without wiring this owner, so such enum locals leaked (#139).
-                if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
-                    if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
-                        self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
-            # A fixed-size array local (`string[3]`, `Box[2]`) whose ELEMENTS own heap. It owns no
-            # buffer of its own -- the storage is the alloca -- so it is not a dynamic array and
-            # has no registry of its own; it reuses the owning-value registry, whose drain calls
-            # the same recursion-safe emit_value_destructor. ArrayType matched NO branch in this
-            # chain, so such a local was registered nowhere and no exit path could free it (#185).
-            elif isinstance(semantic_ty, ArrayType):
-                from sushi_lang.backend.destructors import needs_cleanup
-                if needs_cleanup(semantic_ty):
-                    self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
-            # Track function-value locals for runtime-guarded env free at scope exit.
-            elif isinstance(semantic_ty, FunctionType):
-                self._closure_cleanup.setdefault(name, []).append((self._scope_depth, slot))
-            # Track string locals for owned-bit-guarded free at scope exit (#145).
-            elif semantic_ty == BuiltinType.STRING:
-                self._string_cleanup.setdefault(name, []).append((self._scope_depth, slot))
+            if register_cleanup:
+                self.register_local_cleanup(name, semantic_ty, slot)
 
         if init is not None:
             if self.codegen.builder is None:
@@ -457,7 +423,51 @@ class ScopeManager:
             self.codegen.builder.store(init, slot)
         return slot
 
-    def create_local_nostore(self, name: str, ty: ir.Type, semantic_ty: Optional['Type'] = None) -> ir.AllocaInstr:
+    def register_local_cleanup(self, name: str, semantic_ty: 'Type',
+                               slot: ir.AllocaInstr) -> None:
+        """Register a local in the cleanup registry its type belongs to.
+
+        The one place that decides WHICH registry frees a local. `create_local` and
+        `create_local_nostore` both call it, and `emit_let` calls it directly once the
+        ownership seam has said the binding owns its value -- a `let` bound from a borrow
+        names storage something else frees, so it is registered nowhere (#242).
+
+        Resolve a named / generic reference first -- UnknownType('Box'),
+        GenericTypeRef('List', (i32,)), GenericTypeRef('Result', (T, E)) -- to the concrete
+        struct/enum it names. The branches below dispatch on the resolved class, so an
+        unresolved local is registered in NO cleanup registry and its payload leaks (#179).
+        """
+        from sushi_lang.semantics.typesys import StructType, EnumType, ArrayType, FunctionType, BuiltinType
+        from sushi_lang.backend.destructors import resolve_named_type
+        semantic_ty = resolve_named_type(self.codegen, semantic_ty)
+        if isinstance(semantic_ty, (StructType, EnumType)):
+            # An enum local whose active variant owns heap (a dynamic-array / string /
+            # closure / owning-struct payload) is freed at scope exit like a struct
+            # local, reusing the struct-cleanup registry so both the fall-through
+            # (pop_scope) and early-exit (emit_struct_cleanup) paths free it through
+            # the recursion-safe emit_value_destructor. #143 lifted CE2059 (enum may
+            # hold T[]) without wiring this owner, so such enum locals leaked (#139).
+            if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
+                if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
+                    self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
+        # A fixed-size array local (`string[3]`, `Box[2]`) whose ELEMENTS own heap. It owns no
+        # buffer of its own -- the storage is the alloca -- so it is not a dynamic array and
+        # has no registry of its own; it reuses the owning-value registry, whose drain calls
+        # the same recursion-safe emit_value_destructor. ArrayType matched NO branch in this
+        # chain, so such a local was registered nowhere and no exit path could free it (#185).
+        elif isinstance(semantic_ty, ArrayType):
+            from sushi_lang.backend.destructors import needs_cleanup
+            if needs_cleanup(semantic_ty):
+                self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
+        # Track function-value locals for runtime-guarded env free at scope exit.
+        elif isinstance(semantic_ty, FunctionType):
+            self._closure_cleanup.setdefault(name, []).append((self._scope_depth, slot))
+        # Track string locals for owned-bit-guarded free at scope exit (#145).
+        elif semantic_ty == BuiltinType.STRING:
+            self._string_cleanup.setdefault(name, []).append((self._scope_depth, slot))
+
+    def create_local_nostore(self, name: str, ty: ir.Type, semantic_ty: Optional['Type'] = None,
+                             register_cleanup: bool = True) -> ir.AllocaInstr:
         """Create local variable without initialization.
 
         Allocates space for a local variable but does not store any
@@ -468,6 +478,11 @@ class ScopeManager:
             name: The variable name.
             ty: The LLVM type for the variable.
             semantic_ty: Optional semantic type for the variable.
+            register_cleanup: When False, the local is NOT registered for scope-exit RAII
+                (the semantic type is still recorded for method dispatch). `emit_let` passes
+                False and registers afterwards, because whether a `let` OWNS its value is
+                the ownership seam's answer and the seam cannot run until the initializer
+                is emitted (#242).
 
         Returns:
             The alloca instruction for the variable.
@@ -493,40 +508,8 @@ class ScopeManager:
             if name not in self._types:
                 self._types[name] = []
             self._types[name].append((self._scope_depth, semantic_ty))
-
-            # Track struct / enum variables that need cleanup.
-            # Resolve a named / generic reference first -- UnknownType('Box'),
-            # GenericTypeRef('List', (i32,)), GenericTypeRef('Result', (T, E)) -- to the concrete
-            # struct/enum it names. The branches below dispatch on the resolved class, so an
-            # unresolved local is registered in NO cleanup registry and its payload leaks (#179).
-            from sushi_lang.semantics.typesys import StructType, EnumType, ArrayType, FunctionType, BuiltinType
-            from sushi_lang.backend.destructors import resolve_named_type
-            semantic_ty = resolve_named_type(self.codegen, semantic_ty)
-            if isinstance(semantic_ty, (StructType, EnumType)):
-                # An enum local whose active variant owns heap (a dynamic-array / string /
-                # closure / owning-struct payload) is freed at scope exit like a struct
-                # local, reusing the struct-cleanup registry so both the fall-through
-                # (pop_scope) and early-exit (emit_struct_cleanup) paths free it through
-                # the recursion-safe emit_value_destructor. #143 lifted CE2059 (enum may
-                # hold T[]) without wiring this owner, so such enum locals leaked (#139).
-                if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
-                    if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
-                        self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
-            # A fixed-size array local (`string[3]`, `Box[2]`) whose ELEMENTS own heap. It owns no
-            # buffer of its own -- the storage is the alloca -- so it is not a dynamic array and
-            # has no registry of its own; it reuses the owning-value registry, whose drain calls
-            # the same recursion-safe emit_value_destructor. ArrayType matched NO branch in this
-            # chain, so such a local was registered nowhere and no exit path could free it (#185).
-            elif isinstance(semantic_ty, ArrayType):
-                from sushi_lang.backend.destructors import needs_cleanup
-                if needs_cleanup(semantic_ty):
-                    self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
-            # Track function-value locals for runtime-guarded env free at scope exit.
-            elif isinstance(semantic_ty, FunctionType):
-                self._closure_cleanup.setdefault(name, []).append((self._scope_depth, slot))
-            # Track string locals for owned-bit-guarded free at scope exit (#145).
-            elif semantic_ty == BuiltinType.STRING:
-                self._string_cleanup.setdefault(name, []).append((self._scope_depth, slot))
+            if register_cleanup:
+                self.register_local_cleanup(name, semantic_ty, slot)
 
         return slot
 

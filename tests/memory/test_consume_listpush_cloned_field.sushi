@@ -1,0 +1,25 @@
+# Sink matrix, the escape from the (BORROWED, MOVE) cell: `.clone()` of a heap-owning field
+# handed to the `List.push` sink.
+#
+# The positive twin of `test_err_consume_listpush_field_owning_struct.sushi`. A read borrows,
+# so the sink rejects it (#242); `.clone()` produces a FRESH value nobody owns, which the sink
+# ADOPTS. Both `h` and the list then free exactly one buffer each.
+#
+# This is the whole ergonomic claim of #242: the deep copy still happens, and it is one word
+# the user writes instead of one the compiler inserts.
+# EXPECT_STDOUT_EXACT: "dst=1 src=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Buf:
+    i32[] data
+
+struct Holder:
+    Buf inner
+
+fn main() i32:
+    let Holder h = Holder(Buf(from([1, 2, 3])))
+    let List@(Buf) dst = List.new()
+    dst.push(h.inner.clone())
+    println("dst={dst.len()} src={h.inner.data.len()}")
+    return Result.Ok(0)

@@ -1,0 +1,22 @@
+# A `let` from a read BORROWS, and the borrow is still not consumable (#242).
+#
+# The two halves of the model meet here. `let i32[] view = h.items` is legal: it binds, and
+# `view` names a buffer `h` keeps. Handing `view` to a position that TAKES ownership is not:
+# `view` borrows, so the call is CE2411 exactly as `total(h.items)` would be.
+#
+# Without this the binding would be a laundering step -- read once to a local, then move the
+# local, and the owner's buffer is freed twice with no diagnostic anywhere.
+# EXPECT_ERROR_CODE: CE2411
+
+struct Holder:
+    i32[] items
+
+fn total(i32[] xs) i32:
+    return Result.Ok(xs.len())
+
+fn main() i32:
+    let Holder h = Holder(from([1, 2, 3]))
+    let i32[] view = h.items
+    let i32 n = total(view).realise(-1)
+    println("n={n}")
+    return Result.Ok(0)

@@ -1,0 +1,28 @@
+# A `HashMap.get()` get-out BORROWS, so a position that takes ownership rejects it (#242).
+#
+# The map keeps the entry and `map.free()` still destroys it. Handing the `Maybe@(V)` to a
+# by-value parameter would make the callee a second owner of that entry, and both would free
+# it. CE2411 before either happens.
+#
+# `get` used to deep-copy the value out, so this compiled and the copy made it safe. Deleting
+# that copy is the point of #242 -- the read is free, and consuming it is the user's call to
+# make explicit.
+# EXPECT_ERROR_CODE: CE2411
+use <collections/hashmap>
+
+fn len_of(Maybe@(List@(i32)) got) i32:
+    match got:
+        Maybe.Some(lst) ->
+            return Result.Ok(lst.len())
+        Maybe.None ->
+            return Result.Ok(-1)
+
+fn main() i32:
+    let HashMap@(i32, List@(i32)) map = HashMap.new()
+    let List@(i32) xs = List.new()
+    xs.push(7)
+    map.insert(1, xs)
+    let i32 n = len_of(map.get(1)).realise(-1)
+    println("n={n}")
+    map.free()
+    return Result.Ok(0)

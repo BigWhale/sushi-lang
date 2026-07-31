@@ -179,6 +179,15 @@ def emit_builtin_own_method(
         return emit_own_alloc(codegen, element_type, arg_value)
     elif call.method == "get":
         return emit_own_get(codegen, own_value, element_type)
+    elif call.method == "clone":
+        # The explicit escape from CE2411 (#242). An `Own@(T).get()` deref BORROWS -- the
+        # receiver keeps the pointee and still frees it -- so a position that takes
+        # ownership rejects it, and this is what the diagnostic tells the user to write.
+        # Routed through the seam's `copy_out`, the ONE deep clone in the backend, so
+        # `.clone()` duplicates exactly what `emit_own_destroy` frees: a fresh allocation
+        # holding a deep copy of the pointee.
+        from sushi_lang.backend.ownership import copy_out
+        return copy_out(codegen, own_value, own_type)
     elif call.method == "destroy":
         # Extract variable name from receiver (if it's a Name node)
         from sushi_lang.semantics.ast import Name

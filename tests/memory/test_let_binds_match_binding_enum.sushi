@@ -1,0 +1,31 @@
+# `let` BINDS. It does not take ownership (#242). The ENUM-typed shape.
+#
+# `inner` is a borrowed `match` payload binding whose type is a user enum. `let Box copy =
+# inner` therefore BINDS: `copy` names the same payload, `w` keeps owning it, and neither
+# frees it. The nested match reads through both bindings.
+#
+# This file asserted CE2411 until #242. It is the shape `is_owned_local` never registers, so
+# the backend's old proxy answered 'borrow' without being asked the hard question -- it passed
+# for the wrong reason and gave false confidence. It now passes for the stated one.
+# EXPECT_STDOUT_EXACT: "n=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+enum Box:
+    Full(i32[])
+    Empty
+
+enum Wrap:
+    Has(Box)
+    No
+
+fn main() i32:
+    let Wrap w = Wrap.Has(Box.Full(from([1, 2, 3])))
+    match w:
+        Wrap.Has(inner) ->
+            let Box copy = inner
+            match copy:
+                Box.Full(xs) -> println("n={xs.len()}")
+                Box.Empty -> println("n=0")
+        Wrap.No -> println("no")
+    return Result.Ok(0)

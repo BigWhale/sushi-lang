@@ -197,6 +197,17 @@ def try_emit_string_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCa
 
         return result
 
+    # `clone` is an inline intrinsic too. It is the explicit deep copy, and the escape
+    # CE2411 names, so it must work without `use <collections/strings>` (#242, MM.md B4).
+    # Routed through the seam's `copy_out`, the ONE deep clone in the backend, so a cloned
+    # string duplicates exactly what the owned-bit-guarded free releases. A literal carries
+    # owned=0 and clones to another owned=0, whose free is a no-op.
+    if expr.method == "clone":
+        from sushi_lang.backend.ownership import copy_out
+        from sushi_lang.semantics.typesys import BuiltinType
+        require_builder(codegen)
+        return copy_out(codegen, receiver_value, BuiltinType.STRING)
+
     from sushi_lang.sushi_stdlib.src.collections.strings import is_builtin_string_method
     if not is_builtin_string_method(expr.method):
         return None

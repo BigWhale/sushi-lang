@@ -6,7 +6,7 @@ and variable rebinding (:=) with proper RAII cleanup and move semantics.
 """
 from __future__ import annotations
 from typing import TYPE_CHECKING
-from sushi_lang.backend.ownership import ConsumingUse, consume
+from sushi_lang.backend.ownership import ConsumingUse, bind, consume
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -71,52 +71,22 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
             elif stmt.ty in codegen.enum_table.by_name:
                 semantic_type = codegen.enum_table.by_name[stmt.ty]
 
-        slot = codegen.memory.create_local_nostore(stmt.name, ll_type, semantic_type)
+        # Registration is DEFERRED until the ownership seam has spoken (#242). Whether a
+        # `let` owns its value is `bind()`'s answer, and `bind()` cannot run until the
+        # initializer is emitted. Registering first and undoing it afterwards is what the
+        # two reconcilers used to do, and they derived the answer a second time to do it.
+        slot = codegen.memory.create_local_nostore(stmt.name, ll_type, semantic_type,
+                                                   register_cleanup=False)
 
-        # Register Own<T> and List<T> variables for RAII cleanup
-        if isinstance(semantic_type, StructType) and hasattr(codegen, 'dynamic_arrays'):
-            if codegen.dynamic_arrays.is_own_type(semantic_type):
-                # Registered unconditionally. #106 used to skip an `Own.get()` RHS here, to
-                # stop the binding becoming a second owner of the container's payload -- but
-                # that name-based guard reached one sink and one type, while the same alias
-                # was live at every other sink (#256). The RHS is now DEEP-COPIED below like
-                # any read from a continuing owner, so the binding owns an independent value
-                # and must be registered; skipping it would strand the copy.
-                codegen.dynamic_arrays.register_own(stmt.name, semantic_type, slot)
-            elif codegen.dynamic_arrays.is_list_type(semantic_type):
-                codegen.dynamic_arrays.register_list(stmt.name, semantic_type, slot)
-
-        # Closure (function-value) ownership: create_local_nostore auto-registered this
-        # local as an env owner. A capturing closure owns a heap env, so aliasing it must
-        # keep exactly one owner (else double-free). Reconcile by binding shape:
-        _reconcile_closure_ownership(codegen, stmt, semantic_type)
-
-        # String ownership (#145): create_local_nostore auto-registered this string local
-        # for owned-bit-guarded free. Reconcile by binding shape so exactly one owner frees
-        # the heap buffer (else double-free / use-after-free).
-        _reconcile_string_ownership(codegen, stmt, semantic_type)
-
-        # Zero-initialise a string local's slot ({null, 0, owned=0}) BEFORE emitting the RHS.
-        # The local is already registered for scope-exit free, but its RHS may contain a `??`
-        # (e.g. `let checked = check(s)??`) whose early-exit emit_string_cleanup_all frees
-        # every live string local -- including this one, whose slot is not yet stored. Without
-        # zero-init the slot holds poison, so the guarded free reads a garbage owned byte and
-        # may free a garbage/global pointer (SIGABRT). owned=0 makes that premature free a
-        # no-op; the real value is stored just below (#145).
+        # Zero-initialise a string local's slot ({null, 0, owned=0}) BEFORE emitting the RHS,
+        # and a closure local's fat pointer ({null fn, null env, null drop}) likewise. The RHS
+        # may contain a `??` (`let checked = check(s)??`) whose early exit runs the string and
+        # closure cleanup over every live local. This local is not registered yet, so that
+        # sweep skips it -- but the store costs one instruction and it keeps the slot free of
+        # poison for any path that reads it before the real value lands (#145).
         from sushi_lang.semantics.typesys import BuiltinType as _BT
-        if semantic_type == _BT.STRING and codegen.memory.is_string_registered(stmt.name):
-            from llvmlite import ir as _ir
-            codegen.builder.store(_ir.Constant(ll_type, None), slot)
-
-        # Zero-initialise a closure (function-value) local's fat-pointer slot
-        # ({null fn, null env, null drop}) BEFORE emitting the RHS -- the same
-        # hazard as the string case above. The local is already registered for
-        # scope-exit env cleanup, so a `??` in the RHS (`let g = fallible()??`)
-        # whose early-exit path runs closure cleanup would load an unstored slot
-        # and call a garbage drop_ptr (SIGBUS). A null drop_ptr makes that
-        # premature cleanup a no-op; the real value is stored just below.
         from sushi_lang.semantics.typesys import FunctionType as _FT
-        if isinstance(semantic_type, _FT) and codegen.memory.is_closure_registered(stmt.name):
+        if semantic_type == _BT.STRING or isinstance(semantic_type, _FT):
             from llvmlite import ir as _ir
             codegen.builder.store(_ir.Constant(ll_type, None), slot)
 
@@ -125,103 +95,27 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
             from sushi_lang.backend.statements import initialization
             initialization.initialize_array_literal(codegen, slot, stmt.value, ll_type,
                                                     stmt.ty.base_type)
+            # An array literal is a fresh value that nothing else owns, so the binding
+            # always owns it. Its ELEMENTS are the consuming use, and `initialize_array_literal`
+            # routes each of them through the seam.
+            owns = True
         else:
             rhs = codegen.expressions.emit_expr(stmt.value)
-            # A `let` binding takes ownership of its RHS. What that means for a given
-            # source is not this position's decision to make -- see backend/ownership.py.
-            rhs = consume(codegen, stmt.value, rhs, semantic_type, ConsumingUse.LET)
+            # A `let` BINDS. What that means for a given source is not this position's
+            # decision to make -- see backend/ownership.py.
+            rhs, owns = bind(codegen, stmt.value, rhs, semantic_type)
             casted_rhs = codegen.utils.cast_for_param(rhs, ll_type)
             codegen.builder.store(casted_rhs, slot)
 
-
-def _reconcile_closure_ownership(codegen: 'LLVMCodegen', stmt: 'Let', semantic_type) -> None:
-    """Keep exactly one RAII owner for a function-value (closure) binding.
-
-    `create_local_nostore` registered `stmt.name` as an env owner. That is correct only
-    when the RHS produces a FRESH owned closure (a lambda literal, a call that transferred
-    ownership on return, or a bare fn ref whose env is null). When the RHS aliases an
-    environment that something ELSE already owns, a second owner would double-free the
-    shared env. Reconcile by binding shape:
-
-    - `let g = f` where f is a registered owning local -> MOVE: mark f moved so only g
-      frees (mirrors dynamic-array/Own move-on-return).
-    - `let g = f` where f is NOT a registered owner (a param, or an already-borrowed
-      alias) -> BORROW: the real owner lives elsewhere, so g must not free.
-    - `let g = fns.get(i)??` / `let g = s.handler` (container get-out / struct-field read)
-      -> BORROW: the container/struct still owns the env (mirrors Own<T>.get()).
-
-    Only capturing closures carry a non-null env/drop, so for a non-capturing value every
-    branch is a harmless no-op (the guarded free of a null drop does nothing).
-    """
-    from sushi_lang.semantics.typesys import FunctionType
-    from sushi_lang.semantics.ast import Name, MemberAccess, TryExpr
-
-    if not isinstance(semantic_type, FunctionType):
-        return
-
-    value = stmt.value
-    # Unwrap `expr??` so a get-out through error propagation is visible.
-    if isinstance(value, TryExpr):
-        value = value.expr
-
-    if isinstance(value, Name):
-        source = value.id
-        if codegen.memory.is_closure_registered(source):
-            # MOVE: transfer ownership source -> g. g keeps its registration.
-            codegen.memory.mark_struct_as_moved(source)
-        else:
-            # BORROW: source is a param or an alias whose env is owned elsewhere.
-            codegen.memory.unregister_closure_cleanup(stmt.name)
-    elif isinstance(value, MemberAccess):
-        # BORROW: reading a closure out of a struct field; the struct owns it.
-        codegen.memory.unregister_closure_cleanup(stmt.name)
-    elif getattr(value, 'method', None) == 'get':
-        # BORROW: a container get-out (List/array `.get()`); the container owns it.
-        codegen.memory.unregister_closure_cleanup(stmt.name)
-    # else: lambda literal / call / fn ref -> g owns a fresh env; keep registration.
-
-
-def _reconcile_string_ownership(codegen: 'LLVMCodegen', stmt: 'Let', semantic_type) -> None:
-    """Keep exactly one RAII owner for a string binding (#145).
-
-    `create_local_nostore` registered `stmt.name` for owned-bit-guarded free. That is correct
-    only when the RHS produces a FRESH owned string (a string method / interpolation / call
-    return / literal). When the RHS aliases a buffer that something ELSE already owns, a second
-    owner would double-free. Reconcile by binding shape, mirroring closures:
-
-    - `let s2 = s` where s is a registered owning local -> MOVE: mark s moved so only s2 frees.
-    - `let s2 = s` where s is NOT registered (a param / already-borrowed alias) -> BORROW: the
-      caller's binding owns the buffer, so s2 must not free (unregister it).
-    - `let s2 = obj.field` (struct-field read) / `let s2 = c.get(i)??` (container get-out)
-      -> BORROW: the struct/container still owns the buffer (unregister s2).
-    - literal / method / interpolation / other call -> s2 owns a fresh string; keep it. A
-      literal carries owned=0, so its eventual free is a runtime no-op.
-    """
-    from sushi_lang.semantics.typesys import BuiltinType
-    from sushi_lang.semantics.ast import Name, MemberAccess, TryExpr
-
-    if semantic_type != BuiltinType.STRING:
-        return
-
-    value = stmt.value
-    if isinstance(value, TryExpr):
-        value = value.expr
-
-    if isinstance(value, Name):
-        source = value.id
-        if codegen.memory.is_string_registered(source):
-            # MOVE: transfer ownership source -> s2. s2 keeps its registration.
-            codegen.memory.mark_struct_as_moved(source)
-        else:
-            # BORROW: source is a param or an alias whose buffer is owned elsewhere.
-            codegen.memory.unregister_string_cleanup(stmt.name)
-    elif isinstance(value, MemberAccess):
-        # BORROW: reading a string out of a struct field; the struct owns it.
-        codegen.memory.unregister_string_cleanup(stmt.name)
-    elif getattr(value, 'method', None) == 'get':
-        # BORROW: a container get-out (List/array/HashMap `.get()`); the container owns it.
-        codegen.memory.unregister_string_cleanup(stmt.name)
-    # else: literal / string method / interpolation / call -> s2 owns a fresh string; keep it.
+        if owns:
+            codegen.memory.register_local_cleanup(stmt.name, semantic_type, slot)
+            # Own@(T) and List@(T) keep their own registries, which carry the element type
+            # the destructor needs. `register_local_cleanup` does not reach them.
+            if isinstance(semantic_type, StructType) and hasattr(codegen, 'dynamic_arrays'):
+                if codegen.dynamic_arrays.is_own_type(semantic_type):
+                    codegen.dynamic_arrays.register_own(stmt.name, semantic_type, slot)
+                elif codegen.dynamic_arrays.is_list_type(semantic_type):
+                    codegen.dynamic_arrays.register_list(stmt.name, semantic_type, slot)
 
 
 def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:

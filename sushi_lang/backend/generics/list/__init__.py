@@ -42,6 +42,7 @@ from sushi_lang.internals.errors import raise_internal_error
 
 # Public API - LLVM emission
 from .methods_simple import (
+    emit_list_clone,
     emit_list_new,
     emit_list_with_capacity,
     emit_list_len,
@@ -134,6 +135,8 @@ def emit_list_method(
         result = emit_list_debug(codegen, receiver_value, receiver_type)
     elif method == "iter":
         result = emit_list_iter(codegen, expr, receiver_value, receiver_type)
+    elif method == "clone":
+        result = emit_list_clone(codegen, receiver_value, receiver_type)
     else:
         raise_internal_error("CE0083", method=method)
 

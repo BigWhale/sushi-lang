@@ -126,10 +126,10 @@ def emit_fixed_array_get_maybe(
     element_ptr = codegen.builder.gep(array_temp, [zero, index_value], name="element_ptr")
     element_value = codegen.builder.load(element_ptr, name="element")
 
-    # Value semantics (#60): a struct element that owns heap memory must be deep-copied
-    # so the extracted copy does not shallow-share the array element's buffer.
-    from sushi_lang.backend.expressions import memory
-    element_value = memory.deep_copy_if_owning_struct(codegen, element_value, element_semantic_type)
+    # `.get()` READS. It does not detach (#242): the array keeps the element and still
+    # frees it, so the `Maybe.Some(...)` carries a BORROW. Pass 3 classifies it BORROWED,
+    # a `let` of it binds without owning, and a position that takes ownership rejects it
+    # (CE2411). `.pop()` is the one that still moves, because it removes the element.
 
     # Wrap in Maybe.Some
     some_result = emit_maybe_some(codegen, element_semantic_type, element_value)
@@ -223,10 +223,10 @@ def emit_dynamic_array_get_maybe(
     # Load element value
     element_value = codegen.builder.load(element_ptr, name="element")
 
-    # Value semantics (#60): a struct element that owns heap memory must be deep-copied
-    # so the extracted copy does not shallow-share the array element's buffer.
-    from sushi_lang.backend.expressions import memory
-    element_value = memory.deep_copy_if_owning_struct(codegen, element_value, element_semantic_type)
+    # `.get()` READS. It does not detach (#242): the array keeps the element and still
+    # frees it, so the `Maybe.Some(...)` carries a BORROW. Pass 3 classifies it BORROWED,
+    # a `let` of it binds without owning, and a position that takes ownership rejects it
+    # (CE2411). `.pop()` is the one that still moves, because it removes the element.
 
     # Wrap in Maybe.Some
     some_result = emit_maybe_some(codegen, element_semantic_type, element_value)

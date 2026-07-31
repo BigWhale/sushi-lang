@@ -21,7 +21,7 @@ def is_builtin_own_method(method_name: str) -> bool:
     Returns:
         True if this is a recognized Own<T> method, False otherwise.
     """
-    return method_name in ("alloc", "get", "destroy")
+    return method_name in ("alloc", "get", "destroy", "clone")
 
 
 def validate_own_method_with_validator(
@@ -46,6 +46,8 @@ def validate_own_method_with_validator(
         _validate_own_get(call, own_type, reporter)
     elif call.method == "destroy":
         _validate_own_destroy(call, own_type, reporter)
+    elif call.method == "clone":
+        _validate_own_clone(call, own_type, reporter)
     else:
         # Unknown method - should not happen if is_builtin_own_method was called first
         raise_internal_error("CE0080", method=call.method)
@@ -114,6 +116,22 @@ def _validate_own_destroy(
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc,
                method="destroy", expected=0, got=len(call.args))
+
+
+def _validate_own_clone(
+    call: MethodCall,
+    own_type: StructType,
+    reporter: Any
+) -> None:
+    """Validate Own<T>.clone() -- arity 0, returns a new Own<T> over a copied payload.
+
+    `.clone()` is the ONLY escape from CE2411 for a read of an `Own@(T)`, so it must exist
+    for every `Own` (#242). Before let-borrow bindings the compiler inserted this copy
+    itself, so no user ever needed to name it and it was never registered.
+    """
+    if call.args:
+        er.emit(reporter, er.ERR.CE2016, call.loc,
+                method="clone", expected=0, got=len(call.args))
 
 
 def get_own_element_type(own_type: StructType) -> Type:
