@@ -1,0 +1,28 @@
+# A `let`-borrow binding stops borrowing after its LAST USE (#242).
+#
+# The positive twin of the CE2412 files. The same `l.clear()` that is an error while `view`
+# is still read is legal once it is not: the borrow is dead, so nothing dangles. This is
+# Rust's non-lexical-lifetime rule, and it is why `let g = fns.get(0)??; g(10); fns.free()`
+# keeps compiling.
+#
+# The pass records the change on the binding rather than reporting at the change, and CE2412
+# fires only when a later read finds the record -- the same deferred shape `is_moved` uses
+# for CE2405.
+# EXPECT_STDOUT_EXACT: "n=3\nlen=0\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Buf:
+    i32[] data
+
+fn main() i32:
+    let List@(Buf) l = List.new()
+    l.push(Buf(from([1, 2, 3])))
+    if (true):
+        let Maybe@(Buf) view = l.get(0)
+        match view:
+            Maybe.Some(b) -> println("n={b.data.len()}")
+            Maybe.None -> println("none")
+    l.clear()
+    println("len={l.len()}")
+    return Result.Ok(0)

@@ -122,6 +122,12 @@ class BorrowState:
                                 # `let`-borrow binding (#242). `let x = c.get(0)??` names
                                 # `c`. None for a `match` / `foreach` binding, whose owner
                                 # is the scrutinee expression rather than a named local.
+    invalidated_at: Optional[Span] = None  # On a `let`-borrow BINDING: where its owner was
+                                # changed or released. Set instead of reporting, so CE2412
+                                # fires only if the binding is read afterwards -- Rust's
+                                # non-lexical lifetimes, and the same deferred shape
+                                # `is_moved` already uses for CE2405.
+    invalidated_by: tuple = ()  # (owner name, what the change was), for that diagnostic.
     binding_borrows: list = field(default_factory=list)  # On the OWNER: every live
                                 # `let`-borrow binding reading out of it, as
                                 # (binding name, `let` span). Mutating the owner while this
@@ -163,6 +169,18 @@ class FlowFacts:
 
     def __or__(self, other: "FlowFacts") -> "FlowFacts":
         return FlowFacts(self.moved | other.moved, self.destroyed | other.destroyed)
+
+
+# Methods that change or release what a container holds. A live `let`-borrow binding out of
+# the receiver cannot survive any of them, so each is CE2412 -- Rust's E0502.
+#
+# Drawn from `BUILTIN_LIST_METHODS`, the HashMap method set and the array method set, and
+# kept as ONE set: three copies would drift, and a name missing from any copy is a silent
+# dangling borrow rather than a wrong diagnostic.
+_MUTATING_METHODS = frozenset({
+    "push", "pop", "insert", "remove", "clear", "reserve", "shrink_to_fit",
+    "rehash", "destroy", "free", "fill", "reverse",
+})
 
 
 def _split_type_args(args: str) -> list[str]:
@@ -495,6 +513,10 @@ class BorrowChecker:
             # owned, `obj.field := v` replaces what the field owned. Only the first was
             # ever classified, which is why a field assignment was not a recognised
             # position at all.
+            # Replacing what the owner holds invalidates every binding reading out of
+            # it, whether the target is the owner itself or one of its fields (#242).
+            self._check_owner_not_borrowed(
+                self._root_owner(stmt.target), stmt.loc, "assign")
             if isinstance(stmt.target, Name):
                 self._consume(stmt.value, ConsumingUse.REBIND)
             elif isinstance(stmt.target, MemberAccess):
@@ -733,6 +755,9 @@ class BorrowChecker:
                     self._emit_use_after_move(expr.id, expr.loc, state)
                 elif state.is_destroyed:
                     self.err.emit(er.ERR.CE2406, expr.loc, name=expr.id)
+                elif state.invalidated_at is not None:
+                    # A `let`-borrow binding read after its owner changed (#242).
+                    self._emit_use_of_invalidated_borrow(expr.id, expr.loc, state)
 
         elif isinstance(expr, Call):
             # Check the callee (a moved closure used as `f(x)` is a use-after-move) and
@@ -760,6 +785,7 @@ class BorrowChecker:
             self._check_expr(expr.receiver)
             for arg in expr.args:
                 self._check_expr(arg)
+            self._maybe_reject_mutation(expr)
             self._maybe_mark_container_insert(expr)
             self._maybe_mark_own_alloc_move(expr)
 
@@ -769,6 +795,7 @@ class BorrowChecker:
             self._check_expr(expr.receiver)
             for arg in expr.args:
                 self._check_expr(arg)
+            self._maybe_reject_mutation(expr)
             # An enum constructor is an ownership sink (#134), exactly like a `from([...])`
             # element or an array-literal element: the enum stores the payload shallowly and
             # frees it, so a bare owning Name argument MOVES. `Box.Full(a)` reaches this pass
@@ -897,6 +924,13 @@ class BorrowChecker:
                 self._emit_use_after_move(var_name, borrow.loc, state)
                 return
 
+            # A `&poke` may mutate or free, so it conflicts with a live `let`-borrow
+            # binding exactly as a mutating method does (#242). Reported as CE2412 rather
+            # than CE2407, because the user wrote no `&peek` and CE2407's text would name
+            # a borrow they cannot see.
+            if is_poke:
+                self._check_owner_not_borrowed(var_name, borrow.loc, "take `&poke`")
+
             # Check borrow compatibility based on mode
             if is_poke:
                 # &poke: exclusive borrow - no other borrows allowed
@@ -945,6 +979,9 @@ class BorrowChecker:
             if state.is_moved:
                 self._emit_use_after_move(base_var, borrow.loc, state)
                 return
+
+            if is_poke:
+                self._check_owner_not_borrowed(base_var, borrow.loc, "take `&poke`")
 
             # Check borrow compatibility based on mode
             if is_poke:
@@ -1289,6 +1326,9 @@ class BorrowChecker:
 
         decision = classify(provenance, self._type_class(state.var_type))
         if decision is Ownership.MOVE:
+            # Handing the owner away leaves every binding reading out of it pointing at
+            # storage the new owner frees (#242).
+            self._check_owner_not_borrowed(name, use_span, "move")
             state.is_moved = True
             state.moved_at_span = state.moved_at_span or use_span
         elif decision is Ownership.REJECT:
@@ -1481,6 +1521,70 @@ class BorrowChecker:
                 return expr.id
             else:
                 return None
+
+    def _maybe_reject_mutation(self, expr: Expr) -> None:
+        """Reject `c.push(x)` while a `let`-borrow binding reads out of `c` (#242).
+
+        A mutating method is not a `Borrow` node, so it reaches none of the existing
+        borrow-conflict checks -- those fire only where the user wrote `&peek` / `&poke`.
+        This is the arm that makes `let v = c.get(0)??` followed by `c.free()` an error
+        instead of a use-after-free.
+        """
+        if getattr(expr, "method", None) not in _MUTATING_METHODS:
+            return
+        self._check_owner_not_borrowed(
+            self._root_owner(getattr(expr, "receiver", None)), expr.loc,
+            f"call `.{expr.method}()`")
+
+    def _check_owner_not_borrowed(self, owner: Optional[str], span: Optional[Span],
+                                  what: str) -> None:
+        """Reject a change to `owner` while a `let`-borrow binding reads out of it (#242).
+
+        The half that gives a borrowed binding a LIFETIME. Without it the binding is a
+        pointer into storage the owner may free, shrink or hand away at any time, and the
+        model would trade an implicit deep copy for a dangling read.
+
+        `what` names the action, so the diagnostic says which of the four happened: a
+        mutating method, a rebind, a move, or a `&poke` borrow.
+        """
+        if owner is None:
+            return
+        state = self.borrow_state.get(owner)
+        if state is None or not state.binding_borrows:
+            return
+        # INVALIDATE, do not report. The change is an error only if the binding is read
+        # AFTER it -- Rust's non-lexical lifetimes, and the same shape as `is_moved`, which
+        # this pass already reports at the USE rather than at the move. Reporting here
+        # instead would reject `let g = fns.get(0)??; g(10); fns.free()`, which is safe:
+        # the borrow is dead by the time the owner is freed.
+        for name, bound_at in state.binding_borrows:
+            binding = self.borrow_state.get(name)
+            if binding is not None and binding.invalidated_at is None:
+                binding.invalidated_at = span
+                binding.invalidated_by = (owner, what)
+                binding.bound_at_span = binding.bound_at_span or bound_at
+        state.binding_borrows = []
+
+    def _emit_use_of_invalidated_borrow(self, name: str, use_span: Optional[Span],
+                                        state: BorrowState) -> None:
+        """Report CE2412 at the change, and name the later use that makes it wrong.
+
+        Three locations, because the error needs all three to be explicable: WHAT changed,
+        WHERE the borrow came from, and WHICH later read is left dangling. Rust's E0502
+        renders the same three.
+        """
+        owner, what = state.invalidated_by
+        diag = self.err.emit_with(er.ERR.CE2412, state.invalidated_at,
+                                  owner=owner, name=name)
+        if state.bound_at_span is not None:
+            diag.note(f"'{name}' borrows from '{owner}' here", state.bound_at_span)
+        diag.note(f"'{name}' is used here, after the change", use_span)
+        diag.help(f"{what} after the last use of '{name}', "
+                  f"or bind an independent value with `.clone()`")
+        diag.emit()
+        # Report once per binding: the first dangling read is the whole story, and a
+        # second one adds a location without adding information.
+        state.invalidated_at = None
 
     def _emit_consume_of_read(self, expr: Expr) -> None:
         """Report CE2411 for a read through a live owner (`h.inner`, `c.get(0)??`).

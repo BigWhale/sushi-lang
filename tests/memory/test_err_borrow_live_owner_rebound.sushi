@@ -1,0 +1,15 @@
+# Rebinding the owner while a `let`-borrow binding reads out of it is CE2412 (#242).
+#
+# `h := Holder(...)` destroys what `h` held before storing the new value, so `view` would
+# name a freed buffer.
+# EXPECT_ERROR_CODE: CE2412
+
+struct Holder:
+    i32[] items
+
+fn main() i32:
+    let Holder h = Holder(from([1, 2, 3]))
+    let i32[] view = h.items
+    h := Holder(from([9]))
+    println("view={view.len()}")
+    return Result.Ok(0)
