@@ -14,6 +14,7 @@ from sushi_lang.backend.expressions.calls.stdlib import emit_time_function, emit
 from sushi_lang.backend.expressions.calls import intrinsics, generics
 from sushi_lang.backend.expressions.calls.utils import emit_receiver_value
 from sushi_lang.backend.expressions.calls.variadic import build_variadic_array
+from sushi_lang.backend.ownership import ConsumingUse, consume
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -99,16 +100,8 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     else:
         args = [codegen.expressions.emit_expr(a) for a in expr.args]
         _register_inline_closure_temps(codegen, expr.args, args)
-        # Value semantics (#60): a heap-owning USER struct passed by value must be
-        # deep-copied so the callee owns an independent buffer (the callee frees its
-        # copy at scope exit). Owning move-types (T[]/List/Own) are moved instead, not
-        # copied (struct_needs_cleanup is false for them, so they pass through here).
-        # Reference params (&peek/&poke) are borrows and are never copied.
-        _deep_copy_struct_value_args(codegen, expr.args, args, func_sig)
-        # Move-by-value for owning params (#131): a bare owning argument (T[]/List/Own)
-        # is moved into the callee, which owns and frees it. Mark the source local moved
-        # so the caller's scope-exit RAII skips it (exactly one owner frees).
-        _move_owning_value_args(codegen, expr, func_sig)
+        # A by-value parameter takes ownership; the callee frees its value at scope exit.
+        _consume_call_arguments(codegen, expr.args, args, func_sig)
 
     params = list(llvm_fn.args)
     if len(args) != len(params):
@@ -212,67 +205,29 @@ def _resolve_param_type(codegen: 'LLVMCodegen', ty):
     return ty
 
 
-def _deep_copy_struct_value_args(codegen: 'LLVMCodegen', arg_exprs: list, args: list, func_sig) -> None:
-    """Deep-copy by-value composite arguments that KEEP copy semantics, in place.
+def _consume_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list, func_sig) -> None:
+    """Route every by-value argument through the ownership seam, in place.
 
-    A copy-type composite (a string-only struct, or any struct/enum with no owning
-    resource) passed by value is deep-copied so the callee owns an independent buffer.
-    A #134 move-type argument that is a bare `Name` is instead moved -- it flows to
-    `_move_owning_value_args`, which marks the source local moved -- so it is skipped
-    here (copying it would leak a second buffer the caller never frees). A move-type
-    argument that is NOT a bare Name but reads from a continuing owner (`s.field`,
-    `own.get()`) keeps the copy (spec V5). Reference parameters are borrows, skipped.
+    A by-value parameter takes ownership: the callee frees the value at scope exit (see
+    begin_function's param registration). Reference parameters are borrows and are skipped
+    -- a borrow is spelled `&peek x` at the call site, which is a `Borrow` node, so it
+    never reaches the seam at all.
+
+    This position was the reference implementation before the seam existed: it was the one
+    of eleven that got the rule right, and it did so with two cooperating passes (one
+    deciding copies, one marking moves) plus its own resolver. All three collapse here.
     """
     if func_sig is None or not func_sig.params:
         return
-    from sushi_lang.semantics.typesys import ReferenceType, type_moves_by_value
-    from sushi_lang.backend.expressions import memory
+    from sushi_lang.semantics.typesys import ReferenceType
     for i, param in enumerate(func_sig.params):
-        if i >= len(args):
-            break
-        if isinstance(param.ty, ReferenceType):
+        if i >= len(args) or isinstance(param.ty, ReferenceType):
             continue
         arg_expr = arg_exprs[i] if i < len(arg_exprs) else None
-        if type_moves_by_value(_resolve_param_type(codegen, param.ty)):
-            # #134 move sink. A copy is needed only when the source is a CONTINUING OWNER we
-            # must detach from: a MemberAccess or an Own.get() deref (V5), or a bare Name that
-            # is a borrow (a match / pattern binding whose real owner still frees it). An owned
-            # bare Name is moved (marked in _move_owning_value_args); a fresh owning temp
-            # (clone / call / constructor return) moves in as-is -- copying either would leak
-            # or double-free.
-            if memory.expression_reads_continuing_owner(codegen, arg_expr):
-                args[i] = memory.deep_copy_if_owning_struct(codegen, args[i], param.ty)
-            elif isinstance(arg_expr, Name) and not codegen.memory.is_owned_local(arg_expr.id):
-                args[i] = memory.deep_copy_if_owning_struct(codegen, args[i], param.ty)
+        if arg_expr is None:
             continue
-        # Copy-type composite (string-only struct/enum): deep-copy so the source stays usable.
-        args[i] = memory.deep_copy_if_owning_struct(codegen, args[i], param.ty)
-
-
-def _move_owning_value_args(codegen: 'LLVMCodegen', expr: Call, func_sig) -> None:
-    """Mark bare owning arguments (T[]/List/Own) passed by value as moved (#131).
-
-    A by-value owning parameter takes ownership: the callee frees the value at scope
-    exit (see begin_function's param registration). Mark the source local moved so the
-    caller's scope-exit RAII skips it -- exactly one owner frees, no double-free. Borrows
-    (`&peek x`) are Borrow nodes, not Name nodes, and reference params are not owning, so
-    neither is ever marked. No-op without a signature (indirect/builtin calls).
-
-    #134: the move predicate is `type_moves_by_value`, so an owning struct/enum bare-Name
-    argument moves too (not just T[]/List/Own). String-only composites stay copy types.
-    """
-    if func_sig is None or not func_sig.params:
-        return
-    from sushi_lang.semantics.typesys import type_moves_by_value
-    for i, param in enumerate(func_sig.params):
-        if i >= len(expr.args):
-            break
-        arg = expr.args[i]
-        # Only an OWNED bare Name is moved; a borrow (match/pattern binding) is copied
-        # instead (deep-copied in _deep_copy_struct_value_args) and must not be marked moved.
-        if (isinstance(arg, Name) and type_moves_by_value(_resolve_param_type(codegen, param.ty))
-                and codegen.memory.is_owned_local(arg.id)):
-            codegen.memory.mark_struct_as_moved(arg.id)
+        args[i] = consume(codegen, arg_expr, args[i],
+                          _resolve_param_type(codegen, param.ty), ConsumingUse.CALL_ARG)
 
 
 def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool = False, is_dotcall: bool = False) -> ir.Value:

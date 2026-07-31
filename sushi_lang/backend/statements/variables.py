@@ -6,6 +6,7 @@ and variable rebinding (:=) with proper RAII cleanup and move semantics.
 """
 from __future__ import annotations
 from typing import TYPE_CHECKING
+from sushi_lang.backend.ownership import ConsumingUse, consume
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -126,67 +127,11 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
                                                     stmt.ty.base_type)
         else:
             rhs = codegen.expressions.emit_expr(stmt.value)
-            # Owning-struct copy semantics (#60/#134/#147): a struct that owns heap memory
-            # (a string / array / ... field) must get INDEPENDENT buffers when it is aliased
-            # by value, or two scope-registered owners double-free at scope exit. A bare-Name
-            # or struct-field-read alias is deep-copied here; a fresh RHS (constructor / call
-            # return) or an already-cloned array get-out is a sole owner and left as-is.
-            rhs = _clone_owning_struct_alias(codegen, stmt, rhs, semantic_type)
+            # A `let` binding takes ownership of its RHS. What that means for a given
+            # source is not this position's decision to make -- see backend/ownership.py.
+            rhs = consume(codegen, stmt.value, rhs, semantic_type, ConsumingUse.LET)
             casted_rhs = codegen.utils.cast_for_param(rhs, ll_type)
             codegen.builder.store(casted_rhs, slot)
-
-
-def _clone_owning_struct_alias(codegen: 'LLVMCodegen', stmt: 'Let', rhs: 'ir.Value', semantic_type) -> 'ir.Value':
-    """Deep-copy an owning-struct RHS when the binding aliases an existing owner.
-
-    Move types (#134): `let b = a` where `a` is an owning struct/enum (a T[]/List/Own
-    somewhere in it) MOVES -- the source is marked moved so only the new binding frees, and
-    the RHS is stored un-cloned (mirrors the T[]/List/Own rebind). Copy composites (string-
-    only structs/enums) and a read from a continuing owner -- `let inner = outer.field` or
-    `let inner = own.get()`, spec V5 -- keep the deep copy so each of the two live owners
-    frees once (#147/#256). A constructor, call return, or array `.get()`/index get-out
-    (already deep-copied at the access site) is a fresh sole owner and is returned unchanged.
-    """
-    from sushi_lang.semantics.typesys import (
-        StructType, EnumType, UnknownType, type_moves_by_value, is_owning_type
-    )
-    from sushi_lang.semantics.ast import Name
-
-    resolved = semantic_type
-    if isinstance(resolved, UnknownType):
-        resolved = (codegen.struct_table.by_name.get(resolved.name)
-                    or codegen.enum_table.by_name.get(resolved.name)
-                    or resolved)
-    # A type that IS the owning resource -- a bare `T[]`, `List<T>` or `Own<T>` -- rather
-    # than a composite CONTAINING one (#250). A `T[]` is not a StructType at all, and
-    # `List<T>`/`Own<T>` are StructTypes that the struct_needs_cleanup gate below reports
-    # False for (it scans for dynamic-array FIELDS; theirs are raw pointers). So neither
-    # reaches the MemberAccess clone below. A MemberAccess source reads from a CONTINUING
-    # owner and must detach with its own copy, else the binding and the owning struct both
-    # free the same buffer at scope exit. A bare Name of these types already moves via the
-    # array/List move path, so it is deliberately not handled here.
-    from sushi_lang.backend.expressions.memory import (
-        emit_value_clone, expression_reads_continuing_owner
-    )
-    if is_owning_type(resolved) and expression_reads_continuing_owner(codegen, stmt.value):
-        return emit_value_clone(codegen, rhs, resolved)
-    if not isinstance(resolved, (StructType, EnumType)):
-        return rhs
-    # #134: a bare-Name RHS of a MOVE type transfers ownership -- but only an OWNED local
-    # moves (mark moved, store un-cloned). A borrow binding (a match/pattern binding whose
-    # real owner still frees it, #238) is CLONED so the new binding owns an independent value.
-    if isinstance(stmt.value, Name) and type_moves_by_value(resolved):
-        if codegen.memory.is_owned_local(stmt.value.id):
-            codegen.memory.mark_struct_as_moved(stmt.value.id)
-            return rhs
-        return emit_value_clone(codegen, rhs, resolved)
-    # Copy semantics: a string-only composite always copies; a MemberAccess / Own.get() source
-    # reads from a continuing owner and copies (V5). A fresh RHS is left as-is.
-    if not codegen.dynamic_arrays.struct_needs_cleanup(resolved):
-        return rhs
-    if isinstance(stmt.value, Name) or expression_reads_continuing_owner(codegen, stmt.value):
-        return emit_value_clone(codegen, rhs, resolved)
-    return rhs
 
 
 def _reconcile_closure_ownership(codegen: 'LLVMCodegen', stmt: 'Let', semantic_type) -> None:
@@ -380,23 +325,18 @@ def _emit_dynamic_array_rebind(
         dst: The destination type.
     """
     from llvmlite import ir
-    from sushi_lang.semantics.ast import Name, MemberAccess
+    from sushi_lang.semantics.ast import Name
 
     # Extract variable name from target (must be Name for this function)
     if not isinstance(stmt.target, Name):
         raise_internal_error("CE0022", type=f"Expected Name target, got {type(stmt.target)}")
     var_name = stmt.target.id
 
-    # A `MemberAccess` source (`b := w.items`) reads from a CONTINUING owner -- the struct
-    # still frees that buffer -- so the target must take an independent copy or both free
-    # it (#250). Only the bare-Name source below is consumed. Cloned BEFORE the old-array
-    # destructor runs: cloning reads the source buffer, so a source aliasing the buffer
-    # about to be freed would otherwise be a use-after-free.
-    if isinstance(stmt.value, MemberAccess):
-        from sushi_lang.backend.expressions.memory import emit_value_clone
-        semantic_type = codegen.memory.find_semantic_type(var_name)
-        if semantic_type is not None:
-            val = emit_value_clone(codegen, val, semantic_type)
+    # Decide (and perform) ownership BEFORE the old-array destructor runs below: a COPY
+    # reads the source buffer, and a source aliasing the buffer about to be freed would
+    # otherwise be a use-after-free.
+    semantic_type = codegen.memory.find_semantic_type(var_name)
+    val = consume(codegen, stmt.value, val, semantic_type, ConsumingUse.REBIND)
 
     # Dynamic array rebind - need to clean up old array first to prevent memory leaks
     # Clean up the old array's memory before rebinding
@@ -411,32 +351,28 @@ def _emit_dynamic_array_rebind(
     # Store the new array value
     codegen.builder.store(val, slot)
 
-    # MOVE SEMANTICS: Check if source is a variable (not a method call)
-    # If arr1 := arr2, we need to nullify arr2 and mark it as moved
+    # Nullify a MOVED source's descriptor (data=NULL, len=0, cap=0). The move mark alone
+    # keeps scope exit from freeing it; this additionally makes a later read of the source
+    # observably empty rather than a stale view of the buffer the target now owns.
+    # `consume` has already decided -- a copied or adopted source must NOT be nullified,
+    # which is what `moves.is_moved` distinguishes.
     if isinstance(stmt.value, Name):
         source_name = stmt.value.id
-        if source_name in codegen.dynamic_arrays.arrays:
-            # Nullify the source array (set data=NULL, len=0, cap=0)
-            source_slot = codegen.memory.find_local_slot(source_name)
+        source_slot = codegen.memory.try_find_local_slot(source_name)
+        if (source_name in codegen.dynamic_arrays.arrays and source_slot is not None
+                and codegen.moves.is_moved(source_slot)):
             zero_i32 = ir.Constant(codegen.i32, 0)
-
-            # Get element type from the source array
             element_type_llvm = dst.elements[2].pointee  # T* from {i32, i32, T*}
             null_ptr = ir.Constant(ir.PointerType(element_type_llvm), None)
 
-            # Get pointers to source array fields using helper
             from sushi_lang.backend import gep_utils
             len_ptr = gep_utils.gep_struct_field(codegen, source_slot, 0, "len_ptr")
             cap_ptr = gep_utils.gep_struct_field(codegen, source_slot, 1, "cap_ptr")
             data_ptr_ptr = gep_utils.gep_struct_field(codegen, source_slot, 2, "data_ptr_ptr")
 
-            # Nullify source array
             codegen.builder.store(zero_i32, len_ptr)
             codegen.builder.store(zero_i32, cap_ptr)
             codegen.builder.store(null_ptr, data_ptr_ptr)
-
-            # Mark source as moved (prevents cleanup at scope exit)
-            codegen.memory.mark_struct_as_moved(source_name)
 
 
 def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value', val: 'ir.Value') -> None:
@@ -469,21 +405,11 @@ def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value'
             and codegen.dynamic_arrays.struct_needs_cleanup(resolved)):
         # Destroy the old value's heap so it does not leak when overwritten (#139).
         codegen.dynamic_arrays.emit_struct_field_cleanup(var_name, resolved, slot)
-        # #134: a bare-Name RHS of a MOVE type transfers ownership -- mark the source moved
-        # and store it un-cloned. A copy composite, or a read from a continuing owner
-        # (`s.field` / `own.get()`, V5), deep-copies so the target and the still-live source
-        # each free once.
-        from sushi_lang.semantics.typesys import type_moves_by_value
-        from sushi_lang.backend.expressions.memory import (
-            emit_value_clone, expression_reads_continuing_owner
-        )
-        if (isinstance(stmt.value, Name) and type_moves_by_value(resolved)
-                and codegen.memory.is_owned_local(stmt.value.id)):
-            codegen.memory.mark_struct_as_moved(stmt.value.id)
-        elif (isinstance(stmt.value, Name)
-                or expression_reads_continuing_owner(codegen, stmt.value)):
-            # A borrow binding (#238) or a continuing-owner read is cloned, not moved.
-            val = emit_value_clone(codegen, val, resolved)
+
+    # A rebind takes ownership of its RHS. Run this for EVERY resolved type, not only the
+    # cleanup-needing composites above: the gate belongs to the destroy-the-old-value step,
+    # not to the decision about the new one.
+    val = consume(codegen, stmt.value, val, resolved, ConsumingUse.REBIND)
 
     # Store the new value
     codegen.builder.store(val, slot)
@@ -517,6 +443,12 @@ def _emit_field_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
     if field_index is None:
         raise_internal_error("CE0029", struct=struct_type.name, field=target.member)
 
+    # A field assignment takes ownership of the value, exactly as a `let` or a rebind
+    # does. It was not a recognised position at all: a raw GEP and store, with no clone,
+    # no move mark, and no destruction of the value the field already held.
+    field_type = struct_type.get_field_type(target.member)
+    val = consume(codegen, stmt.value, val, field_type, ConsumingUse.FIELD_ASSIGN)
+
     # Get a pointer to the struct (either alloca or reference parameter pointer)
     from sushi_lang.backend.expressions.structs import try_get_struct_alloca
     struct_ptr = try_get_struct_alloca(codegen, target.receiver)
@@ -533,6 +465,14 @@ def _emit_field_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
         field_index,
         name=f"{target.member}_rebind_ptr"
     )
+
+    # Free what the field already held, or overwriting it leaks. The variable rebind does
+    # this (emit_struct_field_cleanup); the field rebind never did. Emitted AFTER the
+    # value is consumed above, so a COPY has already read the source -- a source aliasing
+    # the buffer about to be freed would otherwise be a use-after-free.
+    from sushi_lang.backend.destructors import emit_value_destructor, needs_cleanup
+    if field_type is not None and needs_cleanup(field_type):
+        emit_value_destructor(codegen, field_ptr, field_type)
 
     # Cast the value if needed (for integer types)
     dst_type = field_ptr.type.pointee

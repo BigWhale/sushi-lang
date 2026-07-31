@@ -359,6 +359,16 @@ _add(ErrorMessage("CE0128", Severity.ERROR,
     "which reports it as CE2095 and stops the analysis -- so reaching this is a gap in that "
     "check, not a user error. It used to be a bare ValueError rendered as CE0000."))
 
+_add(ErrorMessage("CE0129", Severity.ERROR,
+    "no ownership decision for the {use} consuming use of a {node}",
+    Category.INTERNAL,
+    "Every position that takes ownership routes through backend/ownership.py::consume, which "
+    "reads the Provenance semantics stamped on the source expression. A missing stamp means "
+    "Pass 3 did not classify this position -- a gap in the borrow checker's coverage of the "
+    "ConsumingUse set, not a user error. It is fatal ON PURPOSE: a fallback that guessed the "
+    "decision would be a twelfth derivation of the rule, which is the thing the seam exists to "
+    "make impossible. Same treatment CE0124 gives a missing try-expression annotation."))
+
 _add(ErrorMessage("CE0126", Severity.ERROR,
     "poisoned intern of '{name}': already interned as {existing}, rebuilt as {rebuilt}",
     Category.INTERNAL,

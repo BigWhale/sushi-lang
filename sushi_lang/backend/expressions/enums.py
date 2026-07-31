@@ -155,27 +155,14 @@ def emit_enum_constructor_from_method_call(
                         and arg_value.type.pointee == codegen.types.ll_type(arg_type)):
                     arg_value = codegen.builder.load(arg_value, name="enum_payload_by_value")
 
-                # A payload that reads from a CONTINUING owner -- `Result.Ok(w.items)`,
-                # `Maybe.Some(w.items)`, `Box.Full(w.items)`, or an `Own.get()` deref -- must
-                # not alias it: the owner still frees that buffer, and Sushi has no partial
-                # moves, so the enum needs an independent copy (#250/#256). Without it the
-                # payload aliased the source and both freed it -- and because a returned
-                # Result is emitted BEFORE scope cleanup, `return Result.Ok(w.items)` also
-                # handed the caller an already-freed buffer. Cloned, never moved: moving would
-                # leave the source's own destructor to free a buffer the enum now owns.
-                from sushi_lang.backend.expressions.memory import (
-                    clone_owning_source, expression_reads_continuing_owner
-                )
-                if expression_reads_continuing_owner(codegen, arg_expr):
-                    arg_value = clone_owning_source(codegen, arg_value, arg_type)
-
-                # A bare-Name owning arg (dynamic array / List<T> / Own<T> / heap-owning
-                # struct) is stored SHALLOWLY into the variant's data blob, so the enum
-                # takes ownership of the shared buffer -- move the source local so scope-exit
-                # RAII does not ALSO free it (double-free). Mirrors the struct constructor's
-                # move handling (#140).
-                from sushi_lang.backend.expressions.memory import move_owning_arg_into_container
-                move_owning_arg_into_container(codegen, arg_expr)
+                # An enum payload is stored SHALLOWLY into the variant's byte blob, so the
+                # enum becomes an owner of whatever the value points at. Which is why the
+                # decision matters here more than almost anywhere: a returned Result is
+                # emitted BEFORE scope cleanup, so `return Result.Ok(w.items)` handed the
+                # caller an already-freed buffer when this position got it wrong (#256).
+                from sushi_lang.backend.ownership import ConsumingUse, consume
+                arg_value = consume(codegen, arg_expr, arg_value, arg_type,
+                                    ConsumingUse.ENUM_PAYLOAD)
 
             # Calculate size of this argument
             from sushi_lang.backend.expressions import memory

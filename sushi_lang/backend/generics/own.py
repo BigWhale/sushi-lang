@@ -171,14 +171,11 @@ def emit_builtin_own_method(
         # Emit the argument value
         arg = call.args[0]
         arg_value = codegen.expressions.emit_expr(arg)
-        # Own.alloc takes ownership: if the argument is a named owning variable, move it
-        # so its RAII cleanup is skipped (the new Own is now the sole owner). Guarded on
-        # an owning type so primitives (copied) are untouched (#106).
-        from sushi_lang.semantics.ast import Name
-        if isinstance(arg, Name):
-            arg_ty = codegen.memory.find_semantic_type(arg.id)
-            if arg_ty is not None and _arg_type_is_owning(codegen, arg_ty):
-                codegen.memory.mark_struct_as_moved(arg.id)
+        # `Own.alloc` takes ownership: the new Own becomes the sole owner of the pointee.
+        # This position used to move a bare owning Name and do nothing else -- no copy
+        # branch at all, so a borrowed binding or a field read was silently aliased.
+        from sushi_lang.backend.ownership import ConsumingUse, consume
+        arg_value = consume(codegen, arg, arg_value, element_type, ConsumingUse.OWN_ALLOC)
         return emit_own_alloc(codegen, element_type, arg_value)
     elif call.method == "get":
         return emit_own_get(codegen, own_value, element_type)

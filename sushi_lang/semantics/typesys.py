@@ -314,7 +314,8 @@ def is_owning_type(t: Optional["Type"]) -> bool:
     return False
 
 
-def type_moves_by_value(t: Optional["Type"], _visited: Optional[set] = None) -> bool:
+def type_moves_by_value(t: Optional["Type"], _visited: Optional[set] = None,
+                        resolve=None) -> bool:
     """True if a value of this type MOVES at ownership sinks (#134).
 
     A type moves by value iff it transitively contains an owning resource
@@ -324,28 +325,37 @@ def type_moves_by_value(t: Optional["Type"], _visited: Optional[set] = None) -> 
     NOT the backend's needs_cleanup: strings need RAII but are copy types
     (docs/design/string-representation.md), so a string-only struct copies
     while a struct with a T[] field moves. Do not unify the two predicates.
+
+    `resolve` (a `Type -> Type` mapping over the struct/enum tables) is optional but
+    matters wherever a name can still be unresolved AT ANY DEPTH. Without it an
+    `UnknownType` answers False, so a `Buffer[2]` whose element is still named rather
+    than resolved reports "owns nothing" and every consuming use of it aliases -- a
+    double free, not a leak. The top level is not enough: the unresolved name is
+    typically the array's ELEMENT.
     """
     if t is None:
         return False
+    if resolve is not None and isinstance(t, UnknownType):
+        t = resolve(t) or t
     if is_owning_type(t):
         return True
     if isinstance(t, UnknownType):
-        return False  # Pass 2 rejects unresolved types; treat as non-moving
+        return False  # unresolved and no resolver given; treat as non-moving
     if _visited is None:
         _visited = set()
     if isinstance(t, StructType):
         if t.name in _visited:
             return False
         _visited.add(t.name)
-        return any(type_moves_by_value(ft, _visited) for _, ft in t.fields)
+        return any(type_moves_by_value(ft, _visited, resolve) for _, ft in t.fields)
     if isinstance(t, EnumType):
         if t.name in _visited:
             return False
         _visited.add(t.name)
-        return any(type_moves_by_value(at, _visited)
+        return any(type_moves_by_value(at, _visited, resolve)
                    for variant in t.variants for at in variant.associated_types)
     if isinstance(t, ArrayType):
-        return type_moves_by_value(t.base_type, _visited)
+        return type_moves_by_value(t.base_type, _visited, resolve)
     return False
 
 

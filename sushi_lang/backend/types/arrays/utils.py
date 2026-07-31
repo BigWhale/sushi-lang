@@ -36,25 +36,17 @@ def emit_array_literal_elements(codegen: 'LLVMCodegen', element_exprs, element_t
     Returns:
         The list of emitted (and alias-cloned) element SSA values.
     """
-    from sushi_lang.semantics.ast import Name, MemberAccess
-    from sushi_lang.backend.expressions.memory import emit_value_clone
-    from sushi_lang.semantics.typesys import type_moves_by_value
+    from sushi_lang.backend.ownership import ConsumingUse, consume
 
     values = []
     for elem in element_exprs:
         value = codegen.expressions.emit_expr(elem)
-        if isinstance(elem, (Name, MemberAccess)):
-            ety = element_type if element_type is not None else _alias_element_type(codegen, elem)
-            if ety is not None:
-                # #134: an OWNED bare-Name element of a MOVE type moves into the array -- mark
-                # the source moved and store it un-cloned. A borrow binding (#238) or a
-                # MemberAccess element (a continuing owner, V5) keeps the deep copy.
-                if (isinstance(elem, Name) and type_moves_by_value(ety)
-                        and codegen.memory.is_owned_local(elem.id)):
-                    codegen.memory.mark_struct_as_moved(elem.id)
-                else:
-                    value = emit_value_clone(codegen, value, ety)
-        values.append(value)
+        # The array takes ownership of each element. `_alias_element_type` is the fallback
+        # for callers that do not know the declared element type (the plain `from([...])`
+        # path); a None type classifies as PLAIN, i.e. store as-is, which is the same
+        # verbatim-emit this position did before.
+        ety = element_type if element_type is not None else _alias_element_type(codegen, elem)
+        values.append(consume(codegen, elem, value, ety, ConsumingUse.ARRAY_ELEMENT))
     return values
 
 

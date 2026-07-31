@@ -376,7 +376,14 @@ class BorrowChecker:
                 # Foreign `ptr` is exempt from borrow checking: aliasing through a
                 # foreign pointer is not tracked. Record the binding but skip any
                 # borrow analysis of the initializer's reference semantics.
+                #
+                # The ownership stamp is NOT skipped. The exemption is about aliasing
+                # analysis, not about classification: a `ptr` is an unmanaged handle, so
+                # it classifies as PLAIN and the decision is ADOPT. Skipping the stamp
+                # left the backend's `let` position with no decision to read at all --
+                # CE0129 on the first FFI program that binds one.
                 self.borrow_state[stmt.name] = BorrowState(name=stmt.name, var_type=stmt.ty)
+                self._consume(stmt.value, ConsumingUse.LET)
                 self._clear_borrows()
                 return
             self.borrow_state[stmt.name] = BorrowState(name=stmt.name, var_type=stmt.ty)
@@ -432,6 +439,10 @@ class BorrowChecker:
 
         elif isinstance(stmt, Return):
             self._check_expr(stmt.value)
+            # A return hands the value to the caller. `return Result.Ok(x)` consumes `x`
+            # at ENUM_PAYLOAD and the constructor itself is FRESH, so this matters for the
+            # shape that is not wrapped: an extension method's bare `return value`.
+            self._consume(stmt.value, ConsumingUse.RETURN)
             self._clear_borrows()
 
         elif isinstance(stmt, Print) or isinstance(stmt, PrintLn):
@@ -585,7 +596,7 @@ class BorrowChecker:
                 self._register_pattern_bindings(binding, payload_type)
             else:
                 # An OwnPattern auto-unwraps `Own@(T)`; its inner pattern binds the pointee.
-                inner = getattr(binding, "pattern", None)
+                inner = getattr(binding, "inner_pattern", None)
                 if isinstance(inner, Pattern):
                     self._register_pattern_bindings(inner, self._own_payload(payload_type))
                 elif isinstance(inner, str) and inner != "_":
@@ -609,12 +620,24 @@ class BorrowChecker:
         variant = resolved.get_variant(variant_name)
         return tuple(variant.associated_types) if variant is not None else ()
 
-    @staticmethod
-    def _own_payload(ty: Optional[Type]) -> Optional[Type]:
-        """The `T` inside an `Own@(T)`, for an OwnPattern's inner binding."""
+    def _own_payload(self, ty: Optional[Type]) -> Optional[Type]:
+        """The `T` inside an `Own@(T)`, for an OwnPattern's inner binding.
+
+        Both spellings must be handled. Before monomorphization the payload is a
+        `GenericTypeRef("Own", [T])`; after it, an interned `StructType` named `Own<T>`
+        whose single field is `T*`. Recognising only the first left the binding untyped,
+        which classifies as PLAIN -- so an `Own(tail)` binding of an owning enum was
+        adopted rather than copied, and the pointee was freed twice.
+        """
         from sushi_lang.semantics.generics.types import GenericTypeRef
+        from sushi_lang.semantics.typesys import PointerType, StructType as _StructType
+        ty = self._resolve_named(ty)
         if isinstance(ty, GenericTypeRef) and ty.base_name == "Own" and ty.type_args:
             return ty.type_args[0]
+        if isinstance(ty, _StructType) and ty.name.startswith("Own<") and ty.fields:
+            value_field = ty.fields[0][1]
+            if isinstance(value_field, PointerType):
+                return value_field.pointee_type
         return None
 
     def _resolve_named(self, ty: Optional[Type]):
@@ -939,14 +962,31 @@ class BorrowChecker:
         """
         if getattr(expr, "method", None) not in self._CONTAINER_INSERT_METHODS:
             return
-        receiver = getattr(expr, "receiver", None)
-        if not isinstance(receiver, Name):
-            return
-        state = self.borrow_state.get(receiver.id)
-        if state is None or not self._is_container_type(state.var_type):
+        if not self._is_container_type(self._expr_type(getattr(expr, "receiver", None))):
             return
         for arg in expr.args:
             self._consume(arg, ConsumingUse.CONTAINER_INSERT)
+
+    def _expr_type(self, expr) -> Optional[Type]:
+        """Best-effort type of a receiver expression: a local, or a field reached from one.
+
+        `c.numbers.push(10)` is as much a container insert as `numbers.push(10)`, and the
+        backend treats them identically. Resolving only the bare-`Name` shape here left
+        the field receiver unstamped, which the seam then reported as CE0129 -- the loud
+        failure doing exactly its job. Anything more elaborate than a chain of field reads
+        off a local answers None, which classifies as PLAIN and stamps nothing extra.
+        """
+        if isinstance(expr, Name):
+            state = self.borrow_state.get(expr.id)
+            return state.var_type if state is not None else None
+        if isinstance(expr, MemberAccess):
+            from sushi_lang.semantics.typesys import StructType as _StructType
+            owner = self._resolve_named(self._expr_type(expr.receiver))
+            if isinstance(owner, ReferenceType):
+                owner = self._resolve_named(owner.referenced_type)
+            if isinstance(owner, _StructType):
+                return owner.get_field_type(expr.member)
+        return None
 
     def _is_container_type(self, ty: Optional[Type]) -> bool:
         """Is `ty` a `List@(T)`, `HashMap@(K, V)` or a dynamic array `T[]`?

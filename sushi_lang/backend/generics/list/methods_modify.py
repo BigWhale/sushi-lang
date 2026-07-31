@@ -94,8 +94,13 @@ def emit_list_push(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Struc
         phi.add_incoming(typed_new_data_ptr, after_if)
     data_ptr = phi
 
-    # Evaluate element to push
+    # Evaluate element to push. The list stores it shallowly and frees it on
+    # `.destroy()`/scope exit, so this is a consuming use: the seam decides whether the
+    # source hands ownership over, detaches with a copy, or is rejected outright.
+    from sushi_lang.backend.ownership import ConsumingUse, consume
     element_value = codegen.expressions.emit_expr(expr.args[0])
+    element_value = consume(codegen, expr.args[0], element_value, element_type,
+                            ConsumingUse.CONTAINER_INSERT)
 
     # Store element at data[len]
     element_ptr = gep_utils.gep_array_element(codegen, data_ptr, current_len, "element_ptr")
@@ -485,8 +490,11 @@ def emit_list_insert(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Str
         bytes_to_move_i64 = codegen.builder.zext(bytes_to_move, codegen.types.i64)
         codegen.builder.call(memmove_fn, [dest_i8, src_i8, bytes_to_move_i64, is_volatile])
 
-    # Evaluate element value to insert
+    # Evaluate element value to insert. A consuming use, exactly like push.
+    from sushi_lang.backend.ownership import ConsumingUse, consume
     element_value = codegen.expressions.emit_expr(expr.args[1])
+    element_value = consume(codegen, expr.args[1], element_value, element_type,
+                            ConsumingUse.CONTAINER_INSERT)
 
     # Store element at data[index]
     insert_ptr = gep_utils.gep_array_element(codegen, data_ptr, index_value, "insert_ptr")

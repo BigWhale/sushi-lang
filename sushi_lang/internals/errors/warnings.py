@@ -39,10 +39,6 @@ _add(ErrorMessage("CW1002", Severity.WARNING,
     "declared variable '{name}' already exists in an outer scope", Category.SCOPE,
     "A variable was declared with 'let' outside of this scope."))
 
-_add(ErrorMessage("CW1003", Severity.WARNING,
-    "variable '{name}' is only used through borrows (not directly accessed)", Category.SCOPE,
-    "A variable was declared but only accessed through &references. This is valid but may indicate unnecessary indirection."))
-
 # Unit/module warnings
 _add(ErrorMessage("CW3001", Severity.WARNING,
     "duplicate use statement for unit '{unit}'", Category.UNIT,

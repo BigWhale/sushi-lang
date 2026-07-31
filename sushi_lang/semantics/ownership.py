@@ -189,7 +189,10 @@ def type_class_of(ty: Optional[Type], resolve: Callable[[Type], Type] = _IDENTIT
         # nothing -- the exact failure mode this function exists to prevent.
         resolved = resolve(ty) or ty
 
-    if type_moves_by_value(resolved):
+    # The resolver is threaded INTO the walk, not just applied at the top: the name that
+    # is still unresolved is usually nested (a `Buffer[2]`'s element, a field), and a
+    # top-level-only resolve reports such a type as owning nothing.
+    if type_moves_by_value(resolved, resolve=resolve):
         return TypeClass.MOVE
     if _contains_string(resolved, resolve, set()):
         return TypeClass.COPY
