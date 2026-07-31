@@ -39,10 +39,11 @@ def build_closure_value(
     fn_ptr: ir.Value,
     env_ptr: ir.Value,
     drop_ptr: ir.Value,
+    clone_ptr: ir.Value,
 ) -> ir.Value:
-    """Assemble a `{fn_ptr, env_ptr, drop_ptr}` fat value from three i8* fields.
+    """Assemble a `{fn_ptr, env_ptr, drop_ptr, clone_ptr}` fat value from four i8* fields.
 
-    All three arguments must already be `i8*`. Uses the same insert_value idiom the
+    All four arguments must already be `i8*`. Uses the same insert_value idiom the
     string fat pointer uses (a pure SSA value, no alloca).
     """
     st = codegen.types.closure_struct
@@ -50,6 +51,7 @@ def build_closure_value(
     v = codegen.builder.insert_value(v, fn_ptr, 0)
     v = codegen.builder.insert_value(v, env_ptr, 1)
     v = codegen.builder.insert_value(v, drop_ptr, 2)
+    v = codegen.builder.insert_value(v, clone_ptr, 3)
     return v
 
 
@@ -106,10 +108,11 @@ def synthesize_thunk(codegen: "LLVMCodegen", target: ir.Function) -> ir.Function
 def materialize_function_ref(
     codegen: "LLVMCodegen", target: ir.Function
 ) -> ir.Value:
-    """Build a non-capturing `{thunk, null, null}` value for a bare fn reference."""
+    """Build a non-capturing `{thunk, null, null, null}` value for a bare fn reference."""
     thunk = synthesize_thunk(codegen, target)
     fn_ptr_i8 = codegen.builder.bitcast(thunk, codegen.types.str_ptr)
-    return build_closure_value(codegen, fn_ptr_i8, null_ptr(codegen), null_ptr(codegen))
+    nul = null_ptr(codegen)
+    return build_closure_value(codegen, fn_ptr_i8, nul, nul, nul)
 
 
 def get_or_create_env_drop(codegen: "LLVMCodegen", env_struct) -> ir.Function:
@@ -170,6 +173,74 @@ def get_or_create_env_drop(codegen: "LLVMCodegen", env_struct) -> ir.Function:
     return fn
 
 
+def get_or_create_env_clone(codegen: "LLVMCodegen", env_struct) -> ir.Function:
+    """Return (creating once, cached) the type-erased env duplicator for a closure.
+
+        i8* __closure_env_N.__closure_clone(i8* env):
+            new = malloc(sizeof env)
+            *new = *env                       # copy every field
+            <deep-copy each field the drop fn would destroy>
+            return new
+
+    Exact structural inverse of `get_or_create_env_drop`, and cached and named the same
+    way. Its address rides in the fat value's `clone_ptr` slot, which is the only way a
+    closure reached through a struct field or a container can be deep-copied at all: the
+    `fn(...)` type has erased its captures, so the layout is not recoverable at the clone
+    site.
+
+    The gate MUST be the one `get_or_create_env_drop` uses -- `is_owning_type`, the
+    narrow predicate -- not a wider one. Clone fewer fields than the drop frees and the
+    shared buffer is freed twice; clone more and the extra copy is never freed. The two
+    gates are one decision and have to be changed together.
+    """
+    from sushi_lang.backend.expressions.memory import emit_value_clone
+    from sushi_lang.semantics.typesys import is_owning_type
+
+    clone_name = f"{env_struct.name}.__closure_clone"
+    clone_ty = ir.FunctionType(codegen.types.str_ptr, [codegen.types.str_ptr])
+    existing = codegen.module.globals.get(clone_name)
+    if isinstance(existing, ir.Function) and existing.function_type == clone_ty:
+        return existing
+
+    fn = ir.Function(codegen.module, clone_ty, name=clone_name)
+    fn.linkage = "internal"
+    b = ir.IRBuilder(fn.append_basic_block("entry"))
+    env_i8 = fn.args[0]
+    env_ll = codegen.types.ll_type(env_struct)
+    env_ptr_ty = ir.PointerType(env_ll)
+
+    # The clone helpers reach for the AMBIENT codegen.builder / codegen.func (they append
+    # blocks for element loops and string copies), so swap both while emitting this body
+    # and restore afterwards -- the same discipline get_or_create_env_drop follows, and
+    # the one #257 documents as load-bearing for out-of-line bodies.
+    saved_builder, saved_func = codegen.builder, codegen.func
+    codegen.builder, codegen.func = b, fn
+    try:
+        size = codegen.types.get_type_size_bytes(env_struct)
+        raw = emit_malloc(codegen, b, ir.Constant(codegen.types.i64, size))
+        new_ptr = b.bitcast(raw, env_ptr_ty, name="cloned_env")
+        old_ptr = b.bitcast(env_i8, env_ptr_ty, name="src_env")
+
+        # Shallow-copy first so non-owning captures carry over untouched, then deep-copy
+        # exactly the fields the drop fn destroys.
+        b.store(b.load(old_ptr, name="src_env_val"), new_ptr)
+
+        i32 = codegen.types.i32
+        zero = ir.Constant(i32, 0)
+        for idx, (_name, fty) in enumerate(env_struct.fields):
+            if not is_owning_type(fty):
+                continue
+            field_ptr = b.gep(new_ptr, [zero, ir.Constant(i32, idx)],
+                              inbounds=True, name="clone_cap_field")
+            orig = codegen.builder.load(field_ptr, name="clone_cap_orig")
+            codegen.builder.store(emit_value_clone(codegen, orig, fty), field_ptr)
+
+        codegen.builder.ret(raw)
+    finally:
+        codegen.builder, codegen.func = saved_builder, saved_func
+    return fn
+
+
 def emit_lambda(codegen: "LLVMCodegen", lam, to_i1: bool) -> ir.Value:
     """Materialize a lambda literal as a function value at its use site.
 
@@ -191,7 +262,8 @@ def emit_lambda(codegen: "LLVMCodegen", lam, to_i1: bool) -> ir.Value:
     captures = lam.captures or []
     if not captures:
         # No environment: pass a null env; the lifted body never reads it.
-        return build_closure_value(codegen, fn_ptr_i8, null_ptr(codegen), null_ptr(codegen))
+        nul = null_ptr(codegen)
+        return build_closure_value(codegen, fn_ptr_i8, nul, nul, nul)
 
     # Heap-allocate the environment struct and populate captured values into it.
     env_struct = lam.env_struct
@@ -215,7 +287,9 @@ def emit_lambda(codegen: "LLVMCodegen", lam, to_i1: bool) -> ir.Value:
     env_i8 = codegen.builder.bitcast(env_ptr, codegen.types.str_ptr)
     drop_fn = get_or_create_env_drop(codegen, env_struct)
     drop_i8 = codegen.builder.bitcast(drop_fn, codegen.types.str_ptr)
-    return build_closure_value(codegen, fn_ptr_i8, env_i8, drop_i8)
+    clone_fn = get_or_create_env_clone(codegen, env_struct)
+    clone_i8 = codegen.builder.bitcast(clone_fn, codegen.types.str_ptr)
+    return build_closure_value(codegen, fn_ptr_i8, env_i8, drop_i8, clone_i8)
 
 
 def emit_indirect_call(

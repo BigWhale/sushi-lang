@@ -9,7 +9,9 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.backend.constants import INT64_BIT_WIDTH
-from sushi_lang.semantics.typesys import StructType, DynamicArrayType, EnumType, Type
+from sushi_lang.semantics.typesys import (
+    ArrayType, StructType, DynamicArrayType, EnumType, Type,
+)
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc
 
@@ -571,28 +573,40 @@ def emit_value_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) 
                       or codegen.enum_table.by_name.get(value_type.name)
                       or value_type)
 
-    # Foreign ptr / function values: passthrough. A capturing closure's heap env
-    # cannot be generically duplicated (capture is erased from the type), so a
-    # closure HashMap value is an accepted, pre-existing gap -- identical to the
-    # closure gap in array `.get()`.
-    if isinstance(value_type, (ForeignPtrType, FunctionType)):
+    # Foreign ptr: an opaque unmanaged handle, nothing to duplicate.
+    if isinstance(value_type, ForeignPtrType):
         return value
+
+    # Function value: duplicate the heap environment through the type-erased
+    # `clone_ptr` slot, mirroring how the destructor frees it through `drop_ptr`.
+    # A non-capturing value carries a null clone_ptr and passes through unchanged.
+    if isinstance(value_type, FunctionType):
+        return _clone_function_value(codegen, value)
 
     if isinstance(value_type, BuiltinType):
         if value_type == BuiltinType.STRING:
             return _clone_string_value(codegen, value)
         return value  # numerics, bool, I/O handles: nothing to clone
 
-    if isinstance(value_type, (DynamicArrayType, StructType, EnumType)):
+    if isinstance(value_type, (DynamicArrayType, ArrayType, StructType, EnumType)):
         return _emit_composite_clone(codegen, value, value_type)
 
     return value
 
 
 def _clone_type_key(value_type: Type) -> str:
-    """Stable identity key for a composite type's deep clone (mirrors the destructor key)."""
+    """Stable identity key for a composite type's deep clone (mirrors the destructor key).
+
+    The `ArrayType` arm is load-bearing, not decorative: without it every fixed-array
+    type collapses to its element's key, so `Buffer[2]` and `Buffer[3]` would share one
+    `linkonce_odr` clone body and the linker would keep whichever was emitted first.
+    Adding the arm to `emit_value_clone` without adding it here trades a double free for
+    a miscompile. Mirrors `destructors._dtor_type_key`.
+    """
     if isinstance(value_type, DynamicArrayType):
         return "[]" + _clone_type_key(value_type.base_type)
+    if isinstance(value_type, ArrayType):
+        return f"[{value_type.size}]" + _clone_type_key(value_type.base_type)
     if isinstance(value_type, (StructType, EnumType)):
         return value_type.name
     return getattr(value_type, "name", type(value_type).__name__)
@@ -608,9 +622,15 @@ def _clone_symbol(value_type: Type) -> str:
 
 
 def _inline_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) -> ir.Value:
-    """Inline deep-clone dispatch for a composite type (no recursion guard)."""
+    """Inline deep-clone dispatch for a composite type (no recursion guard).
+
+    One arm per arm of `destructors._select_inline_destructor`. A shape the destructor
+    frees but this does not clone is a double free by construction.
+    """
     if isinstance(value_type, DynamicArrayType):
         return clone_dynamic_array_value(codegen, value, value_type.base_type)
+    if isinstance(value_type, ArrayType):
+        return _clone_fixed_array_value(codegen, value, value_type)
     if isinstance(value_type, StructType):
         if value_type.name.startswith("Own<"):
             return _clone_own_value(codegen, value, value_type)
@@ -723,6 +743,32 @@ def _clone_string_value(codegen: 'LLVMCodegen', fat: ir.Value) -> ir.Value:
         b.store(cloned, slot)
 
     return b.load(slot, name="cloned_string")
+
+
+def _clone_function_value(codegen: 'LLVMCodegen', fat: ir.Value) -> ir.Value:
+    """Duplicate a closure's heap environment through its `clone_ptr` slot.
+
+    Structural inverse of `destructors.emit_function_value_destructor`, and guarded the
+    same runtime way: `if (clone_ptr != null) env = clone_ptr(env)`. Capture is erased
+    from the `fn(...)` type, so the env layout is not knowable here -- the fat value
+    carries its own duplicator, exactly as it carries its own destructor. A non-capturing
+    value has a null clone_ptr and is returned unchanged (there is nothing to own).
+    """
+    b = codegen.builder
+    clone_ptr = b.extract_value(fat, 3, name="closure_clone")
+    env_ptr = b.extract_value(fat, 1, name="closure_env")
+
+    slot = b.alloca(fat.type, name="clone_closure_slot")
+    b.store(fat, slot)  # default: return the input unchanged (clone_ptr == null)
+
+    has_clone = b.icmp_unsigned("!=", clone_ptr, ir.Constant(clone_ptr.type, None))
+    with b.if_then(has_clone):
+        clone_fn_ty = ir.FunctionType(codegen.types.str_ptr, [codegen.types.str_ptr])
+        callee = b.bitcast(clone_ptr, ir.PointerType(clone_fn_ty), name="closure_clone_fn")
+        new_env = b.call(callee, [env_ptr], name="cloned_env")
+        b.store(b.insert_value(fat, new_env, 1, name="cloned_closure"), slot)
+
+    return b.load(slot, name="cloned_function_value")
 
 
 def _clone_own_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: StructType) -> ir.Value:
@@ -878,6 +924,33 @@ def _clone_hashmap_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: St
             codegen.builder.insert_value(value, new_buckets, 0), slot)
 
     return b.load(slot, name="cloned_hashmap")
+
+
+def _clone_fixed_array_value(codegen: 'LLVMCodegen', value: ir.Value,
+                             value_type: 'ArrayType') -> ir.Value:
+    """Deep-copy a fixed array `T[N]` element by element.
+
+    Structural inverse of `_emit_fixed_array_destructor`: there is no buffer to
+    duplicate (the storage is inline), so the whole job is cloning each element the
+    destructor would free. `N` is a compile-time constant, so the walk is unrolled with
+    extract/insert rather than a runtime loop -- the same value-in/value-out SSA shape
+    `_clone_struct_value` uses.
+
+    Gated on the destructor's own `field_needs_cleanup`, so a `i32[3]` returns unchanged
+    and only an owning element type (`string`, `Buffer` with an `i32[]`, ...) allocates.
+    """
+    from sushi_lang.backend.destructors import field_needs_cleanup
+
+    if not field_needs_cleanup(codegen, value_type.base_type):
+        return value
+
+    b = codegen.builder
+    new_array = value
+    for i in range(value_type.size):
+        elem = b.extract_value(value, i, name=f"clone_elem_{i}")
+        cloned = emit_value_clone(codegen, elem, value_type.base_type)
+        new_array = b.insert_value(new_array, cloned, i, name=f"cloned_elem_{i}")
+    return new_array
 
 
 def _clone_struct_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: StructType) -> ir.Value:

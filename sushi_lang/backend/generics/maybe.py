@@ -32,7 +32,6 @@ if TYPE_CHECKING:
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import EnumType, Type
 import llvmlite.ir as ir
-from sushi_lang.backend.constants.llvm_values import ONE_I64, ONE_I32
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
 
@@ -84,109 +83,14 @@ def _emit_maybe_expect(
     maybe_value: ir.Value,
     maybe_type: EnumType
 ) -> ir.Value:
-    """Emit LLVM code for maybe.expect(message).
+    """Emit `maybe.expect(message)` -- Some payload, or "ERROR: msg" to stderr and exit(1).
 
-    Maybe<T> enum layout: {i32 tag, [N x i8] data}
-    - tag = 0 for Some variant, 1 for None variant
-    - data contains the packed value bytes
-
-    If Some: return unpacked value
-    If None: print error message and exit(1)
-
-    Args:
-        codegen: The LLVM code generator instance.
-        call: The method call AST node.
-        maybe_value: The LLVM value of the Maybe<T> enum.
-        maybe_type: The Maybe<T> enum type (after monomorphization).
-
-    Returns:
-        The extracted value if Some (or exits if None).
-
-    Raises:
-        ValueError: If argument count is not exactly 1.
+    Thin adapter over the shared `emit_enum_expect`; the Result spelling is its twin.
     """
-    if len(call.args) != 1:
-        raise_internal_error("CE0095", got=len(call.args))
-
-    # Extract T from Maybe<T>
-    some_variant = maybe_type.get_variant("Some")
-    if some_variant is None:
-        raise_internal_error("CE0092", enum=maybe_type.name)
-
-    if len(some_variant.associated_types) != 1:
-        raise_internal_error("CE0093", got=len(some_variant.associated_types))
-
-    t_type = some_variant.associated_types[0]
-
-    # Get the LLVM type for T
-    value_llvm_type = codegen.types.ll_type(t_type)
-
-    # Extract (is_some, value) from Maybe<T>
-    is_some, unpacked_value = codegen.functions._extract_value_from_result_enum(
-        maybe_value, value_llvm_type, t_type
-    )
-
-    # Create basic blocks for Some and None paths
-    some_block = codegen.builder.append_basic_block(name="maybe_expect_some")
-    none_block = codegen.builder.append_basic_block(name="maybe_expect_none")
-    continue_block = codegen.builder.append_basic_block(name="maybe_expect_continue")
-
-    # Branch based on is_some
-    codegen.builder.cbranch(is_some, some_block, none_block)
-
-    # Some block: continue with unpacked value
-    codegen.builder.position_at_end(some_block)
-    codegen.builder.branch(continue_block)
-
-    # None block: print error message and exit
-    codegen.builder.position_at_end(none_block)
-
-    # Emit the error message expression (fat pointer string)
-    error_message = codegen.expressions.emit_expr(call.args[0])
-
-    # Print error message to stderr using runtime function
-    # Format: "ERROR: <message>\n"
-    error_prefix_fat = codegen.runtime.strings.emit_string_literal("ERROR: ")
-    newline_fat = codegen.runtime.strings.emit_string_literal("\n")
-
-    # Get stderr file pointer
-    stderr_ptr = codegen.builder.load(codegen.runtime.libc_stdio.stderr_handle)
-
-    # Get fwrite function
-    fwrite_fn = codegen.runtime.libc_stdio.fwrite
-
-    # Write "ERROR: " to stderr using fwrite
-    error_prefix_ptr = codegen.builder.extract_value(error_prefix_fat, 0, name="error_prefix_ptr")
-    error_prefix_len = codegen.builder.extract_value(error_prefix_fat, 1, name="error_prefix_len")
-    error_prefix_len_i64 = codegen.builder.zext(error_prefix_len, ir.IntType(64), name="error_prefix_len_i64")
-    codegen.builder.call(fwrite_fn, [error_prefix_ptr, ONE_I64, error_prefix_len_i64, stderr_ptr])
-
-    # Write user message to stderr using fwrite
-    error_message_ptr = codegen.builder.extract_value(error_message, 0, name="error_msg_ptr")
-    error_message_len = codegen.builder.extract_value(error_message, 1, name="error_msg_len")
-    error_message_len_i64 = codegen.builder.zext(error_message_len, ir.IntType(64), name="error_msg_len_i64")
-    codegen.builder.call(fwrite_fn, [error_message_ptr, ONE_I64, error_message_len_i64, stderr_ptr])
-
-    # Write newline to stderr using fwrite
-    newline_ptr = codegen.builder.extract_value(newline_fat, 0, name="newline_ptr")
-    newline_len = codegen.builder.extract_value(newline_fat, 1, name="newline_len")
-    newline_len_i64 = codegen.builder.zext(newline_len, ir.IntType(64), name="newline_len_i64")
-    codegen.builder.call(fwrite_fn, [newline_ptr, ONE_I64, newline_len_i64, stderr_ptr])
-
-    # Call exit(1)
-    codegen.builder.call(codegen.runtime.libc_process.exit, [ONE_I32])
-
-    # Unreachable after exit, but LLVM requires a terminator
-    codegen.builder.unreachable()
-
-    # Continue block: return the unpacked value
-    codegen.builder.position_at_end(continue_block)
-
-    # Create a phi node to receive the value from some_block
-    phi = codegen.builder.phi(value_llvm_type, name="expect_result")
-    phi.add_incoming(unpacked_value, some_block)
-
-    return phi
+    from sushi_lang.backend.generics.enum_methods_base import emit_enum_expect
+    return emit_enum_expect(codegen, call, maybe_value, maybe_type,
+                            success_variant_name="Some", label="maybe",
+                            missing_variant_code="CE0092", assoc_count_code="CE0093")
 
 
 # ==============================================================================

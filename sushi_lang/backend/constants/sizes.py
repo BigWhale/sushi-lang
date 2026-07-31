@@ -40,9 +40,10 @@ POINTER_SIZE_BYTES = 8       # 64-bit pointers (i8*, T*)
 # byte at offset 12 (#145). calculate_llvm_type_size() special-cases the string to 16 too.
 FAT_POINTER_SIZE_BYTES = 16
 
-# Closure/function-value fat pointer: {i8* fn_ptr, i8* env_ptr, i8* drop_ptr}
-# = 8 + 8 + 8 = 24 bytes. Distinct from the string fat pointer above.
-CLOSURE_FAT_POINTER_SIZE_BYTES = 24
+# Closure/function-value fat pointer:
+# {i8* fn_ptr, i8* env_ptr, i8* drop_ptr, i8* clone_ptr} = 4 * 8 = 32 bytes.
+# Distinct from the string fat pointer above.
+CLOSURE_FAT_POINTER_SIZE_BYTES = 32
 
 # Dynamic array struct: {i32 len, i32 cap, T* data} = 4 + 4 + 8 = 16 bytes
 DYNAMIC_ARRAY_SIZE_BYTES = 16
