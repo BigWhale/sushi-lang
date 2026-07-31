@@ -53,3 +53,7 @@ _add(ErrorMessage("CE2407", Severity.ERROR,
 _add(ErrorMessage("CE2408", Severity.ERROR,
     "cannot modify '{name}' through &peek reference (read-only)",
     Category.BORROW, "&peek references are read-only. Use &poke for mutable access."))
+
+_add(ErrorMessage("CE2411", Severity.ERROR,
+    "cannot consume '{name}': it is a borrowed binding",
+    Category.BORROW, "A `match` payload binding and a `foreach` loop binding are read-only borrows of storage the scrutinee or the container still owns, so a position that takes ownership cannot have it. Reading through the binding is free; clone it to take an independent value: `{name}.clone()`. Only a binding whose type transitively owns heap (a dynamic array, List, Own, HashMap or a capturing closure) is affected -- a primitive or string binding is unrestricted."))

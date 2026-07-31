@@ -1,0 +1,23 @@
+# Consuming-use matrix, the (OWNED, MOVE) cell: an OWNED local of an owning type handed
+# to the enum-payload consuming use. The positive path -- the source owned it, so ownership
+# TRANSFERS and exactly one owner frees.
+#
+# This row exists because the CE2411 decision turned the whole BORROWED row into
+# diagnostics (docs/design/ownership-conventions.md S8). Without it the matrix would
+# assert only what is REJECTED and nothing about what is accepted, so a consuming use
+# that stopped moving entirely -- leaking, or double-freeing on the way out -- would go
+# unnoticed. `.len()` on the destination proves the buffer survived the transfer.
+# EXPECT_STDOUT_EXACT: "n=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+enum Shape:
+    Poly(i32[])
+    Empty
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let Shape s = Shape.Poly(a)
+    match s:
+        Shape.Poly(p) -> println("n={p.len()}")
+        Shape.Empty -> println("empty")
+    return Result.Ok(0)

@@ -1,9 +1,10 @@
 # Sink matrix (MemberAccess -> container sinks): a `MemberAccess` of a field that owns heap handed to the `HashMap.insert` sink.
 #
-# The invariant (docs/design/move-semantics.md S3): at every by-value ownership sink a
-# bare OWNED Name moves, and anything that reads from a CONTINUING owner -- a borrowed
-# pattern binding, a MemberAccess, an Own@(T).get() deref -- is CLONED so each owner
-# frees exactly once. Only the call-argument sink implements this today; see MM.md S2.1.
+# The invariant (docs/design/ownership-conventions.md S4.3): at every consuming use, a
+# bare OWNED Name moves, a read from a CONTINUING owner (a MemberAccess, an Own@(T).get()
+# deref) is CLONED so each owner frees exactly once, and a BORROWED binding of an owning
+# type may not be consumed at all -- that is CE2411, with `.clone()` as the escape. This
+# file is the (THROUGH_OWNER, MOVE) cell, which still COPIES.
 #
 # A MemberAccess and an Own@(T).get() deref both read through a CONTINUING owner,
 # so a container that stores the value shallowly must clone it (spec S3 row 6/7).

@@ -1,17 +1,16 @@
-# Sink matrix (match binding (enum-typed) -> sinks): a borrowed `match` binding whose type is a user ENUM handed to the rebind sink.
+# Sink matrix (match binding (enum-typed) -> sinks): a borrowed `match` binding whose type is a user ENUM handed to the plain `let` sink.
 #
-# The invariant (docs/design/move-semantics.md S3): at every by-value ownership sink a
-# bare OWNED Name moves, and anything that reads from a CONTINUING owner -- a borrowed
-# pattern binding, a MemberAccess, an Own@(T).get() deref -- is CLONED so each owner
-# frees exactly once. Only the call-argument sink implements this today; see MM.md S2.1.
+# The invariant (docs/design/ownership-conventions.md S4.3): at every consuming use, a
+# bare OWNED Name moves, a read from a CONTINUING owner (a MemberAccess, an Own@(T).get()
+# deref) is CLONED so each owner frees exactly once, and a BORROWED binding of an owning
+# type may not be consumed at all -- that is CE2411, with `.clone()` as the escape. This
+# file is the (BORROWED, MOVE) cell, the one every shipped bug in the family got wrong.
 #
 # Regression guard for the cell the deleted test_move_borrow_binding_* pins
 # covered: an ENUM-typed binding, which `is_owned_local` never registers, so the
 # gate answers 'borrow' without being asked the hard question. Passed before this
 # branch and must keep passing -- it is the shape that gave false confidence.
-# EXPECT_STDOUT_EXACT: "n=3\n"
-# EXPECT_RUNTIME_EXIT: 0
-# EXPECT_NO_LEAKS: true
+# EXPECT_ERROR_CODE: CE2411
 
 enum Box:
     Full(i32[])
@@ -23,10 +22,9 @@ enum Wrap:
 
 fn main() i32:
     let Wrap w = Wrap.Has(Box.Full(from([1, 2, 3])))
-    let Box copy = Box.Empty
     match w:
         Wrap.Has(inner) ->
-            copy := inner
+            let Box copy = inner
             match copy:
                 Box.Full(xs) -> println("n={xs.len()}")
                 Box.Empty -> println("n=0")

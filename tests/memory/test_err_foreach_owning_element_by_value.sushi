@@ -8,9 +8,7 @@
 #
 # Result: a single by-value use is rejected with CE2405 whose "moved here" note points at
 # the SAME span as the use. This file must COMPILE and run. MM.md S2 row 9; no issue.
-# EXPECT_STDOUT_EXACT: "n=3\n"
-# EXPECT_RUNTIME_EXIT: 0
-# EXPECT_NO_LEAKS: true
+# EXPECT_ERROR_CODE: CE2411
 
 struct Holder:
     i32[] data

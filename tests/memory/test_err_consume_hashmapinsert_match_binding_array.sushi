@@ -1,12 +1,11 @@
 # Sink matrix (match binding -> every sink): a borrowed enum-payload `match` binding of type `i32[]` handed to the `HashMap.insert` sink.
 #
-# The invariant (docs/design/move-semantics.md S3): at every by-value ownership sink a
-# bare OWNED Name moves, and anything that reads from a CONTINUING owner -- a borrowed
-# pattern binding, a MemberAccess, an Own@(T).get() deref -- is CLONED so each owner
-# frees exactly once. Only the call-argument sink implements this today; see MM.md S2.1.
-# EXPECT_STDOUT_EXACT: "m=1\n"
-# EXPECT_RUNTIME_EXIT: 0
-# EXPECT_NO_LEAKS: true
+# The invariant (docs/design/ownership-conventions.md S4.3): at every consuming use, a
+# bare OWNED Name moves, a read from a CONTINUING owner (a MemberAccess, an Own@(T).get()
+# deref) is CLONED so each owner frees exactly once, and a BORROWED binding of an owning
+# type may not be consumed at all -- that is CE2411, with `.clone()` as the escape. This
+# file is the (BORROWED, MOVE) cell, the one every shipped bug in the family got wrong.
+# EXPECT_ERROR_CODE: CE2411
 use <collections/hashmap>
 
 enum Shape:
