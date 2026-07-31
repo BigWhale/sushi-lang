@@ -1600,24 +1600,14 @@ class BorrowChecker:
         if state is not None and state.declared_at_span is not None:
             diag.note(f"'{owner}' owns this value and still frees it",
                       state.declared_at_span)
-        diag.help(self._clone_help(expr, text))
+        # ONE branch, on purpose. A field read and an index take the clone directly and
+        # compile; a get-out takes it and hits CE0019, because a chained method call on a
+        # call receiver does not resolve its semantic type. That is a real defect, not a
+        # reason to word around it -- see MM.md B5. This help states the rule, and the
+        # three RED `test_own_get_*` files hold the branch honest until the defect is
+        # fixed. A shape-dependent help would have hidden it.
+        diag.help(f"clone it to take an independent value: `{text}.clone()`")
         diag.emit()
-
-    def _clone_help(self, expr: Expr, text: str) -> str:
-        """The `.clone()` advice, in a shape that COMPILES for this source.
-
-        A field read and an index take the clone directly: `h.inner.clone()`. A get-out
-        cannot, because a chained method call on a call receiver does not resolve its
-        semantic type -- a pre-existing gap that predates #242 (`o.get().hash()` fails the
-        same way on the branch base). Advice the compiler then rejects is worse than no
-        advice, so a get-out gets the two-step form instead.
-        """
-        while isinstance(expr, TryExpr):
-            expr = expr.expr
-        if isinstance(expr, (MemberAccess, IndexAccess)):
-            return f"clone it to take an independent value: `{text}.clone()`"
-        return ("bind it first, then clone the binding: "
-                f"`let <T> view = {text}` and pass `view.clone()`")
 
     def _emit_consume_of_borrow(self, name: str, use_span: Optional[Span],
                                 state: BorrowState) -> None:
