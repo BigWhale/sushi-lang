@@ -352,6 +352,12 @@ def try_emit_primitive_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, Do
     """Try to emit as primitive type method. Returns None if not applicable."""
     from sushi_lang.backend.expressions.calls.stdlib import emit_stdlib_primitive_call
 
+    # The methods on `&T` are the methods on `T`. Without this a borrowed primitive or
+    # string matched no name below, fell through to the user extension-method path, and
+    # died there as a bare KeyError rather than a diagnostic.
+    from sushi_lang.semantics.typesys import deref_type
+    semantic_type = deref_type(semantic_type)
+
     if semantic_type is None:
         return None
 

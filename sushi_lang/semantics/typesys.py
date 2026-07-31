@@ -193,6 +193,19 @@ class ReferenceType:
         """Returns True if this is a read-write borrow."""
         return self.mutability == BorrowMode.POKE
 
+
+def deref_type(t: Optional["Type"]) -> Optional["Type"]:
+    """The type a borrow refers to, or `t` unchanged when it is not a borrow.
+
+    "The methods on `&T` are the methods on `T`", and the same holds for fields, indexing
+    and iteration: a borrow is transparent to everything except ownership. Roughly twenty
+    sites spell this unwrap by hand, and each one that forgets it silently loses a whole
+    receiver family -- `&peek i32` and `&peek string` reached no built-in method at all,
+    fell through to the user extension path, and died there as a CE0000 rather than a
+    diagnostic.
+    """
+    return t.referenced_type if isinstance(t, ReferenceType) else t
+
 @dataclass(frozen=True)
 class PointerType:
     """Represents a pointer to heap-allocated data (T*).

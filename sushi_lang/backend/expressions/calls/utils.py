@@ -132,6 +132,36 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
     return None
 
 
+def _deref_borrowed_receiver(codegen: 'LLVMCodegen', value: ir.Value, ll_type: ir.Type,
+                             semantic_type: Optional['Type'],
+                             name: str) -> Tuple[ir.Value, ir.Type]:
+    """Load through a borrow whose referent is not itself pointer-shaped.
+
+    "The methods on `&T` are the methods on `T`." Semantics already says so
+    (`semantics/generics/builtin_methods.py` unwraps `ReferenceType` before it decides),
+    which is why a borrowed receiver produces no diagnostic at all. This dispatcher keys
+    on the LLVM receiver instead, so it has to agree.
+
+    A borrow is always a POINTER to `T`. For a dynamic array or a struct that is what the
+    handlers already want, because this backend passes those by pointer anyway. For a
+    `BuiltinType` -- a primitive, or a `string` fat pointer -- the by-value form is not a
+    pointer, so the pointer misses every built-in test: `is_string_type` answers False and
+    dispatch falls through to the user extension-method path. That path mangled the name
+    to `string_len` or `i32_hash` and then either declared a symbol nobody defines (a
+    link failure surfacing as CE0000) or raised a bare `KeyError`.
+    """
+    from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, deref_type
+
+    if not isinstance(semantic_type, ReferenceType):
+        return value, ll_type
+    if not isinstance(deref_type(semantic_type), BuiltinType):
+        return value, ll_type
+    if not isinstance(ll_type, ir.PointerType):
+        return value, ll_type
+    loaded = codegen.builder.load(value, name=f"{name}_deref")
+    return loaded, loaded.type
+
+
 def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Value, ir.Type, Optional['Type']]:
     """Emit receiver value with special handling for dynamic arrays and references.
 
@@ -158,6 +188,8 @@ def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Valu
         if type_utils.is_reference_parameter(codegen, receiver.id):
             receiver_value = codegen.builder.load(slot, name=f"{receiver.id}_ref")
             receiver_type = receiver_value.type
+            receiver_value, receiver_type = _deref_borrowed_receiver(
+                codegen, receiver_value, receiver_type, semantic_type, receiver.id)
         elif codegen.types.is_dynamic_array_type(slot_type):
             receiver_value = slot  # Use the alloca pointer directly
             receiver_type = slot_type
