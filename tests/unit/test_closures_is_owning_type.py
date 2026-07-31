@@ -1,8 +1,8 @@
 """T1.3 gate: the shared `is_owning_type` ownership predicate.
 
-Factored out of the borrow checker so the borrow pass and the backend RAII paths
-agree on what owns heap memory. A capturing function value (closure) is owning; a
-non-capturing one stays copyable (v1 first-class-function ergonomics).
+Factored out of the borrow checker so the borrow pass and the backend RAII paths agree
+on what owns heap memory. Every function value owns, whether or not its `captures`
+metadata survived -- see `test_every_function_value_is_owning` for why.
 """
 from __future__ import annotations
 
@@ -36,12 +36,24 @@ def test_list_and_own_are_owning() -> None:
     assert is_owning_type(GenericTypeRef(base_name="Own", type_args=[I32])) is True
 
 
-def test_non_capturing_function_value_is_not_owning() -> None:
-    # Preserves v1 ergonomics: a bare fn reference is copyable, referenceable freely.
-    assert is_owning_type(_fn(captures=None)) is False
-    assert is_owning_type(_fn(captures=())) is False
+def test_captures_is_tri_state_and_unstated_means_owning() -> None:
+    """`captures` distinguishes "no captures" from "captures not stated".
 
+    `FunctionType.__eq__` excludes `captures` from type identity, so a closure reaching
+    a position through a DECLARED type -- a `List@(fn(i32) -> i32)` element, a struct
+    field, a parameter -- arrives with `None` while still owning a heap environment.
+    Reading `None` as "no captures" answered False for a real owner, and the position
+    then aliased the environment: `tests/memory/test_closure_into_list.sushi` and
+    `tests/memory/test_struct_closure_field_by_value.sushi` both double-freed.
 
-def test_capturing_closure_is_owning() -> None:
+    An empty tuple is different. It is a STATEMENT that there are no captures, which
+    only the binding's initializer can make, so a plain fn reference stays copyable and
+    does not report CE2405 on its second use.
+
+    Reading `None` as owning is free: a non-capturing value carries a null `drop_ptr`
+    and a null `clone_ptr`, so its destroy and its clone are both no-ops.
+    """
     caps = (Param(name="x", ty=I32, loc=None),)
-    assert is_owning_type(_fn(captures=caps)) is True
+    assert is_owning_type(_fn(captures=caps)) is True   # known capturing
+    assert is_owning_type(_fn(captures=None)) is True    # unstated -> assume owning
+    assert is_owning_type(_fn(captures=())) is False     # known empty -> owns nothing

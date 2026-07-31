@@ -115,6 +115,23 @@ def materialize_function_ref(
     return build_closure_value(codegen, fn_ptr_i8, nul, nul, nul)
 
 
+def env_owns_field(codegen: "LLVMCodegen", field_type) -> bool:
+    """Does the heap environment own this captured field?
+
+    The environment owns exactly what the seam gave it at the capture. A MOVE type moved
+    in, and any other heap-owning type arrived as a deep copy. Both belong to the
+    environment, so both must be destroyed with it and duplicated when it is cloned.
+
+    So the gate is the classification `consume` already applied at `ConsumingUse.CAPTURE`,
+    not a narrower predicate of its own. Take fewer fields than the capture gave and the
+    environment leaks them; take more and it frees storage another owner still holds.
+    """
+    from sushi_lang.backend.ownership import resolver_for
+    from sushi_lang.semantics.ownership import TypeClass, type_class_of
+
+    return type_class_of(field_type, resolver_for(codegen)) is not TypeClass.PLAIN
+
+
 def get_or_create_env_drop(codegen: "LLVMCodegen", env_struct) -> ir.Function:
     """Return (creating once, cached) the type-erased env destructor for a closure.
 
@@ -131,7 +148,6 @@ def get_or_create_env_drop(codegen: "LLVMCodegen", env_struct) -> ir.Function:
     re-checks the signature (mirroring `synthesize_thunk`).
     """
     from sushi_lang.backend.destructors import emit_value_destructor
-    from sushi_lang.semantics.typesys import is_owning_type
 
     drop_name = f"{env_struct.name}.__closure_drop"
     drop_ty = ir.FunctionType(ir.VoidType(), [codegen.types.str_ptr])
@@ -149,7 +165,8 @@ def get_or_create_env_drop(codegen: "LLVMCodegen", env_struct) -> ir.Function:
     # Destroy owned captured fields before freeing the buffer. The destructor helpers
     # reach for codegen.builder / codegen.func (loop blocks, element frees), so point
     # them at the drop fn while emitting, then restore the caller's context.
-    owned = [(i, fty) for i, (_, fty) in enumerate(env_struct.fields) if is_owning_type(fty)]
+    owned = [(i, fty) for i, (_, fty) in enumerate(env_struct.fields)
+             if env_owns_field(codegen, fty)]
     if owned:
         saved_builder, saved_func = codegen.builder, codegen.func
         codegen.builder, codegen.func = b, fn
@@ -188,13 +205,11 @@ def get_or_create_env_clone(codegen: "LLVMCodegen", env_struct) -> ir.Function:
     `fn(...)` type has erased its captures, so the layout is not recoverable at the clone
     site.
 
-    The gate MUST be the one `get_or_create_env_drop` uses -- `is_owning_type`, the
-    narrow predicate -- not a wider one. Clone fewer fields than the drop frees and the
-    shared buffer is freed twice; clone more and the extra copy is never freed. The two
-    gates are one decision and have to be changed together.
+    The gate MUST be the one `get_or_create_env_drop` uses -- `env_owns_field`. Clone
+    fewer fields than the drop frees and the shared buffer is freed twice; clone more and
+    the extra copy is never freed. The two gates are one decision.
     """
     from sushi_lang.backend.expressions.memory import emit_value_clone
-    from sushi_lang.semantics.typesys import is_owning_type
 
     clone_name = f"{env_struct.name}.__closure_clone"
     clone_ty = ir.FunctionType(codegen.types.str_ptr, [codegen.types.str_ptr])
@@ -228,7 +243,7 @@ def get_or_create_env_clone(codegen: "LLVMCodegen", env_struct) -> ir.Function:
         i32 = codegen.types.i32
         zero = ir.Constant(i32, 0)
         for idx, (_name, fty) in enumerate(env_struct.fields):
-            if not is_owning_type(fty):
+            if not env_owns_field(codegen, fty):
                 continue
             field_ptr = b.gep(new_ptr, [zero, ir.Constant(i32, idx)],
                               inbounds=True, name="clone_cap_field")
@@ -245,14 +260,13 @@ def emit_lambda(codegen: "LLVMCodegen", lam, to_i1: bool) -> ir.Value:
     """Materialize a lambda literal as a function value at its use site.
 
     Non-capturing: `{&__lambda_N, null, null}` (the lifted fn ignores its env slot).
-    Capturing: heap-allocate the environment struct, populate each captured value into
-    it (copy for copyable captures, move for owned captures), and build
-    `{&__lambda_N, env_ptr, drop_ptr}` where `drop_ptr` is the env destructor so RAII
-    frees the environment.
+    Capturing: heap-allocate the environment struct, give each captured value to it
+    through the ownership seam, and build `{&__lambda_N, env_ptr, drop_ptr}` where
+    `drop_ptr` is the env destructor so RAII frees the environment.
     """
     from sushi_lang.internals.errors import raise_internal_error
     from sushi_lang.semantics.ast import Name as _Name
-    from sushi_lang.semantics.typesys import is_owning_type
+    from sushi_lang.backend.ownership import ConsumingUse, consume
 
     lifted = codegen.funcs.get(getattr(lam, "lifted_name", None))
     if lifted is None:
@@ -275,14 +289,17 @@ def emit_lambda(codegen: "LLVMCodegen", lam, to_i1: bool) -> ir.Value:
     i32 = codegen.types.i32
     zero = ir.Constant(i32, 0)
     for idx, cap in enumerate(captures):
-        value = codegen.expressions.emit_expr(_Name(id=cap.name, loc=lam.loc))
+        # A capture names a variable but holds no source `Expr`, so Pass 3 puts the
+        # provenance on the `Param`. Carry it onto the synthesized `Name` the seam reads.
+        source = _Name(id=cap.name, loc=lam.loc)
+        source.ownership_provenance = getattr(cap, "ownership_provenance", None)
+        value = codegen.expressions.emit_expr(source)
+        # The environment takes ownership of the captured value and outlives the scope
+        # that built it. That makes this the CAPTURE consuming use, with no decision of
+        # its own -- `env_owns_field` then destroys exactly what the seam gave it here.
+        value = consume(codegen, source, value, cap.ty, ConsumingUse.CAPTURE)
         field_ptr = codegen.builder.gep(env_ptr, [zero, ir.Constant(i32, idx)], inbounds=True)
         codegen.builder.store(value, field_ptr)
-        # Move-capture: an owned value (dynamic array / List / Own / capturing closure)
-        # is moved into the env, which now owns it and frees it in the env destructor.
-        # Mark the outer binding moved so its own scope exit does not also free it.
-        if is_owning_type(cap.ty):
-            codegen.memory.mark_struct_as_moved(cap.name)
 
     env_i8 = codegen.builder.bitcast(env_ptr, codegen.types.str_ptr)
     drop_fn = get_or_create_env_drop(codegen, env_struct)

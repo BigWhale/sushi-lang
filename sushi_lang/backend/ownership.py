@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
-__all__ = ["ConsumingUse", "consume", "copy_out"]
+__all__ = ["ConsumingUse", "consume", "copy_out", "resolver_for"]
 
 
 def consume(codegen: 'LLVMCodegen', source, value: ir.Value,
@@ -67,7 +67,7 @@ def consume(codegen: 'LLVMCodegen', source, value: ir.Value,
         derivation of the rule, which is the thing this seam exists to make impossible.
     """
     provenance = _provenance_of(source, use)
-    decision = classify(provenance, type_class_of(target_type, _resolver(codegen)))
+    decision = classify(provenance, type_class_of(target_type, resolver_for(codegen)))
 
     if decision is Ownership.MOVE:
         _mark_moved(codegen, source)
@@ -102,6 +102,25 @@ def copy_out(codegen: 'LLVMCodegen', value: ir.Value,
     return _clone(codegen, value, value_type)
 
 
+def resolver_for(codegen: 'LLVMCodegen'):
+    """A `Type -> Type` resolver over the backend's struct and enum tables.
+
+    `type_class_of` needs it because `type_moves_by_value` answers False for an
+    `UnknownType`: an owning struct still named by its declaration would otherwise
+    classify as owning nothing, and every consuming use of it would alias.
+
+    Public because the closure environment gates ask the same question about a captured
+    field that `consume` asks about the capture itself. A second resolver would be a
+    second answer.
+    """
+    def resolve(ty):
+        name = getattr(ty, "name", None)
+        return (codegen.struct_table.by_name.get(name)
+                or codegen.enum_table.by_name.get(name)
+                or ty)
+    return resolve
+
+
 # --- Internals. Everything below is private to the seam. ---------------------------
 
 def _provenance_of(source, use: ConsumingUse) -> Provenance:
@@ -110,21 +129,6 @@ def _provenance_of(source, use: ConsumingUse) -> Provenance:
     if provenance is None:
         raise_internal_error("CE0129", use=use.value, node=type(source).__name__)
     return provenance
-
-
-def _resolver(codegen: 'LLVMCodegen'):
-    """A `Type -> Type` resolver over the backend's struct and enum tables.
-
-    `type_class_of` needs it because `type_moves_by_value` answers False for an
-    `UnknownType`: an owning struct still named by its declaration would otherwise
-    classify as owning nothing, and every consuming use of it would alias.
-    """
-    def resolve(ty):
-        name = getattr(ty, "name", None)
-        return (codegen.struct_table.by_name.get(name)
-                or codegen.enum_table.by_name.get(name)
-                or ty)
-    return resolve
 
 
 def _mark_moved(codegen: 'LLVMCodegen', source) -> None:

@@ -66,7 +66,7 @@ from sushi_lang.semantics.ast import (
     UnaryOp,
     While,
 )
-from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, Type, is_owning_type
+from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, Type
 from sushi_lang.semantics.ownership import (
     ConsumingUse, Ownership, Provenance, TypeClass, classify, is_own_type, type_class_of,
 )
@@ -100,9 +100,6 @@ class BorrowState:
     poke_borrow_count: int = 0  # Number of active &poke borrows (max 1)
     peek_borrow_count: int = 0  # Number of active &peek borrows (unlimited)
     is_moved: bool = False  # Ownership has been transferred
-    is_owning_closure: bool = False  # A capturing closure that owns a heap env (capture
-                                     # is erased from the fn(...) type, so ownership is
-                                     # tracked by binding provenance, not var_type)
     is_destroyed: bool = False  # Variable has been explicitly destroyed (via .destroy())
     is_argv_view: bool = False  # main's `string[] args`: a borrowed view of process argv;
                                 # moving it by value would free argv, so it is a hard error
@@ -765,19 +762,20 @@ class BorrowChecker:
                     self._check_expr(part)
 
         elif isinstance(expr, Lambda):
-            # Move-capture: an owned captured value (dynamic array / List / Own /
-            # capturing closure) is moved into the closure's environment, so a later
-            # use of the outer binding is a use-after-move (CE2405). Copyable captures
-            # (primitives, strings) stay usable.
+            # A captured slot is the CAPTURE consuming use: the heap environment takes
+            # ownership of the value, and it outlives the scope that created it. So the
+            # decision is the shared table's, exactly like the other ten positions.
+            #
+            # A capture holds no source `Expr` -- `Lambda.captures` is a list of `Param`
+            # -- so the provenance goes on the `Param` itself, and `emit_lambda` reads it
+            # from there. `Param` is an unslotted dataclass, and this pass runs after
+            # lambda lifting, so the backend sees the objects stamped here.
             for cap in (expr.captures or []):
-                if isinstance(cap.name, str) and cap.name in self.borrow_state:
-                    state = self.borrow_state[cap.name]
-                    # Closure capture stays on is_owning_type, NOT the move-by-value flip
-                    # (#134 spec §3: capture is unchanged; the backend capture path is not
-                    # flipped, so an owning-struct capture copy-captures as before).
-                    if is_owning_type(cap.ty):
-                        state.is_moved = True
-                        state.moved_at_span = state.moved_at_span or expr.loc
+                if not isinstance(cap.name, str):
+                    continue
+                provenance = self._name_provenance(cap.name)
+                cap.ownership_provenance = provenance
+                self._consume_named(cap.name, provenance, expr.loc)
 
         elif isinstance(expr, Spread):
             # Bloom: `arr...`. The source is USED here (so a moved source is reported)
@@ -952,8 +950,8 @@ class BorrowChecker:
     def _maybe_mark_container_insert(self, expr: Expr) -> None:
         """`l.push(x)` / `m.insert(k, v)` takes ownership -- the CONTAINER_INSERT use.
 
-        The backend has always MOVED here (`move_owning_arg_into_container` marks the
-        source), while this pass marked nothing: only `Own.alloc` and enum constructors
+        The backend has always MOVED here, while this pass marked nothing: only
+        `Own.alloc` and enum constructors
         were recognised among method calls. So `l.push(a)` followed by a read of `a`
         compiled clean and read through a pointer the List owns -- and after the List is
         destroyed the same read is a use-after-free returning whatever the allocator left.
@@ -1016,13 +1014,24 @@ class BorrowChecker:
             self._consume(arg, ConsumingUse.OWN_ALLOC)
 
     def _reconcile_closure_bind(self, stmt: Let) -> None:
-        """Track capturing-closure ownership across `let` bindings.
+        """Record whether a `fn(...)` binding owns a heap environment.
 
-        Capture is erased from the `fn(...)` type, so a closure's heap-env ownership is
-        tracked by binding provenance: a capturing lambda literal owns its env, and a
-        plain rebind `let g = f` MOVES that ownership (a later use of `f` is CE2405, the
-        same move semantics as arrays/List/Own). Non-capturing fn values are copyable and
-        untracked, so plain fn-ref code keeps working."""
+        `FunctionType.__eq__` excludes `captures` from type identity, so the DECLARED type
+        of a `fn(...)` local says nothing about ownership. The initializer says everything:
+        a capturing lambda literal owns an environment, and a plain fn reference owns
+        nothing. This writes that answer into the binding's recorded type, so the one
+        shared classifier reads a precise input here and needs no override of its own.
+
+        The backend cannot do the same. At each position it holds the declared TARGET type
+        -- a `List@(fn(i32) -> i32)` element, a struct field, a parameter -- which has
+        already lost the captures. So it classifies every function value as owning and
+        lets the null `drop_ptr` / `clone_ptr` guard make that answer exact at runtime.
+        One rule, two precisions. Being conservative there costs nothing; being
+        conservative HERE would report CE2405 for a plain fn reference used twice.
+
+        Runs before the `LET` consume, so marking the source moved stays that call's job.
+        """
+        from dataclasses import replace
         from sushi_lang.semantics.typesys import FunctionType
         if not isinstance(stmt.ty, FunctionType):
             return
@@ -1030,14 +1039,18 @@ class BorrowChecker:
         if dest is None:
             return
         value = stmt.value
-        if isinstance(value, Lambda) and value.captures:
-            dest.is_owning_closure = True
+        if isinstance(value, Lambda):
+            dest.var_type = replace(stmt.ty, captures=tuple(value.captures or ()))
         elif isinstance(value, Name):
             src = self.borrow_state.get(value.id)
-            if src is not None and src.is_owning_closure:
-                src.is_moved = True
-                src.moved_at_span = src.moved_at_span or value.loc
-                dest.is_owning_closure = True
+            if src is None:
+                # Not a local: a reference to a top-level function, which captures
+                # nothing. State the empty tuple -- leaving it None would read as
+                # "unstated", and a plain fn reference would then move on every use.
+                dest.var_type = replace(stmt.ty, captures=())
+            elif isinstance(src.var_type, FunctionType):
+                # `let g = f` hands `f`'s environment, if it has one, to `g`.
+                dest.var_type = src.var_type
 
     def _emit_use_after_move(self, name: str, use_span: Optional[Span],
                              state: BorrowState) -> None:
@@ -1087,12 +1100,7 @@ class BorrowChecker:
                                      why it is named above and not here -- that was #256.
         """
         if isinstance(expr, Name):
-            state = self.borrow_state.get(expr.id)
-            if state is None:
-                return Provenance.FRESH
-            if state.is_borrowed_binding or isinstance(state.var_type, ReferenceType):
-                return Provenance.BORROWED
-            return Provenance.OWNED
+            return self._name_provenance(expr.id)
 
         if isinstance(expr, MemberAccess):
             return Provenance.THROUGH_OWNER
@@ -1105,6 +1113,21 @@ class BorrowChecker:
                     return Provenance.THROUGH_OWNER
 
         return Provenance.FRESH
+
+    def _name_provenance(self, name: str) -> Provenance:
+        """The `Provenance` of a source that is a bare name.
+
+        Split out of `_source_provenance` because a lambda capture names a variable
+        without holding an `Expr` for it -- `Lambda.captures` is a list of `Param`. Both
+        paths must give the same answer, so both call this.
+        """
+        state = self.borrow_state.get(name)
+        if state is None:
+            # Not declared in this function: a top-level fn reference or a constant.
+            return Provenance.FRESH
+        if state.is_borrowed_binding or isinstance(state.var_type, ReferenceType):
+            return Provenance.BORROWED
+        return Provenance.OWNED
 
     def _consume(self, expr: Expr, use: ConsumingUse) -> None:
         """Classify a consuming use, stamp the decision, and act on it.
@@ -1144,22 +1167,32 @@ class BorrowChecker:
         if not isinstance(expr, Name):
             return  # only a named source has an owner to move or a binding to reject
 
-        state = self.borrow_state.get(expr.id)
+        self._consume_named(expr.id, provenance, expr.loc)
+
+    def _consume_named(self, name: str, provenance: Provenance,
+                       use_span: Optional[Span]) -> None:
+        """Apply the ownership decision to a source that is a bare name.
+
+        The decision core of `_consume`, split out because a lambda capture reaches it
+        without an `Expr`. It marks the source moved, reports CE2411, or does nothing.
+        Only a name has an owner to move or a binding to reject.
+        """
+        state = self.borrow_state.get(name)
         if state is None:
             return
 
         if state.is_argv_view:
             # Moving main's borrowed argv view would double-free process argv (N2). A more
             # specific diagnostic than CE2411, so it wins.
-            self.err.emit(er.ERR.CE2410, expr.loc, name=expr.id)
+            self.err.emit(er.ERR.CE2410, use_span, name=name)
             return
 
         decision = classify(provenance, self._type_class(state.var_type))
         if decision is Ownership.MOVE:
             state.is_moved = True
-            state.moved_at_span = state.moved_at_span or expr.loc
+            state.moved_at_span = state.moved_at_span or use_span
         elif decision is Ownership.REJECT:
-            self._emit_consume_of_borrow(expr.id, expr.loc, state)
+            self._emit_consume_of_borrow(name, use_span, state)
 
     def _emit_consume_of_borrow(self, name: str, use_span: Optional[Span],
                                 state: BorrowState) -> None:

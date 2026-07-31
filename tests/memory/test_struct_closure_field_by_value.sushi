@@ -1,0 +1,29 @@
+# A struct whose `fn(...)` field holds a CAPTURING closure, passed by value.
+#
+# The callee's parameter owns its value and destroys it at scope exit, which frees the
+# closure's heap environment through `drop_ptr`. So the caller must give the struct up.
+# It did not: `is_owning_type` read `FunctionType.captures` to decide, and a struct FIELD
+# type carries `captures = None` -- unstated, not empty -- because `FunctionType.__eq__`
+# excludes captures from type identity. The predicate read that as "owns nothing", the
+# struct classified PLAIN, the call aliased it, and the caller and the callee both freed
+# the same environment. Exit 133, a double free the leak interposer scores as a SKIP.
+#
+# `captures` is now tri-state: `()` is a plain fn reference and owns nothing, a non-empty
+# tuple owns an environment, and `None` is UNSTATED and assumed owning. A conservative
+# answer is free here, because a non-capturing value carries a null `drop_ptr`, which
+# makes its destroy a no-op. MM.md section 2; no upstream issue.
+# EXPECT_STDOUT_EXACT: "105\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Ops:
+    fn(i32) -> i32 a
+
+fn use_ops(Ops o, i32 v) i32:
+    return Result.Ok(o.a(v)??)
+
+fn main() i32:
+    let i32 k = 100
+    let Ops o = Ops(|i32 x| x + k)
+    println(use_ops(o, 5).realise(0))
+    return Result.Ok(0)

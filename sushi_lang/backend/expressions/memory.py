@@ -400,7 +400,7 @@ def is_own_get_call(codegen: 'LLVMCodegen', expr) -> bool:
     `Own` is a smart pointer, not a collection: `get()` is a dereference, it hands back a bare
     `T` (not a `Maybe@(T)`), and `emit_own_get` loads the pointee without copying it. So the
     value is a view of storage the receiver still frees, exactly like a `MemberAccess` field
-    read -- see `expression_reads_continuing_owner`.
+    read. The borrow checker stamps both as `Provenance.THROUGH_OWNER`.
 
     Resolved through the same `infer_generic_struct_type` the emitter uses
     (`calls/utils.py`), so this predicate and `try_emit_own_method` cannot disagree about what
@@ -421,22 +421,6 @@ def is_own_get_call(codegen: 'LLVMCodegen', expr) -> bool:
     from sushi_lang.backend.expressions.calls.utils import infer_generic_struct_type
     own_type = infer_generic_struct_type(codegen, receiver, "Own<")
     return isinstance(own_type, StructType) and own_type.name.startswith("Own<")
-
-
-def expression_reads_continuing_owner(codegen: 'LLVMCodegen', expr) -> bool:
-    """Does `expr` hand a sink a view of storage another owner still frees?
-
-    The by-value sinks' shared test. `docs/design/move-semantics.md` section 3 splits every
-    source into "ownership sinks move; reads from a continuing owner copy", and this is the
-    second half: a `MemberAccess` (`w.items`) and an `Own@(T).get()` (`o.get()`) both reach
-    through a live owner into storage it keeps, so a sink taking one of them by value must
-    detach with its own deep copy. Sushi has no partial moves, so this is never a move.
-
-    A bare `Name` is deliberately absent: it is the *first* half of the rule and each sink
-    splits it itself -- an owned local moves, a borrow binding (#238) copies.
-    """
-    from sushi_lang.semantics.ast import MemberAccess
-    return isinstance(expr, MemberAccess) or is_own_get_call(codegen, expr)
 
 
 def expression_is_temporary(codegen: 'LLVMCodegen', expr) -> bool:
@@ -502,31 +486,6 @@ def destroy_enum_temp(codegen: 'LLVMCodegen', expr_ast, enum_value: ir.Value,
     slot = codegen.memory.entry_alloca(enum_value.type, "enum_temp_slot")
     codegen.builder.store(enum_value, slot)
     emit_value_destructor(codegen, slot, resolved)
-
-
-def move_owning_arg_into_container(codegen: 'LLVMCodegen', arg_ast) -> None:
-    """Mark a bare-Name owning local as moved when it is stored into a container.
-
-    `container.push(x)` / `.insert(x)` / `map.insert(k, x)` stores the value SHALLOWLY --
-    the container's slot aliases the same heap buffer(s) as the source. Ownership therefore
-    transfers to the container (which frees the value on `.destroy()`/`.free()`/scope exit),
-    and the source local must be moved so scope-exit RAII does not ALSO free the shared
-    buffer (double-free). Covers every owning local kind: strings (#145), dynamic arrays,
-    `List<T>`, `Own<T>`, and heap-owning structs (#140). Only a bare Name of a
-    currently-registered owning local is moved; a literal / temporary / method result is a
-    fresh value the container simply takes over, with no source to move.
-    """
-    from sushi_lang.semantics.ast import Name
-    if not isinstance(arg_ast, Name):
-        return
-    name = arg_ast.id
-    da = codegen.dynamic_arrays
-    if (codegen.memory.is_string_registered(name)
-            or codegen.memory.is_struct_registered(name)
-            or name in da.arrays
-            or name in da.lists
-            or name in da.owned_pointers):
-        codegen.memory.mark_struct_as_moved(name)
 
 
 def deep_copy_struct(codegen: 'LLVMCodegen', struct_value: ir.Value, struct_type: StructType) -> ir.Value:

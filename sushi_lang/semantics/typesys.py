@@ -293,12 +293,26 @@ def is_owning_type(t: Optional["Type"]) -> bool:
     the borrow checker (move semantics) and the backend (deep-copy + destructor
     dispatch) so they never disagree.
 
-    Owning: dynamic arrays, `List<T>`, `Own<T>`, and a CAPTURING function value (a
-    closure with a non-empty `captures` descriptor). A non-capturing function value
-    stays copyable (preserves v1 first-class-function ergonomics). Capture is metadata
-    excluded from type identity, so closure ownership is resolved off `captures` here,
-    while the backend additionally guards every function-value free at runtime by the
-    `drop_ptr` (a null drop makes a conservative free a no-op).
+    Owning: dynamic arrays, `List<T>`, `Own<T>`, and every function value EXCEPT one
+    known to capture nothing.
+
+    `FunctionType.captures` is tri-state, and the difference decides ownership:
+
+      ``()``        known empty -- a plain fn reference. Owns nothing.
+      non-empty     known capturing -- owns a heap environment.
+      ``None``      NOT STATED. Assume it owns one.
+
+    `None` is the common case at a position, because `FunctionType.__eq__` excludes
+    `captures` from type identity: a fn value arriving through a DECLARED type -- a
+    `List@(fn(i32) -> i32)` element, a struct field, a parameter -- has already lost it.
+    Reading `None` as "no captures" answered False for a closure that does own an
+    environment, and the position then aliased it, so the container and the local both
+    freed it (`tests/memory/test_closure_into_list.sushi`).
+
+    Reading `None` as "owning" costs nothing, because the fat value resolves ownership at
+    RUNTIME: the destructor frees through `drop_ptr` and the deep copy duplicates through
+    `clone_ptr`, and a non-capturing value carries null in both. Same data-driven
+    discipline as a string's `owned` bit.
     """
     if t is None:
         return False
@@ -306,8 +320,8 @@ def is_owning_type(t: Optional["Type"]) -> bool:
         return True
     if isinstance(t, GenericTypeRef) and t.base_name in ('Own', 'List'):
         return True
-    if isinstance(t, FunctionType) and t.captures:
-        return True
+    if isinstance(t, FunctionType):
+        return t.captures != ()
     name = getattr(t, 'name', None)
     if isinstance(name, str) and (name.startswith('Own<') or name.startswith('List<')):
         return True

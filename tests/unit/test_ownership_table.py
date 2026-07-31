@@ -202,12 +202,25 @@ def test_none_is_plain():
     assert type_class_of(None) is TypeClass.PLAIN
 
 
-def test_capturing_closure_moves_and_plain_fn_does_not():
-    plain = FunctionType(param_types=(I32,), ok_type=I32, err_type=UnknownType(name="StdError"))
+def test_every_function_value_moves_whatever_its_captures_say():
+    """Capture metadata may be absent, so it must not decide ownership.
+
+    `FunctionType.__eq__` excludes `captures` from type identity. So a closure that
+    reaches a position through a DECLARED type -- a `List@(fn(i32) -> i32)` element, a
+    struct field, a parameter -- arrives with `captures=None` even though it does own a
+    heap environment. Classifying on `captures` answered PLAIN there, the position
+    adopted the value without marking the source moved, and the container and the local
+    then freed the same environment (`tests/memory/test_closure_into_list.sushi`).
+
+    Answering MOVE always is safe because the fat value resolves ownership at runtime:
+    the destructor frees through `drop_ptr` and the deep copy duplicates through
+    `clone_ptr`, and a non-capturing value carries null in both.
+    """
+    declared = FunctionType(param_types=(I32,), ok_type=I32, err_type=UnknownType(name="StdError"))
     capturing = FunctionType(param_types=(I32,), ok_type=I32,
                              err_type=UnknownType(name="StdError"),
                              captures=(("k", I32),))
-    assert type_class_of(plain) is TypeClass.PLAIN
+    assert type_class_of(declared) is TypeClass.MOVE
     assert type_class_of(capturing) is TypeClass.MOVE
 
 
