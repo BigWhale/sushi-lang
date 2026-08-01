@@ -1,0 +1,45 @@
+# ► THIS FILE IS RED, DELIBERATELY. It pins the expensive half of the `??`-receiver defect,
+# which is CLAUDE.md known-limitation 10.
+#
+# `get_map()??.keys()` is CE0019 -- "cannot determine language type for LLVM type:
+# {{i32, i32, {i32, i32, i8}*}, i32, i32, i32}", the HashMap layout. Same cause as
+# `test_tryexpr_receiver_method.sushi`: a `??` receiver resolves to no semantic type.
+#
+# It does NOT have the same fix. Reading the `TryExpr` stamp alone turns this CE0019 into
+# `CE0000: KeyError 'Extension method not found: HashMap__i32_i32_keys'` -- one internal
+# error traded for a worse one. Measured, not assumed. Three things are needed:
+#
+#   (a) a `TryExpr` strategy in `infer_generic_struct_type`, the cheap part;
+#   (b) a spill in `emit_receiver_as_pointer`, which answers None for anything that is not a
+#       name or a field read. `keys` mutates nothing but the HashMap emitters GEP their
+#       receiver, so a value miscompiles. The pattern to copy is `destroy_enum_temp`:
+#       emit, then `entry_alloca` + store;
+#   (c) AN OWNER FOR THE TEMPORARY. The map `get_map()??` produces is FRESH and nothing
+#       frees it, so (a) + (b) alone leak it -- which EXPECT_NO_LEAKS below would catch.
+#
+# (c) is a language decision, not a patch. Rust and C++ both answer it the same way: a
+# temporary lives to the end of the enclosing statement and is dropped there. That is the
+# precedent to follow, and MM.md's Phase 10 already expects to need it (`relinquish_temp`).
+#
+# Phase 7.6. Do NOT rewrite this file two-step (`let HashMap@(i32, i32) m = get_map()??`
+# then `m.keys()`) -- that passes and hides the defect.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_NO_LEAKS: true
+use <collections/hashmap>
+
+fn get_map() HashMap@(i32, i32):
+    let HashMap@(i32, i32) m = HashMap.new()
+    m.insert(1, 10)
+    m.insert(2, 20)
+    return Result.Ok(m)
+
+fn run() i32:
+    let i32 total = 0
+    foreach(k in get_map()??.keys()):
+        total := total + k
+    return Result.Ok(total)
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)
