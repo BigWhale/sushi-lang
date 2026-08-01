@@ -18,6 +18,61 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
 
 
+def _stamped_semantic_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional['Type']:
+    """The type Pass 2 recorded for a method call, or None.
+
+    The backend does not re-infer types; it reads what Pass 2 stamped (the rule CE0124
+    states). `visit_methodcall` / `visit_dotcall`
+    (`semantics/passes/types/visitor.py`) write the inferred return type onto every
+    `MethodCall` and `DotCall`, and Pass 1.6 deep-copies expression nodes precisely so
+    that later-pass annotations survive to codegen
+    (`semantics/generics/monomorphize/transformer.py`). This is the third backend reader
+    of that stamp, after `expressions/literals.py` and `statements/matching.py`;
+    `tests/unit/test_chained_call_receiver_type.py` pins the premise.
+
+    It answers the question a CHAINED receiver asks -- what type does `o.get()` have, in
+    `o.get().clone()` -- which no other strategy here can answer: they key on a `Name` or
+    a `MemberAccess`, and a chained receiver is neither. Without it the receiver reaches
+    the extension-method fallback with no semantic type and dies as CE0019.
+
+    Deliberately narrow. A `TryExpr` receiver (`mk()??.clone()`) is the same defect and
+    is NOT handled here -- it needs `emit_receiver_as_pointer` to spill, and an ownership
+    rule for the unbound temporary, which is a language decision rather than a lookup.
+    `tests/memory/test_tryexpr_receiver_*.sushi` hold that half open.
+
+    Returns None rather than a half-resolved type when the name is in neither table.
+    Handing a `GenericTypeRef` to `try_emit_struct_clone` would change the failure mode
+    of a case that fails today; None reproduces today's behaviour exactly.
+    """
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+    from sushi_lang.semantics.typesys import UnknownType
+
+    if not isinstance(expr, (MethodCall, DotCall)):
+        return None
+
+    stamped = getattr(expr, 'inferred_return_type', None)
+    if stamped is None:
+        return None
+
+    struct_by_name = codegen.struct_table.by_name
+    enum_by_name = codegen.enum_table.by_name
+    resolved = resolve_unknown_type(stamped, struct_by_name, enum_by_name)
+
+    # Never rebuild a named type -- if it has a name, the table is what that name means
+    # (#240). A no-op whenever Pass 2 already handed over the interned instance, which it
+    # does today for every shape this function serves.
+    name = getattr(resolved, 'name', None)
+    if isinstance(name, str):
+        interned = struct_by_name.get(name) or enum_by_name.get(name)
+        if interned is not None:
+            return interned
+
+    if isinstance(resolved, (GenericTypeRef, UnknownType)):
+        return None
+    return resolved
+
+
 def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: str) -> Optional[StructType]:
     """Infer generic struct type (Own<T>, HashMap<K,V>, List<T>) from receiver using multiple strategies."""
     from sushi_lang.semantics.typesys import ReferenceType
@@ -63,8 +118,15 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
             if type_name.startswith(prefix) and type_name in codegen.struct_table.by_name:
                 return codegen.struct_table.by_name[type_name]
 
-    # Strategy 3: For Own.new(), receiver might be a type name from let statement type annotation
-    # This would be handled during type inference in semantic analysis
+    # Strategy 3: the receiver is a chained method call (`outer.get().clone()`), so it is
+    # neither a Name nor a MemberAccess and neither strategy above can see it. Pass 2
+    # already typed it. The three strategies are disjoint by node type, so this one being
+    # last is a matter of diff size, not of priority.
+    stamped = _stamped_semantic_type(codegen, receiver)
+    if isinstance(stamped, ReferenceType):
+        stamped = stamped.referenced_type
+    if isinstance(stamped, StructType) and stamped.name.startswith(prefix):
+        return stamped
 
     return None
 
@@ -217,6 +279,15 @@ def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Valu
         # downstream handlers fall back to mapping the enum's LLVM layout
         # ({i32, [N x i8]}) back to a language type, which fails with CE0019.
         semantic_type = _infer_enum_construction_type(codegen, receiver)
+        if semantic_type is None:
+            # Any other chained receiver -- `o.get().clone()`, `map.get(1).clone()`.
+            # Enum construction keeps first place because it is the narrower question
+            # and this stays purely additive. That order preserves one latent edge:
+            # _infer_enum_construction_type matches ANY DotCall whose receiver is a
+            # Name, so a local shadowing an enum name still resolves to the enum.
+            # Recorded, not fixed -- no report, no test, and reordering to fix it would
+            # change a currently green path.
+            semantic_type = _stamped_semantic_type(codegen, receiver)
 
     return receiver_value, receiver_type, semantic_type
 
