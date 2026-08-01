@@ -116,8 +116,9 @@ foreach(entry in ages.entries()):
 ```
 
 !!! note
-    `.keys()`, `.values()`, and `.entries()` require the receiver to be a plain variable
-    name — chained calls such as `get_map().keys()` are not currently supported.
+    `.keys()`, `.values()`, and `.entries()` do not accept a receiver that is a `??`
+    expression: `get_map()??.keys()` is not currently supported. Bind the map first
+    (`let HashMap@(string, i32) m = get_map()??`, then `m.keys()`).
 
 ### `.free() -> ~`
 
