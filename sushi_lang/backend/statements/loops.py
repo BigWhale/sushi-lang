@@ -116,7 +116,7 @@ def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
 
     # Check if this is a HashMap iterator by inspecting the iterable expression
     # HashMap.keys() and HashMap.values() are parsed as DotCall nodes
-    from sushi_lang.semantics.ast import DotCall, Name
+    from sushi_lang.semantics.ast import DotCall
     from sushi_lang.semantics.typesys import StructType
     is_hashmap_keys_or_values = False
     hashmap_type = None
@@ -125,15 +125,19 @@ def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
     # Check for HashMap.keys(), HashMap.values(), or HashMap.entries()
     if isinstance(node.iterable, DotCall):
         if node.iterable.method in ("keys", "values", "entries"):
-            # The receiver should be a Name node referring to a HashMap variable
-            if isinstance(node.iterable.receiver, Name):
-                var_name = node.iterable.receiver.id
-                # Look up the variable's semantic type using the memory manager
-                receiver_type = codegen.memory.find_semantic_type(var_name)
-                if isinstance(receiver_type, StructType) and receiver_type.name.startswith("HashMap<"):
-                    is_hashmap_keys_or_values = True
-                    hashmap_type = receiver_type
-                    hashmap_method = node.iterable.method
+            # Resolve the receiver's type through the SAME helper the HashMap emitters
+            # use, so this loop and `try_emit_hashmap_method` cannot disagree about what a
+            # HashMap receiver is. It used to require a bare `Name` and look the type up by
+            # variable name, which is why `get_map()??.keys()` silently fell through to the
+            # ARRAY foreach below and iterated the iterator struct as if it were an array:
+            # zero entries, no diagnostic. That was the whole of known-limitation 10.
+            from sushi_lang.backend.expressions.calls.utils import infer_generic_struct_type
+            receiver_type = infer_generic_struct_type(
+                codegen, node.iterable.receiver, "HashMap<")
+            if isinstance(receiver_type, StructType) and receiver_type.name.startswith("HashMap<"):
+                is_hashmap_keys_or_values = True
+                hashmap_type = receiver_type
+                hashmap_method = node.iterable.method
 
     if is_hashmap_keys_or_values:
         # HashMap iterator path

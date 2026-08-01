@@ -134,7 +134,8 @@ def try_emit_hashmap_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     if method == "new":
         receiver_value = None
     else:
-        receiver_value = emit_receiver_as_pointer(codegen, expr.receiver)
+        receiver_value = emit_receiver_as_pointer(
+            codegen, expr.receiver, receiver_semantic_type)
         if receiver_value is None:
             receiver_value = codegen.expressions.emit_expr(expr.receiver)
 
@@ -164,7 +165,8 @@ def try_emit_list_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
     if method in ("new", "with_capacity"):
         receiver_value = None
     else:
-        receiver_value = emit_receiver_as_pointer(codegen, expr.receiver)
+        receiver_value = emit_receiver_as_pointer(
+            codegen, expr.receiver, receiver_semantic_type)
         if receiver_value is None:
             receiver_value = codegen.expressions.emit_expr(expr.receiver)
 

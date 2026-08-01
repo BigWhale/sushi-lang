@@ -5,6 +5,7 @@ This module contains helper functions for type inference, receiver emission,
 and generic type resolution used by the method call dispatcher.
 """
 from __future__ import annotations
+import itertools
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 from llvmlite import ir
@@ -35,23 +36,27 @@ def _stamped_semantic_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional['Type
     a `MemberAccess`, and a chained receiver is neither. Without it the receiver reaches
     the extension-method fallback with no semantic type and dies as CE0019.
 
-    Deliberately narrow. A `TryExpr` receiver (`mk()??.clone()`) is the same defect and
-    is NOT handled here -- it needs `emit_receiver_as_pointer` to spill, and an ownership
-    rule for the unbound temporary, which is a language decision rather than a lookup.
-    `tests/memory/test_tryexpr_receiver_*.sushi` hold that half open.
+    A `??` receiver (`parse_row(7)??.hash()`, `get_map()??.keys()`) is the same question
+    asked of a different node, and Pass 2 answers it there too -- on a `TryExpr` the
+    success type is `inferred_unwrapped_type` (`passes/types/expressions.py`), which
+    `backend/expressions/try_expr.py` already reads for the value itself.
 
     Returns None rather than a half-resolved type when the name is in neither table.
     Handing a `GenericTypeRef` to `try_emit_struct_clone` would change the failure mode
     of a case that fails today; None reproduces today's behaviour exactly.
     """
+    from sushi_lang.semantics.ast import TryExpr
     from sushi_lang.semantics.generics.types import GenericTypeRef
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
     from sushi_lang.semantics.typesys import UnknownType
 
-    if not isinstance(expr, (MethodCall, DotCall)):
+    if isinstance(expr, TryExpr):
+        stamped = getattr(expr, 'inferred_unwrapped_type', None)
+    elif isinstance(expr, (MethodCall, DotCall)):
+        stamped = getattr(expr, 'inferred_return_type', None)
+    else:
         return None
 
-    stamped = getattr(expr, 'inferred_return_type', None)
     if stamped is None:
         return None
 
@@ -280,16 +285,49 @@ def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Valu
         # ({i32, [N x i8]}) back to a language type, which fails with CE0019.
         semantic_type = _infer_enum_construction_type(codegen, receiver)
         if semantic_type is None:
-            # Any other chained receiver -- `o.get().clone()`, `map.get(1).clone()`.
-            # Enum construction keeps first place because it is the narrower question
-            # and this stays purely additive. That order preserves one latent edge:
-            # _infer_enum_construction_type matches ANY DotCall whose receiver is a
-            # Name, so a local shadowing an enum name still resolves to the enum.
-            # Recorded, not fixed -- no report, no test, and reordering to fix it would
-            # change a currently green path.
+            # Any other chained receiver -- `o.get().clone()`, `map.get(1).clone()`,
+            # `make()??.clone()`. Enum construction keeps first place because it is the
+            # narrower question and this stays purely additive. That order preserves one
+            # latent edge: _infer_enum_construction_type matches ANY DotCall whose
+            # receiver is a Name, so a local shadowing an enum name still resolves to the
+            # enum. Recorded, not fixed -- no report, no test, and reordering to fix it
+            # would change a currently green path.
             semantic_type = _stamped_semantic_type(codegen, receiver)
+            _own_receiver_temp(codegen, receiver, receiver_value, semantic_type)
 
     return receiver_value, receiver_type, semantic_type
+
+
+def _own_receiver_temp(codegen: 'LLVMCodegen', receiver: Expr, value: ir.Value,
+                       semantic_type: Optional['Type']) -> None:
+    """Give a receiver that nobody owns an owner, so it is freed exactly once.
+
+    `make()??.clone()` produces a `Bag` no binding names. The clone is a deep copy, so
+    the original's buffers are nobody's afterwards: 16 bytes, leaked, exit code 0. The
+    shape did not compile before the chained-receiver fix, so this is its cost and it is
+    paid here.
+
+    Same rule and same mechanism as the spill in `_spill_receiver` and as a discarded
+    `a.clone()` statement (`backend/statements/__init__.py`): register the value as a
+    scope temp and let scope-exit RAII free it. The value itself is still returned to the
+    dispatcher unchanged -- this only adds an owner, it does not change what is emitted.
+
+    `expression_is_temporary` is the safety gate. A receiver that reads through a live
+    owner is not a temporary, so a get-out and a field read register nothing and the
+    owner keeps its single free.
+    """
+    from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
+    from sushi_lang.backend.expressions.memory import expression_is_temporary
+
+    if value is None or semantic_type is None:
+        return
+    resolved = resolve_named_type(codegen, semantic_type)
+    if resolved is None or not needs_cleanup(resolved):
+        return
+    if not expression_is_temporary(codegen, receiver):
+        return
+    codegen.memory.create_local(
+        f"__recv_temp_{next(_SPILL_SEQ)}", value.type, value, resolved)
 
 
 def _infer_enum_construction_type(codegen: 'LLVMCodegen', receiver: Expr) -> Optional['Type']:
@@ -378,7 +416,8 @@ def infer_semantic_type(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]
     return None
 
 
-def emit_receiver_as_pointer(codegen: 'LLVMCodegen', receiver: Expr) -> Optional[ir.Value]:
+def emit_receiver_as_pointer(codegen: 'LLVMCodegen', receiver: Expr,
+                             semantic_type: Optional['Type'] = None) -> Optional[ir.Value]:
     """Emit receiver as pointer (alloca) for mutation methods.
 
     This is used by HashMap and List methods that need to mutate the receiver.
@@ -386,12 +425,22 @@ def emit_receiver_as_pointer(codegen: 'LLVMCodegen', receiver: Expr) -> Optional
     For reference parameters (&peek T or &poke T), the slot contains a pointer
     to the actual variable, so we need to load that pointer first.
 
+    A receiver that is a whole expression -- `get_map()??`, a call result -- has no
+    address, so it is SPILLED: emitted once, parked in an entry-block slot, and that slot
+    handed back. The HashMap and List emitters GEP their receiver, so handing them a value
+    instead miscompiles; before the spill they got a value and the caller had no way to
+    know. The alloca is hoisted to the entry block because a receiver inside a loop would
+    otherwise allocate once per iteration and grow the stack without bound.
+
     Args:
         codegen: The LLVM code generator
         receiver: Receiver expression
+        semantic_type: The receiver's resolved type, which the caller already knows. Only
+            a spill needs it, and only to decide whether the spilled value owns heap.
 
     Returns:
-        Pointer to receiver if receiver is a Name, None otherwise
+        A pointer to the receiver, or None when the receiver names no storage and could
+        not be spilled either.
     """
     from sushi_lang.backend.expressions import type_utils
 
@@ -418,4 +467,45 @@ def emit_receiver_as_pointer(codegen: 'LLVMCodegen', receiver: Expr) -> Optional
         from sushi_lang.backend.expressions.structs import try_get_struct_alloca
         return try_get_struct_alloca(codegen, receiver)
 
-    return None
+    return _spill_receiver(codegen, receiver, semantic_type)
+
+
+# One counter per module, so two spills in the same function get distinct names.
+_SPILL_SEQ = itertools.count()
+
+
+def _spill_receiver(codegen: 'LLVMCodegen', receiver: Expr,
+                    semantic_type: Optional['Type']) -> Optional[ir.Value]:
+    """Park a receiver that names no storage in a slot, and give it an owner if it needs one.
+
+    A value produced by an expression is owned by nobody. Spilling it creates the first
+    thing that could free it, so the spill has to answer the ownership question at the same
+    time or it trades a miscompile for a leak.
+
+    The answer is the one the language already gives an unbound owning temporary: register
+    it as a scope temp and let scope-exit RAII free it exactly once -- the same rule as a
+    discarded `a.clone()` statement (`backend/statements/__init__.py`). Rust and C++ drop a
+    temporary at the end of the enclosing STATEMENT, which is tighter; scope exit is later,
+    never earlier, so it is safe, and it needs no machinery that does not exist. The
+    difference is visible only as memory held for longer.
+
+    `expression_is_temporary` is the gate, and it is the whole safety argument: a receiver
+    that reads through a live owner -- a get-out, a field read -- must NOT be registered,
+    because its owner frees it. Registering one there is a double free.
+    """
+    from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
+    from sushi_lang.backend.expressions.memory import expression_is_temporary
+
+    value = codegen.expressions.emit_expr(receiver)
+    if value is None:
+        return None
+
+    resolved = resolve_named_type(codegen, semantic_type) if semantic_type is not None else None
+    if (resolved is not None and needs_cleanup(resolved)
+            and expression_is_temporary(codegen, receiver)):
+        name = f"__recv_temp_{next(_SPILL_SEQ)}"
+        return codegen.memory.create_local(name, value.type, value, resolved)
+
+    slot = codegen.memory.entry_alloca(value.type, "recv_temp_slot")
+    codegen.builder.store(value, slot)
+    return slot
