@@ -345,7 +345,19 @@ def is_container_get_call(codegen: 'LLVMCodegen', expr) -> bool:
     A receiver that does not resolve (`f().get()`) answers False. The temporary in that
     shape has no owner either way, so it is a pre-existing gap rather than one this
     predicate introduces.
+
+    **`??` is unwrapped first.** `c.get(0)??` is the same borrow as `c.get(0)` -- the
+    operator moves the payload out of the `Maybe`, it does not move the element out of the
+    container. Without the unwrap this answered False, `expression_is_temporary` concluded
+    nobody owned the value, and `match c.get(0)??:` freed an element the container still
+    frees: a double free that leaves the exit code at 0 and is visible only under the
+    interposer. `_reads_through_owner` (semantics/passes/borrow.py) unwraps first and always
+    did; the two are one rule and must not disagree.
     """
+    from sushi_lang.semantics.ast import TryExpr
+    while isinstance(expr, TryExpr):
+        expr = expr.expr
+
     if getattr(expr, "method", None) != "get":
         return False
     receiver = getattr(expr, "receiver", None)
