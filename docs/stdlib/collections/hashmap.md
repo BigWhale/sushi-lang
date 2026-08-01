@@ -116,9 +116,9 @@ foreach(entry in ages.entries()):
 ```
 
 !!! note
-    `.keys()`, `.values()`, and `.entries()` do not accept a receiver that is a `??`
-    expression: `get_map()??.keys()` is not currently supported. Bind the map first
-    (`let HashMap@(string, i32) m = get_map()??`, then `m.keys()`).
+    `.keys()`, `.values()`, and `.entries()` accept any receiver whose type resolves,
+    including a fallible getter: `foreach(k in get_map()??.keys())` works, and the map
+    it produces is freed at scope exit. This used to require a plain variable name.
 
 ### `.free() -> ~`
 
