@@ -416,6 +416,22 @@ class OwnMethodInferrer:
         return None
 
 
+@dataclass
+class FunctionMethodInferrer:
+    """Type inferrer for the built-in methods on a function value (.clone()).
+
+    Function types are invariant and capture-agnostic, so the clone of a `fn(i32) -> i32`
+    is a `fn(i32) -> i32` whether or not it owns an environment.
+    """
+    receiver_type: 'Type'
+    method_name: str
+    validator: 'TypeValidator'
+
+    def infer_return_type(self) -> Optional['Type']:
+        from sushi_lang.semantics.generics.closures import function_method_return_type
+        return function_method_return_type(self.method_name, self.receiver_type)
+
+
 # Register all built-in type checkers
 @METHOD_TYPE_REGISTRY.register_checker
 def check_array_methods(receiver_type, method_name, validator):
@@ -542,4 +558,16 @@ def check_list_methods(receiver_type, method_name, validator):
 def check_own_methods(receiver_type, method_name, validator):
     if isinstance(receiver_type, StructType) and receiver_type.name.startswith("Own<"):
         return OwnMethodInferrer(receiver_type, method_name, validator)
+    return None
+
+
+@METHOD_TYPE_REGISTRY.register_checker
+def check_function_methods(receiver_type, method_name, validator):
+    # Claim only the names this family handles: infer_method_type is first-match-wins, so a
+    # claim whose inferrer then answers None ends the chain instead of falling through (the
+    # #239 shape, recorded on check_string_methods above).
+    from sushi_lang.semantics.generics.closures import is_builtin_function_method
+    from sushi_lang.semantics.typesys import FunctionType
+    if isinstance(receiver_type, FunctionType) and is_builtin_function_method(method_name):
+        return FunctionMethodInferrer(receiver_type, method_name, validator)
     return None

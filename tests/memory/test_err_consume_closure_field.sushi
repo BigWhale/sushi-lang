@@ -1,0 +1,27 @@
+# The rejection the closure clone exists to escape.
+#
+# A closure read out of a struct field is a BORROW (closures T1.5): `h` keeps the
+# environment and still frees it, so a position that takes ownership may not have it.
+# The positive twin is test_clone_closure.sushi, which writes the `.clone()` this names.
+#
+# This pairing is the point. CE2411's help text tells the user to call `.clone()`, and
+# until that method existed on a function value the advice led to a CE0000 internal
+# compiler error rather than to working code. A rejection whose escape does not compile is
+# worse than no rejection.
+# EXPECT_ERROR_CODE: CE2411
+
+struct Holder:
+    fn(i32) -> i32 handler
+
+fn run() i32:
+    let i32 k = 10
+    let Holder h = Holder(|i32 x| x + k)
+    let List@(fn(i32) -> i32) fns = List.new()
+    fns.push(h.handler)
+    println(fns.get(0)??(5)??)
+    fns.destroy()
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 rc = run().realise(1)
+    return Result.Ok(rc)

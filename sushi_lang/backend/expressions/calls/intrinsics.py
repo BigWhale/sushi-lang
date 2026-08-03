@@ -299,6 +299,35 @@ def try_emit_struct_clone(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
     return struct_clone_method.llvm_emitter(codegen, temp_expr, receiver_value, receiver_type, to_i1)
 
 
+def try_emit_function_clone(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
+                            receiver_value: ir.Value, receiver_type: ir.Type,
+                            semantic_type, to_i1: bool) -> Optional[ir.Value]:
+    """Try to emit clone() on a function value. None if not applicable.
+
+    No new IR: `emit_value_clone` already routes a `FunctionType` to
+    `_clone_function_value`, which duplicates the heap environment through the fat
+    pointer's `clone_ptr` slot and is the structural inverse of
+    `emit_function_value_destructor`. A hand-written duplicate here would be free to break
+    that pairing -- clone fewer buffers is a double free, clone more is a leak -- which is
+    why the fixed-array arm delegates for the same reason.
+
+    A non-capturing value carries a null `clone_ptr` and passes through unchanged, so this
+    is free for a plain fn reference.
+    """
+    from sushi_lang.semantics.typesys import FunctionType, deref_type
+
+    if expr.method != "clone":
+        return None
+
+    # The methods on `&T` are the methods on `T`.
+    resolved = deref_type(semantic_type)
+    if not isinstance(resolved, FunctionType):
+        return None
+
+    from sushi_lang.backend.expressions.memory import emit_value_clone
+    return emit_value_clone(codegen, receiver_value, resolved)
+
+
 def try_emit_enum_clone(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                         receiver_value: ir.Value, receiver_type: ir.Type,
                         semantic_type, to_i1: bool) -> Optional[ir.Value]:

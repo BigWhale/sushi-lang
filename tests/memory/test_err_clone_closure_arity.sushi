@@ -1,0 +1,20 @@
+# clone() on a function value takes no arguments, like every other clone.
+#
+# The arity check is what makes the new family a real built-in rather than a name that
+# happens to dispatch: without it an argument would be evaluated and silently dropped.
+# CE2009 is the same code the struct, enum and array clones report.
+# EXPECT_ERROR_CODE: CE2009
+
+struct Holder:
+    fn(i32) -> i32 handler
+
+fn run() i32:
+    let i32 k = 10
+    let Holder h = Holder(|i32 x| x + k)
+    let fn(i32) -> i32 g = h.handler.clone(1)
+    println(g(5)??)
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 rc = run().realise(1)
+    return Result.Ok(rc)

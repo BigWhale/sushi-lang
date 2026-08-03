@@ -378,6 +378,13 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     if result is not None:
         return result
 
+    # 14c. Function-value clone -- a closure read out of a field or a container is a
+    # borrow, so `.clone()` is CE2411's escape. Without this arm dispatch reached the
+    # extension fallback, which mangled the type name into `fn(i32) - i32_clone`.
+    result = intrinsics.try_emit_function_clone(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
+    if result is not None:
+        return result
+
     # 15. Primitive methods (to_str, hash, etc.)
     result = intrinsics.try_emit_primitive_method(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
     if result is not None:
