@@ -8,10 +8,29 @@
 # recorded in prose only. Prose does not fail CI. Do not remove the directive to get the
 # file green; the directive is the whole point of it.
 #
-# The receiver is a `HashMap@(i32, string)` whose value is an interpolated (owned) string,
-# read out with `.get(2)??.clone()` and then freed. Diagnose before deciding what to do:
-# if the fix is small, take it. If it is entangled with the string tier, leave this red
-# and give it to Phase 9, which rewrites that machinery anyway.
+# DIAGNOSED 2026-08-03, NOT FIXED. It is not a HashMap defect. Bisection removed the map
+# entirely and the leak stayed:
+#
+#   fn go() string:
+#       let string base = "there"
+#       return Result.Ok("hi-{base}")
+#   println(go().realise("err"))        # leaks 8 bytes -- exactly len("hi-there")
+#
+# An owned `string` that NO BINDING NAMES leaks when it is consumed straight in an
+# argument position. Binding it first (`let string s = go().realise("err")`) frees it
+# correctly. The same hole shows through `??` and through an extension method that returns
+# an interpolated string, so it is general, not specific to `.realise()` or to this file.
+#
+# The language already has this rule for a method-call receiver: an owning temporary no
+# binding names is registered as a scope temp and freed at scope exit. Strings have no
+# such registry. `_string_cleanup` is keyed by NAME, and a temporary has none; closures
+# solve it with a value-keyed `_closure_temp_cleanup` and C strings with `_cstr_cleanup`.
+# A string equivalent needs the registry, its push/pop, its early-exit emitter, and a
+# decision at every producing site about which string values are owned temps and which are
+# borrows -- and that last question is exactly what the string tier answers.
+#
+# So this goes to Phase 9, which rewrites that machinery. Registering too eagerly trades
+# the leak for a double free on any borrow-shaped string.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "5\nhi-there\n"
 # EXPECT_NO_LEAKS: true

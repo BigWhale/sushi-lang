@@ -13,13 +13,32 @@
 # (tests/memory/test_clone_closure.sushi covers those). So the emitter is right and the
 # registration is missing.
 #
-# Start at backend/memory/scopes.py::register_local_cleanup and the parameter-binding
-# path, and check it against `is_owning_type`: `FunctionType.captures` is tri-state and
-# `None` means owning (MM.md finding A1, the same trap one layer up).
+# DIAGNOSED 2026-08-03, NOT FIXED. The missing arm is real but it is not the whole fix.
 #
-# A naive fix trades the leak for a double free. That exits 133, and the interposer scores
-# 133 as a SKIP, so the symptom is a leak check that DISAPPEARS from the count, not a new
-# failure line. Read the runner's per-test line, never the binary's exit code.
+# The parameter cleanup chain in `backend/functions/helpers.py::begin_function` has arms
+# for a dynamic array, `Own`/`List`, an owning struct and an owning enum, and NO arm for a
+# `FunctionType`. Adding one frees the environment and closes both leak shapes. It also
+# DOUBLE FREES six other tests, because the caller side does not tell one story:
+#
+#   inline lambda argument  `f(|i32 x| x + k, 10)`  -- the CALLER owns it, registered as a
+#                           caller-scope temp by `_register_inline_closure_temps` (#123)
+#   bare Name argument      `f(g, 10)`              -- marked MOVED at the call site, so
+#                           the caller skips its free and NOBODY owns it. This is the leak.
+#   container get-out /     `f(fns.get(0)??, 10)`   -- a non-owning BORROW; the container
+#   struct-field read                                  stays the owner
+#
+# Three owners for one parameter position, and the callee cannot tell them apart. So the
+# fix is not a missing registration, it is a decision about which side owns a by-value
+# function parameter, and it has to move the caller side with it. Taking only the callee
+# half turns the leak into a double free in the inline-lambda shape, which is the #123
+# path. Verified: the arm alone breaks test_run_issue123_inline_closure_arg, the three
+# test_ho_* and the two test_iter_module_* tests with SIGTRAP.
+#
+# A double free exits 133, and the interposer scores 133 as a SKIP, so the symptom of a
+# careless fix is a leak check that DISAPPEARS from the count, not a new failure line.
+# `--leaks-only` does NOT catch this: none of the six broken tests is leak-annotated. Read
+# the FULL suite's per-test lines, never the binary's exit code and never the narrow
+# selector.
 # EXPECT_STDOUT_EXACT: "12\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
