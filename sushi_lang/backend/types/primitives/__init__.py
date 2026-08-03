@@ -5,6 +5,8 @@ Implemented methods:
 - to_str() -> string: Convert primitive values to string representation
 - hash() -> u64: Compute hash value for use in hash tables/collections
 - to_bits() -> u32/u64: Raw IEEE-754 encoding (f32/f64 only)
+- clone() -> Self: An independent copy, which for a primitive is the value itself
+  (every type except `string`, which carries its own clone)
 
 All methods are implemented as LLVM IR for optimal performance.
 
@@ -21,6 +23,8 @@ import sushi_lang.backend.types.primitives.to_str  # noqa: F401
 import sushi_lang.backend.types.primitives.hashing  # noqa: F401
 # Import bit-reinterpret methods (f32/f64 .to_bits()) to register them
 import sushi_lang.backend.types.primitives.bit_reinterpret  # noqa: F401
+# Import clone methods to register them
+import sushi_lang.backend.types.primitives.cloning  # noqa: F401
 
 from sushi_lang.backend.types.primitives.to_str import generate_module_ir
 

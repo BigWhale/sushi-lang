@@ -1,0 +1,20 @@
+# `.clone()` is total over types, so a FIXED array has one too. The dynamic array already
+# had one; `string[2].clone()` was CE2023 ("expected dynamic array"), which left a fixed
+# array of owning elements with no way to take an independent value.
+# Rust: `[T; N]: Clone where T: Clone`. MM.md section 2.F, finding F1.
+# EXPECT_STDOUT_EXACT: "b=a1 src=a1\n3 3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    # Interpolated strings are owned, so each array must free its own buffers exactly once.
+    let i32 k = 1
+    let string[2] arr = ["a{k}", "b{k}"]
+    let string[2] b = arr.clone()
+    println("b={b[0]} src={arr[0]}")
+
+    let i32[3] ns = [1, 2, 3]
+    let i32[3] ms = ns.clone()
+    println("{ms[2]} {ns[2]}")
+
+    return Result.Ok(0)

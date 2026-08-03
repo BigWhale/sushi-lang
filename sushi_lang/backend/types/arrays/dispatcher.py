@@ -96,6 +96,14 @@ def emit_array_method(
                 # Fixed array hash: compute hash of all elements
                 return hashing.emit_fixed_array_hash_direct(codegen, expr, receiver_value, receiver_type, to_i1)
 
+            case "clone":
+                # A fixed array is a value, so the clone is value-in / value-out. It routes
+                # through the SAME emitter the struct-field and `let` sinks use, which is
+                # what makes it the exact structural inverse of the destructor -- the
+                # property a hand-written element loop here would be free to break.
+                from sushi_lang.backend.expressions.memory import emit_value_clone
+                return emit_value_clone(codegen, receiver_value, semantic_type)
+
             case "fill":
                 # Fixed array fill: fill all elements with a value
                 # Need to get pointer to the array variable for in-place modification

@@ -11,8 +11,9 @@ The registry still carries the same methods, registered by
 dispatches emission through it. The two are kept in sync by
 `tests/unit/test_primitive_methods.py`.
 
-All three methods take no arguments, so validation is uniform; the only per-method
-distinction is which types carry them (`to_bits` is float-only).
+Every one of them takes no arguments, so validation is uniform; the only per-method
+distinction is which types carry them (`to_bits` is float-only, `clone` excludes
+`string`).
 """
 from __future__ import annotations
 
@@ -31,6 +32,11 @@ _ALL_PRIMITIVES = frozenset({
     BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL, BuiltinType.STRING,
 })
 
+# The primitives whose clone() this module owns. `string` is absent on purpose: it carries
+# its own clone in the string method table, which Pass 2 consults BEFORE the primitive
+# path, so registering it here would be a second answer to one question.
+_CLONE_PRIMITIVES = _ALL_PRIMITIVES - {BuiltinType.STRING}
+
 # method name -> {receiver type: return type}.
 #
 # Keyed per (method, RECEIVER) because to_bits() is receiver-dependent: it exposes the raw
@@ -44,6 +50,11 @@ PRIMITIVE_METHOD_RETURNS: dict[str, dict[BuiltinType, BuiltinType]] = {
     "to_str": dict.fromkeys(sorted(_ALL_PRIMITIVES, key=str), BuiltinType.STRING),
     "hash": dict.fromkeys(sorted(_ALL_PRIMITIVES, key=str), BuiltinType.U64),
     "to_bits": {BuiltinType.F32: BuiltinType.U32, BuiltinType.F64: BuiltinType.U64},
+    # clone() returns the receiver's own type, so this row is the identity. A primitive
+    # owns no heap, so the copy is the value itself -- but the method must EXIST, because
+    # one monomorphized body has to satisfy both `T = i32` and `T = string` and only the
+    # string instantiation needs a deep copy. Rust makes `Copy: Clone` for this reason.
+    "clone": {t: t for t in sorted(_CLONE_PRIMITIVES, key=str)},
 }
 
 # Method name -> the primitive types that carry it. Derived; do not edit independently.
