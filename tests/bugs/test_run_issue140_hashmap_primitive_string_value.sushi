@@ -2,8 +2,19 @@
 # a correct owned-bit clone for a heap string value (built via interpolation). Both must get
 # + free cleanly. Confirms emit_value_clone's passthrough and string branches.
 # https://github.com/BigWhale/sushi-lang/issues/140
+#
+# THE LEAK ASSERTION BELOW IS DELIBERATELY RED. This file leaks 8 bytes in 1 block, and
+# carried no `EXPECT_NO_LEAKS` at all until MM.md finding F9 was pinned, so the leak was
+# recorded in prose only. Prose does not fail CI. Do not remove the directive to get the
+# file green; the directive is the whole point of it.
+#
+# The receiver is a `HashMap@(i32, string)` whose value is an interpolated (owned) string,
+# read out with `.get(2)??.clone()` and then freed. Diagnose before deciding what to do:
+# if the fix is small, take it. If it is entangled with the string tier, leave this red
+# and give it to Phase 9, which rewrites that machinery anyway.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "5\nhi-there\n"
+# EXPECT_NO_LEAKS: true
 use <collections/hashmap>
 
 fn get_num() i32:

@@ -1,0 +1,39 @@
+# DELIBERATELY RED. This file pins MM.md finding F12 and is expected to fail the leak
+# assertion until F12 is fixed. Do not silence it, and do not rewrite the shape to make it
+# green -- rewriting the shape is what left F12 recorded in prose only, and prose does not
+# fail CI.
+#
+# F12: a by-value `fn` parameter frees nothing. The callee takes ownership of the fat
+# value but registers no cleanup for it, so the heap environment the closure captured is
+# never freed. The leak is 4 bytes in 1 block, one `i32` capture.
+#
+# The gap is specifically the parameter binding. The neighbouring shapes are all clean: a
+# lambda literal written directly in the same argument position, a `let`-bound closure, a
+# closure returned to a caller, and a closure stored in a struct field or a List
+# (tests/memory/test_clone_closure.sushi covers those). So the emitter is right and the
+# registration is missing.
+#
+# Start at backend/memory/scopes.py::register_local_cleanup and the parameter-binding
+# path, and check it against `is_owning_type`: `FunctionType.captures` is tri-state and
+# `None` means owning (MM.md finding A1, the same trap one layer up).
+#
+# A naive fix trades the leak for a double free. That exits 133, and the interposer scores
+# 133 as a SKIP, so the symptom is a leak check that DISAPPEARS from the count, not a new
+# failure line. Read the runner's per-test line, never the binary's exit code.
+# EXPECT_STDOUT_EXACT: "12\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn make(i32 m) fn(i32) -> i32:
+    return Result.Ok(|i32 x| x * m)
+
+fn apply(fn(i32) -> i32 f, i32 v) i32:
+    return Result.Ok(f(v)??)
+
+fn run() i32:
+    let i32 got = apply(make(2)??, 6)??
+    return Result.Ok(got)
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)
