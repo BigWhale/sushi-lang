@@ -721,10 +721,22 @@ def field_needs_cleanup(codegen: LLVMCodegen, value_type: Type) -> bool:
 
 
 def needs_cleanup(value_type: Type) -> bool:
-    """Check if a type needs cleanup (has resources to free).
+    """Does a value of this type own heap that RAII must free?
 
-    Named types must be resolved (see `resolve_named_type`) before calling this:
-    a bare `UnknownType` falls through to False.
+    **A thin alias of `semantics.typesys.owns_heap`, which is THE ownership predicate.**
+
+    Until Phase 9 this was a second, independently maintained implementation, and it differed
+    from the semantics side on exactly one type: a `string` needed cleanup here but did not
+    move there. That single disagreement WAS the COPY tier. Phase 9 made a string move, so
+    the two questions became one question, and leaving this as a separate implementation
+    would only let them drift apart again -- the defect class this branch is named after.
+
+    The NAME is kept deliberately. 71 call sites across the backend read as "does this need
+    freeing?" at the point of use, which is the right question to ask there; only the answer
+    was ever duplicated.
+
+    Named types must be resolved (see `resolve_named_type`) before calling this: a bare
+    `UnknownType` falls through to False, exactly as before.
 
     Args:
         value_type: The type to check
@@ -732,56 +744,5 @@ def needs_cleanup(value_type: Type) -> bool:
     Returns:
         True if the type needs cleanup, False otherwise
     """
-    from sushi_lang.semantics.typesys import ForeignPtrType
-    if isinstance(value_type, ForeignPtrType):
-        return False  # Foreign `ptr` is unmanaged: RAII never frees it
-    if isinstance(value_type, FunctionType):
-        # A function value may own a heap environment (a capturing closure). Capture is
-        # erased from the type, so we conservatively treat every function value as
-        # needing cleanup; the runtime-guarded drop makes a non-capturing free a no-op.
-        return True
-    if isinstance(value_type, BuiltinType):
-        # A `string` owns a heap buffer when its runtime `owned` bit is set (#145/#147); the
-        # destructor's free is guarded on that bit, so a literal/borrow frees to a no-op. This
-        # is what lets strings inside structs / arrays / List / HashMap / enum payloads free
-        # through the ordinary recursive destructor. All other builtins (numerics, bool, I/O
-        # handles) are unmanaged.
-        return value_type == BuiltinType.STRING
-    elif isinstance(value_type, DynamicArrayType):
-        return True  # Dynamic arrays need cleanup
-    elif isinstance(value_type, StructType):
-        # Own<T> / List<T> always own a heap allocation, but their only fields are raw
-        # pointers -- so the field scan below answered False and every recursion gate in
-        # this module skipped them. An Own/List nested in an enum payload, a struct field,
-        # an array element or a List element was therefore registered as owning heap by
-        # dynamic_arrays._payload_needs_cleanup (which HAS this check) and then dropped by
-        # the destructor meant to free it. That mismatch is #162 (recursive Own<Tree<T>>,
-        # ~12 B/level) and #183 (Maybe<List<T>>, Maybe<Own<T>>).
-        #
-        # This predicate gates RECURSION only. The top-level registration gate uses
-        # dynamic_arrays.struct_needs_cleanup, and a top-level Own/List local is owned by
-        # its own registry (register_own / register_list) and deliberately NOT by
-        # _struct_cleanup -- so do not "unify" the two predicates by teaching that gate the
-        # same trick, or such a local lands in both registries and double-frees.
-        if (value_type.name.startswith("Own<") or value_type.name.startswith("List<")
-                or value_type.name.startswith("HashMap<")):
-            # HashMap always owns a heap bucket buffer; its only owning field is the i32[]
-            # placeholder, so the field scan below answered True only incidentally. Make it
-            # explicit (matching Own/List) so it no longer depends on the placeholder (#181).
-            return True
-        # Structs need cleanup if any field needs cleanup
-        return any(needs_cleanup(field_type) for _, field_type in value_type.fields)
-    elif isinstance(value_type, ArrayType):
-        # A fixed array `T[N]` owns no buffer of its own -- its storage is inline -- but its
-        # ELEMENTS can own heap. Answering False here (the old behaviour) gated a fixed array out
-        # of every recursion, so a `string[3]` FIELD inside a struct was never freed even though
-        # the struct itself was registered (#185).
-        return needs_cleanup(value_type.base_type)
-    elif isinstance(value_type, EnumType):
-        # Enums need cleanup if any variant has associated data that needs cleanup
-        for variant in value_type.variants:
-            if variant.associated_types:
-                if any(needs_cleanup(assoc_type) for assoc_type in variant.associated_types):
-                    return True
-        return False
-    return False
+    from sushi_lang.semantics.typesys import owns_heap
+    return owns_heap(value_type)

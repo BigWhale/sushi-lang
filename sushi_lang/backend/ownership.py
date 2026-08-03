@@ -93,8 +93,6 @@ def bind(codegen: 'LLVMCodegen', source, value: ir.Value,
     if decision is Ownership.MOVE:
         _mark_moved(codegen, source)
         return value, True
-    if decision is Ownership.COPY:
-        return _clone(codegen, value, target_type), True
     if decision is Ownership.ADOPT:
         return value, True
     return value, False
@@ -112,7 +110,9 @@ def consume(codegen: 'LLVMCodegen', source, value: ir.Value,
         use: Which of the eleven positions this is.
 
     Returns:
-        The value to store: the original for MOVE/ADOPT, a deep copy for COPY.
+        The value to store: the original, for both MOVE and ADOPT. Phase 9 deleted the COPY
+        decision -- the compiler no longer inserts a deep copy anywhere, so `.clone()` (which
+        reaches `_clone` through `copy_out`) is the only one in a Sushi program.
 
     Raises:
         CE0129 when the source carries no ownership decision. This is deliberately fatal
@@ -125,8 +125,6 @@ def consume(codegen: 'LLVMCodegen', source, value: ir.Value,
     if decision is Ownership.MOVE:
         _mark_moved(codegen, source)
         return value
-    if decision is Ownership.COPY:
-        return _clone(codegen, value, target_type)
     if decision is Ownership.ADOPT:
         return value
 
@@ -158,7 +156,7 @@ def copy_out(codegen: 'LLVMCodegen', value: ir.Value,
 def resolver_for(codegen: 'LLVMCodegen'):
     """A `Type -> Type` resolver over the backend's struct and enum tables.
 
-    `type_class_of` needs it because `type_moves_by_value` answers False for an
+    `type_class_of` needs it because `owns_heap` answers False for an
     `UnknownType`: an owning struct still named by its declaration would otherwise
     classify as owning nothing, and every consuming use of it would alias.
 

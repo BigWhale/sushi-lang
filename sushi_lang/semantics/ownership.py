@@ -13,8 +13,8 @@ breaks the others (see `docs/design/ownership-conventions.md` section 2):
     A CONSUMING USE is a position that requires ownership of a value.
     The OWNERSHIP CONVENTION at that use is how a given source satisfies it.
 
-At a `COPY` the source is not consumed -- but the use is still a consuming use, because
-the position requires ownership and copying is how it is satisfied. "Transfer", "handoff"
+At an `ADOPT` the source is not consumed -- but the use is still a consuming use, because
+the position requires ownership and adopting is how it is satisfied. "Transfer", "handoff"
 and "move" are all false in that case; "consuming use" is not.
 
 Split of responsibilities, and why it is not a second derivation of the rule:
@@ -40,15 +40,12 @@ from typing import Callable, Optional
 
 from sushi_lang.semantics.typesys import (
     ArrayType,
-    BuiltinType,
     DynamicArrayType,
-    EnumType,
     GenericTypeRef,
     ReferenceType,
-    StructType,
     Type,
     UnknownType,
-    type_moves_by_value,
+    owns_heap,
 )
 
 
@@ -98,20 +95,20 @@ class TypeClass(Enum):
     """What a value of type `T` owns."""
 
     PLAIN = "plain"  # owns no heap: i32, bool, f64, a struct of only these
-    COPY = "copy"    # owns heap, but the policy is to duplicate rather than transfer:
-                     # `string`, and string-only or plain+string composites. Rust's `Copy`
-                     # tier, derived structurally rather than opted into -- a string is a
-                     # fat pointer with a runtime `owned` bit and Sushi deliberately keeps
-                     # it a copy type (docs/design/string-representation.md)
-    MOVE = "move"    # transitively contains a `T[]`, `List@(T)`, `Own@(T)`, `HashMap@(K,V)`
-                     # or a capturing closure
+    MOVE = "move"    # owns heap: a `string`, `T[]`, `List@(T)`, `Own@(T)`, `HashMap@(K,V)`,
+                     # a function value, or any composite transitively holding one
+    #
+    # There used to be a third class, COPY, for a value that owns heap but is duplicated
+    # rather than transferred -- a `string`, and string-only composites. Phase 9 deleted it:
+    # a string now MOVES like every other owning value, except that a binding initialised
+    # straight from a literal owns nothing at all and classifies PLAIN (option B, MM.md
+    # S0.4). Two classes, one question: does this own heap?
 
 
 class Ownership(Enum):
     """How the source satisfies the position's requirement for ownership."""
 
     MOVE = "move"      # the source owned it; mark the source moved, store as-is
-    COPY = "copy"      # the source keeps living and keeps owning; store a deep copy
     ADOPT = "adopt"    # nothing owned it; store as-is
     REJECT = "reject"  # the source may not be consumed at all -- CE2411
 
@@ -129,17 +126,16 @@ class Ownership(Enum):
 # a rejection, so every `s.field` would have needed a `.clone()`. #242 supplies the escape,
 # so the two rows are now the same row and the compiler inserts no deep copy at a read.
 # Every deep copy in a Sushi program is one the user wrote as `.clone()`.
+# Phase 9 made this 3x2. The COPY column was the compiler inserting a deep copy of its own
+# accord; deleting it is what makes `.clone()` the only deep copy in a Sushi program.
 _TABLE: dict[tuple[Provenance, TypeClass], Ownership] = {
     (Provenance.OWNED,    TypeClass.PLAIN): Ownership.ADOPT,
-    (Provenance.OWNED,    TypeClass.COPY):  Ownership.COPY,
     (Provenance.OWNED,    TypeClass.MOVE):  Ownership.MOVE,
 
     (Provenance.BORROWED, TypeClass.PLAIN): Ownership.ADOPT,
-    (Provenance.BORROWED, TypeClass.COPY):  Ownership.COPY,
     (Provenance.BORROWED, TypeClass.MOVE):  Ownership.REJECT,
 
     (Provenance.FRESH,    TypeClass.PLAIN): Ownership.ADOPT,
-    (Provenance.FRESH,    TypeClass.COPY):  Ownership.ADOPT,
     (Provenance.FRESH,    TypeClass.MOVE):  Ownership.ADOPT,
 }
 
@@ -163,14 +159,18 @@ def _IDENTITY(t: Type) -> Type:
 
 
 def type_class_of(ty: Optional[Type], resolve: Callable[[Type], Type] = _IDENTITY) -> TypeClass:
-    """Classify `T` as PLAIN / COPY / MOVE.
+    """Classify `T` as PLAIN or MOVE.
 
     `resolve` maps a named `UnknownType` to its concrete struct/enum. It is a parameter
     rather than a table lookup so this module stays free of both the backend's tables and
     the analyzer's: the borrow checker passes a resolver built from `self.tables`, the
-    backend passes its own. Resolving matters -- `type_moves_by_value` answers False for
-    an `UnknownType`, so an unresolved owning struct would classify as PLAIN and be
-    aliased.
+    backend passes its own. Resolving matters -- `owns_heap` answers False for an
+    `UnknownType`, so an unresolved owning struct would classify as PLAIN and be aliased.
+
+    Only PLAIN and MOVE exist since Phase 9. `TypeClass.COPY` -- the tier that made a
+    string-only composite duplicate rather than transfer -- is gone, and with it the last
+    deep copy the compiler inserted on its own. Every deep copy in a Sushi program is now one
+    the user wrote as `.clone()`.
     """
     if ty is None:
         return TypeClass.PLAIN
@@ -189,45 +189,9 @@ def type_class_of(ty: Optional[Type], resolve: Callable[[Type], Type] = _IDENTIT
     # The resolver is threaded INTO the walk, not just applied at the top: the name that
     # is still unresolved is usually nested (a `Buffer[2]`'s element, a field), and a
     # top-level-only resolve reports such a type as owning nothing.
-    if type_moves_by_value(resolved, resolve=resolve):
+    if owns_heap(resolved, resolve=resolve):
         return TypeClass.MOVE
-    if _contains_string(resolved, resolve, set()):
-        return TypeClass.COPY
     return TypeClass.PLAIN
-
-
-def _contains_string(ty: Optional[Type], resolve: Callable[[Type], Type],
-                     seen: set[str]) -> bool:
-    """Does a value of this type transitively hold a `string`?
-
-    The ir-free counterpart of the backend's `needs_cleanup` for the non-move half: a
-    string is heap-backed, so a composite holding one must be deep-copied rather than
-    aliased even though it does not move. Mirrors `type_moves_by_value`'s recursion,
-    including its cycle guard -- a self-referential type is finite by construction
-    (CE2095 rejects a by-value cycle), so revisiting a name means "no new answer here".
-    """
-    if ty is None:
-        return False
-    if isinstance(ty, UnknownType):
-        ty = resolve(ty)
-        if isinstance(ty, UnknownType):
-            return False
-    if ty == BuiltinType.STRING:
-        return True
-    if isinstance(ty, (ArrayType, DynamicArrayType)):
-        return _contains_string(ty.base_type, resolve, seen)
-    if isinstance(ty, StructType):
-        if ty.name in seen:
-            return False
-        seen.add(ty.name)
-        return any(_contains_string(ft, resolve, seen) for _, ft in ty.fields)
-    if isinstance(ty, EnumType):
-        if ty.name in seen:
-            return False
-        seen.add(ty.name)
-        return any(_contains_string(at, resolve, seen)
-                   for variant in ty.variants for at in variant.associated_types)
-    return False
 
 
 def is_own_type(ty: Optional[Type]) -> bool:

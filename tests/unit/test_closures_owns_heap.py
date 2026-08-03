@@ -1,4 +1,4 @@
-"""T1.3 gate: the shared `is_owning_type` ownership predicate.
+"""T1.3 gate: the shared `owns_heap` ownership predicate (was `is_owning_type`).
 
 Factored out of the borrow checker so the borrow pass and the backend RAII paths agree
 on what owns heap memory. Every function value owns, whether or not its `captures`
@@ -7,7 +7,7 @@ metadata survived -- see `test_every_function_value_is_owning` for why.
 from __future__ import annotations
 
 from sushi_lang.semantics.typesys import (
-    is_owning_type, FunctionType, DynamicArrayType, BuiltinType,
+    owns_heap, FunctionType, DynamicArrayType, BuiltinType,
 )
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ast import Param
@@ -20,20 +20,20 @@ def _fn(captures=None) -> FunctionType:
 
 
 def test_none_is_not_owning() -> None:
-    assert is_owning_type(None) is False
+    assert owns_heap(None) is False
 
 
 def test_primitive_is_not_owning() -> None:
-    assert is_owning_type(I32) is False
+    assert owns_heap(I32) is False
 
 
 def test_dynamic_array_is_owning() -> None:
-    assert is_owning_type(DynamicArrayType(base_type=I32)) is True
+    assert owns_heap(DynamicArrayType(base_type=I32)) is True
 
 
 def test_list_and_own_are_owning() -> None:
-    assert is_owning_type(GenericTypeRef(base_name="List", type_args=[I32])) is True
-    assert is_owning_type(GenericTypeRef(base_name="Own", type_args=[I32])) is True
+    assert owns_heap(GenericTypeRef(base_name="List", type_args=[I32])) is True
+    assert owns_heap(GenericTypeRef(base_name="Own", type_args=[I32])) is True
 
 
 def test_captures_is_tri_state_and_unstated_means_owning() -> None:
@@ -54,6 +54,6 @@ def test_captures_is_tri_state_and_unstated_means_owning() -> None:
     and a null `clone_ptr`, so its destroy and its clone are both no-ops.
     """
     caps = (Param(name="x", ty=I32, loc=None),)
-    assert is_owning_type(_fn(captures=caps)) is True   # known capturing
-    assert is_owning_type(_fn(captures=None)) is True    # unstated -> assume owning
-    assert is_owning_type(_fn(captures=())) is False     # known empty -> owns nothing
+    assert owns_heap(_fn(captures=caps)) is True   # known capturing
+    assert owns_heap(_fn(captures=None)) is True    # unstated -> assume owning
+    assert owns_heap(_fn(captures=())) is False     # known empty -> owns nothing

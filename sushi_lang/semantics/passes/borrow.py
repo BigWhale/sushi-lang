@@ -378,7 +378,7 @@ class BorrowChecker:
                  tables=None):
         self.reporter = reporter
         # Struct/enum tables, used only to RESOLVE a named type before classifying it.
-        # `type_moves_by_value` answers False for an UnknownType by design, so without a
+        # `owns_heap` answers False for an UnknownType by design, so without a
         # resolver an owning struct named by its declaration would classify as owning
         # nothing -- and every consuming use of it would alias instead of moving.
         self.tables = tables
@@ -712,7 +712,7 @@ class BorrowChecker:
 
         The `var_type` half is what makes this bug class diagnosable at all. Before it,
         every binding was registered as a bare `BorrowState(name=binding)` with no type, so
-        `type_moves_by_value(None)` was always False and a match binding could never be
+        `owns_heap(None)` was always False and a match binding could never be
         classified as owning anything -- the eight positions that got (BORROWED, MOVE)
         wrong could not have been caught here even in principle. The types come from the
         variant Pass 2 already resolved for the backend.
@@ -1390,7 +1390,7 @@ class BorrowChecker:
             self.err.emit(er.ERR.CE2410, use_span, name=name)
             return
 
-        decision = classify(provenance, self._type_class(state.var_type))
+        decision = classify(provenance, self._type_class_of_source(state, state.var_type))
         if decision is Ownership.MOVE:
             # Handing the owner away leaves every binding reading out of it pointing at
             # storage the new owner frees (#242).
@@ -1407,7 +1407,7 @@ class BorrowChecker:
         provenance, and that one rule produces every shape with no per-shape exception:
 
             OWNED source, MOVE type  -> move the value;          the binding OWNS
-            OWNED source, PLAIN/COPY -> copy the bytes;          the binding OWNS
+            OWNED source, PLAIN type -> copy the bytes;          the binding OWNS
             BORROWED source          -> borrow the same storage; the binding BORROWS
             FRESH source             -> adopt the value;         the binding OWNS
 
@@ -1440,7 +1440,7 @@ class BorrowChecker:
         # the declared type would move a plain fn reference and report a false CE2405.
         ty = src_state.var_type if src_state is not None else stmt.ty
 
-        decision = classify(provenance, self._type_class(ty))
+        decision = classify(provenance, self._type_class_of_source(src_state, ty))
         if decision is Ownership.MOVE:
             # OWNED is the only provenance that reaches MOVE, and only a named local is
             # ever OWNED, so `src_state` is always present here.
@@ -1691,8 +1691,32 @@ class BorrowChecker:
         diag.emit()
 
     def _type_class(self, ty: Optional[Type]) -> TypeClass:
-        """Classify a type as PLAIN / COPY / MOVE, resolving named types first."""
+        """Classify a type as PLAIN or MOVE, resolving named types first."""
         return type_class_of(ty, self._resolve_named)
+
+    def _type_class_of_source(self, state: Optional[BorrowState],
+                              ty: Optional[Type]) -> TypeClass:
+        """Classify the SOURCE of a consuming use, applying option B (MM.md S0.4).
+
+        Identical to `_type_class` except for one binding-level override: a `string` bound
+        straight from a literal owns no heap, so consuming it transfers nothing and it must
+        classify PLAIN rather than MOVE. The type alone cannot say this --
+        `BuiltinType.STRING` is an enum member with nowhere to carry the fact -- so the answer
+        lives on the binding, written by `binds_a_bare_literal_string` and re-derived on every
+        rebind.
+
+        Without this, `let string s = "hi"` followed by `f(s)` then `println(s)` would be
+        CE2405: a use-after-move report for a move that never happened, because a literal
+        points into `.rodata` with `owned = 0` and there is nothing to transfer. The
+        diagnostic would be false, not merely strict, which is why option B was chosen over a
+        flat "all strings move".
+
+        The single spelling of the override. Both decision sites -- a consuming use
+        (`_consume_named`) and a `let` binding (`_bind`) -- route through it.
+        """
+        if state is not None and state.owns_no_heap:
+            return TypeClass.PLAIN
+        return self._type_class(ty)
 
     def _clear_borrows(self) -> None:
         """Clear all active borrows (called after expression evaluation)."""

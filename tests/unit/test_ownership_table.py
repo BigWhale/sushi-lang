@@ -5,14 +5,25 @@ Every shipped bug in the move/clone family lives in this grid, and until
 consuming uses fused deciding with emitting, so the decision was never a value. This
 file is the reason the decision is now a value.
 
-The grid is 3 x 3 = 9 cells and every one is asserted below. A cell asserted here and
+The grid is 3 x 2 = 6 cells and every one is asserted below. A cell asserted here and
 implemented differently at a position is a bug at that position, not a disagreement --
 which is the whole point of having one table.
 
-It was 4 x 3 until #242. `Provenance.THROUGH_OWNER` copied where BORROWED rejects, and
-the only reason for the asymmetry was that a user could not bind a borrow and so had no
-escape from the rejection. Let-borrow bindings supply the escape, so the two rows became
-one row and the compiler inserts no deep copy at a read.
+It has shrunk twice, and both times because an answer turned out to be unnecessary rather
+than because it was wrong:
+
+- **4 x 3 -> 3 x 3 (#242).** `Provenance.THROUGH_OWNER` copied where BORROWED rejects, and
+  the only reason for the asymmetry was that a user could not bind a borrow and so had no
+  escape from the rejection. Let-borrow bindings supply the escape, so the two rows became
+  one row.
+- **3 x 3 -> 3 x 2 (Phase 9).** `TypeClass.COPY` held the types that own heap but were
+  duplicated rather than transferred -- `string` and string-only composites. Making a string
+  MOVE removed the column, and `Ownership.COPY` went with it, because no cell needed it any
+  more. A literal-bound string owns nothing at all and classifies PLAIN, which is a fact
+  about the binding rather than the type (option B, MM.md S0.4).
+
+Between them those two deletions mean **the compiler inserts no deep copy anywhere**. Every
+deep copy in a Sushi program is a `.clone()` the user wrote.
 """
 from __future__ import annotations
 
@@ -53,13 +64,10 @@ STR = BuiltinType.STRING
 # test that recomputed the table from the same dict it is checking would assert nothing.
 EXPECTED = {
     (Provenance.OWNED,    TypeClass.PLAIN): Ownership.ADOPT,
-    (Provenance.OWNED,    TypeClass.COPY):  Ownership.COPY,
     (Provenance.OWNED,    TypeClass.MOVE):  Ownership.MOVE,
     (Provenance.BORROWED, TypeClass.PLAIN): Ownership.ADOPT,
-    (Provenance.BORROWED, TypeClass.COPY):  Ownership.COPY,
     (Provenance.BORROWED, TypeClass.MOVE):  Ownership.REJECT,
     (Provenance.FRESH,    TypeClass.PLAIN): Ownership.ADOPT,
-    (Provenance.FRESH,    TypeClass.COPY):  Ownership.ADOPT,
     (Provenance.FRESH,    TypeClass.MOVE):  Ownership.ADOPT,
 }
 
@@ -99,10 +107,12 @@ def test_the_compiler_inserts_no_deep_copy_at_a_read():
     different name.
     """
     assert classify(Provenance.BORROWED, TypeClass.MOVE) is Ownership.REJECT
-    copying = [c for c, o in EXPECTED.items()
-               if o is Ownership.COPY and c[1] is TypeClass.MOVE]
-    assert copying == []
+    assert not hasattr(Ownership, "COPY"), (
+        "Ownership.COPY is back. Phase 9 deleted it so that the compiler inserts no deep "
+        "copy of its own anywhere; `.clone()` is the only one in a Sushi program."
+    )
     assert [p.name for p in Provenance] == ["OWNED", "BORROWED", "FRESH"]
+    assert [c.name for c in TypeClass] == ["PLAIN", "MOVE"]
 
 
 def test_fresh_never_copies():
@@ -124,16 +134,22 @@ def test_plain_types():
         assert type_class_of(ty) is TypeClass.PLAIN
 
 
-def test_copy_types():
-    """`string` owns heap but is a copy type (docs/design/string-representation.md)."""
+def test_string_and_string_composites_move():
+    """The Phase 9 flip, stated at the classification layer.
+
+    Every one of these was `TypeClass.COPY` before: the compiler duplicated it at a sink and
+    the source stayed usable. They MOVE now, and `.clone()` is the escape.
+
+    The option-B exception -- a string bound straight from a literal owns nothing -- is NOT
+    visible here and cannot be: it is a fact about a BINDING, not about a type, and lives on
+    `BorrowState.owns_no_heap` (MM.md S0.4).
+    """
     for ty in (STR,
                _struct("N", ("s", STR)),
                _struct("M", ("i", I32), ("s", STR)),
                ArrayType(base_type=STR, size=2),
                DynamicArrayType(base_type=STR)):
-        # A dynamic array is itself an owning resource, so it MOVES regardless of element.
-        expected = TypeClass.MOVE if isinstance(ty, DynamicArrayType) else TypeClass.COPY
-        assert type_class_of(ty) is expected, ty
+        assert type_class_of(ty) is TypeClass.MOVE, ty
 
 
 def test_move_types():
@@ -147,11 +163,13 @@ def test_move_types():
         assert type_class_of(ty) is TypeClass.MOVE, ty
 
 
-def test_move_beats_copy_when_a_type_is_both():
-    """A struct holding BOTH a string and a dynamic array MOVES; it does not copy.
+def test_a_type_that_owns_two_kinds_of_heap_still_moves():
+    """A struct holding BOTH a string and a dynamic array MOVES.
 
-    Order matters in `type_class_of`: asking "contains a string?" first would classify
-    this as COPY and alias the array buffer.
+    This used to guard an ORDERING hazard: `type_class_of` asked "moves?" before "contains a
+    string?", and asking in the other order would have classified this COPY and aliased the
+    array buffer. There is only one question now, so the hazard is gone by construction --
+    the case is kept because it is still the shape most likely to be got wrong.
     """
     both = _struct("B", ("s", STR), ("items", DynamicArrayType(base_type=I32)))
     assert type_class_of(both) is TypeClass.MOVE
@@ -166,13 +184,13 @@ def test_enum_payload_is_walked():
         EnumVariantInfo(name="Msg", associated_types=(STR,)),
     ))
     assert type_class_of(owning) is TypeClass.MOVE
-    assert type_class_of(stringy) is TypeClass.COPY
+    assert type_class_of(stringy) is TypeClass.MOVE   # was COPY before Phase 9
 
 
 def test_unresolved_named_type_is_resolved_before_classifying():
     """An UnknownType answers PLAIN unless resolved -- which would alias an owning value.
 
-    `type_moves_by_value` returns False for an UnknownType by design ("Pass 2 rejects
+    `owns_heap` returns False for an UnknownType by design ("Pass 2 rejects
     unresolved types"), so skipping the resolver here is exactly how an owning struct
     gets classified as owning nothing.
     """

@@ -416,7 +416,7 @@ class ExpressionValidator(RecursiveVisitor):
 
         # CE2094: capturing a &peek/&poke borrow is deferred to Tier 2. A captured
         # name whose enclosing type is a reference is a borrow capture.
-        from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, is_owning_type
+        from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, DynamicArrayType, owns_heap
         for cap in (node.captures or []):
             if isinstance(cap.ty, ReferenceType):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
@@ -426,7 +426,7 @@ class ExpressionValidator(RecursiveVisitor):
                 # which owns it and frees it in the env destructor. The outer binding is
                 # consumed (borrow-checked use-after-move, CE2405). No diagnostic.
                 pass
-            elif is_owning_type(cap.ty):
+            elif owns_heap(cap.ty):
                 # List<T> / Own<T> move-capture into the env (T1.5 item 1): moved in,
                 # owned + freed by the env destructor, outer binding consumed (CE2405).
                 # Reading them back inside the body dispatches through the env-field
@@ -435,8 +435,13 @@ class ExpressionValidator(RecursiveVisitor):
 
         # CE2094 (T1.7 cut): an owning parameter type on a function value has no
         # deep-copy on the indirect-call path yet (a latent double-free), so reject it.
+        # `owns_heap` is the merged predicate and now answers True for a `string` too. A
+        # string parameter is NOT the hazard this check is about: a by-value string param has
+        # its `owned` bit cleared at entry, so it is a borrow and frees nothing. Excluding it
+        # keeps `|string s| ...` legal, exactly as before Phase 9 -- widening CE2094 here
+        # would be a silent language change, not part of the tier flip.
         for p in node.params:
-            if is_owning_type(p.ty):
+            if p.ty != BuiltinType.STRING and owns_heap(p.ty):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
                         reason=f"lambda parameter '{p.name}' has an owning type '{display_type(p.ty)}'; "
                                f"owning function-value parameters are deferred to Tier 2")
