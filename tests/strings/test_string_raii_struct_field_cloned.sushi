@@ -2,16 +2,13 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "made-1\nalias-9\nalias-9\ntwice-2\ntwice-2\nmade-1\n"
 # EXPECT_STDERR_EMPTY: true
-# Issue #147: a heap string in a struct field is freed at scope exit, and every struct
-# copy path (return-by-value, alias, constructor field, array get-out) clones the string
-# so each owner frees exactly once. A leak or double-free would break this test (a
-# double-free SIGABRTs -> nonzero exit + nonempty stderr).
+# The post-flip shape of tests/strings/test_string_raii_struct_field.sushi: the alias and
+# the two constructor fields say `.clone()`. That is the copy the compiler inserts for
+# them today, written by hand, so the same clone emitter runs over the same buffers and
+# each owner still frees exactly once.
 #
-# THIS PINS THE TIER PHASE 9 DELETES. Convert it there, do not convert it early. An
-# explicit `.clone()` on the alias and on the two constructor fields goes around the
-# implicit copy paths this file exists to exercise, so the file stays green and asserts
-# nothing. The explicit-clone shape is a separate file,
-# tests/strings/test_string_raii_struct_field_cloned.sushi, and is already green.
+# This shape is correct before and after Phase 9. The implicit shape it replaces is the
+# COPY tier itself, and stays pinned in the file named above until Phase 9 deletes it.
 
 struct P:
     string name
@@ -25,17 +22,17 @@ fn run() i32:
     let P r = make(1)??
     println(r.name)
 
-    # alias (copy): p and p2 each own an independent buffer
+    # alias: p and p2 each own an independent buffer
     let i32 nine = 9
     let P p = P(name: "alias-{nine}")
-    let P p2 = p
+    let P p2 = p.clone()
     println(p.name)
     println(p2.name)
 
     # owned-string variable used in TWO constructors (each clones; no double-free)
     let string s = "twice-{2}"
-    let P a = P(name: s)
-    let P b = P(name: s)
+    let P a = P(name: s.clone())
+    let P b = P(name: s.clone())
     println(a.name)
     println(b.name)
 
