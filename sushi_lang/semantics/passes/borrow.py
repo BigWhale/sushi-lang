@@ -842,6 +842,22 @@ class BorrowChecker:
         elif isinstance(expr, DotCall):
             # DotCall is the unified X.Y(args) node used before type checking
             # Check receiver and arguments (same as MethodCall)
+            #
+            # DECISION 1 (MM.md S2.F): an FFI string argument NEVER consumes. `libc.strlen(s)`
+            # must not move `s` -- the callee is C, it cannot own a Sushi string, and the
+            # marshalled buffer is already freed at scope exit. Rust passes `as_ptr(&self)`,
+            # Zig takes `[*:0]const u8`, cgo leaves the pointer caller-owned.
+            #
+            # That holds here STRUCTURALLY rather than by a condition: an FFI call arrives as a
+            # DotCall (`external_ref` is stamped by Pass 2), and this arm consumes only for an
+            # enum constructor and a container insert -- `ConsumingUse.CALL_ARG` is reached
+            # from the `Call` arm alone. Verified under the all-strings-move prototype: the
+            # FFI corpus compiles clean.
+            #
+            # **Do not add a blanket `_consume(arg, CALL_ARG)` loop to this arm.** It would
+            # make every FFI argument a move and every `libc.*(s)` call site a false CE2405.
+            # `tests/ffi/test_ffi_string_arg_not_consumed.sushi` is the gate, and it becomes
+            # load-bearing the moment `string` starts moving.
             self._check_expr(expr.receiver)
             for arg in expr.args:
                 self._check_expr(arg)
