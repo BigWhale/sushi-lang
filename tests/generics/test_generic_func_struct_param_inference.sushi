@@ -7,7 +7,10 @@
 # inference cannot bind A and B through a reference parameter, and passing `p.clone()`
 # directly is CE2061, because the monomorphizer infers only from a Name argument. Binding
 # the copy first keeps the argument a Name, so the inference this file tests still runs.
-# MM.md section 2.F, findings F7 and F8.
+# MM.md section 2.F, findings F7 and F8. Both holes are pinned as current behaviour by
+# test_err_peek_generic_param_inference.sushi and test_err_infer_from_non_name_arg.sushi;
+# when those two go red, Phase 9.5 has fixed the inference and the four clone-locals
+# below can go.
 
 struct Pair@(T, U):
     T first

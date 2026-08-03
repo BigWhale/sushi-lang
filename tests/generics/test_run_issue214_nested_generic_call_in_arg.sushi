@@ -4,6 +4,11 @@
 # Here `tag(v)` is nested inside `add_one(...)` in box<T>'s body; box<string> is
 # instantiated from main, so tag<string> is discoverable only after substitution.
 # Pre-fix: CE2061 "monomorphized function 'tag__string' not found".
+#
+# `tag` only reads its argument, so `tag(v.clone())` is a workaround: a `&peek T`
+# parameter cannot bind T (MM.md finding F7). Both holes are pinned as current behaviour
+# by test_err_peek_generic_param_inference.sushi and test_err_infer_from_non_name_arg.sushi;
+# when those two go red, Phase 9.5 has fixed the inference and the clone here can go.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_CONTAINS: "s = hi"
 

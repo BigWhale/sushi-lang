@@ -47,7 +47,9 @@ fn main() i32:
 
     # Both generic functions take their argument by value, so a value used by two calls
     # needs a copy for the second one. A `&peek T` parameter would say this better, but
-    # type-argument inference cannot bind T through a reference parameter.
+    # type-argument inference cannot bind T through a reference parameter. That hole is
+    # pinned as current behaviour by tests/generics/test_err_peek_generic_param_inference.sushi;
+    # when it goes red, this example gets the shape it wants.
     let Robot marvin_desc = marvin.clone()
     let Ship hog_desc = hog.clone()
 

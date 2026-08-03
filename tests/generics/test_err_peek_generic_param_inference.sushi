@@ -1,0 +1,33 @@
+# A KNOWN HOLE, PINNED AS CURRENT BEHAVIOUR. This file passes today and MUST go red the
+# moment Phase 9.5 fixes the inference. When it does, that is the fix landing, not a
+# regression: delete this file and convert the three workaround sites named below.
+#
+# MM.md section 2.F finding F7: type-argument inference cannot bind a type parameter
+# through a reference parameter. A `&peek T` generic parameter is the natural way to say
+# "this function only reads its argument", and it is unavailable, so every generic that
+# only reads must take its argument BY VALUE and make its callers hand over a copy.
+#
+# Three sites are shaped around this hole and are the ones to revisit:
+#   tests/generics/test_generic_func_struct_param_inference.sushi  (4 clone-locals)
+#   tests/generics/test_run_issue214_nested_generic_call_in_arg.sushi
+#   docs/examples/24-perks-constraints.sushi  (a teaching example -- users copy this)
+#
+# The twin hole is test_err_infer_from_non_name_arg.sushi (finding F8).
+# EXPECT_ERROR_CODE: CE2060
+
+struct Pair@(T, U):
+    T first
+    U second
+
+fn get_first@(A, B)(&peek Pair@(A, B) p) A:
+    return Result.Ok(p.first.clone())
+
+fn run() i32:
+    let Pair@(i32, string) p = Pair(42, "test")
+    let i32 first = get_first(&peek p)??
+    return Result.Ok(first)
+
+fn main() i32:
+    let i32 rc = run().realise(99)
+    println(rc)
+    return Result.Ok(0)
