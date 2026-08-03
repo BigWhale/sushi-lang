@@ -182,32 +182,33 @@ fn main() i32:
 
 
 # ---------------------------------------------------------------------------
-# The one known hole, asserted rather than skipped
+# The former known hole, now closed
 # ---------------------------------------------------------------------------
+#
+# `test_hashmap_clone_is_a_known_hole_owned_by_phase_10` lived here. It asserted that
+# `HashMap@(K, V)` had NO clone and that a HashMap was not yet a MOVE type, and it carried its
+# own closing instruction: "Add the clone, then delete this test -- it will already be
+# failing, because the assertion below is that the hole EXISTS."
+#
+# Phase 9 absorbed that Phase 10 item and added `HashMap.clone()`, so the test was failing by
+# design and is gone. The property it guarded is not lost: clause 1 below now binds to
+# HashMap for real, rather than passing over it vacuously.
+#
+# The clone EMITTER was never the hole. `_clone_hashmap_value` has been the destructor's
+# symmetric partner since issue #181; only the method was missing.
 
-def test_hashmap_clone_is_a_known_hole_owned_by_phase_10():
-    """`HashMap<K, V>` has no clone, and today it does not need one. Phase 10 changes that.
 
-    `HashMap<` is absent from `is_owning_type` (typesys.py), so a HashMap classifies PLAIN,
-    never reaches REJECT, and clause 1 passes over it vacuously. It is also excluded from
-    Pass 1.8's auto-derivation (cloning.py CONTAINER_PREFIXES) and absent from
-    `is_builtin_hashmap_method`, so no clone exists.
+def test_hashmap_carries_a_clone():
+    """The closed hole, asserted from the other side.
 
-    MM.md's Phase 10 carries "name HashMap explicitly in the merged predicate". That edit
-    makes a HashMap MOVE -- and in the SAME commit a borrowed HashMap at a consuming use
-    becomes CE2411 with no escape. So `HashMap.clone()` belongs to Phase 10, which is why it
-    is not in this branch.
-
-    **When Phase 10 lands, clause 1 goes red on HashMap.** Add the clone, then delete this
-    test -- it will already be failing, because the assertion below is that the hole EXISTS.
+    A HashMap owns a heap bucket buffer, so once it MOVES a borrowed one at a consuming use is
+    CE2411 -- and `.clone()` is the only escape. Clause 1 covers this generically, but a
+    direct assertion is what fails loudly if the method is ever dropped from
+    `is_builtin_hashmap_method`.
     """
     hashmap = StructType(name="HashMap<i32, i32>", fields=())
-    assert type_class_of(hashmap) is not TypeClass.MOVE, (
-        "HashMap is now a MOVE type, so Phase 10 has landed. HashMap.clone() is now "
-        "mandatory -- clause 1 above is the real assertion. Delete this test."
-    )
-    assert not builtin_method_exists(hashmap, "clone"), (
-        "HashMap.clone() now exists, so this known-hole test is stale. Delete it."
+    assert builtin_method_exists(hashmap, "clone"), (
+        "HashMap.clone() is the only escape from CE2411 for a borrowed HashMap; it must exist"
     )
 
 

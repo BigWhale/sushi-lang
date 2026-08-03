@@ -304,6 +304,10 @@ class HashMapMethodInferrer:
                 if self.method_name in ("get", "remove"):
                     from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
                     return ensure_maybe_type_in_table(self.validator.enum_table, value_type, struct_table=self.validator.struct_table.by_name)
+                elif self.method_name == "clone":
+                    # `.clone()` is the ONLY escape from CE2411 for a HashMap read, so it must
+                    # exist for every HashMap. Returns the receiver's own type.
+                    return self.receiver_type
                 elif self.method_name in ("contains_key", "is_empty"):
                     return BuiltinType.BOOL
                 elif self.method_name in ("len", "tombstone_count"):
