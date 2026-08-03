@@ -32,9 +32,29 @@ _ALL_PRIMITIVES = frozenset({
     BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL, BuiltinType.STRING,
 })
 
-# The primitives whose clone() this module owns. `string` is absent on purpose: it carries
-# its own clone in the string method table, which Pass 2 consults BEFORE the primitive
-# path, so registering it here would be a second answer to one question.
+# The primitives whose clone() this module owns.
+#
+# DECIDED: `string` is absent, and the split between the two tables STAYS.
+#
+# Two tables answer "does this primitive carry clone?" -- `string` from the string method
+# table, the other eleven from this one. That looks like the two-spellings-of-one-rule
+# defect the ownership work exists to remove, so the split was re-examined and kept. Three
+# reasons, in order of weight:
+#
+# 1. The two rows are not the same rule. A `string` clone is a real deep copy of a heap
+#    buffer. Every other primitive owns no heap, so its clone is the identity -- the value
+#    IS its own deep copy. Merging them would put one name over two mechanisms, which is
+#    the defect, not the cure.
+# 2. A STRING row here would be dead code. Pass 2 consults the string method table BEFORE
+#    the primitive path, so the row could never be reached, and a dead table row is how a
+#    table starts lying.
+# 3. The split is already invisible to every caller. `builtin_method_exists` ORs both
+#    families for a STRING receiver, and `tests/unit/test_clone_totality.py` -- the gate on
+#    clone being total over types -- asks only through that seam. So there is one answer at
+#    the boundary even though there are two tables behind it.
+#
+# The rule to hold: one SEAM, not one table. Unifying the tables is only worth doing if it
+# does not resurrect row 2.
 _CLONE_PRIMITIVES = _ALL_PRIMITIVES - {BuiltinType.STRING}
 
 # method name -> {receiver type: return type}.
