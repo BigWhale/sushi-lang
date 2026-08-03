@@ -111,6 +111,22 @@ class BorrowState:
                                 # Distinct from is_argv_view, which is one specific borrow
                                 # with its own diagnostic, and from a ReferenceType param,
                                 # which is spelled `&peek`/`&poke` in the source.
+    owns_no_heap: bool = False  # Option B (MM.md S0.4): this binding's CURRENT value owns no
+                                # heap, so a consuming use of it transfers nothing. Today only
+                                # a `string` bound directly from a literal sets it.
+                                #
+                                # THIS LIVES ON THE BINDING AND NOT ON THE TYPE ON PURPOSE. A
+                                # closure's answer lives in `FunctionType.captures` because
+                                # FunctionType is a dataclass; `BuiltinType.STRING` is an enum
+                                # member with nowhere to put a flag. The asymmetry is
+                                # structural -- do not "fix" it by inventing a string subtype.
+                                #
+                                # Must be RE-DERIVED on every rebind, never inherited: after
+                                # `a := "Hi {name}"` the binding owns a buffer. A conditional
+                                # rebind is unknowable, so it falls back to False.
+                                #
+                                # Default False = "assume it owns heap", the same safe fallback
+                                # an unstated `captures` takes (MM.md finding A1).
     bound_at_span: Optional[Span] = None  # Where the binding was introduced. CE2411 is a
                                 # RELATIONAL error -- the use is only wrong BECAUSE of what
                                 # the binding borrows from -- so it renders both.
@@ -181,6 +197,28 @@ _MUTATING_METHODS = frozenset({
     "push", "pop", "insert", "remove", "clear", "reserve", "shrink_to_fit",
     "rehash", "destroy", "free", "fill", "reverse",
 })
+
+
+def binds_a_bare_literal_string(declared_ty, init) -> bool:
+    """Option B (MM.md S0.4): is this binding a `string` whose value is a plain literal?
+
+    A `StringLit` points into `.rodata` and carries `owned = 0`, so it owns nothing and a
+    consuming use of it transfers nothing. An `InterpolatedString` is a DIFFERENT AST node
+    that builds a heap buffer at runtime and owns it -- classifying one of those as owning
+    nothing would skip a real free. The two being distinct node types is what makes this
+    question exact rather than a heuristic.
+
+    Deliberately an ALLOW-LIST (`isinstance(init, StringLit)`) and not a deny-list
+    ("anything that is not an InterpolatedString"): every other initializer shape -- a call, a
+    `??`, a name, a field read, a container get-out -- must also answer False. A deny-list
+    would answer True for all of them.
+
+    The single spelling of this rule. The `let` path and the rebind path both call it, because
+    a rebind must RE-DERIVE the answer rather than inherit it.
+    """
+    from sushi_lang.semantics.ast import StringLit
+    from sushi_lang.semantics.typesys import BuiltinType
+    return declared_ty == BuiltinType.STRING and isinstance(init, StringLit)
 
 
 def _split_type_args(args: str) -> list[str]:
@@ -469,7 +507,10 @@ class BorrowChecker:
                 self._clear_borrows()
                 return
             self.borrow_state[stmt.name] = BorrowState(
-                name=stmt.name, var_type=stmt.ty, declared_at_span=stmt.loc)
+                name=stmt.name, var_type=stmt.ty, declared_at_span=stmt.loc,
+                # Option B (MM.md S0.4): a string bound straight from a literal owns no heap,
+                # so consuming it transfers nothing and CE2405 must not fire on it.
+                owns_no_heap=binds_a_bare_literal_string(stmt.ty, stmt.value))
             # Check the initialization expression
             self._check_expr(stmt.value)
             # Closure move-on-bind: `let g = f` transfers a capturing closure's owned env.
@@ -500,6 +541,15 @@ class BorrowChecker:
                         # &poke references allow rebind (mutable reference semantics)
                     elif state.is_borrowed:
                         self.err.emit(er.ERR.CE2401, stmt.loc, name=var_name)
+
+                    # Option B (MM.md S0.4): RE-DERIVE, never inherit. `let string a = "hi"`
+                    # owns nothing, but after `a := "Hi {name}"` it owns a buffer. Every
+                    # non-literal initializer answers False here, which also covers the
+                    # conditional rebind the decision calls unknowable -- the fallback is
+                    # "assume owning", so a rebind can only ever CLEAR this flag, never set it
+                    # on a value that owns heap.
+                    state.owns_no_heap = binds_a_bare_literal_string(
+                        state.var_type, stmt.value)
 
             elif isinstance(stmt.target, MemberAccess):
                 # Field rebinding (obj.field := value)
