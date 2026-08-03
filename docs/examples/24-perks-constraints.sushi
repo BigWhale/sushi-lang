@@ -45,6 +45,12 @@ fn main() i32:
     let Robot marvin = Robot("Marvin", 42)
     let Ship hog = Ship("Heart of Gold", 5)
 
+    # Both generic functions take their argument by value, so a value used by two calls
+    # needs a copy for the second one. A `&peek T` parameter would say this better, but
+    # type-argument inference cannot bind T through a reference parameter.
+    let Robot marvin_desc = marvin.clone()
+    let Ship hog_desc = hog.clone()
+
     # Generic function with type inference
     println("1. Using generic function with Robot:")
     print_description(marvin)
@@ -55,8 +61,8 @@ fn main() i32:
 
     println("")
     println("3. Getting description as string:")
-    let string desc1 = get_description(marvin).realise("")
-    let string desc2 = get_description(hog).realise("")
+    let string desc1 = get_description(marvin_desc).realise("")
+    let string desc2 = get_description(hog_desc).realise("")
     println("Desc 1: {desc1}")
     println("Desc 2: {desc2}")
 
