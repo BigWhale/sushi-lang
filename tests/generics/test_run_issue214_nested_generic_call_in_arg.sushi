@@ -14,7 +14,7 @@ fn add_one(i32 n) i32:
     return Result.Ok(n + 1)
 
 fn box@(T)(T v) T:
-    let i32 t = add_one(tag(v)??)??
+    let i32 t = add_one(tag(v.clone())??)??
     println("t = {t}")
     return Result.Ok(v)
 

@@ -6,6 +6,9 @@
 # copy path (return-by-value, alias, constructor field, array get-out) clones the string
 # so each owner frees exactly once. A leak or double-free would break this test (a
 # double-free SIGABRTs -> nonzero exit + nonempty stderr).
+#
+# The alias and the two constructor fields say `.clone()` now. That is the copy the
+# compiler used to insert for them, written by hand, so the same clone emitter runs.
 
 struct P:
     string name
@@ -22,14 +25,14 @@ fn run() i32:
     # alias (copy): p and p2 each own an independent buffer
     let i32 nine = 9
     let P p = P(name: "alias-{nine}")
-    let P p2 = p
+    let P p2 = p.clone()
     println(p.name)
     println(p2.name)
 
     # owned-string variable used in TWO constructors (each clones; no double-free)
     let string s = "twice-{2}"
-    let P a = P(name: s)
-    let P b = P(name: s)
+    let P a = P(name: s.clone())
+    let P b = P(name: s.clone())
     println(a.name)
     println(b.name)
 

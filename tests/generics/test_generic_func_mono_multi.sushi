@@ -4,7 +4,7 @@
 fn swap@(T, U)(T first, U second) U:
     # Use first parameter by copying it around (demonstrates generic type usage)
     # These assignments test that type substitution works in variable declarations
-    let T temp = first
+    let T temp = first.clone()
     temp := first  # Use temp by reassigning
     # Return the second value to demonstrate type parameter usage
     return Result.Ok(second)

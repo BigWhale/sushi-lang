@@ -1,35 +1,46 @@
 # Test: Generic function with nested generic struct parameters
 # Type inference extracts both type parameters from a named generic parameter
 # (e.g., Pair@(A, B) binds A and B from the argument's concrete type).
+#
+# The parameters stay by value, and each call gets its own copy through a local. Two other
+# shapes were tried and neither is available: `&peek Pair@(A, B)` is CE2060, because
+# inference cannot bind A and B through a reference parameter, and passing `p.clone()`
+# directly is CE2061, because the monomorphizer infers only from a Name argument. Binding
+# the copy first keeps the argument a Name, so the inference this file tests still runs.
+# MM.md section 2.F, findings F7 and F8.
 
 struct Pair@(T, U):
     T first
     U second
 
 fn get_first@(A, B)(Pair@(A, B) p) A:
-    return Result.Ok(p.first)
+    return Result.Ok(p.first.clone())
 
 fn get_second@(A, B)(Pair@(A, B) p) B:
-    return Result.Ok(p.second)
+    return Result.Ok(p.second.clone())
 
 fn run_test() i32:
     let Pair@(i32, string) p = Pair(42, "test")
 
-    let i32 first = get_first(p)??
+    let Pair@(i32, string) pa = p.clone()
+    let i32 first = get_first(pa)??
     if (first != 42):
         return Result.Ok(1)
 
-    let string second = get_second(p)??
+    let Pair@(i32, string) pb = p.clone()
+    let string second = get_second(pb)??
     if (second != "test"):
         return Result.Ok(2)
 
     # Test with different types
     let Pair@(string, i32) p2 = Pair("hello", 99)
-    let string first2 = get_first(p2)??
+    let Pair@(string, i32) p2a = p2.clone()
+    let string first2 = get_first(p2a)??
     if (first2 != "hello"):
         return Result.Ok(3)
 
-    let i32 second2 = get_second(p2)??
+    let Pair@(string, i32) p2b = p2.clone()
+    let i32 second2 = get_second(p2b)??
     if (second2 != 99):
         return Result.Ok(4)
 

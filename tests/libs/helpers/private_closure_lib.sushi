@@ -32,7 +32,7 @@ public fn compute@(T)(T a, T b) T:
     # consumer's monomorphized instance references it too (it ships in the
     # concrete struct section and registers at the consumer).
     let Acc acc = Acc(boost)
-    let T chosen = pick_first(a, b)??
+    let T chosen = pick_first(a, b.clone())??
     if (acc.total == 6):
         return Result.Ok(chosen)
     return Result.Ok(b)

@@ -3,6 +3,9 @@
 # (`statements/variables.py:173`) returns early for anything that is not a StructType or
 # EnumType, so an `ArrayType` RHS never reaches `emit_value_clone` -- which would not
 # have handled it anyway. MM.md S2 row 5; no upstream issue.
+#
+# The clone is explicit now. It is the same emitter and the same buffers; only the
+# trigger moved from the sink to the source text.
 # EXPECT_STDOUT_EXACT: "b=a1 src=a1\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
@@ -10,6 +13,6 @@
 fn main() i32:
     let i32 k = 1
     let string[2] arr = ["a{k}", "b{k}"]
-    let string[2] b = arr
+    let string[2] b = arr.clone()
     println("b={b[0]} src={arr[0]}")
     return Result.Ok(0)

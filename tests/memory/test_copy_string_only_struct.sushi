@@ -1,7 +1,10 @@
-# Copy semantics (#134) -- the string-distinction pin: a struct whose only owning content
-# is a string stays a COPY type. Passing it by value deep-copies (the string is cloned),
-# so the SOURCE is still usable afterward. This test fails if the move predicate is wrongly
-# built on needs_cleanup (which is true for strings).
+# A struct whose only owning content is a string, read through a borrow. The reader takes
+# `&peek`, so the caller keeps the struct and can still read its field afterward, and the
+# returned field is an explicit clone because the caller still owns the original.
+#
+# This file used to pin the opposite mechanism: that such a struct is a COPY type and a
+# by-value pass deep-copies it implicitly. Phase 9 deletes that tier, so the shape above is
+# the one that survives the flip. The buffers it exercises are the same.
 # EXPECT_STDOUT_EXACT: "in=hi src=hi\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
@@ -10,11 +13,11 @@ struct Named:
     string name
     i32 id
 
-fn show(Named n) string:
-    return Result.Ok(n.name)
+fn show(&peek Named n) string:
+    return Result.Ok(n.name.clone())
 
 fn main() i32:
     let Named a = Named(name: "hi", id: 1)
-    let string got = show(a).realise("?")
+    let string got = show(&peek a).realise("?")
     println("in={got} src={a.name}")
     return Result.Ok(0)

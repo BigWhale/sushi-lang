@@ -17,7 +17,9 @@ fn get_word() string:
     let HashMap@(i32, string) words = HashMap.new()
     let string base = "there"
     words.insert(2, "hi-{base}")
-    let string got = words.get(2)??
+    # The get-out borrows what the map still owns, so `got` must be an independent value
+    # before the map is freed and before it is returned.
+    let string got = words.get(2)??.clone()
     words.free()
     return Result.Ok(got)
 

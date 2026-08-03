@@ -9,6 +9,9 @@
 #
 # Interpolated (owned) strings are load-bearing: literals have owned=0 and never free.
 # MM.md S2 row 5 / S6.1(1); no upstream issue.
+#
+# The clone is explicit now. It is the same emitter and the same buffers; only the
+# trigger moved from the sink to the source text.
 # EXPECT_STDOUT_EXACT: "n=a1 src=a1\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
@@ -19,6 +22,6 @@ struct Names:
 fn main() i32:
     let i32 k = 1
     let string[2] arr = ["a{k}", "b{k}"]
-    let Names n = Names(arr)
+    let Names n = Names(arr.clone())
     println("n={n.items[0]} src={arr[0]}")
     return Result.Ok(0)

@@ -20,7 +20,8 @@ fn main() i32:
 
     # Hash it and use in HashMap as a key (tests complete integration)
     let HashMap@(Config, string) map = HashMap.new()
-    map.insert(cfg, "The Ultimate Computer")
+    # insert takes ownership of the key, so keep an independent one for the lookup.
+    map.insert(cfg.clone(), "The Ultimate Computer")
 
     # Retrieve it
     let Maybe@(string) retrieved = map.get(cfg)

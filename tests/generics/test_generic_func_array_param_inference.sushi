@@ -4,13 +4,14 @@
 # EXPECT_STDOUT_EXACT: "1 6 a z\n"
 
 fn first@(T)(T[] arr) T:
+    # A get-out borrows what the array still owns, so returning it needs a clone.
     let T elem = arr.get(0)??
-    return Result.Ok(elem)
+    return Result.Ok(elem.clone())
 
 fn last@(T)(T[] arr) T:
     let i32 len = arr.len()
     let T elem = arr.get(len - 1)??
-    return Result.Ok(elem)
+    return Result.Ok(elem.clone())
 
 fn run_test() i32:
     let i32[] a = from([1, 2, 3])

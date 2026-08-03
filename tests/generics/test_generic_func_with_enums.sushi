@@ -11,7 +11,7 @@ fn make_maybe_some@(T)(T value) i32:
 fn unwrap_or@(T)(Maybe@(T) maybe, T default_value) T:
     # Pattern match on generic enum
     match maybe:
-        Maybe.Some(val) -> return Result.Ok(val)
+        Maybe.Some(val) -> return Result.Ok(val.clone())
         Maybe.None() -> return Result.Ok(default_value)
 
 fn run_test() i32:

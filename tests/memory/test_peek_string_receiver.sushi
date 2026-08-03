@@ -14,6 +14,9 @@
 # array is passed by pointer anyway, so the borrow and the value have the same shape.
 # A string does not. MM.md section 2; no upstream issue.
 #
+# That measurement is history, not current state: borrowed scalar strings exist now, and
+# this file is where the first of them came from.
+#
 # `.upper()` and `.trim()` bind to locals rather than being interpolated directly.
 # Interpolating a string-method result leaks the temporary it returns, which is a
 # PRE-EXISTING defect and not a borrow one -- it leaks identically for an owned receiver.

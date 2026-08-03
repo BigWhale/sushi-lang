@@ -7,11 +7,13 @@ enum Either@(T, U):
     Right(U)
 
 fn swap@(T, U)(Either@(T, U) e) Either@(U, T):
+    # A match binding borrows the payload the scrutinee still owns, so re-wrapping it into
+    # a new enum needs an independent value.
     match e:
         Either.Left(v) ->
-            return Result.Ok(Either.Right(v))
+            return Result.Ok(Either.Right(v.clone()))
         Either.Right(v) ->
-            return Result.Ok(Either.Left(v))
+            return Result.Ok(Either.Left(v.clone()))
 
 fn main() i32:
     let Either@(i32, string) e1 = Either.Left(42)

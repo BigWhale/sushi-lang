@@ -3,7 +3,7 @@
 
 fn create_pair@(T)(T first, T second) T:
     # Variable declaration with generic type - use both params
-    let T result = first
+    let T result = first.clone()
     # Copy second to temp and back to ensure both are used
     let T temp = second
     result := temp
