@@ -19,7 +19,9 @@ Sushi provides memory safety without garbage collection:
 
 1. **RAII** - Resources freed automatically at scope exit
 2. **Compile-time borrow checking** - Prevents use-after-free and double-free
-3. **Move semantics** - Clear ownership transfer (dynamic arrays only)
+3. **Move semantics** - Clear ownership transfer for every type that owns heap (dynamic arrays,
+   `List@(T)`, `Own@(T)`, `HashMap@(K, V)`, capturing closures, `string`, and any struct/enum/fixed
+   array holding one of those)
 4. **Zero-cost abstractions** - No runtime overhead
 
 ## RAII (Automatic Cleanup)
@@ -90,16 +92,30 @@ fn build_tree() ~:
 
 ## Move Semantics
 
-Move-ness is **compositional**: a value moves iff it transitively contains an owning resource --
-a **dynamic array (`T[]`), `List@(T)`, `Own@(T)`, a capturing closure, or any struct/enum/fixed
-array holding one of those**. Passing such a value by value, binding it to a new name, putting it
-in a constructor field or array literal, or capturing it in a closure transfers ownership; the
-source is consumed and using it afterward is a use-after-move error (`CE2405`).
+Move-ness is **compositional** and answers one question: **does this type own heap that RAII must
+free?** A value moves iff it does -- a **dynamic array (`T[]`), `List@(T)`, `Own@(T)`,
+`HashMap@(K, V)`, a `string`, a capturing closure, or any struct/enum/fixed array holding one of
+those**. Passing such a value by value, binding it to a new name, putting it in a constructor field
+or array literal, or capturing it in a closure transfers ownership; the source is consumed and using
+it afterward is a use-after-move error (`CE2405`).
 
-Everything else **copies**: primitives, `string`, and *plain-data or string-only* composites (a
-`struct { string name; i32 id }` stays a copy type -- passing it by value clones the string field
-and the source stays usable). This is Rust's `Copy` tier, derived automatically from a type's shape
-rather than opted into.
+Everything else **copies**: primitives, and *plain-data* composites built only from those. This is
+Rust's `Copy` tier, derived automatically from a type's shape rather than opted into.
+
+**One exception, tracked per binding, not per type.** A `string` bound directly from a string
+literal (`let string s = "hi"`) owns nothing -- it points into read-only program data with the
+runtime `owned` bit clear -- so passing, rebinding, or capturing *that* binding behaves like a copy:
+both sides stay usable, because nothing was ever heap-allocated to transfer. Any other `string` --
+built by interpolation, returned from a call, read out of a container, or received as a parameter --
+is an ordinary heap-owning value and moves. This exception lives on the *binding*, not the type: a
+struct with a `string` field is a MOVE type even when every value it is ever constructed from is a
+literal, because the exception does not propagate through a field. See "What Moves" and "What
+Copies" below for both shapes side by side.
+
+**A fixed array (`T[N]`) is not itself a heap allocation** -- its storage is inline in its owner --
+but it moves too when its element type owns heap, for the same compositional reason a struct with an
+owning field moves. `.clone()` exists on both fixed and dynamic arrays, since either one may need an
+independent copy.
 
 Every struct and enum also gets an auto-derived **`.clone()`** -- the single explicit way to copy an
 owning value: `consume(buf.clone())` hands the callee an independent copy while `buf` stays yours.
@@ -126,35 +142,108 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
+**A struct with a `string` field is a MOVE type too -- even when the string is a literal:**
+```sushi
+struct Person:
+    string name
+    i32 age
+
+fn main() i32:
+    let Person a = Person(name: "Ada", age: 30)
+    let Person b = a  # a moved to b (a struct containing a string field owns heap)
+
+    # ERROR CE2405: cannot borrow moved variable 'a'
+    # println(a.name)
+
+    println(b.name)
+    return Result.Ok(0)
+```
+
+**A non-literal `string` moves on its own, with no struct involved:**
+```sushi
+fn consume(string s) ~:
+    println(s)
+    return Result.Ok(~)
+
+fn main() i32:
+    let string name = "world"
+    let string greeting = "Hello, {name}!"  # interpolation heap-allocates: greeting owns heap
+    consume(greeting)  # greeting moved into consume
+
+    # ERROR CE2405: cannot borrow moved variable 'greeting'
+    # println(greeting)
+
+    println(name)  # OK: name is bound from a literal, so it owns nothing and never moves
+    consume(name)
+    println(name)  # still OK -- consume() got an independent, ownerless value
+
+    return Result.Ok(0)
+```
+
 ### What Copies
 
-**Primitives, strings, and string-only / plain-data composites:**
+**Primitives, and plain-data composites of only those:**
 ```sushi
-struct Named:
-    string name
-    i32 id
+struct Point:
+    i32 x
+    i32 y
 
 fn main() i32:
     let i32 x = 42
     let i32 y = x  # x copied to y
     println(x)  # OK: x still valid
 
-    let string s1 = "hello"
-    let string s2 = s1  # s1 copied to s2
-    println(s1)  # OK: s1 still valid
-
-    # A struct whose only owning content is a string is a COPY type:
-    let Named a = Named(name: "hi", id: 1)
-    let Named b = a  # a copied to b (the string field is cloned)
-    println(a.name)  # OK: a still valid
+    let Point p = Point(x: 1, y: 2)
+    let Point q = p  # p copied to q -- Point owns no heap
+    println(p.x)  # OK: p still valid
 
     return Result.Ok(0)
 ```
 
-To read from a struct field without consuming its owner, note that a **field read
-copies** (`take(wrapper.inner)` deep-copies `inner`; `wrapper` stays usable). Only a bare owning
-variable moves. There are no partial moves and no local borrow bindings, so reaching through an
-owner (`s.field`) still copies -- clone or borrow the whole value to avoid the copy.
+**A `string` bound from a literal is the one exception that copies despite owning-heap being a
+whole-program MOVE type:**
+```sushi
+fn main() i32:
+    let string s1 = "hello"
+    let string s2 = s1  # s1 copied to s2 -- s1 owns nothing, so nothing was transferred
+    println(s1)  # OK: s1 still valid
+    println(s2)  # OK: s2 still valid
+
+    return Result.Ok(0)
+```
+
+### Reading Through a Borrow, Without Consuming
+
+A field read, an index, and a container get-out -- `s.field`, `arr[i]`, `list.get(i)??` -- do not
+copy. They hand back a **borrow**: a read-only view of storage the owner keeps and still frees.
+Reading it is free. **Consuming** it -- passing it to a by-value parameter, returning it, storing it
+in a constructor -- is `CE2411`, because that would require ownership the borrow does not have.
+`.clone()` is the escape:
+
+```sushi
+struct Wrapper:
+    string inner
+
+fn take(string s) ~:
+    println(s)
+    return Result.Ok(~)
+
+fn main() i32:
+    let Wrapper w = Wrapper(inner: "Hello, world!")
+
+    # ERROR CE2411: cannot consume 'w.inner': another owner keeps this value
+    # take(w.inner)
+
+    take(w.inner.clone())  # OK: an independent copy
+    println(w.inner)       # OK: w still owns and still has its value
+
+    return Result.Ok(0)
+```
+
+There are no partial moves: `w` above is never marked moved, only `w.inner`'s *value* is read (and,
+via `.clone()`, duplicated). A `let` behaves the same way for a source that reads through an owner:
+`let string x = w.inner` binds `x` as a borrow of `w`, not an independent copy -- see
+[Borrowed `let` Bindings](#borrowed-let-bindings) below.
 
 ### Function Arguments
 
@@ -409,6 +498,67 @@ let i32 temp = 5 + 3
 let i32 x = add_one(&peek temp).realise(0)
 ```
 
+### Borrowed `let` Bindings
+
+A `let` that reads through an owner -- `s.field`, `arr[i]`, `own.get()`, `list.get(i)??` -- **binds
+a borrow**, not a copy: no allocation happens, and the binding does not own what it points to.
+
+```sushi
+struct Wrapper:
+    string inner
+
+fn main() i32:
+    let Wrapper w = Wrapper(inner: "hi")
+    let string x = w.inner  # x borrows w.inner -- no copy, no error
+    println(x)
+    println(w.inner)  # w still owns it
+    return Result.Ok(0)
+```
+
+The borrow lasts to the end of the block that declared it. Two things are checked while it is live:
+
+1. **Mutating, freeing, or rebinding the owner is `CE2412`**, reported at the *use* of the borrowed
+   binding that follows the change (not at the change itself -- this is non-lexical, like Rust):
+
+```sushi
+struct Wrapper:
+    string inner
+
+fn main() i32:
+    let Wrapper w = Wrapper(inner: "hi")
+    let string x = w.inner
+
+    # ERROR CE2412: cannot mutate 'w' while 'x' borrows from it
+    # w := Wrapper(inner: "bye")
+    # println(x)
+
+    println(x)  # OK as long as w is not touched while x is still used
+    return Result.Ok(0)
+```
+
+2. **Consuming the binding itself is `CE2411`**, exactly like consuming a `match`/`foreach` binding
+   or a direct field read -- `.clone()` is the escape (see
+   [Reading Through a Borrow, Without Consuming](#reading-through-a-borrow-without-consuming)).
+
+**A `let` cannot instead declare a reference *type*.** `let &peek T x = ...` parses but is rejected
+with `CE2413`: the binding above already behaves like a checked borrow without any new syntax, so a
+first-class reference-typed local would be a second, overlapping way to say the same thing.
+
+```sushi
+struct Wrapper:
+    string inner
+
+fn main() i32:
+    let Wrapper w = Wrapper(inner: "hi")
+
+    # ERROR CE2413: a 'let' binding cannot have a reference type ('&peek string')
+    # let &peek string x = w.inner
+
+    let string x = w.inner  # write the plain value type instead
+    println(x)
+    return Result.Ok(0)
+```
+
 ## Recursive Types
 
 A type may refer to itself through any **indirection** — `Own@(T)`, `Maybe@(Own@(T))`,
@@ -508,32 +658,50 @@ fn main() i32:
 ### Ownership Semantics
 
 - **`alloc(value)` takes ownership.** When `value` is itself an owning value (an `Own@(T)`,
-  a `List@(T)`, a dynamic array, or a struct with owned fields), the source variable is
+  a `List@(T)`, a dynamic array, a `string`, or a struct with owned fields), the source variable is
   *moved* into the new `Own` and may not be used afterwards (use-after-move is `CE2405`).
   Primitives are copied, so passing an `i32` variable leaves it usable.
-- **`get()` reads through the pointer, and a by-value sink copies.** `get()` is a dereference:
-  it hands back a *view* of the payload, which the `Own` keeps owning. At an ownership sink —
-  a `let` binding, a by-value argument, a constructor field, a rebind, an enum payload, a
-  `return` — that view is deep-copied, so the destination is an independent owner and each
-  side frees exactly once. This is the same rule a struct-field read follows (`let x = s.field`);
-  see `docs/design/move-semantics.md` §3, *"ownership sinks move; reads from a continuing owner
-  copy"*. Reading straight through a get-out (`o.get().field`) is not a sink and copies nothing.
-  Deep-copying a payload that owns nothing is free, so only owning payloads pay.
+- **`get()` reads through the pointer and hands back a borrow.** `get()` is a dereference: it
+  returns a *view* of the payload, which the `Own` keeps owning and still frees. Reading it is
+  free -- a `let x = own.get()` binds `x` as a borrow of `own`, exactly like a struct-field read
+  (see [Borrowed `let` Bindings](#borrowed-let-bindings)). *Consuming* that view at a real
+  ownership sink -- a by-value argument, a constructor field, an enum payload, a `return` -- is
+  **`CE2411`**, with `.clone()` as the escape.
 
 ```sushi
 fn main() i32:
     let Own@(i32) inner = Own.alloc(42)
     let Own@(Own@(i32)) outer = Own.alloc(inner)  # inner is moved into outer
-    let Own@(i32) copied = outer.get()            # an independent copy; outer stays valid
-    let i32 value = copied.get()
+    let Own@(i32) copied = outer.get()            # copied BORROWS from outer; no allocation
+    let i32 value = copied.get()                  # reading through a borrow is free
     println(value)                                # 42
     return Result.Ok(0)
 ```
 
-  The copy is what makes nested owners such as `Own@(Own@(T))` safe. Sushi has no `let`-borrow
-  bindings yet (`let &peek T x = ...` is not expressible), so a binding cannot *be* a view — it
-  is an owner or nothing. Until those land, copying is the only safe reading of a get-out at a
-  sink; the alternative would be a hard error with `.clone()` as the sole escape hatch.
+  `copied` above does not own an independent copy of `inner` -- it is a live borrow of `outer`, so
+  mutating or freeing `outer` while `copied` is in scope would be `CE2412`, and handing `copied`
+  itself to a by-value parameter would be `CE2411`:
+
+```sushi
+fn sink(Own@(i32) x) ~:
+    println(x.get())
+    return Result.Ok(~)
+
+fn main() i32:
+    let Own@(i32) inner = Own.alloc(42)
+    let Own@(Own@(i32)) outer = Own.alloc(inner)
+    let Own@(i32) copied = outer.get()
+
+    # ERROR CE2411: cannot consume 'copied': another owner keeps this value
+    # sink(copied)
+
+    sink(copied.clone())  # OK: an independent copy
+    return Result.Ok(0)
+```
+
+  This is what makes nested owners such as `Own@(Own@(T))` safe without an implicit copy at every
+  `get()`: the borrow checker tracks exactly how long `copied` may live relative to `outer`, and
+  `.clone()` is there for the case that genuinely needs an independent value.
 
 ## Manual Memory Management
 

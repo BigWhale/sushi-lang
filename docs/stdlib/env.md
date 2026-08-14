@@ -224,14 +224,16 @@ Always validate environment variable values:
 ```sushi
 use <sys/env>
 
-fn is_valid_port(string port) bool:
+fn is_valid_port(&peek string port) bool:
     # Add validation logic
     return Result.Ok(true)
 
 fn main() i32:
     match getenv("SERVER_PORT"):
         Maybe.Some(port) ->
-            if (is_valid_port(port).realise(false)):
+            # port is a match binding, a borrow: pass it by &peek rather than
+            # by value (a by-value call would need port.clone() instead)
+            if (is_valid_port(&peek port).realise(false)):
                 println("Using port: {port}")
             else:
                 println("Invalid port in SERVER_PORT")

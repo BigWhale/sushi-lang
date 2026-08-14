@@ -1,10 +1,14 @@
 # Move-by-Value Unification for Owning Composites (#134)
 
-*Design doc, 2026-07-19. Status: **implemented** (2026-07-20). Closes the #134 consistency gap.
-Companion to `docs/memory-management.md` (user-facing rules, to be updated by the implementation)
-and `docs/design/string-representation.md` (why strings are copy types). Implementation is planned
-for a dedicated PR **before** R1 (the first Sushi-source library), so the first real library is
-written once, against the final ownership model.*
+*Design doc, 2026-07-19. Status: **implemented** (2026-07-20); **superseded in part** by
+`docs/design/ownership-conventions.md` (Phase 9, 2026-08-14), which unified this document's two
+ownership predicates, deleted the `COPY` type class this document designed around (a `string` moves
+now, like every other heap-owning type — see §2's note below), and closed §3.1's residual-copy
+question. Read this document for the #134 move-by-value decision itself (owning structs/enums move,
+`.clone()` is the escape) and for its historical record; read `ownership-conventions.md` for the
+current predicate and the current answer to "what does a field read do."
+Companion to `docs/memory-management.md` (user-facing rules) and `docs/design/string-representation.md`
+(the fat-pointer decision, which the string-move change did not touch).*
 
 ---
 
@@ -28,31 +32,44 @@ for the flip.
 
 ---
 
-## 2. The rule: move-ness is compositional, and it is NOT `needs_cleanup`
+## 2. The rule: move-ness is compositional, and it was NOT `needs_cleanup` — until Phase 9 made it so
 
 > **A type moves by value iff it transitively contains an owning resource.**
-> Owning resources are what `is_owning_type` recognizes today: dynamic arrays (`T[]`), `List@(T)`,
-> `Own@(T)`, and capturing closures. A struct/enum/fixed-array *inherits* move-ness from its
-> fields/variant payloads/elements. Everything else copies.
+> Owning resources are what `is_owning_type` recognized at the time: dynamic arrays (`T[]`),
+> `List@(T)`, `Own@(T)`, and capturing closures. A struct/enum/fixed-array *inherits* move-ness from
+> its fields/variant payloads/elements. Everything else copies.
 
-**The string distinction (critical).** The backend's `needs_cleanup`
-(`backend/destructors.py:668`) answers *"does RAII have to free something?"* — and strings answer
-**yes** (heap data behind the `owned` bit). But strings are **copy types**
-(`docs/design/string-representation.md`; copies are cheap and safe via the owned-bit protocol). If
-the move predicate were `needs_cleanup`, a struct with only a `string` field would *move* while a
-bare `string` *copies* — recreating the wrap-a-value inconsistency this design eliminates.
+**Superseded: the string distinction is gone, and the two predicates ARE unified.** Everything in
+this section, as originally written, argued the opposite of what shipped a few weeks later. It is
+kept for the historical reasoning — the string-owning-heap-but-copies asymmetry really was true at
+the time — but `docs/design/ownership-conventions.md` §4.1/§6 is the current answer: **`string` now
+moves like every other heap-owning type**, so `needs_cleanup` ("must RAII free it?") and the move
+predicate ("does it own a resource?") became the *same question* by construction, and the backend's
+`needs_cleanup` is now a thin alias of the single semantics predicate, `owns_heap`
+(`sushi_lang/semantics/typesys.py`). The reasoning below explains why unifying them seemed unsound
+at the time — the fix was not to keep them apart, but to remove the one type they disagreed about
+from the disagreement.
 
-Therefore the new predicate is a **different question** than `needs_cleanup`, and the two must not
-be unified:
+**The string distinction (as it stood in 2026-07-19, before Phase 9).** The backend's `needs_cleanup`
+(`backend/destructors.py:668`) answered *"does RAII have to free something?"* — and strings answered
+**yes** (heap data behind the `owned` bit). But strings were **copy types**
+(`docs/design/string-representation.md`; copies were cheap and safe via the owned-bit protocol). If
+the move predicate had been `needs_cleanup`, a struct with only a `string` field would *move* while a
+bare `string` *copied* — recreating the wrap-a-value inconsistency this design set out to eliminate.
+So at the time, the new predicate had to be a **different question** than `needs_cleanup`:
 
-| Predicate | Question | strings | `struct {string}` | `struct {i32[]}` |
+| Predicate | Question | strings (as of 2026-07-19) | `struct {string}` (as of 2026-07-19) | `struct {i32[]}` |
 |---|---|---|---|---|
-| `needs_cleanup` (backend, exists) | must RAII free it? | yes | yes | yes |
-| `moves_by_value` (semantics, **new**) | does it contain an owning resource? | **no** | **no** | **yes** |
+| `needs_cleanup` (backend, existed) | must RAII free it? | yes | yes | yes |
+| `moves_by_value` (semantics, new then) | does it contain an owning resource? | **no** | **no** | **yes** |
 
-A `struct {string name; i32 id}` stays a copy type: passing it by value deep-copies (the string
-field is cloned, as today), and the source stays usable. A `struct {i32[] data}` becomes a move
-type.
+At the time, a `struct {string name; i32 id}` stayed a copy type: passing it by value deep-copied
+(the string field was cloned), and the source stayed usable. **This is no longer true.** Since
+`string` itself moves now (Phase 9), `struct {string name; i32 id}` is a **move** type: passing it by
+value moves it, and the source is CE2405 on reuse — unless the struct's string field was never bound
+from a literal to begin with, in which case the point is moot, because the option-B literal exception
+lives on a *bare `string` binding*, not on a struct field (`ownership-conventions.md` §4.1). A
+`struct {i32[] data}` was and remains a move type.
 
 ### 2.1 Predicate implementation
 
@@ -119,9 +136,39 @@ also refuses to move out of an index.
 | `&peek` / `&poke` arguments | borrow | unchanged | the way to *not* move |
 | HashMap/List insert of struct/enum values | key+value moved into container (T2.2/N1) | unchanged | already move-shaped |
 
-### 3.1 The deliberate residual copy, and its implications
+**Phase 9 moved the "stays cloned" rows again, and made two "borrow" cells true.** Two kinds of claim
+in this table did not survive as written:
 
-A `MemberAccess` source (`take(s.field)`, `from([s.field])`, `let x = s.field`) keeps the silent
+- The four **"stays cloned"** rows (`s.field`, `own.get()` deref, container get-out, struct-field
+  read) no longer clone at all. `docs/design/ownership-conventions.md` §4.2 classifies every one of
+  them `BORROWED`; a `let` of one binds without owning (§8) and a genuine consuming use of one is
+  **CE2411**, with `.clone()` doing explicitly what these rows used to do silently. This is *not* a
+  behavior regression — it is §3.1's upgrade path (below), taken.
+- The **"borrow, unchanged"** cells for `match`/`foreach` bindings were optimistic when this table
+  was written: at the time, a binding was in fact "a shallow byte-copy of an owner's fat pointer"
+  with no type recorded and no diagnosis possible for misuse of it
+  (`ownership-conventions.md` §8.1) — so "borrow" described the codegen shape, not a checked
+  property. It is now **actually true**: `ownership-conventions.md` §8 makes it a typed, tracked
+  borrow, with **CE2408** on mutation and **CE2411** on consumption. The `&peek`/`&poke`-argument row
+  was already backed by real borrow checking at the time and needed no such correction.
+
+### 3.1 The deliberate residual copy, and its implications (historical — resolved)
+
+**Resolved by `docs/design/ownership-conventions.md`.** This section's "upgrade path" asked for one
+missing feature — `let`-borrow bindings — before the residual copy below could become a hard error.
+That feature landed, but not in the shape this section anticipated: rather than a new *syntax*
+(`let &peek T x = s.field`), a `let` reading through a live owner now implicitly BORROWS
+(`ownership-conventions.md` §8), tracked with a real lifetime (**CE2412** on mutating the owner
+while the binding is live) and a real consuming-use check (**CE2411**, `.clone()` as the escape).
+The explicit reference-typed-`let` syntax this section imagined was itself proposed later as #252,
+assessed against the now-shipped implicit mechanism, and rejected as **CE2413** — it would have been
+a second, overlapping way to say the same thing. See `ownership-conventions.md` §8.4 for the
+untangled numbering (#242 is this section's issue; #252 is the syntax that was rejected). The
+sequencing this section worried about — "gated on the same missing feature" — is therefore unblocked:
+the gate opened, just via a different mechanism than the one anticipated below. The rest of this
+section is kept for its historical reasoning.
+
+A `MemberAccess` source (`take(s.field)`, `from([s.field])`, `let x = s.field`) used to keep a silent
 deep copy, and since #256 an `Own@(T).get()` deref (`take(o.get())`, `let x = o.get()`) is on the
 same footing. Be honest about what this means: **the #134 trap survives in field-access and deref
 form** — after the flip, `f(list)` moves but `f(wrapper.list)` and `f(owned.get())` still silently
@@ -152,12 +199,14 @@ error path) — pinned by a dedicated leak test in §6. The mirror-image hazard 
 double-free, which `EXPECT_NO_LEAKS` + the interposer catch from both directions (leak = positive
 balance; double-free = abort).
 
-**Upgrade path (kept open, not taken now).** If R1 shows the residual copy is a trap in practice:
-first a CW warning on owning-`MemberAccess` at by-value sinks (visible, permissive — but note
-Sushi warnings exit 1 and there is no per-site silencing mechanism yet, so this needs design);
-ultimately the Rust-style hard error, which becomes viable **iff `let`-borrow bindings land**
-(adjacent to the deferred Tier-2 closure borrow-capture work). Both are semantics-tightening
-only — no working program changes meaning — so deferring them costs nothing.
+**Upgrade path — taken, skipping the intermediate warning stage.** This section proposed a staged
+rollout: first a CW warning on owning-`MemberAccess` at by-value sinks, then a Rust-style hard error
+once `let`-borrow bindings landed. What shipped went straight to the equivalent of the hard error,
+without ever emitting the intermediate warning — because the "hard error" and "let-borrow binding"
+turned out to be the same mechanism rather than two staged ones: reading through an owner now BINDS
+(no copy, no error) at a `let`, and errors (CE2411) only at a genuine consuming use, which is exactly
+the Rust shape this section held up as the target (`match &x { Some(v) => take(v.clone()) }`). No
+working program's meaning changed silently — every behavior change here is a new compile error.
 
 ---
 
@@ -173,7 +222,12 @@ method on every user type with a lazily-bound backend emitter":
    **all** structs/enums, not only owning ones — a plain-data clone is trivially the value itself,
    and uniform availability keeps generic code simple. (Unlike `.hash()`, there is no
    CE0052-style exclusion: `emit_value_clone` already handles every shape RAII handles, including
-   recursive types via out-of-line emission.)
+   recursive types via out-of-line emission. **Confirmed by what shipped**: `.clone()` is total over
+   every type — primitives, `string`, fixed and dynamic arrays, `List@(T)`, `Own@(T)`, and now a
+   function value too (the fat pointer's `clone_ptr`, see `docs/design/closures.md`) all have one,
+   with `tests/unit/test_clone_totality.py` as the gate. The one gap is `HashMap@(K, V)`, absent
+   only because it is absent from `owns_heap`'s callers that ask this question, not because of a
+   CE0052-style structural exclusion.)
 2. **Lazy backend binding**: mirror `_lazy_hash_emitter` (`semantics/generics/hashing.py:284-296`)
    + `register_clone_emitter_factory` self-registration from the backend (pattern:
    `backend/types/structs.py:207`), with a CE0123-style internal error if the factory is missing.
@@ -299,18 +353,25 @@ locations** of the relational diagnostic; value tests use `EXPECT_STDOUT_EXACT`.
 
 ---
 
-## 8. Explicitly out of scope
+## 8. Explicitly out of scope (as of 2026-07-19 — see the note on each item for current status)
 
-- **Partial moves** (`let x = s.field` consuming `s`) — field reads stay copies (§3).
-- **Move-out of containers** (`list.get(i)` transferring ownership) — stays a copy; V5 rule.
-- **A `Copy`/`Move` perk or user override** — move-ness is structural and automatic; revisit only
-  if a real library needs to opt a heap-owning type into copy semantics (YAGNI until R1+ shows it).
-- **CW warning or hard error on `MemberAccess` deep copies** — deferred; the full analysis and
-  staged upgrade path (warn → forbid, the latter gated on `let`-borrow bindings existing) is
-  §3.1. Semantics-tightening only, so deferral costs nothing.
-- **`let`-borrow bindings** (`let &peek T x = s.field`) — the missing feature that would make the
-  Rust-style hard error ergonomic; adjacent to Tier-2 closure borrow-capture work, not this PR.
-- **`Own@(T).clone()`** — only if free during implementation.
+- **Partial moves** (`let x = s.field` consuming `s`) — still out of scope; Sushi has none. But
+  `let x = s.field` no longer *copies* either (§3.1's update) — it now BORROWS, which is a third
+  option neither "partial move" nor "copy" that this document did not anticipate.
+- **Move-out of containers** (`list.get(i)` transferring ownership) — still out of scope; a
+  container's `.get()` never transfers ownership. What changed is what the reader gets when it
+  doesn't transfer: a borrow (§3.1's update), not a copy.
+- **A `Copy`/`Move` perk or user override** — still out of scope; move-ness stays structural and
+  automatic. No library has needed an opt-out.
+- **CW warning or hard error on `MemberAccess` deep copies** — **done**, and superseded by a better
+  answer than either option this bullet considered. See §3.1: neither a warning nor an error was
+  needed, because the read stopped copying (or erroring) and started borrowing.
+- **`let`-borrow bindings** (`let &peek T x = s.field`) — **landed, in a different shape.** Not the
+  explicit reference-typed syntax this bullet named (that syntax was assessed later, as #252, and
+  rejected as CE2413) — instead, every `let` reading through an owner implicitly borrows. See
+  `docs/design/ownership-conventions.md` §8.
+- **`Own@(T).clone()`** — shipped. `Own@(T)` has a `.clone()` (`backend/generics/own.py`), the
+  explicit escape from CE2411 for an `Own@(T).get()` deref.
 
 ## 9. Risks
 

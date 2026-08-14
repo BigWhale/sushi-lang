@@ -551,7 +551,9 @@ use <io/files>
 fn backup_and_cleanup(string path) ~:
     let string backup = "{path}.bak"
 
-    match copy(path, backup):
+    # path is used twice below; clone it for the first call so it stays
+    # usable for the second (a by-value string argument moves)
+    match copy(path.clone(), backup):
         Result.Ok(_) ->
             println("Backup created")
         Result.Err(_) ->
