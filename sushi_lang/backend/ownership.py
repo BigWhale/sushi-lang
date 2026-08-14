@@ -44,7 +44,24 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
-__all__ = ["ConsumingUse", "bind", "consume", "copy_out", "relinquish", "resolver_for"]
+__all__ = ["ConsumingUse", "bind", "consume", "copy_out", "relinquish",
+           "relinquish_temp", "resolver_for"]
+
+
+def relinquish_temp(codegen: 'LLVMCodegen', name: str) -> None:
+    """Transfer a compiler-SYNTHESIZED temporary to a new owner, by name.
+
+    The collect path of a variadic call builds a caller-registered `__variadic_*`
+    array and then moves it into the callee, which owns and frees it. That temp has
+    no source expression and therefore no provenance, so `consume` cannot decide for
+    it -- this entry point states the transfer directly. It differs from
+    `relinquish` in what it asserts: `relinquish` states a binding never owned its
+    storage; this states a real transfer of a value only the compiler ever named.
+    """
+    da = getattr(codegen, "dynamic_arrays", None)
+    if da is not None:
+        da.mark_as_moved(name)
+    codegen.memory.mark_struct_as_moved(name)
 
 
 def relinquish(codegen: 'LLVMCodegen', name: str) -> None:
