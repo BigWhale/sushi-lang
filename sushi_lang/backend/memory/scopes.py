@@ -63,8 +63,9 @@ class ScopeManager:
         # like _locals for shadow-correctness (see _struct_cleanup). Every function-typed
         # `let` local is registered; the free is runtime-guarded by drop_ptr, so a
         # non-capturing value frees to a no-op (capture is erased from the `fn(...)` type).
-        # Function PARAMETERS are deliberately NOT registered -- a passed closure is owned by
-        # the caller's binding, not the callee (freeing it here would double-free).
+        # A by-value fn PARAMETER is registered too (the 2026-08-14 ruling: the callee
+        # owns; the caller transferred through the seam). Extension/perk-method bodies
+        # (fn_def=None) register nothing and stay borrows.
         self._closure_cleanup: Dict[str, List[tuple[int, ir.AllocaInstr]]] = {}
 
         # Struct move tracking is delegated to the unified codegen.moves MoveTracker.
@@ -97,7 +98,10 @@ class ScopeManager:
         # scope exit via the owned bit (a literal/borrow carries owned=0 -> the free is a
         # runtime no-op). Stacked like _closure_cleanup for shadow-correctness; move-tracked
         # via MoveTracker so a returned/aliased owning string is skipped (its new owner frees
-        # it). Parameters are NOT registered -- a passed string is owned by the caller's binding.
+        # it). A by-value string PARAMETER of a plain function is registered too (the
+        # 2026-08-14 ruling: the callee owns and its owned bit survives). Extension/perk
+        # bodies (fn_def=None) register nothing; their string params stay borrows with a
+        # cleared owned bit, which is what keeps `return self` safe there.
         self._string_cleanup: Dict[str, List[tuple[int, ir.AllocaInstr]]] = {}
 
     @staticmethod

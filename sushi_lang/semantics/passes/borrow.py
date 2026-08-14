@@ -871,6 +871,15 @@ class BorrowChecker:
             if self._is_enum_constructor(expr):
                 for arg in expr.args:
                     self._consume(arg, ConsumingUse.ENUM_PAYLOAD)
+            elif getattr(expr, "callee_fn_type", None) is not None:
+                # An indirect call through a fn-typed FIELD (`obj.handler(x)`, `env.f(x)`)
+                # is a real call: a by-value argument transfers to the callee exactly like
+                # the Call arm's (the 2026-08-14 ruling -- the callee owns its by-value
+                # parameters). Keyed on the `callee_fn_type` stamp Pass 2 writes when it
+                # resolves the field call, so an FFI / extension / builtin method (which
+                # never carries the stamp) keeps the no-consume rule above.
+                for arg in expr.args:
+                    self._consume(arg, ConsumingUse.CALL_ARG)
             else:
                 self._maybe_mark_container_insert(expr)
             self._maybe_mark_own_alloc_move(expr)

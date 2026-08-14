@@ -1,44 +1,10 @@
-# DELIBERATELY RED. This file pins MM.md finding F12 and is expected to fail the leak
-# assertion until F12 is fixed. Do not silence it, and do not rewrite the shape to make it
-# green -- rewriting the shape is what left F12 recorded in prose only, and prose does not
-# fail CI.
-#
-# F12: a by-value `fn` parameter frees nothing. The callee takes ownership of the fat
-# value but registers no cleanup for it, so the heap environment the closure captured is
-# never freed. The leak is 4 bytes in 1 block, one `i32` capture.
-#
-# The gap is specifically the parameter binding. The neighbouring shapes are all clean: a
-# lambda literal written directly in the same argument position, a `let`-bound closure, a
-# closure returned to a caller, and a closure stored in a struct field or a List
-# (tests/memory/test_clone_closure.sushi covers those). So the emitter is right and the
-# registration is missing.
-#
-# DIAGNOSED 2026-08-03, NOT FIXED. The missing arm is real but it is not the whole fix.
-#
-# The parameter cleanup chain in `backend/functions/helpers.py::begin_function` has arms
-# for a dynamic array, `Own`/`List`, an owning struct and an owning enum, and NO arm for a
-# `FunctionType`. Adding one frees the environment and closes both leak shapes. It also
-# DOUBLE FREES six other tests, because the caller side does not tell one story:
-#
-#   inline lambda argument  `f(|i32 x| x + k, 10)`  -- the CALLER owns it, registered as a
-#                           caller-scope temp by `_register_inline_closure_temps` (#123)
-#   bare Name argument      `f(g, 10)`              -- marked MOVED at the call site, so
-#                           the caller skips its free and NOBODY owns it. This is the leak.
-#   container get-out /     `f(fns.get(0)??, 10)`   -- a non-owning BORROW; the container
-#   struct-field read                                  stays the owner
-#
-# Three owners for one parameter position, and the callee cannot tell them apart. So the
-# fix is not a missing registration, it is a decision about which side owns a by-value
-# function parameter, and it has to move the caller side with it. Taking only the callee
-# half turns the leak into a double free in the inline-lambda shape, which is the #123
-# path. Verified: the arm alone breaks test_run_issue123_inline_closure_arg, the three
-# test_ho_* and the two test_iter_module_* tests with SIGTRAP.
-#
-# A double free exits 133, and the interposer scores 133 as a SKIP, so the symptom of a
-# careless fix is a leak check that DISAPPEARS from the count, not a new failure line.
-# `--leaks-only` does NOT catch this: none of the six broken tests is leak-annotated. Read
-# the FULL suite's per-test lines, never the binary's exit code and never the narrow
-# selector.
+# Pins MM.md F12 (X8), fixed 2026-08-14 by the by-value-parameter ruling: the CALLEE owns
+# a by-value `fn` parameter. `begin_function` registers the parameter's fat value for the
+# drop_ptr-guarded free, and every caller shape transfers exactly once -- a bare Name is
+# marked moved at the call site, a temporary (`make(2)??` here) adopts in, and an inline
+# lambda is no longer caller-registered (the callee frees it). A container get-out or
+# field-read argument stays CE2411; write `.clone()` to hand over an independent value.
+# tests/memory/test_fn_byvalue_param_free.sushi pins the neighbouring shapes.
 # EXPECT_STDOUT_EXACT: "12\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true

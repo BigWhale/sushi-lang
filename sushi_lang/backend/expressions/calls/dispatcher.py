@@ -93,14 +93,20 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     if variadic_param is not None:
         fixed_count = len(func_sig.params) - 1
         fixed_args = [codegen.expressions.emit_expr(a) for a in expr.args[:fixed_count]]
-        _register_inline_closure_temps(codegen, expr.args[:fixed_count], fixed_args)
+        # The FIXED by-value parameters of a variadic function take ownership exactly
+        # like a non-variadic call's (the ruling of 2026-08-14: the callee owns). The
+        # trailing arguments are consumed by build_variadic_array into the synthesized
+        # T[], which the callee owns as a whole.
+        _consume_call_arguments(codegen, expr.args[:fixed_count], fixed_args, func_sig)
         array_struct = build_variadic_array(
             codegen, expr.args[fixed_count:], variadic_param.ty, callee)
         args = fixed_args + [array_struct]
     else:
         args = [codegen.expressions.emit_expr(a) for a in expr.args]
-        _register_inline_closure_temps(codegen, expr.args, args)
         # A by-value parameter takes ownership; the callee frees its value at scope exit.
+        # That includes an inline-lambda argument: the callee's FunctionType param is
+        # registered for cleanup (begin_function), so the caller-side temp registration
+        # (#123) is gone from this path -- it would double-free.
         _consume_call_arguments(codegen, expr.args, args, func_sig)
 
     params = list(llvm_fn.args)
@@ -169,20 +175,31 @@ def _emit_indirect_call(codegen: 'LLVMCodegen', expr: Call, fat_value: 'ir.Value
     Result<T,E> struct flows downstream exactly like a direct call's.
     """
     from sushi_lang.backend.runtime import closures
+    from sushi_lang.semantics.typesys import ReferenceType
     args = [codegen.expressions.emit_expr(a) for a in expr.args]
-    _register_inline_closure_temps(codegen, expr.args, args)
+    # A by-value parameter of the indirect callee takes ownership, exactly like a
+    # direct call's (the ruling of 2026-08-14): every indirect callee is a lifted
+    # lambda or a plain fn, and both compile through begin_function's param
+    # registration, so the callee frees. Reference params are borrows and are skipped.
+    for i, pty in enumerate(fn_type.param_types):
+        if i >= len(args) or isinstance(pty, ReferenceType):
+            continue
+        args[i] = consume(codegen, expr.args[i], args[i],
+                          _resolve_param_type(codegen, pty), ConsumingUse.CALL_ARG)
     return closures.emit_indirect_call(codegen, fat_value, fn_type, args, to_i1)
 
 
 def _register_inline_closure_temps(codegen: 'LLVMCodegen', arg_exprs: list, arg_values: list) -> None:
     """Register inline-closure argument temporaries for scope-exit cleanup (#123).
 
-    A capturing closure written directly as a call argument (`f(|x| x + k, ...)`) is
-    emitted by emit_lambda -- which mallocs its env -- but is never bound to a local, so
-    nothing owns it. Register each such fresh fat value as a caller-scope temp so its env
-    is freed at the enclosing scope exit. Only a syntactic inline `Lambda` is registered:
-    a `Name` arg is already owned by its local's cleanup slot (re-registering would
-    double-free), and a container get-out / struct-field read is a non-owning borrow.
+    ONLY the extension-method fallback still needs this: an extension body is compiled
+    with fn_def=None, registers no parameter cleanup, and so never owns its arguments --
+    the caller stays the owner of an inline lambda's env. Every plain (direct, variadic,
+    indirect) call instead transfers ownership to the callee through the seam, and the
+    callee's registered FunctionType param frees the env (the 2026-08-14 ruling); a
+    caller-side registration there would double-free. Only a syntactic inline `Lambda`
+    is registered: a `Name` arg is owned by its local's cleanup slot, and a container
+    get-out / struct-field read is a non-owning borrow.
     """
     from sushi_lang.semantics.ast import Lambda
     for arg_expr, value in zip(arg_exprs, arg_values, strict=True):

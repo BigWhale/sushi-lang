@@ -1,0 +1,44 @@
+# The by-value-parameter ruling (2026-08-14), string half: the CALLEE owns a by-value
+# `string` parameter. Found during the X9 work: the seam marked the caller's string
+# moved while begin_function cleared the callee copy's owned bit and registered nothing,
+# so an owned buffer passed by value was freed by NOBODY. Shapes covered:
+#   1. a bare Name argument (heap string; the caller's binding is moved; the callee frees),
+#   2. a temporary argument (an interpolation; adopted in; the callee frees),
+#   3. a literal argument (owned=0; the callee's free is a runtime no-op),
+#   4. a callee that RETURNS its parameter (the return marks it moved; the caller of
+#      the callee adopts the buffer -- freed once, not twice),
+#   5. a callee that FORWARDS its parameter by value (the inner callee frees),
+#   6. a variadic function's FIXED by-value string parameter (same ruling).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "hi-there\nfresh-one\nlit\nback:hi-again\nfwd-deep\np-yo\n1\n2\n"
+# EXPECT_NO_LEAKS: true
+
+fn take(string s) ~:
+    println(s)
+    return Result.Ok(~)
+
+fn bounce(string s) string:
+    return Result.Ok(s)
+
+fn forward(string s) ~:
+    take(s)
+    return Result.Ok(~)
+
+fn shout(string prefix, ...i32 nums) ~:
+    println(prefix)
+    foreach(n in nums.iter()):
+        println(n)
+    return Result.Ok(~)
+
+fn main() i32:
+    let string base = "there"
+    let string b = "hi-{base}"
+    take(b)
+    take("fresh-{'one'}")
+    take("lit")
+    let string back = bounce("hi-{'again'}").realise("err")
+    println("back:{back}")
+    forward("fwd-{'deep'}")
+    let string p = "p-{'yo'}"
+    shout(p, 1, 2)
+    return Result.Ok(0)
