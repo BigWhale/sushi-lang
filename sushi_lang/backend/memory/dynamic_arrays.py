@@ -365,12 +365,6 @@ class DynamicArrayManager:
         if self.list_scope_stack:
             self.list_scope_stack[-1].add(var_name)
 
-    def mark_list_moved(self, var_name: str) -> None:
-        """Mark a List<T> as moved (ownership transferred to the caller); skip cleanup."""
-        descriptor = self._list(var_name)
-        if descriptor is not None:
-            self.codegen.moves.mark(descriptor.llvm_alloca)
-
     def mark_list_destroyed(self, var_name: str) -> None:
         """Mark a List<T> as explicitly destroyed/freed; skip redundant RAII cleanup."""
         descriptor = self._list(var_name)
@@ -412,13 +406,6 @@ class DynamicArrayManager:
         depth = self.codegen.memory._scope_depth
         self.owned_pointers[var_name] = OwnDescriptor(
             name=var_name, own_type=own_type, slot=slot, depth=depth, destroyed=False)
-
-    def mark_own_moved(self, var_name: str) -> None:
-        """Mark an Own<T> as moved (ownership transferred, e.g. into another Own or a
-        struct field); the unified MoveTracker excludes it from RAII cleanup."""
-        descriptor = self.owned_pointers.get(var_name)
-        if descriptor is not None:
-            self.codegen.moves.mark(descriptor.slot)
 
     def mark_own_destroyed(self, var_name: str) -> None:
         """Mark an Own<T> variable as explicitly destroyed.

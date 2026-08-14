@@ -110,10 +110,10 @@ class ArrayMethodInferrer:
     def infer_return_type(self) -> Optional['Type']:
         from sushi_lang.semantics.passes.types.arrays import is_builtin_array_method, get_builtin_array_method_return_type
         from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
-        from sushi_lang.semantics.typesys import ReferenceType
+        from sushi_lang.semantics.typesys import deref_type
 
         # Handle references to arrays (e.g., &i32[])
-        actual_type = self.receiver_type.referenced_type if isinstance(self.receiver_type, ReferenceType) else self.receiver_type
+        actual_type = deref_type(self.receiver_type)
 
         if is_builtin_array_method(self.method_name):
             # Special handling for .get() which returns Maybe<T>
@@ -439,9 +439,9 @@ class FunctionMethodInferrer:
 # Register all built-in type checkers
 @METHOD_TYPE_REGISTRY.register_checker
 def check_array_methods(receiver_type, method_name, validator):
-    from sushi_lang.semantics.typesys import ReferenceType
+    from sushi_lang.semantics.typesys import deref_type
     # Handle both direct array types and references to arrays
-    actual_type = receiver_type.referenced_type if isinstance(receiver_type, ReferenceType) else receiver_type
+    actual_type = deref_type(receiver_type)
     if isinstance(actual_type, (ArrayType, DynamicArrayType)):
         return ArrayMethodInferrer(receiver_type, method_name, validator)
     return None

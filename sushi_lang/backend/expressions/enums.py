@@ -167,7 +167,7 @@ def emit_enum_constructor_from_method_call(
             # Calculate size of this argument
             from sushi_lang.backend.expressions import memory
             arg_llvm_type = arg_value.type
-            arg_size = memory.get_type_size(arg_llvm_type)
+            arg_size = memory.calculate_llvm_type_size(arg_llvm_type)
 
             # Store the argument at the current offset. align=1: enum variant data is a byte
             # array, so a 16-byte {i8*,i32,i8} string here is under-aligned; without align=1

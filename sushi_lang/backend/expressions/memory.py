@@ -19,15 +19,6 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
-# Type size lookup table (simplified dispatch for common types)
-TYPE_SIZES = {
-    'i8': 1, 'i16': 2, 'i32': 4, 'i64': 8,
-    'u8': 1, 'u16': 2, 'u32': 4, 'u64': 8,
-    'f32': 4, 'f64': 8,
-    'bool': 1, 'ptr': 8
-}
-
-
 def get_element_size_constant(codegen: 'LLVMCodegen', element_type: ir.Type) -> ir.Value:
     """Get the size in bytes of an element type as an LLVM constant.
 
@@ -130,31 +121,6 @@ def calculate_llvm_type_size(llvm_type: 'ir.Type') -> int:
     else:
         # Conservative estimate for unknown types
         return 16
-
-
-def get_type_size(llvm_type: ir.Type) -> int:
-    """Get the size in bytes of an LLVM type (simplified Python int).
-
-    This is a lightweight version that returns a Python int rather than
-    an LLVM constant. Used for quick size estimates.
-
-    Args:
-        llvm_type: The LLVM type.
-
-    Returns:
-        Size in bytes.
-    """
-    if isinstance(llvm_type, ir.IntType):
-        return llvm_type.width // 8
-    elif isinstance(llvm_type, ir.PointerType):
-        return 8  # Assume 64-bit pointers
-    elif isinstance(llvm_type, ir.FloatType):
-        return 4
-    elif isinstance(llvm_type, ir.DoubleType):
-        return 8
-    else:
-        # For complex types, use accurate calculation
-        return calculate_llvm_type_size(llvm_type)
 
 
 def emit_realloc_call(codegen: 'LLVMCodegen', old_ptr: ir.Value, new_size: ir.Value) -> ir.Value:

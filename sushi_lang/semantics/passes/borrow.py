@@ -1149,31 +1149,16 @@ class BorrowChecker:
         """
         if getattr(expr, "method", None) not in self._CONTAINER_INSERT_METHODS:
             return
-        if not self._is_container_type(self._expr_type(getattr(expr, "receiver", None))):
+        # The receiver is typed by _read_type, the ONE walker for read-through-an-owner
+        # shapes. A narrower twin (`_expr_type`, Name/MemberAccess only) used to live
+        # here; it did not unwrap TryExpr, so `outer.get(0)??.push(5)` was never
+        # recognised as an insert, its argument stayed unstamped, and the seam reported
+        # CE0129 -- the same missing unwrap that shipped the E3 double free in the
+        # backend twin. Two spellings of one rule, folded (11b).
+        if not self._is_container_type(self._read_type(getattr(expr, "receiver", None))):
             return
         for arg in expr.args:
             self._consume(arg, ConsumingUse.CONTAINER_INSERT)
-
-    def _expr_type(self, expr) -> Optional[Type]:
-        """Best-effort type of a receiver expression: a local, or a field reached from one.
-
-        `c.numbers.push(10)` is as much a container insert as `numbers.push(10)`, and the
-        backend treats them identically. Resolving only the bare-`Name` shape here left
-        the field receiver unstamped, which the seam then reported as CE0129 -- the loud
-        failure doing exactly its job. Anything more elaborate than a chain of field reads
-        off a local answers None, which classifies as PLAIN and stamps nothing extra.
-        """
-        if isinstance(expr, Name):
-            state = self.borrow_state.get(expr.id)
-            return state.var_type if state is not None else None
-        if isinstance(expr, MemberAccess):
-            from sushi_lang.semantics.typesys import StructType as _StructType
-            owner = self._resolve_named(self._expr_type(expr.receiver))
-            if isinstance(owner, ReferenceType):
-                owner = self._resolve_named(owner.referenced_type)
-            if isinstance(owner, _StructType):
-                return owner.get_field_type(expr.member)
-        return None
 
     def _is_container_type(self, ty: Optional[Type]) -> bool:
         """Is `ty` a `List@(T)`, `HashMap@(K, V)` or a dynamic array `T[]`?

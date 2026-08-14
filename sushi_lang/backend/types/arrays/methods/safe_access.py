@@ -83,11 +83,11 @@ def emit_fixed_array_get_maybe(
         Maybe<T> enum value.
     """
     from sushi_lang.backend.generics.maybe import emit_maybe_some, emit_maybe_none
-    from sushi_lang.semantics.typesys import ReferenceType
+    from sushi_lang.semantics.typesys import deref_type
 
     # Extract element type from semantic type
     # Handle references to arrays (e.g., &i32[])
-    actual_type = semantic_type.referenced_type if isinstance(semantic_type, ReferenceType) else semantic_type
+    actual_type = deref_type(semantic_type)
 
     if isinstance(actual_type, ArrayType):
         element_semantic_type = actual_type.base_type
@@ -173,11 +173,11 @@ def emit_dynamic_array_get_maybe(
         Maybe<T> enum value.
     """
     from sushi_lang.backend.generics.maybe import emit_maybe_some, emit_maybe_none
-    from sushi_lang.semantics.typesys import ReferenceType
+    from sushi_lang.semantics.typesys import deref_type
 
     # Extract element type from semantic type
     # Handle references to arrays (e.g., &i32[])
-    actual_type = semantic_type.referenced_type if isinstance(semantic_type, ReferenceType) else semantic_type
+    actual_type = deref_type(semantic_type)
 
     if isinstance(actual_type, DynamicArrayType):
         element_semantic_type = actual_type.base_type

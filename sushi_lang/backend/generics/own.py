@@ -107,23 +107,14 @@ def emit_own_get(codegen: Any, own_value: ir.Value, element_type: Type) -> ir.Va
     return codegen.builder.load(ptr, name="own_value")
 
 
-def emit_own_destroy(codegen: Any, own_value: ir.Value, var_name: str | None = None) -> ir.Value:
-    """Emit Own<T>.destroy() -> ~
+def emit_own_destroy(codegen: Any, own_value: ir.Value) -> ir.Value:
+    """Emit Own<T>.destroy() -> ~ for a TEMPORARY (non-Name) receiver.
 
-    Implementation:
-    1. Extract pointer from Own<T> struct
-    2. Cast T* to void* (i8*)
-    3. Call free(void*)
-    4. Mark variable as destroyed (to prevent RAII double-free)
-    5. Return blank value (~)
-
-    Args:
-        codegen: LLVM codegen instance
-        own_value: The Own<T> struct value
-        var_name: The variable name (if known) to mark as destroyed
-
-    Returns:
-        Blank value (i32 constant 0)
+    A shallow single free of the loaded value: extract the pointer, cast to void*,
+    free it, return the blank value. A NAME receiver goes through the deep
+    `emit_value_destructor` path in emit_builtin_own_method instead, which also
+    marks the binding destroyed -- so this function has no binding to mark (its
+    former `var_name` parameter was never passed by its one caller; 11b).
     """
     # Extract pointer from struct
     ptr = codegen.builder.extract_value(own_value, 0, name="own_ptr_to_free")
@@ -134,10 +125,6 @@ def emit_own_destroy(codegen: Any, own_value: ir.Value, var_name: str | None = N
     # Call free(void*)
     free_func = codegen.get_free_func()
     codegen.builder.call(free_func, [void_ptr])
-
-    # Mark variable as destroyed to prevent RAII double-free
-    if var_name and hasattr(codegen, 'dynamic_arrays'):
-        codegen.dynamic_arrays.mark_own_destroyed(var_name)
 
     # Return blank value (~)
     return ir.Constant(codegen.types.i32, 0)
@@ -193,33 +180,19 @@ def emit_builtin_own_method(
         from sushi_lang.semantics.ast import Name
         if isinstance(call.receiver, Name):
             var_name = call.receiver.id
+            # find_local_slot is the ASSERTIVE form: a miss is CE0055, never None
+            # (the semantic passes already accepted the name), so there is no
+            # not-found branch here (11b).
             slot = codegen.memory.find_local_slot(var_name)
-            if slot is not None:
-                # Deep teardown via the general recursive destructor (same as the RAII
-                # path), so manual destroy of a nested Own<Own<T>> frees every level.
-                from sushi_lang.backend.destructors import emit_value_destructor
-                emit_value_destructor(codegen, slot, own_type)
-                codegen.dynamic_arrays.mark_own_destroyed(var_name)
-                return ir.Constant(codegen.types.i32, 0)
+            # Deep teardown via the general recursive destructor (same as the RAII
+            # path), so manual destroy of a nested Own<Own<T>> frees every level.
+            from sushi_lang.backend.destructors import emit_value_destructor
+            emit_value_destructor(codegen, slot, own_type)
+            codegen.dynamic_arrays.mark_own_destroyed(var_name)
+            return ir.Constant(codegen.types.i32, 0)
         # Temporary / non-Name receiver: shallow single free of the loaded value.
         return emit_own_destroy(codegen, own_value)
     else:
         raise_internal_error("CE0080", method=call.method)
-
-
-def _arg_type_is_owning(codegen: Any, ty: Type) -> bool:
-    """Return True if a value of this type carries heap ownership, so passing it into
-    Own.alloc() should move (consume) the source variable.
-
-    Covers Own<T> and List<T> (whose single buffer field is a raw pointer that
-    needs_cleanup() does not recognise) plus everything needs_cleanup() catches
-    (dynamic arrays, structs with owned fields, enums with owned associated data).
-    """
-    from sushi_lang.backend.destructors import needs_cleanup
-    return (
-        codegen.dynamic_arrays.is_own_type(ty)
-        or codegen.dynamic_arrays.is_list_type(ty)
-        or needs_cleanup(ty)
-    )
 
 

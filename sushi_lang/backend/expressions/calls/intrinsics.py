@@ -220,85 +220,74 @@ def try_emit_string_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCa
     return emit_stdlib_string_call(codegen, expr.method, receiver_value, expr.args, to_i1)
 
 
+def _try_emit_auto_derived(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
+                           receiver_value: ir.Value, receiver_type: ir.Type,
+                           semantic_type, to_i1: bool, *, method: str, kind: type,
+                           exclude_containers: bool = False) -> Optional[ir.Value]:
+    """The ONE shape behind the four auto-derived hash/clone dispatchers (11b).
+
+    Checks the method name and the receiver's semantic kind, looks the auto-derived
+    method up in the builtin registry, and calls its registered LLVM emitter. For the
+    enum kind a `Result@(T, E)` still spelled as a GenericTypeRef is interned first
+    (every Result must go through `ensure_result_type_in_table` -- see CE0126).
+    `exclude_containers` keeps Own/List/HashMap on their own method paths, keyed on the
+    SAME prefix tuple their registration exclusion uses (semantics/generics/cloning.py).
+    """
+    if semantic_type is None or expr.method != method:
+        return None
+
+    if kind is EnumType:
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        if isinstance(semantic_type, GenericTypeRef) and semantic_type.base_name == "Result":
+            if len(semantic_type.type_args) >= 2:
+                from sushi_lang.semantics.generics.results import ensure_result_type_in_table
+                result_enum = ensure_result_type_in_table(
+                    codegen.enum_table, semantic_type.type_args[0],
+                    semantic_type.type_args[1], struct_table=codegen.struct_table.by_name)
+                if result_enum is None:
+                    return None
+                semantic_type = result_enum
+
+    if not isinstance(semantic_type, kind):
+        return None
+
+    if exclude_containers:
+        from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
+        if semantic_type.name.startswith(CONTAINER_PREFIXES):
+            return None
+
+    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
+    derived = get_builtin_method(semantic_type, method)
+    if derived is None:
+        return None
+
+    temp_expr = MethodCall(receiver=expr.receiver, method=expr.method, args=expr.args, loc=expr.loc)
+    return derived.llvm_emitter(codegen, temp_expr, receiver_value, receiver_type, to_i1)
+
+
 def try_emit_struct_hash(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                          receiver_value: ir.Value, receiver_type: ir.Type,
                          semantic_type, to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as auto-derived struct hash method. Returns None if not applicable."""
-    if semantic_type is None or not isinstance(semantic_type, StructType):
-        return None
-
-    if expr.method != "hash":
-        return None
-
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-    struct_hash_method = get_builtin_method(semantic_type, "hash")
-    if struct_hash_method is None:
-        return None
-
-    temp_expr = MethodCall(receiver=expr.receiver, method=expr.method, args=expr.args, loc=expr.loc)
-    return struct_hash_method.llvm_emitter(codegen, temp_expr, receiver_value, receiver_type, to_i1)
+    return _try_emit_auto_derived(codegen, expr, receiver_value, receiver_type,
+                                  semantic_type, to_i1, method="hash", kind=StructType)
 
 
 def try_emit_enum_hash(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                        receiver_value: ir.Value, receiver_type: ir.Type,
                        semantic_type, to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as auto-derived enum hash method. Returns None if not applicable."""
-    if semantic_type is None:
-        return None
-
-    # Handle GenericTypeRef for Result<T, E>
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-
-    if isinstance(semantic_type, GenericTypeRef) and semantic_type.base_name == "Result":
-        # Convert GenericTypeRef("Result", [T, E]) to Result enum
-        if len(semantic_type.type_args) >= 2:
-            from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-            ok_type = semantic_type.type_args[0]
-            err_type = semantic_type.type_args[1]
-            result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type, struct_table=codegen.struct_table.by_name)
-            if result_enum is None:
-                return None
-            semantic_type = result_enum
-
-    if not isinstance(semantic_type, EnumType):
-        return None
-
-    if expr.method != "hash":
-        return None
-
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-    enum_hash_method = get_builtin_method(semantic_type, "hash")
-    if enum_hash_method is None:
-        return None
-
-    temp_expr = MethodCall(receiver=expr.receiver, method=expr.method, args=expr.args, loc=expr.loc)
-    return enum_hash_method.llvm_emitter(codegen, temp_expr, receiver_value, receiver_type, to_i1)
+    return _try_emit_auto_derived(codegen, expr, receiver_value, receiver_type,
+                                  semantic_type, to_i1, method="hash", kind=EnumType)
 
 
 def try_emit_struct_clone(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                           receiver_value: ir.Value, receiver_type: ir.Type,
                           semantic_type, to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as auto-derived struct clone method (#134). None if not applicable."""
-    if semantic_type is None or not isinstance(semantic_type, StructType):
-        return None
-
-    if expr.method != "clone":
-        return None
-
-    # Own/List/HashMap are named StructTypes with their own method paths; never route
-    # them through the auto-derived struct clone. Keyed on the SAME prefix tuple their
-    # registration exclusion uses (semantics/generics/cloning.py), so the two cannot drift.
-    from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
-    if semantic_type.name.startswith(CONTAINER_PREFIXES):
-        return None
-
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-    struct_clone_method = get_builtin_method(semantic_type, "clone")
-    if struct_clone_method is None:
-        return None
-
-    temp_expr = MethodCall(receiver=expr.receiver, method=expr.method, args=expr.args, loc=expr.loc)
-    return struct_clone_method.llvm_emitter(codegen, temp_expr, receiver_value, receiver_type, to_i1)
+    return _try_emit_auto_derived(codegen, expr, receiver_value, receiver_type,
+                                  semantic_type, to_i1, method="clone", kind=StructType,
+                                  exclude_containers=True)
 
 
 def try_emit_function_clone(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
@@ -334,35 +323,8 @@ def try_emit_enum_clone(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]
                         receiver_value: ir.Value, receiver_type: ir.Type,
                         semantic_type, to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as auto-derived enum clone method (#134). None if not applicable."""
-    if semantic_type is None:
-        return None
-
-    # Handle GenericTypeRef for Result<T, E>, mirroring try_emit_enum_hash.
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-
-    if isinstance(semantic_type, GenericTypeRef) and semantic_type.base_name == "Result":
-        if len(semantic_type.type_args) >= 2:
-            from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-            ok_type = semantic_type.type_args[0]
-            err_type = semantic_type.type_args[1]
-            result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type, struct_table=codegen.struct_table.by_name)
-            if result_enum is None:
-                return None
-            semantic_type = result_enum
-
-    if not isinstance(semantic_type, EnumType):
-        return None
-
-    if expr.method != "clone":
-        return None
-
-    from sushi_lang.sushi_stdlib.src.common import get_builtin_method
-    enum_clone_method = get_builtin_method(semantic_type, "clone")
-    if enum_clone_method is None:
-        return None
-
-    temp_expr = MethodCall(receiver=expr.receiver, method=expr.method, args=expr.args, loc=expr.loc)
-    return enum_clone_method.llvm_emitter(codegen, temp_expr, receiver_value, receiver_type, to_i1)
+    return _try_emit_auto_derived(codegen, expr, receiver_value, receiver_type,
+                                  semantic_type, to_i1, method="clone", kind=EnumType)
 
 
 def try_emit_primitive_static(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],

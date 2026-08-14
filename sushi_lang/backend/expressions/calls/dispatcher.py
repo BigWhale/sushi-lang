@@ -413,8 +413,8 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     # Use semantic type if available to distinguish bool from i8
     if semantic_type is not None:
         # Unwrap ReferenceType if present (for &peek T or &poke T parameters)
-        from sushi_lang.semantics.typesys import ReferenceType
-        actual_type = semantic_type.referenced_type if isinstance(semantic_type, ReferenceType) else semantic_type
+        from sushi_lang.semantics.typesys import deref_type
+        actual_type = deref_type(semantic_type)
         lang_type = str(actual_type)
     else:
         lang_type = codegen.types.map_llvm_to_language_type(receiver_type)

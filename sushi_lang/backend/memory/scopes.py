@@ -125,6 +125,27 @@ class ScopeManager:
             if not entries:
                 del reg[name]
 
+    def _drain_registry_at_depth(self, registry: Dict[str, List], current_vars,
+                                 emit_free) -> None:
+        """Drain each current-scope binding's top registry entry on the fall-through exit.
+
+        The one shape shared by the struct/enum/fixed-array, closure and string
+        registries: emit the binding's guarded free when the block is live and the
+        binding was not moved, then pop its entry at this depth. `emit_free` receives
+        `(var_name, entry)`; the entry's LAST element is always the slot.
+        """
+        if not registry:
+            return
+        block = self.codegen.builder.block if self.codegen.builder is not None else None
+        block_live = block is not None and not block.is_terminated
+        for var_name in current_vars:
+            entries = registry.get(var_name)
+            if entries and entries[-1][0] == self._scope_depth:
+                entry = entries[-1]
+                if block_live and not self.codegen.moves.is_moved(entry[-1]):
+                    emit_free(var_name, entry)
+                self._stack_pop_at_depth(registry, var_name, self._scope_depth)
+
     def push_scope(self) -> None:
         """Push a new lexical scope onto the scope stack.
 
@@ -159,53 +180,27 @@ class ScopeManager:
         # Get variables in current scope
         current_vars = self._scope_vars[self._scope_depth]
 
-        # Clean up struct variables with dynamic array fields before popping scope.
-        # This is the fall-through (normal) exit. If the block already terminated, an
-        # early return/`??` inside this scope emitted the struct destructors on that path
-        # already (emit_struct_cleanup); emitting again would append a stray free after
-        # the terminator. Skip emission but still drain the tracking. Each runtime exit
-        # path frees on its own mutually-exclusive block, so no double free (#59/#60).
+        # Drain the three stacked cleanup registries on the fall-through (normal) exit.
+        # This is ONE shape (it used to be three verbatim loops; 11b): if the block
+        # already terminated, an early return/`??` inside this scope emitted the frees on
+        # that path already (emit_struct_cleanup / emit_closure_cleanup /
+        # emit_string_cleanup_all); emitting again would append a stray free after the
+        # terminator. Skip emission but still drain the tracking. Each runtime exit path
+        # frees on its own mutually-exclusive block, so no double free (#59/#60). A moved
+        # binding is skipped -- its new owner frees it. The closure free is drop_ptr-
+        # guarded and the string free owned-bit-guarded (#145), so a borrow-shaped value
+        # frees to a runtime no-op.
         if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
-            block = self.codegen.builder.block if self.codegen.builder is not None else None
-            block_live = block is not None and not block.is_terminated
-            for var_name in current_vars:
-                struct_entries = self._struct_cleanup.get(var_name)
-                if struct_entries and struct_entries[-1][0] == self._scope_depth:
-                    _depth, struct_type, alloca = struct_entries[-1]
-                    if block_live and not self.codegen.moves.is_moved(alloca):
-                        self.codegen.dynamic_arrays.emit_struct_field_cleanup(var_name, struct_type, alloca)
-                    # Remove this binding's entry when leaving its scope
-                    self._stack_pop_at_depth(self._struct_cleanup, var_name, self._scope_depth)
-
-        # Free function-value locals (closures) on the fall-through exit, runtime-guarded
-        # by drop_ptr. Same mutual-exclusion discipline as structs (#59/#60): early-exit
-        # paths emit their own guarded free via emit_closure_cleanup; a moved (escaped)
-        # closure is skipped so its new owner frees it.
-        if self._closure_cleanup:
-            block = self.codegen.builder.block if self.codegen.builder is not None else None
-            block_live = block is not None and not block.is_terminated
-            for var_name in current_vars:
-                closure_entries = self._closure_cleanup.get(var_name)
-                if closure_entries and closure_entries[-1][0] == self._scope_depth:
-                    slot = closure_entries[-1][-1]
-                    if block_live and not self.codegen.moves.is_moved(slot):
-                        self._emit_closure_free(slot)
-                    self._stack_pop_at_depth(self._closure_cleanup, var_name, self._scope_depth)
-
-        # Free string locals on the fall-through exit, runtime-guarded by the owned bit (#145).
-        # Same mutual-exclusion discipline as structs/closures: early-exit paths emit their own
-        # guarded free via emit_string_cleanup_all; a moved (returned/aliased) string is skipped
-        # so its new owner frees it. A literal/borrow (owned=0) frees to a no-op.
-        if self._string_cleanup:
-            block = self.codegen.builder.block if self.codegen.builder is not None else None
-            block_live = block is not None and not block.is_terminated
-            for var_name in current_vars:
-                string_entries = self._string_cleanup.get(var_name)
-                if string_entries and string_entries[-1][0] == self._scope_depth:
-                    slot = string_entries[-1][-1]
-                    if block_live and not self.codegen.moves.is_moved(slot):
-                        self._emit_string_free(slot)
-                    self._stack_pop_at_depth(self._string_cleanup, var_name, self._scope_depth)
+            self._drain_registry_at_depth(
+                self._struct_cleanup, current_vars,
+                lambda name, entry: self.codegen.dynamic_arrays.emit_struct_field_cleanup(
+                    name, entry[1], entry[2]))
+        self._drain_registry_at_depth(
+            self._closure_cleanup, current_vars,
+            lambda _name, entry: self._emit_closure_free(entry[-1]))
+        self._drain_registry_at_depth(
+            self._string_cleanup, current_vars,
+            lambda _name, entry: self._emit_string_free(entry[-1]))
 
         # Remove variables from flat caches
         for var_name in current_vars:
@@ -383,6 +378,28 @@ class ScopeManager:
             self._types[name] = []
         self._types[name].append((self._scope_depth, semantic_ty))
 
+    def _enter_local(self, name: str, ty: ir.Type, semantic_ty: Optional['Type'],
+                     register_cleanup: bool) -> ir.AllocaInstr:
+        """Allocate and track a local: the shared body of create_local and
+        create_local_nostore (they used to hold 38 verbatim-duplicated lines; 11b)."""
+        slot = self.entry_alloca(ty, name)
+
+        # Track variable in current scope
+        self._scope_vars[self._scope_depth].add(name)
+
+        # Add to flat cache (primary storage)
+        if name not in self._locals:
+            self._locals[name] = []
+        self._locals[name].append((self._scope_depth, slot))
+
+        if semantic_ty is not None:
+            if name not in self._types:
+                self._types[name] = []
+            self._types[name].append((self._scope_depth, semantic_ty))
+            if register_cleanup:
+                self.register_local_cleanup(name, semantic_ty, slot)
+        return slot
+
     def create_local(self, name: str, ty: ir.Type, init: Optional[ir.Value] = None, semantic_ty: Optional['Type'] = None, register_cleanup: bool = True) -> ir.AllocaInstr:
         """Create local variable with optional initialization.
 
@@ -404,23 +421,7 @@ class ScopeManager:
         Returns:
             The alloca instruction for the variable.
         """
-        slot = self.entry_alloca(ty, name)
-
-        # Track variable in current scope
-        self._scope_vars[self._scope_depth].add(name)
-
-        # Add to flat cache (primary storage)
-        if name not in self._locals:
-            self._locals[name] = []
-        self._locals[name].append((self._scope_depth, slot))
-
-        if semantic_ty is not None:
-            if name not in self._types:
-                self._types[name] = []
-            self._types[name].append((self._scope_depth, semantic_ty))
-            if register_cleanup:
-                self.register_local_cleanup(name, semantic_ty, slot)
-
+        slot = self._enter_local(name, ty, semantic_ty, register_cleanup)
         if init is not None:
             if self.codegen.builder is None:
                 raise_internal_error("CE0009")
@@ -498,24 +499,7 @@ class ScopeManager:
         if name in self._scope_vars[self._scope_depth]:
             raise KeyError(f"duplicate local in same scope: {name}")
 
-        slot = self.entry_alloca(ty, name)
-
-        # Track variable in current scope
-        self._scope_vars[self._scope_depth].add(name)
-
-        # Add to flat cache (primary storage)
-        if name not in self._locals:
-            self._locals[name] = []
-        self._locals[name].append((self._scope_depth, slot))
-
-        if semantic_ty is not None:
-            if name not in self._types:
-                self._types[name] = []
-            self._types[name].append((self._scope_depth, semantic_ty))
-            if register_cleanup:
-                self.register_local_cleanup(name, semantic_ty, slot)
-
-        return slot
+        return self._enter_local(name, ty, semantic_ty, register_cleanup)
 
     def entry_alloca(self, ty: ir.Type, name: str) -> ir.AllocaInstr:
         """Create alloca instruction in function entry block.
