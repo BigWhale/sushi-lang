@@ -543,7 +543,7 @@ class FunctionMonomorphizer:
             Tuple of concrete types or None if inference fails
         """
         from sushi_lang.semantics.ast import Name
-        from sushi_lang.semantics.typesys import UnknownType
+        from sushi_lang.semantics.generics.unify import unify_types
 
         type_param_map = {}
 
@@ -571,20 +571,15 @@ class FunctionMonomorphizer:
                 # Can't infer, skip
                 return None
 
-            # Unify with parameter type
+            # Unify with parameter type through the SHARED engine (F7, 2026-08-14).
+            # A private UnknownType-or-exact-equality unification lived here before,
+            # which is the two-spellings disease: it could not see through a `&peek T`
+            # parameter, so a borrowed nested call (`tag(&peek v)`) inside a generic
+            # body was never collected.
             if param.ty is None:
                 return None
-
-            # Simple unification: if param type is UnknownType (type param), assign it
-            if isinstance(param.ty, UnknownType):
-                param_name = str(param.ty)
-                if param_name in type_param_map:
-                    if type_param_map[param_name] != arg_type:
-                        return None  # Conflict
-                else:
-                    type_param_map[param_name] = arg_type
-            elif param.ty != arg_type:
-                return None  # Type mismatch
+            if not unify_types(param.ty, arg_type, type_param_map):
+                return None
 
         # Extract type args in order
         type_args = []

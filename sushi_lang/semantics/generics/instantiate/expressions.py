@@ -331,7 +331,17 @@ class ExpressionScanner:
         if isinstance(arg_expr, Lambda):
             from sushi_lang.semantics.passes.types.visitor import infer_lambda_type
             return infer_lambda_type(self.type_validator, arg_expr, stamp=False)
-        return self.type_validator.infer_expression_type(arg_expr)
+        arg_type = self.type_validator.infer_expression_type(arg_expr)
+        if arg_type is None and getattr(arg_expr, "method", None) == "clone":
+            # `.clone()` returns its receiver's type BY DEFINITION (it is total over
+            # types), but at Pass 1.5 the receiver's type is still a GenericTypeRef --
+            # the interned instance does not exist until Pass 1.6 -- so Pass 2's clone
+            # inference (keyed on StructType/EnumType) declines it and `f(p.clone())`
+            # was never collected (F8; the pin was CE2061). Fall back to the receiver.
+            receiver = getattr(arg_expr, "receiver", None)
+            if receiver is not None:
+                arg_type = self.type_validator.infer_expression_type(receiver)
+        return arg_type
 
     def _infer_type_args_from_call(self, call, generic_func) -> tuple["Type", ...] | None:
         """Infer type arguments for generic function call.

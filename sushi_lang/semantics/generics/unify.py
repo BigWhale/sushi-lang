@@ -17,6 +17,7 @@ from sushi_lang.semantics.typesys import (
     FunctionType,
     ArrayType,
     DynamicArrayType,
+    ReferenceType,
 )
 from sushi_lang.semantics.generics.types import TypeParameter, GenericTypeRef
 
@@ -30,6 +31,16 @@ def unify_types(param_type: Type, arg_type: Type, type_param_map: Dict[str, Type
 
     Returns True if unification succeeds.
     """
+    # Case 0: reference parameter -- unify THROUGH the borrow (F7, 2026-08-14).
+    # `&peek T item` called as `f(&peek x)` binds T from x's type; `&peek Pair@(A, B)`
+    # binds both. Mutability and the borrow spelling are argument-validation questions
+    # (CE2006), not unification ones -- a mis-spelled call records an instantiation
+    # that Pass 2 then rejects, which is harmless.
+    if isinstance(param_type, ReferenceType):
+        inner_arg = (arg_type.referenced_type
+                     if isinstance(arg_type, ReferenceType) else arg_type)
+        return unify_types(param_type.referenced_type, inner_arg, type_param_map)
+
     # Case 1: param_type is a type parameter
     if isinstance(param_type, TypeParameter):
         param_name = param_type.name
