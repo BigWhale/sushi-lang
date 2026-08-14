@@ -569,6 +569,15 @@ class BorrowChecker:
                 self._root_owner(stmt.target), stmt.loc, "assign")
             if isinstance(stmt.target, Name):
                 self._consume(stmt.value, ConsumingUse.REBIND)
+                # F5 (fixed 2026-08-14): a rebind RE-INITIALIZES the binding, so a
+                # previous move no longer holds -- `f(s); s := "new"; println(s)` is
+                # sound (Rust re-initialization). The value expression was checked
+                # ABOVE, so `s := "{s}-x"` still reports a use of a moved `s`. A
+                # rebind on one branch of an `if` stays conservative: the flow join
+                # unions moved facts, so the other path's move survives it.
+                target_state = self.borrow_state.get(stmt.target.id)
+                if target_state is not None:
+                    target_state.is_moved = False
             elif isinstance(stmt.target, MemberAccess):
                 self._consume(stmt.value, ConsumingUse.FIELD_ASSIGN)
             # Clear any borrows from the expression

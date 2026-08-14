@@ -244,6 +244,9 @@ def _emit_dynamic_array_rebind(
 
     # Store the new array value
     codegen.builder.store(val, slot)
+    # The binding is RE-INITIALIZED: it owns the new array, so scope exit frees it
+    # even if the previous value had been moved away (F5, 2026-08-14).
+    codegen.moves.unmark(slot)
 
     # Nullify a MOVED source's descriptor (data=NULL, len=0, cap=0). The move mark alone
     # keeps scope exit from freeing it; this additionally makes a later read of the source
@@ -278,7 +281,9 @@ def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value'
         slot: The destination slot.
         val: The new value to store.
     """
-    from sushi_lang.semantics.typesys import StructType, EnumType, UnknownType
+    from sushi_lang.semantics.typesys import (
+        BuiltinType, EnumType, FunctionType, StructType, UnknownType,
+    )
     from sushi_lang.semantics.ast import Name
 
     # Extract variable name from target (must be Name for this function)
@@ -294,11 +299,26 @@ def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value'
                     or codegen.enum_table.by_name.get(resolved.name)
                     or resolved)
 
+    # Destroy the old value's heap so it does not leak when overwritten (#139) -- but
+    # only when this binding still OWNS it. A moved-away value (`f(s); s := "new"`)
+    # belongs to its new owner, and freeing the stale copy here would double-free (F5).
+    old_is_owned = not codegen.moves.is_moved(slot)
     if (isinstance(resolved, (StructType, EnumType))
             and hasattr(codegen, 'dynamic_arrays') and codegen.dynamic_arrays is not None
             and codegen.dynamic_arrays.struct_needs_cleanup(resolved)):
-        # Destroy the old value's heap so it does not leak when overwritten (#139).
-        codegen.dynamic_arrays.emit_struct_field_cleanup(var_name, resolved, slot)
+        if old_is_owned:
+            codegen.dynamic_arrays.emit_struct_field_cleanup(var_name, resolved, slot)
+    elif resolved == BuiltinType.STRING:
+        # The old string buffer was never freed on rebind at all (found with F5):
+        # the owned-bit guard makes this a no-op for a literal-bound old value.
+        if old_is_owned:
+            from sushi_lang.backend.destructors import emit_string_destructor
+            emit_string_destructor(codegen, slot)
+    elif isinstance(resolved, FunctionType):
+        # Same for a closure's old environment; drop_ptr-guarded.
+        if old_is_owned:
+            from sushi_lang.backend.destructors import emit_function_value_destructor
+            emit_function_value_destructor(codegen, slot)
 
     # A rebind takes ownership of its RHS. Run this for EVERY resolved type, not only the
     # cleanup-needing composites above: the gate belongs to the destroy-the-old-value step,
@@ -307,6 +327,9 @@ def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value'
 
     # Store the new value
     codegen.builder.store(val, slot)
+    # The binding is RE-INITIALIZED: it owns the new value, so scope exit frees it
+    # even if the previous value had been moved away (F5, 2026-08-14).
+    codegen.moves.unmark(slot)
 
 
 def _emit_field_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:

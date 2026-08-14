@@ -43,6 +43,13 @@ class MoveTracker:
         """Return True if the binding backed by this slot has been moved."""
         return slot in self._moved
 
+    def unmark(self, slot: 'ir.Instruction') -> None:
+        """Clear a binding's moved flag: a rebind RE-INITIALIZES it (F5, 2026-08-14).
+
+        After `f(s); s := "new"` the binding owns its new value again, so scope exit
+        must free it. Only the rebind sink calls this, right after its store."""
+        self._moved.discard(slot)
+
     def reset(self) -> None:
         """Clear all move state (called at each function boundary)."""
         self._moved.clear()
