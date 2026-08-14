@@ -1,0 +1,18 @@
+# Issue #258: a nested Own(inner) pattern with a STRUCT payload used to fail its
+# binding's type resolution (CE0056); the same nesting with an enum payload worked.
+# Fixed on the ownership-refactor branch (the same scope-aware resolution root cause
+# as #263 and #279).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n"
+# EXPECT_NO_LEAKS: true
+
+struct Leafy:
+    i32 x
+
+fn main() i32:
+    let Leafy l = Leafy(7)
+    let Maybe@(Own@(Leafy)) m = Maybe.Some(Own.alloc(l))
+    match m:
+        Maybe.Some(Own(inner)) -> println("{inner.x}")
+        Maybe.None() -> println("none")
+    return Result.Ok(0)

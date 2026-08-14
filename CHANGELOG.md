@@ -8,6 +8,23 @@ Two breaking language changes (generic syntax, ownership), the Tier 0-6 remediat
 the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-07-07.
 
 ### Breaking
+- **The ownership model is unified** (the ownership-refactor branch; normative spec:
+  `docs/design/ownership-conventions.md`). One predicate answers "does this type own heap"
+  (`typesys.owns_heap`), the compiler inserts NO implicit deep copy, and `.clone()` is the only
+  deep copy in a program. The user-visible consequences:
+  - **`string` moves.** `f(s)` then a use of `s` is `CE2405`. The read-only parameter idiom is
+    `&peek string`. A string bound directly from a literal owns no heap and still copies freely
+  - **A field read, an index and a container get-out are BORROWS.** Consuming one -- a call
+    argument, a constructor field, a container insert, a return, a capture -- is `CE2411`; the
+    escape is `.clone()`. `HashMap.get()` / `List.get()` / `arr[i]` no longer return independent
+    copies
+  - **A `let` binds; it does not take ownership.** A `let` bound from a borrow owns nothing, and
+    mutating, freeing, rebinding or moving its owner while that binding is live is `CE2412`
+  - **A by-value parameter is owned by the callee**, which frees it at scope exit -- uniformly for
+    strings, function values, arrays, structs and enums, over direct, variadic and indirect calls.
+    Extension/perk-method parameters stay borrows
+  - **A reference-typed `let` is rejected** (`let &peek T x = ...`, `CE2413`, #252). It used to
+    compile as an unchecked alias
 - **Generic syntax is now `@(...)`, not `<...>`** (#235). This applies to every user-facing position:
   type references (`List@(i32)`, `Result@(T, E)`, `Maybe@(T)`, `Own@(T)`, `HashMap@(K, V)`), generic
   struct/enum declarations (`struct Pair@(T, U):`), generic function declarations
@@ -33,6 +50,28 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   resolve as a prefix of `--leaks-only` and quietly narrow a 1293-test run to 96
 
 ### Added
+- **`.clone()` is total over types.** Every struct and enum has an auto-derived clone, and so do a
+  primitive (a plain copy), a `string`, a fixed array, a dynamic array, `List@(T)`, `Own@(T)`,
+  `HashMap@(K, V)` and a function value (its heap environment is duplicated through the fat
+  pointer's `clone_ptr` -- the fat pointer is four words now). `extend i32 clone()`,
+  `extend f64 clone()` and `extend string clone()` are `CE2097`, on the same footing as
+  `extend P clone()`. A method call on a function value is validated at all now: `g.shout()`
+  reports `CE2008` instead of an internal error
+- **Type-argument inference through a borrow.** `fn f@(T)(&peek T x)` called as `f(&peek v)` infers
+  `T`; `&peek Pair@(A, B)` binds both. The instantiation collector also infers from a `.clone()`
+  argument (`f(p.clone())`). A generic that only reads its argument takes it as `&peek T`
+- **A rebind re-initializes its binding.** `f(s); s := "new"; println(s)` compiles and runs: the
+  rebind clears the move and the scope exit frees the new value. The rebind also frees the OLD
+  value where the binding still owned it (a string buffer and a closure environment were not freed
+  at this position before). A rebind on one branch of an `if` stays conservative
+- **An owned temporary that no binding names is freed.** `println(go().realise("err"))`, a `??`
+  unwrap, a string-method result, and a string-typed interpolation part (`"{s.upper()}"`) are
+  registered into the print-argument frame and freed after output through the owned-bit-guarded
+  destructor
+- **The ownership seam has a no-bypass gate.** Every transfer in the backend goes through
+  `backend/ownership.py`; `tests/unit/test_consuming_use_coverage.py` fails the build when any
+  other backend module touches a move-mark primitive. The clone/destroy pair per type kind lives in
+  one handler table (`backend/lifecycle.py`), with a totality test asserting both halves per kind
 - **`CE2097`: an extension method cannot shadow a built-in** (#239). Every layer of method
   resolution -- validation, inference and code generation -- picks a built-in *before* falling back
   to extension methods, so a colliding extension is compiled and then never called. It is not
@@ -111,6 +150,18 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   emit into two functions at once
 
 ### Fixed
+- **A foreach binding shadowing an outer struct of a different type read the wrong field index**
+  (#279, silent wrong data) -- the backend now resolves the binding's type through the scope-aware
+  resolver, which also fixes `CE0056` on a field of a List/array iterator binding (#263) and on a
+  nested `Own(inner)` pattern binding with a struct payload (#258)
+- **Re-wrapping an enum-payload match binding into a constructor no longer double-frees** (#277,
+  was exit 133 with no diagnostic). A match binding is a borrow and a constructor field takes
+  ownership, so the shape is rejected at compile time with `CE2411`; the escape is
+  `Shape.Poly(p.clone())`
+- **A by-value `string` or `fn(...)` parameter no longer leaks.** The seam marked the caller's
+  value moved while the callee freed nothing, so a heap string passed by value (`take(b)`) and a
+  closure passed by value (`apply(make(2)??, 6)`) leaked their buffers. The callee owns and frees
+  them now (see Breaking)
 - **Built-in method calls have a return type again** (#239). A method call whose type Pass 2 cannot
   infer is not reported -- `validate_assignment_compatibility` treats an unknown value type as
   nothing to check -- so the annotation goes unvalidated and the mismatch surfaces in the backend as

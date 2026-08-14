@@ -1,0 +1,26 @@
+# Issue #279: a foreach binding shadowing an outer struct of a DIFFERENT type used to
+# read the field at the OUTER struct's field index against the real value's layout
+# (silent wrong data: B.x read as 777, which is B.p at A's index for x). Fixed on the
+# ownership-refactor branch: infer_struct_type resolves through the scope-aware
+# resolve_name_semantic_type, so the inner binding's own type wins.
+# EXPECT_ERROR_CODE: CW1002
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "outer child.x = 111\ninner child.x = 888\n"
+# EXPECT_NO_LEAKS: true
+
+struct A:
+    i32 x
+    i32 y
+
+struct B:
+    i32 p
+    i32 x
+
+fn main() i32:
+    let A child = A(111, 222)
+    println("outer child.x = {child.x}")
+    let List@(B) kids = List.new()
+    kids.push(B(777, 888))
+    foreach(child in kids.iter()):
+        println("inner child.x = {child.x}")
+    return Result.Ok(0)
