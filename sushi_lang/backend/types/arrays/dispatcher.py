@@ -96,6 +96,14 @@ def emit_array_method(
                 # Fixed array hash: compute hash of all elements
                 return hashing.emit_fixed_array_hash_direct(codegen, expr, receiver_value, receiver_type, to_i1)
 
+            case "clone":
+                # A fixed array is a value, so the clone is value-in / value-out. It routes
+                # through the SAME emitter the struct-field and `let` sinks use, which is
+                # what makes it the exact structural inverse of the destructor -- the
+                # property a hand-written element loop here would be free to break.
+                from sushi_lang.backend.expressions.memory import emit_value_clone
+                return emit_value_clone(codegen, receiver_value, semantic_type)
+
             case "fill":
                 # Fixed array fill: fill all elements with a value
                 # Need to get pointer to the array variable for in-place modification
@@ -159,9 +167,19 @@ def emit_array_method(
             return emit_dynamic_array_get_maybe(codegen, receiver_value, array_struct_type, index_value, semantic_type, to_i1)
 
         case "push":
-            element_value = codegen.expressions.emit_expr(expr.args[0])
-            from sushi_lang.backend.expressions.memory import move_owning_arg_into_container
-            move_owning_arg_into_container(codegen, expr.args[0])
+            # The array stores the element shallowly and frees it, so this is a consuming
+            # use like List.push and HashMap.insert. The receiver may be a `&poke T[]`
+            # parameter, so unwrap the reference before reaching for the element type.
+            from sushi_lang.backend.ownership import ConsumingUse, consume
+            from sushi_lang.semantics.typesys import ReferenceType as _RefType
+            receiver_sem = semantic_type
+            if isinstance(receiver_sem, _RefType):
+                receiver_sem = receiver_sem.referenced_type
+            element_value = consume(
+                codegen, expr.args[0], codegen.expressions.emit_expr(expr.args[0]),
+                getattr(receiver_sem, "base_type", None),
+                ConsumingUse.CONTAINER_INSERT,
+            )
             return core.emit_dynamic_array_push(codegen, receiver_value, array_struct_type, element_value)
 
         case "pop":

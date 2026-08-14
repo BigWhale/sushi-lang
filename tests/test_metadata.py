@@ -62,6 +62,21 @@ class TestMetadata:
             self.requires_runtime = True
 
 
+def header_block(lines: List[str]) -> List[str]:
+    """The leading comment block: every line before the first line of CODE.
+
+    Comments and blank lines only. Shared with the guard test, so "where a directive may
+    live" has one definition rather than one here and one in whatever checks it.
+    """
+    header = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith('#'):
+            break
+        header.append(line)
+    return header
+
+
 def parse_test_metadata(test_file: Path) -> TestMetadata:
     """
     Parse test metadata from a Sushi source file.
@@ -80,6 +95,13 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
     # TEST_ENV: HOME=/home/trillian     (repeatable, one KEY=VALUE per line)
     # TEST_CWD: /
 
+    Directives are read from the file's LEADING COMMENT BLOCK -- every comment and blank
+    line before the first line of code. This used to be the first 20 lines regardless of
+    what was there, which silently dropped a directive out of any test that explained
+    itself at length: 23 of them, over six files, including four `EXPECT_NO_LEAKS` on
+    memory tests. A dropped directive does not fail; the test simply stops asserting, and
+    the suite still reports it as passed. `tests/unit/test_test_directives.py` is the guard.
+
     Args:
         test_file: Path to the .sushi test file
 
@@ -91,9 +113,7 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
     try:
         content = test_file.read_text(encoding='utf-8')
         lines = content.split('\n')
-
-        # Only parse metadata from the first 20 lines (before main logic)
-        header_lines = lines[:20]
+        header_lines = header_block(lines)
 
         for line in header_lines:
             line = line.strip()

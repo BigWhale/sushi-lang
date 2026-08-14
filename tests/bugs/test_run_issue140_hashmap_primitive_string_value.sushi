@@ -2,8 +2,14 @@
 # a correct owned-bit clone for a heap string value (built via interpolation). Both must get
 # + free cleanly. Confirms emit_value_clone's passthrough and string branches.
 # https://github.com/BigWhale/sushi-lang/issues/140
+#
+# The leak assertion below also pins X9 (MM.md F9), fixed 2026-08-14: an owned `string`
+# temporary that no binding names (`println(go().realise("err"))`) is registered into the
+# print-arg frame and freed after output through the owned-bit-guarded destructor.
+# tests/memory/test_string_temp_print_free.sushi pins the reduced shapes.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "5\nhi-there\n"
+# EXPECT_NO_LEAKS: true
 use <collections/hashmap>
 
 fn get_num() i32:
@@ -17,7 +23,9 @@ fn get_word() string:
     let HashMap@(i32, string) words = HashMap.new()
     let string base = "there"
     words.insert(2, "hi-{base}")
-    let string got = words.get(2)??
+    # The get-out borrows what the map still owns, so `got` must be an independent value
+    # before the map is freed and before it is returned.
+    let string got = words.get(2)??.clone()
     words.free()
     return Result.Ok(got)
 

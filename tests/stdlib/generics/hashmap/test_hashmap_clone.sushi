@@ -1,0 +1,39 @@
+# HashMap@(K, V).clone() -- an independent map with its own bucket buffer and its own deep
+# copies of every owning key and value.
+#
+# The EMITTER is older than the method: `_clone_hashmap_value` has been the destructor's
+# symmetric partner since issue #181 (fresh buckets, memcpy, then a deep clone of each
+# OCCUPIED entry). Only the method was missing, which is what MM.md F10 recorded as "no clone
+# exists by either route" -- true of the method, not of the emitter. This file pins the method.
+#
+# Owning VALUES are load-bearing: an interpolated string owns a buffer, so a shallow copy
+# would double-free. Both maps are freed here on purpose, and a double free would exit 133,
+# which the leak interposer scores as a SKIP -- read the runner's line, not the exit code.
+# EXPECT_STDOUT_EXACT: "a=one b=one n=2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/hashmap>
+
+fn run() i32:
+    let HashMap@(i32, string) a = HashMap.new()
+    # Interpolated ON PURPOSE: interpolation builds a heap buffer at runtime and the map owns
+    # it, so a shallow clone would double-free. A bare literal owns nothing and would pass
+    # this file whether or not the entry deep-clone ran.
+    let string e = "e"
+    a.insert(1, "on{e}")
+    a.insert(2, "two")
+
+    let HashMap@(i32, string) b = a.clone()
+
+    let string av = a.get(1)??.clone()
+    let string bv = b.get(1)??.clone()
+    let i32 n = b.len()
+    println("a={av} b={bv} n={n}")
+
+    a.free()
+    b.free()
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 rc = run().realise(1)
+    return Result.Ok(rc)

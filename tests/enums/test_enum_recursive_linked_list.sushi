@@ -2,17 +2,20 @@
 # Validates length counting via recursion and RAII cleanup of Own@(T) nodes
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "StrList length: 2\n"
+# A recursive traversal BORROWS the structure. Passing an `Own(...)` match binding
+# by value is CE2411 -- the binding borrows storage the Own still owns -- and cloning
+# would deep-copy the whole remaining structure at every step.
 
 enum StrList:
     Nil
     Cons(string, Own@(StrList))
 
-fn count(StrList lst) i32:
+fn count(&peek StrList lst) i32:
     match lst:
         StrList.Nil ->
             return Result.Ok(0)
         StrList.Cons(_, Own(tail)) ->
-            let i32 n = count(tail)??
+            let i32 n = count(&peek tail)??
             return Result.Ok(1 + n)
 
 fn main() i32:
@@ -20,7 +23,7 @@ fn main() i32:
     let Own@(StrList) n1 = Own.alloc(StrList.Cons("world", n2))
     let StrList lst = StrList.Cons("hello", n1)
 
-    let i32 len = count(lst).realise(0)
+    let i32 len = count(&peek lst).realise(0)
     if (len != 2):
         println("FAIL: expected 2 got {len}")
         return Result.Ok(1)

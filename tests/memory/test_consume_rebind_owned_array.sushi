@@ -1,0 +1,18 @@
+# Consuming-use matrix, the (OWNED, MOVE) cell: an OWNED local of an owning type handed
+# to the `x := v` rebind consuming use. The positive path -- the source owned it, so ownership
+# TRANSFERS and exactly one owner frees.
+#
+# This row exists because the CE2411 decision turned the whole BORROWED row into
+# diagnostics (docs/design/ownership-conventions.md S8). Without it the matrix would
+# assert only what is REJECTED and nothing about what is accepted, so a consuming use
+# that stopped moving entirely -- leaking, or double-freeing on the way out -- would go
+# unnoticed. `.len()` on the destination proves the buffer survived the transfer.
+# EXPECT_STDOUT_EXACT: "n=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let i32[] b = from([9])
+    b := a
+    println("n={b.len()}")
+    return Result.Ok(0)

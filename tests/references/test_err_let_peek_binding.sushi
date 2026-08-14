@@ -1,0 +1,11 @@
+# Issue #252: a reference-typed `let` parses by grammar accident and produced an
+# UNCHECKED alias -- the borrow checker never tracked it, so two `&poke` bindings of
+# one variable compiled silently. Rejected with CE2413 until local borrow bindings
+# are a designed, checked feature. Borrow at a use site instead, or `.clone()`.
+# EXPECT_ERROR_CODE: CE2413
+
+fn main() i32:
+    let i32 x = 42
+    let &peek i32 r = &peek x
+    println(r)
+    return Result.Ok(0)

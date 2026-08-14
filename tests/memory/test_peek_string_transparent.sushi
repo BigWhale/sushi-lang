@@ -1,0 +1,56 @@
+# A borrowed string reads exactly like the string it refers to.
+#
+# The capabilities a `&peek string` parameter must have before it can be the default
+# parameter form, each one exercised once:
+#
+#   interpolation   `"{s}"`
+#   comparison      `==` and `!=`
+#   forwarding      handing the borrow to another `&peek string` parameter
+#   struct field    reading a `string` field through a borrowed struct
+#   hash            `.hash()`, which is a PRIMITIVE method, not a stdlib string method,
+#                   and so takes a different dispatch path from `.len()`
+#
+# Forwarding needs the explicit `&peek s` at the call site. That is not a limitation: a
+# borrow is created at the call site in Sushi whether the place is owned or already
+# borrowed, so the syntax is the same either way. Writing the bare name is CE2006, and
+# the diagnostic now carries a `help` naming the borrow to write, because the message
+# alone reads "expected &peek string, got string" -- two types the user never wrote.
+# EXPECT_STDOUT_EXACT: "hi Ford\nsame=1 diff=1\ninner Ford\nfield=Ford\nhash_matches=true\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Crew:
+    string name
+
+fn greet(&peek string name) ~:
+    println("hi {name}")
+    return Result.Ok(~)
+
+fn inner(&peek string s) ~:
+    println("inner {s}")
+    return Result.Ok(~)
+
+fn forward(&peek string s) ~:
+    inner(&peek s)
+    return Result.Ok(~)
+
+fn show_field(&peek Crew c) ~:
+    println("field={c.name}")
+    return Result.Ok(~)
+
+fn hashes_equal(&peek string a, string b) bool:
+    return Result.Ok(a.hash() == b.hash())
+
+fn main() i32:
+    let string v = "Ford"
+    let string other = "Zaphod"
+
+    greet(&peek v)
+    println("same={v == 'Ford'} diff={v != other}")
+    forward(&peek v)
+
+    let Crew c = Crew("Ford")
+    show_field(&peek c)
+
+    println("hash_matches={hashes_equal(&peek v, 'Ford').realise(false)}")
+    return Result.Ok(0)

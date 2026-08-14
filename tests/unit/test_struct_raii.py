@@ -23,12 +23,16 @@ _STRUCT = (
 )
 
 
-def test_struct_get_deep_copies_array_field(tmp_path):
-    """`arr.get(i)??` of a struct with a `T[]` field clones the buffer (independent copy).
+def test_struct_get_borrows_and_does_not_copy(tmp_path):
+    """`let b = arr.get(i)??` BORROWS the element. It does not copy it (#242).
 
-    `extract` takes the array by value and only does the `.get()`, so the sole heap
-    allocation in `extract` is the deep copy of the extracted struct's array field. Before
-    the fix the element was loaded as-is (shallow share) and `extract` had zero mallocs.
+    The array keeps the element and still frees it, so `b` names the same buffer and owns
+    nothing. `extract` therefore allocates NOTHING: it only reads a length through the
+    borrow.
+
+    This asserted the opposite until #242. `.get()` used to deep-copy at the read, which
+    was the compiler inserting a copy the user did not ask for -- and the copy was the
+    only thing that made a second owner safe. Now there is no second owner.
     """
     src = _STRUCT + (
         "fn extract(DataBuffer[] bufs) i32:\n"
@@ -42,11 +46,11 @@ def test_struct_get_deep_copies_array_field(tmp_path):
     )
     ir_text = _emit_ir(tmp_path, src)
     mallocs = _count_in_function(ir_text, "extract", "malloc")
-    assert mallocs >= 1, f"`.get()` of a struct with a T[] field must deep-copy the buffer, got {mallocs} mallocs"
+    assert mallocs == 0, f"`.get()` must borrow, not copy, got {mallocs} mallocs"
 
 
-def test_struct_index_deep_copies_array_field(tmp_path):
-    """`arr[i]` of a struct with a `T[]` field clones the buffer (independent copy)."""
+def test_struct_index_borrows_and_does_not_copy(tmp_path):
+    """`let b = arr[i]` BORROWS the element. It does not copy it (#242)."""
     src = _STRUCT + (
         "fn extract(DataBuffer[] bufs) i32:\n"
         "    let DataBuffer b = bufs[0]\n"
@@ -59,7 +63,7 @@ def test_struct_index_deep_copies_array_field(tmp_path):
     )
     ir_text = _emit_ir(tmp_path, src)
     mallocs = _count_in_function(ir_text, "extract", "malloc")
-    assert mallocs >= 1, f"`arr[i]` of a struct with a T[] field must deep-copy the buffer, got {mallocs} mallocs"
+    assert mallocs == 0, f"`arr[i]` must borrow, not copy, got {mallocs} mallocs"
 
 
 def test_byvalue_struct_param_freed_by_callee(tmp_path):

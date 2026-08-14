@@ -5,7 +5,9 @@
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_LINES: 30
+# This file used to carry `EXPECT_STDOUT_LINES: 30`, which no version of the runner ever
+# understood, so it asserted nothing. The output is 30 lines; the content assertions above
+# are what is checked.
 
 use <collections/strings>
 

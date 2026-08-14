@@ -1,0 +1,40 @@
+# A `??`-unwrapped get-out is still a BORROW, and matching on it must not free it.
+#
+# `match l.get(0)??:` reads an element the List still owns and still frees. Nothing here
+# takes ownership -- a match binding borrows -- so the scrutinee has no owner to be, and
+# destroying it double-frees the payload the moment the container is destroyed.
+#
+# It did. `l.destroy()` reported `double_frees=1` under the interposer, while the program
+# still exited 0, so nothing but the interposer could see it.
+#
+# The cause was a predicate that did not agree with its own twin. `is_container_get_call`
+# keys on `expr.method == "get"` and never unwrapped the `??`, so `l.get(0)??` answered
+# "not a get-out" and `expression_is_temporary` answered "nobody owns this" -- the exact
+# question whose wrong answer frees a borrow. `_reads_through_owner`
+# (semantics/passes/borrow.py), the same rule on the semantics side, unwraps `TryExpr`
+# first and always did.
+#
+# The enum payload is a dynamic array because that is the cheapest shape whose double free
+# the interposer can count.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "n=3\n"
+# EXPECT_NO_LEAKS: true
+
+enum Box:
+    Arr(i32[])
+    Empty
+
+fn run() i32:
+    let List@(Box) l = List.new()
+    let i32[] xs = from([1, 2, 3])
+    l.push(Box.Arr(xs))
+    match l.get(0)??:
+        Box.Arr(a) ->
+            println("n={a.len()}")
+        Box.Empty ->
+            println("empty")
+    l.destroy()
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run().realise(99))

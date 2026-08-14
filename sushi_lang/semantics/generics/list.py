@@ -32,6 +32,7 @@ BUILTIN_LIST_METHODS = {
     "free",          # list.free() -> ~
     "debug",         # list.debug() -> ~
     "iter",          # list.iter() -> Iterator<T>
+    "clone",         # list.clone() -> List<T>
 }
 
 
@@ -54,6 +55,7 @@ def validate_list_method_with_validator(
         # 0 arguments
         "new": 0, "len": 0, "capacity": 0, "is_empty": 0,
         "pop": 0, "clear": 0, "shrink_to_fit": 0, "destroy": 0, "free": 0, "debug": 0, "iter": 0,
+        "clone": 0,
         # 1 argument
         "with_capacity": 1, "push": 1, "get": 1, "reserve": 1, "remove": 1,
         # 2 arguments

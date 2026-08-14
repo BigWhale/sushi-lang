@@ -1,8 +1,17 @@
-# The `let` sink for a fixed array of owning elements. Same root cause as
-# test_fixed_array_string_into_struct: `_clone_owning_struct_alias`
-# (`statements/variables.py:173`) returns early for anything that is not a StructType or
-# EnumType, so an `ArrayType` RHS never reaches `emit_value_clone` -- which would not
-# have handled it anyway. MM.md S2 row 5; no upstream issue.
+# The `let` sink for a fixed array of owning elements.
+#
+# Converted by Phase 9 (FIX.md X3). Before the flip this pinned an implicit copy: `let b = arr`
+# duplicated the `string[2]` at the sink and the source stayed usable. That tier is gone, so
+# the clone is written by hand and the sink now receives a FRESH temp. What is still being
+# tested is the sink itself -- a fixed array of owning elements bound to a new local must be
+# stored and freed exactly once, with both locals owning independent buffers.
+#
+# The original defect this file was written for: `_clone_owning_struct_alias`
+# (`statements/variables.py`) returned early for anything that was not a StructType or
+# EnumType, so an `ArrayType` RHS never reached `emit_value_clone` -- which had no arm for it
+# anyway. `tests/memory/test_clone_fixed_array.sushi` pins `string[N].clone()` on its own.
+#
+# Interpolated (owned) strings are load-bearing: a literal has owned=0 and never frees.
 # EXPECT_STDOUT_EXACT: "b=a1 src=a1\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
@@ -10,6 +19,6 @@
 fn main() i32:
     let i32 k = 1
     let string[2] arr = ["a{k}", "b{k}"]
-    let string[2] b = arr
+    let string[2] b = arr.clone()
     println("b={b[0]} src={arr[0]}")
     return Result.Ok(0)

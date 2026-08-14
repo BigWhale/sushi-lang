@@ -35,6 +35,7 @@ from sushi_lang.semantics.typesys import (
     BuiltinType,
     DynamicArrayType,
     EnumType,
+    FunctionType,
     ReferenceType,
     StructType,
     Type,
@@ -91,6 +92,12 @@ def builtin_method_exists(receiver_type: Type | None, method_name: str) -> bool:
     if isinstance(receiver_type, BuiltinType):
         from sushi_lang.semantics.generics.primitives import has_primitive_method
         return has_primitive_method(receiver_type, method_name)
+
+    # A function value carries clone(): a closure read out of a field or a container is a
+    # borrow, so consuming it is CE2411 and the explicit copy is the escape.
+    if isinstance(receiver_type, FunctionType):
+        from sushi_lang.semantics.generics.closures import is_builtin_function_method
+        return is_builtin_function_method(method_name)
 
     # The interned name is the authority for the generic containers -- angle brackets are
     # the INTERNAL spelling and must not be "fixed" to @( ) here.

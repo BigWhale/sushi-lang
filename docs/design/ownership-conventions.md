@@ -1,20 +1,33 @@
 # Ownership Conventions: One Authority for Every Consuming Use
 
-*Design doc, 2026-07-30. Status: **accepted, not yet implemented**. Supersedes the ad-hoc "ownership
-sink" handling described in `docs/design/move-semantics.md` §3, which stays accurate as a statement
-of the intended rule and inaccurate as a description of the implementation.*
+*Design doc, 2026-07-30. Status: **implemented** (Phase 9, 2026-08-14). Supersedes the ad-hoc
+"ownership sink" handling described in `docs/design/move-semantics.md` §3 — that document is now
+historical and cross-links back here. The shipped seam lives in `sushi_lang/semantics/ownership.py`
+(the rule, `classify()`) and `sushi_lang/backend/ownership.py` (`consume`/`bind`/`copy_out`/
+`relinquish`/`relinquish_temp`, the only module allowed to move-mark a value —
+`tests/unit/test_consuming_use_coverage.py` is the no-bypass gate).*
+
+*One change from the design as originally written: the **`COPY` type class was deleted**. A
+`string` moves like every other heap-owning type; the one exception is a binding initialised
+directly from a string literal, which owns nothing and is tracked at the BINDING (not the type)
+level — see §4.1. The **`THROUGH_OWNER` provenance was folded into `BORROWED`**: a field read, an
+index, and a container get-out classify the same as a `match`/`foreach` binding — see §4.2. Both
+simplifications turn the original 4x3 table (§4.3) into a 3x2 one.*
 
 *The one language question this design raised — what a `match`/`foreach` binding is — is settled in
 §8: **a read-only borrow**. It is not an open question; §4.3's table is final.*
 
 ---
 
-## 1. The problem
+## 1. The problem (historical)
 
-`docs/design/move-semantics.md` §3 states a rule: **at a position that takes ownership, a bare
+This section describes the state the design fixed, on `f2523db1` (2026-07-30), before the seam
+existed. It is kept for the record; §5 describes what shipped.
+
+`docs/design/move-semantics.md` §3 stated a rule: **at a position that takes ownership, a bare
 owned value moves; a value read through a still-live owner is copied; a fresh temporary is stored
-as-is.** There is no function implementing that rule. Every position re-derives it, and no two
-derivations agree.
+as-is.** There was no function implementing that rule. Every position re-derived it, and no two
+derivations agreed.
 
 Measured on `f2523db1`:
 
@@ -102,9 +115,16 @@ already-freed buffer in #256. It is not merely `LET` at a different address.
 ```python
 class Ownership(Enum):
     MOVE   # the source owned it; mark the source moved, store as-is
-    COPY   # the source keeps living and keeps owning; store an independent deep copy
     ADOPT  # nothing owned it; store as-is
+    REJECT # the source may not be consumed at all -- CE2411
 ```
+
+**Shipped without `COPY`.** The design as originally written had a third answer, `COPY` — "the
+source keeps living and keeps owning; store an independent deep copy" — for the one type class
+(`string`) that owned heap but was designated to duplicate rather than transfer. Phase 9 deleted it:
+a `string` now moves like every other heap-owning type (§4.1), so there is nothing left for `COPY`
+to answer. `REJECT` was always implicit in the design (the (BORROWED, MOVE) cell); it is spelled out
+here because the shipped enum names it.
 
 ## 4. The classification rule
 
@@ -112,171 +132,234 @@ Two inputs: the **type class** of `T`, and the **provenance** of the source expr
 
 ### 4.1 Type class
 
+Two classes, not three:
+
 | class | definition | examples |
 |---|---|---|
 | **PLAIN** | owns no heap | `i32`, `bool`, `f64`, a struct of only these |
-| **COPY** | owns heap, but policy is to duplicate rather than transfer | `string`; string-only and plain+string composites |
-| **MOVE** | `type_moves_by_value(T)` — transitively contains `T[]`, `List@(T)`, `Own@(T)`, `HashMap@(K,V)` or a capturing closure | `i32[]`, `struct W { i32[] }`, `Maybe@(Own@(T))`, `Buffer[2]` |
+| **MOVE** | `owns_heap(T)` — transitively contains `T[]`, `List@(T)`, `Own@(T)`, `HashMap@(K,V)`, `string`, or a capturing closure | `i32[]`, `struct W { i32[] }`, `Maybe@(Own@(T))`, `Buffer[2]`, `string`, `struct { string name }` |
 
-The COPY tier exists because a `string` is a fat pointer with a runtime `owned` bit, and Sushi
-deliberately keeps it a copy type (`docs/design/string-representation.md`). It is Rust's `Copy`
-tier, derived structurally rather than opted into.
+**Shipped as one predicate, not two.** The design as originally written kept a `COPY` tier for
+`string` alongside a `PLAIN`/`MOVE` split, on the theory that unifying the move predicate with the
+backend's `needs_cleanup` was unsound (`docs/design/move-semantics.md` §2 argued the two questions
+must stay separate). Phase 9 did the opposite: it made `string` move, which makes "does this need
+freeing?" and "does this move?" the same question for every type, including `string`. The single
+predicate is `owns_heap` (`sushi_lang/semantics/typesys.py`); the backend's `needs_cleanup` is now a
+thin alias of it (`sushi_lang/backend/destructors.py`).
+
+**The string exception lives on the BINDING, not the type.** A `string` bound directly from a
+string literal (`let string s = "hi"`) owns nothing — it points into `.rodata` with the runtime
+`owned` bit clear — so classifying it as PLAIN for *that binding* is exact, not an approximation.
+This is "option B": the flag (`BorrowState.owns_no_heap`) is recorded on the binding by the borrow
+checker, re-derived on every rebind (never inherited — a rebound string may now own a heap buffer),
+and is invisible to `owns_heap`/`type_class_of`, which always answer MOVE for `BuiltinType.STRING`.
+It is a binding-level fact because `BuiltinType.STRING` is a bare enum member with nowhere to carry
+a per-value flag, unlike `FunctionType`, which is a dataclass and carries `captures` the same way.
+One consequence worth stating plainly: **a struct with a string field is a MOVE type**, full stop —
+`Named(name: "hi", id: 1)` passed by value moves, even though the string it was built from is a
+literal, because the option-B flag is a fact about a *bare `string` binding*, not about a value
+nested inside a struct field. See `docs/memory-management.md` for the worked example.
 
 ### 4.2 Source provenance
+
+Three, not four:
 
 | provenance | meaning | expression shapes |
 |---|---|---|
 | **OWNED** | a registered owner in this scope | a bare `Name` bound by `let` or a by-value parameter |
-| **BORROWED** | names storage owned elsewhere, for a shorter lifetime | a `match` payload binding, a `foreach` binding, a `&peek`/`&poke` parameter |
-| **THROUGH_OWNER** | reads *through* a still-live owner | `s.field`, `own.get()`, `arr[i]`, `list.get(i)??` |
-| **FRESH** | nothing owns it yet | a constructor, a call result, `.clone()`, a literal |
+| **BORROWED** | names storage owned elsewhere, for a shorter lifetime | a `match` payload binding, a `foreach` binding, a `&peek`/`&poke` parameter, a `let` bound from any of these, **and every read THROUGH a still-live owner** — `s.field`, `own.get()`, `arr[i]`, `list.get(i)??` |
+| **FRESH** | nothing owns it yet | a constructor, a call result, `.clone()`, a literal, `List.pop()` (which REMOVES the element, so the container stops owning it) |
+
+**`THROUGH_OWNER` merged into `BORROWED`.** The design as originally written kept these as separate
+provenances because they had different outcomes in the table (BORROWED rejected, THROUGH_OWNER
+copied — see §4.3's original text below). Once the compiler stopped inserting an automatic copy at
+a read (§8 supplies the escape — an implicit borrowed `let` binding, not a hard error), the two
+provenances have identical outcomes at every type class, so they are one case: reading through a
+live owner, wherever the read appears, is `BORROWED`.
 
 ### 4.3 The table
 
-|  | PLAIN | COPY | MOVE |
-|---|---|---|---|
-| OWNED | ADOPT | COPY | **MOVE** |
-| BORROWED | ADOPT | COPY | **ERROR — CE2411** |
-| THROUGH_OWNER | ADOPT | COPY | **COPY** |
-| FRESH | ADOPT | ADOPT | ADOPT |
+Shipped as 3x2, not 4x3:
+
+|  | PLAIN | MOVE |
+|---|---|---|
+| OWNED | ADOPT | **MOVE** |
+| BORROWED | ADOPT | **REJECT — CE2411** |
+| FRESH | ADOPT | ADOPT |
+
+(`sushi_lang/semantics/ownership.py:_TABLE`, unit-tested cell by cell in
+`tests/unit/test_ownership_table.py`.)
 
 The single cell that every shipped bug in this family got wrong is **(BORROWED, MOVE)**. #238 fixed
-it at three positions, #250 at five, #256 at six, #277 reports it at one more; it is currently wrong
-at eight. Per §8 it is not a code-generation question at all — it is rejected. The table also makes
-the omission that caused #250 unmissable: `THROUGH_OWNER × MOVE` must copy whether the field's type
-*is* the resource (`i32[]`) or merely *contains* one.
+it at three positions, #250 at five, #256 at six, #277 reported it at one more before the seam
+existed. Per §8 it is not a code-generation question at all — it is rejected, with `.clone()` as the
+explicit escape.
 
-Note the two owning rows are deliberately **not** symmetric. `BORROWED` is rejected;
-`THROUGH_OWNER` copies. The difference is that a borrowed binding has a *shorter* lifetime than its
-owner and a visible alternative at the use site (`.clone()`), whereas making every owning field read
-an error would force `.clone()` on every `s.field` with no escape until `let`-borrow bindings exist.
-That is #242, and it stays deferred — deliberately, not by omission.
+**Two different consuming uses read `REJECT` two different ways** (§5), and this is what makes the
+table stable across the merge in §4.2: `consume()` (a genuine consuming use — a call argument, a
+constructor field, a return) turns `REJECT` into the **CE2411** diagnostic; `bind()` (a `let`)
+turns the identical `REJECT` into "the binding BORROWS instead of owning" (§8), no diagnostic at
+all. A `let x = s.field` and `take(s.field)` see the same table cell and reach opposite surface
+behaviour, because a `let` does not require ownership the way a call argument does — see §5's `bind`
+vs `consume` split.
 
 ### 4.4 The rejected cell
 
-Consuming a borrowed binding whose type owns heap is **CE2411** (new; must be registered in the
-module owning the CE24xx borrow/reference range — CE2410 is the last one taken).
+Consuming a borrowed binding or a read-through-owner whose type owns heap is **CE2411**
+(`sushi_lang/internals/errors/borrow.py`), rendered as:
 
 ```
-error [CE2411]: cannot consume 'p': it is a borrowed binding
-  |             t := Shape.Poly(p)
-  `                             -+
-  = note: 'p' borrows the payload of 's', which still owns it
-    demo.sushi:8:11
-  = help: clone it to take an independent value: `p.clone()`
+error [CE2411]: cannot consume 'copied': another owner keeps this value.
+  |     sink(copied)
+  `          ---+---
+  = note: 'copied' borrows here, and the owner keeps the value
+    demo.sushi:8:5
+    |     let Own@(i32) copied = outer.get()
+    `     ^
+  = help: clone it to take an independent value: `copied.clone()`
 ```
 
 It is a **relational** error, so it carries a second location per the tier-3 rule in `CLAUDE.md`:
-the use, and the binding site it borrows from. Rendering it with one location is a bug.
+the use, and the binding site it borrows from (or the owner's declaration, for a direct read like
+`h.inner`). Rendering it with one location is a bug.
 
-**Mutating through a binding needs no new code.** A binding is a `&peek` borrow, so a write through
-one is already **CE2408** ("cannot modify through &peek reference"). That closes #253 in the
-"reject it" direction rather than the "silently discard it" one.
+**Mutating through a binding needs no new code for the `&peek`/`&poke`-parameter case.** A
+reference parameter is already read-only/exclusive per the ordinary borrow rules, so a write
+through a `&peek` one is **CE2408** ("cannot modify through &peek reference"). A *bound* borrow
+(a `let` reading through an owner, §8) gets its own diagnostic instead — **CE2412**, "cannot mutate
+the owner while this binding borrows from it" — because the thing being protected is not the
+binding's own mutability but the owner changing out from under it.
 
 ## 5. The seam
 
-Every consuming use routes through exactly one function:
+Shipped as `sushi_lang/backend/ownership.py`. Every consuming use routes through one of two entry
+points, both built on the shared `classify()` table:
 
 ```python
-def consume(codegen, source: Expr, value: ir.Value,
-            target_type: Type, use: ConsumingUse) -> ir.Value:
-    """The only way a value may be given to a new owner.
+def consume(codegen, source, value: ir.Value,
+            target_type: Optional[Type], use: ConsumingUse) -> ir.Value:
+    """Give `value` to a new owner, and return what the caller should store.
 
-    Reads the Ownership decision stamped by semantics, performs it, and returns the
-    value the caller should store. Raises an internal error if no decision was stamped.
+    Reads the Provenance Pass 3 stamped on `source`, asks classify() what that means for
+    `target_type`, and performs the answer: MOVE marks the source moved and returns the
+    value as-is; ADOPT returns it as-is; REJECT raises CE0129 (internal -- Pass 3 should
+    already have reported CE2411 for the same source before codegen runs).
+    """
+
+
+def bind(codegen, source, value: ir.Value,
+         target_type: Optional[Type]) -> tuple[ir.Value, bool]:
+    """Bind a `let` to its initializer, and say whether the binding OWNS the value.
+
+    consume() with ONE answer mapped differently: where consume() cannot satisfy REJECT
+    and raises, bind() returns (value, False) -- the binding owns nothing, i.e. it
+    BORROWS (see S8). Returns (the value to store, whether the caller must register the
+    local for cleanup).
     """
 ```
+
+Two more functions round out the seam: `copy_out` (the ONE place `emit_value_clone` is reached from
+— an explicit `.clone()` and a few internal reader positions that need an independent copy) and
+`relinquish`/`relinquish_temp` (state that a binding or a compiler-synthesized temporary transferred
+ownership, for the two shapes that have no source `Expr` to stamp a decision on). All five are
+listed in the module's `__all__`; nothing else in the backend may call the primitives underneath
+them (§5.2).
 
 ### 5.1 The decision is computed in semantics, not in the backend
 
 This is what makes it a *single* authority rather than a backend-local one.
 
-The backend currently asks `is_owned_local` — "is this name registered for cleanup?" — as a proxy
-for "is this a borrow of something still live?". Those coincide for a `let` local and a fresh
+Before the seam, the backend asked `is_owned_local` — "is this name registered for cleanup?" — as a
+proxy for "is this a borrow of something still live?". Those coincide for a `let` local and a fresh
 temporary, and diverge for exactly one thing: a pattern binding. The backend has LLVM values and
 cleanup registries; it does not reliably have provenance. Semantics has the AST, the types, the
-scopes and `borrow_state` — it *knows* a match binding is a binding.
+scopes and `borrow_state` — it *knows* a match binding is a binding, which is why provenance had to
+be computed there.
 
-So `Ownership` is computed in Pass 2/3 and **stamped on the AST node**. Two consumers read it:
+**What is shipped stamps `Provenance`, not the final `Ownership` decision** — a half-step short of
+what this section originally proposed, and a better split. Pass 3 (the borrow checker) is the only
+side that can compute *where a value came from* — it has the AST, the scopes and `borrow_state` — so
+it stamps `Provenance` on the source node (`expr.ownership_provenance`). The backend supplies the
+other half, the resolved *target type* at its position, and both sides call the identical
+`classify(provenance, type_class)` to reach `Ownership`. Reusing one pure function is what makes two
+calls agree rather than one stamped value: the borrow checker uses its answer to decide whether to
+mark the source moved (and therefore whether a later use is CE2405, or — for a `let` — whether the
+binding borrows instead, §8); the backend uses its answer to decide what to emit. If a source somehow
+reaches the backend with no `Provenance` stamped, the seam raises **CE0129** (internal) rather than
+guessing — this is the same transformation Tier 4.6 applied to try-expression types (CE0124), and it
+is the correct direction here for the identical reason: reaching this code path with no stamp means
+Pass 3 disagreed with itself.
 
-- the **borrow checker**, to decide whether to mark the source moved (and therefore whether a later
-  use is CE2405);
-- the **backend**, to decide what to emit.
-
-They cannot drift, because there is only one computation. This is the same transformation Tier 4.6
-applied to try-expression types: the backend stopped re-inferring and started reading the
-annotations Pass 2 stamps, with **CE0124** as the loud failure for a missing one. A missing
-`Ownership` annotation gets the same treatment — a new internal code, not a silent fallback.
-
-That single computation also closes two defects that no amount of backend tidying reaches:
-`l.push(a)` followed by a use of `a` compiles clean today (the backend moves, semantics never
-marks), and a `foreach` binding used once by value is rejected with a CE2405 whose "moved here"
-note points at the *same span as the use* (semantics registers it as an owned local, the backend
-creates it as a borrow).
+That single computation closed two defects no amount of backend tidying alone could have reached:
+`l.push(a)` followed by a use of `a` used to compile clean (the backend moved, but semantics never
+marked the source, so CE2405 never fired), and a `foreach` binding consumed by value used to be
+rejected with a CE2405 whose "moved here" note pointed at the *same span as the use* (semantics
+registered it as an owned local while the backend created it as a borrow). Both are typed bindings
+with a real `Provenance` now (§8.1), so both fire the correct diagnostic at the correct span.
 
 ### 5.2 Nothing may bypass the seam
 
 A shared helper that callers may decline to call is not an authority. The ownership-transferring
-primitives become private to the seam module:
+primitives are private to the seam module (`sushi_lang/backend/ownership.py`'s internal `_mark_moved`
+and `_clone`); every other backend module reaches them only through `consume`/`bind`/`copy_out`/
+`relinquish`/`relinquish_temp`.
 
-| primitive | today | after |
-|---|---|---|
-| `MemoryManager.mark_struct_as_moved` | called from 6+ modules | seam only |
-| `DynamicArrayManager.mark_as_moved` | called from 3+ modules | seam only |
-| `emit_value_clone` | called from 8+ modules | seam only |
-| `deep_copy_struct` | 1 external caller, one-line delegate | **deleted** |
-| `clone_owning_source` | 1 external caller | **deleted** |
-| `deep_copy_if_owning_struct` | 2 callers | **deleted** |
-| `move_owning_arg_into_container` | 5 callers, no copy branch | **deleted** |
-
-Enforced by a CI gate that fails when any backend module outside the seam references them. This is
-not a new mechanism: `tests/unit/test_borrow_dispatch_is_total.py` already pins the borrow checker's
-`Expr` dispatch against the AST union, with **CE0125** as the runtime backstop, and it is the one
-guard in this repo that has actually held. `tests/unit/test_consuming_use_coverage.py` is its twin.
+Enforced by a CI gate that fails when any backend module outside the seam references the primitives
+directly: `tests/unit/test_consuming_use_coverage.py`. This mirrors an existing, proven mechanism:
+`tests/unit/test_borrow_dispatch_is_total.py` pins the borrow checker's `Expr` dispatch against the
+AST union, with **CE0125** as the runtime backstop, and it is the guard in this repo that had
+already held before this design shipped.
 
 ## 6. Collapsing the predicate
 
-With `CAPTURE` routed through the seam, `is_owning_type` has no remaining consumer that wants the
-narrow answer. Its four call sites — `backend/runtime/closures.py:149` and `:212`,
-`semantics/passes/borrow.py:653`, `semantics/passes/types/visitor.py:439` — all become seam calls or
-`type_moves_by_value`. **Delete `is_owning_type`.**
+Shipped as one function, `owns_heap` (`sushi_lang/semantics/typesys.py`), not two. The design as
+originally written proposed keeping `is_owning_type` (narrow, base-cases-only) and
+`type_moves_by_value` (transitive) as separate predicates and auditing every `is_owning_type` call
+site to see whether it could switch to the wide one. That audit is superseded: Phase 9 merged both
+predicates — and the backend's independent `needs_cleanup` — into one, because deleting the `COPY`
+type class (§4.1) removed the one type (`string`) the two predicates disagreed about. There is now
+exactly one question — "does this type own heap?" — asked by semantics, the borrow checker, and the
+backend alike.
 
-Two consequences worth stating:
+Two consequences that the original audit predicted correctly:
 
-- The escaping-closure use-after-free disappears by construction: the env destructor's field set and
-  the capture's move decision stop being able to disagree.
-- `HashMap@(K, V)` stops moving *by accident*. It currently moves only because
-  `semantics/generics/hashmap.py:664` declares `buckets` as a placeholder `i32[]` that the file's own
-  comment disowns as not the real layout. Under one predicate, `HashMap` is named explicitly and the
-  placeholder stops being load-bearing.
+- The escaping-closure use-after-free is gone by construction: the env destructor's field set and
+  the capture's move decision cannot disagree, because both read `owns_heap`.
+- `HashMap@(K, V)` no longer moves *by accident*. `owns_heap` names `HashMap` explicitly
+  (`GenericTypeRef.base_name in ('Own', 'List', 'HashMap')`, and the equivalent `StructType.name`
+  prefix check after monomorphization) rather than inferring it from a placeholder `buckets: i32[]`
+  field — the placeholder is no longer load-bearing for this question.
 
-`docs/design/move-semantics.md:198-201` required an audit of every `is_owning_type` call site before
-the two-predicate split shipped, and predicted its result ("expected: yes — they are all
-move/ownership sites"). The audit was not performed. This is that audit, with the opposite finding.
+## 7. Pairing clone with destruction
 
-## 7. Pairing COPY with destruction
+Shipped as `sushi_lang/backend/lifecycle.py` — one handler table per composite type kind (dynamic
+array, fixed array, struct, enum), each registering a `destroy` emitter
+(`sushi_lang/backend/destructors.py`) and a `clone` emitter (`sushi_lang/backend/expressions/memory.py`)
+under one shared identity key (`composite_type_key`) and one shared symbol mangler
+(`lifecycle_symbol`). A kind with one half and not the other is a loud `KeyError` at dispatch, and
+`tests/unit/test_lifecycle_handlers.py` asserts totality statically — the "one handler per type
+kind, registered like `register_clone_emitter_factory`/`register_hash_emitter_factory`" plan this
+section originally proposed, now real.
 
-A separate axis, and the seam only fixes half of it. The seam decides *whether* to copy;
-`emit_value_clone` decides *how*, and it has drifted from its inverse:
+This closes the specific drift the design called out: a self-referential type's out-of-line clone
+and destructor bodies must swap **both** `codegen.builder` and `codegen.func` (#257), and
+`get_or_emit_lifecycle_func` is the one place that does it for both halves, so they cannot drift back
+apart the way the old separately-maintained twins (`_dtor_type_key`/`_clone_type_key`,
+`_select_inline_destructor`/`_inline_clone`) did.
 
-- `backend/expressions/memory.py:586` dispatches on `(DynamicArrayType, StructType, EnumType)`. The
-  module does not import `ArrayType` at all. `backend/destructors.py:74` includes it.
-- `_clone_type_key` (`memory.py:592`) likewise lacks the `ArrayType` arm that `_dtor_type_key`
-  (`destructors.py:103`) has, so every fixed-array type would collapse to one shared `linkonce_odr`
-  clone body. **Adding the first without the second replaces a double free with a miscompile.**
-- `emit_value_clone`'s own docstring calls it the "exact structural inverse" of
-  `emit_value_destructor` and warns that cloning fewer buffers is a double free. It is a promise in
-  prose.
+**One thing changed about when clone runs.** With the `COPY` type class deleted (§4.1), the compiler
+never invokes `emit_value_clone` automatically at an ownership sink — only an explicit `.clone()`
+call and a small number of reader positions that need an independent copy (`copy_out`, §5) reach it.
+"Pairing clone with destruction" is therefore about **every clone the compiler can still emit**
+staying the exact structural inverse of the matching destructor — not, as originally scoped, about
+keeping an *automatic* per-sink copy correct.
 
-Make it structural: one handler per type kind, supplying `emit_clone` and `emit_destroy` **from the
-same object**, registered exactly like the existing `register_clone_emitter_factory` /
-`register_hash_emitter_factory` inversion in `sushi_stdlib/src/common.py` — which is the one piece of
-this subsystem that is already right, and keeps `grep -rn "sushi_lang\.backend" sushi_lang/semantics/`
-empty. A missing clone arm then becomes a missing method on a handler, not a silently-skipped
+A missing clone arm is a missing method on a handler, not a silently-skipped
 `isinstance` branch.
 
-This also collapses the 8 independent `isinstance` type-kind ladders and the 13 sites that spell
-`("Own<", "List<", "HashMap<")` by hand, of which `CONTAINER_PREFIXES` currently serves 2.
+This also collapsed the 8 independent `isinstance` type-kind ladders that predated it, and most of
+the sites that used to spell `("Own<", "List<", "HashMap<")` by hand now share
+`semantics/generics/cloning.py`'s `CONTAINER_PREFIXES`.
 
 ## 8. Decided: a binding is a read-only borrow
 
@@ -284,15 +367,20 @@ This also collapses the 8 independent `isinstance` type-kind ladders and the 13 
 scrutinee or container still owns.** Reads are free and copy nothing. Writing through one is
 **CE2408**. Consuming one whose type owns heap is **CE2411**, with `.clone()` as the escape.
 
-### 8.1 What it is today
+### 8.1 What it was before this design (historical)
 
-None of the coherent answers. The borrow checker models it as an untyped local
-(`BorrowState(name=binding)` with no `var_type`, so `type_moves_by_value(None)` is always False and
-this bug class is undiagnosable *in principle*). Codegen creates it as a non-owning borrow
+None of the coherent answers. The borrow checker modelled it as an untyped local
+(`BorrowState(name=binding)` with no `var_type`, so `owns_heap(None)` was always False and
+this bug class was undiagnosable *in principle*). Codegen created it as a non-owning borrow
 (`register_cleanup=False`). Eight consuming uses read "absent from every cleanup registry" as "free
-to take". It is in fact a shallow byte-copy of an owner's fat pointer — which is why mutation
-through it is silently discarded (#253), re-wrapping it double-frees (#277), and shadowing through
-it reads the wrong field index (#279).
+to take". It was in fact a shallow byte-copy of an owner's fat pointer — which is why mutation
+through it was silently discarded (#253), re-wrapping it double-freed (#277), and shadowing through
+it read the wrong field index (#279).
+
+**What it is now:** typed. `_register_pattern_bindings` (`semantics/passes/borrow.py`) stamps each
+`match` binding's `var_type` from the variant Pass 2 already resolved, and the `foreach` binding is
+stamped from the container's element type — `owns_heap` finally has something to answer on, and
+the three bugs above are closed by construction rather than patched individually.
 
 ### 8.2 Why, from precedent
 
@@ -322,22 +410,28 @@ later, only where it was demonstrably needed.
 
 ### 8.3 Cost, stated honestly
 
-This is **not** purely semantics-tightening. It breaks source compatibility: the call-argument
-position currently copies a borrowed binding and works, so `eat(p)` becomes `eat(p.clone())`. No
-program silently changes behaviour — every break is a compile error — but programs that compile
-today will stop.
+This was **not** purely semantics-tightening. It broke source compatibility: the call-argument
+position used to copy a borrowed binding silently, so `eat(p)` had to become `eat(p.clone())`. No
+program silently changed behaviour — every break is a compile error — but a program that compiled
+before this shipped can require a `.clone()` it did not need before.
 
 The blast radius is smaller than it sounds, because only `(BORROWED, MOVE)` is affected:
 
 ```sushi
-foreach(i in 0..10):              # PLAIN    -- unaffected
-foreach(n in numbers.iter()):     # i32      -- unaffected
+foreach(i in 0..10):              # PLAIN                -- unaffected
+foreach(n in numbers.iter()):     # i32, PLAIN           -- unaffected
 match name_opt:
-    Maybe.Some(s) -> println(s)   # string is a COPY type -- unaffected
+    Maybe.Some(s) -> println(s)   # reading s is free    -- unaffected
 ```
 
-Only a binding whose payload transitively owns heap is rejected — and essentially every program that
-hands one to a consuming use today is already double-freeing.
+**One thing shifted since this table was first drawn.** `string` was a `COPY` type when this
+section was written, which made every `string` binding categorically exempt. Phase 9 deleted `COPY`
+(§4.1) — a `string` is `MOVE` now — so a `match`/`foreach` binding of a `string` payload is affected
+the same as any other owning binding: `println(s)` above stays fine because printing is not a
+consuming use (nothing takes ownership to print), but `take(s)` where `take` accepts `string` by
+value is now **CE2411**, escaped with `s.clone()`. Only a binding whose payload transitively owns
+heap and is handed to a genuine consuming use is rejected — and essentially every program that did
+that before this design shipped was already double-freeing.
 
 ### 8.4 What is NOT decided
 
@@ -346,25 +440,45 @@ vocabulary point at the binding site (`Shape.Poly(&poke p)`); Rust points at the
 (`match &mut x`). Deferred on purpose, exactly as C# deferred `ref`: ship read-only, and let real
 code demonstrate the need. Nothing in this design forecloses either spelling.
 
-This decision was previously described as blocked on `let`-borrow bindings (#252). It is not. #242
-needs them because a hard error on owning-`MemberAccess` would force `.clone()` on every field read
-with no alternative; a binding is different — only *consuming* it is rejected, and `.clone()` at the
-use site is the escape, which is exactly what Rust requires (`match &x { Some(v) => take(v.clone()) }`).
+**Numbering, untangled.** Two different issues get invoked near this decision and are easy to
+conflate:
 
-## 9. Risks
+- **#242** is `docs/design/move-semantics.md` §3.1's residual-copy-tier issue: a plain field read
+  (`s.field`) or container get-out silently deep-copied, with no escape if that copy were ever
+  upgraded to a hard error. Closed by this design: §4.2 makes such a read `BORROWED`, and §8 makes a
+  `let` of one bind rather than own — no new syntax needed, and `.clone()` (already the escape a hard
+  error would have required) is the one this ships with.
+- **#252** is a distinct, later request: a first-class *reference-typed* local binding
+  (`let &peek T x = ...`) as its own kind of value. That is NOT what #242 needed and is NOT what §8
+  implements — §8's binding still declares an ordinary value type `T`; it is tracked as a borrow by
+  provenance, not by a reference type. #252 was assessed and **rejected** as **CE2413**: the form
+  parses but would add a second, overlapping way to say the same thing the implicit binding already
+  says, with no additional checked semantics today.
 
-**Annotation completeness becomes a new failure mode.** `Ownership` must survive Pass 1.6
-monomorphization and Pass 1.7 transformation. There is precedent (`resolved_enum_type`,
-`resolved_scrutinee_type`) and there is precedent for it going wrong: **CE0121** exists because a
-missed `resolved_scrutinee_type` silently dropped match-arm bindings. Expect latent gaps to surface
-as internal errors during rollout. That is the correct direction — loud beats silent — but it will
-not be quiet.
+So this decision does not "depend on #252" the way an earlier note claimed — the prerequisite #242
+needed was a `let` that can *borrow* rather than copy-or-error, and that is exactly what §8's binding
+classification supplies without any new grammar. A `match`/`foreach` binding and a `let x = s.field`
+binding are the same kind of thing under §4.2 — both `BORROWED`, both reject a consuming use with
+CE2411, both escape with `.clone()` — which is exactly what Rust requires
+(`match &x { Some(v) => take(v.clone()) }`).
 
-**`RETURN` and `CAPTURE` are the two variants most likely to need per-use behaviour** beyond the
-table: the first because it emits before scope cleanup, the second because the environment is
-heap-allocated and type-erased through `drop_ptr`. Both should be implemented last, after the
-straightforward nine confirm the shape.
+## 9. Risks, and how they resolved
 
-**The seam must not become a second `is_owned_local`.** Its input is provenance computed in
-semantics, not a registry lookup performed in the backend. If it ends up consulting cleanup
-registries to decide, the split has been reintroduced inside the seam.
+**Annotation completeness was a new failure mode.** `Provenance` had to survive Pass 1.6
+monomorphization and Pass 1.7 transformation, with the same going-wrong shape as
+`resolved_scrutinee_type`'s **CE0121**. It resolved the intended way: a missing stamp is **CE0129**
+(internal), so a latent gap surfaces loudly during rollout rather than silently misclassifying —
+exactly the trade the design accepted going in.
+
+**`RETURN` and `CAPTURE` did need per-use behaviour** beyond the plain table, as predicted. `RETURN`
+still routes through `consume()` with `ConsumingUse.RETURN` — the special case turned out to be
+"emit the value before scope cleanup runs," which was already how `returns.py` worked and needed no
+new table cell. `CAPTURE` reads its `Provenance` off a `Param`, not an `Expr` (`Lambda.captures` is a
+list of `Param`, not a list of expressions) — a plumbing difference, not a rule difference; `classify`
+answers it exactly like every other use.
+
+**The seam did not become a second `is_owned_local`.** `consume`/`bind` take `Provenance` computed in
+semantics and the resolved target type from the backend; neither queries a cleanup registry to
+decide. `resolver_for` (`backend/ownership.py`) exists only to resolve an `UnknownType` name to its
+struct/enum table entry before classifying it — a type lookup, not an ownership-registry lookup —
+which is the distinction this risk was about.

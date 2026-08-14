@@ -142,58 +142,12 @@ def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
 
 def _finish_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, result: ir.Value,
                          to_i1: bool) -> ir.Value:
-    """Apply value semantics to a loaded element and coerce for a boolean context."""
-    # Value semantics (#60, #145): an element that owns heap memory must be deep-copied so
-    # the indexed copy does not shallow-share the array element's buffer. Two owners of one
-    # buffer (the array's element destructor and the new binding / the container it is stored
-    # into) would otherwise double-free. Covers owning structs/enums AND heap-owned string
-    # elements (`let s = words[0]`, `m.insert(words[0], ...)` on a split() array, N1).
-    #
-    # A field array (`h.names[0]`) needs this every bit as much as a local (#200): the struct owns
-    # and frees its field's elements, so a bound copy would be a second owner. It could not reach
-    # here before -- indexing a fixed-array field was an ICE -- so making that work without this
-    # would have traded an ICE for a double free.
-    if not to_i1:
-        from sushi_lang.semantics.typesys import (
-            ArrayType, DynamicArrayType, BuiltinType)
-        array_sem = _indexed_array_semantic_type(codegen, expr.array)
-        if isinstance(array_sem, (ArrayType, DynamicArrayType)):
-            from sushi_lang.backend.expressions import memory
-            if array_sem.base_type == BuiltinType.STRING:
-                # A string element clones its heap buffer (owned=1) so a `let` binding or a
-                # container the value is stored into becomes the sole owner of an independent
-                # buffer, while the array keeps and frees the original element. A literal
-                # element (owned=0) clones to another owned=0, whose free is a no-op.
-                result = memory.emit_value_clone(codegen, result, array_sem.base_type)
-                # A transient index-load with no binding (e.g. println(words[0])) would leak
-                # this clone; register it for an owned-bit-guarded free at the end of the
-                # print-arg frame. Outside a print frame (a `let`/container store) this is a
-                # no-op and the new owner frees the clone.
-                codegen.register_string_value_temp(result)
-            else:
-                result = memory.deep_copy_if_owning_struct(codegen, result, array_sem.base_type)
+    """Coerce a loaded element for a boolean context. A read never detaches.
 
-    return codegen.utils.as_i1(result) if to_i1 else result
-
-
-def _indexed_array_semantic_type(codegen: 'LLVMCodegen', array_expr):
-    """Semantic type of the array being indexed -- a local, or a struct field (#200).
-
-    Shares `infer_struct_type`'s resolution of the parent struct, so the two cannot drift apart
-    about what `h.names` is.
+    `arr[i]` READS. It does not detach (#242). The array keeps the element and still
+    frees it, so what this hands back is a BORROW: Pass 3 classifies it BORROWED, a `let`
+    of it binds without owning, and a position that takes ownership rejects it (CE2411)
+    with `.clone()` as the escape. The deep copy that used to happen here was the compiler
+    inserting one the user did not ask for.
     """
-    from sushi_lang.semantics.typesys import ReferenceType
-
-    if isinstance(array_expr, Name):
-        array_sem = (codegen.variable_types.get(array_expr.id)
-                     or codegen.memory.find_semantic_type(array_expr.id))
-        if isinstance(array_sem, ReferenceType):
-            array_sem = array_sem.referenced_type
-        return array_sem
-
-    if isinstance(array_expr, MemberAccess):
-        from sushi_lang.backend.expressions.structs import infer_struct_type
-        parent = infer_struct_type(codegen, array_expr.receiver)
-        return parent.get_field_type(array_expr.member)
-
-    return None
+    return codegen.utils.as_i1(result) if to_i1 else result

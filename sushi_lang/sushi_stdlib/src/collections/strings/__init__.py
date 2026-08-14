@@ -171,20 +171,22 @@ def _validate_method_signature(call: MethodCall, spec: MethodSpec, reporter: Any
 def is_builtin_string_method(method_name: str) -> bool:
     """Check if a method name is a built-in string method.
 
-    Note: Includes both stdlib methods (in METHOD_SPECS) and inline intrinsics (is_empty).
+    Note: Includes both stdlib methods (in METHOD_SPECS) and the inline intrinsics
+    (`is_empty`, `clone`), which need no `use <collections/strings>`.
     """
-    return method_name in METHOD_SPECS or method_name == "is_empty"
+    return method_name in METHOD_SPECS or method_name in ("is_empty", "clone")
 
 
 def validate_builtin_string_method_with_validator(call: MethodCall, string_type: BuiltinType, reporter: Any, validator: Any) -> None:
     """Validate built-in string method calls with access to the validator for type checking."""
     method_name = call.method
 
-    # Handle inline intrinsic is_empty (not in METHOD_SPECS)
-    if method_name == "is_empty":
+    # Inline intrinsics, not in METHOD_SPECS. `clone` is the explicit deep copy and the
+    # escape from CE2411; it must not need `use <collections/strings>` (#242, MM.md B4).
+    if method_name in ("is_empty", "clone"):
         if len(call.args) != 0:
             er.emit(reporter, er.ERR.CE2009, call.loc,
-                   name="string.is_empty", expected=0, got=len(call.args))
+                   name=f"string.{method_name}", expected=0, got=len(call.args))
         return
 
     spec = METHOD_SPECS.get(method_name)
@@ -206,7 +208,7 @@ def get_builtin_string_method_return_type(method_name: str, string_type: Builtin
     elif method_name in {"is_empty", "contains", "starts_with", "ends_with"}:
         return BuiltinType.BOOL
     # Methods returning string
-    elif method_name in {"concat", "s", "sleft", "sright", "char_at", "ss",
+    elif method_name in {"clone", "concat", "s", "sleft", "sright", "char_at", "ss",
                          "upper", "lower", "cap", "trim", "tleft", "tright", "replace",
                          "join", "pad_left", "pad_right", "strip_prefix", "strip_suffix"}:
         return BuiltinType.STRING

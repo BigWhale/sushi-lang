@@ -1,9 +1,12 @@
-# The return sink of #250. `return Result.Ok(w.items)` handed the caller the field's
-# descriptor while the callee's scope exit still freed that buffer -- a use-after-free plus
-# a double free (SIGABRT, garbage length). returns.py never cloned a MemberAccess source,
-# and _extract_return_variables only understands a bare Name so nothing was marked moved.
-# Cloning (not moving) is the fix: Sushi has no partial moves, so the struct keeps its own
-# copy and frees it, while the caller owns the returned one.
+# Sink matrix, the (BORROWED, MOVE) cell reached through a read: a `T[]` field read at the return sink.
+#
+# The read BORROWS (#242): the owner keeps the value and still frees it, so the sink may not
+# take it and `.clone()` is the escape. Written WITHOUT the clone this file is CE2411, and
+# `tests/memory/test_err_consume_read_*.sushi` pins that half.
+#
+# This used to compile with no clone, because the compiler inserted one for you: the
+# provenance was THROUGH_OWNER, which COPIED. Deleting that cell is the point of #242 -- every
+# deep copy in a Sushi program is now one the user wrote.
 # EXPECT_STDOUT_EXACT: "returned=3 src=3\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
@@ -12,7 +15,7 @@ struct W:
     i32[] items
 
 fn get_it(&peek W w) i32[]:
-    return Result.Ok(w.items)
+    return Result.Ok(w.items.clone())
 
 fn main() i32:
     let W w = W(from([1, 2, 3]))

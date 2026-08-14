@@ -7,10 +7,10 @@ Implemented methods:
 - alloc(value: T) -> Own<T>: Allocate heap memory and store value. Takes ownership of
   an owning argument (the source variable is moved, so RAII will not double-free it).
 - get() -> T: Dereference. Loads the payload UNCOPIED, so the value is a view of storage
-  this Own still frees -- the pointer analogue of a MemberAccess field read. Every by-value
-  sink therefore deep-copies it (`expression_reads_continuing_owner`), which is what keeps
+  this Own still frees -- the pointer analogue of a MemberAccess field read. So the seam
+  classifies it THROUGH_OWNER and every consuming use deep-copies it, which is what keeps
   a nested Own<Own<T>> from being double-freed (#106) and what #256 was missing at the five
-  sinks the #106 guard never reached.
+  positions the #106 guard never reached.
 - destroy() -> ~: Free the allocated memory (RAII), recursing into the payload.
 
 The Own<T> type is a generic struct for unique ownership of heap data:
@@ -89,8 +89,8 @@ def emit_own_get(codegen: Any, own_value: ir.Value, element_type: Type) -> ir.Va
     owner, so the copy would belong to nobody and leak (#256, pinned by
     `tests/memory/test_own_get_field_read_no_leak.sushi`). The other container get-outs can
     copy at the access site because they return `Maybe@(T)` and cannot be chained; `Own`
-    returns bare `T`. So the copy lives at the sinks instead -- see
-    `expression_reads_continuing_owner` in `backend/expressions/memory.py`.
+    returns bare `T`. So the copy lives at the consuming uses instead -- the seam reads the
+    THROUGH_OWNER provenance that `semantics/passes/borrow.py` stamps for this shape.
 
     Args:
         codegen: LLVM codegen instance
@@ -107,23 +107,14 @@ def emit_own_get(codegen: Any, own_value: ir.Value, element_type: Type) -> ir.Va
     return codegen.builder.load(ptr, name="own_value")
 
 
-def emit_own_destroy(codegen: Any, own_value: ir.Value, var_name: str | None = None) -> ir.Value:
-    """Emit Own<T>.destroy() -> ~
+def emit_own_destroy(codegen: Any, own_value: ir.Value) -> ir.Value:
+    """Emit Own<T>.destroy() -> ~ for a TEMPORARY (non-Name) receiver.
 
-    Implementation:
-    1. Extract pointer from Own<T> struct
-    2. Cast T* to void* (i8*)
-    3. Call free(void*)
-    4. Mark variable as destroyed (to prevent RAII double-free)
-    5. Return blank value (~)
-
-    Args:
-        codegen: LLVM codegen instance
-        own_value: The Own<T> struct value
-        var_name: The variable name (if known) to mark as destroyed
-
-    Returns:
-        Blank value (i32 constant 0)
+    A shallow single free of the loaded value: extract the pointer, cast to void*,
+    free it, return the blank value. A NAME receiver goes through the deep
+    `emit_value_destructor` path in emit_builtin_own_method instead, which also
+    marks the binding destroyed -- so this function has no binding to mark (its
+    former `var_name` parameter was never passed by its one caller; 11b).
     """
     # Extract pointer from struct
     ptr = codegen.builder.extract_value(own_value, 0, name="own_ptr_to_free")
@@ -134,10 +125,6 @@ def emit_own_destroy(codegen: Any, own_value: ir.Value, var_name: str | None = N
     # Call free(void*)
     free_func = codegen.get_free_func()
     codegen.builder.call(free_func, [void_ptr])
-
-    # Mark variable as destroyed to prevent RAII double-free
-    if var_name and hasattr(codegen, 'dynamic_arrays'):
-        codegen.dynamic_arrays.mark_own_destroyed(var_name)
 
     # Return blank value (~)
     return ir.Constant(codegen.types.i32, 0)
@@ -171,49 +158,41 @@ def emit_builtin_own_method(
         # Emit the argument value
         arg = call.args[0]
         arg_value = codegen.expressions.emit_expr(arg)
-        # Own.alloc takes ownership: if the argument is a named owning variable, move it
-        # so its RAII cleanup is skipped (the new Own is now the sole owner). Guarded on
-        # an owning type so primitives (copied) are untouched (#106).
-        from sushi_lang.semantics.ast import Name
-        if isinstance(arg, Name):
-            arg_ty = codegen.memory.find_semantic_type(arg.id)
-            if arg_ty is not None and _arg_type_is_owning(codegen, arg_ty):
-                codegen.memory.mark_struct_as_moved(arg.id)
+        # `Own.alloc` takes ownership: the new Own becomes the sole owner of the pointee.
+        # This position used to move a bare owning Name and do nothing else -- no copy
+        # branch at all, so a borrowed binding or a field read was silently aliased.
+        from sushi_lang.backend.ownership import ConsumingUse, consume
+        arg_value = consume(codegen, arg, arg_value, element_type, ConsumingUse.OWN_ALLOC)
         return emit_own_alloc(codegen, element_type, arg_value)
     elif call.method == "get":
         return emit_own_get(codegen, own_value, element_type)
+    elif call.method == "clone":
+        # The explicit escape from CE2411 (#242). An `Own@(T).get()` deref BORROWS -- the
+        # receiver keeps the pointee and still frees it -- so a position that takes
+        # ownership rejects it, and this is what the diagnostic tells the user to write.
+        # Routed through the seam's `copy_out`, the ONE deep clone in the backend, so
+        # `.clone()` duplicates exactly what `emit_own_destroy` frees: a fresh allocation
+        # holding a deep copy of the pointee.
+        from sushi_lang.backend.ownership import copy_out
+        return copy_out(codegen, own_value, own_type)
     elif call.method == "destroy":
         # Extract variable name from receiver (if it's a Name node)
         from sushi_lang.semantics.ast import Name
         if isinstance(call.receiver, Name):
             var_name = call.receiver.id
+            # find_local_slot is the ASSERTIVE form: a miss is CE0055, never None
+            # (the semantic passes already accepted the name), so there is no
+            # not-found branch here (11b).
             slot = codegen.memory.find_local_slot(var_name)
-            if slot is not None:
-                # Deep teardown via the general recursive destructor (same as the RAII
-                # path), so manual destroy of a nested Own<Own<T>> frees every level.
-                from sushi_lang.backend.destructors import emit_value_destructor
-                emit_value_destructor(codegen, slot, own_type)
-                codegen.dynamic_arrays.mark_own_destroyed(var_name)
-                return ir.Constant(codegen.types.i32, 0)
+            # Deep teardown via the general recursive destructor (same as the RAII
+            # path), so manual destroy of a nested Own<Own<T>> frees every level.
+            from sushi_lang.backend.destructors import emit_value_destructor
+            emit_value_destructor(codegen, slot, own_type)
+            codegen.dynamic_arrays.mark_own_destroyed(var_name)
+            return ir.Constant(codegen.types.i32, 0)
         # Temporary / non-Name receiver: shallow single free of the loaded value.
         return emit_own_destroy(codegen, own_value)
     else:
         raise_internal_error("CE0080", method=call.method)
-
-
-def _arg_type_is_owning(codegen: Any, ty: Type) -> bool:
-    """Return True if a value of this type carries heap ownership, so passing it into
-    Own.alloc() should move (consume) the source variable.
-
-    Covers Own<T> and List<T> (whose single buffer field is a raw pointer that
-    needs_cleanup() does not recognise) plus everything needs_cleanup() catches
-    (dynamic arrays, structs with owned fields, enums with owned associated data).
-    """
-    from sushi_lang.backend.destructors import needs_cleanup
-    return (
-        codegen.dynamic_arrays.is_own_type(ty)
-        or codegen.dynamic_arrays.is_list_type(ty)
-        or needs_cleanup(ty)
-    )
 
 

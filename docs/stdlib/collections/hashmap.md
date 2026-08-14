@@ -116,8 +116,9 @@ foreach(entry in ages.entries()):
 ```
 
 !!! note
-    `.keys()`, `.values()`, and `.entries()` require the receiver to be a plain variable
-    name — chained calls such as `get_map().keys()` are not currently supported.
+    `.keys()`, `.values()`, and `.entries()` accept any receiver whose type resolves,
+    including a fallible getter: `foreach(k in get_map()??.keys())` works, and the map
+    it produces is freed at scope exit. This used to require a plain variable name.
 
 ### `.free() -> ~`
 

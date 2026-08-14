@@ -107,8 +107,8 @@ fn navigate() i32 | ProcessError:
         let string current = getcwd()??
         println("Current: {current}")
 
-        # Restore original directory
-        chdir(original)??
+        # Restore original directory (clone: original is read again right after)
+        chdir(original.clone())??
         println("Restored to {original}")
 
     return Result.Ok(0)
@@ -584,8 +584,8 @@ fn process_directory(string dir_path) i32 | ProcessError:
     # Save current location
     let string original_dir = getcwd()??
 
-    # Change to target directory
-    let i32 change_result = chdir(dir_path)??
+    # Change to target directory (clone: dir_path is read again below)
+    let i32 change_result = chdir(dir_path.clone())??
     if (change_result != 0):
         println("ERROR: Cannot access directory: {dir_path}")
         return Result.Ok(1)

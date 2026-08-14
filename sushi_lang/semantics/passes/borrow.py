@@ -19,7 +19,7 @@ without runtime overhead.
 
 from __future__ import annotations
 from typing import Dict, FrozenSet, Iterable, Iterator, Set, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sushi_lang.semantics.ast import (
     ArrayLiteral,
@@ -66,7 +66,11 @@ from sushi_lang.semantics.ast import (
     UnaryOp,
     While,
 )
-from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, Type, is_owning_type, type_moves_by_value
+from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, Type
+from sushi_lang.semantics.ownership import (
+    ConsumingUse, Ownership, Provenance, TypeClass, classify, is_get_out_container,
+    type_class_of,
+)
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.error_reporter import PassErrorReporter
@@ -97,12 +101,59 @@ class BorrowState:
     poke_borrow_count: int = 0  # Number of active &poke borrows (max 1)
     peek_borrow_count: int = 0  # Number of active &peek borrows (unlimited)
     is_moved: bool = False  # Ownership has been transferred
-    is_owning_closure: bool = False  # A capturing closure that owns a heap env (capture
-                                     # is erased from the fn(...) type, so ownership is
-                                     # tracked by binding provenance, not var_type)
     is_destroyed: bool = False  # Variable has been explicitly destroyed (via .destroy())
     is_argv_view: bool = False  # main's `string[] args`: a borrowed view of process argv;
                                 # moving it by value would free argv, so it is a hard error
+    is_borrowed_binding: bool = False  # A `match` payload binding, a `foreach` item, or a
+                                # `let` bound from any read through a live owner: a
+                                # READ-ONLY borrow of storage something else still owns
+                                # (docs/design/ownership-conventions.md S8).
+                                # Distinct from is_argv_view, which is one specific borrow
+                                # with its own diagnostic, and from a ReferenceType param,
+                                # which is spelled `&peek`/`&poke` in the source.
+    owns_no_heap: bool = False  # Option B (MM.md S0.4): this binding's CURRENT value owns no
+                                # heap, so a consuming use of it transfers nothing. Today only
+                                # a `string` bound directly from a literal sets it.
+                                #
+                                # THIS LIVES ON THE BINDING AND NOT ON THE TYPE ON PURPOSE. A
+                                # closure's answer lives in `FunctionType.captures` because
+                                # FunctionType is a dataclass; `BuiltinType.STRING` is an enum
+                                # member with nowhere to put a flag. The asymmetry is
+                                # structural -- do not "fix" it by inventing a string subtype.
+                                #
+                                # Must be RE-DERIVED on every rebind, never inherited: after
+                                # `a := "Hi {name}"` the binding owns a buffer. A conditional
+                                # rebind is unknowable, so it falls back to False.
+                                #
+                                # Default False = "assume it owns heap", the same safe fallback
+                                # an unstated `captures` takes (MM.md finding A1).
+    bound_at_span: Optional[Span] = None  # Where the binding was introduced. CE2411 is a
+                                # RELATIONAL error -- the use is only wrong BECAUSE of what
+                                # the binding borrows from -- so it renders both.
+    declared_at_span: Optional[Span] = None  # Where this variable was introduced. CE2411
+                                # for a read THROUGH an owner points here as its second
+                                # location: the error exists only because this owner keeps
+                                # the value, so the ladder's tier 3 needs it.
+    borrows_from: Optional[str] = None  # The root owner this binding reads out of, for a
+                                # `let`-borrow binding (#242). `let x = c.get(0)??` names
+                                # `c`. None for a `match` / `foreach` binding, whose owner
+                                # is the scrutinee expression rather than a named local.
+    invalidated_at: Optional[Span] = None  # On a `let`-borrow BINDING: where its owner was
+                                # changed or released. Set instead of reporting, so CE2412
+                                # fires only if the binding is read afterwards -- Rust's
+                                # non-lexical lifetimes, and the same deferred shape
+                                # `is_moved` already uses for CE2405.
+    invalidated_by: tuple = ()  # (owner name, what the change was), for that diagnostic.
+    binding_borrows: list = field(default_factory=list)  # On the OWNER: every live
+                                # `let`-borrow binding reading out of it, as
+                                # (binding name, `let` span). Mutating the owner while this
+                                # list is non-empty is CE2412 -- Rust's E0502.
+                                #
+                                # Deliberately NOT one of the counters above: `_clear_borrows`
+                                # zeroes those at the end of every statement, because an
+                                # explicit `&peek x` lives only for the expression that made
+                                # it. A binding borrow lives to the end of its lexical scope,
+                                # so `_check_block` releases it instead.
     first_borrow_span: Optional[Span] = None  # Location of the first active borrow
     moved_at_span: Optional[Span] = None  # Where ownership was transferred away.
                                           # Use-after-move is a RELATIONAL error: the
@@ -134,6 +185,63 @@ class FlowFacts:
 
     def __or__(self, other: "FlowFacts") -> "FlowFacts":
         return FlowFacts(self.moved | other.moved, self.destroyed | other.destroyed)
+
+
+# Methods that change or release what a container holds. A live `let`-borrow binding out of
+# the receiver cannot survive any of them, so each is CE2412 -- Rust's E0502.
+#
+# Drawn from `BUILTIN_LIST_METHODS`, the HashMap method set and the array method set, and
+# kept as ONE set: three copies would drift, and a name missing from any copy is a silent
+# dangling borrow rather than a wrong diagnostic.
+_MUTATING_METHODS = frozenset({
+    "push", "pop", "insert", "remove", "clear", "reserve", "shrink_to_fit",
+    "rehash", "destroy", "free", "fill", "reverse",
+})
+
+
+def binds_a_bare_literal_string(declared_ty, init) -> bool:
+    """Option B (MM.md S0.4): is this binding a `string` whose value is a plain literal?
+
+    A `StringLit` points into `.rodata` and carries `owned = 0`, so it owns nothing and a
+    consuming use of it transfers nothing. An `InterpolatedString` is a DIFFERENT AST node
+    that builds a heap buffer at runtime and owns it -- classifying one of those as owning
+    nothing would skip a real free. The two being distinct node types is what makes this
+    question exact rather than a heuristic.
+
+    Deliberately an ALLOW-LIST (`isinstance(init, StringLit)`) and not a deny-list
+    ("anything that is not an InterpolatedString"): every other initializer shape -- a call, a
+    `??`, a name, a field read, a container get-out -- must also answer False. A deny-list
+    would answer True for all of them.
+
+    The single spelling of this rule. The `let` path and the rebind path both call it, because
+    a rebind must RE-DERIVE the answer rather than inherit it.
+    """
+    from sushi_lang.semantics.ast import StringLit
+    from sushi_lang.semantics.typesys import BuiltinType
+    return declared_ty == BuiltinType.STRING and isinstance(init, StringLit)
+
+
+def _split_type_args(args: str) -> list[str]:
+    """Split an interned type-argument list on its TOP-LEVEL commas.
+
+    `HashMap<i32, List<i32>>` carries `i32, List<i32>`, and a plain `split(",")` would cut
+    the nested argument in half. Depth counting is all that is needed, because the interned
+    spelling is always balanced.
+    """
+    parts, depth, current = [], 0, ""
+    for ch in args:
+        if ch == "<":
+            depth += 1
+        elif ch == ">":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append(current.strip())
+            current = ""
+        else:
+            current += ch
+    if current.strip():
+        parts.append(current.strip())
+    return parts
 
 
 def _iter_stmts(block: Block) -> Iterator[Stmt]:
@@ -266,8 +374,14 @@ class BorrowChecker:
 
     def __init__(self, reporter: Reporter,
                  destroy_effects: Optional[Dict[str, FrozenSet[int]]] = None,
-                 enum_names: Optional[Set[str]] = None):
+                 enum_names: Optional[Set[str]] = None,
+                 tables=None):
         self.reporter = reporter
+        # Struct/enum tables, used only to RESOLVE a named type before classifying it.
+        # `owns_heap` answers False for an UnknownType by design, so without a
+        # resolver an owning struct named by its declaration would classify as owning
+        # nothing -- and every consuming use of it would alias instead of moving.
+        self.tables = tables
         self.err = PassErrorReporter(reporter)
         # fn name -> the &poke param indices it destroys (#168). Computed once over EVERY
         # unit by compute_destroy_effects(), so a cross-unit callee is not a blind spot.
@@ -282,6 +396,11 @@ class BorrowChecker:
         self.borrow_state: Dict[str, BorrowState] = {}
         # Track variables currently borrowed (for clearing after expressions)
         self.active_borrows: Set[str] = set()
+        # One frame per open block, holding the (owner, binding) pairs that block
+        # registered. `_check_block` pops its frame and releases them, which is what gives
+        # a `let`-borrow binding a LEXICAL lifetime. `active_borrows` cannot serve: it is
+        # emptied after every statement, and a binding outlives the statement that made it.
+        self._scope_binding_borrows: list[list[tuple[str, str]]] = []
 
     def run(self, program: Program) -> None:
         """Run borrow checking on the entire program."""
@@ -310,10 +429,12 @@ class BorrowChecker:
         # Reset borrow state for new function scope
         self.borrow_state = {}
         self.active_borrows = set()
+        self._scope_binding_borrows = []
 
         # Initialize parameters as unborrowed, unmoved
         for param in func.params:
-            state = BorrowState(name=param.name, var_type=param.ty)
+            state = BorrowState(name=param.name, var_type=param.ty,
+                                declared_at_span=getattr(param, "loc", None))
             # main's `string[] args` is a borrowed view of process argv (the runtime owns and
             # frees it). Stamp it so a by-value move is a hard error (CE2410), not a silent
             # move that makes the callee free argv (N2).
@@ -345,9 +466,25 @@ class BorrowChecker:
         self._check_block(ext.body)
 
     def _check_block(self, block: Block) -> None:
-        """Check borrow safety for a block of statements."""
-        for stmt in block.statements:
-            self._check_stmt(stmt)
+        """Check borrow safety for a block of statements.
+
+        A block is also the LIFETIME of every `let`-borrow binding declared in it (#242).
+        The frame pushed here collects them, and the release below ends them, so mutating
+        the owner after the block is legal and mutating it inside is CE2412. This is the
+        only lexical-scope notion in the pass, and it is deliberately the coarse one:
+        Rust's non-lexical lifetimes would end the borrow at its last use instead.
+        """
+        self._scope_binding_borrows.append([])
+        try:
+            for stmt in block.statements:
+                self._check_stmt(stmt)
+        finally:
+            for owner, binding in self._scope_binding_borrows.pop():
+                state = self.borrow_state.get(owner)
+                if state is not None:
+                    state.binding_borrows = [
+                        entry for entry in state.binding_borrows if entry[0] != binding
+                    ]
 
     def _check_stmt(self, stmt: Stmt) -> None:
         """Check borrow safety for a single statement."""
@@ -358,19 +495,31 @@ class BorrowChecker:
                 # Foreign `ptr` is exempt from borrow checking: aliasing through a
                 # foreign pointer is not tracked. Record the binding but skip any
                 # borrow analysis of the initializer's reference semantics.
-                self.borrow_state[stmt.name] = BorrowState(name=stmt.name, var_type=stmt.ty)
+                #
+                # The ownership stamp is NOT skipped. The exemption is about aliasing
+                # analysis, not about classification: a `ptr` is an unmanaged handle, so
+                # it classifies as PLAIN and the decision is ADOPT. Skipping the stamp
+                # left the backend's `let` position with no decision to read at all --
+                # CE0129 on the first FFI program that binds one.
+                self.borrow_state[stmt.name] = BorrowState(
+                    name=stmt.name, var_type=stmt.ty, declared_at_span=stmt.loc)
+                self._bind(stmt)
                 self._clear_borrows()
                 return
-            self.borrow_state[stmt.name] = BorrowState(name=stmt.name, var_type=stmt.ty)
+            self.borrow_state[stmt.name] = BorrowState(
+                name=stmt.name, var_type=stmt.ty, declared_at_span=stmt.loc,
+                # Option B (MM.md S0.4): a string bound straight from a literal owns no heap,
+                # so consuming it transfers nothing and CE2405 must not fire on it.
+                owns_no_heap=binds_a_bare_literal_string(stmt.ty, stmt.value))
             # Check the initialization expression
             self._check_expr(stmt.value)
             # Closure move-on-bind: `let g = f` transfers a capturing closure's owned env.
             self._reconcile_closure_bind(stmt)
-            # A let-binding from a bare owning variable MOVES it (#134): `let b = a`
-            # consumes `a`, mirroring the `:=` rebind and call-argument sinks. Copy types
-            # (primitives, strings, string-only composites) are untouched; a MemberAccess
-            # or method-call RHS is not a Name, so it keeps its continuing-owner copy.
-            self._mark_moved_if_applicable(stmt.value)
+            # A `let` BINDS; it does not take ownership (#242). The binding inherits the
+            # source's provenance, so a bare owning variable still MOVES, and a read
+            # through a live owner now makes the binding a BORROW instead of making the
+            # compiler insert a deep copy.
+            self._bind(stmt)
             # Clear any borrows from the expression
             self._clear_borrows()
 
@@ -393,6 +542,15 @@ class BorrowChecker:
                     elif state.is_borrowed:
                         self.err.emit(er.ERR.CE2401, stmt.loc, name=var_name)
 
+                    # Option B (MM.md S0.4): RE-DERIVE, never inherit. `let string a = "hi"`
+                    # owns nothing, but after `a := "Hi {name}"` it owns a buffer. Every
+                    # non-literal initializer answers False here, which also covers the
+                    # conditional rebind the decision calls unknowable -- the fallback is
+                    # "assume owning", so a rebind can only ever CLEAR this flag, never set it
+                    # on a value that owns heap.
+                    state.owns_no_heap = binds_a_bare_literal_string(
+                        state.var_type, stmt.value)
+
             elif isinstance(stmt.target, MemberAccess):
                 # Field rebinding (obj.field := value)
                 # We need to check if the receiver (obj) is borrowed
@@ -401,14 +559,36 @@ class BorrowChecker:
 
             # Check the value expression
             self._check_expr(stmt.value)
-            # Mark source as moved if rebinding from another variable (only for simple variable rebind)
+            # Both rebind shapes take ownership of the value: `x := v` replaces what `x`
+            # owned, `obj.field := v` replaces what the field owned. Only the first was
+            # ever classified, which is why a field assignment was not a recognised
+            # position at all.
+            # Replacing what the owner holds invalidates every binding reading out of
+            # it, whether the target is the owner itself or one of its fields (#242).
+            self._check_owner_not_borrowed(
+                self._root_owner(stmt.target), stmt.loc, "assign")
             if isinstance(stmt.target, Name):
-                self._mark_moved_if_applicable(stmt.value)
+                self._consume(stmt.value, ConsumingUse.REBIND)
+                # F5 (fixed 2026-08-14): a rebind RE-INITIALIZES the binding, so a
+                # previous move no longer holds -- `f(s); s := "new"; println(s)` is
+                # sound (Rust re-initialization). The value expression was checked
+                # ABOVE, so `s := "{s}-x"` still reports a use of a moved `s`. A
+                # rebind on one branch of an `if` stays conservative: the flow join
+                # unions moved facts, so the other path's move survives it.
+                target_state = self.borrow_state.get(stmt.target.id)
+                if target_state is not None:
+                    target_state.is_moved = False
+            elif isinstance(stmt.target, MemberAccess):
+                self._consume(stmt.value, ConsumingUse.FIELD_ASSIGN)
             # Clear any borrows from the expression
             self._clear_borrows()
 
         elif isinstance(stmt, Return):
             self._check_expr(stmt.value)
+            # A return hands the value to the caller. `return Result.Ok(x)` consumes `x`
+            # at ENUM_PAYLOAD and the constructor itself is FRESH, so this matters for the
+            # shape that is not wrapped: an extension method's bare `return value`.
+            self._consume(stmt.value, ConsumingUse.RETURN)
             self._clear_borrows()
 
         elif isinstance(stmt, Print) or isinstance(stmt, PrintLn):
@@ -461,17 +641,26 @@ class BorrowChecker:
         elif isinstance(stmt, Foreach):
             self._check_expr(stmt.iterable)
             self._clear_borrows()
-            # Declare loop variable
-            self.borrow_state[stmt.item_name] = BorrowState(name=stmt.item_name, var_type=stmt.item_type)
+            # The loop variable BORROWS the container's element -- that is what the backend
+            # creates (`register_cleanup=False` in statements/loops.py), and registering it
+            # here as an owned local is what made a foreach binding used by value report a
+            # CE2405 whose "moved here" note pointed at the same span as the use.
+            self.borrow_state[stmt.item_name] = BorrowState(
+                name=stmt.item_name, var_type=stmt.item_type,
+                is_borrowed_binding=True,
+                bound_at_span=stmt.item_name_span or stmt.loc,
+            )
             self._check_loop_body(stmt.body)
 
         elif isinstance(stmt, Match):
             self._check_expr(stmt.scrutinee)
             self._clear_borrows()
             for arm in stmt.arms:
-                # Add pattern bindings to scope (recursive for nested patterns)
+                # Add pattern bindings to scope (recursive for nested patterns). The
+                # scrutinee type is what gives each binding a var_type; Pass 2 stamps it
+                # (that is what CE0121 guards) and this pass used to ignore it.
                 if isinstance(arm.pattern, Pattern):
-                    self._register_pattern_bindings(arm.pattern)
+                    self._register_pattern_bindings(arm.pattern, stmt.resolved_scrutinee_type)
                 # Check arm body
                 if isinstance(arm.body, Block):
                     self._check_block(arm.body)
@@ -522,15 +711,94 @@ class BorrowChecker:
         # A variable moved (or destroyed) anywhere in the loop is so after it (conservative join).
         self._restore_flow(fixed_point)
 
-    def _register_pattern_bindings(self, pattern: Pattern) -> None:
-        """Recursively register pattern bindings in borrow state."""
-        for binding in pattern.bindings:
+    def _register_pattern_bindings(self, pattern: Pattern,
+                                   scrutinee_type: Optional[Type] = None) -> None:
+        """Register a match arm's payload bindings, WITH their types.
+
+        A payload binding is a read-only BORROW of storage the scrutinee still owns
+        (docs/design/ownership-conventions.md S8) -- which is what the backend creates
+        (`register_cleanup=False` in statements/matching.py).
+
+        The `var_type` half is what makes this bug class diagnosable at all. Before it,
+        every binding was registered as a bare `BorrowState(name=binding)` with no type, so
+        `owns_heap(None)` was always False and a match binding could never be
+        classified as owning anything -- the eight positions that got (BORROWED, MOVE)
+        wrong could not have been caught here even in principle. The types come from the
+        variant Pass 2 already resolved for the backend.
+        """
+        variant_types = self._variant_payload_types(scrutinee_type, pattern.variant_name)
+        span = pattern.variant_name_span or pattern.loc
+
+        for index, binding in enumerate(pattern.bindings):
+            payload_type = variant_types[index] if index < len(variant_types) else None
             if isinstance(binding, str):
                 if binding != "_":  # Skip wildcard bindings
-                    self.borrow_state[binding] = BorrowState(name=binding)
+                    self.borrow_state[binding] = BorrowState(
+                        name=binding, var_type=payload_type,
+                        is_borrowed_binding=True, bound_at_span=span,
+                    )
             elif isinstance(binding, Pattern):
-                # Nested pattern - recursively register bindings
-                self._register_pattern_bindings(binding)
+                # Nested pattern: its own bindings are typed by the payload enum it matches.
+                self._register_pattern_bindings(binding, payload_type)
+            else:
+                # An OwnPattern auto-unwraps `Own@(T)`; its inner pattern binds the pointee.
+                inner = getattr(binding, "inner_pattern", None)
+                if isinstance(inner, Pattern):
+                    self._register_pattern_bindings(inner, self._own_payload(payload_type))
+                elif isinstance(inner, str) and inner != "_":
+                    self.borrow_state[inner] = BorrowState(
+                        name=inner, var_type=self._own_payload(payload_type),
+                        is_borrowed_binding=True, bound_at_span=span,
+                    )
+
+    def _variant_payload_types(self, enum_type: Optional[Type],
+                               variant_name: str) -> tuple:
+        """The associated types of `variant_name`, or () when the enum is not resolved.
+
+        Empty is the safe answer: it leaves every binding untyped, which is exactly the
+        pre-existing behaviour, so an unresolved scrutinee degrades to "cannot classify"
+        rather than to a wrong classification.
+        """
+        from sushi_lang.semantics.typesys import EnumType as _EnumType
+        resolved = self._resolve_named(enum_type)
+        if not isinstance(resolved, _EnumType):
+            return ()
+        variant = resolved.get_variant(variant_name)
+        return tuple(variant.associated_types) if variant is not None else ()
+
+    def _own_payload(self, ty: Optional[Type]) -> Optional[Type]:
+        """The `T` inside an `Own@(T)`, for an OwnPattern's inner binding.
+
+        Both spellings must be handled. Before monomorphization the payload is a
+        `GenericTypeRef("Own", [T])`; after it, an interned `StructType` named `Own<T>`
+        whose single field is `T*`. Recognising only the first left the binding untyped,
+        which classifies as PLAIN -- so an `Own(tail)` binding of an owning enum was
+        adopted rather than copied, and the pointee was freed twice.
+        """
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        from sushi_lang.semantics.typesys import PointerType, StructType as _StructType
+        ty = self._resolve_named(ty)
+        if isinstance(ty, GenericTypeRef) and ty.base_name == "Own" and ty.type_args:
+            return ty.type_args[0]
+        if isinstance(ty, _StructType) and ty.name.startswith("Own<") and ty.fields:
+            value_field = ty.fields[0][1]
+            if isinstance(value_field, PointerType):
+                return value_field.pointee_type
+        return None
+
+    def _resolve_named(self, ty: Optional[Type]):
+        """Resolve an `UnknownType` against the struct/enum tables; identity otherwise.
+
+        The single resolver this pass hands to `semantics.ownership.type_class_of`, so
+        the classification and the pattern-binding lookup cannot disagree about what a
+        name means.
+        """
+        from sushi_lang.semantics.typesys import UnknownType
+        if not isinstance(ty, UnknownType) or self.tables is None:
+            return ty
+        structs = getattr(getattr(self.tables, "structs", None), "by_name", None) or {}
+        enums = getattr(getattr(self.tables, "enums", None), "by_name", None) or {}
+        return structs.get(ty.name) or enums.get(ty.name) or ty
 
     def _check_expr(self, expr: Expr) -> None:
         """Check borrow safety for an expression."""
@@ -546,6 +814,9 @@ class BorrowChecker:
                     self._emit_use_after_move(expr.id, expr.loc, state)
                 elif state.is_destroyed:
                     self.err.emit(er.ERR.CE2406, expr.loc, name=expr.id)
+                elif state.invalidated_at is not None:
+                    # A `let`-borrow binding read after its owner changed (#242).
+                    self._emit_use_of_invalidated_borrow(expr.id, expr.loc, state)
 
         elif isinstance(expr, Call):
             # Check the callee (a moved closure used as `f(x)` is a use-after-move) and
@@ -560,7 +831,7 @@ class BorrowChecker:
             # by-value and therefore moved. This holds uniformly for ordinary function
             # calls, indirect closure calls, and struct constructors.
             for arg in expr.args:
-                self._mark_moved_if_applicable(arg)
+                self._consume(arg, ConsumingUse.CALL_ARG)
 
             # A callee that destroys its `&poke` parameter destroys the CALLER's value
             # (#168). Without this the borrow checker only ever saw a literal
@@ -573,14 +844,33 @@ class BorrowChecker:
             self._check_expr(expr.receiver)
             for arg in expr.args:
                 self._check_expr(arg)
+            self._maybe_reject_mutation(expr)
+            self._maybe_mark_container_insert(expr)
             self._maybe_mark_own_alloc_move(expr)
 
         elif isinstance(expr, DotCall):
             # DotCall is the unified X.Y(args) node used before type checking
             # Check receiver and arguments (same as MethodCall)
+            #
+            # DECISION 1 (MM.md S2.F): an FFI string argument NEVER consumes. `libc.strlen(s)`
+            # must not move `s` -- the callee is C, it cannot own a Sushi string, and the
+            # marshalled buffer is already freed at scope exit. Rust passes `as_ptr(&self)`,
+            # Zig takes `[*:0]const u8`, cgo leaves the pointer caller-owned.
+            #
+            # That holds here STRUCTURALLY rather than by a condition: an FFI call arrives as a
+            # DotCall (`external_ref` is stamped by Pass 2), and this arm consumes only for an
+            # enum constructor and a container insert -- `ConsumingUse.CALL_ARG` is reached
+            # from the `Call` arm alone. Verified under the all-strings-move prototype: the
+            # FFI corpus compiles clean.
+            #
+            # **Do not add a blanket `_consume(arg, CALL_ARG)` loop to this arm.** It would
+            # make every FFI argument a move and every `libc.*(s)` call site a false CE2405.
+            # `tests/ffi/test_ffi_string_arg_not_consumed.sushi` is the gate, and it becomes
+            # load-bearing the moment `string` starts moving.
             self._check_expr(expr.receiver)
             for arg in expr.args:
                 self._check_expr(arg)
+            self._maybe_reject_mutation(expr)
             # An enum constructor is an ownership sink (#134), exactly like a `from([...])`
             # element or an array-literal element: the enum stores the payload shallowly and
             # frees it, so a bare owning Name argument MOVES. `Box.Full(a)` reaches this pass
@@ -589,7 +879,18 @@ class BorrowChecker:
             # `a` read through a stale descriptor and printed plausible WRONG data.
             if self._is_enum_constructor(expr):
                 for arg in expr.args:
-                    self._mark_moved_if_applicable(arg)
+                    self._consume(arg, ConsumingUse.ENUM_PAYLOAD)
+            elif getattr(expr, "callee_fn_type", None) is not None:
+                # An indirect call through a fn-typed FIELD (`obj.handler(x)`, `env.f(x)`)
+                # is a real call: a by-value argument transfers to the callee exactly like
+                # the Call arm's (the 2026-08-14 ruling -- the callee owns its by-value
+                # parameters). Keyed on the `callee_fn_type` stamp Pass 2 writes when it
+                # resolves the field call, so an FFI / extension / builtin method (which
+                # never carries the stamp) keeps the no-consume rule above.
+                for arg in expr.args:
+                    self._consume(arg, ConsumingUse.CALL_ARG)
+            else:
+                self._maybe_mark_container_insert(expr)
             self._maybe_mark_own_alloc_move(expr)
 
         elif isinstance(expr, BinaryOp):
@@ -611,14 +912,14 @@ class BorrowChecker:
                 self._check_expr(arg)
                 # Same ownership sink as the DotCall spelling above, for whichever paths
                 # hand the checker an already-resolved EnumConstructor node.
-                self._mark_moved_if_applicable(arg)
+                self._consume(arg, ConsumingUse.ENUM_PAYLOAD)
 
         elif isinstance(expr, DynamicArrayFrom):
             for elem in expr.elements.elements:
                 self._check_expr(elem)
                 # from([...]) is an ownership sink (#134): a bare owning element variable
                 # moves into the new dynamic array; a MemberAccess element keeps its copy.
-                self._mark_moved_if_applicable(elem)
+                self._consume(elem, ConsumingUse.ARRAY_ELEMENT)
 
         elif isinstance(expr, ArrayLiteral):
             for elem in expr.elements:
@@ -626,7 +927,7 @@ class BorrowChecker:
                 # An array-literal element is an ownership sink (#134): a bare owning
                 # element variable moves into the array. A MemberAccess element keeps its
                 # continuing-owner copy (only bare Names are marked by _mark_moved).
-                self._mark_moved_if_applicable(elem)
+                self._consume(elem, ConsumingUse.ARRAY_ELEMENT)
 
         elif isinstance(expr, CastExpr):
             self._check_expr(expr.expr)
@@ -640,23 +941,24 @@ class BorrowChecker:
                     self._check_expr(part)
 
         elif isinstance(expr, Lambda):
-            # Move-capture: an owned captured value (dynamic array / List / Own /
-            # capturing closure) is moved into the closure's environment, so a later
-            # use of the outer binding is a use-after-move (CE2405). Copyable captures
-            # (primitives, strings) stay usable.
+            # A captured slot is the CAPTURE consuming use: the heap environment takes
+            # ownership of the value, and it outlives the scope that created it. So the
+            # decision is the shared table's, exactly like the other ten positions.
+            #
+            # A capture holds no source `Expr` -- `Lambda.captures` is a list of `Param`
+            # -- so the provenance goes on the `Param` itself, and `emit_lambda` reads it
+            # from there. `Param` is an unslotted dataclass, and this pass runs after
+            # lambda lifting, so the backend sees the objects stamped here.
             for cap in (expr.captures or []):
-                if isinstance(cap.name, str) and cap.name in self.borrow_state:
-                    state = self.borrow_state[cap.name]
-                    # Closure capture stays on is_owning_type, NOT the move-by-value flip
-                    # (#134 spec §3: capture is unchanged; the backend capture path is not
-                    # flipped, so an owning-struct capture copy-captures as before).
-                    if is_owning_type(cap.ty):
-                        state.is_moved = True
-                        state.moved_at_span = state.moved_at_span or expr.loc
+                if not isinstance(cap.name, str):
+                    continue
+                provenance = self._name_provenance(cap.name)
+                cap.ownership_provenance = provenance
+                self._consume_named(cap.name, provenance, expr.loc)
 
         elif isinstance(expr, Spread):
             # Bloom: `arr...`. The source is USED here (so a moved source is reported)
-            # and, in a call-argument position, MOVED -- see _mark_moved_if_applicable,
+            # and, in a call-argument position, MOVED -- see _consume,
             # which the Call arm runs over every argument after checking them.
             self._check_expr(expr.value)
 
@@ -706,6 +1008,13 @@ class BorrowChecker:
                 self._emit_use_after_move(var_name, borrow.loc, state)
                 return
 
+            # A `&poke` may mutate or free, so it conflicts with a live `let`-borrow
+            # binding exactly as a mutating method does (#242). Reported as CE2412 rather
+            # than CE2407, because the user wrote no `&peek` and CE2407's text would name
+            # a borrow they cannot see.
+            if is_poke:
+                self._check_owner_not_borrowed(var_name, borrow.loc, "take `&poke`")
+
             # Check borrow compatibility based on mode
             if is_poke:
                 # &poke: exclusive borrow - no other borrows allowed
@@ -754,6 +1063,9 @@ class BorrowChecker:
             if state.is_moved:
                 self._emit_use_after_move(base_var, borrow.loc, state)
                 return
+
+            if is_poke:
+                self._check_owner_not_borrowed(base_var, borrow.loc, "take `&poke`")
 
             # Check borrow compatibility based on mode
             if is_poke:
@@ -818,43 +1130,82 @@ class BorrowChecker:
             return False
         return receiver.id in self.enum_names and receiver.id not in self.borrow_state
 
+    # `List.push`/`.insert`, `HashMap.insert` and `T[].push` store the argument and free
+    # it themselves, so each is a consuming use. Only the METHOD NAME is matched loosely;
+    # the receiver must be a container, so a user extension method that happens to be
+    # called `push` is not swept up.
+    _CONTAINER_INSERT_METHODS = frozenset({"push", "insert"})
+
+    def _maybe_mark_container_insert(self, expr: Expr) -> None:
+        """`l.push(x)` / `m.insert(k, v)` takes ownership -- the CONTAINER_INSERT use.
+
+        The backend has always MOVED here, while this pass marked nothing: only
+        `Own.alloc` and enum constructors
+        were recognised among method calls. So `l.push(a)` followed by a read of `a`
+        compiled clean and read through a pointer the List owns -- and after the List is
+        destroyed the same read is a use-after-free returning whatever the allocator left.
+        `docs/design/move-semantics.md:120` called this sink "already move-shaped"; it was
+        move-shaped in codegen only.
+        """
+        if getattr(expr, "method", None) not in self._CONTAINER_INSERT_METHODS:
+            return
+        # The receiver is typed by _read_type, the ONE walker for read-through-an-owner
+        # shapes. A narrower twin (`_expr_type`, Name/MemberAccess only) used to live
+        # here; it did not unwrap TryExpr, so `outer.get(0)??.push(5)` was never
+        # recognised as an insert, its argument stayed unstamped, and the seam reported
+        # CE0129 -- the same missing unwrap that shipped the E3 double free in the
+        # backend twin. Two spellings of one rule, folded (11b).
+        if not self._is_container_type(self._read_type(getattr(expr, "receiver", None))):
+            return
+        for arg in expr.args:
+            self._consume(arg, ConsumingUse.CONTAINER_INSERT)
+
+    def _is_container_type(self, ty: Optional[Type]) -> bool:
+        """Is `ty` a `List@(T)`, `HashMap@(K, V)` or a dynamic array `T[]`?
+
+        `Own@(T)` is deliberately absent: it has no insert method, and its `.get()` is a
+        deref through a live owner rather than a copy-out (see `is_own_type`).
+        """
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        ty = self._resolve_named(ty)
+        if isinstance(ty, ReferenceType):
+            ty = ty.referenced_type
+        if isinstance(ty, DynamicArrayType):
+            return True
+        if isinstance(ty, GenericTypeRef):
+            return ty.base_name in ("List", "HashMap")
+        name = getattr(ty, "name", None)
+        return isinstance(name, str) and (name.startswith("List<") or name.startswith("HashMap<"))
+
     def _maybe_mark_own_alloc_move(self, expr: Expr) -> None:
-        """Own.alloc(x) takes ownership of an owning x; mark x moved so a later use of x
-        is a use-after-move (CE2405), matching move semantics for arrays/lists/structs."""
+        """`Own.alloc(x)` takes ownership of `x` -- the OWN_ALLOC consuming use."""
         if getattr(expr, 'method', None) != 'alloc':
             return
         receiver = getattr(expr, 'receiver', None)
         if not (isinstance(receiver, Name) and receiver.id == 'Own'):
             return
         for arg in expr.args:
-            if isinstance(arg, Name) and arg.id in self.borrow_state:
-                state = self.borrow_state[arg.id]
-                if self._type_moves_by_value(state.var_type):
-                    state.is_moved = True
-                    state.moved_at_span = state.moved_at_span or arg.loc
-
-    def _type_moves_by_value(self, vt: Optional[Type]) -> bool:
-        """True if a value of this type MOVES at an ownership sink (#134).
-
-        Delegates to the shared `type_moves_by_value` predicate (typesys) so the borrow
-        checker and every backend flip site agree on what moves — dynamic arrays, `List`,
-        `Own`, capturing closures, AND any struct/enum/fixed array that transitively
-        contains one. Strings and string-only composites copy (not this predicate).
-
-        NB: closure *capture* classification stays on `is_owning_type` (spec §3 pins it
-        unchanged; the backend capture path is not flipped), so that call uses the module
-        predicate directly rather than this method.
-        """
-        return type_moves_by_value(vt)
+            self._consume(arg, ConsumingUse.OWN_ALLOC)
 
     def _reconcile_closure_bind(self, stmt: Let) -> None:
-        """Track capturing-closure ownership across `let` bindings.
+        """Record whether a `fn(...)` binding owns a heap environment.
 
-        Capture is erased from the `fn(...)` type, so a closure's heap-env ownership is
-        tracked by binding provenance: a capturing lambda literal owns its env, and a
-        plain rebind `let g = f` MOVES that ownership (a later use of `f` is CE2405, the
-        same move semantics as arrays/List/Own). Non-capturing fn values are copyable and
-        untracked, so plain fn-ref code keeps working."""
+        `FunctionType.__eq__` excludes `captures` from type identity, so the DECLARED type
+        of a `fn(...)` local says nothing about ownership. The initializer says everything:
+        a capturing lambda literal owns an environment, and a plain fn reference owns
+        nothing. This writes that answer into the binding's recorded type, so the one
+        shared classifier reads a precise input here and needs no override of its own.
+
+        The backend cannot do the same. At each position it holds the declared TARGET type
+        -- a `List@(fn(i32) -> i32)` element, a struct field, a parameter -- which has
+        already lost the captures. So it classifies every function value as owning and
+        lets the null `drop_ptr` / `clone_ptr` guard make that answer exact at runtime.
+        One rule, two precisions. Being conservative there costs nothing; being
+        conservative HERE would report CE2405 for a plain fn reference used twice.
+
+        Runs before the `LET` consume, so marking the source moved stays that call's job.
+        """
+        from dataclasses import replace
         from sushi_lang.semantics.typesys import FunctionType
         if not isinstance(stmt.ty, FunctionType):
             return
@@ -862,14 +1213,18 @@ class BorrowChecker:
         if dest is None:
             return
         value = stmt.value
-        if isinstance(value, Lambda) and value.captures:
-            dest.is_owning_closure = True
+        if isinstance(value, Lambda):
+            dest.var_type = replace(stmt.ty, captures=tuple(value.captures or ()))
         elif isinstance(value, Name):
             src = self.borrow_state.get(value.id)
-            if src is not None and src.is_owning_closure:
-                src.is_moved = True
-                src.moved_at_span = src.moved_at_span or value.loc
-                dest.is_owning_closure = True
+            if src is None:
+                # Not a local: a reference to a top-level function, which captures
+                # nothing. State the empty tuple -- leaving it None would read as
+                # "unstated", and a plain fn reference would then move on every use.
+                dest.var_type = replace(stmt.ty, captures=())
+            elif isinstance(src.var_type, FunctionType):
+                # `let g = f` hands `f`'s environment, if it has one, to `g`.
+                dest.var_type = src.var_type
 
     def _emit_use_after_move(self, name: str, use_span: Optional[Span],
                              state: BorrowState) -> None:
@@ -896,17 +1251,101 @@ class BorrowChecker:
             if isinstance(arg, Name) and arg.id in self.borrow_state:
                 self.borrow_state[arg.id].is_destroyed = True
 
-    def _mark_moved_if_applicable(self, expr: Expr) -> None:
-        """Mark a variable as moved if the expression is a bare reference to an owning value.
+    def _source_provenance(self, expr: Expr) -> Provenance:
+        """Where the value at a consuming use came from -- the half only semantics knows.
 
-        Move semantics apply to every owning type in Sushi -- dynamic arrays, `List<T>`,
-        `Own<T>`, and capturing closures (the shared `is_owning_type` predicate). Primitives,
-        strings, and copyable structs are copied, not moved.
+        The backend cannot compute this. It has cleanup registries and LLVM values, and
+        has been asking `is_owned_local` ("is this registered for cleanup?") as a proxy
+        for "is this a borrow of something still live?". Those coincide for a `let` local
+        and a fresh temporary and diverge for exactly one thing: a binding. This pass has
+        the AST, the types, the scopes and `borrow_state` -- it KNOWS a match binding is a
+        binding.
+
+        Shapes, and why each is what it is:
+          Name in borrow_state     -- a binding, a `let` bound from a borrow, or a
+                                      `&peek`/`&poke` param is BORROWED; anything else
+                                      declared here is an OWNED local
+          Name not in borrow_state -- a top-level fn reference or a constant: FRESH
+          a read through an owner  -- BORROWED. `s.field`, `arr[i]`, and a container
+                                      get-out. See `_reads_through_owner`.
+          everything else          -- FRESH: a constructor, a call result, `.clone()`, a
+                                      literal, and a `List.pop()`, which REMOVES the
+                                      element so the container stops owning it.
         """
-        # Rebinding from / passing a bare owning variable transfers ownership:
-        # Example: arr1 := arr2  (arr2 is moved if arr2 is owning)
-        # Example: x := y        (y is copied if y is a primitive like i32)
+        if isinstance(expr, Name):
+            return self._name_provenance(expr.id)
 
+        if self._reads_through_owner(expr):
+            return Provenance.BORROWED
+
+        return Provenance.FRESH
+
+    def _reads_through_owner(self, expr: Optional[Expr]) -> bool:
+        """Does `expr` read a value out of storage something else still owns?
+
+        A field read, an index and a container get-out all hand back a value the owner
+        keeps and still frees. Until #242 the backend deep-copied at each of these, so the
+        result was nobody else's and the honest answer was FRESH. Phase 7 deleted those
+        copies, so the result is a view and this predicate had to move with them.
+
+        The get-out arm keys on the RECEIVER'S TYPE, never on the bare method name: a user
+        extension method called `get` is an ordinary call that returns a fresh value, and
+        classifying it as a container read would report a false CE2411. Where the receiver
+        is itself a read through an owner the answer recurses -- a get-out of a borrow is
+        a borrow.
+        """
+        while isinstance(expr, TryExpr):
+            # `c.get(i)??` -- the get-out sits under the propagation operator.
+            expr = expr.expr
+
+        if isinstance(expr, (MemberAccess, IndexAccess)):
+            return True
+
+        if getattr(expr, "method", None) == "get":
+            receiver = getattr(expr, "receiver", None)
+            if isinstance(receiver, Name):
+                state = self.borrow_state.get(receiver.id)
+                return state is not None and is_get_out_container(state.var_type)
+            return self._reads_through_owner(receiver)
+
+        return False
+
+    def _name_provenance(self, name: str) -> Provenance:
+        """The `Provenance` of a source that is a bare name.
+
+        Split out of `_source_provenance` because a lambda capture names a variable
+        without holding an `Expr` for it -- `Lambda.captures` is a list of `Param`. Both
+        paths must give the same answer, so both call this.
+        """
+        state = self.borrow_state.get(name)
+        if state is None:
+            # Not declared in this function: a top-level fn reference or a constant.
+            return Provenance.FRESH
+        if state.is_borrowed_binding or isinstance(state.var_type, ReferenceType):
+            return Provenance.BORROWED
+        return Provenance.OWNED
+
+    def _consume(self, expr: Expr, use: ConsumingUse) -> None:
+        """Classify a consuming use, stamp the decision, and act on it.
+
+        THE one place the borrow checker decides what happens to a value handed to a
+        position that takes ownership. It:
+
+          1. computes the source's `Provenance` (only this pass can),
+          2. stamps it on the source AST node for the backend seam to read,
+          3. asks the shared `classify()` table what that means for this type, and
+          4. marks the source moved (MOVE) or reports CE2411 (REJECT).
+
+        Steps 3 and 4 use the SOURCE's recorded type. That is sound because Pass 2 has
+        already validated assignability at this position, so the source and target types
+        agree on what they own. Where the source has no recorded type -- a constructor, a
+        call -- the provenance is FRESH, which is ADOPT for every type class, so the
+        missing type cannot change the answer.
+
+        The backend calls the same `classify()` with the resolved target type and this
+        stamped provenance. Two callers, two halves of the input, ONE implementation of
+        the rule -- which is what stops them drifting the way eleven inline derivations did.
+        """
         # A bloom `arr...` MOVES its source array into the callee -- the backend marks it
         # moved and the callee frees it. CE0120 already restricts the source to a bare
         # array variable, so the inner expression is always a Name. Unwrapping it here is
@@ -914,15 +1353,373 @@ class BorrowChecker:
         if isinstance(expr, Spread):
             expr = expr.value
 
+        provenance = self._source_provenance(expr)
+        # Only PROVENANCE is stamped. The `use` is the backend's to name: semantics cannot
+        # tell `S(x)` from `f(x)` (both are a `Call` here) while the backend knows exactly
+        # which position it is emitting, so stamping a guess would be a second, weaker
+        # answer to a question that already has an authoritative one.
+        expr.ownership_provenance = provenance
+
         if isinstance(expr, Name):
-            if expr.id in self.borrow_state:
-                state = self.borrow_state[expr.id]
-                if state.is_argv_view:
-                    # Moving main's borrowed argv view would double-free process argv (N2).
-                    self.err.emit(er.ERR.CE2410, expr.loc, name=expr.id)
-                elif self._type_moves_by_value(state.var_type):
-                    state.is_moved = True
-                    state.moved_at_span = state.moved_at_span or expr.loc
+            self._consume_named(expr.id, provenance, expr.loc)
+            return
+
+        # A read through a live owner -- `h.inner`, `rows[i]`, `c.get(0)??` -- has no owner
+        # to mark moved, but it CAN be rejected (#242): the owner keeps the value and still
+        # frees it, so a position that takes ownership cannot have it. Before let-borrow
+        # bindings this cell COPIED, so there was nothing to report and only a Name mattered.
+        # Leaving it that way made the backend classify REJECT with no diagnostic ahead of
+        # it, which surfaced as CE0129 -- an internal error for a plain user mistake.
+        if provenance is not Provenance.BORROWED:
+            return
+        if classify(provenance, self._type_class(self._read_type(expr))) is Ownership.REJECT:
+            self._emit_consume_of_read(expr)
+
+    def _consume_named(self, name: str, provenance: Provenance,
+                       use_span: Optional[Span]) -> None:
+        """Apply the ownership decision to a source that is a bare name.
+
+        The decision core of `_consume`, split out because a lambda capture reaches it
+        without an `Expr`. It marks the source moved, reports CE2411, or does nothing.
+        Only a name has an owner to move or a binding to reject.
+        """
+        state = self.borrow_state.get(name)
+        if state is None:
+            return
+
+        if state.is_argv_view:
+            # Moving main's borrowed argv view would double-free process argv (N2). A more
+            # specific diagnostic than CE2411, so it wins.
+            self.err.emit(er.ERR.CE2410, use_span, name=name)
+            return
+
+        decision = classify(provenance, self._type_class_of_source(state, state.var_type))
+        if decision is Ownership.MOVE:
+            # Handing the owner away leaves every binding reading out of it pointing at
+            # storage the new owner frees (#242).
+            self._check_owner_not_borrowed(name, use_span, "move")
+            state.is_moved = True
+            state.moved_at_span = state.moved_at_span or use_span
+        elif decision is Ownership.REJECT:
+            self._emit_consume_of_borrow(name, use_span, state)
+
+    def _bind(self, stmt: Let) -> None:
+        """Give a `let` binding the provenance of its initializer (#242).
+
+        A `let` BINDS. It does not take ownership. The binding inherits the source's
+        provenance, and that one rule produces every shape with no per-shape exception:
+
+            OWNED source, MOVE type  -> move the value;          the binding OWNS
+            OWNED source, PLAIN type -> copy the bytes;          the binding OWNS
+            BORROWED source          -> borrow the same storage; the binding BORROWS
+            FRESH source             -> adopt the value;         the binding OWNS
+
+        So this is `_consume_named` with ONE answer mapped differently: where a position
+        that takes ownership reports CE2411, a `let` records a borrowed binding. The rule
+        still has exactly one implementation -- both ask `classify()` -- because what
+        differs is what the CALLER does with REJECT, not what the table says.
+        """
+        expr = stmt.value
+        provenance = self._source_provenance(expr)
+        # Stamped for the backend seam, exactly as `_consume` stamps a consuming use.
+        expr.ownership_provenance = provenance
+
+        dest = self.borrow_state.get(stmt.name)
+        if dest is None:
+            return
+
+        src_state = self.borrow_state.get(expr.id) if isinstance(expr, Name) else None
+
+        if src_state is not None and src_state.is_argv_view:
+            # Binding main's argv view by value would make the new binding free argv
+            # (N2). The same hard error as any other move of it, and more specific than
+            # anything the table says.
+            self.err.emit(er.ERR.CE2410, expr.loc, name=expr.id)
+            return
+
+        # The SOURCE's recorded type where there is one, because it is the more precise
+        # input: `_reconcile_closure_bind` writes the initializer's real capture list onto
+        # a `fn(...)` local, and the DECLARED type has already lost it -- classifying by
+        # the declared type would move a plain fn reference and report a false CE2405.
+        ty = src_state.var_type if src_state is not None else stmt.ty
+
+        decision = classify(provenance, self._type_class_of_source(src_state, ty))
+        if decision is Ownership.MOVE:
+            # OWNED is the only provenance that reaches MOVE, and only a named local is
+            # ever OWNED, so `src_state` is always present here.
+            src_state.is_moved = True
+            src_state.moved_at_span = src_state.moved_at_span or expr.loc
+        elif decision is Ownership.REJECT:
+            self._record_borrowed_binding(stmt, dest)
+
+    def _record_borrowed_binding(self, stmt: Let, dest: BorrowState) -> None:
+        """Record that a `let` borrows storage its initializer's owner keeps (#242).
+
+        Two halves, and both are needed. The binding is marked BORROWED, so consuming it
+        later is CE2411 exactly like a `match` binding. And the OWNER is told, so mutating
+        or freeing it while the binding is live is CE2412 -- without that half the binding
+        can dangle, which is the whole reason a borrow needs a lifetime.
+        """
+        dest.is_borrowed_binding = True
+        dest.bound_at_span = stmt.loc
+
+        owner = self._root_owner(stmt.value)
+        if owner is None:
+            return
+        owner_state = self.borrow_state.get(owner)
+        if owner_state is None:
+            return
+        dest.borrows_from = owner
+        owner_state.binding_borrows.append((stmt.name, stmt.loc))
+        self._scope_binding_borrows[-1].append((owner, stmt.name))
+
+    def _read_type(self, expr: Optional[Expr]) -> Optional[Type]:
+        """The type a read-through-an-owner expression produces.
+
+        Needed because a BORROWED source is now often NOT a bare name: `h.inner`,
+        `rows[i]` and `c.get(0)??` all carry a provenance but no `BorrowState`, so there is
+        no recorded type to classify. Without this, a MOVE-typed field read reached the
+        backend, classified REJECT there, and became CE0129 -- an internal error where the
+        user should have seen CE2411.
+
+        Deliberately partial. It walks only the shapes `_reads_through_owner` recognises,
+        and answers None for anything else. None classifies as PLAIN, i.e. "consume it
+        freely", which is the answer this pass gave every non-name source before #242 --
+        so a gap here can only fail to report, never report falsely.
+        """
+        from sushi_lang.semantics.typesys import StructType as _StructType
+
+        while isinstance(expr, TryExpr):
+            expr = expr.expr
+
+        if isinstance(expr, Name):
+            state = self.borrow_state.get(expr.id)
+            return state.var_type if state is not None else None
+
+        if isinstance(expr, MemberAccess):
+            receiver = self._resolve_named(self._read_type(expr.receiver))
+            if isinstance(receiver, ReferenceType):
+                receiver = self._resolve_named(receiver.referenced_type)
+            if isinstance(receiver, _StructType):
+                return receiver.get_field_type(expr.member)
+            return None
+
+        if isinstance(expr, IndexAccess):
+            return self._element_type(self._read_type(expr.array))
+
+        if getattr(expr, "method", None) == "get":
+            receiver_type = self._read_type(getattr(expr, "receiver", None))
+            # A container `.get()` returns `Maybe@(T)`, and every use of it reaches here
+            # through the `??` this method already unwrapped, so the interesting type is
+            # the element. `Own@(T).get()` hands back the bare `T`.
+            return self._element_type(receiver_type)
+
+        return None
+
+    def _element_type(self, ty: Optional[Type]) -> Optional[Type]:
+        """What a `.get()` on a receiver of type `ty` reads out.
+
+        An array and a `List@(T)` yield `T`, an `Own@(T)` yields its pointee, and a
+        `HashMap@(K, V)` yields `V`. A container `.get()` actually returns `Maybe@(T)`
+        rather than `T`, and that difference does not matter here: this answer feeds
+        `type_class_of` only, and a `Maybe@(T)` owns heap exactly when its payload does.
+        """
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        from sushi_lang.semantics.typesys import ArrayType as _ArrayType, StructType as _StructType
+
+        ty = self._resolve_named(ty)
+        if isinstance(ty, ReferenceType):
+            ty = self._resolve_named(ty.referenced_type)
+        if isinstance(ty, (DynamicArrayType, _ArrayType)):
+            return ty.base_type
+        if isinstance(ty, GenericTypeRef):
+            if ty.base_name in ("List", "Own") and ty.type_args:
+                return ty.type_args[0]
+            if ty.base_name == "HashMap" and len(ty.type_args) == 2:
+                return ty.type_args[1]
+        # After monomorphization the container is an interned StructType whose NAME
+        # carries the type arguments -- `List<i32>`, `HashMap<i32, List<i32>>`. That name
+        # IS the identity (#240), so reading the argument back out of it is the supported
+        # route, not a workaround. Angle brackets are the internal spelling on purpose.
+        if isinstance(ty, _StructType):
+            if ty.name.startswith("List<"):
+                return self._type_from_name(ty.name[len("List<"):-1])
+            if ty.name.startswith("HashMap<"):
+                args = _split_type_args(ty.name[len("HashMap<"):-1])
+                return self._type_from_name(args[1]) if len(args) == 2 else None
+        return self._own_payload(ty)
+
+    def _type_from_name(self, type_str: str) -> Optional[Type]:
+        """Resolve one interned type-argument spelling back to a `Type`.
+
+        Shares `type_strings.resolve_type_from_string` with the rest of the compiler, so a
+        name this pass reads means the same thing it means everywhere else. The adapter is
+        needed because that helper wants `struct_table`/`enum_table` and this pass holds
+        `structs`/`enums`.
+        """
+        if self.tables is None:
+            return None
+        from types import SimpleNamespace
+        from sushi_lang.semantics.generics.type_strings import resolve_type_from_string
+        adapter = SimpleNamespace(
+            struct_table=getattr(self.tables, "structs", SimpleNamespace(by_name={})),
+            enum_table=getattr(self.tables, "enums", SimpleNamespace(by_name={})),
+        )
+        try:
+            return resolve_type_from_string(type_str, adapter)
+        except Exception:
+            return None
+
+    def _root_owner(self, expr: Optional[Expr]) -> Optional[str]:
+        """The named local a read-through-an-owner expression ultimately reads out of.
+
+        `c.get(0)??` names `c`; `s.inner.data` names `s`; `rows[i]` names `rows`. Returns
+        None where the root is not a bare name -- a call result owns itself, so there is
+        nothing to keep alive.
+        """
+        while True:
+            if isinstance(expr, TryExpr):
+                expr = expr.expr
+            elif isinstance(expr, MemberAccess):
+                expr = expr.receiver
+            elif isinstance(expr, IndexAccess):
+                expr = expr.array
+            elif isinstance(expr, (MethodCall, DotCall)):
+                expr = expr.receiver
+            elif isinstance(expr, Name):
+                return expr.id
+            else:
+                return None
+
+    def _maybe_reject_mutation(self, expr: Expr) -> None:
+        """Reject `c.push(x)` while a `let`-borrow binding reads out of `c` (#242).
+
+        A mutating method is not a `Borrow` node, so it reaches none of the existing
+        borrow-conflict checks -- those fire only where the user wrote `&peek` / `&poke`.
+        This is the arm that makes `let v = c.get(0)??` followed by `c.free()` an error
+        instead of a use-after-free.
+        """
+        if getattr(expr, "method", None) not in _MUTATING_METHODS:
+            return
+        self._check_owner_not_borrowed(
+            self._root_owner(getattr(expr, "receiver", None)), expr.loc,
+            f"call `.{expr.method}()`")
+
+    def _check_owner_not_borrowed(self, owner: Optional[str], span: Optional[Span],
+                                  what: str) -> None:
+        """Reject a change to `owner` while a `let`-borrow binding reads out of it (#242).
+
+        The half that gives a borrowed binding a LIFETIME. Without it the binding is a
+        pointer into storage the owner may free, shrink or hand away at any time, and the
+        model would trade an implicit deep copy for a dangling read.
+
+        `what` names the action, so the diagnostic says which of the four happened: a
+        mutating method, a rebind, a move, or a `&poke` borrow.
+        """
+        if owner is None:
+            return
+        state = self.borrow_state.get(owner)
+        if state is None or not state.binding_borrows:
+            return
+        # INVALIDATE, do not report. The change is an error only if the binding is read
+        # AFTER it -- Rust's non-lexical lifetimes, and the same shape as `is_moved`, which
+        # this pass already reports at the USE rather than at the move. Reporting here
+        # instead would reject `let g = fns.get(0)??; g(10); fns.free()`, which is safe:
+        # the borrow is dead by the time the owner is freed.
+        for name, bound_at in state.binding_borrows:
+            binding = self.borrow_state.get(name)
+            if binding is not None and binding.invalidated_at is None:
+                binding.invalidated_at = span
+                binding.invalidated_by = (owner, what)
+                binding.bound_at_span = binding.bound_at_span or bound_at
+        state.binding_borrows = []
+
+    def _emit_use_of_invalidated_borrow(self, name: str, use_span: Optional[Span],
+                                        state: BorrowState) -> None:
+        """Report CE2412 at the change, and name the later use that makes it wrong.
+
+        Three locations, because the error needs all three to be explicable: WHAT changed,
+        WHERE the borrow came from, and WHICH later read is left dangling. Rust's E0502
+        renders the same three.
+        """
+        owner, what = state.invalidated_by
+        diag = self.err.emit_with(er.ERR.CE2412, state.invalidated_at,
+                                  owner=owner, name=name)
+        if state.bound_at_span is not None:
+            diag.note(f"'{name}' borrows from '{owner}' here", state.bound_at_span)
+        diag.note(f"'{name}' is used here, after the change", use_span)
+        diag.help(f"{what} after the last use of '{name}', "
+                  f"or bind an independent value with `.clone()`")
+        diag.emit()
+        # Report once per binding: the first dangling read is the whole story, and a
+        # second one adds a location without adding information.
+        state.invalidated_at = None
+
+    def _emit_consume_of_read(self, expr: Expr) -> None:
+        """Report CE2411 for a read through a live owner (`h.inner`, `c.get(0)??`).
+
+        Relational like the binding form, but the second location is the OWNER's
+        declaration rather than a `let`. Where the root is not a named local there is no
+        second location to give, and the message carries the expression instead.
+        """
+        text = self._expr_to_string(expr)
+        diag = self.err.emit_with(er.ERR.CE2411, expr.loc, name=text)
+        owner = self._root_owner(expr)
+        state = self.borrow_state.get(owner) if owner is not None else None
+        if state is not None and state.declared_at_span is not None:
+            diag.note(f"'{owner}' owns this value and still frees it",
+                      state.declared_at_span)
+        # ONE branch, on purpose. A field read and an index take the clone directly and
+        # compile; a get-out takes it and hits CE0019, because a chained method call on a
+        # call receiver does not resolve its semantic type. That is a real defect, not a
+        # reason to word around it -- see MM.md B5. This help states the rule, and the
+        # three RED `test_own_get_*` files hold the branch honest until the defect is
+        # fixed. A shape-dependent help would have hidden it.
+        diag.help(f"clone it to take an independent value: `{text}.clone()`")
+        diag.emit()
+
+    def _emit_consume_of_borrow(self, name: str, use_span: Optional[Span],
+                                state: BorrowState) -> None:
+        """Report CE2411, pointing at the binding as well as the use.
+
+        A relational error: consuming this value is only wrong BECAUSE the name is a
+        borrow of storage something else still owns. Rendering it with one location would
+        show the user a rule without the reason for it.
+        """
+        diag = self.err.emit_with(er.ERR.CE2411, use_span, name=name)
+        if state.bound_at_span is not None:
+            diag.note(f"'{name}' borrows here, and the owner keeps the value",
+                      state.bound_at_span)
+        diag.help(f"clone it to take an independent value: `{name}.clone()`")
+        diag.emit()
+
+    def _type_class(self, ty: Optional[Type]) -> TypeClass:
+        """Classify a type as PLAIN or MOVE, resolving named types first."""
+        return type_class_of(ty, self._resolve_named)
+
+    def _type_class_of_source(self, state: Optional[BorrowState],
+                              ty: Optional[Type]) -> TypeClass:
+        """Classify the SOURCE of a consuming use, applying option B (MM.md S0.4).
+
+        Identical to `_type_class` except for one binding-level override: a `string` bound
+        straight from a literal owns no heap, so consuming it transfers nothing and it must
+        classify PLAIN rather than MOVE. The type alone cannot say this --
+        `BuiltinType.STRING` is an enum member with nowhere to carry the fact -- so the answer
+        lives on the binding, written by `binds_a_bare_literal_string` and re-derived on every
+        rebind.
+
+        Without this, `let string s = "hi"` followed by `f(s)` then `println(s)` would be
+        CE2405: a use-after-move report for a move that never happened, because a literal
+        points into `.rodata` with `owned = 0` and there is nothing to transfer. The
+        diagnostic would be false, not merely strict, which is why option B was chosen over a
+        flat "all strings move".
+
+        The single spelling of the override. Both decision sites -- a consuming use
+        (`_consume_named`) and a `let` binding (`_bind`) -- route through it.
+        """
+        if state is not None and state.owns_no_heap:
+            return TypeClass.PLAIN
+        return self._type_class(ty)
 
     def _clear_borrows(self) -> None:
         """Clear all active borrows (called after expression evaluation)."""
@@ -941,9 +1738,18 @@ class BorrowChecker:
             return str(expr.value)
         elif isinstance(expr, BinaryOp):
             return f"({self._expr_to_string(expr.left)} {expr.op} {self._expr_to_string(expr.right)})"
-        elif isinstance(expr, MethodCall):
-            return f"{self._expr_to_string(expr.receiver)}.{expr.method}(...)"
+        elif isinstance(expr, (MethodCall, DotCall)):
+            # Both spellings reach here. A `DotCall` used to fall to `<expression>`, which
+            # made CE2411 for an `own.get()` name a value the user cannot find in the source.
+            # Arguments are rendered too, so the text matches what the user wrote and the
+            # `help` below is something they can paste.
+            args = ", ".join(self._expr_to_string(a) for a in (getattr(expr, "args", None) or []))
+            return f"{self._expr_to_string(expr.receiver)}.{expr.method}({args})"
         elif isinstance(expr, MemberAccess):
             return f"{self._expr_to_string(expr.receiver)}.{expr.member}"
+        elif isinstance(expr, IndexAccess):
+            return f"{self._expr_to_string(expr.array)}[{self._expr_to_string(expr.index)}]"
+        elif isinstance(expr, TryExpr):
+            return f"{self._expr_to_string(expr.expr)}??"
         else:
             return "<expression>"

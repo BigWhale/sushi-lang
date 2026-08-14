@@ -110,10 +110,10 @@ class ArrayMethodInferrer:
     def infer_return_type(self) -> Optional['Type']:
         from sushi_lang.semantics.passes.types.arrays import is_builtin_array_method, get_builtin_array_method_return_type
         from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
-        from sushi_lang.semantics.typesys import ReferenceType
+        from sushi_lang.semantics.typesys import deref_type
 
         # Handle references to arrays (e.g., &i32[])
-        actual_type = self.receiver_type.referenced_type if isinstance(self.receiver_type, ReferenceType) else self.receiver_type
+        actual_type = deref_type(self.receiver_type)
 
         if is_builtin_array_method(self.method_name):
             # Special handling for .get() which returns Maybe<T>
@@ -304,6 +304,10 @@ class HashMapMethodInferrer:
                 if self.method_name in ("get", "remove"):
                     from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
                     return ensure_maybe_type_in_table(self.validator.enum_table, value_type, struct_table=self.validator.struct_table.by_name)
+                elif self.method_name == "clone":
+                    # `.clone()` is the ONLY escape from CE2411 for a HashMap read, so it must
+                    # exist for every HashMap. Returns the receiver's own type.
+                    return self.receiver_type
                 elif self.method_name in ("contains_key", "is_empty"):
                     return BuiltinType.BOOL
                 elif self.method_name in ("len", "tombstone_count"):
@@ -348,6 +352,7 @@ class ListMethodInferrer:
                 expected_args = {
                     "new": 0, "len": 0, "capacity": 0, "is_empty": 0,
                     "pop": 0, "clear": 0, "shrink_to_fit": 0, "destroy": 0, "free": 0, "debug": 0, "iter": 0,
+                    "clone": 0,
                     "with_capacity": 1, "push": 1, "get": 1, "reserve": 1, "remove": 1,
                     "insert": 2,
                 }
@@ -362,6 +367,10 @@ class ListMethodInferrer:
                 if self.method_name in ("get", "pop", "remove"):
                     from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
                     return ensure_maybe_type_in_table(self.validator.enum_table, element_type, struct_table=self.validator.struct_table.by_name)
+                elif self.method_name == "clone":
+                    # `.clone()` is the ONLY escape from CE2411 for a List read, so it must
+                    # exist for every List (#242). Returns the receiver's own type.
+                    return self.receiver_type
                 elif self.method_name in ("len", "capacity"):
                     return BuiltinType.I32
                 elif self.method_name == "is_empty":
@@ -405,15 +414,34 @@ class OwnMethodInferrer:
                 return None
         if self.method_name == "destroy":
             return BuiltinType.BLANK
+        if self.method_name == "clone":
+            # A fresh Own@(T) over a copied payload -- the receiver's own type (#242).
+            return self.receiver_type
         return None
+
+
+@dataclass
+class FunctionMethodInferrer:
+    """Type inferrer for the built-in methods on a function value (.clone()).
+
+    Function types are invariant and capture-agnostic, so the clone of a `fn(i32) -> i32`
+    is a `fn(i32) -> i32` whether or not it owns an environment.
+    """
+    receiver_type: 'Type'
+    method_name: str
+    validator: 'TypeValidator'
+
+    def infer_return_type(self) -> Optional['Type']:
+        from sushi_lang.semantics.generics.closures import function_method_return_type
+        return function_method_return_type(self.method_name, self.receiver_type)
 
 
 # Register all built-in type checkers
 @METHOD_TYPE_REGISTRY.register_checker
 def check_array_methods(receiver_type, method_name, validator):
-    from sushi_lang.semantics.typesys import ReferenceType
+    from sushi_lang.semantics.typesys import deref_type
     # Handle both direct array types and references to arrays
-    actual_type = receiver_type.referenced_type if isinstance(receiver_type, ReferenceType) else receiver_type
+    actual_type = deref_type(receiver_type)
     if isinstance(actual_type, (ArrayType, DynamicArrayType)):
         return ArrayMethodInferrer(receiver_type, method_name, validator)
     return None
@@ -534,4 +562,16 @@ def check_list_methods(receiver_type, method_name, validator):
 def check_own_methods(receiver_type, method_name, validator):
     if isinstance(receiver_type, StructType) and receiver_type.name.startswith("Own<"):
         return OwnMethodInferrer(receiver_type, method_name, validator)
+    return None
+
+
+@METHOD_TYPE_REGISTRY.register_checker
+def check_function_methods(receiver_type, method_name, validator):
+    # Claim only the names this family handles: infer_method_type is first-match-wins, so a
+    # claim whose inferrer then answers None ends the chain instead of falling through (the
+    # #239 shape, recorded on check_string_methods above).
+    from sushi_lang.semantics.generics.closures import is_builtin_function_method
+    from sushi_lang.semantics.typesys import FunctionType
+    if isinstance(receiver_type, FunctionType) and is_builtin_function_method(method_name):
+        return FunctionMethodInferrer(receiver_type, method_name, validator)
     return None

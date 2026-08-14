@@ -4,12 +4,19 @@
 # concrete `i32 which` (passed the non-Name `amount()??`) and a `T val` (passed the Name
 # `v`); T is inferable from `val`, but the old inferrer bailed on `amount()??`.
 # Pre-fix (even after arg-recursion): CE2061 "monomorphized function 'pick__string' not found".
+#
+# `pick` returns `val` from ONE place. It used to return it from two exclusive branches, which
+# the move checker reads as a second use of a moved value because it is not path-sensitive
+# (MM.md finding F4). That shape was incidental to what this file tests -- the inferrer must
+# not abort on the first non-Name argument -- and it went red the moment Phase 9 made a string
+# move. The limitation itself is pinned by test_err_move_not_path_sensitive.sushi, which is
+# where it belongs; changing it here would have hidden it instead.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_CONTAINS: "s = hi"
 
 fn pick@(T)(i32 which, T val) T:
     if (which > 0):
-        return Result.Ok(val)
+        println("positive")
     return Result.Ok(val)
 
 fn amount() i32:

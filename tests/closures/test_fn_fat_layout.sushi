@@ -1,8 +1,15 @@
-# T1.0: a function value is now a 3-word fat pointer {fn_ptr, env_ptr, drop_ptr}.
+# T1.0: a function value is a 4-word fat pointer {fn_ptr, env_ptr, drop_ptr, clone_ptr}.
 # This exercises the migrated ABI end to end for NON-capturing values: a bare fn
-# reference stored in a struct field alongside another field (so the 24-byte fat
-# layout must be laid out and copied correctly), passed by value, and called
-# through the parameter via the synthesized adapter thunk.
+# reference stored in a struct field alongside another field (so the fat layout must
+# be laid out and copied correctly), borrowed, and called through the parameter via
+# the synthesized adapter thunk.
+#
+# `Ops` takes a `&peek` borrow rather than passing by value. A struct with a `fn(...)`
+# field is a MOVE type, because a declared field type cannot say whether the value in
+# it captures: the same `Ops` can hold a plain fn reference or a closure that owns a
+# heap environment. Passing it by value used to alias the environments, so the callee
+# and the caller both freed them (a double free, exit 133). The struct now moves, and
+# a borrow is how this test keeps using `o` twice.
 # EXPECT_STDOUT_EXACT: "7\n30\n"
 fn add_one(i32 x) i32:
     return Result.Ok(x + 1)
@@ -14,16 +21,16 @@ struct Ops:
     fn(i32) -> i32 a
     fn(i32) -> i32 b
 
-fn call_a(Ops o, i32 v) i32:
+fn call_a(&peek Ops o, i32 v) i32:
     let fn(i32) -> i32 f = o.a
     return Result.Ok(f(v)??)
 
-fn call_b(Ops o, i32 v) i32:
+fn call_b(&peek Ops o, i32 v) i32:
     let fn(i32) -> i32 g = o.b
     return Result.Ok(g(v)??)
 
 fn main() i32:
     let Ops o = Ops(add_one, triple)
-    println(call_a(o, 6).realise(0))
-    println(call_b(o, 10).realise(0))
+    println(call_a(&peek o, 6).realise(0))
+    println(call_b(&peek o, 10).realise(0))
     return Result.Ok(0)

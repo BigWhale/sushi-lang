@@ -286,27 +286,42 @@ class FunctionHelpers:
 
             param_slots.append((arg, slot))
 
+        # A by-value parameter of a plain function TAKES OWNERSHIP: the caller transferred
+        # the value (the seam marked a Name source moved, a temp adopted in), so the callee
+        # owns the buffer and its owned bit must survive. A body compiled with fn_def=None
+        # (an extension/perk method) registers no cleanup, so its string params stay
+        # BORROWS and keep the owned-bit clear below -- that is what makes `return self`
+        # safe there (#145). `main`'s params are argv views and stay borrows too.
+        is_user_main = fn_def is not None and fn_def.name == "main"
+        owning_string_params: set[str] = set()
+        if fn_def is not None and not is_user_main:
+            for param in fn_def.params:
+                if param.ty == BuiltinType.STRING and not getattr(param, "is_variadic", False):
+                    owning_string_params.add(param.name)
+
         for arg, slot in param_slots:
             val = arg
-            # A by-value `string` parameter is a BORROW: the caller's binding retains
-            # ownership and frees the buffer. Clear the callee's copy's owned bit to 0 so
-            # anything the callee does with it (notably `return self` in an extension method,
-            # or forwarding it onward) is treated as a borrow and never frees the caller's
-            # buffer -- no double-free (#145). The callee never frees a string param anyway
-            # (params are not registered in _string_cleanup); this makes RETURNING one safe.
-            if self.codegen.types.is_string_type(arg.type):
+            # A by-value `string` parameter of an fn_def=None body is a BORROW: the
+            # caller's binding retains ownership and frees the buffer. Clear the callee's
+            # copy's owned bit to 0 so anything the body does with it (notably `return
+            # self` in an extension method, or forwarding it onward) never frees the
+            # caller's buffer -- no double-free (#145). An OWNING param (registered below)
+            # keeps its owned bit: the callee is the one owner and must really free it.
+            if (self.codegen.types.is_string_type(arg.type)
+                    and (arg.name or "") not in owning_string_params):
                 val = self.codegen.builder.insert_value(arg, ir.Constant(self.codegen.i8, 0), 2)
             self.codegen.builder.store(val, slot)
 
-        # Register owning value parameters (moved-in T[] / List<T> / Own<T>, and native
-        # variadic '...T' arrays) for RAII cleanup: the callee owns them and frees them
-        # at scope exit.
+        # Register owning value parameters (moved-in T[] / List<T> / Own<T>, native
+        # variadic '...T' arrays, and -- the by-value-parameter ruling, 2026-08-14 --
+        # strings, function values and owning fixed arrays) for RAII cleanup: a by-value
+        # parameter is a consuming position, so the CALLEE owns the value and frees it
+        # at scope exit (MM.md section 0.2; X8/F12 and the string twin found with X9).
         #
         # Exception: the user `main`'s `args` parameter is a BORROWED view of C argv --
         # its string elements point directly at process argv memory, not heap-owned
         # copies -- so it must never be freed. Skip cleanup registration for main's
         # parameters entirely (callers must borrow `args`, not move it by value).
-        is_user_main = fn_def is not None and fn_def.name == "main"
         if fn_def is not None and not is_user_main:
             slot_by_name = {arg.name or f"arg{i}": slot
                             for i, (arg, slot) in enumerate(param_slots)}
@@ -358,6 +373,20 @@ class FunctionHelpers:
                     # owns it and frees it at scope exit, reusing the struct-cleanup registry.
                     if self.codegen.dynamic_arrays.struct_needs_cleanup(resolved):
                         self.codegen.memory.register_struct_cleanup(param.name, resolved, slot)
+                else:
+                    # The by-value-parameter ruling (2026-08-14): a string, a function
+                    # value, or an owning fixed array passed by value is owned by the
+                    # callee, exactly like the arms above. register_local_cleanup routes
+                    # each to its registry, and every free is runtime-guarded (owned bit /
+                    # drop_ptr), so a literal string or a plain fn reference frees to a
+                    # no-op. Lifted lambda bodies compile through this path too, so the
+                    # indirect-call ABI agrees with the direct one.
+                    from sushi_lang.semantics.typesys import FunctionType
+                    from sushi_lang.backend.destructors import needs_cleanup
+                    if (resolved == BuiltinType.STRING
+                            or isinstance(resolved, FunctionType)
+                            or (isinstance(resolved, ArrayType) and needs_cleanup(resolved))):
+                        self.codegen.memory.register_local_cleanup(param.name, resolved, slot)
 
     def end_function(self) -> None:
         """Clean up function emission context.

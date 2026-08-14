@@ -1,0 +1,27 @@
+# Consuming-use matrix, the (OWNED, MOVE) cell: an OWNED local of an owning type handed
+# to the `return` consuming use. The positive path -- the source owned it, so ownership
+# TRANSFERS and exactly one owner frees.
+#
+# This row exists because the CE2411 decision turned the whole BORROWED row into
+# diagnostics (docs/design/ownership-conventions.md S8). Without it the matrix would
+# assert only what is REJECTED and nothing about what is accepted, so a consuming use
+# that stopped moving entirely -- leaking, or double-freeing on the way out -- would go
+# unnoticed. `.len()` on the destination proves the buffer survived the transfer.
+#
+# The read-back sits in a helper because `??` in main is CW2511 and tests should not use
+# it; the helper is not part of what this file asserts.
+# EXPECT_STDOUT_EXACT: "n=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn make() i32[]:
+    let i32[] a = from([1, 2, 3])
+    return Result.Ok(a)
+
+fn make_len() i32:
+    let i32[] b = make()??
+    return Result.Ok(b.len())
+
+fn main() i32:
+    println("n={make_len().realise(-1)}")
+    return Result.Ok(0)

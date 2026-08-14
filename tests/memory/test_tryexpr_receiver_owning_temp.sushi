@@ -1,0 +1,32 @@
+# A receiver that nobody owns is still freed exactly once.
+#
+# `make()??.clone()` produces a `Bag` no binding names. The clone is a deep copy, so
+# after it the original's buffer belongs to nobody: 16 bytes leaked, in 1 block, with the
+# program still exiting 0. Only the interposer can see it.
+#
+# The shape did not compile at all until a `??` receiver could resolve its type, so this
+# is the cost of that and it is paid at the same place. The rule is the one the language
+# already uses for a discarded owning temporary: register it as a scope temp and let
+# scope-exit RAII free it. Rust and C++ drop such a temporary at the end of the enclosing
+# STATEMENT, which is tighter; scope exit is later, never earlier, so it is safe.
+#
+# The struct owns a dynamic array because that is the cheapest field whose leak the
+# interposer can count. `.clone()` is what makes the leak observable: it takes a deep copy
+# and leaves the original with no owner at all.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "n=3 first=1\n"
+# EXPECT_NO_LEAKS: true
+
+struct Bag:
+    i32[] items
+
+fn make() Bag:
+    return Result.Ok(Bag(from([1, 2, 3])))
+
+fn run() i32:
+    let Bag b = make()??.clone()
+    println("n={b.items.len()} first={b.items[0]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run().realise(99))

@@ -82,35 +82,35 @@ def try_emit_result_or_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCa
 
 
 def try_emit_own_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
-    """Try to emit as Own<T> method. Returns None if not an Own<T> method."""
+    """Try to emit as Own<T> method. Returns None if not an Own<T> method.
+
+    The type decides first, and the receiver is emitted only once this probe has
+    claimed the call. `clone` is a built-in method name for Own AND for List, so this
+    probe sees receivers that belong to another family, and emitting before knowing
+    left that IR stranded in the block -- the #199 shape. It cost nothing while a
+    receiver could only be a name; a chained receiver is a whole expression, and one
+    that allocated would have run two or three times.
+
+    Nothing is lost by the reorder: `infer_semantic_type` never reads the emitted
+    value on the StructType path.
+    """
     from sushi_lang.semantics.generics.own import is_builtin_own_method
     from sushi_lang.backend.expressions.calls.utils import infer_semantic_type
+    from sushi_lang.backend.generics.own import emit_builtin_own_method
 
     method = expr.method
     if not is_builtin_own_method(method):
         return None
 
-    receiver = expr.receiver
-    args = expr.args
+    receiver_semantic_type = infer_semantic_type(codegen, expr, None, "Own<", StructType)
+    if not (isinstance(receiver_semantic_type, StructType)
+            and receiver_semantic_type.name.startswith("Own<")):
+        return None
 
-    # For Own.alloc(), we don't emit the receiver (it's just the type name)
-    if method == "alloc":
-        receiver_semantic_type = infer_semantic_type(codegen, expr, None, "Own<", StructType)
-        if isinstance(receiver_semantic_type, StructType) and receiver_semantic_type.name.startswith("Own<"):
-            from sushi_lang.backend.generics.own import emit_builtin_own_method
-            temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
-            return emit_builtin_own_method(codegen, temp_expr, None, receiver_semantic_type)
-    else:
-        # For get() and destroy(), emit the receiver first
-        own_value = codegen.expressions.emit_expr(receiver)
-        receiver_semantic_type = infer_semantic_type(codegen, expr, own_value, "Own<", StructType)
-
-        if isinstance(receiver_semantic_type, StructType) and receiver_semantic_type.name.startswith("Own<"):
-            from sushi_lang.backend.generics.own import emit_builtin_own_method
-            temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
-            return emit_builtin_own_method(codegen, temp_expr, own_value, receiver_semantic_type)
-
-    return None
+    # `Own.alloc()` is a static call: its receiver is the type name, not a value.
+    own_value = None if method == "alloc" else codegen.expressions.emit_expr(expr.receiver)
+    temp_expr = MethodCall(receiver=expr.receiver, method=method, args=expr.args, loc=expr.loc)
+    return emit_builtin_own_method(codegen, temp_expr, own_value, receiver_semantic_type)
 
 
 def try_emit_hashmap_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
@@ -123,42 +123,24 @@ def try_emit_hashmap_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     if not is_builtin_hashmap_method(method):
         return None
 
-    receiver = expr.receiver
-    args = expr.args
+    receiver_semantic_type = infer_semantic_type(codegen, expr, None, "HashMap<", StructType)
+    if not (isinstance(receiver_semantic_type, StructType)
+            and receiver_semantic_type.name.startswith("HashMap<")):
+        return None
 
-    # HashMap.insert(k, v): BOTH the key and the value are stored shallowly, so the map takes
-    # ownership of each and frees them on .free()/scope exit -- mark a bare-Name owning source
-    # (string, array, List<T>, Own<T>, or heap-owning struct) moved so scope exit does not
-    # double-free (#140). The key was previously left un-moved, so a heap-owning key (e.g. a
-    # string bound out of a split() array) was freed by both its own RAII and the map (N1).
-    if method == "insert" and len(args) >= 2:
-        from sushi_lang.backend.expressions.memory import move_owning_arg_into_container
-        move_owning_arg_into_container(codegen, args[0])
-        move_owning_arg_into_container(codegen, args[1])
-
-    # For HashMap.new(), we don't emit the receiver (it's just the type name)
+    # `HashMap.new()` is a static call: its receiver is the type name, not a value.
+    # Every other method mutates or probes the table and wants a POINTER; a receiver
+    # with no address (a call result) falls back to the value.
     if method == "new":
-        receiver_semantic_type = infer_semantic_type(codegen, expr, None, "HashMap<", StructType)
-        if isinstance(receiver_semantic_type, StructType) and receiver_semantic_type.name.startswith("HashMap<"):
-            temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
-            return emit_hashmap_method(codegen, temp_expr, None, receiver_semantic_type, to_i1)
+        receiver_value = None
     else:
-        # For other methods, we need the HashMap as a POINTER for mutation
-        hashmap_ptr = emit_receiver_as_pointer(codegen, receiver)
-        receiver_semantic_type = infer_semantic_type(codegen, expr, None, "HashMap<", StructType)
+        receiver_value = emit_receiver_as_pointer(
+            codegen, expr.receiver, receiver_semantic_type)
+        if receiver_value is None:
+            receiver_value = codegen.expressions.emit_expr(expr.receiver)
 
-        if hashmap_ptr is not None and isinstance(receiver_semantic_type, StructType) and receiver_semantic_type.name.startswith("HashMap<"):
-            temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
-            return emit_hashmap_method(codegen, temp_expr, hashmap_ptr, receiver_semantic_type, to_i1)
-        elif hashmap_ptr is None:
-            # For other receiver types, emit normally
-            hashmap_value = codegen.expressions.emit_expr(receiver)
-            receiver_semantic_type = infer_semantic_type(codegen, expr, hashmap_value, "HashMap<", StructType)
-            if isinstance(receiver_semantic_type, StructType) and receiver_semantic_type.name.startswith("HashMap<"):
-                temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
-                return emit_hashmap_method(codegen, temp_expr, hashmap_value, receiver_semantic_type, to_i1)
-
-    return None
+    temp_expr = MethodCall(receiver=expr.receiver, method=method, args=expr.args, loc=expr.loc)
+    return emit_hashmap_method(codegen, temp_expr, receiver_value, receiver_semantic_type, to_i1)
 
 
 def try_emit_list_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
@@ -166,36 +148,27 @@ def try_emit_list_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
     from sushi_lang.semantics.generics.list import is_builtin_list_method
     from sushi_lang.backend.expressions.calls.utils import infer_semantic_type, emit_receiver_as_pointer
 
+    from sushi_lang.backend.generics.list import emit_list_method
+
     method = expr.method
     if not is_builtin_list_method(method):
         return None
 
-    receiver = expr.receiver
-    args = expr.args
+    receiver_semantic_type = infer_semantic_type(codegen, expr, None, "List<", StructType)
+    if not (isinstance(receiver_semantic_type, StructType)
+            and receiver_semantic_type.name.startswith("List<")):
+        return None
 
-    # For List.new() and List.with_capacity(), we don't emit the receiver (it's just the type name)
+    # `List.new()` / `List.with_capacity()` are static calls: the receiver is the type
+    # name, not a value. Every other method wants a POINTER so it can mutate; a receiver
+    # with no address (a call result) falls back to the value.
     if method in ("new", "with_capacity"):
-        receiver_semantic_type = infer_semantic_type(codegen, expr, None, "List<", StructType)
-        if isinstance(receiver_semantic_type, StructType) and receiver_semantic_type.name.startswith("List<"):
-            from sushi_lang.backend.generics.list import emit_list_method
-            temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
-            return emit_list_method(codegen, temp_expr, None, receiver_semantic_type, to_i1)
+        receiver_value = None
     else:
-        # For other methods, emit the list as a pointer for mutation
-        list_ptr = emit_receiver_as_pointer(codegen, receiver)
-        if list_ptr is not None:
-            receiver_semantic_type = infer_semantic_type(codegen, expr, None, "List<", StructType)
-            if isinstance(receiver_semantic_type, StructType) and receiver_semantic_type.name.startswith("List<"):
-                from sushi_lang.backend.generics.list import emit_list_method
-                temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
-                return emit_list_method(codegen, temp_expr, list_ptr, receiver_semantic_type, to_i1)
-        else:
-            # For other receiver types, emit normally
-            list_value = codegen.expressions.emit_expr(receiver)
-            receiver_semantic_type = infer_semantic_type(codegen, expr, list_value, "List<", StructType)
-            if isinstance(receiver_semantic_type, StructType) and receiver_semantic_type.name.startswith("List<"):
-                from sushi_lang.backend.generics.list import emit_list_method
-                temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
-                return emit_list_method(codegen, temp_expr, list_value, receiver_semantic_type, to_i1)
+        receiver_value = emit_receiver_as_pointer(
+            codegen, expr.receiver, receiver_semantic_type)
+        if receiver_value is None:
+            receiver_value = codegen.expressions.emit_expr(expr.receiver)
 
-    return None
+    temp_expr = MethodCall(receiver=expr.receiver, method=method, args=expr.args, loc=expr.loc)
+    return emit_list_method(codegen, temp_expr, receiver_value, receiver_semantic_type, to_i1)

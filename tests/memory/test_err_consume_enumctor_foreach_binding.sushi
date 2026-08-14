@@ -1,0 +1,26 @@
+# Sink matrix (foreach binding -> sinks): a borrowed `foreach` binding over owning elements handed to the enum-constructor payload sink.
+#
+# The invariant (docs/design/ownership-conventions.md S4.3): at every consuming use, a
+# bare OWNED Name moves, a read from a CONTINUING owner (a MemberAccess, an Own@(T).get()
+# deref) is CLONED so each owner frees exactly once, and a BORROWED binding of an owning
+# type may not be consumed at all -- that is CE2411, with `.clone()` as the escape. This
+# file is the (BORROWED, MOVE) cell, the one every shipped bug in the family got wrong.
+#
+# A `foreach` binding is created with register_cleanup=False (a borrow), exactly
+# like a match binding -- so handing it to a sink has the same requirement.
+# EXPECT_ERROR_CODE: CE2411
+
+struct Buf:
+    i32[] data
+
+enum Held:
+    One(Buf)
+    None
+
+fn main() i32:
+    let Buf[] src = from([Buf(from([1, 2, 3]))])
+    let Held h = Held.None
+    foreach(p in src.iter()):
+        h := Held.One(p)
+    println("wrapped")
+    return Result.Ok(0)

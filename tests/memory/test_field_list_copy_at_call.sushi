@@ -1,7 +1,12 @@
-# The List@(T) half of BUGS.md entry 1. List@(i32) IS a StructType, so it reaches
-# deep_copy_if_owning_struct -- but struct_needs_cleanup scans for dynamic-array FIELDS and
-# List's are raw pointers, so the gate reports False and the value is aliased rather than
-# copied. Both the callee and `w` free the same buffer. Double free (SIGTRAP, rc=133).
+# Sink matrix, the (BORROWED, MOVE) cell reached through a read: a `List@(T)` field read at the call-argument sink.
+#
+# The read BORROWS (#242): the owner keeps the value and still frees it, so the sink may not
+# take it and `.clone()` is the escape. Written WITHOUT the clone this file is CE2411, and
+# `tests/memory/test_err_consume_read_*.sushi` pins that half.
+#
+# This used to compile with no clone, because the compiler inserted one for you: the
+# provenance was THROUGH_OWNER, which COPIED. Deleting that cell is the point of #242 -- every
+# deep copy in a Sushi program is now one the user wrote.
 # EXPECT_STDOUT_EXACT: "n=2 src=2\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
@@ -17,6 +22,6 @@ fn main() i32:
     l.push(10)
     l.push(20)
     let W w = W(l)
-    let i32 n = total(w.items).realise(-1)
+    let i32 n = total(w.items.clone()).realise(-1)
     println("n={n} src={w.items.len()}")
     return Result.Ok(0)

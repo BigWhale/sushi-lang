@@ -18,11 +18,13 @@ today; **Part II** describes what is deferred, why, and the options for closing 
 Sushi has function **types** (`fn(i32) -> i32`), function **values**, and capturing **closures**.
 A function type names an arity/parameter/return/error-type signature; a function *value* is
 callable data of that type — a top-level function reference, or a lambda literal, optionally
-capturing state from its defining scope. Both forms share one representation: a three-word fat
-pointer `{fn_ptr, env_ptr, drop_ptr}`. A non-capturing value (a bare `fn` reference, or a lambda
-that reads nothing from its enclosing scope) carries null `env_ptr`/`drop_ptr` and costs nothing
-beyond the wider pointer; a capturing lambda heap-allocates an environment record that the value
-owns and frees via `drop_ptr`.
+capturing state from its defining scope. Both forms share one representation: a four-word fat
+pointer `{fn_ptr, env_ptr, drop_ptr, clone_ptr}` (widened from three words, 2026-08-14, when
+`.clone()` became total over every type — see below). A non-capturing value (a bare `fn` reference,
+or a lambda that reads nothing from its enclosing scope) carries null `env_ptr`/`drop_ptr`/
+`clone_ptr` and costs nothing beyond the wider pointer; a capturing lambda heap-allocates an
+environment record that the value owns, frees via `drop_ptr`, and duplicates via `clone_ptr` when
+`.clone()`d.
 
 ```sushi
 fn make_adder(i32 n) fn(i32) -> i32:
@@ -138,18 +140,27 @@ both a plain fn and any closure of that arity/ok/err.
 
 ## 3. Semantics: ABI, calling convention, capture, RAII
 
-### Representation — the three-word fat pointer
+### Representation — the four-word fat pointer
 
-A function value lowers to `{ i8* fn_ptr, i8* env_ptr, i8* drop_ptr }` (24 bytes):
+A function value lowers to `{ i8* fn_ptr, i8* env_ptr, i8* drop_ptr, i8* clone_ptr }` (32 bytes,
+widened from three words / 24 bytes on 2026-08-14 — see below):
 
 | Field | Non-capturing value | Capturing closure |
 |-------|---------------------|-------------------|
-| `fn_ptr`   | address of a thunk `f__thunk(env, ...)` wrapping the bare fn | address of the lifted `__lambda_N(env, ...)` |
-| `env_ptr`  | `null` | heap `Own@(__closure_env_N)*` holding captured values |
-| `drop_ptr` | `null` | address of a type-erased env destructor |
+| `fn_ptr`    | address of a thunk `f__thunk(env, ...)` wrapping the bare fn | address of the lifted `__lambda_N(env, ...)` |
+| `env_ptr`   | `null` | heap `Own@(__closure_env_N)*` holding captured values |
+| `drop_ptr`  | `null` | address of a type-erased env destructor |
+| `clone_ptr` | `null` | address of a type-erased env cloner: allocates a fresh environment record and deep-copies each captured field into it |
 
-This mirrors the existing **string** fat pointer (`{i8*, i32}`, `backend/strings.py`), applying the
-same insert_value/extract_value/store/load idioms.
+`clone_ptr` was added when `.clone()` became total over every type in the language
+(`docs/design/move-semantics.md` §4) — a function value was the one remaining type without one.
+`build_closure_value` (`backend/runtime/closures.py`) assembles all four fields; a non-capturing
+value's `clone_ptr` is `null`, so `.clone()`-ing a bare `fn` reference is a runtime-guarded no-op
+that hands back an equivalent fat value, exactly like `drop_ptr`'s guarded free.
+
+This mirrors the existing **string** fat pointer (`{i8*, i32, i8}`, see
+`docs/design/string-representation.md`), applying the same insert_value/extract_value/store/load
+idioms.
 
 ### Calling convention — adapter-thunk split
 
@@ -160,20 +171,35 @@ same insert_value/extract_value/store/load idioms.
   leading argument.
 - **A bare fn used as a value is bridged by a thunk.** Materializing a top-level fn as a value
   synthesizes (once, cached) `f__thunk(i8* env, <params>) { return f(<params>) }` and stores
-  `{f__thunk, null, null}`. The thunk ignores `env`, so the indirect ABI is uniform without
+  `{f__thunk, null, null, null}`. The thunk ignores `env`, so the indirect ABI is uniform without
   touching any real function body.
 
 ### Capture policy
 
-- **Copyable types** (primitives, strings, structs/fixed-arrays composed of those) are captured by
-  **value-copy** into the environment record.
-- **Owned types** (dynamic array, `List@(T)`, `Own@(T)`) are captured by **move** into the
-  environment — the outer binding is consumed (borrow-checker enforced; later use is CE2405), and
-  the env's recursive destructor frees them.
+Capture is a `ConsumingUse.CAPTURE` — an ownership sink like any other in
+`docs/design/ownership-conventions.md` — so what happens is the shared `classify()` table's answer
+for the captured variable's provenance and type class, not a closures-specific rule:
+
+- **Types that own no heap** (primitives, and — since Phase 9 — a `string` bound directly from a
+  literal, which owns nothing at that binding) are captured by **value-copy** into the environment
+  record; the outer binding stays usable.
+- **Types that own heap** (dynamic array, `List@(T)`, `Own@(T)`, `HashMap@(K, V)`, and — since Phase
+  9 — **any `string` not bound from a literal**, e.g. one built by interpolation, returned from a
+  call, or arriving as a parameter) are captured by **move** into the environment — the outer
+  binding is consumed (borrow-checker enforced; later use is CE2405), and the env's recursive
+  destructor frees them. A struct or fixed array composed only of non-owning fields is captured by
+  copy, exactly like a bare primitive; one with an owning field (including, now, a plain `string`
+  field) is captured by move, exactly like a bare owning value.
 - **A captured closure *value*** (a `fn(...)` local that is itself a capturing closure) is also
-  move-captured, same as `List`/`Own` — this is what makes `compose` and capture-and-call bodies
-  work (§7).
+  move-captured, same as any other owning type — this is what makes `compose` and capture-and-call
+  bodies work (§7).
 - **Borrow capture (`&poke`/`&peek`) is rejected** with CE2094 — deferred to Tier 2 (Part II §3).
+- **Reading a captured field back out of the environment is a BORROW**, exactly like reading a
+  struct field (`docs/design/ownership-conventions.md` §4.2): a lambda body that reads a captured
+  owning value (e.g. `|~| greeting` returning a captured `string`) sees a borrow of the environment's
+  copy, so *returning* or otherwise consuming it from inside the body needs its own `.clone()` —
+  CE2411 otherwise. Reading it without consuming it (e.g. `println(greeting)` inside the body) is
+  free.
 
 ### Environment ownership, escape, and RAII
 
@@ -262,11 +288,19 @@ and run. Two gaps were closed to make this possible:
   A user List method **cannot shadow a builtin** List method name (providers are checked first at
   dispatch); the by-value-`self`-vs-by-pointer receiver ABI mismatch is reconciled at the dispatch
   site.
-- **Inline capturing-closure argument leak — fixed.** A capturing closure passed *inline* as a call
-  argument (`map(xs, |x| x * k)`) previously heap-allocated an environment that was never freed,
-  because it was not bound to a local and so not RAII-tracked. It is now registered in a per-scope
-  temporary registry and freed via the runtime-guarded drop on every exit path; binding to a local
-  is no longer required.
+- **Inline capturing-closure argument leak — fixed, then superseded by the by-value-parameter ruling
+  (2026-08-14).** A capturing closure passed *inline* as a call argument (`map(xs, |x| x * k)`) used
+  to heap-allocate an environment that was never freed, because it was not bound to a local and so
+  not RAII-tracked. The first fix (T1.8) registered it in a per-scope caller-side temporary registry,
+  freed via the runtime-guarded drop on every exit path. That registry is now used for only ONE
+  shape: an inline closure passed to an **extension method** (compiled with `fn_def=None`, which
+  registers no parameter cleanup — the caller must still own the argument, which is what keeps
+  `return self` safe there). Every other call shape — direct, indirect, variadic — instead transfers
+  ownership of the by-value argument to the callee through the seam
+  (`docs/design/ownership-conventions.md`), and the callee's own registered `FunctionType` parameter
+  frees the
+  environment at its own scope exit, exactly like any other owning by-value parameter; a caller-side
+  registration there would double-free. Binding to a local is still not required either way.
 
 Validated as **free generic functions** (`tests/generics/test_ho_*`): `map@(T, U)(List@(T), fn(T) ->
 U)` with a capturing closure and with `U` genuinely differing from `T` (i32 -> bool);
@@ -477,8 +511,9 @@ Test coverage: `tests/generics/test_generic_fn_ref.sushi`,
 | Expected-type propagation to bare-param lambdas | `semantics/passes/types/propagation.py` |
 | Lambda-lifting pass | `semantics/passes/lambda_lift.py` |
 | Shared fn-synthesis wiring | `semantics/generics/synthesis.py:register_synthesized_function` |
-| Ownership predicate (single source of truth) | `semantics/typesys.py:is_owning_type` |
-| Env heap alloc / recursive env destructor | `backend/generics/own.py:emit_own_alloc`, `backend/destructors.py:emit_value_destructor` |
+| Ownership predicate (single source of truth) | `semantics/typesys.py:owns_heap` (Phase 9 merged `is_owning_type` into it — see `docs/design/ownership-conventions.md` §6) |
+| Ownership seam (consume/bind/copy_out) | `semantics/ownership.py` (the `classify()` table), `backend/ownership.py` (the seam functions) |
+| Env heap alloc / recursive env destructor / cloner | `backend/generics/own.py:emit_own_alloc`, `backend/destructors.py:emit_value_destructor`, `backend/runtime/closures.py` (env clone, `clone_ptr`) |
 | Runtime API (thunk, build value, indirect call, `emit_lambda`) | `backend/runtime/closures.py` |
 | Backend expr dispatch -> `emit_lambda` | `backend/expressions/__init__.py` (`case Lambda()`) |
 | Indirect call, non-`Name` callee routing | `backend/expressions/calls/dispatcher.py`, `backend/expressions/calls/utils.py` |
@@ -639,7 +674,9 @@ treat this as a known authoring gotcha rather than a validated error path.
    `|` = bitwise-or), validated through the parser generator with no new conflicts.
 5. **Ownership vs. the move/borrow tracker.** Only *capturing* values are owning (capture-taint);
    non-capturing values stay copyable to preserve v1 ergonomics; the runtime-guarded drop makes
-   conservative (erased-provenance) frees sound. One localized predicate change in `is_owning_type`.
+   conservative (erased-provenance) frees sound. This is answered by `owns_heap`
+   (`semantics/typesys.py`), the single ownership predicate every type asks — see
+   `docs/design/ownership-conventions.md` §6.
 6. **Pass-ordering.** Lambda-lifting needs resolved capture *types* (post-`types`) but its
    synthesized functions must be borrow-checked (last pass), so it sits between them. If passes are
    reordered later, this insertion point moves with `types`.

@@ -14,7 +14,7 @@ import copy
 from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter, TypePack
 from sushi_lang.semantics.typesys import (
     Type, EnumType, EnumVariantInfo, StructType, UnknownType,
-    PointerType, ArrayType, DynamicArrayType
+    PointerType, ArrayType, DynamicArrayType, ReferenceType
 )
 
 if TYPE_CHECKING:
@@ -97,6 +97,15 @@ class TypeSubstitutor:
         if isinstance(ty, PointerType):
             return PointerType(
                 pointee_type=self.substitute_type(ty.pointee_type, substitution)
+            )
+
+        # For reference types (&peek T / &poke T), substitute the referenced type,
+        # keeping the mutability (F7, 2026-08-14). Without this arm a monomorphized
+        # signature kept the literal `&peek Pair@(A, B)` and every call failed CE2006.
+        if isinstance(ty, ReferenceType):
+            return ReferenceType(
+                referenced_type=self.substitute_type(ty.referenced_type, substitution),
+                mutability=ty.mutability,
             )
 
         # For array types, substitute the element type

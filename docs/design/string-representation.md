@@ -84,3 +84,34 @@ The rule for compiler code touching strings: **never pass a string's `i32` size 
 directly as a `mem*` length — zero-extend to `i64` and use the `i64`-length intrinsic.**
 See `sushi_lang/backend/runtime/strings.py` and the stdlib `declare_memcpy` helper
 (`sushi_lang/sushi_stdlib/src/libc_declarations.py`) for the pattern.
+
+## Update (Phase 9, 2026-08-14): `string` is no longer a copy type
+
+This document's decision — the 3-field fat pointer, the runtime `owned` bit — is **unchanged**. What
+changed is a different question entirely: whether a `string` *value* is copied or moved at an
+ownership sink. See `docs/design/ownership-conventions.md` for the full model; the short version:
+
+A `string` now **moves** by value like every other type that owns heap (`T[]`, `List@(T)`,
+`Own@(T)`, `HashMap@(K, V)`, a capturing closure). Passing a `string` local to a by-value parameter,
+rebinding it, or putting it in a constructor field moves it — reusing the source afterward is
+**CE2405**. The one exception: a `string` bound directly from a string literal (`let string s =
+"hi"`) owns nothing (it points into `.rodata` with `owned = 0`), so *that binding* classifies as
+owning no heap and behaves like a copy — both the original and any number of downstream bindings of
+it stay usable, because nothing was ever transferred. This exception is tracked per-**binding**, not
+per-**type**: `BuiltinType.STRING` carries no such flag, so a `string` field inside a struct, or a
+`string` produced by interpolation, a method call, or a rebind, is a ordinary MOVE with no exception
+— see `docs/memory-management.md` for worked examples.
+
+**Why the runtime `owned` bit still matters, given that the compiler now tracks ownership statically
+for strings too.** It would be tempting to think a compile-time MOVE/PLAIN classification makes the
+runtime bit redundant. It does not, for the same reason the bit existed in the first place (see
+"Why a runtime ownership bit at all", above): static tracking is necessarily conservative at every
+point it cannot prove ownership statically — a rebind whose value depends on a runtime branch, a
+value arriving through a generic type parameter, a `string` read out of a container. In every one of
+those cases the compiler's honest answer is "treat this as owning a buffer, to be safe" (the same
+default an unstated `FunctionType.captures` takes), and the runtime bit is what makes that
+conservative answer **free**: freeing a `string` whose `owned` bit happens to be `0` — a
+conservatively-registered borrow, a literal that flowed through a code path the compiler could not
+fully track — costs one branch and no `free()` call. Without the bit, "when in doubt, assume owning"
+would mean "when in doubt, actually free," which is unsound the moment the doubt is wrong. The bit
+is what lets the type system be conservative without being wrong.

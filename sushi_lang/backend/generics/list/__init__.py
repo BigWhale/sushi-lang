@@ -42,6 +42,7 @@ from sushi_lang.internals.errors import raise_internal_error
 
 # Public API - LLVM emission
 from .methods_simple import (
+    emit_list_clone,
     emit_list_new,
     emit_list_with_capacity,
     emit_list_len,
@@ -111,9 +112,7 @@ def emit_list_method(
     elif method == "is_empty":
         result = emit_list_is_empty(codegen, receiver_value)
     elif method == "push":
-        from sushi_lang.backend.expressions.memory import move_owning_arg_into_container
         result = emit_list_push(codegen, expr, receiver_value, receiver_type)
-        move_owning_arg_into_container(codegen, expr.args[0])
     elif method == "pop":
         result = emit_list_pop(codegen, receiver_value, receiver_type)
     elif method == "get":
@@ -121,10 +120,7 @@ def emit_list_method(
     elif method == "clear":
         result = emit_list_clear(codegen, receiver_value, receiver_type)
     elif method == "insert":
-        from sushi_lang.backend.expressions.memory import move_owning_arg_into_container
         result = emit_list_insert(codegen, expr, receiver_value, receiver_type)
-        if len(expr.args) >= 2:
-            move_owning_arg_into_container(codegen, expr.args[1])
     elif method == "remove":
         result = emit_list_remove(codegen, expr, receiver_value, receiver_type)
     elif method == "reserve":
@@ -139,6 +135,8 @@ def emit_list_method(
         result = emit_list_debug(codegen, receiver_value, receiver_type)
     elif method == "iter":
         result = emit_list_iter(codegen, expr, receiver_value, receiver_type)
+    elif method == "clone":
+        result = emit_list_clone(codegen, receiver_value, receiver_type)
     else:
         raise_internal_error("CE0083", method=method)
 

@@ -1,0 +1,33 @@
+# F7 (fixed 2026-08-14): type-argument inference binds a type parameter THROUGH a
+# reference parameter. `&peek T` is the natural signature for a generic that only
+# reads its argument; the unifier sees through the borrow on both sides, and the
+# monomorphizer substitutes inside a ReferenceType, so the instance's signature is
+# concrete. Covers the struct shape (&peek Pair@(A, B)) and the bare shape (&peek T).
+# This file replaces the CE2060 known-hole pin test_err_peek_generic_param_inference.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\ntest\n"
+# EXPECT_NO_LEAKS: true
+
+struct Pair@(T, U):
+    T first
+    U second
+
+fn get_first@(A, B)(&peek Pair@(A, B) p) A:
+    return Result.Ok(p.first.clone())
+
+fn get_second@(A, B)(&peek Pair@(A, B) p) B:
+    return Result.Ok(p.second.clone())
+
+fn run() i32:
+    let Pair@(i32, string) p = Pair(42, "test")
+    let i32 first = get_first(&peek p)??
+    let string second = get_second(&peek p)??
+    println(first)
+    println(second)
+    return Result.Ok(first)
+
+fn main() i32:
+    let i32 rc = run().realise(99)
+    if (rc == 42):
+        return Result.Ok(0)
+    return Result.Ok(1)

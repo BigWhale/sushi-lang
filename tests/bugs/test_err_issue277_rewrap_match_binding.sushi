@@ -1,0 +1,20 @@
+# Issue #277: re-wrapping an enum-payload match binding into a constructor used to
+# COMPILE and then double-free the payload (exit 133) -- the constructor sink moved the
+# binding out from under the arm's copy. On the ownership-refactor branch a match
+# binding is a BORROW and a constructor field is a consuming position, so the shape is
+# rejected at compile time with CE2411; the escape is `Shape.Poly(p.clone())`, pinned by
+# the companion test_run_issue277_rewrap_clone_escape.sushi.
+# EXPECT_ERROR_CODE: CE2411
+
+enum Shape:
+    Poly(i32[])
+    Empty
+
+fn main() i32:
+    let Shape s = Shape.Poly(from([1, 2, 3]))
+    let Shape t = Shape.Empty()
+    match s:
+        Shape.Poly(p) ->
+            t := Shape.Poly(p)
+        Shape.Empty -> println("empty")
+    return Result.Ok(0)

@@ -1,0 +1,43 @@
+# ► THIS FILE IS RED, DELIBERATELY. It pins the first half of the `??`-receiver defect.
+#
+# `parse_row(7)??.hash()` is CE0019 -- "cannot determine language type for LLVM type:
+# %"Row"". A method call whose receiver is a `??` expression does not resolve its semantic
+# type, so the receiver's raw LLVM type is mapped back to a language type and fails.
+#
+# This is the SAME defect Phase 7.5 fixed for a chained method receiver (`o.get().clone()`),
+# in its remaining shape. Pass 2 stamps the type on a `MethodCall`/`DotCall` and the backend
+# now reads it; a `TryExpr` carries the answer too, in `inferred_unwrapped_type`, and the
+# backend does not read that one yet. `.clone()` in place of `.hash()` fails identically, so
+# the escape CE2411 names is unavailable through a `??` as well.
+#
+# Fixing THIS file is cheap: one more strategy that reads the stamp. Fixing its sibling,
+# `test_tryexpr_receiver_hashmap_keys.sushi`, is not -- see that file. Both are Phase 7.6.
+#
+# `??` and chaining a method onto it are KEPT (decided 2026-08-01). The grammar makes `??` a
+# postfix chain element, which is Rust's `?` exactly, and the suite already relies on the
+# shape (`mk()??.realise(0)`, `mk()??.expect(...)`, `arr.get(0)??.f`). A postfix operator
+# that cannot be followed by a method call buys nothing over a prefix one.
+#
+# Do NOT rewrite this file two-step (`let Row r = parse_row(7)??` then `r.hash()`). That
+# passes and hides the defect. See MM.md B5 for the last time that was tried.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "id=7\n"
+# EXPECT_NO_LEAKS: true
+
+struct Row:
+    i32 id
+    string label
+
+fn parse_row(i32 n) Row:
+    return Result.Ok(Row(n, "row"))
+
+fn run() i32:
+    let u64 h = parse_row(7)??.hash()
+    if (h == 0):
+        return Result.Ok(-1)
+    let Row r = parse_row(7)??.clone()
+    println("id={r.id}")
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run().realise(99))

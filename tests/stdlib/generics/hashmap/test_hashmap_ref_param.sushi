@@ -9,7 +9,7 @@ fn build_chain(&poke HashMap@(string, string) chain, string[] words) ~:
     while (i < words.len() - 1):
         let string current = words[i]
         let string next_word = words[i + 1]
-        chain.insert(current, next_word)
+        chain.insert(current.clone(), next_word.clone())
         i := i + 1
     return Result.Ok(~)
 

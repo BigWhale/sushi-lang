@@ -158,10 +158,22 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
 
             # Check if the expression is already a string (fat pointer struct)
             if codegen.types.is_string_type(expr_value.type):
-                # Already a string fat pointer -- a BORROW of its owner (e.g. `{name}`);
-                # use directly and never free it here.
+                # A string-typed part is a BORROW when a live owner frees it (`{name}`, a
+                # field read, a container get-out) -- use directly, never free here. A
+                # TEMPORARY string part (`{s.upper()}`, a call result, a `??` unwrap) is an
+                # owned value nobody else frees (MM.md B2): inside a print-arg frame the
+                # frame frees it after output (the concat loop below is disabled there);
+                # outside one the concat loop frees it like any other fresh intermediate.
+                from sushi_lang.backend.expressions.memory import expression_is_temporary
+                if expression_is_temporary(codegen, part):
+                    if codegen._string_temp_stack:
+                        codegen.register_string_value_temp(expr_value)
+                        fresh_flags.append(False)
+                    else:
+                        fresh_flags.append(True)
+                else:
+                    fresh_flags.append(False)
                 string_values.append(expr_value)
-                fresh_flags.append(False)
             else:
                 # Not a string, need to convert using appropriate to_str implementation
                 # Directly call the conversion functions based on LLVM type

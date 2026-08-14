@@ -1,0 +1,26 @@
+# Issue #277 companion: the escape CE2411 names. Re-wrapping a match binding through
+# `.clone()` hands the constructor an independent value, so the arm's borrow and the
+# new owner each free their own buffer -- no double free, no leak.
+# NOTE: `t` is initialized with the explicit constructor `Shape.Empty()`. The bare
+# member spelling `Shape.Empty` leaves the binding UNREGISTERED for cleanup, so a
+# later rebind's owning payload leaks -- a separate pre-existing defect, filed with
+# the Phase 12 batch.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "t len: 3\n"
+# EXPECT_NO_LEAKS: true
+
+enum Shape:
+    Poly(i32[])
+    Empty
+
+fn main() i32:
+    let Shape s = Shape.Poly(from([1, 2, 3]))
+    let Shape t = Shape.Empty()
+    match s:
+        Shape.Poly(p) ->
+            t := Shape.Poly(p.clone())
+        Shape.Empty -> println("empty")
+    match t:
+        Shape.Poly(q) -> println("t len: {q.len()}")
+        Shape.Empty -> println("t empty")
+    return Result.Ok(0)

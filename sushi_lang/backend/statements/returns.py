@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from llvmlite import ir
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.semantics.ast import Return, Expr
 
@@ -70,63 +71,49 @@ def emit_return(codegen: 'LLVMCodegen', stmt: 'Return') -> None:
     Raises:
         TypeError: If the return type is not supported.
     """
-    # Extract variables being returned (for move semantics)
-    moved_vars = _extract_return_variables(stmt.value)
+    # A `return` hands the value to the caller, so the local that produced it must stop
+    # owning it -- but this position must NOT decide that on its own. It used to: six
+    # ad-hoc type branches that marked the source moved BEFORE the value was emitted. Once
+    # the payload position started deciding too (`return Result.Ok(cwd)` consumes `cwd` at
+    # ENUM_PAYLOAD), the two derivations fought: the pre-move said "moved, skip cleanup"
+    # and the seam said "copy type, clone it", so the original was cloned AND never freed.
+    #
+    # `Result.Ok(x)` / `Maybe.Some(x)` is already an ENUM_PAYLOAD consuming use, so the
+    # whole job here is the shapes that are not: an extension method's bare `return value`.
+    # A wrapped return reaches the seam as a FRESH constructor and is a no-op.
+    # An extension method returns the bare value; a regular function returns the
+    # `Result.Ok(...)` / `Result.Err(...)` the source wrote. Both are just this expression.
+    value = codegen.expressions.emit_expr(stmt.value)
+    value = _consume_returned_value(codegen, stmt, value)
 
-    # Mark returned struct and dynamic array variables as moved (transfer ownership to caller)
-    # This prevents RAII cleanup from freeing memory that the caller will receive
-    from sushi_lang.semantics.typesys import StructType, EnumType, DynamicArrayType, FunctionType, BuiltinType
-    for var_name in moved_vars:
-        # Check if variable is a struct with dynamic arrays or a dynamic array itself
-        semantic_type = codegen.memory.find_semantic_type(var_name)
-        if semantic_type:
-            if semantic_type == BuiltinType.STRING:
-                # A returned string escapes: mark it moved so scope-exit cleanup skips its
-                # owned-bit free (the caller's binding now owns and frees the buffer). Freeing
-                # here would return a dangling pointer (use-after-free) (#145).
-                codegen.memory.mark_struct_as_moved(var_name)
-            elif isinstance(semantic_type, FunctionType):
-                # A returned closure escapes: mark it moved so the local scope skips its
-                # env free (the caller's binding now owns and frees the environment).
-                codegen.memory.mark_struct_as_moved(var_name)
-            elif codegen.dynamic_arrays.is_list_type(semantic_type):
-                # List<T> is a StructType; mark moved so RAII does not free the buffer
-                # the caller now owns (#61).
-                codegen.dynamic_arrays.mark_list_moved(var_name)
-            elif codegen.dynamic_arrays.is_own_type(semantic_type):
-                # Own<T> is a StructType whose pointer field struct_needs_cleanup() does
-                # not see; mark it moved explicitly so RAII does not free the allocation
-                # the caller now owns.
-                codegen.dynamic_arrays.mark_own_moved(var_name)
-            elif isinstance(semantic_type, StructType):
-                if codegen.dynamic_arrays.struct_needs_cleanup(semantic_type):
-                    # Mark as moved so RAII cleanup skips it
-                    codegen.memory.mark_struct_as_moved(var_name)
-            elif isinstance(semantic_type, EnumType):
-                # An owning enum returned by value escapes to the caller (#134); mark it
-                # moved so scope-exit RAII does not free the payload the caller now owns.
-                # Without this branch the returned enum's buffer was freed here and the
-                # caller received a dangling pointer (the returns-gap).
-                if codegen.dynamic_arrays.struct_needs_cleanup(semantic_type):
-                    codegen.memory.mark_struct_as_moved(var_name)
-            elif isinstance(semantic_type, DynamicArrayType):
-                # Mark dynamic array as moved so RAII cleanup skips it
-                codegen.dynamic_arrays.mark_as_moved(var_name)
-
-    # Check if we're in an extension method
-    if hasattr(codegen, 'in_extension_method') and codegen.in_extension_method:
-        # Extension method: return bare value directly
-        value = codegen.expressions.emit_expr(stmt.value)
-    else:
-        # Regular function: emit Result expression (Ok or Err)
-        # This will produce a Result struct: {i1 is_ok, T value}
-        value = codegen.expressions.emit_expr(stmt.value)
-
-    # RAII: Emit cleanup for all resources using shared utilities
-    # This cleans up both struct fields with dynamic arrays and top-level dynamic arrays
-    # Note: Moved variables are automatically skipped by the cleanup logic
+    # RAII: cleanup for all resources. Ordering is the whole reason RETURN is its own
+    # position: the value is emitted and consumed BEFORE cleanup runs, so a MOVE has
+    # already flagged the source (cleanup skips it) and a COPY has already taken its
+    # independent buffer (cleanup frees the original). Cleaning up first would hand the
+    # caller a freed buffer, which is what #256 was.
     from sushi_lang.backend.statements import utils
     utils.emit_scope_cleanup(codegen, cleanup_type='all')
 
     # Return the value (Result struct for functions, bare value for extension methods)
     codegen.builder.ret(value)
+
+
+def _consume_returned_value(codegen: 'LLVMCodegen', stmt: 'Return',
+                            value: 'ir.Value') -> 'ir.Value':
+    """Route a bare returned value through the ownership seam.
+
+    Only the shapes that are not already a consuming use reach a decision here. A
+    `return Result.Ok(x)` consumed `x` at ENUM_PAYLOAD while emitting, and the
+    constructor itself is FRESH, so this is a no-op for it -- the common case.
+
+    The type comes from the source local, not from the function signature: an extension
+    method's declared return type and the local's type agree by Pass 2, and the local is
+    what has to stop owning the value.
+    """
+    from sushi_lang.semantics.ast import Name
+    from sushi_lang.backend.ownership import ConsumingUse, consume
+
+    if not isinstance(stmt.value, Name):
+        return value
+    semantic_type = codegen.memory.find_semantic_type(stmt.value.id)
+    return consume(codegen, stmt.value, value, semantic_type, ConsumingUse.RETURN)

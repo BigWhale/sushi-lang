@@ -1,0 +1,24 @@
+# Pins MM.md F12 (X8), fixed 2026-08-14 by the by-value-parameter ruling: the CALLEE owns
+# a by-value `fn` parameter. `begin_function` registers the parameter's fat value for the
+# drop_ptr-guarded free, and every caller shape transfers exactly once -- a bare Name is
+# marked moved at the call site, a temporary (`make(2)??` here) adopts in, and an inline
+# lambda is no longer caller-registered (the callee frees it). A container get-out or
+# field-read argument stays CE2411; write `.clone()` to hand over an independent value.
+# tests/memory/test_fn_byvalue_param_free.sushi pins the neighbouring shapes.
+# EXPECT_STDOUT_EXACT: "12\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn make(i32 m) fn(i32) -> i32:
+    return Result.Ok(|i32 x| x * m)
+
+fn apply(fn(i32) -> i32 f, i32 v) i32:
+    return Result.Ok(f(v)??)
+
+fn run() i32:
+    let i32 got = apply(make(2)??, 6)??
+    return Result.Ok(got)
+
+fn main() i32:
+    println(run().realise(-1))
+    return Result.Ok(0)

@@ -14,9 +14,10 @@ from sushi_lang.semantics.ast import (
     IndexAccess,
 )
 from sushi_lang.semantics.typesys import (
-    UnknownType, StructType, EnumType, ArrayType, DynamicArrayType, ReferenceType, BuiltinType,
-    type_moves_by_value,
+    UnknownType, StructType, ArrayType, DynamicArrayType, ReferenceType,
 )
+from sushi_lang.backend.expressions.names import resolve_name_semantic_type
+from sushi_lang.backend.ownership import ConsumingUse, consume
 from sushi_lang.internals.errors import InternalCompilerError, raise_internal_error
 
 if TYPE_CHECKING:
@@ -41,7 +42,6 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
     Raises:
         TypeError: If field count doesn't match or unsupported array constructor type.
     """
-    from sushi_lang.backend.expressions import memory
 
     struct_name = expr.callee.id
     struct_type = codegen.struct_table.by_name[struct_name]
@@ -85,9 +85,7 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
                 )
                 field_values.append(array_struct)
             else:
-                # Move semantics: Transfer ownership of existing dynamic array
-                # This handles cases like: Container(existing_array)
-                # The array is MOVED into the struct (original becomes invalid)
+                # An existing dynamic array handed to a `T[]` field.
                 arg_value = codegen.expressions.emit_expr(arg)
 
                 # Handle method calls that return pointers (like .clone())
@@ -102,19 +100,8 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
                     if arg_value.type.pointee == expected_struct_type:
                         arg_value = codegen.builder.load(arg_value)
 
-                # A read from a CONTINUING owner (`V(w.items)`, `V(o.get())`) is NOT a move:
-                # the owner still frees that buffer, and Sushi has no partial moves, so the
-                # new struct must own an independent copy or both free it (#250/#256). Only a
-                # bare Name below is consumed.
-                if memory.expression_reads_continuing_owner(codegen, arg):
-                    arg_value = memory.emit_value_clone(codegen, arg_value, field_type)
-
-                field_values.append(arg_value)
-
-                # Mark the source variable as moved to prevent double-free
-                # (but not for method calls like .clone() which create new arrays)
-                if isinstance(arg, Name):
-                    codegen.dynamic_arrays.mark_as_moved(arg.id)
+                field_values.append(consume(codegen, arg, arg_value, field_type,
+                                            ConsumingUse.STRUCT_FIELD))
         else:
             # Regular field - emit normally
             arg_value = codegen.expressions.emit_expr(arg)
@@ -127,55 +114,13 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
                 elif field_type.name in codegen.enum_table.by_name:
                     resolved_field_type = codegen.enum_table.by_name[field_type.name]
 
-            # Deep-copy structs with dynamic arrays to avoid double-free
-            # When passing a struct with dynamic arrays to another struct constructor,
-            # we must clone the dynamic array memory to avoid shared ownership
-            if isinstance(resolved_field_type, StructType) and type_moves_by_value(resolved_field_type):
-                # #134 move-type field (owning struct / List / Own): an OWNED bare Name moves
-                # the local (mark moved, store as-is). A borrow binding (#238), a MemberAccess
-                # source or an Own.get() deref detaches from its continuing owner with one
-                # clone (#181/#256). A fresh owning temp (constructor / call / clone) moves in
-                # as-is -- cloning would orphan it.
-                if isinstance(arg, Name) and codegen.memory.is_owned_local(arg.id):
-                    codegen.memory.mark_struct_as_moved(arg.id)
-                elif (isinstance(arg, Name)
-                        or memory.expression_reads_continuing_owner(codegen, arg)):
-                    arg_value = memory.emit_value_clone(codegen, arg_value, resolved_field_type)
-
-            elif isinstance(resolved_field_type, StructType):
-                # Copy-type composite field (string-only): clone a bare-Name / continuing-owner
-                # alias so the source stays a live owner and each frees once (#147); a fresh
-                # RHS is a sole owner stored as-is.
-                if (codegen.dynamic_arrays.struct_needs_cleanup(resolved_field_type)
-                        and (isinstance(arg, Name)
-                             or memory.expression_reads_continuing_owner(codegen, arg))):
-                    arg_value = memory.deep_copy_struct(codegen, arg_value, resolved_field_type)
-
-            # An owning enum field (a variant carrying heap, #139): a bare-Name MOVE-type arg
-            # transfers ownership (mark source moved); a continuing-owner read detaches with
-            # one clone; a fresh RHS (constructor / call) is a sole owner and moves in as-is.
-            elif (isinstance(resolved_field_type, EnumType)
-                  and codegen.dynamic_arrays.struct_needs_cleanup(resolved_field_type)):
-                # An OWNED bare Name of a move-type enum moves; a borrow binding (#238), a
-                # MemberAccess / Own.get() source, or a copy-type (string-only) enum alias is
-                # cloned so the source stays a live owner.
-                if (isinstance(arg, Name) and type_moves_by_value(resolved_field_type)
-                        and codegen.memory.is_owned_local(arg.id)):
-                    codegen.memory.mark_struct_as_moved(arg.id)
-                elif (isinstance(arg, Name)
-                        or memory.expression_reads_continuing_owner(codegen, arg)):
-                    arg_value = memory.emit_value_clone(codegen, arg_value, resolved_field_type)
-
-            # A `string` field: when the arg ALIASES an existing owner (a bare-Name local /
-            # param, or a struct-field read), CLONE it so the struct gets an independent buffer
-            # and each owner frees once (#147). Cloning -- not moving -- is required because the
-            # borrow checker does not flag a string reused across two constructors, which a move
-            # (shallow share) would double-free. A fresh RHS (literal / interpolation / method /
-            # call) is a sole owner with no other owner to alias, so it is stored as-is.
-            elif (resolved_field_type == BuiltinType.STRING
-                  and (isinstance(arg, Name)
-                       or memory.expression_reads_continuing_owner(codegen, arg))):
-                arg_value = memory.emit_value_clone(codegen, arg_value, BuiltinType.STRING)
+            # A constructor field takes ownership of its value. This was four
+            # independent isinstance ladders -- one for owning structs, one for copy
+            # composites, one for owning enums, one for `string` -- each with its own
+            # spelling of "reads from a continuing owner", and NO arm at all for a fixed
+            # `T[N]` field. The type class is the seam's business now.
+            arg_value = consume(codegen, arg, arg_value, resolved_field_type,
+                                ConsumingUse.STRUCT_FIELD)
 
             # Cast to the expected field type
             llvm_field_type = codegen.types.ll_type(field_type)
@@ -403,12 +348,17 @@ def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
         TypeError: If the type cannot be inferred or is not a struct.
     """
     if isinstance(expr, Name):
-        # Look up the variable's Sushi type
+        # Scope-aware lookup. `codegen.variable_types` is a FLAT map, so a `match` arm
+        # binding that shadows an outer variable overwrites the outer entry and never
+        # restores it (the outer struct is then read through the inner type's field
+        # indices for the rest of the function), and a `foreach` binding never reaches
+        # it at all (so the outer type wins inside the loop). Both are silent wrong
+        # data, not a crash. `resolve_name_semantic_type` consults the scoped table
+        # first and falls back to the flat one, so shadowing resolves correctly.
         var_name = expr.id
-        if var_name not in codegen.variable_types:
+        var_type = resolve_name_semantic_type(codegen, var_name)
+        if var_type is None:
             raise_internal_error("CE0056", name=var_name)
-
-        var_type = codegen.variable_types[var_name]
 
         # Unwrap ReferenceType to get the underlying type
         if isinstance(var_type, ReferenceType):

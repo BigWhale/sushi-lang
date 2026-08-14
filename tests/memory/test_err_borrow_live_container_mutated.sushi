@@ -1,0 +1,24 @@
+# A `let`-borrow binding gives the borrow a LIFETIME (#242, Rust's E0502).
+#
+# `view` names the list's element storage; the list keeps it. `l.clear()` releases that
+# storage, and `view` is read AFTER the clear -- a use-after-free. CE2412, rendered with
+# all three locations: the change, the borrow, and the later read that makes it wrong.
+#
+# Without this half the binding model would trade an implicit deep copy for a dangling
+# read: the copy that used to make `view` independent is gone, so the borrow has to be
+# enforced instead. Reading `view` BEFORE the clear is legal -- see
+# `test_borrow_ends_with_its_block.sushi`.
+# EXPECT_ERROR_CODE: CE2412
+
+struct Buf:
+    i32[] data
+
+fn main() i32:
+    let List@(Buf) l = List.new()
+    l.push(Buf(from([1, 2, 3])))
+    let Maybe@(Buf) view = l.get(0)
+    l.clear()
+    match view:
+        Maybe.Some(b) -> println("n={b.data.len()}")
+        Maybe.None -> println("none")
+    return Result.Ok(0)

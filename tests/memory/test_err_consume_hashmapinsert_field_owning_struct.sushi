@@ -1,0 +1,27 @@
+# Sink matrix, the (BORROWED, MOVE) cell: a field read of a heap-owning field handed to the
+# `HashMap.insert` sink.
+#
+# The read BORROWS (#242): `h` keeps `h.inner` and still frees it, so a position that takes
+# ownership may not have it. CE2411, and `.clone()` is the escape -- see the positive twin
+# `test_consume_hashmapinsert_cloned_field.sushi`.
+#
+# This file asserted the OPPOSITE until #242. The provenance was THROUGH_OWNER, whose cell
+# COPIED, so the compiler inserted the clone the user now writes. The two owning rows are one
+# row again, and the compiler inserts no deep copy at a read.
+# EXPECT_ERROR_CODE: CE2411
+
+use <collections/hashmap>
+
+struct Buf:
+    i32[] data
+
+struct Holder:
+    Buf inner
+
+fn main() i32:
+    let Holder h = Holder(Buf(from([1, 2, 3])))
+    let HashMap@(i32, Buf) m = HashMap.new()
+    m.insert(1, h.inner)
+    println("m={m.len()} src={h.inner.data.len()}")
+    m.free()
+    return Result.Ok(0)

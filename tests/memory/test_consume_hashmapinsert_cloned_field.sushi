@@ -1,0 +1,24 @@
+# Sink matrix, the escape from the (BORROWED, MOVE) cell: `.clone()` of a heap-owning field
+# handed to the `HashMap.insert` sink.
+#
+# The positive twin of `test_err_consume_hashmapinsert_field_owning_struct.sushi`. A read
+# borrows, so the sink rejects it (#242); `.clone()` produces a FRESH value nobody owns, which
+# the sink ADOPTS. `h` and the map then free exactly one buffer each.
+# EXPECT_STDOUT_EXACT: "m=1 src=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/hashmap>
+
+struct Buf:
+    i32[] data
+
+struct Holder:
+    Buf inner
+
+fn main() i32:
+    let Holder h = Holder(Buf(from([1, 2, 3])))
+    let HashMap@(i32, Buf) m = HashMap.new()
+    m.insert(1, h.inner.clone())
+    println("m={m.len()} src={h.inner.data.len()}")
+    m.free()
+    return Result.Ok(0)

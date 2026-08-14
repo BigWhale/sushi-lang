@@ -1,0 +1,39 @@
+# `.clone()` is total over types, so a primitive has one and it is a plain copy.
+# Rust makes `Copy: Clone` for exactly this reason: one monomorphized body must satisfy
+# both `T = i32` and `T = string`, and only the string instantiation needs a deep copy.
+# Without a primitive clone the escape from CE2411 does not survive monomorphization --
+# MM.md section 2.F, finding F1.
+# EXPECT_STDOUT_EXACT: "5 5\n2.5 2.5\nyes\n7 7\n1 a\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn first@(T)(T[] arr) T:
+    let T elem = arr.get(0)??
+    return Result.Ok(elem.clone())
+
+fn main() i32:
+    let i32 n = 5
+    let i32 m = n.clone()
+    println("{n} {m}")
+
+    let f64 f = 2.5
+    let f64 g = f.clone()
+    println("{f} {g}")
+
+    let bool b = true
+    let bool c = b.clone()
+    if (c):
+        println("yes")
+
+    let u8 u = 7 as u8
+    let u8 v = u.clone()
+    println("{u} {v}")
+
+    # The case that matters: one body, two instantiations.
+    let i32[] xs = from([1, 2, 3])
+    let i32 x0 = first(xs).realise(99)
+    let string[] ss = from(["a", "b"])
+    let string s0 = first(ss).realise("z")
+    println("{x0} {s0}")
+
+    return Result.Ok(0)

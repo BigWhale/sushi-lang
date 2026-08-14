@@ -81,8 +81,17 @@ def emit_hashmap_insert(
     if len(expr.args) != 2:
         raise_internal_error("CE0023", method="insert", expected=2, got=len(expr.args))
 
-    key_value = codegen.expressions.emit_expr(expr.args[0])
-    value_value = codegen.expressions.emit_expr(expr.args[1])
+    # BOTH the key and the value are stored shallowly, so the map takes ownership of each
+    # and frees them on `.free()`/scope exit -- two consuming uses, not one. The key was
+    # the half that got overlooked, so a heap-owning key (a string bound out of a split()
+    # array, say) was freed by its own RAII and by the map.
+    from sushi_lang.backend.ownership import ConsumingUse, consume
+    key_value = consume(codegen, expr.args[0],
+                        codegen.expressions.emit_expr(expr.args[0]),
+                        key_type, ConsumingUse.CONTAINER_INSERT)
+    value_value = consume(codegen, expr.args[1],
+                          codegen.expressions.emit_expr(expr.args[1]),
+                          value_type, ConsumingUse.CONTAINER_INSERT)
 
     # Get pointers to HashMap fields
     # hashmap_value should be a POINTER to the HashMap struct (like array_value for arrays)

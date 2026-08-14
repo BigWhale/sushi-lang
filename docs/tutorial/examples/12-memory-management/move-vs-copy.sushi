@@ -1,8 +1,11 @@
 # Move semantics vs copy semantics.
 #
-# Primitives and strings are COPIED on assignment: the original
-# stays valid. Dynamic arrays are MOVED: the source is consumed and
-# can no longer be used (this is how Sushi avoids double-frees).
+# Primitives are COPIED on assignment: the original stays valid.
+# A string owns heap and MOVES like any other owning type -- except a string
+# bound directly from a literal, which points into read-only program data and
+# owns nothing, so it behaves like a copy (both sides stay valid). Dynamic
+# arrays are always MOVED: the source is consumed and can no longer be used
+# (this is how Sushi avoids double-frees).
 
 fn main() i32:
     # Primitives are copied
@@ -12,7 +15,7 @@ fn main() i32:
     println("x is still usable: {x}")
     println("y is a copy: {y}")
 
-    # Strings are copied too
+    # A string bound from a literal owns no heap, so it copies too
     let string s1 = "Mostly Harmless"
     let string s2 = ""
     s2 := s1

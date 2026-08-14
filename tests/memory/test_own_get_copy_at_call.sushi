@@ -1,9 +1,21 @@
-# The call-argument sink of #256. A by-value owning-struct parameter TAKES
-# ownership (#134), so the callee frees the payload at its scope exit -- while
-# `o` still frees the same inner Own@(Leafy) at ours. Two owners, one buffer.
+# Sink matrix, the (BORROWED, MOVE) cell reached through a read: an `Own@(T).get()` deref at the call-argument sink.
 #
-# Not in the issue as filed; found by looking for the bug's shape where the
-# reported trigger (a `let`) is absent.
+# The read BORROWS (#242): the owner keeps the value and still frees it, so the sink may not
+# take it and `.clone()` is the escape. Written WITHOUT the clone this file is CE2411, and
+# `tests/memory/test_err_consume_read_*.sushi` pins that half.
+#
+# This used to compile with no clone, because the compiler inserted one for you: the
+# provenance was THROUGH_OWNER, which COPIED. Deleting that cell is the point of #242 -- every
+# deep copy in a Sushi program is now one the user wrote.
+# ► THIS FILE IS RED, DELIBERATELY. `o.get().clone()` is CE0019: a chained method call on a
+# call receiver does not resolve its semantic type. That defect is PRE-EXISTING -- verified
+# against the branch base b22f70b3, where `o.get().hash()` fails identically -- but #242 is
+# what makes it matter, because `.clone()` on a get-out is now the thing the user must write.
+#
+# The file is written in the shape CE2411's help tells the user to write. It was briefly
+# written in a two-step shape instead (`let view = o.get()` then `view.clone()`), which
+# passes and hides the defect. Green by test-bending is the false confidence this branch
+# exists to remove. See MM.md B5.
 # EXPECT_STDOUT_EXACT: "v=1\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
@@ -22,7 +34,7 @@ fn run_test() i32:
     let Leafy l = Leafy(9)
     let Holder h = Holder(1, Maybe.Some(Own.alloc(l)))
     let Own@(Holder) o = Own.alloc(h)
-    let i32 v = takes(o.get())??
+    let i32 v = takes(o.get().clone())??
     println("v={v}")
     return Result.Ok(0)
 

@@ -103,8 +103,8 @@ class TypeSizing:
                 # Opaque foreign pointer (LLVM i8*), 64-bit
                 return 8
             case FunctionType():
-                # First-class function value is a 3-word fat pointer
-                # {i8* fn_ptr, i8* env_ptr, i8* drop_ptr} = 24 bytes.
+                # First-class function value is a 4-word fat pointer
+                # {i8* fn_ptr, i8* env_ptr, i8* drop_ptr, i8* clone_ptr} = 32 bytes.
                 from sushi_lang.backend.constants.sizes import CLOSURE_FAT_POINTER_SIZE_BYTES
                 return CLOSURE_FAT_POINTER_SIZE_BYTES
             case _:

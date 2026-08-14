@@ -22,6 +22,32 @@ if TYPE_CHECKING:
     from .. import TypeValidator
 
 
+def emit_argument_mismatch(validator: 'TypeValidator', arg, index: int,
+                           expected_ty, actual_ty) -> None:
+    """Report CE2006, and say how to borrow when the parameter wants a borrow.
+
+    A borrow reads exactly like the value it refers to, so `infer_expression_type`
+    dereferences one: `v + 1` must see `i32`, not `&peek i32`. At an argument position
+    that dereference makes the message read `expected &peek string, got string`, which
+    describes two types the user never wrote and names no fix.
+
+    A borrow is always created AT the call site in Sushi, whether the place is owned or
+    already borrowed, so the fix is the same `&peek x` the caller writes everywhere else.
+    Say so. This matters most where a function forwards its own borrowed parameter to
+    another function, which is the shape every `&peek string` signature produces.
+    """
+    from sushi_lang.semantics.ast import MemberAccess
+    from sushi_lang.semantics.typesys import ReferenceType
+
+    b = er.emit_with(validator.reporter, er.ERR.CE2006, arg.loc,
+                     index=index, expected=display_type(expected_ty),
+                     got=display_type(actual_ty))
+    if isinstance(expected_ty, ReferenceType) and isinstance(arg, (Name, MemberAccess)):
+        place = arg.id if isinstance(arg, Name) else f"{arg.receiver}.{arg.member}"
+        b.help(f"borrow it at the call site: `&{expected_ty.mutability} {place}`")
+    b.emit()
+
+
 def _reject_misplaced_spread(validator: 'TypeValidator', arg) -> bool:
     """Emit CE0120 if `arg` is a bloom spread `arr...` in a position where one is not
     allowed (a non-variadic call, or a fixed/non-last argument). Still validates the
@@ -215,8 +241,7 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
             if param.ty is not None:
                 arg_type = validator.infer_expression_type(arg)
                 if arg_type is not None and not types_compatible(validator, arg_type, param.ty):
-                    er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                           index=i + 1, expected=display_type(param.ty), got=display_type(arg_type))
+                    emit_argument_mismatch(validator, arg, i + 1, param.ty, arg_type)
 
         # Validate trailing variadic arguments. Two forms are accepted:
         #   - individual values, each type-checked against element type T;
@@ -266,8 +291,7 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         if param.ty is not None:  # Skip if parameter has unknown type
             arg_type = validator.infer_expression_type(arg)
             if arg_type is not None and not types_compatible(validator, arg_type, param.ty):
-                er.emit(validator.reporter, er.ERR.CE2006, arg.loc,
-                       index=i+1, expected=display_type(param.ty), got=display_type(arg_type))
+                emit_argument_mismatch(validator, arg, i + 1, param.ty, arg_type)
 
     # Validate any excess arguments (if more args than params)
     for i in range(len(expected_params), len(actual_args)):

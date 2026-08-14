@@ -395,7 +395,7 @@ class SemanticAnalyzer:
             # Base names only: a generic enum is interned as "Result<i32, StdError>" but the
             # constructor receiver is written bare ("Result").
             borrow_checker = BorrowChecker(unit_reporter, destroy_effects=destroy_effects,
-                                           enum_names=enum_base_names)
+                                           enum_names=enum_base_names, tables=self.tables)
             borrow_checker.run(unit.ast)
 
             # Merge unit reporter results into main reporter

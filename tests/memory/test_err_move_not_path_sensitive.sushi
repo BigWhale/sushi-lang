@@ -1,0 +1,35 @@
+# A KNOWN LIMITATION, PINNED AS CURRENT BEHAVIOUR. This file passes today and MUST go red
+# the moment the move checker becomes path-sensitive. When it does, that is the fix landing,
+# not a regression: delete this file.
+#
+# MM.md finding F4: the move checker is not path-sensitive. Returning the same owning value
+# from two MUTUALLY EXCLUSIVE branches is reported as a use-after-move, because the checker
+# marks `val` moved at the first return and then sees the second return as a use of a moved
+# value. Only one of them can ever run.
+#
+# The limitation is old, but it was invisible until Phase 9: before the string tier flipped,
+# a `string` was a COPY type, so this shape never moved anything and never reported. Making a
+# string move is what exposed it. It applies equally to any owning type -- a `T[]`, a `List`,
+# an `Own` -- and always did.
+#
+# The workaround is to return from one place, which is what
+# tests/generics/test_run_issue214_non_name_arg_inference.sushi now does. That file exists to
+# pin issue #214 and merely tripped over this; restructuring it there and pinning the
+# limitation here keeps both facts asserted instead of trading one for the other.
+# EXPECT_ERROR_CODE: CE2405
+
+fn pick(i32 which, string val) string:
+    if (which > 0):
+        return Result.Ok(val)
+    return Result.Ok(val)
+
+fn run() i32:
+    let i32 n = 1
+    let string s = "hi{n}"
+    let string got = pick(1, s)??
+    println(got)
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 rc = run().realise(1)
+    return Result.Ok(rc)

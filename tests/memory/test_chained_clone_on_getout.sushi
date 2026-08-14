@@ -1,0 +1,39 @@
+# ► THIS FILE IS RED, DELIBERATELY. It pins the container half of the chained-clone defect.
+#
+# `map.get(1)` BORROWS since #242, so handing it to a by-value parameter is CE2411 and the
+# help says to write `.clone()`. Writing exactly that is CE0019 -- a chained method call on a
+# call receiver does not resolve its semantic type, so the receiver's LLVM type ({i32, [16 x
+# i8]}, the Maybe layout) is mapped back to a language type and fails.
+#
+# The defect is PRE-EXISTING: `o.get().hash()` fails the same way on the branch base
+# b22f70b3, and CLAUDE.md already records the sibling shape (`get_map()??.keys()` surfaces as
+# CE0019). #242 is what makes it BLOCKING, because `.clone()` on a get-out went from a thing
+# nobody wrote to the only way to consume one.
+#
+# The escape that does work today is two-step: `let Maybe@(List@(i32)) view = map.get(1)`
+# then `len_of(view.clone())`. Do NOT rewrite this file into that shape to make it pass --
+# the whole point is that the shape the compiler recommends must compile. See MM.md B5.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n"
+# EXPECT_NO_LEAKS: true
+use <collections/hashmap>
+
+fn len_of(Maybe@(List@(i32)) got) i32:
+    match got:
+        Maybe.Some(lst) ->
+            return Result.Ok(lst.len())
+        Maybe.None ->
+            return Result.Ok(-1)
+
+fn run() i32:
+    let HashMap@(i32, List@(i32)) map = HashMap.new()
+    let List@(i32) xs = List.new()
+    xs.push(7)
+    map.insert(1, xs)
+    let i32 n = len_of(map.get(1).clone()).realise(-1)
+    map.free()
+    return Result.Ok(n)
+
+fn main() i32:
+    println(run().realise(99))
+    return Result.Ok(0)

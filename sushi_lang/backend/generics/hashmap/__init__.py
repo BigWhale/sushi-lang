@@ -130,6 +130,12 @@ def emit_hashmap_method(
         result = emit_hashmap_values(codegen, expr, receiver_value, receiver_type)
     elif method == "entries":
         result = emit_hashmap_entries(codegen, expr, receiver_value, receiver_type)
+    elif method == "clone":
+        # Routed through the seam's `copy_out`, which is the ONE deep clone in the backend, so
+        # `.clone()` duplicates exactly what the destructor frees. The seam also accepts a
+        # pointer, which is the shape a HashMap receiver arrives in. Mirrors emit_list_clone.
+        from sushi_lang.backend.ownership import copy_out
+        result = copy_out(codegen, receiver_value, receiver_type)
     else:
         raise_internal_error("CE0085", method=method)
 

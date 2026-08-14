@@ -63,8 +63,9 @@ class ScopeManager:
         # like _locals for shadow-correctness (see _struct_cleanup). Every function-typed
         # `let` local is registered; the free is runtime-guarded by drop_ptr, so a
         # non-capturing value frees to a no-op (capture is erased from the `fn(...)` type).
-        # Function PARAMETERS are deliberately NOT registered -- a passed closure is owned by
-        # the caller's binding, not the callee (freeing it here would double-free).
+        # A by-value fn PARAMETER is registered too (the 2026-08-14 ruling: the callee
+        # owns; the caller transferred through the seam). Extension/perk-method bodies
+        # (fn_def=None) register nothing and stay borrows.
         self._closure_cleanup: Dict[str, List[tuple[int, ir.AllocaInstr]]] = {}
 
         # Struct move tracking is delegated to the unified codegen.moves MoveTracker.
@@ -97,7 +98,10 @@ class ScopeManager:
         # scope exit via the owned bit (a literal/borrow carries owned=0 -> the free is a
         # runtime no-op). Stacked like _closure_cleanup for shadow-correctness; move-tracked
         # via MoveTracker so a returned/aliased owning string is skipped (its new owner frees
-        # it). Parameters are NOT registered -- a passed string is owned by the caller's binding.
+        # it). A by-value string PARAMETER of a plain function is registered too (the
+        # 2026-08-14 ruling: the callee owns and its owned bit survives). Extension/perk
+        # bodies (fn_def=None) register nothing; their string params stay borrows with a
+        # cleared owned bit, which is what keeps `return self` safe there.
         self._string_cleanup: Dict[str, List[tuple[int, ir.AllocaInstr]]] = {}
 
     @staticmethod
@@ -120,6 +124,27 @@ class ScopeManager:
             entries.pop()
             if not entries:
                 del reg[name]
+
+    def _drain_registry_at_depth(self, registry: Dict[str, List], current_vars,
+                                 emit_free) -> None:
+        """Drain each current-scope binding's top registry entry on the fall-through exit.
+
+        The one shape shared by the struct/enum/fixed-array, closure and string
+        registries: emit the binding's guarded free when the block is live and the
+        binding was not moved, then pop its entry at this depth. `emit_free` receives
+        `(var_name, entry)`; the entry's LAST element is always the slot.
+        """
+        if not registry:
+            return
+        block = self.codegen.builder.block if self.codegen.builder is not None else None
+        block_live = block is not None and not block.is_terminated
+        for var_name in current_vars:
+            entries = registry.get(var_name)
+            if entries and entries[-1][0] == self._scope_depth:
+                entry = entries[-1]
+                if block_live and not self.codegen.moves.is_moved(entry[-1]):
+                    emit_free(var_name, entry)
+                self._stack_pop_at_depth(registry, var_name, self._scope_depth)
 
     def push_scope(self) -> None:
         """Push a new lexical scope onto the scope stack.
@@ -155,53 +180,27 @@ class ScopeManager:
         # Get variables in current scope
         current_vars = self._scope_vars[self._scope_depth]
 
-        # Clean up struct variables with dynamic array fields before popping scope.
-        # This is the fall-through (normal) exit. If the block already terminated, an
-        # early return/`??` inside this scope emitted the struct destructors on that path
-        # already (emit_struct_cleanup); emitting again would append a stray free after
-        # the terminator. Skip emission but still drain the tracking. Each runtime exit
-        # path frees on its own mutually-exclusive block, so no double free (#59/#60).
+        # Drain the three stacked cleanup registries on the fall-through (normal) exit.
+        # This is ONE shape (it used to be three verbatim loops; 11b): if the block
+        # already terminated, an early return/`??` inside this scope emitted the frees on
+        # that path already (emit_struct_cleanup / emit_closure_cleanup /
+        # emit_string_cleanup_all); emitting again would append a stray free after the
+        # terminator. Skip emission but still drain the tracking. Each runtime exit path
+        # frees on its own mutually-exclusive block, so no double free (#59/#60). A moved
+        # binding is skipped -- its new owner frees it. The closure free is drop_ptr-
+        # guarded and the string free owned-bit-guarded (#145), so a borrow-shaped value
+        # frees to a runtime no-op.
         if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
-            block = self.codegen.builder.block if self.codegen.builder is not None else None
-            block_live = block is not None and not block.is_terminated
-            for var_name in current_vars:
-                struct_entries = self._struct_cleanup.get(var_name)
-                if struct_entries and struct_entries[-1][0] == self._scope_depth:
-                    _depth, struct_type, alloca = struct_entries[-1]
-                    if block_live and not self.codegen.moves.is_moved(alloca):
-                        self.codegen.dynamic_arrays.emit_struct_field_cleanup(var_name, struct_type, alloca)
-                    # Remove this binding's entry when leaving its scope
-                    self._stack_pop_at_depth(self._struct_cleanup, var_name, self._scope_depth)
-
-        # Free function-value locals (closures) on the fall-through exit, runtime-guarded
-        # by drop_ptr. Same mutual-exclusion discipline as structs (#59/#60): early-exit
-        # paths emit their own guarded free via emit_closure_cleanup; a moved (escaped)
-        # closure is skipped so its new owner frees it.
-        if self._closure_cleanup:
-            block = self.codegen.builder.block if self.codegen.builder is not None else None
-            block_live = block is not None and not block.is_terminated
-            for var_name in current_vars:
-                closure_entries = self._closure_cleanup.get(var_name)
-                if closure_entries and closure_entries[-1][0] == self._scope_depth:
-                    slot = closure_entries[-1][-1]
-                    if block_live and not self.codegen.moves.is_moved(slot):
-                        self._emit_closure_free(slot)
-                    self._stack_pop_at_depth(self._closure_cleanup, var_name, self._scope_depth)
-
-        # Free string locals on the fall-through exit, runtime-guarded by the owned bit (#145).
-        # Same mutual-exclusion discipline as structs/closures: early-exit paths emit their own
-        # guarded free via emit_string_cleanup_all; a moved (returned/aliased) string is skipped
-        # so its new owner frees it. A literal/borrow (owned=0) frees to a no-op.
-        if self._string_cleanup:
-            block = self.codegen.builder.block if self.codegen.builder is not None else None
-            block_live = block is not None and not block.is_terminated
-            for var_name in current_vars:
-                string_entries = self._string_cleanup.get(var_name)
-                if string_entries and string_entries[-1][0] == self._scope_depth:
-                    slot = string_entries[-1][-1]
-                    if block_live and not self.codegen.moves.is_moved(slot):
-                        self._emit_string_free(slot)
-                    self._stack_pop_at_depth(self._string_cleanup, var_name, self._scope_depth)
+            self._drain_registry_at_depth(
+                self._struct_cleanup, current_vars,
+                lambda name, entry: self.codegen.dynamic_arrays.emit_struct_field_cleanup(
+                    name, entry[1], entry[2]))
+        self._drain_registry_at_depth(
+            self._closure_cleanup, current_vars,
+            lambda _name, entry: self._emit_closure_free(entry[-1]))
+        self._drain_registry_at_depth(
+            self._string_cleanup, current_vars,
+            lambda _name, entry: self._emit_string_free(entry[-1]))
 
         # Remove variables from flat caches
         for var_name in current_vars:
@@ -379,6 +378,28 @@ class ScopeManager:
             self._types[name] = []
         self._types[name].append((self._scope_depth, semantic_ty))
 
+    def _enter_local(self, name: str, ty: ir.Type, semantic_ty: Optional['Type'],
+                     register_cleanup: bool) -> ir.AllocaInstr:
+        """Allocate and track a local: the shared body of create_local and
+        create_local_nostore (they used to hold 38 verbatim-duplicated lines; 11b)."""
+        slot = self.entry_alloca(ty, name)
+
+        # Track variable in current scope
+        self._scope_vars[self._scope_depth].add(name)
+
+        # Add to flat cache (primary storage)
+        if name not in self._locals:
+            self._locals[name] = []
+        self._locals[name].append((self._scope_depth, slot))
+
+        if semantic_ty is not None:
+            if name not in self._types:
+                self._types[name] = []
+            self._types[name].append((self._scope_depth, semantic_ty))
+            if register_cleanup:
+                self.register_local_cleanup(name, semantic_ty, slot)
+        return slot
+
     def create_local(self, name: str, ty: ir.Type, init: Optional[ir.Value] = None, semantic_ty: Optional['Type'] = None, register_cleanup: bool = True) -> ir.AllocaInstr:
         """Create local variable with optional initialization.
 
@@ -400,64 +421,58 @@ class ScopeManager:
         Returns:
             The alloca instruction for the variable.
         """
-        slot = self.entry_alloca(ty, name)
-
-        # Track variable in current scope
-        self._scope_vars[self._scope_depth].add(name)
-
-        # Add to flat cache (primary storage)
-        if name not in self._locals:
-            self._locals[name] = []
-        self._locals[name].append((self._scope_depth, slot))
-
-        if semantic_ty is not None:
-            if name not in self._types:
-                self._types[name] = []
-            self._types[name].append((self._scope_depth, semantic_ty))
-
-            # Track struct / enum variables that need cleanup.
-            # Resolve a named / generic reference first -- UnknownType('Box'),
-            # GenericTypeRef('List', (i32,)), GenericTypeRef('Result', (T, E)) -- to the concrete
-            # struct/enum it names. The branches below dispatch on the resolved class, so an
-            # unresolved local is registered in NO cleanup registry and its payload leaks (#179).
-            from sushi_lang.semantics.typesys import StructType, EnumType, ArrayType, FunctionType, BuiltinType
-            from sushi_lang.backend.destructors import resolve_named_type
-            semantic_ty = resolve_named_type(self.codegen, semantic_ty)
-            if not register_cleanup:
-                pass  # borrow-like binding: aliases memory owned elsewhere, do not free
-            elif isinstance(semantic_ty, (StructType, EnumType)):
-                # An enum local whose active variant owns heap (a dynamic-array / string /
-                # closure / owning-struct payload) is freed at scope exit like a struct
-                # local, reusing the struct-cleanup registry so both the fall-through
-                # (pop_scope) and early-exit (emit_struct_cleanup) paths free it through
-                # the recursion-safe emit_value_destructor. #143 lifted CE2059 (enum may
-                # hold T[]) without wiring this owner, so such enum locals leaked (#139).
-                if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
-                    if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
-                        self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
-            # A fixed-size array local (`string[3]`, `Box[2]`) whose ELEMENTS own heap. It owns no
-            # buffer of its own -- the storage is the alloca -- so it is not a dynamic array and
-            # has no registry of its own; it reuses the owning-value registry, whose drain calls
-            # the same recursion-safe emit_value_destructor. ArrayType matched NO branch in this
-            # chain, so such a local was registered nowhere and no exit path could free it (#185).
-            elif isinstance(semantic_ty, ArrayType):
-                from sushi_lang.backend.destructors import needs_cleanup
-                if needs_cleanup(semantic_ty):
-                    self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
-            # Track function-value locals for runtime-guarded env free at scope exit.
-            elif isinstance(semantic_ty, FunctionType):
-                self._closure_cleanup.setdefault(name, []).append((self._scope_depth, slot))
-            # Track string locals for owned-bit-guarded free at scope exit (#145).
-            elif semantic_ty == BuiltinType.STRING:
-                self._string_cleanup.setdefault(name, []).append((self._scope_depth, slot))
-
+        slot = self._enter_local(name, ty, semantic_ty, register_cleanup)
         if init is not None:
             if self.codegen.builder is None:
                 raise_internal_error("CE0009")
             self.codegen.builder.store(init, slot)
         return slot
 
-    def create_local_nostore(self, name: str, ty: ir.Type, semantic_ty: Optional['Type'] = None) -> ir.AllocaInstr:
+    def register_local_cleanup(self, name: str, semantic_ty: 'Type',
+                               slot: ir.AllocaInstr) -> None:
+        """Register a local in the cleanup registry its type belongs to.
+
+        The one place that decides WHICH registry frees a local. `create_local` and
+        `create_local_nostore` both call it, and `emit_let` calls it directly once the
+        ownership seam has said the binding owns its value -- a `let` bound from a borrow
+        names storage something else frees, so it is registered nowhere (#242).
+
+        Resolve a named / generic reference first -- UnknownType('Box'),
+        GenericTypeRef('List', (i32,)), GenericTypeRef('Result', (T, E)) -- to the concrete
+        struct/enum it names. The branches below dispatch on the resolved class, so an
+        unresolved local is registered in NO cleanup registry and its payload leaks (#179).
+        """
+        from sushi_lang.semantics.typesys import StructType, EnumType, ArrayType, FunctionType, BuiltinType
+        from sushi_lang.backend.destructors import resolve_named_type
+        semantic_ty = resolve_named_type(self.codegen, semantic_ty)
+        if isinstance(semantic_ty, (StructType, EnumType)):
+            # An enum local whose active variant owns heap (a dynamic-array / string /
+            # closure / owning-struct payload) is freed at scope exit like a struct
+            # local, reusing the struct-cleanup registry so both the fall-through
+            # (pop_scope) and early-exit (emit_struct_cleanup) paths free it through
+            # the recursion-safe emit_value_destructor. #143 lifted CE2059 (enum may
+            # hold T[]) without wiring this owner, so such enum locals leaked (#139).
+            if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
+                if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
+                    self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
+        # A fixed-size array local (`string[3]`, `Box[2]`) whose ELEMENTS own heap. It owns no
+        # buffer of its own -- the storage is the alloca -- so it is not a dynamic array and
+        # has no registry of its own; it reuses the owning-value registry, whose drain calls
+        # the same recursion-safe emit_value_destructor. ArrayType matched NO branch in this
+        # chain, so such a local was registered nowhere and no exit path could free it (#185).
+        elif isinstance(semantic_ty, ArrayType):
+            from sushi_lang.backend.destructors import needs_cleanup
+            if needs_cleanup(semantic_ty):
+                self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
+        # Track function-value locals for runtime-guarded env free at scope exit.
+        elif isinstance(semantic_ty, FunctionType):
+            self._closure_cleanup.setdefault(name, []).append((self._scope_depth, slot))
+        # Track string locals for owned-bit-guarded free at scope exit (#145).
+        elif semantic_ty == BuiltinType.STRING:
+            self._string_cleanup.setdefault(name, []).append((self._scope_depth, slot))
+
+    def create_local_nostore(self, name: str, ty: ir.Type, semantic_ty: Optional['Type'] = None,
+                             register_cleanup: bool = True) -> ir.AllocaInstr:
         """Create local variable without initialization.
 
         Allocates space for a local variable but does not store any
@@ -468,6 +483,11 @@ class ScopeManager:
             name: The variable name.
             ty: The LLVM type for the variable.
             semantic_ty: Optional semantic type for the variable.
+            register_cleanup: When False, the local is NOT registered for scope-exit RAII
+                (the semantic type is still recorded for method dispatch). `emit_let` passes
+                False and registers afterwards, because whether a `let` OWNS its value is
+                the ownership seam's answer and the seam cannot run until the initializer
+                is emitted (#242).
 
         Returns:
             The alloca instruction for the variable.
@@ -479,56 +499,7 @@ class ScopeManager:
         if name in self._scope_vars[self._scope_depth]:
             raise KeyError(f"duplicate local in same scope: {name}")
 
-        slot = self.entry_alloca(ty, name)
-
-        # Track variable in current scope
-        self._scope_vars[self._scope_depth].add(name)
-
-        # Add to flat cache (primary storage)
-        if name not in self._locals:
-            self._locals[name] = []
-        self._locals[name].append((self._scope_depth, slot))
-
-        if semantic_ty is not None:
-            if name not in self._types:
-                self._types[name] = []
-            self._types[name].append((self._scope_depth, semantic_ty))
-
-            # Track struct / enum variables that need cleanup.
-            # Resolve a named / generic reference first -- UnknownType('Box'),
-            # GenericTypeRef('List', (i32,)), GenericTypeRef('Result', (T, E)) -- to the concrete
-            # struct/enum it names. The branches below dispatch on the resolved class, so an
-            # unresolved local is registered in NO cleanup registry and its payload leaks (#179).
-            from sushi_lang.semantics.typesys import StructType, EnumType, ArrayType, FunctionType, BuiltinType
-            from sushi_lang.backend.destructors import resolve_named_type
-            semantic_ty = resolve_named_type(self.codegen, semantic_ty)
-            if isinstance(semantic_ty, (StructType, EnumType)):
-                # An enum local whose active variant owns heap (a dynamic-array / string /
-                # closure / owning-struct payload) is freed at scope exit like a struct
-                # local, reusing the struct-cleanup registry so both the fall-through
-                # (pop_scope) and early-exit (emit_struct_cleanup) paths free it through
-                # the recursion-safe emit_value_destructor. #143 lifted CE2059 (enum may
-                # hold T[]) without wiring this owner, so such enum locals leaked (#139).
-                if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
-                    if self.codegen.dynamic_arrays.struct_needs_cleanup(semantic_ty):
-                        self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
-            # A fixed-size array local (`string[3]`, `Box[2]`) whose ELEMENTS own heap. It owns no
-            # buffer of its own -- the storage is the alloca -- so it is not a dynamic array and
-            # has no registry of its own; it reuses the owning-value registry, whose drain calls
-            # the same recursion-safe emit_value_destructor. ArrayType matched NO branch in this
-            # chain, so such a local was registered nowhere and no exit path could free it (#185).
-            elif isinstance(semantic_ty, ArrayType):
-                from sushi_lang.backend.destructors import needs_cleanup
-                if needs_cleanup(semantic_ty):
-                    self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
-            # Track function-value locals for runtime-guarded env free at scope exit.
-            elif isinstance(semantic_ty, FunctionType):
-                self._closure_cleanup.setdefault(name, []).append((self._scope_depth, slot))
-            # Track string locals for owned-bit-guarded free at scope exit (#145).
-            elif semantic_ty == BuiltinType.STRING:
-                self._string_cleanup.setdefault(name, []).append((self._scope_depth, slot))
-
-        return slot
+        return self._enter_local(name, ty, semantic_ty, register_cleanup)
 
     def entry_alloca(self, ty: ir.Type, name: str) -> ir.AllocaInstr:
         """Create alloca instruction in function entry block.

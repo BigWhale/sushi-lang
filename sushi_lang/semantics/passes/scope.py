@@ -19,7 +19,6 @@ class VariableInfo:
     name: str
     declared_at: Optional[Span]
     used: bool = False
-    borrowed: bool = False  # True if variable is only accessed through borrows
 
 
 class ScopeAnalyzer:
@@ -103,13 +102,8 @@ class ScopeAnalyzer:
                 if var_info.declared_at is None:
                     continue
 
-                # Check if variable was borrowed but not directly used
-                if var_info.borrowed:
-                    # Variable is only used through borrows - emit clarified warning
-                    self.err.emit(er.ERR.CW1003, var_info.declared_at, name=var_info.name)
-                else:
-                    # Variable is completely unused
-                    self.err.emit(er.ERR.CW1001, var_info.declared_at, name=var_info.name)
+                # Variable is completely unused (a borrow counts as a use).
+                self.err.emit(er.ERR.CW1001, var_info.declared_at, name=var_info.name)
 
     def _declare_variable(self, name: str, span: Optional[Span]) -> None:
         """Declare a variable in the current scope."""
@@ -155,12 +149,22 @@ class ScopeAnalyzer:
             self.err.emit(er.ERR.CE1001, usage_span, name=name)
 
     def _borrow_variable(self, name: str, usage_span: Optional[Span] = None) -> None:
-        """Mark a variable as borrowed (used through a reference), searching through scope stack."""
+        """Mark a variable used through a reference, searching through scope stack.
+
+        A BORROW IS A USE. This used to set a separate `borrowed` flag and deliberately
+        leave `used` false, so a variable only ever passed by `&peek`/`&poke` was reported
+        as CW1003 ("only used through borrows ... may indicate unnecessary indirection").
+
+        That advice became wrong when a `match`/`foreach` binding of an owning type stopped
+        being consumable (CE2411): borrowing is now the REQUIRED form for a recursive
+        traversal, not an avoidable indirection, and a pattern binding has no declaration
+        to turn into a reference anyway. No mainstream language warns here -- Rust, Go and
+        C# have no equivalent, and Clippy's `needless_borrow` warns the opposite way.
+        A variable that is genuinely never touched is still CW1001.
+        """
         for i in range(len(self.scopes) - 1, -1, -1):
             if name in self.scopes[i]:
-                # Mark as borrowed but don't mark as directly used
-                # This allows us to detect variables that are ONLY borrowed
-                self.scopes[i][name].borrowed = True
+                self.scopes[i][name].used = True
                 self._record_capture(name, i, usage_span)
                 return
 

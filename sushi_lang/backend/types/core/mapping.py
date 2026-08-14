@@ -84,11 +84,18 @@ class TypeMapper:
         # {i8*, i32} and FAT_POINTER_SIZE_BYTES stays 12.
         self.string_struct: ir.LiteralStructType = self._create_string_struct_type()
 
-        # Closure/function-value fat pointer type: {i8* fn_ptr, i8* env_ptr, i8* drop_ptr}
+        # Closure/function-value fat pointer type:
+        # {i8* fn_ptr, i8* env_ptr, i8* drop_ptr, i8* clone_ptr}
+        # `clone_ptr` is `drop_ptr`'s twin and exists for the same reason: capture is
+        # erased from the `fn(...)` type, so a value cloned through a struct field or a
+        # container has no compile-time way to learn its own environment layout. Carrying
+        # a type-erased env duplicator alongside the type-erased env destructor is what
+        # lets a closure be deep-copied at all. Slots 0-2 keep their indices.
         self.closure_struct: ir.LiteralStructType = ir.LiteralStructType([
             self.str_ptr,  # fn_ptr  (opaque; bitcast to the real signature at call site)
             self.str_ptr,  # env_ptr (null when non-capturing)
             self.str_ptr,  # drop_ptr (null when non-capturing)
+            self.str_ptr,  # clone_ptr (null when non-capturing)
         ])
 
         # Type mapping dictionary for O(1) lookups
@@ -176,10 +183,11 @@ class TypeMapper:
                 # Map ForeignPtrType (`ptr`) to opaque LLVM i8* for the C ABI.
                 return ir.PointerType(self.i8)
             case FunctionType():
-                # Map a first-class function value to the 3-word fat pointer
-                # {i8* fn_ptr, i8* env_ptr, i8* drop_ptr}. Capture is erased: a
-                # non-capturing value carries null env/drop; a closure carries a
-                # heap env and a type-erased destructor. The real callee signature
+                # Map a first-class function value to the 4-word fat pointer
+                # {i8* fn_ptr, i8* env_ptr, i8* drop_ptr, i8* clone_ptr}. Capture is
+                # erased: a non-capturing value carries null env/drop/clone; a closure
+                # carries a heap env plus a type-erased destructor and duplicator. The
+                # real callee signature
                 # (Result<T,E>(i8* env, params)) is recovered from the semantic
                 # FunctionType at the call site, not from this opaque LLVM type.
                 return self.closure_struct

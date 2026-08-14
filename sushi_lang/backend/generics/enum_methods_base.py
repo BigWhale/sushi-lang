@@ -179,6 +179,93 @@ def emit_enum_realise(
     return result
 
 
+def emit_enum_expect(
+    codegen: 'LLVMCodegen',
+    call: 'MethodCall',
+    enum_value: ir.Value,
+    enum_type: EnumType,
+    success_variant_name: str,
+    label: str,
+    missing_variant_code: str,
+    assoc_count_code: str,
+) -> ir.Value:
+    """Emit LLVM code for enum.expect(message), for Result<T, E> and Maybe<T> alike.
+
+    Enum layout: {i32 tag, [N x i8] data}; the success variant has tag 0. On success the
+    payload is returned; on failure "ERROR: <message>" goes to stderr and the process
+    exits 1.
+
+    Ownership is decided the same way `realise` decides it: when the receiver is a
+    BORROW (a live binding that keeps owning its payload) an owning payload is CLONED,
+    so the binding and the extracted value each free once. A temporary receiver is
+    ADOPTED, since nothing else will ever free it. `expect` previously returned the
+    unpacked payload through a bare phi with no ownership reasoning at all, so
+    `m.expect(...)` on an owning payload double-freed where the identical program
+    written with `.realise(...)` exited cleanly.
+
+    Result and Maybe had a verbatim copy of this function each, differing only in
+    identifiers; they now differ only in the arguments below.
+    """
+    from sushi_lang.backend.constants.llvm_values import ONE_I64, ONE_I32
+
+    if len(call.args) != 1:
+        raise_internal_error("CE0095", got=len(call.args))
+
+    success_variant = enum_type.get_variant(success_variant_name)
+    if success_variant is None:
+        raise_internal_error(missing_variant_code, enum=enum_type.name)
+    if len(success_variant.associated_types) != 1:
+        raise_internal_error(assoc_count_code, got=len(success_variant.associated_types))
+
+    t_type = success_variant.associated_types[0]
+    value_llvm_type = codegen.types.ll_type(t_type)
+
+    is_success, unpacked_value = codegen.functions._extract_value_from_result_enum(
+        enum_value, value_llvm_type, t_type
+    )
+
+    ok_block = codegen.builder.append_basic_block(name=f"{label}_expect_ok")
+    fail_block = codegen.builder.append_basic_block(name=f"{label}_expect_fail")
+    continue_block = codegen.builder.append_basic_block(name=f"{label}_expect_continue")
+
+    codegen.builder.cbranch(is_success, ok_block, fail_block)
+
+    # Success: detach an owning payload from a receiver that stays live. Done INSIDE the
+    # success block -- on the failure path the data field holds the other variant's bytes
+    # reinterpreted as T, so cloning through it would walk a bogus pointer.
+    codegen.builder.position_at_end(ok_block)
+    payload = unpacked_value
+    owned_type = resolve_named_type(codegen, t_type)
+    if needs_cleanup(owned_type) and _expression_is_borrow(codegen, call.receiver):
+        payload = emit_value_clone(codegen, payload, owned_type)
+    # The clone may have appended blocks (a string copy branches), so the phi's incoming
+    # edge is wherever the builder ended up, not `ok_block` itself.
+    ok_exit_block = codegen.builder.block
+    codegen.builder.branch(continue_block)
+
+    # Failure: write "ERROR: <message>\n" to stderr, then exit(1).
+    codegen.builder.position_at_end(fail_block)
+    error_message = codegen.expressions.emit_expr(call.args[0])
+    stderr_ptr = codegen.builder.load(codegen.runtime.libc_stdio.stderr_handle)
+    fwrite_fn = codegen.runtime.libc_stdio.fwrite
+
+    for fat in (codegen.runtime.strings.emit_string_literal("ERROR: "),
+                error_message,
+                codegen.runtime.strings.emit_string_literal("\n")):
+        data = codegen.builder.extract_value(fat, 0, name="expect_msg_ptr")
+        size = codegen.builder.extract_value(fat, 1, name="expect_msg_len")
+        size_i64 = codegen.builder.zext(size, ir.IntType(64), name="expect_msg_len_i64")
+        codegen.builder.call(fwrite_fn, [data, ONE_I64, size_i64, stderr_ptr])
+
+    codegen.builder.call(codegen.runtime.libc_process.exit, [ONE_I32])
+    codegen.builder.unreachable()  # exit() does not return, but LLVM wants a terminator
+
+    codegen.builder.position_at_end(continue_block)
+    phi = codegen.builder.phi(value_llvm_type, name="expect_result")
+    phi.add_incoming(payload, ok_exit_block)
+    return phi
+
+
 def _expression_is_borrow(codegen: 'LLVMCodegen', expr) -> bool:
     """Does `expr` name storage that keeps owning its heap after we read it?
 

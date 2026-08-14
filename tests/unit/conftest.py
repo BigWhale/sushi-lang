@@ -8,6 +8,8 @@ the compiler actually produces.
 """
 from __future__ import annotations
 
+from typing import NamedTuple
+
 import pytest
 
 from sushi_lang.internals.parser import parse_to_ast
@@ -40,44 +42,79 @@ def make_unit(tmp_path):
     return _make
 
 
-@pytest.fixture
-def analyze(tmp_path):
-    """Factory that semantically analyzes `src`, returning the Reporter.
+def _analyze_source(tmp_path, src: str, name: str) -> "Analysis":
+    """Run the production semantic flow over `src` and return everything it produced.
 
-    Mirrors the production flow in compiler/pipeline.py:compile_multi_file: the
-    real compiler always analyzes through a UnitManager (the multi-file path),
-    even for a single file. (SemanticAnalyzer._check_single_file is not used by
-    the production pipeline.) Assert on `reporter.items[*].code`,
-    `reporter.has_errors`, and `reporter.has_warnings`.
+    Mirrors compile_multi_file in compiler/pipeline.py: the real compiler always
+    analyzes through a UnitManager (the multi-file path), even for a single file.
+    (SemanticAnalyzer._check_single_file is not used by the production pipeline.)
     """
     from sushi_lang.semantics.generics.active_generics import reset_active_generics
     from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
 
+    text = _ensure_newline(src)
+    file_path = tmp_path / f"{name}.sushi"
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text(text, encoding="utf-8")
+    program, _tree = parse_to_ast(text)
+
+    reporter = Reporter(source=text, filename=name)
+
+    # Match compile_multi_file's pre-analysis setup.
+    reset_active_generics()
+    get_stdlib_registry()
+
+    unit_manager = UnitManager(root_path=tmp_path, reporter=reporter)
+    unit = unit_manager.load_unit(name, program)
+    if unit is None:
+        return Analysis(reporter=reporter, program=program, analyzer=None)
+    unit_manager.build_global_symbol_table()
+    unit_manager.get_compilation_order()
+
+    analyzer = SemanticAnalyzer(reporter, filename=name, unit_manager=unit_manager)
+    try:
+        analyzer.check(program)
+    except ValueError:
+        pass
+    return Analysis(reporter=reporter, program=program, analyzer=analyzer)
+
+
+class Analysis(NamedTuple):
+    """What one semantic-analysis run produced.
+
+    `program` is the SAME tree the analyzer mutated -- the passes annotate nodes in
+    place -- so a test may walk it and assert on what a pass stamped. `analyzer`
+    carries the symbol tables (`.structs`, `.enums`, `.tables`), which is what makes
+    a nominal-identity assertion (#240) possible: the stamped type must BE the
+    interned table entry, not merely equal to it.
+    """
+    reporter: Reporter
+    program: object
+    analyzer: object
+
+
+@pytest.fixture
+def analyze(tmp_path):
+    """Factory that semantically analyzes `src`, returning the Reporter.
+
+    Assert on `reporter.items[*].code`, `reporter.has_errors`, and
+    `reporter.has_warnings`. Use `analyze_program` instead when the assertion is
+    about the annotated tree or the symbol tables rather than the diagnostics.
+    """
     def _analyze(src: str, name: str = "main") -> Reporter:
-        text = _ensure_newline(src)
-        file_path = tmp_path / f"{name}.sushi"
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_text(text, encoding="utf-8")
-        program, _tree = parse_to_ast(text)
+        return _analyze_source(tmp_path, src, name).reporter
 
-        reporter = Reporter(source=text, filename=name)
+    return _analyze
 
-        # Match compile_multi_file's pre-analysis setup.
-        reset_active_generics()
-        get_stdlib_registry()
 
-        unit_manager = UnitManager(root_path=tmp_path, reporter=reporter)
-        unit = unit_manager.load_unit(name, program)
-        if unit is None:
-            return reporter
-        unit_manager.build_global_symbol_table()
-        unit_manager.get_compilation_order()
+@pytest.fixture
+def analyze_program(tmp_path):
+    """Factory that semantically analyzes `src`, returning the whole `Analysis`.
 
-        analyzer = SemanticAnalyzer(reporter, filename=name, unit_manager=unit_manager)
-        try:
-            analyzer.check(program)
-        except ValueError:
-            pass
-        return reporter
+    The sibling of `analyze` for tests that assert on what a pass STAMPED on the
+    tree rather than on what it reported.
+    """
+    def _analyze(src: str, name: str = "main") -> Analysis:
+        return _analyze_source(tmp_path, src, name)
 
     return _analyze

@@ -1,0 +1,19 @@
+# Issue #263: reading a field of a foreach binding from a List iterator used to be
+# CE0056 -- the loop registered the binding's type in the memory manager's cache while
+# infer_struct_type read the flat variable_types table. Fixed on the ownership-refactor
+# branch by resolving through the scope-aware resolve_name_semantic_type.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "acc: 10\n"
+# EXPECT_NO_LEAKS: true
+
+struct Leaf:
+    i32 value
+
+fn main() i32:
+    let List@(Leaf) kids = List.new()
+    kids.push(Leaf(10))
+    let i32 acc = 0
+    foreach(child in kids.iter()):
+        acc := acc + child.value
+    println("acc: {acc}")
+    return Result.Ok(0)

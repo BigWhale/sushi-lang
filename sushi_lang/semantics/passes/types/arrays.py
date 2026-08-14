@@ -223,8 +223,9 @@ def _validate_byte_array_to_string_checked(call: MethodCall, array_type: Dynamic
                name=f"{display_type(array_type)}.to_string_checked", expected=0, got=len(call.args))
 
 
-def _validate_dynamic_array_clone(call: MethodCall, array_type: DynamicArrayType, reporter: Any) -> None:
-    """Validate clone() method call on dynamic arrays."""
+def _validate_array_clone(call: MethodCall, array_type: ArrayType | DynamicArrayType,
+                          reporter: Any) -> None:
+    """Validate clone() on a fixed or a dynamic array. It takes no arguments."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
                name=f"{display_type(array_type)}.clone", expected=0, got=len(call.args))
@@ -372,12 +373,10 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | Dyna
         _validate_byte_array_to_string_checked(call, array_type, reporter)
 
     elif method_name == "clone":
-        # clone() - only available on dynamic arrays
-        if not isinstance(array_type, DynamicArrayType):
-            er.emit(reporter, er.ERR.CE2023, call.loc,
-                   method="clone", expected="dynamic array", got=display_type(array_type))
-            return
-        _validate_dynamic_array_clone(call, array_type, reporter)
+        # clone() - available on both fixed and dynamic arrays. A fixed array is a value,
+        # but a fixed array OF owning elements (a `string[2]`) still needs a way to take
+        # an independent copy, and `.clone()` is the only one the language offers.
+        _validate_array_clone(call, array_type, reporter)
 
     elif method_name == "hash":
         # hash() - available on both fixed and dynamic arrays (no arguments)
@@ -440,10 +439,8 @@ def get_builtin_array_method_return_type(method_name: str, array_type: ArrayType
             return BuiltinType.STRING
         return None
     elif method_name == "clone":
-        # Only available on dynamic arrays, returns same array type
-        if isinstance(array_type, DynamicArrayType):
-            return array_type
-        return None
+        # Available on both fixed and dynamic arrays, returns the same array type
+        return array_type
     elif method_name == "hash":
         # Available on both fixed and dynamic arrays, returns u64
         return BuiltinType.U64

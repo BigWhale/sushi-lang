@@ -165,7 +165,7 @@ def _emit_variant_data_hash(codegen: Any, enum_value: ir.Value, variant: Any, in
 
         # Calculate pointer to this value in the data array
         from sushi_lang.backend.expressions import memory
-        value_size = memory.get_type_size(llvm_type)
+        value_size = memory.calculate_llvm_type_size(llvm_type)
 
         # Get pointer at current offset
         value_ptr_i8 = builder.gep(data_ptr, [ir.Constant(codegen.types.i32, offset)], name=f"assoc{assoc_idx}_ptr")

@@ -1,0 +1,41 @@
+# A borrowed scalar string is a first-class receiver.
+#
+# "The methods on `&T` are the methods on `T`." Semantics said so already
+# (`semantics/generics/builtin_methods.py` unwraps `ReferenceType` before it decides),
+# so a borrowed receiver produced no diagnostic at all. The backend dispatched on the
+# LLVM receiver instead, and a borrow is a POINTER to the string fat pointer, so
+# `is_string_type` answered False and every built-in string method fell through to the
+# user extension-method path. That path mangled the name to `string_len` and declared a
+# symbol nobody defines, so the program failed at LINK time and the linker error was
+# reported as a CE0000 internal compiler error.
+#
+# `&peek string` had ZERO coverage before this file. Every `&peek string` in the
+# repository was `&peek string[]`, an array borrow, which works by accident: a dynamic
+# array is passed by pointer anyway, so the borrow and the value have the same shape.
+# A string does not. MM.md section 2; no upstream issue.
+#
+# That measurement is history, not current state: borrowed scalar strings exist now, and
+# this file is where the first of them came from.
+#
+# `.upper()` and `.trim()` bind to locals rather than being interpolated directly.
+# Interpolating a string-method result leaks the temporary it returns, which is a
+# PRE-EXISTING defect and not a borrow one -- it leaks identically for an owned receiver.
+# Binding keeps this file testing the borrow path and nothing else.
+# EXPECT_STDOUT_EXACT: "len=8 upper=  FORD   trim=[Ford]\nhas=true idx=3\nempty=false\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+use <collections/strings>
+
+fn info(&peek string s) ~:
+    let string loud = s.upper()
+    let string tight = s.trim()
+    println("len={s.len()} upper={loud} trim=[{tight}]")
+    println("has={s.contains('or')} idx={s.find('or').realise(-1)}")
+    println("empty={s.is_empty()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    let string v = "  Ford  "
+    info(&peek v)
+    return Result.Ok(0)

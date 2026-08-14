@@ -1,17 +1,20 @@
 # EXPECT_STDOUT_EXACT: "Sum: 15\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Test recursive binary tree with Own@(Tree)
+# A recursive traversal BORROWS the structure. Passing an `Own(...)` match binding
+# by value is CE2411 -- the binding borrows storage the Own still owns -- and cloning
+# would deep-copy the whole remaining structure at every step.
 enum Tree:
     Leaf(i32)
     Node(Own@(Tree), Own@(Tree))
 
-fn sum(Tree tree) i32:
+fn sum(&peek Tree tree) i32:
     match tree:
         Tree.Leaf(value) ->
             return Result.Ok(value)
         Tree.Node(Own(left), Own(right)) ->
-            let i32 left_sum = sum(left)??
-            let i32 right_sum = sum(right)??
+            let i32 left_sum = sum(&peek left)??
+            let i32 right_sum = sum(&peek right)??
             return Result.Ok(left_sum + right_sum)
 
 fn run_test() i32:
@@ -27,7 +30,7 @@ fn run_test() i32:
     let Own@(Tree) leaf5 = Own.alloc(Tree.Leaf(5))
     let Tree root = Tree.Node(leaf5, right_node)
 
-    let i32 total = sum(root)??
+    let i32 total = sum(&peek root)??
     println("Sum: {total}")
     let i32 expected = 15
     return Result.Ok(total - expected)

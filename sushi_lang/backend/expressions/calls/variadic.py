@@ -9,13 +9,19 @@ value the callee receives. Two shapes are supported:
   - **Bloom** (`arr...`): an existing array is moved into the callee whole, with no
     new allocation and no element copy; the caller relinquishes ownership so its RAII
     does not free the buffer the callee now owns.
+
+Every ownership transfer here goes through the seam (`backend/ownership.py`): each
+trailing element and the bloom source are CALL_ARG consuming uses, and the synthesized
+temp itself leaves through `relinquish_temp`. `tests/unit/test_consuming_use_coverage.py`
+fails the build if a transfer primitive is called from this module directly.
 """
 from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
 from llvmlite import ir
-from sushi_lang.semantics.ast import Spread, Name
+from sushi_lang.semantics.ast import Spread
 from sushi_lang.semantics.typesys import DynamicArrayType
+from sushi_lang.backend.ownership import ConsumingUse, consume, relinquish_temp
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -46,10 +52,18 @@ def build_variadic_array(codegen: 'LLVMCodegen', trailing_exprs: List,
 
     # Bloom: `arr...` moves an existing array in whole.
     if len(trailing_exprs) == 1 and isinstance(trailing_exprs[0], Spread):
-        return _bloom_move_array(codegen, trailing_exprs[0].value)
+        return _bloom_move_array(codegen, trailing_exprs[0].value, array_type)
 
-    # Collect: synthesize an owned T[] from the individual trailing values.
+    # Collect: synthesize an owned T[] from the individual trailing values. Each
+    # trailing element is a CALL_ARG consuming use of the ELEMENT type: the synthesized
+    # array stores it shallowly and the callee recursively destroys it at scope exit,
+    # so an owning Name source moves (its own RAII is skipped) and a fresh temp adopts
+    # in. A plain-typed element is an ADOPT no-op.
     trailing_values = [codegen.expressions.emit_expr(a) for a in trailing_exprs]
+    trailing_values = [
+        consume(codegen, arg_expr, value, array_type.base_type, ConsumingUse.CALL_ARG)
+        for arg_expr, value in zip(trailing_exprs, trailing_values, strict=True)
+    ]
 
     _variadic_temp_counter[0] += 1
     temp_name = f"__variadic_{callee_name}_{_variadic_temp_counter[0]}"
@@ -57,37 +71,25 @@ def build_variadic_array(codegen: 'LLVMCodegen', trailing_exprs: List,
     codegen.dynamic_arrays.declare_dynamic_array(temp_name, array_type)
     codegen.dynamic_arrays.emit_array_constructor_from(temp_name, trailing_values)
 
-    # Move-managed element types (a dynamic-array element `...T[]`) are stored into the
-    # synthesized array by a shallow struct copy that shares the underlying buffer. The
-    # callee recursively destroys each element at scope exit, so a Name-bound source must
-    # relinquish ownership (move) or it would be freed twice. Primitive/string/copy-type
-    # elements are unaffected.
-    if isinstance(array_type.base_type, DynamicArrayType):
-        for arg in trailing_exprs:
-            if isinstance(arg, Name):
-                codegen.memory.mark_struct_as_moved(arg.id)
-
     descriptor = codegen.dynamic_arrays._array(temp_name)
     array_struct = codegen.builder.load(descriptor.llvm_alloca, name=f"{temp_name}_val")
 
-    # Ownership moves into the callee: the caller must not free this temp.
-    codegen.dynamic_arrays.mark_as_moved(temp_name)
+    # Ownership moves into the callee: the caller must not free this temp. The temp is
+    # compiler-made and carries no provenance, which is exactly what relinquish_temp is for.
+    relinquish_temp(codegen, temp_name)
 
     return array_struct
 
 
-def _bloom_move_array(codegen: 'LLVMCodegen', source) -> ir.Value:
+def _bloom_move_array(codegen: 'LLVMCodegen', source, array_type) -> ir.Value:
     """Move an existing array (the bloom source) into the callee.
 
-    Loads the source's T[] struct by value and marks the source moved so the
-    caller's RAII skips the buffer the callee now owns. Soundness depends on the
-    source being a bare Name: validate_variadic_trailing_args rejects any other
-    spread source with CE0120, so the `isinstance(source, Name)` move below always
-    fires for a spread that reached codegen.
+    Loads the source's T[] struct by value and consumes the source (a CALL_ARG use of
+    the whole array type) so the caller's RAII skips the buffer the callee now owns.
+    Soundness depends on the source being a bare Name: validate_variadic_trailing_args
+    rejects any other spread source with CE0120.
     """
     value = codegen.expressions.emit_expr(source)
     if isinstance(value.type, ir.PointerType):
         value = codegen.builder.load(value, name="bloom_src_val")
-    if isinstance(source, Name):
-        codegen.memory.mark_struct_as_moved(source.id)
-    return value
+    return consume(codegen, source, value, array_type, ConsumingUse.CALL_ARG)

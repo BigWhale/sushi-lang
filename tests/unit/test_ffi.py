@@ -169,11 +169,14 @@ def test_string_marshalling_no_leak_multi_return(tmp_path):
     mallocs = _count_in_function(ir_text, "work", 'call i8* @"malloc"')
     frees = _count_in_function(ir_text, "work", 'call void @"free"')
     assert mallocs == 1, f"expected exactly one marshalling malloc, got {mallocs}"
-    # One free per mutually-exclusive exit block: the early `if (flag)` return AND
-    # the fall-through return. Exactly one runs at runtime, so this is no double free.
-    assert frees == 2, (
-        f"expected a free in EACH of the two exit blocks, got {frees}; "
-        "the early-return path is leaking the marshalled char*"
+    # Each mutually-exclusive exit block (the early `if (flag)` return AND the
+    # fall-through return) frees the marshalled char* PLUS the by-value `string`
+    # parameter `s` (owned-bit-guarded; the callee owns it since the 2026-08-14
+    # by-value-parameter ruling): 2 exits x 2 frees. Exactly one exit runs at
+    # runtime, so this is no double free.
+    assert frees == 4, (
+        f"expected a marshal free and a param free in EACH of the two exit blocks, "
+        f"got {frees}; an exit path is leaking the marshalled char* or the parameter"
     )
 
     # The early-return block (if.0.body) must itself contain a free, not only the
@@ -217,11 +220,12 @@ def test_string_marshalling_no_leak_try_success_path(tmp_path):
     mallocs = _count_in_function(ir_text, "work", 'call i8* @"malloc"')
     frees = _count_in_function(ir_text, "work", 'call void @"free"')
     assert mallocs == 1, f"expected one marshalling malloc, got {mallocs}"
-    # One free on the `??` error-propagation path and one on the success
-    # continuation (the common path) -> two mutually-exclusive frees.
-    assert frees == 2, (
-        f"expected a free on both the ?? propagate and success paths, got {frees}; "
-        "the success continuation is leaking the marshalled char*"
+    # Each of the two mutually-exclusive paths (the `??` error-propagation and the
+    # success continuation) frees the marshalled char* PLUS the by-value `string`
+    # parameter `s` (owned-bit-guarded; callee-owned since the 2026-08-14 ruling).
+    assert frees == 4, (
+        f"expected a marshal free and a param free on both the ?? propagate and "
+        f"success paths, got {frees}; a path is leaking the marshalled char* or the parameter"
     )
 
     # The success continuation block must carry a free.
@@ -274,26 +278,23 @@ def test_variadic_string_arg_freed_no_leak(tmp_path):
 
     # Two strings are marshalled in `emit`: the fixed format string and the
     # VARIADIC string `s`. Both must be freed on EVERY mutually-exclusive exit
-    # block (the early `if (flag)` return and the fall-through return), so the
-    # free count is exactly 2 marshalled strings x 2 exit paths == 4. Without the
-    # variadic char* registration the count would drop to 2.
+    # block (the early `if (flag)` return and the fall-through return), and each
+    # exit also frees the by-value `string` parameter `s` itself (owned-bit-guarded;
+    # callee-owned since the 2026-08-14 ruling): 2 exits x (2 marshal + 1 param) == 6.
+    # Without the variadic char* registration the count would drop by 2.
     mallocs = _count_in_function(ir_text, "emit", 'call i8* @"malloc"')
-    frees = _count_in_function(ir_text, "emit", 'call void @"free"')
+    marshal_frees = _count_in_function(ir_text, "emit", 'call void @"free"(i8* %"malloc_result')
+    param_frees = _count_in_function(ir_text, "emit", 'call void @"free"(i8* %"string_data')
     assert mallocs == 2, f"expected two marshalling mallocs (fmt + variadic), got {mallocs}"
-    assert frees == 2 * mallocs, (
-        f"expected every marshalled char* freed on every exit path "
-        f"({2 * mallocs}), got {frees}; a variadic-marshalled char* is leaking"
+    # 2 marshalled char* x 2 exit paths: a count of 4 is only reachable when the
+    # early `if (flag)` return block carries BOTH frees too (proves the variadic
+    # char* is registered), so no separate block-slicing assertion is needed.
+    assert marshal_frees == 4, (
+        f"expected every marshalled char* freed on every exit path (4), got "
+        f"{marshal_frees}; a variadic-marshalled char* is leaking"
     )
-
-    # The early-return block must itself carry frees for BOTH marshalled strings,
-    # not only the fall-through (proves the variadic char* is registered).
-    emit_body = _function_body(ir_text, "emit")
-    body_idx = emit_body.index("if.0.body")
-    next_block = emit_body.index("ret ", body_idx)
-    early_block = emit_body[body_idx:next_block]
-    assert early_block.count('call void @"free"') == mallocs, (
-        "the early `if (flag)` return block does not free every marshalled "
-        "char* (including the variadic one)"
+    assert param_frees == 2, (
+        f"expected the by-value string param freed once per exit path (2), got {param_frees}"
     )
 
 

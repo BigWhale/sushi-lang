@@ -1,35 +1,40 @@
 # Test: Generic function with nested generic struct parameters
 # Type inference extracts both type parameters from a named generic parameter
 # (e.g., Pair@(A, B) binds A and B from the argument's concrete type).
+#
+# The functions only read their argument, so they borrow it -- F7 (inference through a
+# `&peek` parameter) was fixed 2026-08-14 by Phase 9.5, so the four clone-locals this
+# file used to need are gone. The positive pins for the two former holes are
+# test_peek_generic_param_inference.sushi and test_infer_from_non_name_arg.sushi.
 
 struct Pair@(T, U):
     T first
     U second
 
-fn get_first@(A, B)(Pair@(A, B) p) A:
-    return Result.Ok(p.first)
+fn get_first@(A, B)(&peek Pair@(A, B) p) A:
+    return Result.Ok(p.first.clone())
 
-fn get_second@(A, B)(Pair@(A, B) p) B:
-    return Result.Ok(p.second)
+fn get_second@(A, B)(&peek Pair@(A, B) p) B:
+    return Result.Ok(p.second.clone())
 
 fn run_test() i32:
     let Pair@(i32, string) p = Pair(42, "test")
 
-    let i32 first = get_first(p)??
+    let i32 first = get_first(&peek p)??
     if (first != 42):
         return Result.Ok(1)
 
-    let string second = get_second(p)??
+    let string second = get_second(&peek p)??
     if (second != "test"):
         return Result.Ok(2)
 
     # Test with different types
     let Pair@(string, i32) p2 = Pair("hello", 99)
-    let string first2 = get_first(p2)??
+    let string first2 = get_first(&peek p2)??
     if (first2 != "hello"):
         return Result.Ok(3)
 
-    let i32 second2 = get_second(p2)??
+    let i32 second2 = get_second(&peek p2)??
     if (second2 != 99):
         return Result.Ok(4)
 

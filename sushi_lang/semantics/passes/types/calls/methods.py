@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType, ForeignPtrType
+from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType, FunctionType, StructType, ForeignPtrType
 from sushi_lang.semantics.ast import MethodCall, Name
 from ..compatibility import types_compatible
 from ..utils import is_array_destroyed, mark_array_destroyed, reject_spread_args
@@ -81,8 +81,15 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
                           receiver_type.name.startswith("HashMap<") or
                           receiver_type.name.startswith("List<")))
 
-    # Allow StructType through for perk method checking and auto-derived methods
-    if not isinstance(receiver_type, (BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType)) and not is_generic_struct:
+    # Allow StructType through for perk method checking and auto-derived methods.
+    #
+    # FunctionType is in this tuple because a function value carries clone(). Before it was,
+    # this early return meant a method call on a fn value was never validated AT ALL: no
+    # arity check, no unknown-method error, nothing. `h.handler.clone()` therefore reached
+    # codegen unexamined, fell through to the extension fallback, and died mangling the type
+    # name into `fn(i32) - i32_clone`. Silence here is what turned a missing method into an
+    # internal compiler error.
+    if not isinstance(receiver_type, (BuiltinType, ArrayType, DynamicArrayType, EnumType, FunctionType, StructType)) and not is_generic_struct:
         # Can't call methods on unknown types - this is handled by unknown type validation
         return
 
@@ -194,6 +201,19 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
         # unknown-method error.
         if has_primitive_method(receiver_type, call.method):
             validate_primitive_method(call, receiver_type, validator.reporter)
+            return
+
+    # Check for built-in methods on a function value (clone). A closure read out of a
+    # struct field or a container is a borrow, so consuming it is CE2411 and `.clone()` is
+    # the escape the diagnostic names -- it has to resolve here, or dispatch falls through
+    # to the extension path and mangles the type name into a symbol nobody defines.
+    if isinstance(receiver_type, FunctionType):
+        from sushi_lang.semantics.generics.closures import (
+            is_builtin_function_method, validate_function_method_with_validator,
+        )
+        if is_builtin_function_method(call.method):
+            validate_function_method_with_validator(
+                call, receiver_type, validator.reporter, validator)
             return
 
     # Check for auto-derived struct methods (hash) - AFTER perks

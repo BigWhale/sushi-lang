@@ -1,8 +1,12 @@
-# Same defect as test_field_array_copy_at_let.sushi, at the call-argument sink. The
-# dispatcher does recognise the MemberAccess source (calls/dispatcher.py:242) but delegates
-# to deep_copy_if_owning_struct, which declines to copy a bare DynamicArrayType -- so the
-# callee frees the caller's buffer and `w` frees it again. Double free (SIGTRAP, rc=133).
-# See BUGS.md entry 1.
+# Sink matrix, the (BORROWED, MOVE) cell reached through a read: a `T[]` field read at the call-argument sink.
+#
+# The read BORROWS (#242): the owner keeps the value and still frees it, so the sink may not
+# take it and `.clone()` is the escape. Written WITHOUT the clone this file is CE2411, and
+# `tests/memory/test_err_consume_read_*.sushi` pins that half.
+#
+# This used to compile with no clone, because the compiler inserted one for you: the
+# provenance was THROUGH_OWNER, which COPIED. Deleting that cell is the point of #242 -- every
+# deep copy in a Sushi program is now one the user wrote.
 # EXPECT_STDOUT_EXACT: "n=3 src=3\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
@@ -15,6 +19,6 @@ fn total(i32[] xs) i32:
 
 fn main() i32:
     let W w = W(from([1, 2, 3]))
-    let i32 n = total(w.items).realise(-1)
+    let i32 n = total(w.items.clone()).realise(-1)
     println("n={n} src={w.items.len()}")
     return Result.Ok(0)

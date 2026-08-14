@@ -383,13 +383,16 @@ Enforce memory safety rules for references.
 
 ### Rules
 
-1. **One active borrow per variable**
+1. **No reference-typed `let` bindings (CE2413, issue #252)**
 
 ```sushi
 let i32 x = 42
-let &peek i32 r1 = &peek x
-# let &peek i32 r2 = &peek x  # ERROR: x already borrowed
+# let &peek i32 r = &peek x  # ERROR CE2413: a let binding cannot have a reference type
 ```
+
+A borrow is created at a USE site (`f(&peek x)`); a local borrow BINDING is not a
+checked feature yet, so the form is rejected rather than compiled as an unchecked
+alias.
 
 2. **Cannot move/rebind while borrowed**
 
@@ -422,6 +425,40 @@ let i32[] arr = from([1, 2, 3])
 arr.destroy()
 # println(arr.len())  # ERROR CE2406: Use of destroyed variable 'arr'
 ```
+
+5. **A `let` reading through an owner BORROWS, and consuming or invalidating that borrow is an
+   error (CE2411, CE2412)**
+
+A `let` does not always take ownership of what it binds. Its OWNERSHIP is derived from the
+*provenance* of its source expression -- one of three: `OWNED` (a bare local or a by-value
+parameter), `BORROWED` (a `match`/`foreach` binding, a `&peek`/`&poke` parameter, or any read
+through a still-live owner -- a field, an index, a container get-out), or `FRESH` (a constructor, a
+call result, `.clone()`, a literal). See `docs/design/ownership-conventions.md` for the full
+classification table.
+
+```sushi
+struct Wrapper:
+    i32[] items
+
+fn take(i32[] xs) ~:
+    println("{xs.len()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    let Wrapper w = Wrapper(items: from([1, 2, 3]))
+    let i32[] borrowed = w.items  # borrowed BORROWS from w; no allocation happens
+
+    # ERROR CE2411: cannot consume 'borrowed': another owner keeps this value
+    # take(borrowed)
+
+    take(borrowed.clone())  # OK: an independent copy
+    return Result.Ok(0)
+```
+
+The borrow lasts to the end of the block that declared it. Mutating, freeing, or rebinding `w`
+while `borrowed` is still live is **CE2412**; handing `borrowed` itself to a by-value sink is
+**CE2411**. This is what makes rule 1's rejection (`let &peek T x = ...`, CE2413) unnecessary as a
+checked-borrow mechanism: an ordinary `let T x = <borrowed source>` is already tracked.
 
 ### Borrow Tracking
 

@@ -34,7 +34,7 @@ def is_builtin_hashmap_method(method_name: str) -> bool:
     return method_name in (
         "new", "insert", "get", "contains_key", "remove",
         "len", "is_empty", "tombstone_count", "rehash", "free", "destroy", "debug",
-        "keys", "values", "entries"
+        "keys", "values", "entries", "clone"
     )
 
 
@@ -86,6 +86,8 @@ def validate_hashmap_method_with_validator(
         _validate_hashmap_values(call, hashmap_type, reporter)
     elif method == "entries":
         _validate_hashmap_entries(call, hashmap_type, reporter)
+    elif method == "clone":
+        _validate_hashmap_clone(call, hashmap_type, reporter)
     else:
         # Unknown method - should not happen if is_builtin_hashmap_method was called first
         raise_internal_error("CE0085", method=method)
@@ -466,6 +468,30 @@ def _validate_hashmap_len(
     # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="len", expected=0, got=len(call.args))
+
+
+def _validate_hashmap_clone(
+    call: MethodCall,
+    hashmap_type: StructType,
+    reporter: Any
+) -> None:
+    """Validate HashMap<K, V>.clone() method call.
+
+    Validates that no arguments are provided.
+
+    `.clone()` is the explicit escape from CE2411: a read of a HashMap borrows, so a position
+    that takes ownership rejects it and the diagnostic tells the user to write this. The deep
+    copy itself is `_clone_hashmap_value` (issue #181), which has been the destructor's
+    symmetric partner since long before this method existed -- only the method was missing.
+
+    Args:
+        call: The method call AST node.
+        hashmap_type: The HashMap<K, V> struct type.
+        reporter: Error reporter for emitting validation errors.
+    """
+    # Validate argument count
+    if len(call.args) != 0:
+        er.emit(reporter, er.ERR.CE2016, call.loc, method="clone", expected=0, got=len(call.args))
 
 
 def _validate_hashmap_is_empty(

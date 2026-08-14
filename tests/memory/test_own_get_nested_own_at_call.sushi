@@ -1,11 +1,21 @@
-# The payload does not have to be a struct. `Own@(Own@(i32)).get()` yields an
-# Own@(i32) that `outer` still owns; passing it to a by-value owning parameter
-# hands the callee a second owner and both free it (SIGABRT, exit 134).
+# Sink matrix, the (BORROWED, MOVE) cell reached through a read: a nested `Own@(Own@(T)).get()` deref at the call-argument sink.
 #
-# #106 covered exactly one shape of this -- an Own-typed `let` binding, which
-# skipped RAII registration by name (`stmt.value.method != 'get'`). That guard
-# reached one sink and one type, which is why this one stayed broken. The
-# binding is now an independent copy instead, so every sink behaves alike.
+# The read BORROWS (#242): the owner keeps the value and still frees it, so the sink may not
+# take it and `.clone()` is the escape. Written WITHOUT the clone this file is CE2411, and
+# `tests/memory/test_err_consume_read_*.sushi` pins that half.
+#
+# This used to compile with no clone, because the compiler inserted one for you: the
+# provenance was THROUGH_OWNER, which COPIED. Deleting that cell is the point of #242 -- every
+# deep copy in a Sushi program is now one the user wrote.
+# ► THIS FILE IS RED, DELIBERATELY. `o.get().clone()` is CE0019: a chained method call on a
+# call receiver does not resolve its semantic type. That defect is PRE-EXISTING -- verified
+# against the branch base b22f70b3, where `o.get().hash()` fails identically -- but #242 is
+# what makes it matter, because `.clone()` on a get-out is now the thing the user must write.
+#
+# The file is written in the shape CE2411's help tells the user to write. It was briefly
+# written in a two-step shape instead (`let view = o.get()` then `view.clone()`), which
+# passes and hides the defect. Green by test-bending is the false confidence this branch
+# exists to remove. See MM.md B5.
 # EXPECT_STDOUT_EXACT: "v=42\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
@@ -16,7 +26,7 @@ fn takes(Own@(i32) x) i32:
 fn run_test() i32:
     let Own@(i32) inner = Own.alloc(42)
     let Own@(Own@(i32)) outer = Own.alloc(inner)
-    let i32 v = takes(outer.get())??
+    let i32 v = takes(outer.get().clone())??
     println("v={v}")
     return Result.Ok(0)
 

@@ -28,41 +28,39 @@ def initialize_array_literal(
     Creates GEP instructions for each array element and stores the
     evaluated expression value at that location.
 
-    Value semantics (#60/#185): an element written from a BORROWED source -- a bare name or a
-    field read, which some other owner still frees -- is deep-copied, so the array and that owner
-    hold independent buffers. Storing it shallowly gives one buffer two owners and both free it.
-    This became reachable when a fixed-size array became an owner at all (#185): before that the
-    array was registered nowhere, so the aliased buffer had exactly one owner (the source local)
-    and the bug was invisible.
+    The array takes ownership of each element, so every element is an ARRAY_ELEMENT
+    consuming use and goes through the seam (`backend/ownership.py`). A bare owned name
+    moves in, a fresh temporary is adopted, and a read through a live owner is a borrow the
+    array may not take -- CE2411, which Pass 3 reports before this runs.
 
-    An element built INLINE (`[Box(data: from(...)), ...]`) is a temporary that nobody else owns,
-    so it is ADOPTED, not copied -- copying it would strand the original. Same clone-vs-adopt
-    discipline as `.realise()` and the `let` binding.
+    This position used to derive the answer itself, from `expression_is_temporary`. It was
+    the last `let` path that did, and it disagreed with the seam about a borrowed binding:
+    a `match` binding was "not temporary", so it was cloned rather than rejected.
 
     Args:
         codegen: The main LLVMCodegen instance.
         slot: The alloca instruction for the array variable.
         array_literal: The array literal AST node.
         array_type: The LLVM array type.
-        element_semantic_type: The element's Sushi type (None skips the value-semantics copy).
+        element_semantic_type: The element's Sushi type (None classifies as PLAIN, i.e.
+            store as-is).
     """
     from llvmlite import ir
-    from sushi_lang.backend.expressions import memory
-    from sushi_lang.backend.destructors import resolve_named_type, needs_cleanup
+    from sushi_lang.backend.destructors import resolve_named_type
+    from sushi_lang.backend.ownership import ConsumingUse, consume
 
     require_builder(codegen)
 
     resolved_element = (resolve_named_type(codegen, element_semantic_type)
                         if element_semantic_type is not None else None)
-    element_owns_heap = resolved_element is not None and needs_cleanup(resolved_element)
 
     # Initialize each element of the array
     for i, element_expr in enumerate(array_literal.elements):
         # Emit the element expression
         element_value = codegen.expressions.emit_expr(element_expr)
 
-        if element_owns_heap and not memory.expression_is_temporary(codegen, element_expr):
-            element_value = memory.emit_value_clone(codegen, element_value, resolved_element)
+        element_value = consume(codegen, element_expr, element_value, resolved_element,
+                                ConsumingUse.ARRAY_ELEMENT)
 
         # Create GEP to the array element: array[0][i]
         zero = ir.Constant(codegen.i32, 0)
@@ -142,15 +140,21 @@ def initialize_dynamic_array(
         if isinstance(val.type, ir.PointerType) and codegen.types.is_dynamic_array_type(val.type.pointee):
             val = codegen.builder.load(val, name=f"{name}_init_value")
 
-        # A `MemberAccess` source (`let b = w.items`) reads from a CONTINUING owner: the
-        # struct still holds -- and still frees -- that buffer, so the new local must get
-        # its own copy or both free it at scope exit (#250). Sushi has no partial moves,
-        # so the field is never consumed. A bare Name source moves instead (handled by the
-        # array move path), and a fresh temp (call return / `??`) is already a sole owner.
-        from sushi_lang.semantics.ast import MemberAccess
-        if isinstance(constructor_expr, MemberAccess):
-            from sushi_lang.backend.expressions.memory import emit_value_clone
-            val = emit_value_clone(codegen, val, array_type)
+        # A bare `T[]` binding goes through the same seam as every other `let`. This
+        # position used to have no ownership decision at all: a `MemberAccess` source was
+        # cloned and a bare `Name` source was neither cloned nor marked moved, on the
+        # belief that "the array move path" handled it -- there is no such path here, so
+        # `let b = a` left two registered owners of one buffer and double-freed at scope
+        # exit.
+        from sushi_lang.backend.ownership import bind, relinquish
+        val, owns = bind(codegen, constructor_expr, val, array_type)
 
         # Store the struct value into the alloca
         codegen.builder.store(val, alloca)
+
+        if not owns:
+            # `let i32[] view = holder.items` BORROWS: the struct still owns the buffer and
+            # still frees it, so this binding must not (#242). The descriptor had to be
+            # declared and registered above, before the initializer that decides could be
+            # emitted, so this is the one `let` path that gives the registration back.
+            relinquish(codegen, name)

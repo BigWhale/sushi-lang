@@ -1,0 +1,35 @@
+# Consuming-use matrix, the (OWNED, MOVE) cell: an OWNED local of an owning type handed
+# to the `List.push` consuming use. The positive path -- the source owned it, so ownership
+# TRANSFERS and exactly one owner frees.
+#
+# This row exists because the CE2411 decision turned the whole BORROWED row into
+# diagnostics (docs/design/ownership-conventions.md S8). Without it the matrix would
+# assert only what is REJECTED and nothing about what is accepted, so a consuming use
+# that stopped moving entirely -- leaking, or double-freeing on the way out -- would go
+# unnoticed. `.len()` on the destination proves the buffer survived the transfer.
+#
+# The read-back sits in a helper because `??` in main is CW2511 and tests should not use
+# it; the helper is not part of what this file asserts.
+#
+# The element is an owning STRUCT rather than a bare `i32[]`: a `List@(i32[])` cannot be
+# read back out at all today (`l.get(0)??` is CE0124, the same under-support as the
+# `List@(i32[]).push(w.items)` ICE). The cell under test -- an OWNED local of a MOVE type
+# entering a container -- is the same either way.
+# EXPECT_STDOUT_EXACT: "n=3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Buf:
+    i32[] data
+
+fn head_len(&peek List@(Buf) l) i32:
+    let Buf first = l.get(0)??
+    return Result.Ok(first.data.len())
+
+fn main() i32:
+    let Buf w = Buf(from([1, 2, 3]))
+    let List@(Buf) l = List.new()
+    l.push(w)
+    println("n={head_len(&peek l).realise(-1)}")
+    l.destroy()
+    return Result.Ok(0)

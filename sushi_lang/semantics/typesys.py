@@ -193,6 +193,19 @@ class ReferenceType:
         """Returns True if this is a read-write borrow."""
         return self.mutability == BorrowMode.POKE
 
+
+def deref_type(t: Optional["Type"]) -> Optional["Type"]:
+    """The type a borrow refers to, or `t` unchanged when it is not a borrow.
+
+    "The methods on `&T` are the methods on `T`", and the same holds for fields, indexing
+    and iteration: a borrow is transparent to everything except ownership. Roughly twenty
+    sites spell this unwrap by hand, and each one that forgets it silently loses a whole
+    receiver family -- `&peek i32` and `&peek string` reached no built-in method at all,
+    fell through to the user extension path, and died there as a CE0000 rather than a
+    diagnostic.
+    """
+    return t.referenced_type if isinstance(t, ReferenceType) else t
+
 @dataclass(frozen=True)
 class PointerType:
     """Represents a pointer to heap-allocated data (T*).
@@ -285,67 +298,103 @@ class FunctionType:
                 self.err_type == other.err_type)
 
 
-def is_owning_type(t: Optional["Type"]) -> bool:
-    """True if a value of this type carries heap ownership.
+def owns_heap(t: Optional["Type"], _visited: Optional[set] = None,
+              resolve=None) -> bool:
+    """True if a value of this type owns heap that RAII must free and a sink must transfer.
 
-    An owning value is MOVED on rebind/return/capture and RAII-freed at scope exit
-    (its outer binding is consumed). This is the single ownership predicate shared by
-    the borrow checker (move semantics) and the backend (deep-copy + destructor
-    dispatch) so they never disagree.
+    **THE single ownership predicate**, for semantics and the backend both. Phase 9 merged
+    this with the backend's `needs_cleanup`, which is now a thin alias
+    (`backend/destructors.py`). Before the merge there were two predicates that differed on
+    exactly one type -- `string` -- and keeping both in step by hand is the defect class this
+    branch is named after.
 
-    Owning: dynamic arrays, `List<T>`, `Own<T>`, and a CAPTURING function value (a
-    closure with a non-empty `captures` descriptor). A non-capturing function value
-    stays copyable (preserves v1 first-class-function ergonomics). Capture is metadata
-    excluded from type identity, so closure ownership is resolved off `captures` here,
-    while the backend additionally guards every function-value free at runtime by the
-    `drop_ptr` (a null drop makes a conservative free a no-op).
+    Base cases: `string`, `T[]`, `List<T>`, `Own<T>`, `HashMap<K, V>`, and a function value.
+    Composites -- struct, enum, fixed array -- inherit from their contents.
+
+    **`string` is a TYPE-level yes.** Option B's exception -- a string bound directly from a
+    literal owns nothing, because it points into `.rodata` with `owned = 0` -- is a
+    BINDING-level fact and lives on `BorrowState.owns_no_heap`, read by the borrow checker.
+    It cannot be expressed here: `BuiltinType.STRING` is an enum member with no room for a
+    flag, unlike `FunctionType`, which is a dataclass and carries `captures`. That asymmetry
+    is structural (MM.md S0.4) -- do not "fix" it by inventing a string subtype.
+
+    **`FunctionType.captures` is TRI-STATE and the merged predicate keeps all three answers**
+    (this is the one place the two old predicates disagreed other than `string`, and the
+    semantics side is the one that is right):
+
+      ``()``        known empty -- a plain fn reference. Owns NOTHING, so it stays copyable
+                    and a second use of it is not CE2405. Only a binding's initializer can
+                    make this statement.
+      non-empty     known capturing -- owns a heap environment.
+      ``None``      NOT STATED. Assume it owns one.
+
+    `None` is the common case at a position, because `FunctionType.__eq__` excludes
+    `captures` from type identity: a value arriving through a DECLARED type -- a
+    `List@(fn(i32) -> i32)` element, a struct field, a parameter -- has already lost it
+    (MM.md finding A1). Reading `None` as "no captures" answered False for a closure that
+    does own an environment, and the position then aliased it (#123's double frees).
+
+    The backend's old `needs_cleanup` answered True for all three. That was a safety
+    over-approximation, not a fact: a `captures == ()` value carries a null `drop_ptr`, so
+    the free it registered was a guaranteed no-op. Dropping it changes nothing at runtime.
+
+    `resolve` (a `Type -> Type` mapping over the struct/enum tables) is optional but matters
+    wherever a name can still be unresolved AT ANY DEPTH. Without it an `UnknownType` answers
+    False, so a `Buffer[2]` whose element is still named rather than resolved reports "owns
+    nothing" and every consuming use of it aliases -- a double free, not a leak. The top level
+    is not enough: the unresolved name is typically the array's ELEMENT.
+
+    `_visited` breaks self-referential types (`Own<Tree>`, `enum MsgValue: Arr(MsgValue[])`).
     """
     if t is None:
         return False
+    if resolve is not None and isinstance(t, UnknownType):
+        t = resolve(t) or t
+
+    # --- base cases: the things that own a heap allocation outright ------------------
+    if isinstance(t, ForeignPtrType):
+        return False  # an opaque unmanaged foreign handle; RAII never frees it
+    if isinstance(t, ReferenceType):
+        return False  # a borrow names storage someone else owns
+    if isinstance(t, FunctionType):
+        # Tri-state, and the distinction is load-bearing -- see the docstring.
+        return t.captures != ()
+    if isinstance(t, BuiltinType):
+        # A string owns its buffer when the runtime `owned` bit is set; the free is guarded
+        # on that bit, so a literal/borrow frees to a no-op. Every other builtin (numerics,
+        # bool, I/O handles) is unmanaged.
+        return t == BuiltinType.STRING
     if isinstance(t, DynamicArrayType):
         return True
-    if isinstance(t, GenericTypeRef) and t.base_name in ('Own', 'List'):
+    if isinstance(t, GenericTypeRef) and t.base_name in ('Own', 'List', 'HashMap'):
         return True
-    if isinstance(t, FunctionType) and t.captures:
-        return True
-    name = getattr(t, 'name', None)
-    if isinstance(name, str) and (name.startswith('Own<') or name.startswith('List<')):
-        return True
-    return False
 
-
-def type_moves_by_value(t: Optional["Type"], _visited: Optional[set] = None) -> bool:
-    """True if a value of this type MOVES at ownership sinks (#134).
-
-    A type moves by value iff it transitively contains an owning resource
-    (is_owning_type's base cases: T[], List<T>, Own<T>, capturing closures);
-    structs/enums/fixed arrays inherit move-ness from their contents.
-
-    NOT the backend's needs_cleanup: strings need RAII but are copy types
-    (docs/design/string-representation.md), so a string-only struct copies
-    while a struct with a T[] field moves. Do not unify the two predicates.
-    """
-    if t is None:
-        return False
-    if is_owning_type(t):
-        return True
     if isinstance(t, UnknownType):
-        return False  # Pass 2 rejects unresolved types; treat as non-moving
+        return False  # unresolved and no resolver given; treat as owning nothing
+
     if _visited is None:
         _visited = set()
+
     if isinstance(t, StructType):
+        # Own<T> / List<T> / HashMap<K, V> always own a heap allocation, but their only
+        # fields are raw pointers or a placeholder, so the field scan below answers False and
+        # every recursion gate would skip them. That mismatch was #162 / #181 / #183.
+        if t.name.startswith(('Own<', 'List<', 'HashMap<')):
+            return True
         if t.name in _visited:
             return False
         _visited.add(t.name)
-        return any(type_moves_by_value(ft, _visited) for _, ft in t.fields)
+        return any(owns_heap(ft, _visited, resolve) for _, ft in t.fields)
     if isinstance(t, EnumType):
         if t.name in _visited:
             return False
         _visited.add(t.name)
-        return any(type_moves_by_value(at, _visited)
+        return any(owns_heap(at, _visited, resolve)
                    for variant in t.variants for at in variant.associated_types)
     if isinstance(t, ArrayType):
-        return type_moves_by_value(t.base_type, _visited)
+        # A fixed array `T[N]` owns no buffer of its own -- its storage is inline -- but its
+        # ELEMENTS can own heap (#185).
+        return owns_heap(t.base_type, _visited, resolve)
     return False
 
 

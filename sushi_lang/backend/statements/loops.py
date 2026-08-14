@@ -116,7 +116,7 @@ def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
 
     # Check if this is a HashMap iterator by inspecting the iterable expression
     # HashMap.keys() and HashMap.values() are parsed as DotCall nodes
-    from sushi_lang.semantics.ast import DotCall, Name
+    from sushi_lang.semantics.ast import DotCall
     from sushi_lang.semantics.typesys import StructType
     is_hashmap_keys_or_values = False
     hashmap_type = None
@@ -125,15 +125,19 @@ def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
     # Check for HashMap.keys(), HashMap.values(), or HashMap.entries()
     if isinstance(node.iterable, DotCall):
         if node.iterable.method in ("keys", "values", "entries"):
-            # The receiver should be a Name node referring to a HashMap variable
-            if isinstance(node.iterable.receiver, Name):
-                var_name = node.iterable.receiver.id
-                # Look up the variable's semantic type using the memory manager
-                receiver_type = codegen.memory.find_semantic_type(var_name)
-                if isinstance(receiver_type, StructType) and receiver_type.name.startswith("HashMap<"):
-                    is_hashmap_keys_or_values = True
-                    hashmap_type = receiver_type
-                    hashmap_method = node.iterable.method
+            # Resolve the receiver's type through the SAME helper the HashMap emitters
+            # use, so this loop and `try_emit_hashmap_method` cannot disagree about what a
+            # HashMap receiver is. It used to require a bare `Name` and look the type up by
+            # variable name, which is why `get_map()??.keys()` silently fell through to the
+            # ARRAY foreach below and iterated the iterator struct as if it were an array:
+            # zero entries, no diagnostic. That was the whole of known-limitation 10.
+            from sushi_lang.backend.expressions.calls.utils import infer_generic_struct_type
+            receiver_type = infer_generic_struct_type(
+                codegen, node.iterable.receiver, "HashMap<")
+            if isinstance(receiver_type, StructType) and receiver_type.name.startswith("HashMap<"):
+                is_hashmap_keys_or_values = True
+                hashmap_type = receiver_type
+                hashmap_method = node.iterable.method
 
     if is_hashmap_keys_or_values:
         # HashMap iterator path
@@ -473,6 +477,10 @@ def _emit_hashmap_foreach(
     codegen.loop_stack.append((cond_bb, end_bb, codegen.memory._scope_depth + 1))
     codegen.memory.push_scope()
 
+    # The item binding is a read-only BORROW of the map's entry, exactly as the array path
+    # at _emit_array_foreach is: the shallow-loaded key/value aliases the buffers the map's
+    # own destructor frees, so `register_cleanup=False` below keeps the map the sole owner.
+    # Registering the binding as a second owner double-freed every owning key/value type.
     if is_entries:
         # Construct user-facing Entry<K, V> struct {key, value} from internal {key, value, state}
         user_entry_llvm = get_user_entry_type(codegen, key_type, value_type)
@@ -489,7 +497,8 @@ def _emit_hashmap_foreach(
         entry_val = codegen.builder.insert_value(entry_val, value_val, 1, name="entry_with_value")
 
         element_ll_type = user_entry_llvm
-        codegen.memory.create_local(node.item_name, element_ll_type, entry_val, element_type)
+        codegen.memory.create_local(node.item_name, element_ll_type, entry_val, element_type,
+                                    register_cleanup=False)
         # Register type for field access (entry.key, entry.value)
         codegen.variable_types[node.item_name] = element_type
     else:
@@ -498,7 +507,8 @@ def _emit_hashmap_foreach(
         element_value = codegen.builder.load(element_ptr, name=node.item_name)
 
         element_ll_type = codegen.types.ll_type(element_type)
-        codegen.memory.create_local(node.item_name, element_ll_type, element_value, element_type)
+        codegen.memory.create_local(node.item_name, element_ll_type, element_value, element_type,
+                                    register_cleanup=False)
 
     # Emit the foreach body
     _emit_block(codegen, node.body)

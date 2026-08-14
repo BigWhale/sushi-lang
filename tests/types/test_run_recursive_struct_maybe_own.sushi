@@ -11,15 +11,18 @@
 # EXPECT_STDOUT_EXACT: "Sum: 6\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
+# A recursive traversal BORROWS the structure. Passing an `Own(...)` match binding
+# by value is CE2411 -- the binding borrows storage the Own still owns -- and cloning
+# would deep-copy the whole remaining structure at every step.
 
 struct Node:
     i32 value
     Maybe@(Own@(Node)) next
 
-fn sum(Node n) i32:
+fn sum(&peek Node n) i32:
     match n.next:
         Maybe.Some(Own(nxt)) ->
-            let i32 rest = sum(nxt)??
+            let i32 rest = sum(&peek nxt)??
             return Result.Ok(n.value + rest)
         Maybe.None() ->
             return Result.Ok(n.value)
@@ -29,7 +32,7 @@ fn run_test() i32:
     let Node n2 = Node(2, Maybe.Some(Own.alloc(n3)))
     let Node n1 = Node(1, Maybe.Some(Own.alloc(n2)))
 
-    let i32 total = sum(n1)??
+    let i32 total = sum(&peek n1)??
     println("Sum: {total}")
     return Result.Ok(0)
 

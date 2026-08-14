@@ -1,0 +1,24 @@
+# Sink matrix (match binding -> every sink): a borrowed enum-payload `match` binding of type `i32[]` handed to the array-literal element sink.
+#
+# The invariant (docs/design/ownership-conventions.md S4.3): at every consuming use, a
+# bare OWNED Name moves, a read from a CONTINUING owner (a MemberAccess, an Own@(T).get()
+# deref) is CLONED so each owner frees exactly once, and a BORROWED binding of an owning
+# type may not be consumed at all -- that is CE2411, with `.clone()` as the escape. This
+# file is the (BORROWED, MOVE) cell, the one every shipped bug in the family got wrong.
+# EXPECT_ERROR_CODE: CE2411
+
+enum Shape:
+    Poly(i32[])
+    Empty
+
+struct W:
+    i32[] items
+
+fn main() i32:
+    let Shape s = Shape.Poly(from([1, 2, 3]))
+    match s:
+        Shape.Poly(p) ->
+            let W[] ws = from([W(p)])
+            println("ws={ws.len()}")
+        Shape.Empty -> println("empty")
+    return Result.Ok(0)

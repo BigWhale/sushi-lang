@@ -1,0 +1,32 @@
+# Decision 1 (MM.md S2.F): an FFI string argument NEVER consumes.
+#
+# The callee is C. It cannot own a Sushi string, and the compiler already frees the
+# marshalled buffer at scope exit, so there is no ownership to transfer. Rust passes
+# `as_ptr(&self)`, Zig takes `[*:0]const u8`, cgo leaves the pointer caller-owned; every
+# precedent draws the line here. The alternative -- writing `&peek string` in the extern
+# declaration -- is illegal today: `_is_c_abi_type` is a strict allowlist, so a reference
+# type is CE5003.
+#
+# MM.md finding F6: NO FFI test used a string after passing it, so the Phase 8 prototype
+# produced ZERO diagnostics at any FFI site and the green sweep proved nothing about them.
+# This file is the missing evidence. Before the string tier flipped it passes trivially;
+# after the flip it is the only thing keeping every FFI call site from becoming CE2405.
+# EXPECT_STDOUT_EXACT: "len=6 s=hello5\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "measuring a C string length is read-only":
+    fn strlen(string s) i64 = "strlen"
+
+fn run() i32:
+    let i32 n = 5
+    # Interpolated ON PURPOSE. A bare literal owns nothing under option B, so it would pass
+    # this file whether or not the carve-out exists. Only an OWNING string tests it.
+    let string s = "hello{n}"
+    let i64 len = libc.strlen(s)
+    # `s` is read here, AFTER being passed to C. That is the whole assertion.
+    println("len={len} s={s}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 rc = run().realise(1)
+    return Result.Ok(rc)

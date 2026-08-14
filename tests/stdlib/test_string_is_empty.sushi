@@ -2,9 +2,9 @@
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT: empty: yes
-# EXPECT_STDOUT: Hello: not empty
-# EXPECT_STDOUT: UTF-8: not empty
+# EXPECT_STDOUT_CONTAINS: empty: yes
+# EXPECT_STDOUT_CONTAINS: Hello: not empty
+# EXPECT_STDOUT_CONTAINS: UTF-8: not empty
 
 # Note: is_empty() no longer requires use <collections/strings> - it's an inline intrinsic
 

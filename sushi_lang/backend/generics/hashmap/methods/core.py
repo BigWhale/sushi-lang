@@ -253,12 +253,11 @@ def emit_hashmap_get(
     entry_value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="entry_value_ptr")
     entry_value = builder.load(entry_value_ptr, name="entry_value")
 
-    # Deep-copy an owning value out so the returned Some(V) owns independent heap buffers.
-    # map.free() runs emit_value_destructor on the entry that stays OCCUPIED, so without
-    # this clone the returned copy and the entry would double-free the shared buffer (#140).
-    # No-op for non-owning V. Mirrors the deep_copy_if_owning_struct that array .get() does.
-    from sushi_lang.backend.expressions.memory import emit_value_clone
-    entry_value = emit_value_clone(codegen, entry_value, value_type)
+    # `.get()` READS. It does not detach (#242): the entry stays OCCUPIED and `map.free()`
+    # still destroys it, so the returned `Maybe.Some(V)` carries a BORROW. Pass 3
+    # classifies it BORROWED, a `let` of it binds without owning, and a position that
+    # takes ownership rejects it (CE2411) with `.clone()` as the escape. The deep copy
+    # that used to happen here was the compiler inserting one the user did not ask for.
 
     # Create Maybe<V> enum for return
     # Get the Maybe<V> enum type from the generic enum table

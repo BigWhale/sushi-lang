@@ -9,6 +9,8 @@ Provides two-phase testing:
 Supports test metadata for specifying expected runtime behavior.
 """
 
+import atexit
+import io
 import re
 import subprocess
 import signal
@@ -44,6 +46,270 @@ _NUMERIC = re.compile(r"-?\d+")
 SKIP_NOT_BUILT = "interposer not built"
 SKIP_TIMED_OUT = "interposer run timed out"
 SKIP_NO_REPORT = "no interposer report"
+
+
+# --- terminal color ----------------------------------------------------------
+# Presentation only. Two rules keep it from leaking anywhere it would do harm:
+# every color decision lives in this block, and glyph painting happens at the
+# print site rather than where a message is built -- so the ~25 message
+# constructors stay plain strings and nothing serialized to --json, matched
+# against, or written to a log file ever carries an escape code.
+
+def _color_enabled() -> bool:
+    """Whether to emit SGR codes.
+
+    Honours NO_COLOR (no-color.org) and FORCE_COLOR, and defaults to off when
+    stdout is not a TTY. The last part matters here: suite output is routinely
+    piped through grep while triaging, and a piped run has to stay greppable.
+    """
+    if os.environ.get("NO_COLOR"):
+        return False
+    if os.environ.get("FORCE_COLOR"):
+        return True
+    return sys.stdout.isatty()
+
+
+COLOR = _color_enabled()
+
+RESET = "\033[0m"
+BOLD = "\033[1m"
+RED = "\033[31m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+
+
+def tint(text: object, *codes: str) -> str:
+    """Wrap `text` in the given SGR codes; a no-op when color is disabled."""
+    if not COLOR or not codes:
+        return str(text)
+    return f"{''.join(codes)}{text}{RESET}"
+
+
+def paint(message: str) -> str:
+    """Color the status glyphs inside an already-composed message."""
+    if not COLOR:
+        return message
+    return message.replace("✓", tint("✓", GREEN)).replace("✗", tint("✗", RED))
+
+
+# --- sticky progress bar -----------------------------------------------------
+
+def _clock(seconds: float) -> str:
+    """Format a duration as MM:SS (or HH:MM:SS past an hour), matching tqdm."""
+    seconds = int(max(0.0, seconds))
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
+
+
+class StickyBar:
+    """A progress bar pinned in place, with results scrolling upward beneath it.
+
+    Layout, established once at startup:
+
+        rows 1..bar_row-1     earlier output, left alone
+        row  bar_row          the bar -- OUTSIDE the scroll region, so it never moves
+        rows bar_row+1..end   the scroll region: the whole lower screen. Results
+                              appear here and scroll up, vanishing under the bar
+
+    The bar is placed where the cursor already is, and the screen is scrolled ONLY
+    when that would leave too little room:
+
+    - >= MIN_VIEWPORT rows free below the cursor: the bar goes on the current row and
+      nothing scrolls. Whatever is on screen stays exactly where it is.
+    - fewer than that: emit MIN_VIEWPORT newlines, which scrolls the content up by
+      just enough and lands the bar on the row the text had reached. (The arithmetic
+      works out to exactly MIN_VIEWPORT newlines whatever the starting row: to reach
+      the bottom takes `rows - cur`, and the further `cur - (rows - MIN_VIEWPORT)`
+      scrolls the screen, and those sum to MIN_VIEWPORT.)
+
+    Either way the viewport is everything below the bar, so it grows with the window.
+
+    Placing the bar requires knowing where the cursor is, which only the terminal
+    knows -- hence the DSR query in `_cursor_row`. If it fails or times out, the
+    conservative branch (scroll) is taken, which is always safe.
+
+    The scroll region is terminal state, not process state: leaving it set breaks the
+    user's shell until `reset`. Every exit path restores it -- the context manager, an
+    atexit hook, and SIGINT/SIGTERM -- and restoring twice is harmless.
+
+    Only used on a TTY. Everything else (CI, pipes, --json, --verbose) keeps tqdm.
+    """
+
+    MIN_VIEWPORT = 15    # rows of results wanted below the bar before scrolling
+
+    def __init__(self, total: int, desc: str = "Running tests", stream=None):
+        self.total = max(1, total)
+        self.desc = desc
+        self.out = stream or sys.stdout
+        self.n = 0
+        self.start = time.monotonic()
+        self.rows, self.cols = self._size()
+        # Geometry is settled in __enter__: it depends on where the cursor is, which
+        # is only meaningful once the caller has finished printing its preamble.
+        self.bar_row = self.rows - self.MIN_VIEWPORT
+        self.area = self.MIN_VIEWPORT
+        self._active = False
+        self._prev_handlers: Dict[int, object] = {}
+
+    def _cursor_row(self) -> Optional[int]:
+        """Current cursor row via DSR (`ESC[6n`), or None if the terminal won't say.
+
+        The terminal replies `ESC[{row};{col}R` on stdin, so stdin has to be put in
+        raw mode to read it before a newline arrives. Guarded three ways, because a
+        terminal that never answers would otherwise hang the whole run: stdin must be
+        a TTY, the read is on a short select() timeout, and the reply length is
+        capped. Any failure returns None and the caller scrolls instead.
+        """
+        try:
+            fd = sys.stdin.fileno()
+            if not sys.stdin.isatty():
+                return None
+            import select
+            import termios
+            import tty
+        except (AttributeError, ValueError, ImportError, io.UnsupportedOperation):
+            return None
+
+        try:
+            saved = termios.tcgetattr(fd)
+        except termios.error:
+            return None
+        try:
+            tty.setraw(fd)
+            self.out.write("\033[6n")
+            self.out.flush()
+            reply = ""
+            while len(reply) < 16:
+                if not select.select([fd], [], [], 0.2)[0]:
+                    return None
+                reply += os.read(fd, 1).decode("ascii", errors="replace")
+                if reply.endswith("R"):
+                    break
+            else:
+                return None
+            match = re.search(r"\[(\d+);(\d+)R$", reply)
+            return int(match.group(1)) if match else None
+        except (OSError, termios.error):
+            return None
+        finally:
+            try:
+                termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+            except termios.error:
+                pass
+
+    def _size(self) -> Tuple[int, int]:
+        """Terminal size, asked of the stream's own fd.
+
+        NOT shutil.get_terminal_size: that consults $COLUMNS first and silently falls
+        back to 80x24, which is why the bar rendered 80 columns wide in a much wider
+        window. os.get_terminal_size(fd) asks the device.
+        """
+        try:
+            size = os.get_terminal_size(self.out.fileno())
+            return size.lines, size.columns
+        except (OSError, AttributeError, ValueError):
+            fallback = shutil.get_terminal_size(fallback=(80, 24))
+            return fallback.lines, fallback.columns
+
+    @classmethod
+    def usable(cls, stream=None) -> bool:
+        stream = stream or sys.stdout
+        if not stream.isatty() or os.environ.get("SUSHI_TEST_PLAIN"):
+            return False
+        try:
+            return os.get_terminal_size(stream.fileno()).lines >= cls.MIN_VIEWPORT + 3
+        except (OSError, AttributeError, ValueError):
+            return False
+
+    # -- lifecycle ------------------------------------------------------------
+
+    def __enter__(self) -> "StickyBar":
+        cur = self._cursor_row()
+        if cur is not None and self.rows - cur >= self.MIN_VIEWPORT:
+            # Enough room already: put the bar on the current row, scroll nothing.
+            self.bar_row = cur
+        else:
+            # Too little room (or the terminal would not say): scroll the content up
+            # by exactly enough, which leaves the bar on the row the text reached.
+            self.out.write("\n" * self.MIN_VIEWPORT)
+            self.bar_row = self.rows - self.MIN_VIEWPORT
+        self.area = self.rows - self.bar_row
+
+        # Confine scrolling to the rows beneath the bar, and drop the cursor in.
+        self.out.write(f"\033[{self.bar_row + 1};{self.rows}r")
+        self.out.write(f"\033[{self.bar_row + 1};1H")
+        self.out.flush()
+        self._active = True
+        atexit.register(self.close)
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                self._prev_handlers[sig] = signal.signal(sig, self._on_signal)
+            except (ValueError, OSError):
+                pass  # not the main thread, or unsupported -- atexit still covers us
+        self.render()
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
+    def _on_signal(self, signum, frame):
+        self.close()
+        previous = self._prev_handlers.get(signum)
+        if callable(previous):
+            previous(signum, frame)
+        elif previous == signal.SIG_DFL:
+            signal.signal(signum, signal.SIG_DFL)
+            os.kill(os.getpid(), signum)
+
+    def close(self) -> None:
+        """Reset the scroll region and park the cursor below the bar. Idempotent."""
+        if not self._active:
+            return
+        self._active = False
+        self.out.write("\033[r")                     # full-screen scrolling again
+        self.out.write(f"\033[{self.rows};1H\n")     # cursor to the last row
+        self.out.flush()
+        for sig, previous in self._prev_handlers.items():
+            try:
+                signal.signal(sig, previous)
+            except (ValueError, OSError, TypeError):
+                pass
+        self._prev_handlers.clear()
+
+    # -- drawing --------------------------------------------------------------
+
+    def _bar_text(self) -> str:
+        """The bar, sized to fill the terminal width exactly."""
+        frac = self.n / self.total
+        elapsed = time.monotonic() - self.start
+        remaining = (elapsed / self.n) * (self.total - self.n) if self.n else 0.0
+        left = f"{self.desc}: {frac * 100:3.0f}%|"
+        right = f"| {self.n}/{self.total} [{_clock(elapsed)}<{_clock(remaining)}]"
+        # One column short of the full width: filling the last cell makes some
+        # terminals wrap to the next line, which would push the bar into the region.
+        width = max(4, self.cols - len(left) - len(right) - 1)
+        filled = int(width * frac)
+        return f"{left}{'█' * filled}{' ' * (width - filled)}{right}"
+
+    def render(self) -> None:
+        """Redraw the bar on its own row without disturbing the cursor in the region."""
+        if not self._active:
+            return
+        self.out.write(
+            f"\0337\033[{self.bar_row};1H\033[2K{tint(self._bar_text(), BOLD)}\0338"
+        )
+        self.out.flush()
+
+    def update(self, step: int = 1) -> None:
+        self.n = min(self.total, self.n + step)
+        self.render()
+
+    def write(self, block: str) -> None:
+        """Print a block into the scrolling region beneath the bar."""
+        self.out.write(block + "\n")
+        self.out.flush()
+        self.render()
 
 
 def stdout_contains(stdout: str, expected: str) -> bool:
@@ -115,6 +381,9 @@ class TestRunner:
         self.leaks_checked: List[str] = []
         self.leaks_skipped: List[Tuple[str, str]] = []
         self.temp_dir = None
+        # The live tqdm bar, or None. Set only while the bar is on screen, so _emit
+        # can tell whether output has to be routed around it.
+        self._pbar = None
 
     def __enter__(self):
         """Create temporary directory for test binaries."""
@@ -173,33 +442,44 @@ class TestRunner:
             future_to_test = {executor.submit(self.run_single_test, test_file): test_file.name
                              for test_file in test_files}
 
+            # Sticky bar on an interactive terminal, tqdm everywhere else. Both expose
+            # update()/close(), and _emit() routes result blocks through whichever is
+            # live, so the collection loop below does not care which one it got.
             if show_progress:
-                pbar = tqdm(total=len(test_files), desc="Running tests", unit="test",
-                           bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]")
+                if StickyBar.usable():
+                    self._pbar = StickyBar(len(test_files)).__enter__()
+                else:
+                    self._pbar = tqdm(total=len(test_files), desc="Running tests", unit="test",
+                                      bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]")
+            pbar = self._pbar
 
-            # Collect results as they complete
-            for future in as_completed(future_to_test):
-                test_name = future_to_test[future]
-                try:
-                    result = future.result()
-                    results[test_name] = result
-                    if not self.json_output and (self.verbose or not result.total_success):
-                        self._print_test_result(result)
-                except Exception as e:
-                    if not self.json_output:
-                        print(f"ERROR: Test {test_name} crashed: {e}")
-                    results[test_name] = TestResult(
-                        name=test_name,
-                        category="error",
-                        compilation_success=False,
-                        compilation_message=f"Test runner exception: {e}",
-                        skipped_runtime=True
-                    )
+            try:
+                # Collect results as they complete
+                for future in as_completed(future_to_test):
+                    test_name = future_to_test[future]
+                    try:
+                        result = future.result()
+                        results[test_name] = result
+                        if not self.json_output and (self.verbose or not result.total_success):
+                            self._print_test_result(result)
+                    except Exception as e:
+                        if not self.json_output:
+                            self._emit(f"ERROR: Test {test_name} crashed: {e}")
+                        results[test_name] = TestResult(
+                            name=test_name,
+                            category="error",
+                            compilation_success=False,
+                            compilation_message=f"Test runner exception: {e}",
+                            skipped_runtime=True
+                        )
+                    if show_progress:
+                        pbar.update(1)
+            finally:
+                # The scroll region is terminal state; it has to come back even if the
+                # loop raises, or the caller's shell is left broken.
                 if show_progress:
-                    pbar.update(1)
-
-            if show_progress:
-                pbar.close()
+                    pbar.close()
+                    self._pbar = None
 
         end_time = time.time()
 
@@ -609,19 +889,38 @@ class TestRunner:
         full_message = summary + "\n" + "\n".join(f"  {msg}" for msg in messages)
         return success, full_message
 
+    def _emit(self, block: str) -> None:
+        """Write a block of output without corrupting a live progress bar.
+
+        tqdm draws its bar with a carriage return and no trailing newline, so a plain
+        print lands in the middle of it -- the bar stays on screen and the message is
+        appended to it. `tqdm.write` erases the bar, writes, and redraws it below.
+        """
+        if self._pbar is not None:
+            self._pbar.write(block)
+        else:
+            print(block)
+
     def _print_test_result(self, result: TestResult) -> None:
-        """Print result for a single test."""
-        status = "PASS" if result.total_success else "FAIL"
-        print(f"[{status}] {result.name}")
+        """Print result for a single test.
+
+        Composed into ONE block and emitted once. Results arrive from a thread pool,
+        so emitting line by line would let two failing tests interleave, and would
+        make tqdm tear down and redraw the bar between every line.
+        """
+        status = tint("PASS", GREEN) if result.total_success else tint("FAIL", RED, BOLD)
+        lines = [f"[{status}] {result.name}"]
 
         if not result.compilation_success or self.verbose:
-            print(f"  Compilation: {result.compilation_message}")
+            lines.append(f"  Compilation: {paint(result.compilation_message)}")
 
         if not result.skipped_runtime:
             if not result.runtime_success or self.verbose:
-                print(f"  Runtime: {result.runtime_message}")
+                lines.append(f"  Runtime: {paint(result.runtime_message)}")
         elif self.verbose:
-            print(f"  Runtime: Skipped")
+            lines.append("  Runtime: Skipped")
+
+        self._emit("\n".join(lines))
 
     def _print_summary(self, results: Dict[str, TestResult], duration: float) -> None:
         """Print test summary."""
@@ -666,18 +965,20 @@ class TestRunner:
             }
             print(json.dumps(json_output, indent=2))
         else:
-            print(f"\nTest Results ({duration:.2f}s):")
+            print(f"\n{tint(f'Test Results ({duration:.2f}s):', BOLD)}")
             print(f"  Total tests: {total_tests}")
             print(f"  Compilation tests: {compilation_tests}")
             print(f"  Runtime tests: {runtime_tests}")
-            print(f"  Passed: {passed_tests}")
-            print(f"  Failed: {failed_tests}")
+            print(f"  Passed: {tint(passed_tests, GREEN) if passed_tests else passed_tests}")
+            print(f"  Failed: {tint(failed_tests, RED, BOLD) if failed_tests else tint(0, GREEN)}")
             if self.leaks_checked:
-                print(f"  Leak checks: {len(self.leaks_checked)}")
+                print(f"  Leak checks: {tint(len(self.leaks_checked), GREEN)}")
             if self.leaks_skipped:
                 # Group by reason: the old line hardcoded "no leak checker on <platform>",
                 # which was already a lie for the timeout and no-report cases.
-                print(f"  Leak checks SKIPPED: {len(self.leaks_skipped)}")
+                # Yellow, not plain: a skipped leak assertion is not a passing one, and
+                # this line exists precisely so that cannot be read as a clean run.
+                print(f"  Leak checks SKIPPED: {tint(len(self.leaks_skipped), YELLOW, BOLD)}")
                 by_reason: Dict[str, List[str]] = {}
                 for name, reason in sorted(self.leaks_skipped):
                     by_reason.setdefault(reason, []).append(name)
@@ -685,22 +986,20 @@ class TestRunner:
                     shown = ", ".join(names[:5])
                     if len(names) > 5:
                         shown += f", ... (+{len(names) - 5} more)"
-                    print(f"    {len(names)} x {reason}: {shown}")
+                    print(f"    {tint(f'{len(names)} x {reason}', YELLOW)}: {shown}")
 
             if failed_tests == 0:
-                print("\nAll tests passed! ✓")
+                print("\n" + tint("All tests passed! ✓", GREEN, BOLD))
             else:
-                print(f"\n{failed_tests} test(s) failed! ✗")
+                print("\n" + tint(f"{failed_tests} test(s) failed! ✗", RED, BOLD))
 
                 # Show failed test details
-                print("\nFailed tests:")
+                print("\n" + tint("Failed tests:", BOLD))
                 for name, result in results.items():
                     if not result.total_success:
-                        print(f"  {name}: ", end="")
-                        if not result.compilation_success:
-                            print("Compilation failed")
-                        elif not result.runtime_success:
-                            print("Runtime failed")
+                        reason = ("Compilation failed" if not result.compilation_success
+                                  else "Runtime failed")
+                        print(f"  {name}: {tint(reason, RED)}")
 
 
 def main():
