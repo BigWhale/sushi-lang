@@ -81,50 +81,6 @@ def emit_value_destructor(
         emit_function_value_destructor(codegen, value_ptr)
 
 
-def _select_inline_destructor(value_type: Type):
-    """Pick the inline destructor emitter for a composite type."""
-    if isinstance(value_type, DynamicArrayType):
-        return _emit_dynamic_array_destructor
-    if isinstance(value_type, ArrayType):
-        return _emit_fixed_array_destructor
-    if isinstance(value_type, StructType):
-        return _emit_struct_destructor
-    if isinstance(value_type, EnumType):
-        return _emit_enum_destructor
-    raise AssertionError(f"not a composite destructor type: {value_type!r}")
-
-
-def _dtor_type_key(value_type: Type) -> str:
-    """A stable identity key for a composite type's destructor.
-
-    Two occurrences of the same type share a key (so a self-referential type is
-    detected on re-entry, and its out-of-line destructor is emitted once).
-    """
-    if isinstance(value_type, DynamicArrayType):
-        return "[]" + _dtor_type_key(value_type.base_type)
-    if isinstance(value_type, ArrayType):
-        return f"[{value_type.size}]" + _dtor_type_key(value_type.base_type)
-    if isinstance(value_type, (StructType, EnumType)):
-        return value_type.name
-    return getattr(value_type, "name", type(value_type).__name__)
-
-
-def _dtor_symbol(value_type: Type) -> str:
-    """Deterministic, symbol-safe name for a per-type destructor function.
-
-    Deterministic across compilation units so the `linkonce_odr` bodies emitted in
-    different units for the same recursive type deduplicate at link time.
-    """
-    mapping = {"<": "_L", ">": "_G", ",": "_C", "[": "_A", "]": "_E", " ": ""}
-    out = []
-    for ch in _dtor_type_key(value_type):
-        if ch.isalnum() or ch == "_":
-            out.append(ch)
-        else:
-            out.append(mapping.get(ch, "_"))
-    return "__sushi_dtor_" + "".join(out)
-
-
 def _emit_composite_destructor(
     codegen: LLVMCodegen,
     value_ptr: ir.Value,
@@ -143,72 +99,22 @@ def _emit_composite_destructor(
     # files). Aliased once here: an out-of-line destructor body swaps codegen.builder
     # for its own function, so reading it is what keeps this body and the loop helpers
     # it calls emitting into the SAME function (#257).
+    from sushi_lang.backend import lifecycle
     builder = codegen.builder
-    key = _dtor_type_key(value_type)
+    key = lifecycle.composite_type_key(value_type)
     stack = codegen._dtor_inprogress
 
     if key in stack:
-        fn = _get_or_emit_dtor_func(codegen, value_type)
+        fn = lifecycle.get_or_emit_lifecycle_func(codegen, value_type, "destroy")
         i8_ptr = builder.bitcast(value_ptr, ir.PointerType(ir.IntType(INT8_BIT_WIDTH)))
         builder.call(fn, [i8_ptr])
         return
 
     stack.append(key)
     try:
-        _select_inline_destructor(value_type)(codegen, value_ptr, value_type)
+        lifecycle.inline_destroy(codegen, value_ptr, value_type)
     finally:
         stack.pop()
-
-
-def _get_or_emit_dtor_func(codegen: LLVMCodegen, value_type: Type) -> ir.Function:
-    """Get (or lazily emit) the out-of-line destructor function for a recursive type.
-
-    Signature is `void __sushi_dtor_<mangled>(i8* value_ptr)`. The function is inserted
-    into the cache BEFORE its body is emitted, so a self-referential position inside the
-    body resolves to a call to this same function (terminating the emission). The body is
-    built with a fresh in-progress stack seeded with this type's key, so the recursion
-    point becomes a self-call while unrelated nested types still inline.
-
-    This body is emitted LAZILY, in the middle of emitting some other function, so
-    `codegen.builder` and `codegen.func` are pointed at that other function -- and the
-    destructor helpers reach for them (emit_container_walk builds its loop through
-    `codegen.builder`; the List emitters append blocks through `codegen.func`). Both are
-    therefore swapped to this function for the duration and restored afterwards, exactly as
-    `_get_or_emit_clone_func` and the closure env destructor in runtime/closures.py already
-    do. Without the swap the element loop was appended to the *caller's* function while the
-    element-destructor call went into this one, so the emitted IR referenced a value defined
-    in another function and would not parse (#257).
-    """
-    key = _dtor_type_key(value_type)
-    funcs = codegen._dtor_funcs
-    if key in funcs:
-        return funcs[key]
-
-    i8_ptr_ty = ir.PointerType(ir.IntType(INT8_BIT_WIDTH))
-    fn_ty = ir.FunctionType(ir.VoidType(), [i8_ptr_ty])
-    fn = ir.Function(codegen.module, fn_ty, name=_dtor_symbol(value_type))
-    fn.linkage = "linkonce_odr"
-    funcs[key] = fn
-
-    entry = fn.append_basic_block(name="entry")
-    fb = ir.IRBuilder(entry)
-    typed_ptr = fb.bitcast(
-        fn.args[0],
-        ir.PointerType(codegen.types.ll_type(value_type)),
-        name="self_ptr",
-    )
-
-    saved = codegen._dtor_inprogress
-    saved_builder, saved_func = codegen.builder, codegen.func
-    codegen._dtor_inprogress = [key]
-    codegen.builder, codegen.func = fb, fn
-    try:
-        _select_inline_destructor(value_type)(codegen, typed_ptr, value_type)
-    finally:
-        codegen._dtor_inprogress = saved
-        codegen.builder, codegen.func = saved_builder, saved_func
-    fb.ret_void()
-    return fn
 
 
 def emit_function_value_destructor(
@@ -746,3 +652,17 @@ def needs_cleanup(value_type: Type) -> bool:
     """
     from sushi_lang.semantics.typesys import owns_heap
     return owns_heap(value_type)
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle registration: the DESTROY half of every composite kind's handler.
+# The CLONE half registers in backend/expressions/memory.py; the pairing is
+# asserted by tests/unit/test_lifecycle_handlers.py. A kind registered on one
+# side only is a double free or a leak by construction (see backend/lifecycle.py).
+# ---------------------------------------------------------------------------
+from sushi_lang.backend.lifecycle import register_lifecycle as _register_lifecycle  # noqa: E402
+
+_register_lifecycle("dynamic_array", destroy=_emit_dynamic_array_destructor)
+_register_lifecycle("fixed_array", destroy=_emit_fixed_array_destructor)
+_register_lifecycle("struct", destroy=_emit_struct_destructor)
+_register_lifecycle("enum", destroy=_emit_enum_destructor)

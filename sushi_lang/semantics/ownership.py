@@ -216,7 +216,12 @@ def is_own_type(ty: Optional[Type]) -> bool:
 
 # The generic containers whose `.get()` reads out of storage the receiver keeps. The
 # interned names carry `<...>`, never `@(...)` -- see `semantics/generics/type_display.py`.
-_GET_OUT_PREFIXES = ("Own<", "List<", "HashMap<")
+# The set coincides with the containers that keep their own clone/method paths, so it is
+# spelled ONCE (semantics/generics/cloning.py) and aliased here under the name that says
+# what this module uses it for.
+from sushi_lang.semantics.generics.cloning import (  # noqa: E402
+    CONTAINER_PREFIXES as _GET_OUT_PREFIXES,
+)
 
 
 def is_get_out_container(ty: Optional[Type]) -> bool:

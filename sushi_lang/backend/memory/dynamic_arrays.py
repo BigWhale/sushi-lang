@@ -607,10 +607,10 @@ class DynamicArrayManager:
             # Own<T> / List<T> / HashMap<K,V> always own a heap allocation; other structs
             # are checked field-by-field. Named-prefix check short-circuits the
             # self-referential Own<Tree> / List<Node> cycle without recursing into the
-            # payload type. HashMap is explicit here (matching destructors.needs_cleanup)
-            # so registration no longer relies on its i32[] `buckets` placeholder (#181).
-            if (ty.name.startswith("Own<") or ty.name.startswith("List<")
-                    or ty.name.startswith("HashMap<")):
+            # payload type. Keyed on the shared CONTAINER_PREFIXES so the container set
+            # is spelled once (it used to match destructors.needs_cleanup by hand, #181).
+            from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
+            if ty.name.startswith(CONTAINER_PREFIXES):
                 return True
             return self.struct_needs_cleanup(ty)
         if isinstance(ty, EnumType):

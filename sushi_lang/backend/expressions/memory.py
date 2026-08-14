@@ -373,7 +373,8 @@ def is_container_get_call(codegen: 'LLVMCodegen', expr) -> bool:
         # (`calls/utils.py`), so this predicate and `try_emit_own_method` cannot disagree
         # about what an `Own` / `List` / `HashMap` receiver is. It is AST-only and emits no
         # IR, which is what makes it safe to call from a predicate.
-        for prefix in ("Own<", "List<", "HashMap<"):
+        from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
+        for prefix in CONTAINER_PREFIXES:
             receiver_type = infer_generic_struct_type(codegen, receiver, prefix)
             if receiver_type is not None:
                 break
@@ -496,54 +497,21 @@ def emit_value_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) 
     return value
 
 
-def _clone_type_key(value_type: Type) -> str:
-    """Stable identity key for a composite type's deep clone (mirrors the destructor key).
+def _clone_struct_value_dispatch(codegen: 'LLVMCodegen', value: ir.Value,
+                                 value_type: Type) -> ir.Value:
+    """The struct kind's clone handler: containers first, then the field-walk clone.
 
-    The `ArrayType` arm is load-bearing, not decorative: without it every fixed-array
-    type collapses to its element's key, so `Buffer[2]` and `Buffer[3]` would share one
-    `linkonce_odr` clone body and the linker would keep whichever was emitted first.
-    Adding the arm to `emit_value_clone` without adding it here trades a double free for
-    a miscompile. Mirrors `destructors._dtor_type_key`.
+    The container subdispatch keys on the shared CONTAINER_PREFIXES (the interned
+    `<...>` names are the identity, #240), not on hand-spelled prefixes.
     """
-    if isinstance(value_type, DynamicArrayType):
-        return "[]" + _clone_type_key(value_type.base_type)
-    if isinstance(value_type, ArrayType):
-        return f"[{value_type.size}]" + _clone_type_key(value_type.base_type)
-    if isinstance(value_type, (StructType, EnumType)):
-        return value_type.name
-    return getattr(value_type, "name", type(value_type).__name__)
-
-
-def _clone_symbol(value_type: Type) -> str:
-    """Deterministic, symbol-safe name for a per-type clone function (linkonce_odr)."""
-    mapping = {"<": "_L", ">": "_G", ",": "_C", "[": "_A", "]": "_E", " ": ""}
-    out = []
-    for ch in _clone_type_key(value_type):
-        out.append(ch if (ch.isalnum() or ch == "_") else mapping.get(ch, "_"))
-    return "__sushi_clone_" + "".join(out)
-
-
-def _inline_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) -> ir.Value:
-    """Inline deep-clone dispatch for a composite type (no recursion guard).
-
-    One arm per arm of `destructors._select_inline_destructor`. A shape the destructor
-    frees but this does not clone is a double free by construction.
-    """
-    if isinstance(value_type, DynamicArrayType):
-        return clone_dynamic_array_value(codegen, value, value_type.base_type)
-    if isinstance(value_type, ArrayType):
-        return _clone_fixed_array_value(codegen, value, value_type)
-    if isinstance(value_type, StructType):
+    from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
+    if value_type.name.startswith(CONTAINER_PREFIXES):
         if value_type.name.startswith("Own<"):
             return _clone_own_value(codegen, value, value_type)
         if value_type.name.startswith("List<"):
             return _clone_list_value(codegen, value, value_type)
-        if value_type.name.startswith("HashMap<"):
-            return _clone_hashmap_value(codegen, value, value_type)
-        return _clone_struct_value(codegen, value, value_type)
-    if isinstance(value_type, EnumType):
-        return _clone_enum_value(codegen, value, value_type)
-    raise AssertionError(f"not a composite clone type: {value_type!r}")
+        return _clone_hashmap_value(codegen, value, value_type)
+    return _clone_struct_value(codegen, value, value_type)
 
 
 def _emit_composite_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) -> ir.Value:
@@ -555,59 +523,27 @@ def _emit_composite_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: T
     ``Own<Tree>``), an out-of-line per-type clone function is called at that position so the
     deep copy recurses at runtime over the actual data and terminates -- instead of
     recursing unbounded at compile time.
+
+    Identity key, symbol, kind dispatch and the out-of-line emitter are the SHARED
+    lifecycle machinery (backend/lifecycle.py) -- the same pieces the destructor half
+    uses, so the two cannot drift apart again.
     """
-    key = _clone_type_key(value_type)
+    from sushi_lang.backend import lifecycle
+    key = lifecycle.composite_type_key(value_type)
     stack = getattr(codegen, "_clone_inprogress", None)
     if stack is None:
         stack = []
         codegen._clone_inprogress = stack
 
     if key in stack:
-        fn = _get_or_emit_clone_func(codegen, value_type)
+        fn = lifecycle.get_or_emit_lifecycle_func(codegen, value_type, "clone")
         return codegen.builder.call(fn, [value])
 
     stack.append(key)
     try:
-        return _inline_clone(codegen, value, value_type)
+        return lifecycle.inline_clone(codegen, value, value_type)
     finally:
         stack.pop()
-
-
-def _get_or_emit_clone_func(codegen: 'LLVMCodegen', value_type: Type) -> ir.Function:
-    """Get (or lazily emit) the out-of-line deep-clone function for a recursive type.
-
-    Signature is ``<T> __sushi_clone_<mangled>(<T> value)``. Inserted into the cache before
-    its body is emitted, so a self-referential position inside the body resolves to a call
-    to this same function. The inline clone helpers use ``codegen.builder``, so it is swapped
-    to the new function's builder while the body is emitted, then restored.
-    """
-    key = _clone_type_key(value_type)
-    funcs = getattr(codegen, "_clone_funcs", None)
-    if funcs is None:
-        funcs = {}
-        codegen._clone_funcs = funcs
-    if key in funcs:
-        return funcs[key]
-
-    lltype = codegen.types.ll_type(value_type)
-    fn_ty = ir.FunctionType(lltype, [lltype])
-    fn = ir.Function(codegen.module, fn_ty, name=_clone_symbol(value_type))
-    fn.linkage = "linkonce_odr"
-    funcs[key] = fn
-
-    entry = fn.append_basic_block(name="entry")
-    fb = ir.IRBuilder(entry)
-    saved_builder = codegen.builder
-    saved_stack = getattr(codegen, "_clone_inprogress", None)
-    codegen.builder = fb
-    codegen._clone_inprogress = [key]
-    try:
-        result = _inline_clone(codegen, fn.args[0], value_type)
-        codegen.builder.ret(result)
-    finally:
-        codegen.builder = saved_builder
-        codegen._clone_inprogress = saved_stack if saved_stack is not None else []
-    return fn
 
 
 def _declare_memcpy(codegen: 'LLVMCodegen'):
@@ -933,3 +869,20 @@ def _clone_enum_value(codegen: 'LLVMCodegen', value: ir.Value, value_type) -> ir
 
     b.position_at_end(end_bb)
     return b.load(slot, name="cloned_enum")
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle registration: the CLONE half of every composite kind's handler.
+# The DESTROY half registers in backend/destructors.py; the pairing is asserted
+# by tests/unit/test_lifecycle_handlers.py. A kind registered on one side only
+# is a double free or a leak by construction (see backend/lifecycle.py).
+# ---------------------------------------------------------------------------
+from sushi_lang.backend.lifecycle import register_lifecycle as _register_lifecycle  # noqa: E402
+
+_register_lifecycle(
+    "dynamic_array",
+    clone=lambda cg, v, ty: clone_dynamic_array_value(cg, v, ty.base_type),
+)
+_register_lifecycle("fixed_array", clone=_clone_fixed_array_value)
+_register_lifecycle("struct", clone=_clone_struct_value_dispatch)
+_register_lifecycle("enum", clone=_clone_enum_value)

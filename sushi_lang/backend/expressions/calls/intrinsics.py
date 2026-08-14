@@ -286,8 +286,10 @@ def try_emit_struct_clone(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
         return None
 
     # Own/List/HashMap are named StructTypes with their own method paths; never route
-    # them through the auto-derived struct clone (they are excluded from registration too).
-    if semantic_type.name.startswith(("Own<", "List<", "HashMap<")):
+    # them through the auto-derived struct clone. Keyed on the SAME prefix tuple their
+    # registration exclusion uses (semantics/generics/cloning.py), so the two cannot drift.
+    from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
+    if semantic_type.name.startswith(CONTAINER_PREFIXES):
         return None
 
     from sushi_lang.sushi_stdlib.src.common import get_builtin_method
