@@ -383,13 +383,16 @@ Enforce memory safety rules for references.
 
 ### Rules
 
-1. **One active borrow per variable**
+1. **No reference-typed `let` bindings (CE2413, issue #252)**
 
 ```sushi
 let i32 x = 42
-let &peek i32 r1 = &peek x
-# let &peek i32 r2 = &peek x  # ERROR: x already borrowed
+# let &peek i32 r = &peek x  # ERROR CE2413: a let binding cannot have a reference type
 ```
+
+A borrow is created at a USE site (`f(&peek x)`); a local borrow BINDING is not a
+checked feature yet, so the form is rejected rather than compiled as an unchecked
+alias.
 
 2. **Cannot move/rebind while borrowed**
 

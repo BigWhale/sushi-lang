@@ -101,6 +101,16 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
         er.emit(validator.reporter, er.ERR.CE2032, stmt.type_span)
         return
 
+    # A reference-typed `let` parses by grammar accident and would produce an
+    # unchecked alias (issue #252) -- reject it until local borrow bindings are a
+    # designed, checked feature.
+    from sushi_lang.semantics.typesys import ReferenceType
+    if isinstance(stmt.ty, ReferenceType):
+        mode = "peek" if stmt.ty.is_peek() else "poke"
+        er.emit(validator.reporter, er.ERR.CE2413, stmt.type_span,
+                mode=mode, ty=display_type(stmt.ty.referenced_type))
+        return
+
     # Resolve variable type (handles UnknownType, GenericTypeRef, Result<T, E>, HashMap<K, V>, etc.)
     from .resolution import resolve_variable_type
     from sushi_lang.semantics.generics.types import GenericTypeRef

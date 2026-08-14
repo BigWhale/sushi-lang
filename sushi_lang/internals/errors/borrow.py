@@ -54,6 +54,10 @@ _add(ErrorMessage("CE2408", Severity.ERROR,
     "cannot modify '{name}' through &peek reference (read-only)",
     Category.BORROW, "&peek references are read-only. Use &poke for mutable access."))
 
+_add(ErrorMessage("CE2413", Severity.ERROR,
+    "a 'let' binding cannot have a reference type ('&{mode} {ty}')",
+    Category.BORROW, "A reference-typed `let` (`let &peek T x = ...`) parses but has no checked semantics: the binding would be an alias the borrow checker does not track, so two `&poke` bindings of one variable would compile silently (issue #252). Borrow at a USE site instead: pass `&peek x` / `&poke x` to a reference parameter, or take an independent value with `.clone()`. Checked local borrow bindings are a possible future feature; until they are designed, the form is rejected."))
+
 _add(ErrorMessage("CE2412", Severity.ERROR,
     "cannot mutate '{owner}' while '{name}' borrows from it",
     Category.BORROW, "A `let` bound from a read THROUGH an owner -- `let v = h.items`, `let v = c.get(0)??` -- BORROWS: it names storage the owner keeps and still frees. Mutating, freeing, rebinding or moving that owner while the binding is live would leave the binding pointing at storage the owner no longer holds. The borrow lasts to the end of the block that declares it, so move the mutation after that block, or take an independent value with `.clone()`. This is Rust's E0502."))
