@@ -1,0 +1,19 @@
+# Issue #253: a field assignment through a match binding writes to a private copy.
+# The write never reaches the enum the scrutinee owns, so it must be rejected.
+# EXPECT_ERROR_CODE: CE2414
+
+struct Box:
+    i32 w
+
+enum Holder:
+    Full(Box)
+    Empty
+
+fn main() i32:
+    let Holder h = Holder.Full(Box(1))
+    match h:
+        Holder.Full(b) ->
+            b.w := 99
+            println("w: {b.w}")
+        Holder.Empty -> println("empty")
+    return Result.Ok(0)

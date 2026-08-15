@@ -555,6 +555,10 @@ class BorrowChecker:
                 # Field rebinding (obj.field := value)
                 # We need to check if the receiver (obj) is borrowed
                 # The field rebinding itself is always allowed since we're mutating in place
+                # -- unless the root owner is a match/foreach binding: the store would
+                # land on the binding's private copy and be lost (#253), so it is CE2414.
+                self._reject_binding_mutation(
+                    self._root_owner(stmt.target), stmt.loc, "assign to a field")
                 self._check_expr(stmt.target)
 
             # Check the value expression
@@ -1008,6 +1012,14 @@ class BorrowChecker:
                 self._emit_use_after_move(var_name, borrow.loc, state)
                 return
 
+            # A `&poke` OF a match/foreach binding hands out a mutable view of the
+            # binding's private copy: the callee's writes are lost (#253), so it is
+            # rejected outright (CE2414). A `&peek` reads the same data either way
+            # and stays legal.
+            if is_poke and self._reject_binding_mutation(
+                    var_name, borrow.loc, "take a `&poke` borrow"):
+                return
+
             # A `&poke` may mutate or free, so it conflicts with a live `let`-borrow
             # binding exactly as a mutating method does (#242). Reported as CE2412 rather
             # than CE2407, because the user wrote no `&peek` and CE2407's text would name
@@ -1062,6 +1074,12 @@ class BorrowChecker:
             state = self.borrow_state[base_var]
             if state.is_moved:
                 self._emit_use_after_move(base_var, borrow.loc, state)
+                return
+
+            # Same #253 rule as the Name arm: `&poke binding.field` writes into the
+            # binding's private copy and is lost, so it is CE2414.
+            if is_poke and self._reject_binding_mutation(
+                    base_var, borrow.loc, "take a `&poke` borrow"):
                 return
 
             if is_poke:
@@ -1598,12 +1616,61 @@ class BorrowChecker:
         borrow-conflict checks -- those fire only where the user wrote `&peek` / `&poke`.
         This is the arm that makes `let v = c.get(0)??` followed by `c.free()` an error
         instead of a use-after-free.
+
+        The receiver side of the same question is #253: a mutating method THROUGH a
+        match/foreach binding writes to a private copy and is lost, so it is CE2414.
         """
         if getattr(expr, "method", None) not in _MUTATING_METHODS:
             return
-        self._check_owner_not_borrowed(
-            self._root_owner(getattr(expr, "receiver", None)), expr.loc,
-            f"call `.{expr.method}()`")
+        root = self._root_owner(getattr(expr, "receiver", None))
+        if self._reject_binding_mutation(root, expr.loc,
+                                         f"call `.{expr.method}()`"):
+            return
+        self._check_owner_not_borrowed(root, expr.loc,
+                                       f"call `.{expr.method}()`")
+
+    def _pattern_binding_state(self, name: Optional[str]) -> Optional["BorrowState"]:
+        """The state of `name` if it is a match/foreach binding, else None.
+
+        The discriminator is `is_borrowed_binding and borrows_from is None`: a
+        `let`-borrow binding (#242) names its owner in `borrows_from`, and mutating
+        its OWNER is the CE2412 question with its own machinery. A match/foreach
+        binding has no named owner, and the backend materializes it as a private
+        copy, so a write through it can never reach the owner (#253).
+        """
+        if name is None:
+            return None
+        state = self.borrow_state.get(name)
+        if state is not None and state.is_borrowed_binding \
+                and state.borrows_from is None:
+            return state
+        return None
+
+    def _reject_binding_mutation(self, name: Optional[str], span: Optional[Span],
+                                 what: str) -> bool:
+        """CE2414 (#253): a write through a match/foreach binding is rejected.
+
+        The three write shapes that route here: a mutating method on (or under) the
+        binding, a field assignment whose root owner is the binding, and a `&poke`
+        borrow of it. A rebind of the binding ITSELF does not route here on purpose:
+        it re-initializes a local (Rust's `Some(mut n) => n = 99`), it does not claim
+        to write through.
+
+        Relational (tier 3): the write is only wrong because of where the binding
+        came from, so the diagnostic points at both.
+        """
+        state = self._pattern_binding_state(name)
+        if state is None:
+            return False
+        diag = self.err.emit_with(er.ERR.CE2414, span, name=name)
+        if state.bound_at_span is not None:
+            diag.note(f"'{name}' is bound here, as a read-only view",
+                      state.bound_at_span)
+        diag.help(f"the write ({what}) would land on a private copy and be lost; "
+                  f"take an independent value with `{name}.clone()`, mutate it, "
+                  f"and store it back into the owner")
+        diag.emit()
+        return True
 
     def _check_owner_not_borrowed(self, owner: Optional[str], span: Optional[Span],
                                   what: str) -> None:

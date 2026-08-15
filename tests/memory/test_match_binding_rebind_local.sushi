@@ -1,0 +1,22 @@
+# The ALLOWED half of the #253 rule: a rebind of the binding ITSELF re-initializes
+# a local (Rust's `Some(mut n) => n = 99`). It does not write through the binding,
+# so it stays legal. The owner is unchanged afterwards, and that is by design.
+# EXPECT_STDOUT_CONTAINS: local: 99
+# EXPECT_STDOUT_CONTAINS: owner: 5
+# EXPECT_NO_LEAKS
+
+enum Num:
+    Val(i32)
+    Nothing
+
+fn main() i32:
+    let Num v = Num.Val(5)
+    match v:
+        Num.Val(n) ->
+            n := 99
+            println("local: {n}")
+        Num.Nothing -> println("nothing")
+    match v:
+        Num.Val(n) -> println("owner: {n}")
+        Num.Nothing -> println("nothing")
+    return Result.Ok(0)

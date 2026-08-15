@@ -62,6 +62,10 @@ _add(ErrorMessage("CE2412", Severity.ERROR,
     "cannot mutate '{owner}' while '{name}' borrows from it",
     Category.BORROW, "A `let` bound from a read THROUGH an owner -- `let v = h.items`, `let v = c.get(0)??` -- BORROWS: it names storage the owner keeps and still frees. Mutating, freeing, rebinding or moving that owner while the binding is live would leave the binding pointing at storage the owner no longer holds. The borrow lasts to the end of the block that declares it, so move the mutation after that block, or take an independent value with `.clone()`. This is Rust's E0502."))
 
+_add(ErrorMessage("CE2414", Severity.ERROR,
+    "cannot mutate through binding '{name}': a match/foreach binding is a read-only view",
+    Category.BORROW, "A `match` payload binding and a `foreach` loop binding borrow a value the scrutinee or the container owns. The compiled binding is a private copy, so a write through it -- a mutating method, a field assignment, or a `&poke` borrow -- never reaches the owner and is silently lost (issue #253). Take an independent value with `.clone()`, mutate that, and store it back into the owner. A rebind of the binding ITSELF (`n := 99`) stays legal: it re-initializes a local and does not claim to write through."))
+
 _add(ErrorMessage("CE2411", Severity.ERROR,
     "cannot consume '{name}': another owner keeps this value",
     Category.BORROW, "A borrow names storage something else owns and still frees, so a position that takes ownership cannot have it. Three shapes borrow: a `match` payload binding, a `foreach` loop binding, and every read THROUGH a live owner -- a field read (`h.inner`), an index (`rows[i]`) and a container get-out (`c.get(0)??`, `own.get()`). Reading through a borrow is free; clone it to take an independent value: `{name}.clone()`. Only a value whose type transitively owns heap (a dynamic array, List, Own, HashMap, a string or a capturing closure) is affected -- a primitive borrow is unrestricted, and so is a string bound directly from a literal, which points into read-only memory and owns nothing."))
