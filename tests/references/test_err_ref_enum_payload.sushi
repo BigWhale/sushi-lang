@@ -1,0 +1,14 @@
+# An enum variant payload cannot borrow (#316). The whole construct / match / print cycle
+# used to compile and run with no tracking at all.
+# EXPECT_ERROR_CODE: CE2416
+enum Ref:
+    Borrowed(&peek i32)
+    Empty
+
+fn main() i32:
+    let i32 n = 7
+    let Ref r = Ref.Borrowed(&peek n)
+    match r:
+        Ref.Borrowed(v) -> println(v)
+        Ref.Empty -> println("empty")
+    return Result.Ok(0)

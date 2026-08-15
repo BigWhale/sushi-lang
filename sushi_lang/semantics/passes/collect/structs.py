@@ -12,7 +12,7 @@ from sushi_lang.semantics.ast import StructDef, Program, BoundedTypeParam
 from sushi_lang.semantics.typesys import Type, StructType
 from sushi_lang.semantics.generics.types import GenericStructType, TypeParameter
 
-from .utils import extract_type_param_names, note_first_declaration
+from .utils import extract_type_param_names, note_first_declaration, reject_reference_in
 
 
 @dataclass
@@ -170,6 +170,15 @@ class StructCollector:
             if field_type is None:
                 er.emit(self.r, ERR.CE0104, field_loc, name=f"field '{field_name}'")
                 continue
+
+            # A reference field has no semantics: nothing relates its borrow to the value
+            # it points at, and reading one is an internal error (CE2415, #315).
+            #
+            # Reported, then KEPT. Dropping the field from the table is error recovery that
+            # makes things worse: every construction of the struct then reports a spurious
+            # CE2027 arity error about a field the user did write. The report already stops
+            # the compile before codegen, which is what the ICE needed protecting from.
+            reject_reference_in(self.r, field_type, field_loc, ERR.CE2415)
 
             # NOTE: Field types may be TypeParameter instances (e.g., T, U) for generic structs
             # These will be resolved during monomorphization

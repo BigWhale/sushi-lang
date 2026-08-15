@@ -1,0 +1,20 @@
+# PROMOTED, not merely tolerated: a lambda may declare a reference PARAMETER
+# (`|&peek i32 x| ...`), which is what satisfies a `fn(&peek i32) -> i32` binding. Like
+# the fn-type position it worked by accident of the general machinery and had no test,
+# and the position rejections (CE2415-CE2420) carve it out on purpose.
+# EXPECT_STDOUT_EXACT: "20\n20\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+fn apply(fn(&peek i32) -> i32 f, &peek i32 v) i32:
+    return Result.Ok(f(&peek v)??)
+
+fn run_test() i32:
+    let i32 n = 10
+    let fn(&peek i32) -> i32 doubler = |&peek i32 x| x * 2
+    println(doubler(&peek n)??)
+    println(apply(doubler, &peek n)??)
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 code = run_test().realise(1)
+    return Result.Ok(code)

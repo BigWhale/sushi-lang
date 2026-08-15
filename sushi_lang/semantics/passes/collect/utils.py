@@ -103,3 +103,29 @@ def get_span(node: Any, *attrs: str) -> Optional[Span]:
         if span is not None:
             return span
     return None
+
+
+def reject_reference_in(reporter, ty: Optional[Type], span: Optional[Span],
+                        code) -> bool:
+    """Reject a reference type in a position that has no semantics for one (R4).
+
+    The one emit helper behind CE2415-CE2420. It asks `contains_reference` (the one walk)
+    and renders the type with `display_type`, so the diagnostic shows `&peek i32`, never
+    the interned spelling.
+
+    Returns True when it reported, so a caller can skip work that a rejected type would
+    only make worse -- a struct field the backend cannot lay out, an extension nothing can
+    call.
+
+    The predicate lives in `semantics/type_predicates.py` and the emit lives here, which is
+    the convention the `ptr` gates already follow: the predicate module stays free of the
+    reporter.
+    """
+    from sushi_lang.internals import errors as er
+    from sushi_lang.semantics.generics.type_display import display_type
+    from sushi_lang.semantics.type_predicates import contains_reference
+
+    if not contains_reference(ty):
+        return False
+    er.emit(reporter, code, span, ty=display_type(ty))
+    return True

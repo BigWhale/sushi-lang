@@ -1,0 +1,30 @@
+# PROMOTED, not merely tolerated: a reference PARAMETER inside a function type
+# (`fn(&peek i32) -> i32`) is the one supported reference position, wherever the function
+# type itself appears. It worked by accident of the general machinery and had no test; the
+# position rejections (CE2415-CE2420) deliberately carve it out, so it needs one.
+#
+# Note the call spelling: a borrow is created at the USE site, so forwarding a reference
+# parameter into such a call is written `f(&peek v)`, never bare `f(v)`. The bare form is
+# CE2092 -- Pass 2 unwraps a reference-typed name at every mention, so it reports
+# "expected '&peek i32', got 'i32'" for a name that IS a `&peek i32`.
+# EXPECT_STDOUT_EXACT: "43\n43\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+fn bump(&peek i32 x) i32:
+    return Result.Ok(x + 1)
+
+fn apply(fn(&peek i32) -> i32 f, &peek i32 v) i32:
+    return Result.Ok(f(&peek v)??)
+
+fn run_test() i32:
+    let i32 n = 42
+    # A fn value whose parameter is a borrow, called directly...
+    let fn(&peek i32) -> i32 g = bump
+    println(g(&peek n)??)
+    # ...and passed to a higher-order function that calls it through a re-borrow.
+    println(apply(g, &peek n)??)
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 code = run_test().realise(1)
+    return Result.Ok(code)

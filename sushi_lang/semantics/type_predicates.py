@@ -292,3 +292,48 @@ def contains_foreign_ptr(ty: Type, struct_table: Optional[dict] = None,
             for v in ty.variants for at in v.associated_types
         )
     return False
+
+
+def contains_reference(ty: Optional[Type]) -> bool:
+    """Does this declared type contain a `&peek` / `&poke` anywhere it is not supported?
+
+    The single walk behind the six position rejections (CE2415-CE2420). The grammar's
+    `?type` rule is recursive and universal, so a reference parses in EVERY type position;
+    semantics defines it for exactly one, the PARAMETER. Each other position is rejected at
+    its declaration until it is designed, and each asks this one question.
+
+    Structural only, and deliberately so: it never resolves a named type against the
+    tables. A reference is written in the declaration being checked, so it is visible in
+    the spelling; descending into an already-collected struct or enum would re-report the
+    field the struct's own declaration already rejected.
+
+    **The `FunctionType` carve-out is load-bearing.** A reference PARAMETER inside a
+    function type -- `fn(&peek i32) -> i32` -- is legal and works, and so is the lambda
+    that satisfies it (`|&peek i32 x| ...`). A function type is a parameter list, so its
+    parameters are the supported position, wherever the function type itself appears: as a
+    struct field, a generic argument, a variable. The RETURN of a function type is not
+    exempt -- returning a borrow is the same unsound shape as a plain reference return
+    type (#314), by the same reasoning.
+    """
+    from sushi_lang.semantics.typesys import (
+        ArrayType, DynamicArrayType, FunctionType, IteratorType, PointerType,
+        ReferenceType,
+    )
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+
+    if ty is None:
+        return False
+    if isinstance(ty, ReferenceType):
+        return True
+    if isinstance(ty, (ArrayType, DynamicArrayType)):
+        return contains_reference(ty.base_type)
+    if isinstance(ty, PointerType):
+        return contains_reference(ty.pointee_type)
+    if isinstance(ty, IteratorType):
+        return contains_reference(ty.element_type)
+    if isinstance(ty, GenericTypeRef):
+        return any(contains_reference(arg) for arg in (ty.type_args or ()))
+    if isinstance(ty, FunctionType):
+        # Parameters are the ONE supported position; the return is not (see the docstring).
+        return contains_reference(ty.ok_type) or contains_reference(ty.err_type)
+    return False

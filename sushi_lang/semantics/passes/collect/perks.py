@@ -11,6 +11,8 @@ from sushi_lang.internals.errors import ERR
 from sushi_lang.semantics.ast import PerkDef, ExtendWithDef, FuncDef, Program
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
 
+from .utils import reject_reference_in
+
 
 
 @dataclass
@@ -286,6 +288,16 @@ class PerkCollector:
                             context="a perk method")
                     break
 
+        # A perk method that promises to RETURN a borrow is the same unsound shape as a
+        # plain function returning one (CE2417, #314): the implementation would hand out a
+        # view of its own frame. Perk method PARAMETERS stay legal -- that is the one
+        # supported reference position.
+        for method in getattr(perk, "methods", []) or []:
+            reject_reference_in(self.r, getattr(method, "ret", None),
+                                getattr(method, "ret_span", None)
+                                or getattr(method, "name_span", None) or name_span,
+                                ERR.CE2417)
+
         # Check for duplicate perk names
         if not self.perks.register(perk):
             prev = self.perks.get(name)
@@ -308,6 +320,14 @@ class PerkCollector:
 
         perk_name_span: Optional[Span] = getattr(impl, "perk_name_span", None) or getattr(impl, "loc", None)
         target_type: Optional[Type] = getattr(impl, "target_type", None)
+
+        # `extend &peek T with P` has the same problem as a reference extension target
+        # (CE2420, #319): the implementation is registered against a type no receiver ever
+        # resolves to, so it is unreachable.
+        if reject_reference_in(self.r, target_type,
+                               getattr(impl, "target_type_span", None)
+                               or getattr(impl, "loc", None), ERR.CE2420):
+            return
 
         # Extract type name from target type
         type_name = _get_type_name(target_type)
