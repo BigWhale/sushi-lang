@@ -195,6 +195,17 @@ it at three positions, #250 at five, #256 at six, #277 reported it at one more b
 existed. Per §8 it is not a code-generation question at all — it is rejected, with `.clone()` as the
 explicit escape.
 
+**A reference has the type class of its REFERENT.** The two halves of a decision must not answer
+each other's question: the borrow is the PROVENANCE (a `&peek`/`&poke` parameter is BORROWED, per
+the table in §4.2), and the type class asks only "does this value own heap?". `type_class_of` used
+to short-circuit any `ReferenceType` to PLAIN — reading the borrow into the ownership answer — and
+that made the (BORROWED, MOVE) cell UNREACHABLE through a reference. The checker then classified
+`f(a)` on a `&poke i32[]` parameter as ADOPT and stayed silent while the backend classified the
+same transfer from the TARGET type and answered REJECT. One question, two answers: #301's CE0129
+ICE, #310's compile-clean double free through a `let` bound from a reference, #311's ref-to-ref
+rebind. A reference now classifies as `referenced_type`, so all three are the ordinary CE2411 and
+`.clone()` (which derefs a reference receiver) is the escape.
+
 **Two different consuming uses read `REJECT` two different ways** (§5), and this is what makes the
 table stable across the merge in §4.2: `consume()` (a genuine consuming use — a call argument, a
 constructor field, a return) turns `REJECT` into the **CE2411** diagnostic; `bind()` (a `let`)
