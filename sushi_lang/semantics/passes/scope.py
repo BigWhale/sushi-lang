@@ -7,8 +7,8 @@ from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.semantics.ast import (
-    Program, FuncDef, ConstDef, ExtendDef, ExtendWithDef, Block, Stmt, Let, ExprStmt, Return, Print, PrintLn, While, Foreach, Match, MatchArm, Pattern, OwnPattern, Break,
-    If, Expr, Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall,
+    Program, FuncDef, ConstDef, ExtendDef, ExtendWithDef, Block, Stmt, Let, ExprStmt, Return, Print, PrintLn, While, Foreach, Expand, Match, MatchArm, Pattern, OwnPattern, Break,
+    If, Expr, Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall,
     DynamicArrayNew, DynamicArrayFrom, Rebind, Continue, CastExpr, MemberAccess, EnumConstructor, TryExpr, Borrow, RangeExpr, Spread, Lambda, Param
 )
 from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, ExternalTable
@@ -323,7 +323,11 @@ class ScopeAnalyzer:
             handler = getattr(self, handler_name)
             handler(stmt)
         else:
-            self._check_unknown_statement(stmt)
+            # NOT a silent fall-through (#245). A statement with no handler got no scope
+            # analysis at all, invisibly -- the same class CE0125 closed in the borrow
+            # checker; `expand(...)` bodies were skipped this way. The CI gate is
+            # tests/unit/test_scope_dispatch_is_total.py; this is the runtime backstop.
+            er.raise_internal_error("CE0130", node=type(stmt).__name__)
 
     def _check_let(self, stmt: Let) -> None:
         """Check a let statement."""
@@ -402,6 +406,21 @@ class ScopeAnalyzer:
         self._loop_depth -= 1
         self._pop_scope()
 
+    def _check_expand(self, stmt: Expand) -> None:
+        """Check an expand statement (compile-time pack expansion).
+
+        The compile-time analog of `_check_foreach`, found unhandled by the #245 totality
+        gate: `expand` bodies got no scope analysis at all before it. The binding variable
+        lives in its own scope, like a foreach item. `_loop_depth` is NOT bumped: the body
+        is unrolled statements, not a runtime loop, so a bare `break` inside one is still
+        CE1003.
+        """
+        self._check_expression(stmt.iterable)
+        self._push_scope()
+        self._declare_variable(stmt.var, stmt.var_span)
+        self._check_block(stmt.body)
+        self._pop_scope()
+
     def _check_match(self, stmt: Match) -> None:
         """Check a match statement."""
         # Check the scrutinee expression (in current scope)
@@ -465,11 +484,6 @@ class ScopeAnalyzer:
     def _check_funcdef(self, stmt: FuncDef) -> None:
         """Check a nested function definition."""
         self._check_function(stmt)
-
-    def _check_unknown_statement(self, stmt: Stmt) -> None:
-        """Handle unknown statement types."""
-        # Could log a warning or raise an error
-        pass
 
     def _check_scoped_block(self, block: Block) -> None:
         """Check a block with its own scope."""
@@ -631,3 +645,11 @@ class ScopeAnalyzer:
                 self._check_expression(expr.value)
             case Lambda():
                 self._check_lambda(expr)
+            case BlankLit():
+                # The blank literal `~` is a leaf: it owns nothing and names nothing.
+                pass
+            case _:
+                # NOT a silent fall-through (#245). An expression node with no case got
+                # no usage tracking, invisibly. The CI gate is
+                # tests/unit/test_scope_dispatch_is_total.py; this is the backstop.
+                er.raise_internal_error("CE0130", node=type(expr).__name__)
