@@ -1,0 +1,23 @@
+# `self` is not special: EVERY parameter of a method is a borrow (#298), so returning an
+# owning one has exactly #333's shape and exactly #333's cost.
+#
+# Found while #333 was fixed. It used to compile clean and report `double_frees=1`: the
+# caller keeps `h` and frees its label, and `same` adopts the returned value and frees it
+# too. The plain-function twin is sound, because there the callee owns its by-value
+# parameter -- which is the whole reason the two forms need different answers here.
+# EXPECT_ERROR_CODE: CE2411
+struct Holder:
+    string label
+
+struct Box:
+    i32 n
+
+extend Box passthrough(Holder h) Holder:
+    return h
+
+fn main() i32:
+    let Box b = Box(1)
+    let Holder h = Holder("initial-{0}")
+    let Holder same = b.passthrough(h)
+    println("label: {same.label} orig: {h.label}")
+    return Result.Ok(0)

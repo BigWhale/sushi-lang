@@ -1,0 +1,26 @@
+# The call-argument sink for an explicit method parameter -- the sibling of
+# `test_err_consume_self_call_arg.sushi`, and the same corruption.
+#
+# It printed `orig: n: 1 orig`: `eat` freed the caller's label buffer, the allocator handed
+# the memory back out, and the caller's read found the interpolation that had overwritten
+# it. `double_frees=1`.
+# EXPECT_ERROR_CODE: CE2411
+struct Holder:
+    string label
+
+struct Box:
+    i32 n
+
+fn eat(Holder h) i32:
+    println("eating {h.label}")
+    return Result.Ok(1)
+
+extend Box feed(Holder h) i32:
+    return eat(h).realise(0)
+
+fn main() i32:
+    let Box b = Box(1)
+    let Holder h = Holder("initial-{0}")
+    let i32 n = b.feed(h)
+    println("n: {n} orig: {h.label}")
+    return Result.Ok(0)

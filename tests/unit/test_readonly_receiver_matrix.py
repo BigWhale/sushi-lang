@@ -1,11 +1,12 @@
 """Every read-only receiver rejects every write shape, through ONE gate.
 
-The language now has three receivers a write cannot reach through, each found as its own
-bug and each given its own code:
+The language has four receivers a write cannot reach through, each found as its own bug
+and each given its own code, because each carries its own escape:
 
-  a match/foreach binding  -> CE2414 (#253) -- compiled as a private deep copy
-  a `&peek` reference      -> CE2408 (#302, R1) -- a read-only borrow of the caller
-  the method receiver      -> CE2421 (#326) -- a borrow, per the #298 ruling
+  a match/foreach binding    -> CE2414 (#253) -- compiled as a private deep copy
+  a `&peek` reference        -> CE2408 (#302, R1) -- a read-only borrow of the caller
+  the method receiver        -> CE2421 (#326) -- a borrow, per the #298 ruling
+  a by-value method PARAM    -> CE2422 -- the same borrow, one line over
 
 and three shapes the write comes in, each of which had to be found separately for the
 first two kinds:
@@ -14,9 +15,9 @@ first two kinds:
   a field assignment under the receiver  `x.n := 42`
   a `&poke` borrow of the receiver       `f(&poke x)`
 
-Nine cells. The gate is one dispatcher (`_reject_readonly_write`) over a table of kinds,
+Twelve cells. The gate is one dispatcher (`_reject_readonly_write`) over a table of kinds,
 called from the four write sites, so a new kind is one table entry and a new write shape
-is one call -- never a third copy of the same walk. This test is what makes the table
+is one call -- never a fourth copy of the same walk. This test is what makes the table
 load-bearing: a kind wired into the table but missing from a call site, or a call site
 that forgets the dispatcher, turns a cell red instead of shipping a silent write.
 
@@ -92,10 +93,31 @@ def _self_program(write: str) -> str:
     )
 
 
+def _method_param_program(write: str) -> str:
+    """A by-value parameter of a method: the receiver's rule, one line over.
+
+    The extended type is deliberately NOT `Holder`, so nothing here can be satisfied by
+    the receiver arm -- the write is on `r`, an ordinary parameter.
+    """
+    return (
+        _STRUCT + _GROW +
+        "struct Box:\n"
+        "    i32 v\n"
+        "\n"
+        "extend Box touch(Holder r) i32:\n"
+        f"    {write}\n"
+        "    return 1\n"
+        "\n"
+        "fn main() i32:\n"
+        "    return Result.Ok(0)\n"
+    )
+
+
 KINDS = {
     "peek_reference":  ("CE2408", _peek_program),
     "pattern_binding": ("CE2414", _binding_program),
     "method_receiver": ("CE2421", _self_program),
+    "method_parameter": ("CE2422", _method_param_program),
 }
 
 
@@ -130,6 +152,51 @@ def test_poke_borrow_of_the_whole_receiver_is_rejected(analyze):
         "    return Result.Ok(0)\n"
     )
     assert "CE2421" in _codes(analyze(src))
+
+
+def test_poke_borrow_of_a_whole_method_parameter_is_rejected(analyze):
+    """The parameter twin of the shape above."""
+    src = (
+        _STRUCT +
+        "struct Box:\n"
+        "    i32 v\n"
+        "\n"
+        "fn bump(&poke Holder h) ~:\n"
+        "    h.n := h.n + 1\n"
+        "    return Result.Ok(~)\n"
+        "\n"
+        "extend Box inc(Holder r) i32:\n"
+        "    bump(&poke r)\n"
+        "    return 1\n"
+        "\n"
+        "fn main() i32:\n"
+        "    return Result.Ok(0)\n"
+    )
+    assert "CE2422" in _codes(analyze(src))
+
+
+def test_a_poke_method_parameter_stays_writable(analyze):
+    """The escape CE2422 names, and the line that keeps the gate off `&poke`.
+
+    A `&poke` parameter is the supported way to write through a method's argument, so the
+    method-parameter kind must exclude reference parameters entirely -- a `&peek` one is
+    already CE2408, and a `&poke` one is the answer.
+    """
+    src = (
+        _STRUCT +
+        "struct Box:\n"
+        "    i32 v\n"
+        "\n"
+        "extend Box inc(&poke Holder r) i32:\n"
+        "    r.n := 42\n"
+        "    r.items.push(9)\n"
+        "    return 1\n"
+        "\n"
+        "fn main() i32:\n"
+        "    return Result.Ok(0)\n"
+    )
+    codes = _codes(analyze(src))
+    assert "CE2422" not in codes and "CE2408" not in codes, codes
 
 
 def test_every_readonly_kind_is_in_the_gate_table(analyze):

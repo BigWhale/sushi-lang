@@ -113,14 +113,25 @@ class BorrowState:
                                 # Distinct from is_argv_view, which is one specific borrow
                                 # with its own diagnostic, and from a ReferenceType param,
                                 # which is spelled `&peek`/`&poke` in the source.
-    is_method_receiver: bool = False  # The implicit `self` of an extension or perk method.
-                                # A read-only borrow of the caller's value (#298 S8.6), and
-                                # its own KIND rather than a flavour of is_borrowed_binding:
+    is_method_param: bool = False  # A parameter of an extension or perk method body --
+                                # `self` and the explicit ones alike. A BORROW of the
+                                # caller's value (#298 S8.6): the body registers no
+                                # parameter cleanup and the caller keeps ownership, so
+                                # writing through one cannot reach the caller (CE2421 /
+                                # CE2422) and consuming an owning one gives the value a
+                                # second owner (CE2411, #333).
+                                #
+                                # Its own KIND rather than a flavour of is_borrowed_binding:
                                 # a binding is a private DEEP copy, so a write through it is
-                                # merely lost, while `self` is a SHALLOW copy whose fields
-                                # alias the caller's heap -- which is why the same write was
-                                # a double free there (#326). The write rejections are the
-                                # same three shapes; the code and the escape differ.
+                                # merely lost, while a method parameter is a SHALLOW copy
+                                # whose fields alias the caller's heap -- which is why the
+                                # same write was a double free here (#326).
+    is_method_receiver: bool = False  # ...and this one is `self` specifically. The narrower
+                                # flag exists for the DIAGNOSTIC, not for the rule: the
+                                # receiver has no escape yet (`&poke self` is #327) while an
+                                # explicit parameter can be redeclared `&poke T` today, so
+                                # the two carry different codes and different help.
+                                # `is_method_receiver` implies `is_method_param`.
     owns_no_heap: bool = False  # Option B (MM.md S0.4): this binding's CURRENT value owns no
                                 # heap, so a consuming use of it transfers nothing. Today only
                                 # a `string` bound directly from a literal sets it.
@@ -305,6 +316,22 @@ _READONLY_RECEIVERS: tuple[_ReadOnlyReceiver, ...] = (
         help="the write ({what}) would change the caller's value through a read-only "
              "borrow; declare the parameter `&poke` if the callee must write, or take "
              "an independent value with `{name}.clone()`",
+    ),
+    _ReadOnlyReceiver(
+        # An explicit by-value parameter of a method: the receiver's rule, one line over
+        # (#298 S8.6). AFTER the `&peek` row and excluding every reference parameter, so a
+        # `&peek` one keeps its own code and a `&poke` one stays writable -- that is the
+        # escape this code names, and the reason the two are one row apart rather than one
+        # row.
+        code=er.ERR.CE2422,
+        matches=lambda state: (state.is_method_param
+                               and not state.is_method_receiver
+                               and not isinstance(state.var_type, ReferenceType)),
+        note_span=lambda state: state.declared_at_span,
+        note="'{name}' is declared here, as a by-value parameter of a method",
+        help="the write ({what}) would land on the method's private copy of the "
+             "argument; declare the parameter `&poke` if the method must write through "
+             "it, or take an independent value with `{name}.clone()`",
     ),
     _ReadOnlyReceiver(
         # `is_borrowed_binding and borrows_from is None`: a `let`-borrow binding (#242)
@@ -580,19 +607,23 @@ class BorrowChecker:
         Registering `self` is not hygiene. Without it the checker cannot type
         `self.field`, so no rule about the receiver could fire at all -- which is why a
         write through it was silently lost or a double free (#326), and why a container
-        insert under it reached the ownership seam unstamped as a CE0129. The receiver is
-        registered exactly like a by-value parameter, PLAIN and owning: the #298 ruling
-        makes it a borrow the caller keeps, and a bare `return self` is the one legal move
-        the backend already makes safe by clearing the returned string's owned bit.
+        insert under it reached the ownership seam unstamped as a CE0129.
+
+        `is_method` is the whole difference between the two callable kinds, and it says
+        one thing: every parameter of a method body is a BORROW of the caller's value
+        (#298 S8.6). See `_mark_method_param` for what follows from that.
         """
         self.borrow_state = {}
         self.active_borrows = set()
         self._scope_binding_borrows = []
+        is_method = self_type is not None
 
-        if self_type is not None:
-            self.borrow_state["self"] = BorrowState(
-                name="self", var_type=self_type, declared_at_span=self_span,
-                is_method_receiver=True)
+        if is_method:
+            receiver = BorrowState(name="self", var_type=self_type,
+                                   declared_at_span=self_span,
+                                   is_method_receiver=True)
+            self._mark_method_param(receiver)
+            self.borrow_state["self"] = receiver
 
         for param in params:
             state = BorrowState(name=param.name, var_type=param.ty,
@@ -602,9 +633,38 @@ class BorrowChecker:
             # move that makes the callee free argv (N2).
             if fn_name == "main" and self._is_argv_view_param(param.ty):
                 state.is_argv_view = True
+            if is_method:
+                self._mark_method_param(state)
             self.borrow_state[param.name] = state
 
         self._check_block(body)
+
+    @staticmethod
+    def _mark_method_param(state: BorrowState) -> None:
+        """A parameter of a method body is a BORROW, and a `string` one owns no heap.
+
+        Both halves are facts about how the backend compiles a method body, and both were
+        missing, each with its own double free:
+
+        - The body registers NO parameter cleanup and the caller keeps ownership (#298),
+          so handing the value to a position that takes ownership gives it a second owner.
+          `return self` on an owning struct, `eat(self)`, `sink.push(self)` and all three
+          again for an explicit parameter were compile-clean double frees (#333). Marking
+          the provenance BORROWED makes every one of them CE2411, at no sink's expense --
+          the (BORROWED, MOVE) cell already says REJECT.
+        - `begin_function` clears the owned bit of EVERY `string` parameter of a body
+          compiled with `fn_def=None`, which is what an extension or perk method is
+          (#145). So a method's `string` parameter genuinely owns no heap, and consuming
+          it transfers nothing. That is `owns_no_heap`'s exact meaning -- the same flag a
+          literal-bound string carries, for the same reason -- and it is what keeps the
+          `extend T with Display: return self` idiom compiling. The corpus is entirely
+          `string`-receiving, which is not a coincidence: `string` is the only type with a
+          runtime owned bit to clear.
+        """
+        from sushi_lang.semantics.typesys import BuiltinType
+        state.is_method_param = True
+        if state.var_type == BuiltinType.STRING:
+            state.owns_no_heap = True
 
     @staticmethod
     def _is_argv_view_param(ty: Optional[Type]) -> bool:
@@ -1601,7 +1661,23 @@ class BorrowChecker:
         if state is None:
             # Not declared in this function: a top-level fn reference or a constant.
             return Provenance.FRESH
-        if state.is_borrowed_binding or isinstance(state.var_type, ReferenceType):
+        if state.owns_no_heap:
+            # There is nothing to borrow. This binding's CURRENT value owns no heap, so
+            # no other owner can be left holding it and every position may have it. Two
+            # bindings answer True: a `string` bound straight from a literal, and a
+            # method's `string` parameter, whose owned bit the backend clears at entry.
+            #
+            # It must be OWNED rather than BORROWED, and that is a fact about the SEAM,
+            # not a preference. The backend re-derives the type class from the TYPE alone
+            # -- it has no binding to ask -- so it answers MOVE for any `string`, and
+            # (BORROWED, MOVE) is REJECT, which reaches codegen as a CE0129 for a shape
+            # that is sound. OWNED keeps both halves saying MOVE, which is what a
+            # literal-bound string has always done: harmless, because moving a value with
+            # `owned = 0` frees nothing.
+            return Provenance.OWNED
+        if (state.is_borrowed_binding
+                or state.is_method_param
+                or isinstance(state.var_type, ReferenceType)):
             return Provenance.BORROWED
         return Provenance.OWNED
 
@@ -2034,10 +2110,11 @@ class BorrowChecker:
         borrow of storage something else still owns. Rendering it with one location would
         show the user a rule without the reason for it.
 
-        The second location comes from whichever of the two borrow kinds this is. A
-        `let`-borrow or pattern binding records where it was BOUND; a reference parameter
-        records where it was DECLARED, and has no `bound_at_span` at all. The reference
-        arm is strictly an `elif` so the existing corpus renders unchanged.
+        The second location comes from whichever borrow kind this is. A `let`-borrow or
+        pattern binding records where it was BOUND; a reference parameter and a method
+        parameter record where they were DECLARED, and have no `bound_at_span` at all.
+        Each arm after the first is strictly an `elif` so the existing corpus renders
+        unchanged.
         """
         diag = self.err.emit_with(er.ERR.CE2411, use_span, name=name)
         if state.bound_at_span is not None:
@@ -2048,6 +2125,15 @@ class BorrowChecker:
             diag.note(f"'{name}' is declared here as a `&{state.var_type.mutability}` "
                       f"borrow of the caller's value",
                       state.declared_at_span)
+        elif state.is_method_receiver:
+            # Unguarded on purpose: this sentence still says something without a location,
+            # so a receiver whose type span is missing degrades to a note rather than to
+            # nothing. The parameter arm below needs its location to read at all.
+            diag.note("'self' is the receiver of a method on this type, which borrows "
+                      "the caller's value", state.declared_at_span)
+        elif state.is_method_param and state.declared_at_span is not None:
+            diag.note(f"'{name}' is declared here, and a method parameter borrows the "
+                      f"caller's value", state.declared_at_span)
         diag.help(f"clone it to take an independent value: `{name}.clone()`")
         diag.emit()
 

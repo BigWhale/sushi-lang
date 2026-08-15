@@ -1,0 +1,29 @@
+# A write through an explicit method parameter is #326's shape, for the parameter rather
+# than the receiver -- and it needs its own code, because unlike `&poke self` its escape
+# already exists.
+#
+# The parameter is a borrow (#298), materialized as a private copy, so the field rebind
+# released the CALLER's buffer through the copy and stored the new value into the copy,
+# which dies at method exit. It compiled clean, printed an empty label, and reported
+# `leaked=7 blocks=1 double_frees=1`. The plain-function twin is sound: there the callee
+# owns its by-value parameter.
+#
+# Escape, and it works today: declare the parameter `&poke Holder h`. Pinned by
+# `tests/memory/test_method_param_borrows_ok.sushi`.
+# EXPECT_ERROR_CODE: CE2422
+struct Holder:
+    string label
+
+struct Box:
+    i32 n
+
+extend Box relabel(Holder h) i32:
+    h.label := "fresh-{9}"
+    return 1
+
+fn main() i32:
+    let Box b = Box(1)
+    let Holder h = Holder("initial-{0}")
+    let i32 x = b.relabel(h)
+    println("label: {h.label} x: {x}")
+    return Result.Ok(0)

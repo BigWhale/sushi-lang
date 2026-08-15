@@ -1,0 +1,21 @@
+# Handing `self` to the caller by value gives one buffer two owners (#333).
+#
+# `self` is a BORROW -- the ruling on #298 -- so a position that takes ownership cannot
+# have it. `same` adopts the returned value (a call result is FRESH) and frees the label at
+# scope exit; `h` frees the same buffer. It used to compile clean, print the right label,
+# and report `double_frees=1` under the malloc interposer.
+#
+# The escape is the one CE2411 always names: `self.clone()`, pinned by
+# `tests/memory/test_self_read_only_ok.sushi`.
+# EXPECT_ERROR_CODE: CE2411
+struct Holder:
+    string label
+
+extend Holder passthrough() Holder:
+    return self
+
+fn main() i32:
+    let Holder h = Holder("initial-{0}")
+    let Holder same = h.passthrough()
+    println("label: {same.label} orig: {h.label}")
+    return Result.Ok(0)

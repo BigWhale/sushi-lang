@@ -112,13 +112,21 @@ _add(ErrorMessage("CE2420", Severity.ERROR,
     "an extension cannot target a reference type ('{ty}')",
     Category.BORROW, "`extend &peek T` compiles and is permanently uncallable: a reference target falls through method resolution, so every call reports 'no such method' and the body is dead code the author believes they wrote (issue #319). Extend the referent instead -- the methods on `&T` ARE the methods on `T`, so `extend T` is already callable through a `&peek T` / `&poke T` receiver. This is the CE2097 shape: an extension that can never be reached is a diagnostic, not silence."))
 
-# --- The method receiver (R6) ---------------------------------------------------------
+# --- Method parameters, `self` included (R6) -------------------------------------------
 #
-# The third read-only receiver, after the match/foreach binding (CE2414) and the `&peek`
-# reference (CE2408). All three share ONE gate in `semantics/passes/borrow.py` over a
-# table of kinds, and each keeps its own code because each carries its own rationale and
-# its own escape -- the same reasoning as the six position codes above.
+# The third and fourth read-only receivers, after the match/foreach binding (CE2414) and
+# the `&peek` reference (CE2408). All four share ONE gate in `semantics/passes/borrow.py`
+# over a table of kinds, and each keeps its own code because each carries its own
+# rationale and its own escape -- the same reasoning as the six position codes above.
+#
+# The two here are one rule (#298: every parameter of an extension or perk method is a
+# borrow) with two escapes: a by-value parameter can be redeclared `&poke T` today, and a
+# receiver cannot, because `&poke self` (#327) is not designed yet.
 
 _add(ErrorMessage("CE2421", Severity.ERROR,
     "cannot write through 'self': a method receiver is a read-only borrow",
     Category.BORROW, "An extension or perk method receives `self` as a BORROW: the caller keeps the value (the ruling on issue #298, `docs/design/ownership-conventions.md` S8.6). The compiled receiver is a private copy, so a write through it -- a mutating method, a field assignment, or a `&poke` borrow of it -- never reaches the caller. A plain field was silently LOST; an owning field was a double free plus a leak, because the field rebind released the caller's buffer through the copy (issue #326). This is CE2414's rule for the one receiver CE2414 does not cover. There is no way to spell a mutating receiver yet: `&poke self` (issue #327) is designed separately. Until then, return the new value and let the caller store it, or take a `&poke T` parameter on a plain function."))
+
+_add(ErrorMessage("CE2422", Severity.ERROR,
+    "cannot write through '{name}': a by-value method parameter is a read-only borrow",
+    Category.BORROW, "Every parameter of an extension or perk method is a BORROW of the caller's value, `self` and the explicit ones alike (the ruling on issue #298). A by-value one is compiled as a private copy, so a write through it -- a mutating method, a field assignment, or a `&poke` borrow of it -- never reaches the caller: a plain field was silently lost, and an owning field was a double free plus a leak, because the field rebind released the caller's buffer through the copy. CE2421 is the same rule for the receiver, and the plain-function form has no such problem, because there the callee OWNS its by-value parameters. Unlike the receiver, this one has an escape that exists today: declare the parameter `&poke T` and the write reaches the caller."))

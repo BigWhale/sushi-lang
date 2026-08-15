@@ -1,0 +1,61 @@
+# The green half of the method-parameter borrow rule (#298, #333).
+#
+# A parameter of an extension or perk method -- `self` included -- is a borrow of the
+# caller's value, so a consuming use of an OWNING one is CE2411 and a write through a
+# by-value one is CE2422. Four things must stay legal, and this file is what says so:
+#
+#   1. `.clone()` out of the receiver, the escape CE2411 names.
+#   2. A `&poke` parameter, the escape CE2422 names -- the write reaches the caller.
+#   3. A bare `return self` on a `string` receiver: the `extend T with Display` idiom the
+#      whole corpus uses. The backend clears a method body's string parameters' owned bit
+#      at entry, so the returned value owns nothing and the caller does not free it.
+#   4. The same for an explicit `string` parameter, for the same reason. The carve-out is
+#      a fact about strings, not about the receiver.
+#
+# A PLAIN parameter (an i32, a struct of primitives) was never affected either way: it
+# copies, and BORROWED x PLAIN adopts.
+# EXPECT_STDOUT_EXACT: "clone: initial-0 / initial-0\npoke: fresh-9\nself: hi-1\nparam: hi-1\nplain: 7\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+struct Holder:
+    string label
+
+struct Box:
+    i32 n
+
+extend Holder copy_of() Holder:
+    return self.clone()
+
+extend Box relabel(&poke Holder h) i32:
+    h.label := "fresh-{9}"
+    return 1
+
+extend string say_it() string:
+    return self
+
+extend Box echo_it(string s) string:
+    return s
+
+extend Box plus(Box other) i32:
+    return self.n + other.n
+
+fn run_test() i32:
+    let Holder h = Holder("initial-{0}")
+    let Holder copy = h.copy_of()
+    println("clone: {copy.label} / {h.label}")
+
+    let Box b = Box(1)
+    let Holder target = Holder("start-{0}")
+    b.relabel(&poke target)
+    println("poke: {target.label}")
+
+    let string greeting = "hi-{1}"
+    println("self: {greeting.say_it()}")
+    println("param: {b.echo_it(greeting)}")
+
+    println("plain: {b.plus(Box(6))}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 code = run_test().realise(1)
+    return Result.Ok(code)

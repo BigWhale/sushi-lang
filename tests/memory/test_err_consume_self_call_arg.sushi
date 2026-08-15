@@ -1,0 +1,25 @@
+# The same rule at the other consuming position: `self` handed to a by-value parameter.
+#
+# A plain function's by-value parameter is owned by the CALLEE (the 2026-08-14 ruling), so
+# `eat` frees the label while the caller still owns it. This compiled clean, printed
+# `orig: n: 1 orig` -- the caller's buffer read back after the allocator had reused it --
+# and reported `double_frees=1`.
+#
+# One rule, every position: `self` is a borrow, so every sink rejects it. Nothing here is
+# specific to a call argument.
+# EXPECT_ERROR_CODE: CE2411
+struct Holder:
+    string label
+
+fn eat(Holder h) i32:
+    println("eating {h.label}")
+    return Result.Ok(1)
+
+extend Holder feed() i32:
+    return eat(self).realise(0)
+
+fn main() i32:
+    let Holder h = Holder("initial-{0}")
+    let i32 n = h.feed()
+    println("n: {n} orig: {h.label}")
+    return Result.Ok(0)
