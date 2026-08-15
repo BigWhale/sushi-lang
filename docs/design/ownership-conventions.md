@@ -526,6 +526,46 @@ struct field, an enum payload): dropping it would be error recovery that reports
 error at every construction of the type. The report already stops the compile before codegen,
 which is what the internal errors needed protecting from.
 
+## 8.6 Method receivers and method parameters (decided 2026-08-15, #298)
+
+A by-value parameter is owned by the CALLEE (§4.2). An **extension or perk method** is the
+one exception, and it is now a **decision rather than a compromise**: its parameters --
+`self` included -- are BORROWS, and the caller keeps ownership.
+
+| | plain function | extension / perk method |
+|---|---|---|
+| by-value parameter | callee owns and frees it; the call site consumes | **borrow**; the caller keeps it |
+| a later use of the argument | CE2405 | legal |
+| `self` | — | **borrow**, and a write through it is rejected |
+
+The asymmetry is observable — `eat(s)` consumes, `b.eat(s)` does not — and it was verified
+sound in both directions: the method form is leak-clean and double-free-clean, because a
+method-call argument is not a consuming use at the call site either. The alternative,
+extending callee-owns to method bodies, would make every method argument consuming
+(`text.count(needle)` would eat `needle`, and the same for every stdlib string method that
+takes one by value). That blast radius buys symmetry and nothing else, so the borrow
+reading — the one the documentation already gave users — is now the permanent rule.
+
+**`self` was the unsound half, and is rejected rather than documented.** `self` is
+materialized as a private copy, so `self.n := 42` was silently lost and
+`self.label := "..."` on an owning field was a double free plus a leak (#326) — #253's
+shape, for the one receiver CE2414 does not cover. A write through `self` is therefore a
+compile error, with the same relational rendering CE2414 uses.
+
+There is no way to spell the working version today, so the diagnostic names the future
+feature rather than a dead end: **`&poke self`** (#327), an opt-in first parameter carrying
+the borrow vocabulary the language already has —
+
+```sushi
+extend Counter bump(&poke self) ~:
+    self.n := self.n + 1
+    return ~
+```
+
+— which inherits CE2408 / CE2407 / CE2404 at the call site for free, because it is the same
+`&poke`. This is the order #252 → CE2413 and #253 → CE2414 both followed: reject the
+unchecked form, design the feature separately.
+
 ## 9. Risks, and how they resolved
 
 **Annotation completeness was a new failure mode.** `Provenance` had to survive Pass 1.6
