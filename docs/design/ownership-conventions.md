@@ -224,8 +224,12 @@ the use, and the binding site it borrows from (or the owner's declaration, for a
 `h.inner`). Rendering it with one location is a bug.
 
 **Mutating through a binding needs no new code for the `&peek`/`&poke`-parameter case.** A
-reference parameter is already read-only/exclusive per the ordinary borrow rules, so a write
-through a `&peek` one is **CE2408** ("cannot modify through &peek reference"). A *bound* borrow
+reference parameter is read-only/exclusive per the ordinary borrow rules, so a write through a
+`&peek` one is **CE2408** ("cannot modify through &peek reference"). That rule became TOTAL in
+R1: the same three write shapes CE2414 rejects for a binding — a mutating method on or under it,
+a field assignment, and a `&poke` borrow of it — are rejected for a `&peek` reference, next to
+the rebind that was checked before. One helper, four call sites, keyed on `_MUTATING_METHODS`
+so the method list is never copied. A *bound* borrow
 (a `let` reading through an owner, §8) gets its own diagnostic instead — **CE2412**, "cannot mutate
 the owner while this binding borrows from it" — because the thing being protected is not the
 binding's own mutability but the owner changing out from under it.
