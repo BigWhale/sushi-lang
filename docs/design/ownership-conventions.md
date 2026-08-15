@@ -582,6 +582,25 @@ BORROWED. That is a fact about the SEAM: the backend re-derives the type class f
 TYPE alone, so it answers MOVE for any `string`, and (BORROWED, MOVE) is REJECT, which
 would reach codegen as a CE0129 for a shape that is sound.
 
+**And the carve-out has a price, which is now stated rather than implied (#338).** A
+returned `string` self is a non-owning VIEW of the receiver's buffer. That is exactly what
+makes it double-free-free, and it is also what makes it dangle: nothing relates the view's
+lifetime to the receiver's, so when the receiver is a local of the CALLING function, the
+buffer is freed at that function's scope exit and the view outlives it —
+
+```sushi
+fn make_tag() string:
+    let string s = "tag-{1}"
+    return Result.Ok(s.say_it())   # a view of `s`, which dies on the next line
+```
+
+— which compiles clean, leaks nothing, double-frees nothing, and reads freed memory. The
+trade is a dangling read in place of a double free, and it is not new: it arrived with the
+owned-bit clear (#145) and survived the whole reference-seam project. Fixing it properly
+needs a lifetime relating the return value to the receiver; the only option available
+today is to reject `return self` for a `string` receiver as well and make the `Display`
+corpus write `return self.clone()`. #338 carries that question.
+
 There is no way to spell the working version today, so the diagnostic names the future
 feature rather than a dead end: **`&poke self`** (#327), an opt-in first parameter carrying
 the borrow vocabulary the language already has —
