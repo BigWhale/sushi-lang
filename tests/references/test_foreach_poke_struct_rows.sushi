@@ -1,0 +1,18 @@
+# #300 phase 1, the motivating shape: mutate struct elements in place -- a plain
+# field write AND a mutating method on an OWNING field both reach the container.
+# Before the feature, the only route was clone out, mutate, store back.
+# EXPECT_STDOUT_EXACT: "101 2\n102 3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+struct Row:
+    i32 n
+    i32[] cells
+
+fn main() i32:
+    let Row[] rows = from([Row(1, from([1])), Row(2, from([2, 2]))])
+    foreach(&poke r in rows.iter()):
+        r.n := r.n + 100
+        r.cells.push(9)
+    foreach(v in rows.iter()):
+        println("{v.n} {v.cells.len()}")
+    return Result.Ok(0)

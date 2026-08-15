@@ -1,0 +1,13 @@
+# #300 phase 1: `.entries()` synthesizes each Entry pair on the fly (the backend
+# insert_values it from two GEPs) -- no address to bind, so CE2423. Use .keys()
+# or .values(), which do GEP into the entries buffer.
+# EXPECT_ERROR_CODE: CE2423
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(i32, string) m = HashMap.new()
+    m.insert(1, "one-{1}")
+    foreach(&poke e in m.entries()):
+        println("x")
+    m.free()
+    return Result.Ok(0)

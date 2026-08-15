@@ -1,0 +1,7 @@
+# #300 phase 1: a range synthesizes its values -- there is no element storage to
+# point into, so a reference binding over one is CE2423.
+# EXPECT_ERROR_CODE: CE2423
+fn main() i32:
+    foreach(&poke q in 0..3):
+        println(q)
+    return Result.Ok(0)

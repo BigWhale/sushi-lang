@@ -456,10 +456,19 @@ that before this design shipped was already double-freeing.
 
 ### 8.4 What is NOT decided
 
-**How to opt into a mutable binding**, if it is ever wanted. Zig and Sushi's own `&peek`/`&poke`
-vocabulary point at the binding site (`Shape.Poly(&poke p)`); Rust points at the scrutinee
-(`match &mut x`). Deferred on purpose, exactly as C# deferred `ref`: ship read-only, and let real
-code demonstrate the need. Nothing in this design forecloses either spelling.
+**How to opt into a mutable binding** — DECIDED and phase 1 SHIPPED (#300, 2026-08-16). The
+spelling is the binding site, with Sushi's own vocabulary: `foreach(&poke r in rows.iter())`
+and `Own(&poke x)` bind a POINTER into the container's / pointee's storage, so a write
+through the binding reaches the owner; `&peek` is the copy-free read-only twin. The binding
+registers with its full `ReferenceType`, which wires in every existing rule by construction:
+a write through `&peek` is CE2408, a consuming use is CE2411, and the owner is FROZEN for
+the binding's scope (CE2412) exactly like a `let`-borrow's. Fences: an iterable whose items
+have no address (a range, `.entries()`) is **CE2423**; a `&poke` binding out of a `&peek`
+container is CE2408; out of a constant is CE2400; and the match-pattern position
+(`Shape.Poly(&poke p)`) is **CE2424** until the enum payload alignment fix (#300 phase 3),
+because the payload is byte-packed behind the tag and an interior pointer into it is the
+#149 crash class. Rust's scrutinee-side spelling (`match &mut x`) stays foreclosed-by-none
+but unimplemented.
 
 **Numbering, untangled.** Two different issues get invoked near this decision and are easy to
 conflate:

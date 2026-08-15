@@ -1,0 +1,9 @@
+# #300 phase 1: a `&peek` binding is read-only -- a write through it is CE2408,
+# the same gate a `&peek` parameter's writes go through (the row keys on the
+# ReferenceType, so the binding inherits the rule by construction).
+# EXPECT_ERROR_CODE: CE2408
+fn main() i32:
+    let i32[] xs = from([1])
+    foreach(&peek r in xs.iter()):
+        r := 5
+    return Result.Ok(0)

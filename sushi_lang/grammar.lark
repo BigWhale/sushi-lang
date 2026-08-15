@@ -78,6 +78,7 @@ else_part: ELSE ":" block
 
 while_stmt: WHILE "(" expr ")" ":" block
 foreach_stmt: FOREACH "(" [type] NAME "in" expr ")" ":" block
+            | FOREACH "(" BIT_AND BORROW_MODE NAME "in" expr ")" ":" block -> foreach_ref
 expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block
 
 match_stmt: MATCH expr ":" _NEWLINE _INDENT match_arm+ _DEDENT
@@ -86,6 +87,7 @@ match_arm_inline: (return_stmt | print_stmt | println_stmt | call_stmt | break_s
 pattern: NAME "." NAME ["(" [pattern_list] ")"]
 pattern_list: pattern_item ("," pattern_item)*
 pattern_item: pattern | NAME | wildcard_pattern | own_pattern
+            | BIT_AND BORROW_MODE NAME -> ref_binding
 own_pattern: NAME "(" pattern_item ")"  -> own_pattern_call
 wildcard_pattern: UNDERSCORE
 

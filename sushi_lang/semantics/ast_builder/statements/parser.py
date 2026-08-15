@@ -35,6 +35,7 @@ class StatementParser:
             "if_stmt": control_flow.parse_if_stmt,
             "while_stmt": control_flow.parse_while_stmt,
             "foreach_stmt": loops.parse_foreach_stmt,
+            "foreach_ref": loops.parse_foreach_ref,
             "expand_stmt": loops.parse_expand_stmt,
             "match_stmt": matching.parse_match_stmt,
             "break_stmt": flow.parse_break_stmt,

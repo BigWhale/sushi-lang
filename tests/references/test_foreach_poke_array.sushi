@@ -1,0 +1,12 @@
+# #300 phase 1: a `&poke` foreach binding is a pointer INTO the array's element
+# storage, so a rebind through it mutates the element in place.
+# EXPECT_STDOUT_EXACT: "11\n12\n13\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    foreach(&poke r in xs.iter()):
+        r := r + 10
+    foreach(v in xs.iter()):
+        println(v)
+    return Result.Ok(0)

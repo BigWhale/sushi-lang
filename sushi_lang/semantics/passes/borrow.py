@@ -67,7 +67,7 @@ from sushi_lang.semantics.ast import (
     UnaryOp,
     While,
 )
-from sushi_lang.semantics.typesys import ReferenceType, DynamicArrayType, Type
+from sushi_lang.semantics.typesys import BorrowMode, ReferenceType, DynamicArrayType, Type
 from sushi_lang.semantics.ownership import (
     ConsumingUse, Ownership, Provenance, TypeClass, classify, is_get_out_container,
     type_class_of,
@@ -871,19 +871,41 @@ class BorrowChecker:
             # gets its state back after the loop instead of counting as a read-only view
             # for the rest of the function (a false CE2411).
             displaced: dict = {}
-            self._register_binding(
-                stmt.item_name,
-                BorrowState(
-                    name=stmt.item_name, var_type=stmt.item_type,
-                    is_borrowed_binding=True,
-                    bound_at_span=stmt.item_name_span or stmt.loc,
-                ),
-                displaced,
-            )
+            frozen: list = []
+            span = stmt.item_name_span or stmt.loc
+            if stmt.item_borrow is not None:
+                # A reference binding (#300 phase 1): `foreach(&poke r in rows.iter())`.
+                # The state carries the full `ReferenceType`, which is what wires every
+                # existing rule in by construction -- a write through a `&peek` binding is
+                # CE2408 (the readonly-receiver row keys on the type), a consuming use is
+                # CE2411 (BORROWED provenance), and the backend's deref machinery keys on
+                # the same type. NOT `is_borrowed_binding`: with an unknown owner that
+                # flag would put a `&poke` binding in the CE2414 read-only row and reject
+                # the write the marker exists to allow.
+                mode = BorrowMode.POKE if stmt.item_borrow == "poke" else BorrowMode.PEEK
+                state = BorrowState(
+                    name=stmt.item_name,
+                    var_type=ReferenceType(stmt.item_type, mode),
+                    bound_at_span=span, declared_at_span=stmt.item_borrow_span or span,
+                )
+                self._register_binding(stmt.item_name, state, displaced)
+                self._freeze_ref_binding_owner(state, stmt.iterable, span, frozen,
+                                               poke_span=stmt.item_borrow_span)
+            else:
+                self._register_binding(
+                    stmt.item_name,
+                    BorrowState(
+                        name=stmt.item_name, var_type=stmt.item_type,
+                        is_borrowed_binding=True,
+                        bound_at_span=span,
+                    ),
+                    displaced,
+                )
             try:
                 self._check_loop_body(stmt.body)
             finally:
                 self._restore_displaced(displaced)
+                self._release_frozen(frozen)
 
         elif isinstance(stmt, Match):
             self._check_expr(stmt.scrutinee)
@@ -908,9 +930,11 @@ class BorrowChecker:
                 # local's facts and never the binding's. Pass 2 already scopes its own
                 # table per arm (types/matching.py); this is the borrow pass's half.
                 displaced: dict = {}
+                frozen: list = []
                 if isinstance(arm.pattern, Pattern):
                     self._register_pattern_bindings(
-                        arm.pattern, stmt.resolved_scrutinee_type, displaced)
+                        arm.pattern, stmt.resolved_scrutinee_type, displaced,
+                        scrutinee=stmt.scrutinee, frozen=frozen)
                 # Check arm body
                 try:
                     if isinstance(arm.body, Block):
@@ -920,6 +944,7 @@ class BorrowChecker:
                         self._clear_borrows()
                 finally:
                     self._restore_displaced(displaced)
+                    self._release_frozen(frozen)
                 if not self._terminates(arm.body):
                     paths.append(self._snapshot_flow())
             # A `match` is exhaustive (Pass 2 enforces it), so unlike an `if` with no else
@@ -1080,9 +1105,71 @@ class BorrowChecker:
             else:
                 self.borrow_state[name] = previous
 
+    def _freeze_ref_binding_owner(self, state: BorrowState, source: Expr,
+                                  span: Optional[Span], frozen: list,
+                                  poke_span: Optional[Span] = None) -> None:
+        """Give a reference binding (#300) the owner freeze a `let`-borrow gets (#242).
+
+        `state` is the binding's `ReferenceType` BorrowState; `source` is the expression
+        it points into (the foreach iterable, or the match scrutinee for `Own(&poke x)`).
+        The same contract as `_record_borrowed_binding`: name the owner in `borrows_from`
+        and enter the pair in the owner's `binding_borrows`, so mutating / moving /
+        freeing the owner while the binding lives is CE2412. The (owner, name) pair goes
+        into `frozen` for `_release_frozen` at the binding's scope exit -- NOT into
+        `_scope_binding_borrows`, whose current frame is the ENCLOSING block's and would
+        outlive the binding (a stale entry there would invalidate whatever the name
+        means after the restore).
+
+        A `&poke` binding through a `&peek` owner is rejected here (the readonly gate's
+        CE2408 row, rendered the same way): the write the marker allows would reach the
+        caller's value through a read-only borrow. An owner with no BorrowState (a
+        temporary, a constant) gets no freeze: a temporary is scope-owned storage that
+        outlives the loop, and a `&poke` binding out of a CONSTANT is rejected by the
+        scope pass, which owns non-local classification (#330).
+        """
+        owner = self._root_owner(source)
+        if owner is None:
+            return
+        owner_state = self.borrow_state.get(owner)
+        if owner_state is None:
+            return
+        if (isinstance(state.var_type, ReferenceType) and state.var_type.is_poke()
+                and isinstance(owner_state.var_type, ReferenceType)
+                and owner_state.var_type.is_peek()):
+            diag = self.err.emit_with(er.ERR.CE2408, poke_span or span, name=owner)
+            if owner_state.declared_at_span is not None:
+                diag.note(f"'{owner}' is declared here as a read-only borrow",
+                          owner_state.declared_at_span)
+            diag.help("a `&poke` element binding would write the caller's container "
+                      "through a read-only borrow; declare the parameter "
+                      "`&poke` if the elements must be written, or drop the marker "
+                      "and bind the element by value")
+            diag.emit()
+            return
+        state.borrows_from = owner
+        owner_state.binding_borrows.append((state.name, span))
+        frozen.append((owner, state.name))
+
+    def _release_frozen(self, frozen: list) -> None:
+        """End the owner freezes `_freeze_ref_binding_owner` installed.
+
+        Runs at the binding's scope exit (loop end, arm end), paired with
+        `_restore_displaced`: after it, the owner may be mutated again, and -- the half
+        that matters for correctness -- a stale (owner, name) pair can no longer
+        invalidate whatever `name` resolves to AFTER the binding's scope (#337's shape).
+        """
+        for owner, binding in frozen:
+            owner_state = self.borrow_state.get(owner)
+            if owner_state is not None:
+                owner_state.binding_borrows = [
+                    entry for entry in owner_state.binding_borrows if entry[0] != binding
+                ]
+
     def _register_pattern_bindings(self, pattern: Pattern,
                                    scrutinee_type: Optional[Type] = None,
-                                   displaced: Optional[dict] = None) -> None:
+                                   displaced: Optional[dict] = None,
+                                   scrutinee: Optional[Expr] = None,
+                                   frozen: Optional[list] = None) -> None:
         """Register a match arm's payload bindings, WITH their types.
 
         A payload binding is a read-only BORROW of storage the scrutinee still owns
@@ -1097,7 +1184,10 @@ class BorrowChecker:
         variant Pass 2 already resolved for the backend.
 
         `displaced` is the #337 bracket (see `_register_binding`); the Match arm passes
-        one per arm and restores it at arm exit.
+        one per arm and restores it at arm exit. `scrutinee` and `frozen` serve the
+        `Own(&poke x)` reference bindings (#300): the scrutinee expression names the
+        owner to freeze, and the (owner, name) pairs land in `frozen` for the arm-exit
+        release.
         """
         if displaced is None:
             displaced = {}
@@ -1114,18 +1204,41 @@ class BorrowChecker:
                     ), displaced)
             elif isinstance(binding, Pattern):
                 # Nested pattern: its own bindings are typed by the payload enum it matches.
-                self._register_pattern_bindings(binding, payload_type, displaced)
+                self._register_pattern_bindings(binding, payload_type, displaced,
+                                                scrutinee=scrutinee, frozen=frozen)
             else:
                 # An OwnPattern auto-unwraps `Own@(T)`; its inner pattern binds the pointee.
                 inner = getattr(binding, "inner_pattern", None)
+                inner_borrow = getattr(binding, "inner_borrow", None)
                 if isinstance(inner, Pattern):
                     self._register_pattern_bindings(
-                        inner, self._own_payload(payload_type), displaced)
+                        inner, self._own_payload(payload_type), displaced,
+                        scrutinee=scrutinee, frozen=frozen)
                 elif isinstance(inner, str) and inner != "_":
-                    self._register_binding(inner, BorrowState(
-                        name=inner, var_type=self._own_payload(payload_type),
-                        is_borrowed_binding=True, bound_at_span=span,
-                    ), displaced)
+                    if inner_borrow is not None:
+                        # `Own(&poke x)` (#300 phase 1): the binding is a REFERENCE to
+                        # the pointee. The full ReferenceType wires the rules in by
+                        # construction (a `&peek` write is CE2408, a consume is CE2411,
+                        # the backend derefs by type), and the scrutinee's owner is
+                        # frozen for the arm exactly like a `let`-borrow's (#242).
+                        mode = (BorrowMode.POKE if inner_borrow == "poke"
+                                else BorrowMode.PEEK)
+                        borrow_span = getattr(binding, "inner_borrow_span", None) or span
+                        state = BorrowState(
+                            name=inner,
+                            var_type=ReferenceType(self._own_payload(payload_type), mode),
+                            bound_at_span=borrow_span, declared_at_span=borrow_span,
+                        )
+                        self._register_binding(inner, state, displaced)
+                        if scrutinee is not None and frozen is not None:
+                            self._freeze_ref_binding_owner(
+                                state, scrutinee, borrow_span, frozen,
+                                poke_span=borrow_span)
+                    else:
+                        self._register_binding(inner, BorrowState(
+                            name=inner, var_type=self._own_payload(payload_type),
+                            is_borrowed_binding=True, bound_at_span=span,
+                        ), displaced)
 
     def _variant_payload_types(self, enum_type: Optional[Type],
                                variant_name: str) -> tuple:
@@ -2114,7 +2227,13 @@ class BorrowChecker:
                 binding.invalidated_at = span
                 binding.invalidated_by = (owner, what)
                 binding.bound_at_span = binding.bound_at_span or bound_at
-        state.binding_borrows = []
+        # Invalidate ONCE -- but not during a suppressed (loop-discovery) pass, whose
+        # job is to find facts for the REAL pass, not to consume them. Clearing here in
+        # pass 1 left pass 2 with no live borrows to invalidate, so an owner mutated
+        # inside a loop while a binding read out of it was never reported (found by
+        # #300's foreach bindings, whose home IS the loop body).
+        if not self.err.suppressed:
+            state.binding_borrows = []
 
     def _emit_use_of_invalidated_borrow(self, name: str, use_span: Optional[Span],
                                         state: BorrowState) -> None:
@@ -2134,8 +2253,11 @@ class BorrowChecker:
                   f"or bind an independent value with `.clone()`")
         diag.emit()
         # Report once per binding: the first dangling read is the whole story, and a
-        # second one adds a location without adding information.
-        state.invalidated_at = None
+        # second one adds a location without adding information. A suppressed
+        # (loop-discovery) pass reported nothing, so it must consume nothing -- clearing
+        # there erased the invalidation the union carries into the real pass.
+        if not self.err.suppressed:
+            state.invalidated_at = None
 
     def _emit_consume_of_read(self, expr: Expr) -> None:
         """Report CE2411 for a read through a live owner (`h.inner`, `c.get(0)??`).

@@ -1,0 +1,11 @@
+# #300 phase 1: a `&poke` element binding writes through a pointer into the
+# container's storage, and a constant's storage is `.rodata` -- a store into it is
+# undefined behaviour. Rejected as CE2400 by the scope pass, which owns the
+# "what kind of name is this" question (#330).
+# EXPECT_ERROR_CODE: CE2400
+const i32[3] PRIMES = [2, 3, 5]
+
+fn main() i32:
+    foreach(&poke r in PRIMES.iter()):
+        r := 0
+    return Result.Ok(0)

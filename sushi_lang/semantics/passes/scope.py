@@ -397,6 +397,20 @@ class ScopeAnalyzer:
         # Check the iterable expression first (in outer scope)
         self._check_expression(stmt.iterable)
 
+        # A `&poke` element binding (#300 phase 1) writes through a pointer into the
+        # container's storage, so the container must be a LOCAL -- a constant is emitted
+        # into `.rodata` and a store through it is undefined behaviour, not a diagnostic
+        # (the CE2096 rationale). This pass owns the "what kind of name is this"
+        # question (#330), so the rejection is CE2400, the borrow-of-a-non-local code.
+        if stmt.item_borrow == "poke":
+            root = stmt.iterable
+            from sushi_lang.semantics.ast import DotCall as _DotCall, MethodCall as _MethodCall
+            while isinstance(root, (_DotCall, _MethodCall)):
+                root = root.receiver
+            if isinstance(root, Name) and self._names_a_non_local(root.id):
+                self.err.emit(er.ERR.CE2400, stmt.item_borrow_span or stmt.loc,
+                              name=root.id)
+
         # The foreach body gets its own scope with the item variable
         self._push_scope()
         # Declare the loop variable in the inner scope

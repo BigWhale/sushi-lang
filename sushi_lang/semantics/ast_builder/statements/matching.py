@@ -5,6 +5,7 @@ from lark import Tree, Token
 from sushi_lang.semantics.ast import Match, MatchArm, Pattern, WildcardPattern, OwnPattern, Block, Expr
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, ice, expect, unhandled
 from sushi_lang.semantics.ast_builder.utils.expression_discovery import _EXPR_NODES, contains_expr_like
+from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -116,6 +117,15 @@ def parse_pattern(t: Tree, ast_builder: 'ASTBuilder') -> Pattern:
                     # Store underscore as "_" - scope analyzer will skip it
                     bindings.append("_")
             elif isinstance(child, Tree):
+                # A reference binding directly in a pattern (`Variant(&poke x)`) waits on
+                # the enum payload alignment fix (#300 phase 3): the payload is byte-packed
+                # behind the tag, and a pointer into it is the #149 crash class. The two
+                # working spellings are `Own(&poke x)` and `foreach(&poke r in ...)`.
+                if child.data == "ref_binding":
+                    raise SyntaxDiagnostic("CE2424", span=span_of(child)) \
+                        .help("supported today: `Own(&poke x)` in a pattern, and "
+                              "`foreach(&poke r in ...)`; otherwise clone out, mutate, "
+                              "store back")
                 # Recurse for pattern_item
                 if child.data == "pattern_item":
                     # pattern_item can be: pattern | NAME | wildcard_pattern | own_pattern_call
@@ -160,6 +170,25 @@ def parse_own_pattern(t: Tree, ast_builder: 'ASTBuilder') -> 'OwnPattern':
     name_token = next((c for c in t.children if isinstance(c, Token) and c.type == "NAME"), None)
     if name_token is None or str(name_token.value) != "Own":
         ice(t, f"expected 'Own' in pattern, got {name_token.value if name_token else 'nothing'}")
+
+    # `Own(&poke x)` / `Own(&peek x)` (#300 phase 1): the alias renames the whole
+    # pattern_item tree, so the reference form arrives as a `ref_binding` sibling.
+    # Malloc'd storage is naturally aligned, so the enum-payload wall that defers
+    # plain `&poke` pattern bindings (CE2424) does not apply here.
+    ref_tree = first_tree(t.children, "ref_binding")
+    if ref_tree is not None:
+        mode_tok = next((c for c in ref_tree.children
+                         if isinstance(c, Token) and c.type == "BORROW_MODE"), None)
+        name_tok = next((c for c in ref_tree.children
+                         if isinstance(c, Token) and c.type == "NAME"), None)
+        if mode_tok is None or name_tok is None:
+            ice(t, "malformed ref_binding inside Own pattern")
+        return OwnPattern(
+            inner_pattern=str(name_tok.value),
+            inner_borrow=str(mode_tok.value),
+            inner_borrow_span=span_of(ref_tree),
+            loc=span_of(t)
+        )
 
     # Find the pattern_item inside
     pattern_item_tree = first_tree(t.children, "pattern_item")

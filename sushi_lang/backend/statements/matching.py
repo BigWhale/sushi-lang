@@ -409,6 +409,14 @@ def _emit_match_arms(
         codegen.builder.position_at_end(arm_bb)
         codegen.memory.push_scope()
 
+        # Bracket `variable_types` per ARM: pattern bindings write entries into the flat
+        # per-function dict (`memory._types` is scoped; this dict never was), so an arm's
+        # entry used to shadow a same-named outer local for the rest of the function --
+        # wrong TYPE info for a value binding (the structs.py hazard), wrong CODE for a
+        # reference binding (`Own(&poke x)`, #300: `is_reference_parameter` keys on this
+        # dict, so a later same-named value binding would be double-dereferenced).
+        saved_variable_types = dict(codegen.variable_types)
+
         if isinstance(arm.pattern, Pattern):
             # Find the next arm with the same outer tag (for nested pattern fallthrough)
             next_arm_bb = _find_next_arm_with_same_tag(codegen, stmt, arm_blocks, scrutinee_type, i)
@@ -417,11 +425,15 @@ def _emit_match_arms(
             _extract_pattern_bindings(codegen, arm.pattern, scrutinee_value, scrutinee_type, next_arm_bb)
 
         # Emit the arm body
-        if isinstance(arm.body, Block):
-            _emit_block(codegen, arm.body)
-        else:
-            # Expression body
-            codegen.expressions.emit_expr(arm.body)
+        try:
+            if isinstance(arm.body, Block):
+                _emit_block(codegen, arm.body)
+            else:
+                # Expression body
+                codegen.expressions.emit_expr(arm.body)
+        finally:
+            codegen.variable_types.clear()
+            codegen.variable_types.update(saved_variable_types)
 
         codegen.memory.pop_scope()
 
@@ -628,8 +640,24 @@ def _extract_own_pattern(codegen: 'LLVMCodegen', own_pattern: 'OwnPattern', own_
         # (needs_cleanup answered False for Own<T>), so the extra free destroyed nothing.
         # Fixing that no-op (#162/#183) made the bogus owner real.
         if inner_pattern != "_":
-            codegen.memory.create_local(inner_pattern, element_llvm_type, unwrapped_value,
-                                        element_type, register_cleanup=False)
+            if own_pattern.inner_borrow is not None:
+                # `Own(&poke x)` (#300 phase 1): bind the heap POINTER itself, not a
+                # copy of the pointee, so a write through the binding lands in the
+                # allocation the Own owns. Malloc'd storage is naturally aligned, so
+                # the enum-payload alignment wall does not apply. The slot mimics a
+                # reference parameter's (`T**` holding the `T*`), and the
+                # `ReferenceType` in `variable_types` flips every deref/write consumer.
+                from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
+                pointee_ptr = codegen.builder.extract_value(own_value, 0, name="own_ptr")
+                mode = (BorrowMode.POKE if own_pattern.inner_borrow == "poke"
+                        else BorrowMode.PEEK)
+                ref_type = ReferenceType(element_type, mode)
+                codegen.memory.create_local(inner_pattern, pointee_ptr.type, pointee_ptr,
+                                            ref_type, register_cleanup=False)
+                codegen.variable_types[inner_pattern] = ref_type
+            else:
+                codegen.memory.create_local(inner_pattern, element_llvm_type, unwrapped_value,
+                                            element_type, register_cleanup=False)
     elif isinstance(inner_pattern, PatternNode):
         # Nested pattern: recursively extract and validate the unwrapped value
         _extract_nested_pattern(codegen, inner_pattern, unwrapped_value, element_type, next_arm_bb)

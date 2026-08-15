@@ -259,13 +259,23 @@ class While(Stmt):
 
 @dataclass
 class Foreach(Stmt):
-    """Foreach loop statement: foreach(type item in iterable):"""
+    """Foreach loop statement: foreach(type item in iterable):
+
+    `item_borrow` is the reference-binding marker (#300 phase 1):
+    `foreach(&poke r in rows.iter())` binds `r` as a pointer INTO the container's
+    element storage, so a write through it reaches the owner. `"peek"` is the
+    read-only twin (no element copy). None is the classic value binding (a
+    read-only private copy). A reference-typed `item_type` is normalized to this
+    marker by the AST builder, so downstream passes see ONE spelling.
+    """
     item_name: str              # Loop variable name
     item_type: Optional[Type]   # Declared type (may be None for inference)
     iterable: "Expr"            # Expression yielding iterator
     body: Block                 # Loop body
     item_name_span: Optional[Span] = None
     item_type_span: Optional[Span] = None
+    item_borrow: Optional[str] = None       # None | "peek" | "poke"
+    item_borrow_span: Optional[Span] = None
 
 @dataclass
 class Expand(Stmt):
@@ -324,8 +334,15 @@ class OwnPattern(Node):
 
     The compiler generates Own<T>.get() to unwrap the owned value
     before matching the inner pattern.
+
+    `inner_borrow` (#300 phase 1): `Own(&poke inner)` binds `inner` as a pointer
+    to the heap pointee instead of a private copy, so a write through it reaches
+    the owned value. Malloc'd storage is naturally aligned, so the enum-payload
+    alignment wall that defers plain `&poke` pattern bindings does not apply.
     """
     inner_pattern: Union[str, 'Pattern']  # Variable name or nested pattern
+    inner_borrow: Optional[str] = None    # None | "peek" | "poke"
+    inner_borrow_span: Optional[Span] = None
 
 @dataclass
 class MatchArm(Node):
