@@ -290,8 +290,11 @@ def _emit_dynamic_array_rebind(
     # Store the new array value
     codegen.builder.store(val, slot)
     # The binding is RE-INITIALIZED: it owns the new array, so scope exit frees it
-    # even if the previous value had been moved away (F5, 2026-08-14).
+    # even if the previous value had been moved away (F5, 2026-08-14) or explicitly
+    # destroyed (#294) -- the descriptor's destroyed flag describes the OLD value.
     codegen.moves.unmark(slot)
+    if hasattr(codegen, 'dynamic_arrays') and codegen.dynamic_arrays is not None:
+        codegen.dynamic_arrays.reset_destroyed_on_rebind(var_name)
 
     # Nullify a MOVED source's descriptor (data=NULL, len=0, cap=0). The move mark alone
     # keeps scope exit from freeing it; this additionally makes a later read of the source
@@ -340,11 +343,20 @@ def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value'
     resolved = resolve_named_type(codegen, codegen.memory.find_semantic_type(var_name))
 
     # Destroy the old value's heap so it does not leak when overwritten (#139) -- but
-    # only when this binding still OWNS it. A moved-away value (`f(s); s := "new"`)
-    # belongs to its new owner, and freeing the stale copy here would double-free (F5).
+    # only when this binding still OWNS it. Two ways it may not:
+    #
+    #   MOVED     a moved-away value (`f(s); s := "new"`) belongs to its new owner, and
+    #             freeing the stale copy here would double-free (F5).
+    #   DESTROYED an explicit `.destroy()` already released it and did NOT null the field,
+    #             so the slot still holds the freed pointer. Freeing it again frees
+    #             whatever `malloc` has since handed to the NEW value -- which is what
+    #             made `o.destroy(); o := Own.alloc(7); o.get()` read freed memory (#294).
+    #
     # The per-kind ladder that used to stand here (struct/enum, then string, then closure)
     # is gone: every arm of it called the destructor this helper calls.
-    if not codegen.moves.is_moved(slot):
+    da = getattr(codegen, "dynamic_arrays", None)
+    already_destroyed = da is not None and da.is_destroyed(var_name)
+    if not codegen.moves.is_moved(slot) and not already_destroyed:
         _destroy_old_value(codegen, slot, resolved)
 
     # A rebind takes ownership of its RHS. Run this for EVERY resolved type, not only the
@@ -355,8 +367,11 @@ def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value'
     # Store the new value
     codegen.builder.store(val, slot)
     # The binding is RE-INITIALIZED: it owns the new value, so scope exit frees it
-    # even if the previous value had been moved away (F5, 2026-08-14).
+    # even if the previous value had been moved away (F5, 2026-08-14) or explicitly
+    # destroyed (#294) -- the descriptor's destroyed flag describes the OLD value.
     codegen.moves.unmark(slot)
+    if da is not None:
+        da.reset_destroyed_on_rebind(var_name)
 
 
 def _emit_field_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:

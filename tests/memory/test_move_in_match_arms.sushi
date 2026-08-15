@@ -1,0 +1,25 @@
+# `match` arms are EXCLUSIVE paths, exactly like `if` arms. They used to be checked as a
+# sequence sharing one mutable state, so a move in arm 1 left the value moved for arm 2
+# and reported a spurious CE2405 -- the identical bug that per-arm snapshotting fixed for
+# `if` in Tier 2, still live for `match`.
+# EXPECT_STDOUT_EXACT: "ate value-1\n0\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+enum Choice:
+    First
+    Second
+
+fn eat(string s) ~:
+    println("ate {s}")
+    return Result.Ok(~)
+
+fn run_test(Choice c) i32:
+    let string val = "value-{1}"
+    match c:
+        Choice.First -> eat(val)
+        Choice.Second -> eat(val)
+    return Result.Ok(0)
+
+fn main() i32:
+    println(run_test(Choice.First()).realise(-1))
+    return Result.Ok(0)

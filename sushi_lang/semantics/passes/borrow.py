@@ -170,8 +170,26 @@ class BorrowState:
 class FlowFacts:
     """The per-variable facts that must survive a branch join or a loop back edge.
 
-    Both flags are MONOTONE (they only ever go false -> true within a path), so a join
-    is a union and a loop reaches its fixed point in two passes.
+    A fact belongs here when leaving it out of the snapshot lets one path's state leak
+    into a sibling path. Every such leak has the same two shapes: a fact that only goes
+    false -> true leaks as a FALSE diagnostic in the sibling arm, and a fact that grants
+    permission leaks as a MISSING one. The four fields cover both.
+
+    **Two join rules, and which one a field takes is the whole design.**
+
+    - `moved`, `destroyed`, `invalidation` are MONOTONE within a path and are joined by
+      UNION: a value moved on any path is moved after the join. Conservative, and a loop
+      reaches its fixed point in two passes because union only grows.
+    - `owns_no_heap` GRANTS PERMISSION -- it says a consuming use of this binding transfers
+      nothing -- so it is joined by INTERSECTION: it may be believed after the join only if
+      it held on EVERY path. Union would be unsound, and so would carrying it across arms
+      unrestored: `if (c): a := "hi"` set it for the whole function, so on the else path
+      (where `a` still owns an interpolated buffer) a consuming use classified PLAIN, the
+      checker recorded no move, the BACKEND moved it anyway, and the later read printed an
+      empty string with no diagnostic.
+
+    Because intersection has no empty identity, paths are joined with `join()` over the
+    list of surviving paths, never by folding into a blank `FlowFacts()`.
 
     `destroyed` used to be absent from this snapshot, which was harmless only because a
     destroy could not be reached through a call: the sole way to set it was a literal
@@ -182,9 +200,42 @@ class FlowFacts:
     """
     moved: frozenset[str] = frozenset()
     destroyed: frozenset[str] = frozenset()
+    owns_no_heap: frozenset[str] = frozenset()
+    # (binding name, where its owner changed, (owner, what)) -- a tuple rather than a
+    # frozenset because `Span` is an unfrozen dataclass and therefore unhashable. The
+    # SPAN has to travel with the flag: restoring the flag without it renders CE2412
+    # with no location.
+    invalidation: tuple = ()
 
     def __or__(self, other: "FlowFacts") -> "FlowFacts":
-        return FlowFacts(self.moved | other.moved, self.destroyed | other.destroyed)
+        """Join two paths. Union for the monotone facts, intersection for permission."""
+        seen = {name for name, _span, _by in self.invalidation}
+        merged = self.invalidation + tuple(
+            entry for entry in other.invalidation if entry[0] not in seen
+        )
+        return FlowFacts(
+            moved=self.moved | other.moved,
+            destroyed=self.destroyed | other.destroyed,
+            owns_no_heap=self.owns_no_heap & other.owns_no_heap,
+            invalidation=merged,
+        )
+
+    @staticmethod
+    def join(paths: list["FlowFacts"]) -> "FlowFacts":
+        """Join every surviving path of a branch.
+
+        `paths` excludes the arms that terminated (a `return` leaves the function, so its
+        facts do not reach the code after the branch -- #287). An EMPTY list means every
+        path terminated, so the code that follows is unreachable; a blank `FlowFacts` is
+        the right answer there, and it is the one case where the intersection field may
+        start blank.
+        """
+        if not paths:
+            return FlowFacts()
+        result = paths[0]
+        for facts in paths[1:]:
+            result = result | facts
+        return result
 
 
 # Methods that change or release what a container holds. A live `let`-borrow binding out of
@@ -586,7 +637,7 @@ class BorrowChecker:
                 # unions moved facts, so the other path's move survives it.
                 target_state = self.borrow_state.get(stmt.target.id)
                 if target_state is not None:
-                    target_state.is_moved = False
+                    self._reinitialize(target_state)
             elif isinstance(stmt.target, MemberAccess):
                 self._consume(stmt.value, ConsumingUse.FIELD_ASSIGN)
             # Clear any borrows from the expression
@@ -626,21 +677,26 @@ class BorrowChecker:
             # Without the per-arm snapshot/restore, a move in one arm leaked into its sibling
             # arms and past the `if`, producing a SPURIOUS CE2405 (test_move_in_branch_arms).
             entry = self._snapshot_flow()
-            after = FlowFacts()
+            # Only the paths that REACH the code after the `if` contribute to the join. An
+            # arm that ends in `return` leaves the function, so its move cannot reach a
+            # sibling arm or the statements below (#287).
+            paths: list[FlowFacts] = []
             for cond_expr, arm_block in stmt.arms:
                 self._restore_flow(entry)
                 self._check_expr(cond_expr)
                 self._clear_borrows()
                 self._check_block(arm_block)
-                after |= self._snapshot_flow()
+                if not self._terminates(arm_block):
+                    paths.append(self._snapshot_flow())
             if stmt.else_block:
                 self._restore_flow(entry)
                 self._check_block(stmt.else_block)
-                after |= self._snapshot_flow()
+                if not self._terminates(stmt.else_block):
+                    paths.append(self._snapshot_flow())
             else:
                 # No else arm: the fall-through path (no arm taken) changes nothing beyond entry.
-                after |= entry
-            self._restore_flow(after)
+                paths.append(entry)
+            self._restore_flow(FlowFacts.join(paths))
 
         elif isinstance(stmt, While):
             self._check_expr(stmt.cond)
@@ -664,7 +720,14 @@ class BorrowChecker:
         elif isinstance(stmt, Match):
             self._check_expr(stmt.scrutinee)
             self._clear_borrows()
+            # Match arms are EXCLUSIVE paths, exactly like `if` arms, and used to be checked
+            # as a sequence sharing one mutable state -- so a move in arm 1 left the value
+            # moved for arm 2 and reported a spurious CE2405. Same snapshot / restore / join
+            # as the `If` arm above; the two are the same control-flow shape and now say so.
+            entry = self._snapshot_flow()
+            paths: list[FlowFacts] = []
             for arm in stmt.arms:
+                self._restore_flow(entry)
                 # Add pattern bindings to scope (recursive for nested patterns). The
                 # scrutinee type is what gives each binding a var_type; Pass 2 stamps it
                 # (that is what CE0121 guards) and this pass used to ignore it.
@@ -676,27 +739,116 @@ class BorrowChecker:
                 else:
                     self._check_expr(arm.body)
                     self._clear_borrows()
+                if not self._terminates(arm.body):
+                    paths.append(self._snapshot_flow())
+            # A `match` is exhaustive (Pass 2 enforces it), so unlike an `if` with no else
+            # there is no fall-through path to add: some arm always runs.
+            self._restore_flow(FlowFacts.join(paths))
 
         elif isinstance(stmt, Break) or isinstance(stmt, Continue):
             pass  # No borrow checking needed
 
+    @staticmethod
+    def _reinitialize(state: "BorrowState") -> None:
+        """A rebind RE-INITIALIZES the binding: every fact about the OLD value is stale.
+
+        `x := v` gives the binding a new value, so what was true of the previous one no
+        longer holds. The flags fell out of step one at a time, each as its own bug:
+
+        - `is_moved` (F5, 2026-08-14): `f(s); s := "new"; println(s)` is Rust's
+          re-initialization and must compile.
+        - `moved_at_span`: kept, so a LATER move reported its "moved here" note pointing at
+          the move that the rebind had already cleared -- a stale second location.
+        - `is_destroyed` (#294): kept, so `o.destroy(); o := Own.alloc(7); o.get()` was a
+          false CE2406. The backend half must land with it, or the false error becomes a
+          real leak instead.
+        - `invalidated_at` / `invalidated_by`: kept, so a binding whose owner had changed
+          reported CE2412 even after the binding was given a value of its own.
+        - `is_borrowed_binding` / `borrows_from`: kept, so a binding re-initialized from a
+          fresh value still counted as a borrow and a consuming use of it was a false
+          CE2411.
+
+        The value expression is checked BEFORE this runs, so `s := "{s}-x"` still reports a
+        use of a moved `s`. A rebind on ONE branch of an `if` stays conservative: the flow
+        join re-unions the other path's facts over the top of this.
+        """
+        state.is_moved = False
+        state.moved_at_span = None
+        state.is_destroyed = False
+        state.invalidated_at = None
+        state.invalidated_by = ()
+        state.is_borrowed_binding = False
+        state.borrows_from = None
+
+    @classmethod
+    def _terminates(cls, node) -> bool:
+        """Does every path through this statement (or block) leave the function?
+
+        A terminated path contributes NO facts to the join after it, which is what makes
+        the move checker path-sensitive: two `return`s on exclusive `if` paths each move
+        the same value, and neither move can reach the other (#287). Before this, the
+        first arm's move joined into the state the second arm was checked from, and the
+        second use was a false CE2405.
+
+        A structural question, deliberately answered structurally rather than threaded out
+        of `_check_stmt`: the check and the shape are independent, and a syntactic query
+        cannot accidentally depend on the order arms were visited in.
+
+        **`Break` and `Continue` answer False on purpose.** They leave the STATEMENT, not
+        the function, and `_check_loop_body` has a single exit-fact collector -- excluding a
+        broken arm's facts would drop a pre-`break` move from the post-loop state, which is
+        unsound rather than merely conservative. Recorded as a decided-conservative cell in
+        `tests/unit/test_borrow_flag_lifecycle.py`.
+        """
+        if isinstance(node, Return):
+            return True
+        if isinstance(node, Block):
+            # Any terminating statement terminates the block. Later statements are
+            # unreachable; they are still checked, which over-checks and never under-checks.
+            return any(cls._terminates(stmt) for stmt in node.statements)
+        if isinstance(node, If):
+            # Only with an `else`: without one, the fall-through path survives.
+            if not node.else_block:
+                return False
+            return (all(cls._terminates(arm) for _cond, arm in node.arms)
+                    and cls._terminates(node.else_block))
+        if isinstance(node, Match):
+            arms = getattr(node, "arms", ())
+            return bool(arms) and all(cls._terminates(arm.body) for arm in arms)
+        return False
+
     def _snapshot_flow(self) -> FlowFacts:
-        """The moved / destroyed facts (for branch and loop control-flow joins)."""
+        """Every path-sensitive fact (for branch and loop control-flow joins)."""
         return FlowFacts(
             moved=frozenset(n for n, s in self.borrow_state.items() if s.is_moved),
             destroyed=frozenset(n for n, s in self.borrow_state.items() if s.is_destroyed),
+            owns_no_heap=frozenset(
+                n for n, s in self.borrow_state.items() if s.owns_no_heap),
+            invalidation=tuple(
+                (n, s.invalidated_at, s.invalidated_by)
+                for n, s in self.borrow_state.items() if s.invalidated_at is not None),
         )
 
     def _restore_flow(self, facts: FlowFacts) -> None:
-        """Set each variable's moved/destroyed flags to exactly what `facts` says.
+        """Set every path-sensitive flag to exactly what `facts` says.
 
-        Used to reset to a snapshot before checking an alternative path (an `if` arm) and to
-        install a join / loop fixed-point state afterwards. Only these two flags are
-        restored; borrow counts are cleared per statement by _clear_borrows.
+        Used to reset to a snapshot before checking an alternative path (an `if` arm or a
+        `match` arm) and to install a join / loop fixed-point state afterwards. Borrow
+        COUNTS are not here: `_clear_borrows` zeroes those at the end of every statement,
+        because an explicit `&peek x` lives only for the expression that made it.
+
+        A flag restored here must also be SNAPSHOT above; the two halves are one contract,
+        and a flag present in one and not the other leaks across arms, which is what
+        `tests/unit/test_borrow_flag_lifecycle.py` exists to catch.
         """
+        invalidation = {name: (span, by) for name, span, by in facts.invalidation}
         for name, state in self.borrow_state.items():
             state.is_moved = name in facts.moved
             state.is_destroyed = name in facts.destroyed
+            state.owns_no_heap = name in facts.owns_no_heap
+            span, by = invalidation.get(name, (None, ()))
+            state.invalidated_at = span
+            state.invalidated_by = by
 
     def _check_loop_body(self, body: Block) -> None:
         """Borrow-check a loop body to a fixed point so the back edge is honoured.
