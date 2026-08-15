@@ -365,7 +365,11 @@ the sites that used to spell `("Own<", "List<", "HashMap<")` by hand now share
 
 **A `match` payload binding and a `foreach` loop binding are read-only borrows of storage their
 scrutinee or container still owns.** Reads are free and copy nothing. Writing through one is
-**CE2408**. Consuming one whose type owns heap is **CE2411**, with `.clone()` as the escape.
+**CE2414** — a mutating method, a field assignment, and a `&poke` borrow of the binding are all
+rejected (#253; the compiled binding is a private copy, so such a write could never reach the
+owner). A rebind of the binding ITSELF (`n := 99`) stays legal: it re-initializes a local, the
+Rust `Some(mut n) => n = 99` shape, and does not claim to write through. Consuming a binding
+whose type owns heap is **CE2411**, with `.clone()` as the escape.
 
 ### 8.1 What it was before this design (historical)
 
@@ -380,7 +384,9 @@ it read the wrong field index (#279).
 **What it is now:** typed. `_register_pattern_bindings` (`semantics/passes/borrow.py`) stamps each
 `match` binding's `var_type` from the variant Pass 2 already resolved, and the `foreach` binding is
 stamped from the container's element type — `owns_heap` finally has something to answer on, and
-the three bugs above are closed by construction rather than patched individually.
+the three bugs above are closed rather than patched individually: #277 and #279 by the typing
+itself, and #253 by **CE2414**, which rejects every write through a binding (the read-only rule
+above, enforced instead of asserted).
 
 ### 8.2 Why, from precedent
 
