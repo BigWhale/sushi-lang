@@ -1,0 +1,22 @@
+# `owns_no_heap` GRANTS PERMISSION -- it says a consuming use of this binding transfers
+# nothing -- so it may be believed after a branch only if it held on EVERY path. It used
+# to be set for the whole function by a rebind inside ONE arm, so on the path where `a`
+# still owned its interpolated buffer the consuming use classified PLAIN, the checker
+# recorded no move, the BACKEND moved it anyway, and this program printed `after: ` with
+# no diagnostic at all.
+# EXPECT_ERROR_CODE: CE2405
+fn eat(string s) ~:
+    println("ate {s}")
+    return Result.Ok(~)
+
+fn run_test(bool flag) i32:
+    let string a = "owned-{1}"
+    if (flag):
+        a := "hi"
+    eat(a)
+    println("after: {a}")
+    return Result.Ok(0)
+
+fn main() i32:
+    println(run_test(false).realise(-1))
+    return Result.Ok(0)

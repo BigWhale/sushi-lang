@@ -407,6 +407,46 @@ class DynamicArrayManager:
         self.owned_pointers[var_name] = OwnDescriptor(
             name=var_name, own_type=own_type, slot=slot, depth=depth, destroyed=False)
 
+    def is_destroyed(self, var_name: str) -> bool:
+        """Has `var_name` already been released by an explicit `.destroy()` / `.free()`?
+
+        The read half of the flag every owning-kind descriptor carries. A rebind must ask
+        it BEFORE freeing the old value: `.destroy()` frees the buffer without nulling the
+        field, so the stale pointer is still sitting in the slot, and freeing it again
+        frees whatever `malloc` has since handed to the NEW value (#294). Observed exactly
+        that: `o.destroy(); o := Own.alloc(7); o.get()` printed garbage.
+
+        One method over all three kinds, because a rebind does not know (or care) which
+        registry holds the name.
+        """
+        array = self._array(var_name)
+        if array is not None and array.destroyed:
+            return True
+        lst = self._list(var_name)
+        if lst is not None and lst.destroyed:
+            return True
+        own = self.owned_pointers.get(var_name)
+        return own is not None and own.destroyed
+
+    def reset_destroyed_on_rebind(self, var_name: str) -> None:
+        """Clear the destroyed flag after a rebind gives `var_name` a NEW value.
+
+        The write half, and it must land with the checker's (#294): the checker now allows
+        `o.destroy(); o := Own.alloc(7)`, and without this the descriptor still reads
+        "destroyed", so scope exit skips the new value and it leaks.
+
+        Symmetric with `is_destroyed`, and over the same three registries.
+        """
+        array = self._array(var_name)
+        if array is not None:
+            array.destroyed = False
+        lst = self._list(var_name)
+        if lst is not None:
+            lst.destroyed = False
+        own = self.owned_pointers.get(var_name)
+        if own is not None:
+            own.destroyed = False
+
     def mark_own_destroyed(self, var_name: str) -> None:
         """Mark an Own<T> variable as explicitly destroyed.
 

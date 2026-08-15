@@ -1,0 +1,20 @@
+# A `let`-borrow binding is INVALIDATED when its owner changes (CE2412), and that fact is
+# path-sensitive like every other: the arm that clears the list does not invalidate the
+# binding for its SIBLING arm, where the owner was never touched. `invalidated_at` was
+# missing from the flow snapshot, so it leaked across arms as a false CE2412.
+# EXPECT_STDOUT_EXACT: "one-1\n0\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+fn run_test(bool flag) i32:
+    let List@(string) c = List.new()
+    c.push("one-{1}")
+    let string v = c.get(0)??
+    if (flag):
+        c.clear()
+    else:
+        println(v)
+    return Result.Ok(0)
+
+fn main() i32:
+    println(run_test(false).realise(-1))
+    return Result.Ok(0)

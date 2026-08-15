@@ -1,0 +1,25 @@
+# The green twin of the deleted `test_err_move_not_path_sensitive.sushi`, which pinned
+# this shape as a KNOWN LIMITATION and said in its own header to delete it when the move
+# checker became path-sensitive (#287).
+#
+# Returning the same owning value from two MUTUALLY EXCLUSIVE branches is sound: only one
+# of them ever runs. A `return` leaves the function, so its move contributes nothing to
+# the state the code after the branch is checked from.
+# EXPECT_STDOUT_EXACT: "hi1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+fn pick(i32 which, string val) string:
+    if (which > 0):
+        return Result.Ok(val)
+    return Result.Ok(val)
+
+fn run() i32:
+    let i32 n = 1
+    let string s = "hi{n}"
+    let string got = pick(1, s)??
+    println(got)
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 rc = run().realise(1)
+    return Result.Ok(rc)
