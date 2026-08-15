@@ -554,11 +554,16 @@ class BorrowChecker:
             elif isinstance(stmt.target, MemberAccess):
                 # Field rebinding (obj.field := value)
                 # We need to check if the receiver (obj) is borrowed
-                # The field rebinding itself is always allowed since we're mutating in place
-                # -- unless the root owner is a match/foreach binding: the store would
-                # land on the binding's private copy and be lost (#253), so it is CE2414.
-                self._reject_binding_mutation(
-                    self._root_owner(stmt.target), stmt.loc, "assign to a field")
+                # The field rebinding itself is always allowed since we're mutating in
+                # place -- unless the root owner is a match/foreach binding, where the
+                # store lands on the binding's private copy and is lost (#253, CE2414),
+                # or a `&peek` reference, where it reaches the caller's value through a
+                # read-only borrow (R1, CE2408).
+                root_owner = self._root_owner(stmt.target)
+                if not self._reject_peek_mutation(root_owner, stmt.loc,
+                                                  "assign to a field"):
+                    self._reject_binding_mutation(root_owner, stmt.loc,
+                                                  "assign to a field")
                 self._check_expr(stmt.target)
 
             # Check the value expression
@@ -1012,10 +1017,14 @@ class BorrowChecker:
                 self._emit_use_after_move(var_name, borrow.loc, state)
                 return
 
-            # A `&poke` OF a match/foreach binding hands out a mutable view of the
-            # binding's private copy: the callee's writes are lost (#253), so it is
-            # rejected outright (CE2414). A `&peek` reads the same data either way
-            # and stays legal.
+            # A `&poke` OF a `&peek` reference UPGRADES a read-only borrow: the callee
+            # writes to the caller's value through a parameter that promised not to
+            # (R1, CE2408). A `&poke` OF a match/foreach binding hands out a mutable view
+            # of the binding's private copy, so the callee's writes are lost (#253,
+            # CE2414). A `&peek` reads the same data either way and stays legal.
+            if is_poke and self._reject_peek_mutation(
+                    var_name, borrow.loc, "take a `&poke` borrow"):
+                return
             if is_poke and self._reject_binding_mutation(
                     var_name, borrow.loc, "take a `&poke` borrow"):
                 return
@@ -1076,8 +1085,13 @@ class BorrowChecker:
                 self._emit_use_after_move(base_var, borrow.loc, state)
                 return
 
-            # Same #253 rule as the Name arm: `&poke binding.field` writes into the
-            # binding's private copy and is lost, so it is CE2414.
+            # Same two rules as the Name arm: `&poke peek_ref.field` writes to the
+            # caller's value through a read-only borrow (CE2408), and
+            # `&poke binding.field` writes into the binding's private copy and is
+            # lost (#253, CE2414).
+            if is_poke and self._reject_peek_mutation(
+                    base_var, borrow.loc, "take a `&poke` borrow"):
+                return
             if is_poke and self._reject_binding_mutation(
                     base_var, borrow.loc, "take a `&poke` borrow"):
                 return
@@ -1619,10 +1633,15 @@ class BorrowChecker:
 
         The receiver side of the same question is #253: a mutating method THROUGH a
         match/foreach binding writes to a private copy and is lost, so it is CE2414.
+        The third receiver kind is a `&peek` reference, where the write DOES reach the
+        caller's value and must not (R1, #302): CE2408.
         """
         if getattr(expr, "method", None) not in _MUTATING_METHODS:
             return
         root = self._root_owner(getattr(expr, "receiver", None))
+        if self._reject_peek_mutation(root, expr.loc,
+                                      f"call `.{expr.method}()`"):
+            return
         if self._reject_binding_mutation(root, expr.loc,
                                          f"call `.{expr.method}()`"):
             return
@@ -1669,6 +1688,56 @@ class BorrowChecker:
         diag.help(f"the write ({what}) would land on a private copy and be lost; "
                   f"take an independent value with `{name}.clone()`, mutate it, "
                   f"and store it back into the owner")
+        diag.emit()
+        return True
+
+    def _peek_reference_state(self, name: Optional[str]) -> Optional["BorrowState"]:
+        """The state of `name` if it is a `&peek` reference, else None.
+
+        The sibling of `_pattern_binding_state`, for the other read-only kind. A
+        reference parameter carries its full `ReferenceType` as `var_type`, so the
+        question is answerable here and nowhere else: Pass 2 unwraps a reference at
+        every mention, so no inferred type downstream can tell a borrow from a value.
+        """
+        if name is None:
+            return None
+        state = self.borrow_state.get(name)
+        if state is not None and isinstance(state.var_type, ReferenceType) \
+                and state.var_type.is_peek():
+            return state
+        return None
+
+    def _reject_peek_mutation(self, name: Optional[str], span: Optional[Span],
+                              what: str) -> bool:
+        """CE2408 (R1, #302): a write THROUGH a `&peek` reference is rejected.
+
+        A `&peek` parameter is a read-only borrow of the caller's value, so every write
+        that reaches the caller's storage through it is rejected -- the same three shapes
+        CE2414 rejects for a match/foreach binding: a mutating method on (or under) it, a
+        field assignment whose root owner is it, and a `&poke` borrow of it (which hands
+        the write to a callee).
+
+        The gate is keyed on `_MUTATING_METHODS` at its method call site, never on a
+        second list of names: a method added to that set is covered here by construction,
+        and `tests/unit/test_peek_write_gate_is_total.py` fails if it is not.
+
+        The REBIND of the reference itself (`x := v`) keeps its own emit site in the
+        Rebind arm. It is the one shape that was checked before this gate, and it is a
+        different question: it writes to the referent directly, not through a chain.
+
+        Relational (tier 3) where the parameter has a span. An extension-method parameter
+        carries none yet (R6 of FIX.md), so it degrades to tier 2 there.
+        """
+        state = self._peek_reference_state(name)
+        if state is None:
+            return False
+        diag = self.err.emit_with(er.ERR.CE2408, span, name=name)
+        if state.declared_at_span is not None:
+            diag.note(f"'{name}' is declared here as a read-only borrow",
+                      state.declared_at_span)
+        diag.help(f"the write ({what}) would change the caller's value through a "
+                  f"read-only borrow; declare the parameter `&poke` if the callee must "
+                  f"write, or take an independent value with `{name}.clone()`")
         diag.emit()
         return True
 
