@@ -1,0 +1,20 @@
+# The (BORROWED, PLAIN) cell, which must keep ADOPTing: a reference to a type that owns
+# no heap passes through by value, because copying it transfers nothing. This is what
+# keeps `&peek i32` parameters usable after the reference becomes a first-class borrow.
+# EXPECT_STDOUT_EXACT: "ate 5\nafter: 5\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+fn eat(i32 v) ~:
+    println("ate {v}")
+    return Result.Ok(~)
+
+fn f(&peek i32 x) ~:
+    eat(x)
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32 n = 5
+    let Result@(~, StdError) r = f(&peek n)
+    if (r):
+        println("after: {n}")
+    return Result.Ok(0)

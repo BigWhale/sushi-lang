@@ -1821,11 +1821,21 @@ class BorrowChecker:
         A relational error: consuming this value is only wrong BECAUSE the name is a
         borrow of storage something else still owns. Rendering it with one location would
         show the user a rule without the reason for it.
+
+        The second location comes from whichever of the two borrow kinds this is. A
+        `let`-borrow or pattern binding records where it was BOUND; a reference parameter
+        records where it was DECLARED, and has no `bound_at_span` at all. The reference
+        arm is strictly an `elif` so the existing corpus renders unchanged.
         """
         diag = self.err.emit_with(er.ERR.CE2411, use_span, name=name)
         if state.bound_at_span is not None:
             diag.note(f"'{name}' borrows here, and the owner keeps the value",
                       state.bound_at_span)
+        elif isinstance(state.var_type, ReferenceType) \
+                and state.declared_at_span is not None:
+            diag.note(f"'{name}' is declared here as a `&{state.var_type.mutability}` "
+                      f"borrow of the caller's value",
+                      state.declared_at_span)
         diag.help(f"clone it to take an independent value: `{name}.clone()`")
         diag.emit()
 
