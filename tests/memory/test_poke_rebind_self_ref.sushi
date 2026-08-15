@@ -1,0 +1,16 @@
+# The order-sensitive shape: the new value READS the old one. The right-hand side is
+# built first, then the rebind frees the old buffer, then it stores the new value. An
+# order that freed first would read freed memory.
+# EXPECT_STDOUT_EXACT: "base-1-x\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+fn extend_it(&poke string s) ~:
+    s := "{s}-x"
+    return Result.Ok(~)
+
+fn main() i32:
+    let string a = "base-{1}"
+    let Result@(~, StdError) r = extend_it(&poke a)
+    if (r):
+        println(a)
+    return Result.Ok(0)

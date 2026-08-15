@@ -1,0 +1,16 @@
+# The owned-bit edge of the reference rebind: the OLD pointee is literal-backed
+# (owned=0, it points into .rodata), so the rebind's destructor must be a runtime
+# no-op for it. The NEW value owns its buffer and the caller frees it at scope exit.
+# EXPECT_STDOUT_EXACT: "owned-7\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+fn take_over(&poke string s) ~:
+    s := "owned-{7}"
+    return Result.Ok(~)
+
+fn main() i32:
+    let string a = "literal"
+    let Result@(~, StdError) r = take_over(&poke a)
+    if (r):
+        println(a)
+    return Result.Ok(0)
