@@ -27,6 +27,9 @@ class FunctionHelpers:
             codegen: The main LLVMCodegen instance.
         """
         self.codegen = codegen
+        # One entry per open `begin_function`, holding the name -> semantic-type map that
+        # was live when it started. See `begin_function` for why the map is per-function.
+        self._variable_types_stack: list[dict] = []
 
     def is_valid_param_type(self, param_type: Ty) -> bool:
         """Check if a type is valid for function parameters.
@@ -233,6 +236,17 @@ class FunctionHelpers:
         self.codegen.func = llvm_fn
         self.codegen.entry_branch = None
 
+        # `variable_types` is per-FUNCTION state, like the scope stack below it, and it
+        # used to be per-MODULE: created once and never cleared, so an entry a function
+        # wrote stayed readable by every function emitted afterwards. For a value type
+        # that is wrong DATA; for a `ReferenceType` entry it is wrong CODE, because
+        # `is_reference_parameter` keys on it and a later function's plain local of the
+        # same name would be dereferenced (BORROW.md 3.5). Save and restore rather than
+        # clear: nothing nests today, but an out-of-line destructor body emitted lazily
+        # mid-function would, and restoring is correct either way.
+        self._variable_types_stack.append(self.codegen.variable_types)
+        self.codegen.variable_types = {}
+
         entry = llvm_fn.append_basic_block(name="entry")
         start = llvm_fn.append_basic_block(name="start")
 
@@ -391,7 +405,8 @@ class FunctionHelpers:
     def end_function(self) -> None:
         """Clean up function emission context.
 
-        Clears per-function state including builders, scopes, and references.
+        Clears per-function state including builders, scopes, references, and the
+        name -> semantic-type map `begin_function` saved.
         """
         self.codegen.func = None
         self.codegen.builder = None
@@ -399,6 +414,9 @@ class FunctionHelpers:
         self.codegen.entry_block = None
         self.codegen.memory.reset_scope_stack()
         self.codegen.entry_branch = None
+        self.codegen.variable_types = (
+            self._variable_types_stack.pop() if self._variable_types_stack else {}
+        )
 
 
 def declare_stdlib_function(

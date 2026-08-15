@@ -156,6 +156,31 @@ def compare_resolved_types(validator: 'TypeValidator', actual: Type, expected: T
     return False
 
 
+def _params_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -> bool:
+    """Compatibility for one parameter INSIDE a function type: no borrow coercion.
+
+    `&poke T` may be handed to a place that only reads, so it coerces to `&peek T` at a
+    call site. That coercion is a property of the POSITION -- a value being passed once,
+    now -- and it must not travel into a function type, where it would make parameters
+    covariant in mutability:
+
+        fn poker(&poke i32 x) i32: x := 999 ...
+        let fn(&peek i32) -> i32 g = poker      # accepted before this check
+        g(&peek n)                              # writes 999 through a `&peek`
+
+    That compiled clean and defeated the entire `&peek` write gate (CE2408) through one
+    indirection. The function-type arm recursed through `types_compatible`, which applies
+    the coercion, although its own comment said parameters are invariant. They are: the
+    mutability is part of what the value promises its callers.
+    """
+    if isinstance(actual, ReferenceType) or isinstance(expected, ReferenceType):
+        return (isinstance(actual, ReferenceType) and isinstance(expected, ReferenceType)
+                and actual.mutability == expected.mutability
+                and types_compatible(validator, actual.referenced_type,
+                                     expected.referenced_type))
+    return types_compatible(validator, actual, expected)
+
+
 def types_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -> bool:
     """Check if two types are compatible (handles UnknownType resolution to StructType/EnumType).
 
@@ -177,7 +202,7 @@ def types_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -
     if isinstance(actual, FunctionType) and isinstance(expected, FunctionType):
         if len(actual.param_types) != len(expected.param_types):
             return False
-        if not all(types_compatible(validator, ap, ep)
+        if not all(_params_compatible(validator, ap, ep)
                    for ap, ep in zip(actual.param_types, expected.param_types, strict=False)):
             return False
         return (types_compatible(validator, actual.ok_type, expected.ok_type) and

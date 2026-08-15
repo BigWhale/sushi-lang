@@ -1,0 +1,19 @@
+# Handing an OWNING field of `self` to the caller is a consuming use of a borrow, so it is
+# CE2411 -- the ordinary rule, reached for the first time because `self` is now registered.
+#
+# Found while the #326 evidence was gathered: it used to compile clean and report
+# `double_frees=1` under the malloc interposer. `self.label` names storage the CALLER still
+# owns and still frees, so returning it gives the same buffer a second owner. The escape is
+# the one CE2411 always names: `self.label.clone()`.
+# EXPECT_ERROR_CODE: CE2411
+struct Holder:
+    string label
+
+extend Holder get_label() string:
+    return self.label
+
+fn main() i32:
+    let Holder h = Holder("initial-{0}")
+    let string s = h.get_label()
+    println("s: {s} label: {h.label}")
+    return Result.Ok(0)

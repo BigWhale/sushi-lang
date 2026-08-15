@@ -160,22 +160,15 @@ def resolve_fn_field_call(type_validator, node) -> Optional["Type"]:
 
 
 def validate_fn_field_call_args(type_validator, node, fn_ty) -> None:
-    """Validate `obj.handler(args)` arg count and types against the field's FunctionType."""
-    expected = fn_ty.param_types
-    if len(node.args) != len(expected):
-        er.emit(type_validator.reporter, er.ERR.CE2092, node.loc,
-                expected=display_type(fn_ty),
-                actual=f"a call with {len(node.args)} argument(s)")
-        return
-    from sushi_lang.semantics.passes.types.compatibility import types_compatible
-    for arg, param_ty in zip(node.args, expected, strict=False):
-        type_validator.validate_expression(arg)
-        arg_ty = type_validator.infer_expression_type(arg)
-        if arg_ty is None:
-            continue
-        if not types_compatible(type_validator, arg_ty, param_ty):
-            er.emit(type_validator.reporter, er.ERR.CE2092, getattr(arg, 'loc', node.loc),
-                    expected=display_type(param_ty), actual=display_type(arg_ty))
+    """Validate `obj.handler(args)` against the field's FunctionType.
+
+    The same check as a call through a fn-typed local, so it IS that check: two copies of
+    the loop is how the missing-borrow help came to exist in only one of them.
+    """
+    from sushi_lang.semantics.passes.types.calls.user_defined import (
+        validate_fn_value_call_args,
+    )
+    validate_fn_value_call_args(type_validator, node.args, fn_ty, node.loc)
 
 
 class StatementValidator(RecursiveVisitor):

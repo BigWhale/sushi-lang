@@ -550,7 +550,10 @@ reading — the one the documentation already gave users — is now the permanen
 materialized as a private copy, so `self.n := 42` was silently lost and
 `self.label := "..."` on an owning field was a double free plus a leak (#326) — #253's
 shape, for the one receiver CE2414 does not cover. A write through `self` is therefore a
-compile error, with the same relational rendering CE2414 uses.
+compile error, **CE2421**, with the same relational rendering CE2414 uses. Three shapes,
+the same three CE2414 rejects: a mutating method under the receiver
+(`self.items.push(9)` — which did not even reach codegen, it was a CE0129), a field
+assignment (`self.n := 42`), and a `&poke` borrow of it (`bump(&poke self)`).
 
 There is no way to spell the working version today, so the diagnostic names the future
 feature rather than a dead end: **`&poke self`** (#327), an opt-in first parameter carrying
@@ -565,6 +568,34 @@ extend Counter bump(&poke self) ~:
 — which inherits CE2408 / CE2407 / CE2404 at the call site for free, because it is the same
 `&poke`. This is the order #252 → CE2413 and #253 → CE2414 both followed: reject the
 unchecked form, design the feature separately.
+
+**Reads through `self` are unaffected, and one of them became expressible.** A field read,
+a read-only method under it, `.clone()` of an owning field, and a bare `return self` all
+stay legal. `&peek self` and `&peek self.field` now WORK — they used to be
+`CE2400: cannot borrow 'self': variable does not exist`, which was true of the borrow
+checker's state and puzzling to anyone who could see `self` on the line above.
+
+**Three read-only receivers, one gate.** A `match`/`foreach` binding (CE2414), a `&peek`
+reference (CE2408) and the method receiver (CE2421) are the same rule with three
+rationales: a write through any of them cannot reach the value it appears to write. Each
+was found as its own bug, and each time all three write shapes had to be re-covered by
+hand. The checker now holds them as a TABLE of kinds behind one dispatcher
+(`_reject_readonly_write`), called from the four write sites, so a fourth kind is one row
+rather than a fourth walk;
+`tests/unit/test_readonly_receiver_matrix.py` pins all nine cells and fails if a kind in
+the table has no row in the matrix. The codes stay separate for the reason the six
+position codes do (§8.5): each carries its own escape, and each is lifted separately when
+its feature is designed.
+
+**What is NOT decided: handing an owning `self` OUT.** Returning an owning FIELD
+(`return self.label`) is now **CE2411** — the ordinary borrow rule, reached for the first
+time because the receiver is registered — with `self.label.clone()` as the escape. A bare
+`return self` on a struct with an owning field is still a compile-clean double free
+(**#333**): it is legal because `self` is registered as a plain owning parameter, which is
+what keeps the `extend T with Display: return self` corpus compiling — that corpus is
+entirely `string`-receiving, and a returned `string` self is made non-owning by the owned-
+bit clear in `begin_function` (#145). A struct has no such bit. The choice between
+rejecting the consuming use and extending the clear is #333's to make.
 
 ## 9. Risks, and how they resolved
 

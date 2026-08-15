@@ -1,0 +1,19 @@
+# A write to `self.field` in an extension method is rejected (#326).
+#
+# `self` is a method receiver, and the 2026-08-15 ruling on #298 makes that a BORROW: the
+# caller keeps the value. The compiled receiver is a private copy, so this store lands on
+# the copy and is lost -- it used to compile with no diagnostic and print the ORIGINAL 1.
+# The escape the diagnostic names is `&poke self` (#327), designed separately.
+# EXPECT_ERROR_CODE: CE2421
+struct Counter:
+    i32 n
+
+extend Counter bump() i32:
+    self.n := 42
+    return 1
+
+fn main() i32:
+    let Counter c = Counter(1)
+    let i32 x = c.bump()
+    println("n: {c.n} x: {x}")
+    return Result.Ok(0)

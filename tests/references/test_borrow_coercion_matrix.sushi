@@ -1,0 +1,60 @@
+# The `&poke` -> `&peek` coercion, in every position that has one.
+#
+# It is one rule -- a mutable borrow may be handed to a place that only reads -- and it had
+# exactly ONE test (`test_poke_to_peek_coercion.sushi`, the call-site case). The single
+# coercion site is `types/compatibility.py`, and `compare_resolved_types` has no reference
+# arm at all, so any new caller that reaches THAT directly loses the coercion silently.
+# This file is what makes such a loss a red test.
+#
+# The two rejections that bound the rule live in their own files, because a `test_err_*`
+# stops at the first diagnostic: `&peek` -> `&poke` at a call site is CE2408
+# (`test_err_peek_to_poke_upgrade.sushi`), and inside a function TYPE the coercion does not
+# apply at all -- parameters are invariant (`test_err_fn_type_poke_for_peek.sushi`).
+# EXPECT_STDOUT_EXACT: "direct: 41\nforwarded: 41\ngeneric: 7\nmethod: 15\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+struct Box:
+    i32 n
+
+fn read_only(&peek i32 x) i32:
+    return Result.Ok(x)
+
+# A `&poke` parameter forwarded into a `&peek` parameter: the borrow is re-created at the
+# use site, and the downgrade happens there.
+fn forward(&poke i32 v) i32:
+    return Result.Ok(read_only(&peek v)??)
+
+# Type-argument inference binds T through a `&peek` parameter, and the argument may be a
+# `&poke` borrow -- the coercion has to survive unification.
+fn peek_generic@(T)(&peek T x) T:
+    return Result.Ok(x)
+
+# An extension-method parameter takes the same coercion as a plain one.
+extend Box add(&peek i32 x) i32:
+    return self.n + x
+
+fn through_method(&poke i32 v) i32:
+    let Box b = Box(10)
+    return Result.Ok(b.add(&peek v))
+
+fn run_test() i32:
+    let i32 n = 41
+
+    # 1. The call-site downgrade: a `&poke` borrow given to a `&peek` parameter.
+    println("direct: {read_only(&poke n)??}")
+
+    # 2. Through a `&poke` parameter, re-borrowed as `&peek`.
+    println("forwarded: {forward(&poke n)??}")
+
+    # 3. Through generic inference.
+    let i32 seven = 7
+    println("generic: {peek_generic(&poke seven)??}")
+
+    # 4. Into an extension method's parameter.
+    let i32 five = 5
+    println("method: {through_method(&poke five)??}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 code = run_test().realise(1)
+    return Result.Ok(code)

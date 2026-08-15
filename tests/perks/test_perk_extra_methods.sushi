@@ -1,4 +1,12 @@
 # Test that implementations can have extra methods beyond perk requirements
+#
+# The extra method used to be a `reset()` that wrote `self.x := 0`. That write never
+# reached the caller -- `self` is the method's private copy of the receiver -- and the test
+# never looked, so it passed while proving nothing about the write. It is now CE2421
+# (#326). The extra method reads instead, and the printed sum proves what this file is
+# actually about: the method exists, is callable, and is not part of the perk.
+# EXPECT_STDOUT_EXACT: "sum: 30\n"
+# EXPECT_RUNTIME_EXIT: 0
 
 perk Hashable:
     fn hash() u64
@@ -15,13 +23,11 @@ extend Point with Hashable:
         let u64 multiplier = 31 as u64
         return hx * multiplier + hy
 
-    fn reset() ~:
-        self.x := 0
-        self.y := 0
-        return ~
+    fn sum() i32:
+        return self.x + self.y
 
 fn main() i32:
     let Point p = Point(10, 20)
     p.hash()
-    p.reset()
+    println("sum: {p.sum()}")
     return Result.Ok(0)

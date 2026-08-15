@@ -1,0 +1,20 @@
+# A mutating method under `self` is the second write shape (#326), the one CE2414 rejects
+# for a match/foreach binding.
+#
+# It never even reached codegen: with `self` absent from the borrow checker's state, the
+# container-insert sink could not type the receiver, so the argument was left unstamped and
+# the ownership seam reported a CE0129 internal error. Registering `self` answers both --
+# the sink types the receiver, and the write is rejected as the user error it is.
+# EXPECT_ERROR_CODE: CE2421
+struct Bag:
+    i32[] items
+
+extend Bag add() i32:
+    self.items.push(9)
+    return 1
+
+fn main() i32:
+    let Bag b = Bag(from([1, 2, 3]))
+    let i32 x = b.add()
+    println("len: {b.items.len()} x: {x}")
+    return Result.Ok(0)

@@ -19,6 +19,27 @@ from sushi_lang.semantics.library_registry import LibraryRegistry
 from sushi_lang.semantics.library_templates import deserialize_perk_impl
 
 
+def enum_base_names(*tables) -> set[str]:
+    """The base name of every enum in `tables`, for the borrow checker's sink test.
+
+    `Box.Full(a)` and `xs.push(a)` are the same node shape at Pass 3, and only the first
+    is an ownership sink, so the checker needs the enum type names to tell them apart.
+    A monomorphized generic is interned as `Result<i32, StdError>` while its constructor
+    is written bare, hence the split.
+
+    Each argument is a collector table (which HAS a `by_name` mapping) or a plain mapping
+    (which IS one). The question is PRESENCE, not truthiness: this used to be an
+    `or`-chain, and an EMPTY `by_name` is falsy, so it fell through to the table OBJECT --
+    a dataclass with no `__iter__` -- and raised a bare `TypeError` (F16 of BORROW.md).
+    Nothing masked that except Phase 0 always pre-registering `Result` and `Maybe`.
+    """
+    names: set[str] = set()
+    for table in tables:
+        mapping = table.by_name if hasattr(table, 'by_name') else table
+        names.update(name.split('<', 1)[0] for name in mapping)
+    return names
+
+
 class SemanticAnalyzer:
     """
     Semantic analysis coordinator that runs all semantic analysis passes.
@@ -357,12 +378,7 @@ class SemanticAnalyzer:
         # Enum type names for the borrow checker's ownership-sink test, stripped to their
         # base name: a monomorphized generic enum is interned as "Result<i32, StdError>"
         # while its constructor is written `Result.Ok(...)`.
-        enum_base_names = {
-            name.split('<', 1)[0]
-            for table in (getattr(self.enums, 'by_name', {}) or {},
-                          getattr(self.generic_enums, 'by_name', None) or self.generic_enums or {})
-            for name in table
-        }
+        enum_names = enum_base_names(self.enums, self.generic_enums)
 
         for unit in compilation_order:
             if unit.ast is None:
@@ -395,7 +411,7 @@ class SemanticAnalyzer:
             # Base names only: a generic enum is interned as "Result<i32, StdError>" but the
             # constructor receiver is written bare ("Result").
             borrow_checker = BorrowChecker(unit_reporter, destroy_effects=destroy_effects,
-                                           enum_names=enum_base_names, tables=self.tables)
+                                           enum_names=enum_names, tables=self.tables)
             borrow_checker.run(unit.ast)
 
             # Merge unit reporter results into main reporter

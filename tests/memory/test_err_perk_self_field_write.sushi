@@ -1,0 +1,24 @@
+# The perk-implementation twin of the same write (#326). A perk method is a FuncDef with an
+# implicit `self`, checked through the same entry point as a plain function, so it used to
+# miss the receiver for a different reason than an extension method did -- and behaved
+# identically: compiled clean, printed the ORIGINAL 7.
+#
+# One entry point (`_check_callable`) now serves all three callable kinds, which is what
+# makes this test and its extension sibling the SAME rule rather than two copies of one.
+# EXPECT_ERROR_CODE: CE2421
+perk Resettable:
+    fn reset() i32
+
+struct Counter:
+    i32 n
+
+extend Counter with Resettable:
+    fn reset() i32:
+        self.n := 0
+        return 1
+
+fn main() i32:
+    let Counter c = Counter(7)
+    let i32 x = c.reset()
+    println("n: {c.n} x: {x}")
+    return Result.Ok(0)
