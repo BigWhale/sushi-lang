@@ -10,7 +10,7 @@ extend i32 with Display:
 
 extend string with Display:
     fn display() string:
-        return self
+        return self.clone()
 
 fn show_all@(...Ts: Display)(...Ts args) ~:
     expand(a in args):

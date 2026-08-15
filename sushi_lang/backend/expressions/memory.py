@@ -521,32 +521,30 @@ def _declare_memcpy(codegen: 'LLVMCodegen'):
 
 
 def _clone_string_value(codegen: 'LLVMCodegen', fat: ir.Value) -> ir.Value:
-    """Deep-copy a string's heap buffer, mirroring the owned-bit guard of the destructor.
+    """Deep-copy a string's buffer, UNCONDITIONALLY.
 
-    Fat layout is `{i8* data@0, i32 size@1, i8 owned@2}`. If `owned != 0` the buffer is
-    heap-owned: malloc a fresh copy (i64-length memcpy -- the raw i32 size is unsafe on
-    ARM64, #149) and set owned=1. A literal/borrow (owned=0) passes through unchanged, so
-    exactly one owner frees each buffer -- symmetric with `emit_string_destructor`.
+    Fat layout is `{i8* data@0, i32 size@1, i8 owned@2}`. Malloc a fresh copy (i64-length
+    memcpy -- the raw i32 size is unsafe on ARM64, #149) and set owned=1, whatever the
+    source's owned bit says. The destructor's owned-bit guard must NOT be mirrored here:
+    `owned == 0` means "this binding does not own the buffer", never "the buffer is
+    immortal". Two owned=0 strings exist -- a literal (rodata, immortal) and a VIEW of
+    another owner's heap buffer (a method's `string` parameter after the #145 owned-bit
+    clear, an argv element). A pass-through clone of a view dangles the moment the owner
+    dies, which is what made `return self.clone()` -- the escape CE2411 names -- return
+    the same dangling view as `return self` (#338). A copy is always safe; it can only
+    cost an allocation on a literal.
     """
     b = codegen.builder
-    owned = b.extract_value(fat, 2, name="clone_str_owned")
     size = b.extract_value(fat, 1, name="clone_str_size")
     data = b.extract_value(fat, 0, name="clone_str_data")
 
-    slot = b.alloca(fat.type, name="clone_str_slot")
-    b.store(fat, slot)  # default: return input unchanged (owned == 0)
-
-    is_owned = b.icmp_unsigned("!=", owned, ir.Constant(owned.type, 0))
-    with b.if_then(is_owned):
-        size_i64 = b.zext(size, ir.IntType(INT64_BIT_WIDTH))
-        new_data = emit_malloc(codegen, codegen.builder, size_i64)  # i8*
-        b.call(_declare_memcpy(codegen),
-               [new_data, data, size_i64, ir.Constant(ir.IntType(1), 0)])
-        cloned = b.insert_value(fat, new_data, 0)
-        cloned = b.insert_value(cloned, ir.Constant(codegen.types.i8, 1), 2)
-        b.store(cloned, slot)
-
-    return b.load(slot, name="cloned_string")
+    size_i64 = b.zext(size, ir.IntType(INT64_BIT_WIDTH))
+    new_data = emit_malloc(codegen, codegen.builder, size_i64)  # i8*
+    b.call(_declare_memcpy(codegen),
+           [new_data, data, size_i64, ir.Constant(ir.IntType(1), 0)])
+    cloned = b.insert_value(fat, new_data, 0)
+    cloned = b.insert_value(cloned, ir.Constant(codegen.types.i8, 1), 2)
+    return cloned
 
 
 def _clone_function_value(codegen: 'LLVMCodegen', fat: ir.Value) -> ir.Value:

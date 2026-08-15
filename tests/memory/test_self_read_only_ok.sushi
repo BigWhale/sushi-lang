@@ -1,11 +1,11 @@
-# The green half of #326: READING through `self` is unaffected, and so is the one legal
-# move of it.
+# The green half of #326: READING through `self` is unaffected.
 #
 # Registering `self` in the borrow checker's state is what makes the write rejections
-# possible, and it had to leave four shapes alone: a plain field read, a read-only method
-# under it, a bare `return self` on a `string` receiver -- the `extend T with Display`
-# idiom the whole corpus uses, which the backend keeps safe by clearing the returned
-# string's owned bit -- and `.clone()` of an owning field, which is the escape CE2411 names.
+# possible, and it had to leave three shapes alone: a plain field read, a read-only
+# method under it, and `.clone()` -- of the receiver itself and of an owning field --
+# which is the escape CE2411 names. (A bare `return self` on a `string` receiver was a
+# fourth legal shape until the #338 ruling: it handed out a dangling view, so it is
+# CE2411 now, and the Display idiom is spelled `return self.clone()`.)
 # EXPECT_STDOUT_EXACT: "n: 7\nlen: 3\nsaid: hi-1\ncopy: initial-0\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS
@@ -25,7 +25,7 @@ extend Bag size() i32:
     return self.items.len()
 
 extend string say_it() string:
-    return self
+    return self.clone()
 
 extend Holder copy_label() string:
     return self.label.clone()

@@ -304,8 +304,11 @@ class FunctionHelpers:
         # the value (the seam marked a Name source moved, a temp adopted in), so the callee
         # owns the buffer and its owned bit must survive. A body compiled with fn_def=None
         # (an extension/perk method) registers no cleanup, so its string params stay
-        # BORROWS and keep the owned-bit clear below -- that is what makes `return self`
-        # safe there (#145). `main`'s params are argv views and stay borrows too.
+        # BORROWS and keep the owned-bit clear below -- the body can then never free the
+        # caller's buffer (#145). Since the #338 ruling, every CONSUMING use of such a
+        # parameter is CE2411 in Pass 3, so the cleared bit no longer escapes anywhere:
+        # it guards the read paths only. `main`'s params are argv views and stay borrows
+        # too.
         is_user_main = fn_def is not None and fn_def.name == "main"
         owning_string_params: set[str] = set()
         if fn_def is not None and not is_user_main:

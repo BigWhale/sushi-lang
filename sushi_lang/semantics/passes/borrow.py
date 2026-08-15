@@ -641,30 +641,25 @@ class BorrowChecker:
 
     @staticmethod
     def _mark_method_param(state: BorrowState) -> None:
-        """A parameter of a method body is a BORROW, and a `string` one owns no heap.
+        """A parameter of a method body is a BORROW -- every parameter, `string` included.
 
-        Both halves are facts about how the backend compiles a method body, and both were
-        missing, each with its own double free:
+        The body registers NO parameter cleanup and the caller keeps ownership (#298),
+        so handing the value to a position that takes ownership gives it a second owner.
+        `return self` on an owning struct, `eat(self)`, `sink.push(self)` and all three
+        again for an explicit parameter were compile-clean double frees (#333). Marking
+        the provenance BORROWED makes every one of them CE2411, at no sink's expense --
+        the (BORROWED, MOVE) cell already says REJECT.
 
-        - The body registers NO parameter cleanup and the caller keeps ownership (#298),
-          so handing the value to a position that takes ownership gives it a second owner.
-          `return self` on an owning struct, `eat(self)`, `sink.push(self)` and all three
-          again for an explicit parameter were compile-clean double frees (#333). Marking
-          the provenance BORROWED makes every one of them CE2411, at no sink's expense --
-          the (BORROWED, MOVE) cell already says REJECT.
-        - `begin_function` clears the owned bit of EVERY `string` parameter of a body
-          compiled with `fn_def=None`, which is what an extension or perk method is
-          (#145). So a method's `string` parameter genuinely owns no heap, and consuming
-          it transfers nothing. That is `owns_no_heap`'s exact meaning -- the same flag a
-          literal-bound string carries, for the same reason -- and it is what keeps the
-          `extend T with Display: return self` idiom compiling. The corpus is entirely
-          `string`-receiving, which is not a coincidence: `string` is the only type with a
-          runtime owned bit to clear.
+        A `string` parameter used to be exempt (`owns_no_heap = True`): `begin_function`
+        clears its owned bit (#145), so consuming it transferred nothing and `extend T
+        with Display: return self` compiled. The exemption was REMOVED by the #338
+        ruling: the value it let out is a non-owning VIEW of the caller's buffer, which
+        dangles the moment the receiver is a local of the calling function. The trade was
+        a double free for a dangling read, and the ruling ended it -- a `string` method
+        parameter is a borrow like every other owning type, and the escape is
+        `return self.clone()`.
         """
-        from sushi_lang.semantics.typesys import BuiltinType
         state.is_method_param = True
-        if state.var_type == BuiltinType.STRING:
-            state.owns_no_heap = True
 
     @staticmethod
     def _is_argv_view_param(ty: Optional[Type]) -> bool:
@@ -1663,9 +1658,12 @@ class BorrowChecker:
             return Provenance.FRESH
         if state.owns_no_heap:
             # There is nothing to borrow. This binding's CURRENT value owns no heap, so
-            # no other owner can be left holding it and every position may have it. Two
-            # bindings answer True: a `string` bound straight from a literal, and a
-            # method's `string` parameter, whose owned bit the backend clears at entry.
+            # no other owner can be left holding it and every position may have it. One
+            # binding answers True: a `string` bound straight from a literal, which
+            # points into `.rodata`. (A method's `string` parameter used to answer True
+            # too; the #338 ruling removed that exemption -- the backend still clears its
+            # owned bit, but the VIEW that made legal to hand out dangles, so the
+            # checker now treats it as the borrow it is.)
             #
             # It must be OWNED rather than BORROWED, and that is a fact about the SEAM,
             # not a preference. The backend re-derives the type class from the TYPE alone

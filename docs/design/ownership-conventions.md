@@ -567,39 +567,39 @@ things a borrow must not do were both accepted and both corrupted memory:
   with no per-sink work: the parameter's provenance is BORROWED, and the (BORROWED, MOVE)
   cell already said REJECT.
 
-**The one carve-out is `string`, and it is a fact rather than a preference.**
-`begin_function` clears the owned bit of every `string` parameter of a body compiled with
-`fn_def=None` — which is what an extension or perk method is (#145). So a method's
-`string` parameter genuinely owns no heap, consuming it transfers nothing, and
-`extend T with Display: fn display() string: return self` stays legal. That idiom is the
-entire `return self` corpus, and its being entirely `string`-receiving is not a
-coincidence: `string` is the only type with a runtime owned bit to clear. An owning
-struct, array or `List` receiver has none, which is exactly why it double-freed.
-
-The carve-out is spelled as `owns_no_heap` on the binding — the same flag a literal-bound
-string carries, for the same reason — and it makes the provenance OWNED rather than
-BORROWED. That is a fact about the SEAM: the backend re-derives the type class from the
-TYPE alone, so it answers MOVE for any `string`, and (BORROWED, MOVE) is REJECT, which
-would reach codegen as a CE0129 for a shape that is sound.
-
-**And the carve-out has a price, which is now stated rather than implied (#338).** A
-returned `string` self is a non-owning VIEW of the receiver's buffer. That is exactly what
-makes it double-free-free, and it is also what makes it dangle: nothing relates the view's
-lifetime to the receiver's, so when the receiver is a local of the CALLING function, the
-buffer is freed at that function's scope exit and the view outlives it —
+**There is no `string` carve-out any more (RULED 2026-08-15, #338).** Until that ruling,
+a method's `string` parameter was exempt from the consuming rule: `begin_function` clears
+its owned bit (#145), so consuming it transferred nothing and
+`extend T with Display: fn display() string: return self` stayed legal. The price was a
+dangling read — a returned `string` self is a non-owning VIEW of the receiver's buffer,
+and nothing relates the view's lifetime to the receiver's, so when the receiver was a
+local of the CALLING function, the buffer was freed at that function's scope exit and the
+view outlived it:
 
 ```sushi
 fn make_tag() string:
     let string s = "tag-{1}"
-    return Result.Ok(s.say_it())   # a view of `s`, which dies on the next line
+    return Result.Ok(s.say_it())   # was: a view of `s`, which dies on the next line
 ```
 
-— which compiles clean, leaks nothing, double-frees nothing, and reads freed memory. The
-trade is a dangling read in place of a double free, and it is not new: it arrived with the
-owned-bit clear (#145) and survived the whole reference-seam project. Fixing it properly
-needs a lifetime relating the return value to the receiver; the only option available
-today is to reject `return self` for a `string` receiver as well and make the `Display`
-corpus write `return self.clone()`. #338 carries that question.
+That compiled clean, leaked nothing, double-freed nothing, and read freed memory. The
+ruling removed the exemption: a `string` method parameter is a borrow like every other
+owning type, every consuming use of one is **CE2411**, and the `Display` idiom is spelled
+`return self.clone()`. The checker half is one deletion (the parameter no longer gets
+`owns_no_heap`, so its provenance is BORROWED and the (BORROWED, MOVE) cell rejects).
+
+The backend owned-bit clear (#145) STAYS: it guarantees a method body can never free the
+caller's buffer, and since the ruling it guards read paths only — no consuming use
+compiles.
+
+**The ruling exposed a second defect, fixed with it: `string.clone()` did not copy a
+view.** The clone emitter mirrored the destructor's owned-bit guard and passed an
+`owned = 0` string through unchanged. That is correct for a literal (rodata is immortal)
+and wrong for a view of a heap buffer — the two are indistinguishable from the bit — so
+`return self.clone()`, the exact escape the ruling names, returned the same dangling view
+as `return self`. `.clone()` on a `string` now copies unconditionally; the destructor
+keeps its guard. A clone that sometimes aliases was a hole in the ".clone() is the only
+deep copy" contract, independent of #338.
 
 There is no way to spell the working version today, so the diagnostic names the future
 feature rather than a dead end: **`&poke self`** (#327), an opt-in first parameter carrying
