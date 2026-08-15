@@ -18,7 +18,7 @@ without runtime overhead.
 """
 
 from __future__ import annotations
-from typing import Dict, FrozenSet, Iterable, Iterator, Set, Optional
+from typing import Callable, Dict, FrozenSet, Iterable, Iterator, List, Set, Optional
 from dataclasses import dataclass, field
 
 from sushi_lang.semantics.ast import (
@@ -52,6 +52,7 @@ from sushi_lang.semantics.ast import (
     MemberAccess,
     MethodCall,
     Name,
+    Param,
     Pattern,
     Print,
     PrintLn,
@@ -73,6 +74,7 @@ from sushi_lang.semantics.ownership import (
 )
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.errors.registry import ErrorMessage
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 
 
@@ -111,6 +113,25 @@ class BorrowState:
                                 # Distinct from is_argv_view, which is one specific borrow
                                 # with its own diagnostic, and from a ReferenceType param,
                                 # which is spelled `&peek`/`&poke` in the source.
+    is_method_param: bool = False  # A parameter of an extension or perk method body --
+                                # `self` and the explicit ones alike. A BORROW of the
+                                # caller's value (#298 S8.6): the body registers no
+                                # parameter cleanup and the caller keeps ownership, so
+                                # writing through one cannot reach the caller (CE2421 /
+                                # CE2422) and consuming an owning one gives the value a
+                                # second owner (CE2411, #333).
+                                #
+                                # Its own KIND rather than a flavour of is_borrowed_binding:
+                                # a binding is a private DEEP copy, so a write through it is
+                                # merely lost, while a method parameter is a SHALLOW copy
+                                # whose fields alias the caller's heap -- which is why the
+                                # same write was a double free here (#326).
+    is_method_receiver: bool = False  # ...and this one is `self` specifically. The narrower
+                                # flag exists for the DIAGNOSTIC, not for the rule: the
+                                # receiver has no escape yet (`&poke self` is #327) while an
+                                # explicit parameter can be redeclared `&poke T` today, so
+                                # the two carry different codes and different help.
+                                # `is_method_receiver` implies `is_method_param`.
     owns_no_heap: bool = False  # Option B (MM.md S0.4): this binding's CURRENT value owns no
                                 # heap, so a consuming use of it transfers nothing. Today only
                                 # a `string` bound directly from a literal sets it.
@@ -248,6 +269,84 @@ _MUTATING_METHODS = frozenset({
     "push", "pop", "insert", "remove", "clear", "reserve", "shrink_to_fit",
     "rehash", "destroy", "free", "fill", "reverse",
 })
+
+
+@dataclass(frozen=True)
+class _ReadOnlyReceiver:
+    """One kind of receiver a write cannot reach through, as DATA.
+
+    The three kinds differ only in how the state is recognised, which code says so, and
+    what the note and the help say. Everything else -- the three write shapes, the
+    root-owner walk, the relational rendering -- is identical, so the varying part is a
+    row here and the invariant part is `BorrowChecker._reject_readonly_write`.
+
+    `note` and `help` are format strings: `{name}` is the receiver, `{what}` names the
+    write that was attempted ("call `.push()`", "assign to a field", ...).
+    """
+    code: ErrorMessage                                 # the registry entry (er.ERR.CExxxx)
+    matches: Callable[["BorrowState"], bool]           # is the state this kind?
+    note_span: Callable[["BorrowState"], Optional[Span]]  # where the kind was introduced
+    note: str
+    help: str
+
+
+# The three kinds, most specific first. They are disjoint in practice -- the receiver is
+# never a reference parameter, and neither is ever a pattern binding -- so the order is
+# documentation rather than precedence.
+_READONLY_RECEIVERS: tuple[_ReadOnlyReceiver, ...] = (
+    _ReadOnlyReceiver(
+        code=er.ERR.CE2421,
+        matches=lambda state: state.is_method_receiver,
+        note_span=lambda state: state.declared_at_span,
+        note="'{name}' is the receiver of a method on this type, a read-only borrow",
+        help="the write ({what}) would land on the method's private copy of the "
+             "receiver; return the new value and let the caller store it, or take a "
+             "`&poke` parameter on a plain function. A mutating receiver "
+             "(`&poke self`) is a separate feature and is not designed yet",
+    ),
+    _ReadOnlyReceiver(
+        # A reference parameter carries its full `ReferenceType` as `var_type`, so the
+        # question is answerable here and nowhere else: Pass 2 unwraps a reference at
+        # every mention, so no inferred type downstream can tell a borrow from a value.
+        code=er.ERR.CE2408,
+        matches=lambda state: (isinstance(state.var_type, ReferenceType)
+                               and state.var_type.is_peek()),
+        note_span=lambda state: state.declared_at_span,
+        note="'{name}' is declared here as a read-only borrow",
+        help="the write ({what}) would change the caller's value through a read-only "
+             "borrow; declare the parameter `&poke` if the callee must write, or take "
+             "an independent value with `{name}.clone()`",
+    ),
+    _ReadOnlyReceiver(
+        # An explicit by-value parameter of a method: the receiver's rule, one line over
+        # (#298 S8.6). AFTER the `&peek` row and excluding every reference parameter, so a
+        # `&peek` one keeps its own code and a `&poke` one stays writable -- that is the
+        # escape this code names, and the reason the two are one row apart rather than one
+        # row.
+        code=er.ERR.CE2422,
+        matches=lambda state: (state.is_method_param
+                               and not state.is_method_receiver
+                               and not isinstance(state.var_type, ReferenceType)),
+        note_span=lambda state: state.declared_at_span,
+        note="'{name}' is declared here, as a by-value parameter of a method",
+        help="the write ({what}) would land on the method's private copy of the "
+             "argument; declare the parameter `&poke` if the method must write through "
+             "it, or take an independent value with `{name}.clone()`",
+    ),
+    _ReadOnlyReceiver(
+        # `is_borrowed_binding and borrows_from is None`: a `let`-borrow binding (#242)
+        # names its owner in `borrows_from`, and mutating its OWNER is the CE2412
+        # question with its own machinery. A match/foreach binding has no named owner.
+        code=er.ERR.CE2414,
+        matches=lambda state: (state.is_borrowed_binding
+                               and state.borrows_from is None),
+        note_span=lambda state: state.bound_at_span,
+        note="'{name}' is bound here, as a read-only view",
+        help="the write ({what}) would land on a private copy and be lost; take an "
+             "independent value with `{name}.clone()`, mutate it, and store it back "
+             "into the owner",
+    ),
+)
 
 
 def binds_a_bare_literal_string(declared_ty, init) -> bool:
@@ -423,6 +522,11 @@ class BorrowChecker:
     - Nested borrow analysis
     """
 
+    # The read-only receiver kinds, as data. Exposed on the class so
+    # `tests/unit/test_readonly_receiver_matrix.py` can assert that every kind in the
+    # table has a row in the matrix -- a kind added here without one is a red test.
+    _READONLY_RECEIVERS = _READONLY_RECEIVERS
+
     def __init__(self, reporter: Reporter,
                  destroy_effects: Optional[Dict[str, FrozenSet[int]]] = None,
                  enum_names: Optional[Set[str]] = None,
@@ -473,48 +577,100 @@ class BorrowChecker:
         # no borrow conflicts (#176). ScopeAnalyzer.run() walked them the whole time.
         for perk_impl in program.perk_impls:
             for method in perk_impl.methods:
-                self._check_function(method)
+                self._check_callable(method.params, method.body, fn_name=method.name,
+                                     self_type=perk_impl.target_type,
+                                     self_span=perk_impl.target_type_span)
 
     def _check_function(self, func: FuncDef) -> None:
-        """Check borrow safety for a single function."""
-        # Reset borrow state for new function scope
+        """Check borrow safety for a single plain function."""
+        self._check_callable(func.params, func.body, fn_name=func.name)
+
+    def _check_extension(self, ext: ExtendDef) -> None:
+        """Check borrow safety for an extension method."""
+        self._check_callable(ext.params, ext.body, fn_name=ext.name,
+                             self_type=ext.target_type,
+                             self_span=ext.target_type_span)
+
+    def _check_callable(self, params: List[Param], body: Block, *,
+                        fn_name: Optional[str] = None,
+                        self_type: Optional[Type] = None,
+                        self_span: Optional[Span] = None) -> None:
+        """Set up the state for one callable body and check it. THE entry point.
+
+        There used to be two: `_check_function` for plain functions and perk methods, and
+        `_check_extension` for extension methods -- two setups for one concept, and they
+        had drifted (BORROW.md section 7). The extension form registered its parameters
+        WITHOUT `declared_at_span`, so every relational diagnostic in an extension body
+        rendered without its second location; it also skipped the `_scope_binding_borrows`
+        reset; and NEITHER registered the receiver.
+
+        Registering `self` is not hygiene. Without it the checker cannot type
+        `self.field`, so no rule about the receiver could fire at all -- which is why a
+        write through it was silently lost or a double free (#326), and why a container
+        insert under it reached the ownership seam unstamped as a CE0129.
+
+        `is_method` is the whole difference between the two callable kinds, and it says
+        one thing: every parameter of a method body is a BORROW of the caller's value
+        (#298 S8.6). See `_mark_method_param` for what follows from that.
+        """
         self.borrow_state = {}
         self.active_borrows = set()
         self._scope_binding_borrows = []
+        is_method = self_type is not None
 
-        # Initialize parameters as unborrowed, unmoved
-        for param in func.params:
+        if is_method:
+            receiver = BorrowState(name="self", var_type=self_type,
+                                   declared_at_span=self_span,
+                                   is_method_receiver=True)
+            self._mark_method_param(receiver)
+            self.borrow_state["self"] = receiver
+
+        for param in params:
             state = BorrowState(name=param.name, var_type=param.ty,
                                 declared_at_span=getattr(param, "loc", None))
             # main's `string[] args` is a borrowed view of process argv (the runtime owns and
             # frees it). Stamp it so a by-value move is a hard error (CE2410), not a silent
             # move that makes the callee free argv (N2).
-            if func.name == "main" and self._is_argv_view_param(param.ty):
+            if fn_name == "main" and self._is_argv_view_param(param.ty):
                 state.is_argv_view = True
+            if is_method:
+                self._mark_method_param(state)
             self.borrow_state[param.name] = state
 
-        # Check function body
-        self._check_block(func.body)
+        self._check_block(body)
+
+    @staticmethod
+    def _mark_method_param(state: BorrowState) -> None:
+        """A parameter of a method body is a BORROW, and a `string` one owns no heap.
+
+        Both halves are facts about how the backend compiles a method body, and both were
+        missing, each with its own double free:
+
+        - The body registers NO parameter cleanup and the caller keeps ownership (#298),
+          so handing the value to a position that takes ownership gives it a second owner.
+          `return self` on an owning struct, `eat(self)`, `sink.push(self)` and all three
+          again for an explicit parameter were compile-clean double frees (#333). Marking
+          the provenance BORROWED makes every one of them CE2411, at no sink's expense --
+          the (BORROWED, MOVE) cell already says REJECT.
+        - `begin_function` clears the owned bit of EVERY `string` parameter of a body
+          compiled with `fn_def=None`, which is what an extension or perk method is
+          (#145). So a method's `string` parameter genuinely owns no heap, and consuming
+          it transfers nothing. That is `owns_no_heap`'s exact meaning -- the same flag a
+          literal-bound string carries, for the same reason -- and it is what keeps the
+          `extend T with Display: return self` idiom compiling. The corpus is entirely
+          `string`-receiving, which is not a coincidence: `string` is the only type with a
+          runtime owned bit to clear.
+        """
+        from sushi_lang.semantics.typesys import BuiltinType
+        state.is_method_param = True
+        if state.var_type == BuiltinType.STRING:
+            state.owns_no_heap = True
 
     @staticmethod
     def _is_argv_view_param(ty: Optional[Type]) -> bool:
         """True if `ty` is `string[]` -- the shape of main's borrowed argv parameter."""
         from sushi_lang.semantics.typesys import BuiltinType
         return isinstance(ty, DynamicArrayType) and ty.base_type == BuiltinType.STRING
-
-    def _check_extension(self, ext: ExtendDef) -> None:
-        """Check borrow safety for an extension method."""
-        # Reset borrow state for new function scope
-        self.borrow_state = {}
-        self.active_borrows = set()
-
-        # Extension methods have implicit 'self' parameter (not in AST, added by codegen)
-        # Initialize explicit parameters
-        for param in ext.params:
-            self.borrow_state[param.name] = BorrowState(name=param.name, var_type=param.ty)
-
-        # Check method body
-        self._check_block(ext.body)
 
     def _check_block(self, block: Block) -> None:
         """Check borrow safety for a block of statements.
@@ -590,8 +746,14 @@ class BorrowChecker:
                         if state.var_type.is_peek():
                             self.err.emit(er.ERR.CE2408, stmt.loc, name=var_name)
                         # &poke references allow rebind (mutable reference semantics)
-                    elif state.is_borrowed:
-                        self.err.emit(er.ERR.CE2401, stmt.loc, name=var_name)
+                    #
+                    # There is deliberately no "rebind while borrowed" check here. It used
+                    # to be CE2401's only emit site and could never fire -- this runs
+                    # BEFORE the value walk, so no borrow of the target is registered yet
+                    # (F14 of BORROW.md). Moving it after the walk would reject
+                    # `x := f(&peek x)`, where the borrow is dead by the time the store
+                    # happens; Rust accepts the same shape. CE2401 now lives at the
+                    # consuming use, which is where the two really conflict.
 
                     # Option B (MM.md S0.4): RE-DERIVE, never inherit. `let string a = "hi"`
                     # owns nothing, but after `a := "Hi {name}"` it owns a buffer. Every
@@ -606,15 +768,10 @@ class BorrowChecker:
                 # Field rebinding (obj.field := value)
                 # We need to check if the receiver (obj) is borrowed
                 # The field rebinding itself is always allowed since we're mutating in
-                # place -- unless the root owner is a match/foreach binding, where the
-                # store lands on the binding's private copy and is lost (#253, CE2414),
-                # or a `&peek` reference, where it reaches the caller's value through a
-                # read-only borrow (R1, CE2408).
-                root_owner = self._root_owner(stmt.target)
-                if not self._reject_peek_mutation(root_owner, stmt.loc,
-                                                  "assign to a field"):
-                    self._reject_binding_mutation(root_owner, stmt.loc,
-                                                  "assign to a field")
+                # place -- unless the root owner is one of the read-only receivers, where
+                # the store cannot reach the value it appears to write.
+                self._reject_readonly_write(self._root_owner(stmt.target), stmt.loc,
+                                            "assign to a field")
                 self._check_expr(stmt.target)
 
             # Check the value expression
@@ -657,17 +814,20 @@ class BorrowChecker:
 
         elif isinstance(stmt, ExprStmt):
             self._check_expr(stmt.expr)
-            # Method calls like .destroy() need special handling
+            # `x.destroy()` releases what `x` holds, so every later use of it is CE2406.
+            #
+            # There is no "destroy while borrowed" check (the retired CE2402). It could
+            # not fire: `.destroy()` returns `~`, so it is only ever a statement of its
+            # own, and the borrow counters are cleared at the end of every statement --
+            # nothing can be borrowed when it runs. The cases it meant to cover have
+            # their own codes: CE2408 (destroy through a `&peek` reference), CE2412
+            # (destroy an owner a `let`-borrow binding reads out of), CE2406 (the later
+            # use).
             if isinstance(stmt.expr, (MethodCall, DotCall)):
                 if stmt.expr.method == "destroy":
-                    # Check if the variable being destroyed is borrowed
                     if isinstance(stmt.expr.receiver, Name):
-                        var_name = stmt.expr.receiver.id
-                        if var_name in self.borrow_state:
-                            state = self.borrow_state[var_name]
-                            if state.is_borrowed:
-                                self.err.emit(er.ERR.CE2402, stmt.loc, name=var_name)
-                            # Mark variable as destroyed
+                        state = self.borrow_state.get(stmt.expr.receiver.id)
+                        if state is not None:
                             state.is_destroyed = True
             self._clear_borrows()
 
@@ -1157,9 +1317,13 @@ class BorrowChecker:
             # Variable borrows
             var_name = borrow.expr.id
 
-            # Check if variable exists in borrow state
+            # A name this pass cannot find has ALREADY been reported by the scope pass,
+            # which is the pass that owns names: CE1001 if it is declared nowhere, CE2400
+            # if it names something that is not a local (a constant, a function, an enum
+            # type, an FFI namespace). Repeating the question here is what produced two
+            # diagnostics for one token (F15 of BORROW.md), and it produced the WRONG one
+            # too, because `borrow_state` cannot tell those two cases apart.
             if var_name not in self.borrow_state:
-                self.err.emit(er.ERR.CE2400, borrow.loc, name=var_name)
                 return
 
             state = self.borrow_state[var_name]
@@ -1169,15 +1333,11 @@ class BorrowChecker:
                 self._emit_use_after_move(var_name, borrow.loc, state)
                 return
 
-            # A `&poke` OF a `&peek` reference UPGRADES a read-only borrow: the callee
-            # writes to the caller's value through a parameter that promised not to
-            # (R1, CE2408). A `&poke` OF a match/foreach binding hands out a mutable view
-            # of the binding's private copy, so the callee's writes are lost (#253,
-            # CE2414). A `&peek` reads the same data either way and stays legal.
-            if is_poke and self._reject_peek_mutation(
-                    var_name, borrow.loc, "take a `&poke` borrow"):
-                return
-            if is_poke and self._reject_binding_mutation(
+            # A `&poke` of a read-only receiver hands the write to a callee: it UPGRADES a
+            # `&peek` reference (R1, CE2408), hands out a mutable view of a binding's
+            # private copy (#253, CE2414), or of a method receiver's (#326, CE2421). A
+            # `&peek` reads the same data either way and stays legal.
+            if is_poke and self._reject_readonly_write(
                     var_name, borrow.loc, "take a `&poke` borrow"):
                 return
 
@@ -1226,10 +1386,10 @@ class BorrowChecker:
                 self.err.emit(er.ERR.CE2404, borrow.loc, expr=expr_str)
                 return
 
-            # Check if base variable exists and is not moved
+            # Check if base variable exists and is not moved. As in the Name arm: an
+            # unknown base was already reported by the scope pass.
             base_var = base.id
             if base_var not in self.borrow_state:
-                self.err.emit(er.ERR.CE2400, borrow.loc, name=base_var)
                 return
 
             state = self.borrow_state[base_var]
@@ -1237,14 +1397,10 @@ class BorrowChecker:
                 self._emit_use_after_move(base_var, borrow.loc, state)
                 return
 
-            # Same two rules as the Name arm: `&poke peek_ref.field` writes to the
-            # caller's value through a read-only borrow (CE2408), and
-            # `&poke binding.field` writes into the binding's private copy and is
-            # lost (#253, CE2414).
-            if is_poke and self._reject_peek_mutation(
-                    base_var, borrow.loc, "take a `&poke` borrow"):
-                return
-            if is_poke and self._reject_binding_mutation(
+            # The same rule as the Name arm, through a field: `&poke peek_ref.field`,
+            # `&poke binding.field` and `&poke self.field` all hand a callee a write that
+            # cannot reach the value the user means.
+            if is_poke and self._reject_readonly_write(
                     base_var, borrow.loc, "take a `&poke` borrow"):
                 return
 
@@ -1505,7 +1661,23 @@ class BorrowChecker:
         if state is None:
             # Not declared in this function: a top-level fn reference or a constant.
             return Provenance.FRESH
-        if state.is_borrowed_binding or isinstance(state.var_type, ReferenceType):
+        if state.owns_no_heap:
+            # There is nothing to borrow. This binding's CURRENT value owns no heap, so
+            # no other owner can be left holding it and every position may have it. Two
+            # bindings answer True: a `string` bound straight from a literal, and a
+            # method's `string` parameter, whose owned bit the backend clears at entry.
+            #
+            # It must be OWNED rather than BORROWED, and that is a fact about the SEAM,
+            # not a preference. The backend re-derives the type class from the TYPE alone
+            # -- it has no binding to ask -- so it answers MOVE for any `string`, and
+            # (BORROWED, MOVE) is REJECT, which reaches codegen as a CE0129 for a shape
+            # that is sound. OWNED keeps both halves saying MOVE, which is what a
+            # literal-bound string has always done: harmless, because moving a value with
+            # `owned = 0` frees nothing.
+            return Provenance.OWNED
+        if (state.is_borrowed_binding
+                or state.is_method_param
+                or isinstance(state.var_type, ReferenceType)):
             return Provenance.BORROWED
         return Provenance.OWNED
 
@@ -1579,6 +1751,22 @@ class BorrowChecker:
 
         decision = classify(provenance, self._type_class_of_source(state, state.var_type))
         if decision is Ownership.MOVE:
+            # The same value cannot be borrowed and handed away in ONE statement (F6 of
+            # BORROW.md). This is where CE2401 belongs and where it had never been wired:
+            # its old emit site ran BEFORE the value walk, so no borrow was ever live when
+            # it looked -- a registered code with no reachable path. Here the counters ARE
+            # live, because the call arm checks every argument (registering the borrows)
+            # before it consumes any of them, which is what makes both argument orders of
+            # `both(&peek s, s)` one rule instead of two.
+            if state.is_borrowed:
+                self.err.emit_with(er.ERR.CE2401, use_span, name=name) \
+                    .note("borrowed here, in the same statement",
+                          state.first_borrow_span) \
+                    .help(f"the new owner frees this value while the borrow still points "
+                          f"at it; borrow it twice, or clone what the owning position "
+                          f"needs: `{name}.clone()`") \
+                    .emit()
+                return
             # Handing the owner away leaves every binding reading out of it pointing at
             # storage the new owner frees (#242).
             self._check_owner_not_borrowed(name, use_span, "move")
@@ -1783,115 +1971,63 @@ class BorrowChecker:
         This is the arm that makes `let v = c.get(0)??` followed by `c.free()` an error
         instead of a use-after-free.
 
-        The receiver side of the same question is #253: a mutating method THROUGH a
-        match/foreach binding writes to a private copy and is lost, so it is CE2414.
-        The third receiver kind is a `&peek` reference, where the write DOES reach the
-        caller's value and must not (R1, #302): CE2408.
+        The receiver side of the same question is the read-only receiver gate: a mutating
+        method THROUGH a match/foreach binding, a `&peek` reference or a method receiver
+        cannot reach the value it appears to write. See `_reject_readonly_write`.
         """
         if getattr(expr, "method", None) not in _MUTATING_METHODS:
             return
         root = self._root_owner(getattr(expr, "receiver", None))
-        if self._reject_peek_mutation(root, expr.loc,
-                                      f"call `.{expr.method}()`"):
+        what = f"call `.{expr.method}()`"
+        if self._reject_readonly_write(root, expr.loc, what):
             return
-        if self._reject_binding_mutation(root, expr.loc,
-                                         f"call `.{expr.method}()`"):
-            return
-        self._check_owner_not_borrowed(root, expr.loc,
-                                       f"call `.{expr.method}()`")
+        self._check_owner_not_borrowed(root, expr.loc, what)
 
-    def _pattern_binding_state(self, name: Optional[str]) -> Optional["BorrowState"]:
-        """The state of `name` if it is a match/foreach binding, else None.
+    def _reject_readonly_write(self, name: Optional[str], span: Optional[Span],
+                               what: str) -> bool:
+        """THE gate: a write that cannot reach the value it appears to write is rejected.
 
-        The discriminator is `is_borrowed_binding and borrows_from is None`: a
-        `let`-borrow binding (#242) names its owner in `borrows_from`, and mutating
-        its OWNER is the CE2412 question with its own machinery. A match/foreach
-        binding has no named owner, and the backend materializes it as a private
-        copy, so a write through it can never reach the owner (#253).
+        The language has three read-only receivers, each found as its own bug and each
+        keeping its own code and its own escape:
+
+          a match/foreach binding  CE2414  (#253) -- a private DEEP copy: the write is lost
+          a `&peek` reference      CE2408  (#302) -- a read-only borrow of the caller
+          the method receiver      CE2421  (#326) -- a SHALLOW copy: the write is lost, and
+                                                     on an owning field it is a double free
+
+        and three shapes the write comes in -- a mutating method on (or under) the
+        receiver, a field assignment whose root owner is it, and a `&poke` borrow of it,
+        which hands the write to a callee. Nine cells, ONE dispatcher, four call sites.
+        Each kind was implemented separately as it was found, and each time all three
+        shapes had to be re-covered by hand; the table is what makes a fourth kind one
+        entry instead of a fourth walk.
+
+        The order is most-specific first, though the kinds are disjoint in practice: the
+        receiver is never a reference parameter, and neither is ever a pattern binding.
+
+        A REBIND of the receiver itself does not route here on purpose. For a binding it
+        re-initializes a local (Rust's `Some(mut n) => n = 99`); for a `&peek` reference
+        it writes to the referent directly rather than through a chain, and keeps its own
+        emit site in the Rebind arm; for `self` it is already CE1002 in the scope pass.
+
+        Relational (tier 3) wherever the state carries a span.
         """
         if name is None:
-            return None
+            return False
         state = self.borrow_state.get(name)
-        if state is not None and state.is_borrowed_binding \
-                and state.borrows_from is None:
-            return state
-        return None
-
-    def _reject_binding_mutation(self, name: Optional[str], span: Optional[Span],
-                                 what: str) -> bool:
-        """CE2414 (#253): a write through a match/foreach binding is rejected.
-
-        The three write shapes that route here: a mutating method on (or under) the
-        binding, a field assignment whose root owner is the binding, and a `&poke`
-        borrow of it. A rebind of the binding ITSELF does not route here on purpose:
-        it re-initializes a local (Rust's `Some(mut n) => n = 99`), it does not claim
-        to write through.
-
-        Relational (tier 3): the write is only wrong because of where the binding
-        came from, so the diagnostic points at both.
-        """
-        state = self._pattern_binding_state(name)
         if state is None:
             return False
-        diag = self.err.emit_with(er.ERR.CE2414, span, name=name)
-        if state.bound_at_span is not None:
-            diag.note(f"'{name}' is bound here, as a read-only view",
-                      state.bound_at_span)
-        diag.help(f"the write ({what}) would land on a private copy and be lost; "
-                  f"take an independent value with `{name}.clone()`, mutate it, "
-                  f"and store it back into the owner")
-        diag.emit()
-        return True
-
-    def _peek_reference_state(self, name: Optional[str]) -> Optional["BorrowState"]:
-        """The state of `name` if it is a `&peek` reference, else None.
-
-        The sibling of `_pattern_binding_state`, for the other read-only kind. A
-        reference parameter carries its full `ReferenceType` as `var_type`, so the
-        question is answerable here and nowhere else: Pass 2 unwraps a reference at
-        every mention, so no inferred type downstream can tell a borrow from a value.
-        """
-        if name is None:
-            return None
-        state = self.borrow_state.get(name)
-        if state is not None and isinstance(state.var_type, ReferenceType) \
-                and state.var_type.is_peek():
-            return state
-        return None
-
-    def _reject_peek_mutation(self, name: Optional[str], span: Optional[Span],
-                              what: str) -> bool:
-        """CE2408 (R1, #302): a write THROUGH a `&peek` reference is rejected.
-
-        A `&peek` parameter is a read-only borrow of the caller's value, so every write
-        that reaches the caller's storage through it is rejected -- the same three shapes
-        CE2414 rejects for a match/foreach binding: a mutating method on (or under) it, a
-        field assignment whose root owner is it, and a `&poke` borrow of it (which hands
-        the write to a callee).
-
-        The gate is keyed on `_MUTATING_METHODS` at its method call site, never on a
-        second list of names: a method added to that set is covered here by construction,
-        and `tests/unit/test_peek_write_gate_is_total.py` fails if it is not.
-
-        The REBIND of the reference itself (`x := v`) keeps its own emit site in the
-        Rebind arm. It is the one shape that was checked before this gate, and it is a
-        different question: it writes to the referent directly, not through a chain.
-
-        Relational (tier 3) where the parameter has a span. An extension-method parameter
-        carries none yet (R6 of FIX.md), so it degrades to tier 2 there.
-        """
-        state = self._peek_reference_state(name)
-        if state is None:
-            return False
-        diag = self.err.emit_with(er.ERR.CE2408, span, name=name)
-        if state.declared_at_span is not None:
-            diag.note(f"'{name}' is declared here as a read-only borrow",
-                      state.declared_at_span)
-        diag.help(f"the write ({what}) would change the caller's value through a "
-                  f"read-only borrow; declare the parameter `&poke` if the callee must "
-                  f"write, or take an independent value with `{name}.clone()`")
-        diag.emit()
-        return True
+        for kind in self._READONLY_RECEIVERS:
+            if not kind.matches(state):
+                continue
+            diag = self.err.emit_with(kind.code, span, name=name)
+            note_span = kind.note_span(state)
+            if note_span is not None:
+                diag.note(kind.note.format(name=name), note_span)
+            diag.help(kind.help.format(name=name, what=what))
+            diag.emit()
+            return True
+        return False
 
     def _check_owner_not_borrowed(self, owner: Optional[str], span: Optional[Span],
                                   what: str) -> None:
@@ -1974,10 +2110,11 @@ class BorrowChecker:
         borrow of storage something else still owns. Rendering it with one location would
         show the user a rule without the reason for it.
 
-        The second location comes from whichever of the two borrow kinds this is. A
-        `let`-borrow or pattern binding records where it was BOUND; a reference parameter
-        records where it was DECLARED, and has no `bound_at_span` at all. The reference
-        arm is strictly an `elif` so the existing corpus renders unchanged.
+        The second location comes from whichever borrow kind this is. A `let`-borrow or
+        pattern binding records where it was BOUND; a reference parameter and a method
+        parameter record where they were DECLARED, and have no `bound_at_span` at all.
+        Each arm after the first is strictly an `elif` so the existing corpus renders
+        unchanged.
         """
         diag = self.err.emit_with(er.ERR.CE2411, use_span, name=name)
         if state.bound_at_span is not None:
@@ -1988,6 +2125,15 @@ class BorrowChecker:
             diag.note(f"'{name}' is declared here as a `&{state.var_type.mutability}` "
                       f"borrow of the caller's value",
                       state.declared_at_span)
+        elif state.is_method_receiver:
+            # Unguarded on purpose: this sentence still says something without a location,
+            # so a receiver whose type span is missing degrades to a note rather than to
+            # nothing. The parameter arm below needs its location to read at all.
+            diag.note("'self' is the receiver of a method on this type, which borrows "
+                      "the caller's value", state.declared_at_span)
+        elif state.is_method_param and state.declared_at_span is not None:
+            diag.note(f"'{name}' is declared here, and a method parameter borrows the "
+                      f"caller's value", state.declared_at_span)
         diag.help(f"clone it to take an independent value: `{name}.clone()`")
         diag.emit()
 

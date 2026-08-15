@@ -134,6 +134,36 @@ class ScopeAnalyzer:
         """True if `name` is a registered FFI namespace and not shadowed by a local."""
         return self.external_table.is_namespace(name) and not self._is_bound_local(name)
 
+    def _names_a_non_local(self, name: str) -> bool:
+        """True if `name` resolves to something that is not a variable at all.
+
+        A constant, a math constant, an enum type name, a top-level function referenced
+        as a value, and the built-in I/O identifiers. None of them has a frame slot, so
+        none is tracked as a variable -- and none is undeclared either. An FFI namespace
+        is deliberately NOT here: it is only ever the receiver of a `DotCall`, which its
+        own arm handles, so a bare mention of one stays the CE1001 it has always been.
+
+        This is the ONE place that answers "what kind of name is this", because this pass
+        is the one that owns names. `_borrow_variable` used to be a copy of `_use_variable`
+        that had lost every case here, which is why `&peek SOME_CONST` reported CE1001
+        about a constant declared two lines above.
+
+        A local of the same name SHADOWS a constant, a function name or an FFI namespace,
+        and then it is a plain variable read. Without that guard the local was never marked
+        used (a bogus CW1001) and the backend read the CONSTANT, so a shadowing local of a
+        different length was `CE0017: cannot convert '[3 x i32]' to '[4 x i32]'` (found
+        while fixing #248).
+        """
+        if name in ('stdin', 'stdout', 'stderr', 'open'):
+            return True
+        if self._is_math_constant(name):
+            return True
+        if name in self.enums.by_name or name in self.generic_enums.by_name:
+            return True
+        if self._is_bound_local(name):
+            return False
+        return name in self.constants.by_name or name in self.function_names
+
     def _use_variable(self, name: str, usage_span: Optional[Span] = None, is_rebind: bool = False) -> None:
         """Mark a variable as used, searching through scope stack."""
         for i in range(len(self.scopes) - 1, -1, -1):
@@ -149,7 +179,7 @@ class ScopeAnalyzer:
             self.err.emit(er.ERR.CE1001, usage_span, name=name)
 
     def _borrow_variable(self, name: str, usage_span: Optional[Span] = None) -> None:
-        """Mark a variable used through a reference, searching through scope stack.
+        """A borrow needs a LOCAL. Mark it used, or say which way it is not one.
 
         A BORROW IS A USE. This used to set a separate `borrowed` flag and deliberately
         leave `used` false, so a variable only ever passed by `&peek`/`&poke` was reported
@@ -161,6 +191,15 @@ class ScopeAnalyzer:
         to turn into a reference anyway. No mainstream language warns here -- Rust, Go and
         C# have no equivalent, and Clippy's `needless_borrow` warns the opposite way.
         A variable that is genuinely never touched is still CW1001.
+
+        The failure half is what this function is FOR, and it was missing. A borrow takes
+        the address of storage a frame owns, so a name that resolves to something else --
+        a constant, a top-level function, an enum type, an FFI namespace -- cannot be
+        borrowed even though it exists. That is CE2400, and this is the only pass that can
+        tell it from a name that is declared nowhere (CE1001). The borrow checker used to
+        ask the same question from `borrow_state`, which cannot distinguish the two, so it
+        answered CE2400 for BOTH -- and the scope pass answered CE1001 for both, giving one
+        token two diagnostics, one of them wrong (F15 of BORROW.md).
         """
         for i in range(len(self.scopes) - 1, -1, -1):
             if name in self.scopes[i]:
@@ -168,8 +207,10 @@ class ScopeAnalyzer:
                 self._record_capture(name, i, usage_span)
                 return
 
-        # Variable not found in any scope - emit error
-        self.err.emit(er.ERR.CE1001, usage_span, name=name)
+        if self._names_a_non_local(name) or self._is_external_namespace(name):
+            self.err.emit(er.ERR.CE2400, usage_span, name=name)
+        else:
+            self.err.emit(er.ERR.CE1001, usage_span, name=name)
 
     def _record_capture(self, name: str, resolved_index: int, span: Optional[Span]) -> None:
         """Record `name` as a capture for every enclosing lambda it is free in.
@@ -440,34 +481,8 @@ class ScopeAnalyzer:
         """Check an expression for variable usage."""
         match expr:
             case Name():
-                # Check for special built-in identifiers (stdin, stdout, stderr)
-                if expr.id in ['stdin', 'stdout', 'stderr']:
-                    # Built-in I/O identifiers don't need to be tracked
-                    pass
-                # Check for built-in global functions (open)
-                elif expr.id in ['open']:
-                    # Built-in global functions don't need to be tracked as variables
-                    pass
-                # Check if it's a constant. A local of the same name shadows it and is
-                # a plain variable read -- same rule as the function-name arm below.
-                # Without the shadowing guard the local was never marked used (a bogus
-                # CW1001) and the backend read the CONSTANT, so a shadowing local of a
-                # different length was `CE0017: cannot convert '[3 x i32]' to
-                # '[4 x i32]'` (found while fixing #248).
-                elif expr.id in self.constants.by_name and not self._is_bound_local(expr.id):
-                    # Constants don't need to be tracked as variables
-                    pass
-                # Check if it's a math module constant (PI, E, TAU)
-                elif self._is_math_constant(expr.id):
-                    # Math constants don't need to be tracked as variables
-                    pass
-                # Check if it's an enum type name (concrete or generic)
-                elif expr.id in self.enums.by_name or expr.id in self.generic_enums.by_name:
-                    # Enum type names don't need to be tracked as variables
-                    pass
-                # Check if it's a top-level function referenced as a value (first-class
-                # function). A local of the same name shadows it and is handled below.
-                elif expr.id in self.function_names and not self._is_bound_local(expr.id):
+                if self._names_a_non_local(expr.id):
+                    # Not a variable: nothing to track, and nothing to report.
                     pass
                 else:
                     # It's a variable, track its usage
@@ -592,13 +607,19 @@ class ScopeAnalyzer:
                 # Check the inner expression for variable usage
                 self._check_expression(expr.expr)
             case Borrow():
-                # Borrow expression: &expr
-                # Special handling: if borrowing a simple variable (Name node),
-                # mark it as borrowed rather than used
-                if isinstance(expr.expr, Name):
-                    self._borrow_variable(expr.expr.id, expr.expr.loc)
+                # Borrow expression: &expr. What is borrowed is the ROOT of the place --
+                # `&peek cfg.port` borrows out of `cfg` -- so the whole chain resolves
+                # through the one borrow-specific arm. Walking to the base here is what
+                # gives `&peek nope.x` the same single diagnostic as `&peek nope`; it used
+                # to fall through to the ordinary member-access walk and be reported twice.
+                base = expr.expr
+                while isinstance(base, MemberAccess):
+                    base = base.receiver
+                if isinstance(base, Name):
+                    self._borrow_variable(base.id, base.loc)
                 else:
-                    # For complex expressions (like &cfg.port), just check normally
+                    # Not a place at all (a call result, a literal). Pass 3 rejects it as
+                    # CE2404; here it is just an ordinary expression to walk.
                     self._check_expression(expr.expr)
             case RangeExpr():
                 # Range expression: start..end or start..=end

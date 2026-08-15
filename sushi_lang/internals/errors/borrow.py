@@ -19,16 +19,19 @@ _add(ErrorMessage("CE2410", Severity.ERROR,
 
 # Borrow/reference errors (CE24xx)
 _add(ErrorMessage("CE2400", Severity.ERROR,
-    "cannot borrow '{name}': variable does not exist",
-    Category.BORROW, "Attempted to borrow a variable that was not declared."))
+    "cannot borrow '{name}': only a local variable can be borrowed",
+    Category.BORROW, "A borrow takes the address of storage a frame owns, so its target must be a local -- a parameter, a `let`, or a binding. A constant, a top-level function, an enum type name and an FFI namespace all name something else, and none of them has a frame slot to point at. Read the value instead, or copy it into a local first. A name that is declared NOWHERE is CE1001; this code is only for a name that exists and is not a local, which is why the two are no longer reported together for one token."))
 
 _add(ErrorMessage("CE2401", Severity.ERROR,
-    "cannot move/reassign '{name}' while it is borrowed",
-    Category.BORROW, "A variable cannot be moved or reassigned while a reference to it is active."))
+    "cannot move '{name}' while it is borrowed",
+    Category.BORROW, "One statement borrowed a value and also handed it to a position that takes ownership -- `both(&peek s, s)`. The new owner frees the buffer while the borrow still points at it, so `both(&poke a, a)` is a double free plus a read of released memory, whichever order the arguments are written in. Borrow it twice (`&peek` is shareable), or clone the value the owning position needs: `both(&peek s, s.clone())`. A borrow lasts only for the statement that creates it, so the same two lines written as two statements are unaffected."))
 
-_add(ErrorMessage("CE2402", Severity.ERROR,
-    "cannot destroy '{name}' while it is borrowed",
-    Category.BORROW, "A variable cannot be explicitly destroyed (.destroy()) while a reference to it is active."))
+# CE2402 ("cannot destroy '{name}' while it is borrowed") was RETIRED in R7 of FIX.md. It
+# was unreachable: `.destroy()` returns `~`, so it is only ever a statement of its own, and
+# borrow counters are cleared at the end of every statement -- no borrow can be live when
+# it runs. Its intent is covered three ways: CE2408 (destroy through a `&peek` reference),
+# CE2412 (destroy an owner a `let`-borrow binding reads out of) and CE2406 (use after
+# destroy). A registered code that nothing can reach misinforms the registry's own promise.
 
 _add(ErrorMessage("CE2403", Severity.ERROR,
     "'{name}' already has an active &poke borrow (only one exclusive borrow allowed)",
@@ -108,3 +111,22 @@ _add(ErrorMessage("CE2419", Severity.ERROR,
 _add(ErrorMessage("CE2420", Severity.ERROR,
     "an extension cannot target a reference type ('{ty}')",
     Category.BORROW, "`extend &peek T` compiles and is permanently uncallable: a reference target falls through method resolution, so every call reports 'no such method' and the body is dead code the author believes they wrote (issue #319). Extend the referent instead -- the methods on `&T` ARE the methods on `T`, so `extend T` is already callable through a `&peek T` / `&poke T` receiver. This is the CE2097 shape: an extension that can never be reached is a diagnostic, not silence."))
+
+# --- Method parameters, `self` included (R6) -------------------------------------------
+#
+# The third and fourth read-only receivers, after the match/foreach binding (CE2414) and
+# the `&peek` reference (CE2408). All four share ONE gate in `semantics/passes/borrow.py`
+# over a table of kinds, and each keeps its own code because each carries its own
+# rationale and its own escape -- the same reasoning as the six position codes above.
+#
+# The two here are one rule (#298: every parameter of an extension or perk method is a
+# borrow) with two escapes: a by-value parameter can be redeclared `&poke T` today, and a
+# receiver cannot, because `&poke self` (#327) is not designed yet.
+
+_add(ErrorMessage("CE2421", Severity.ERROR,
+    "cannot write through 'self': a method receiver is a read-only borrow",
+    Category.BORROW, "An extension or perk method receives `self` as a BORROW: the caller keeps the value (the ruling on issue #298, `docs/design/ownership-conventions.md` S8.6). The compiled receiver is a private copy, so a write through it -- a mutating method, a field assignment, or a `&poke` borrow of it -- never reaches the caller. A plain field was silently LOST; an owning field was a double free plus a leak, because the field rebind released the caller's buffer through the copy (issue #326). This is CE2414's rule for the one receiver CE2414 does not cover. There is no way to spell a mutating receiver yet: `&poke self` (issue #327) is designed separately. Until then, return the new value and let the caller store it, or take a `&poke T` parameter on a plain function."))
+
+_add(ErrorMessage("CE2422", Severity.ERROR,
+    "cannot write through '{name}': a by-value method parameter is a read-only borrow",
+    Category.BORROW, "Every parameter of an extension or perk method is a BORROW of the caller's value, `self` and the explicit ones alike (the ruling on issue #298). A by-value one is compiled as a private copy, so a write through it -- a mutating method, a field assignment, or a `&poke` borrow of it -- never reaches the caller: a plain field was silently lost, and an owning field was a double free plus a leak, because the field rebind released the caller's buffer through the copy. CE2421 is the same rule for the receiver, and the plain-function form has no such problem, because there the callee OWNS its by-value parameters. Unlike the receiver, this one has an escape that exists today: declare the parameter `&poke T` and the write reaches the caller."))

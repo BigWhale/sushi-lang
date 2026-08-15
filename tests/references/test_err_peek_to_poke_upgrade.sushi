@@ -1,0 +1,19 @@
+# The coercion runs one way only. A `&peek` borrow handed to a `&poke` parameter would let
+# the callee write through a promise not to, so it is rejected -- CE2408, the same code as
+# every other write through a `&peek`, because that is what it would become (#307).
+#
+# The companion of `test_borrow_coercion_matrix.sushi`, which pins the four places the
+# legal direction works.
+# EXPECT_ERROR_CODE: CE2408
+fn writer(&poke i32 x) ~:
+    x := x + 1
+    return Result.Ok(~)
+
+fn outer(&peek i32 v) i32:
+    writer(&poke v)
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 n = 1
+    println("{outer(&peek n).realise(0)}")
+    return Result.Ok(0)

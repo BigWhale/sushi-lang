@@ -1,0 +1,19 @@
+# The same write on an OWNING field was worse than lost: a double free plus a leak (#326).
+#
+# The field rebind destroys the OLD value through the private copy -- which holds the
+# CALLER's buffer -- then stores the new value into the copy, which dies at method exit.
+# The caller frees the same buffer again at scope exit. It compiled clean, printed an empty
+# label, and reported `leaked=7 blocks=1 double_frees=1` under the malloc interposer.
+# EXPECT_ERROR_CODE: CE2421
+struct Holder:
+    string label
+
+extend Holder relabel() i32:
+    self.label := "fresh-{9}"
+    return 1
+
+fn main() i32:
+    let Holder h = Holder("initial-{0}")
+    let i32 x = h.relabel()
+    println("holder: {h.label} x: {x}")
+    return Result.Ok(0)

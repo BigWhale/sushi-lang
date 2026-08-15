@@ -1,0 +1,23 @@
+# A `&poke` borrow of `self` is the third write shape (#326): it hands the write to a
+# callee, which reaches the private copy and is lost just the same.
+#
+# It used to report CE2400 ("variable does not exist"), which was true of the borrow
+# checker's state and confusing to a user who can see `self` on the line above. The
+# rejection now names the future feature that WILL make it work: `&poke self` (#327).
+# EXPECT_ERROR_CODE: CE2421
+struct Counter:
+    i32 n
+
+fn bump(&poke Counter c) ~:
+    c.n := c.n + 1
+    return Result.Ok(~)
+
+extend Counter inc() i32:
+    bump(&poke self)
+    return 1
+
+fn main() i32:
+    let Counter c = Counter(1)
+    let i32 x = c.inc()
+    println("n: {c.n} x: {x}")
+    return Result.Ok(0)

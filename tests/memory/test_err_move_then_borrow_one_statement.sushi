@@ -1,0 +1,20 @@
+# The other argument order of F6, and it must report the same code.
+#
+# Writing the move first does not make it earlier: the call arm checks every argument
+# (which registers the borrow) before it consumes any of them, so one gate in the consuming
+# path covers both spellings. Two gates, one per order, is the duplicated-predicate shape
+# this repair exists to remove.
+# EXPECT_ERROR_CODE: CE2401
+fn both(string owned, &peek string r) i32:
+    println("owned: {owned} ref: {r}")
+    return Result.Ok(1)
+
+fn run_test() i32:
+    let string s = "hello-{1}"
+    let i32 x = both(s, &peek s)??
+    println("x: {x}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 code = run_test().realise(1)
+    return Result.Ok(code)

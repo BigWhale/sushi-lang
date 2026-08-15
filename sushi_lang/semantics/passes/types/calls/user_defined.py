@@ -103,27 +103,64 @@ def validate_variadic_trailing_args(validator: 'TypeValidator', trailing: list,
                             index=index, expected=display_type(element_ty), got=display_type(arg_type))
 
 
-def validate_indirect_call(validator: 'TypeValidator', call: Call, fn_ty) -> None:
-    """Validate a call through a first-class function value (CE2092).
+def validate_fn_value_call_args(validator: 'TypeValidator', args, fn_ty,
+                                span) -> None:
+    """Arity and per-argument check for a call through a function VALUE (CE2092).
 
-    The callee is a local variable of FunctionType. Check arity and each argument
-    against the function type's parameter types (invariant).
+    Function types are invariant, so each argument must match its parameter type exactly.
+
+    One implementation for both spellings of the call: through a local of `FunctionType`
+    (`g(x)`) and through a fn-typed struct field (`obj.handler(x)`). They were two copies
+    of this loop, which is how the missing help below stayed missing in one of them.
+
+    `span` is the fallback location -- the callee for an indirect call, the call node for
+    a field call -- used for the arity error and for any argument that carries none.
     """
     expected = fn_ty.param_types
-    actual = call.args
-    if len(actual) != len(expected):
-        er.emit(validator.reporter, er.ERR.CE2092, call.callee.loc,
+    if len(args) != len(expected):
+        er.emit(validator.reporter, er.ERR.CE2092, span,
                 expected=display_type(fn_ty),
-                actual=f"a call with {len(actual)} argument(s)")
+                actual=f"a call with {len(args)} argument(s)")
         return
-    for arg, param_ty in zip(actual, expected, strict=False):
+    for arg, param_ty in zip(args, expected, strict=False):
         validator.validate_expression(arg)
         arg_ty = validator.infer_expression_type(arg)
         if arg_ty is None:
             continue
-        if not types_compatible(validator, arg_ty, param_ty):
-            er.emit(validator.reporter, er.ERR.CE2092, getattr(arg, 'loc', call.callee.loc),
-                    expected=display_type(param_ty), actual=display_type(arg_ty))
+        if types_compatible(validator, arg_ty, param_ty):
+            continue
+        diag = er.emit_with(validator.reporter, er.ERR.CE2092, getattr(arg, 'loc', span),
+                            expected=display_type(param_ty), actual=display_type(arg_ty))
+        _explain_missing_borrow(diag, arg, arg_ty, param_ty)
+        diag.emit()
+
+
+def _explain_missing_borrow(diag, arg, arg_ty, param_ty) -> None:
+    """Add the "you meant `&peek x`" help where the mismatch is a missing borrow.
+
+    A `fn(&peek i32) -> i32` parameter reports "expected '&peek i32', got 'i32'" for an
+    argument the user declared `&peek i32` -- naming a type they DID write. Pass 2 unwraps
+    a reference-typed name at every mention, deliberately: a borrow is created at the USE
+    site, not carried by the name. The rule is right; only the message was unhelpful.
+
+    Keyed on the shape of the mismatch (the expected type is a reference to exactly the
+    type the argument has), so it also fires for a plain local, where the answer is the
+    same spelling. Only for a bare NAME: a borrow needs a place, and anything else is
+    CE2404 rather than a missing `&`.
+    """
+    from sushi_lang.semantics.typesys import ReferenceType
+    if not isinstance(arg, Name) or isinstance(arg_ty, ReferenceType):
+        return
+    if not isinstance(param_ty, ReferenceType) or param_ty.referenced_type != arg_ty:
+        return
+    diag.help(f"a borrow is created where it is USED, so the argument is written "
+              f"`&{param_ty.mutability} {arg.id}`; a reference-typed name mentioned "
+              f"bare is its referent")
+
+
+def validate_indirect_call(validator: 'TypeValidator', call: Call, fn_ty) -> None:
+    """Validate a call through a first-class function value held in a local (CE2092)."""
+    validate_fn_value_call_args(validator, call.args, fn_ty, call.callee.loc)
 
 
 def validate_function_call(validator: 'TypeValidator', call: Call) -> None:

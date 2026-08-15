@@ -1,0 +1,13 @@
+# A native variadic collects its trailing arguments into an owned `T[]` the callee frees,
+# so the element type cannot be a borrow. CE0114 already rejected it and had no test at all
+# (R7c of FIX.md) -- a registered code whose behaviour nothing pins is a behaviour that can
+# be lost silently.
+# EXPECT_ERROR_CODE: CE0114
+fn log_all(string prefix, ...&peek i32 values) ~:
+    println(prefix)
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32 a = 1
+    log_all("x", &peek a)
+    return Result.Ok(0)

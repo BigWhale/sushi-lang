@@ -1,0 +1,17 @@
+# A borrow takes the address of storage a frame owns, so a constant cannot be borrowed --
+# CE2400, which had ZERO tests until now (section 7 of BORROW.md).
+#
+# This used to report CE1001, "use of undeclared identifier 'LIMIT'", about a constant
+# declared two lines above, AND CE2400 for the same token: the borrow arm of the scope pass
+# was a copy of the plain-use arm that had lost every non-variable case, and the borrow
+# checker asked the same question again from state that cannot tell the two apart.
+# EXPECT_ERROR_CODE: CE2400
+const i32 LIMIT = 10
+
+fn read_value(&peek i32 x) i32:
+    return Result.Ok(x)
+
+fn main() i32:
+    let i32 y = read_value(&peek LIMIT).realise(0)
+    println("{y}")
+    return Result.Ok(0)

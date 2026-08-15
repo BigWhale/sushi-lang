@@ -536,7 +536,9 @@ one exception, and it is now a **decision rather than a compromise**: its parame
 |---|---|---|
 | by-value parameter | callee owns and frees it; the call site consumes | **borrow**; the caller keeps it |
 | a later use of the argument | CE2405 | legal |
-| `self` | — | **borrow**, and a write through it is rejected |
+| a write through a by-value parameter | legal (the callee owns it) | rejected, **CE2422** |
+| consuming a by-value parameter in the body | legal (the callee owns it) | rejected, **CE2411** |
+| `self` | — | the same borrow: writes **CE2421**, consuming uses **CE2411** |
 
 The asymmetry is observable — `eat(s)` consumes, `b.eat(s)` does not — and it was verified
 sound in both directions: the method form is leak-clean and double-free-clean, because a
@@ -546,11 +548,39 @@ extending callee-owns to method bodies, would make every method argument consumi
 takes one by value). That blast radius buys symmetry and nothing else, so the borrow
 reading — the one the documentation already gave users — is now the permanent rule.
 
-**`self` was the unsound half, and is rejected rather than documented.** `self` is
-materialized as a private copy, so `self.n := 42` was silently lost and
-`self.label := "..."` on an owning field was a double free plus a leak (#326) — #253's
-shape, for the one receiver CE2414 does not cover. A write through `self` is therefore a
-compile error, with the same relational rendering CE2414 uses.
+**The borrow is now ENFORCED, in both directions, for every parameter.** "The caller keeps
+ownership" was a statement about the ABI that nothing in the checker made true, so the two
+things a borrow must not do were both accepted and both corrupted memory:
+
+- **Writing through one.** A method parameter is materialized as a private SHALLOW copy,
+  so `self.n := 42` was silently lost and `self.label := "..."` on an owning field was a
+  double free plus a leak (#326) — #253's shape, for the receivers CE2414 does not cover.
+  The explicit parameters had the identical bug, found while #333 was fixed. A write is
+  now **CE2421** for the receiver and **CE2422** for a by-value parameter, with the same
+  relational rendering CE2414 uses, and the same three shapes CE2414 rejects: a mutating
+  method under it (`self.items.push(9)` — which did not even reach codegen, it was a
+  CE0129), a field assignment, and a `&poke` borrow of it.
+- **Handing one to a position that takes ownership.** The value gets a second owner and
+  both free it. `return self`, `eat(self)`, `sink.push(self)` and all three again for an
+  explicit parameter were compile-clean double frees (#333); two of them printed the
+  caller's buffer back after the allocator had reused it. Every one is now **CE2411**,
+  with no per-sink work: the parameter's provenance is BORROWED, and the (BORROWED, MOVE)
+  cell already said REJECT.
+
+**The one carve-out is `string`, and it is a fact rather than a preference.**
+`begin_function` clears the owned bit of every `string` parameter of a body compiled with
+`fn_def=None` — which is what an extension or perk method is (#145). So a method's
+`string` parameter genuinely owns no heap, consuming it transfers nothing, and
+`extend T with Display: fn display() string: return self` stays legal. That idiom is the
+entire `return self` corpus, and its being entirely `string`-receiving is not a
+coincidence: `string` is the only type with a runtime owned bit to clear. An owning
+struct, array or `List` receiver has none, which is exactly why it double-freed.
+
+The carve-out is spelled as `owns_no_heap` on the binding — the same flag a literal-bound
+string carries, for the same reason — and it makes the provenance OWNED rather than
+BORROWED. That is a fact about the SEAM: the backend re-derives the type class from the
+TYPE alone, so it answers MOVE for any `string`, and (BORROWED, MOVE) is REJECT, which
+would reach codegen as a CE0129 for a shape that is sound.
 
 There is no way to spell the working version today, so the diagnostic names the future
 feature rather than a dead end: **`&poke self`** (#327), an opt-in first parameter carrying
@@ -565,6 +595,27 @@ extend Counter bump(&poke self) ~:
 — which inherits CE2408 / CE2407 / CE2404 at the call site for free, because it is the same
 `&poke`. This is the order #252 → CE2413 and #253 → CE2414 both followed: reject the
 unchecked form, design the feature separately.
+
+**Reads are unaffected, and one of them became expressible.** A field read, a read-only
+method under the receiver, `.clone()` of an owning field, and `.clone()` of the whole
+receiver all stay legal — the last is the escape CE2411 names. `&peek self` and
+`&peek self.field` now WORK; they used to be
+`CE2400: cannot borrow 'self': variable does not exist`, which was true of the borrow
+checker's state and puzzling to anyone who could see `self` on the line above. And a
+PLAIN parameter — an i32, a struct of primitives — was never affected in either
+direction: it copies, and (BORROWED, PLAIN) adopts.
+
+**Four read-only receivers, one gate.** A `match`/`foreach` binding (CE2414), a `&peek`
+reference (CE2408), the method receiver (CE2421) and a by-value method parameter (CE2422)
+are the same rule with four rationales: a write through any of them cannot reach the value
+it appears to write. Each was found as its own bug, and each time all three write shapes
+had to be re-covered by hand. The checker now holds them as a TABLE of kinds behind one
+dispatcher (`_reject_readonly_write`), called from the four write sites, so a fifth kind is
+one row rather than a fifth walk; `tests/unit/test_readonly_receiver_matrix.py` pins all
+twelve cells and fails if a kind in the table has no row in the matrix. The codes stay
+separate for the reason the six position codes do (§8.5): each carries its own escape.
+Here the escapes are what separate the last two — a by-value parameter can be redeclared
+`&poke T` today, and a receiver cannot, because `&poke self` is not designed yet.
 
 ## 9. Risks, and how they resolved
 
