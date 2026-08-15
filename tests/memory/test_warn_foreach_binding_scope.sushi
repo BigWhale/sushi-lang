@@ -1,0 +1,20 @@
+# The foreach twin of issue #337: the loop item binding must not overwrite an outer
+# local's borrow state. Consuming the outer `p` after the loop is legal -- it used to
+# be a false CE2411, because the item's BorrowState (a read-only view) replaced the
+# outer entry and nothing removed it. The shadowing itself still warns (CW1002).
+# (The item type must equal the outer type here: Pass 2 has a separate defect where
+# the item TYPE also leaks past the loop -- filed on its own.)
+# EXPECT_ERROR_CODE: CW1002
+fn eat(string s) i32:
+    println("ate {s}")
+    return Result.Ok(1)
+
+fn main() i32:
+    let string p = "outer-{1}"
+    let string[] xs = from(["a-{1}", "b-{2}"])
+    foreach(p in xs.iter()):
+        println(p)
+    match eat(p):
+        Result.Ok(n) -> println(n)
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

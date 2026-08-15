@@ -865,12 +865,25 @@ class BorrowChecker:
             # creates (`register_cleanup=False` in statements/loops.py), and registering it
             # here as an owned local is what made a foreach binding used by value report a
             # CE2405 whose "moved here" note pointed at the same span as the use.
-            self.borrow_state[stmt.item_name] = BorrowState(
-                name=stmt.item_name, var_type=stmt.item_type,
-                is_borrowed_binding=True,
-                bound_at_span=stmt.item_name_span or stmt.loc,
+            #
+            # The binding lives for the LOOP and no longer (#337's foreach twin): it is
+            # registered through the displaced-entry bracket, so an outer local it shadows
+            # gets its state back after the loop instead of counting as a read-only view
+            # for the rest of the function (a false CE2411).
+            displaced: dict = {}
+            self._register_binding(
+                stmt.item_name,
+                BorrowState(
+                    name=stmt.item_name, var_type=stmt.item_type,
+                    is_borrowed_binding=True,
+                    bound_at_span=stmt.item_name_span or stmt.loc,
+                ),
+                displaced,
             )
-            self._check_loop_body(stmt.body)
+            try:
+                self._check_loop_body(stmt.body)
+            finally:
+                self._restore_displaced(displaced)
 
         elif isinstance(stmt, Match):
             self._check_expr(stmt.scrutinee)
@@ -886,14 +899,27 @@ class BorrowChecker:
                 # Add pattern bindings to scope (recursive for nested patterns). The
                 # scrutinee type is what gives each binding a var_type; Pass 2 stamps it
                 # (that is what CE0121 guards) and this pass used to ignore it.
+                #
+                # A binding lives for its ARM and no longer (#337). Registration goes
+                # through the displaced-entry bracket: an outer local the binding shadows
+                # gets its state back at arm exit, instead of counting as a read-only
+                # view for the rest of the function (a false CE2411 on the next consume).
+                # The restore runs BEFORE the path snapshot, so the join sees the outer
+                # local's facts and never the binding's. Pass 2 already scopes its own
+                # table per arm (types/matching.py); this is the borrow pass's half.
+                displaced: dict = {}
                 if isinstance(arm.pattern, Pattern):
-                    self._register_pattern_bindings(arm.pattern, stmt.resolved_scrutinee_type)
+                    self._register_pattern_bindings(
+                        arm.pattern, stmt.resolved_scrutinee_type, displaced)
                 # Check arm body
-                if isinstance(arm.body, Block):
-                    self._check_block(arm.body)
-                else:
-                    self._check_expr(arm.body)
-                    self._clear_borrows()
+                try:
+                    if isinstance(arm.body, Block):
+                        self._check_block(arm.body)
+                    else:
+                        self._check_expr(arm.body)
+                        self._clear_borrows()
+                finally:
+                    self._restore_displaced(displaced)
                 if not self._terminates(arm.body):
                     paths.append(self._snapshot_flow())
             # A `match` is exhaustive (Pass 2 enforces it), so unlike an `if` with no else
@@ -1027,8 +1053,36 @@ class BorrowChecker:
         # A variable moved (or destroyed) anywhere in the loop is so after it (conservative join).
         self._restore_flow(fixed_point)
 
+    def _register_binding(self, name: str, state: BorrowState,
+                          displaced: dict) -> None:
+        """Install a pattern/foreach binding, saving whatever entry it shadows (#337).
+
+        `displaced` records the PREVIOUS entry for each name exactly once (None when the
+        name was new), so `_restore_displaced` can end the binding's life at its scope
+        exit. Without the bracket, the binding's `BorrowState` replaced an outer local's
+        entry for the rest of the function, and every later consuming use of that local
+        saw a read-only view -- the false CE2411 of #337.
+        """
+        if name not in displaced:
+            displaced[name] = self.borrow_state.get(name)
+        self.borrow_state[name] = state
+
+    def _restore_displaced(self, displaced: dict) -> None:
+        """End the bindings a `_register_binding` bracket installed (#337).
+
+        The saved entry object was unreachable while shadowed -- the name resolved to the
+        binding -- so putting it back as-is is exact, not conservative. A name with no
+        previous entry is removed outright.
+        """
+        for name, previous in displaced.items():
+            if previous is None:
+                self.borrow_state.pop(name, None)
+            else:
+                self.borrow_state[name] = previous
+
     def _register_pattern_bindings(self, pattern: Pattern,
-                                   scrutinee_type: Optional[Type] = None) -> None:
+                                   scrutinee_type: Optional[Type] = None,
+                                   displaced: Optional[dict] = None) -> None:
         """Register a match arm's payload bindings, WITH their types.
 
         A payload binding is a read-only BORROW of storage the scrutinee still owns
@@ -1041,7 +1095,12 @@ class BorrowChecker:
         classified as owning anything -- the eight positions that got (BORROWED, MOVE)
         wrong could not have been caught here even in principle. The types come from the
         variant Pass 2 already resolved for the backend.
+
+        `displaced` is the #337 bracket (see `_register_binding`); the Match arm passes
+        one per arm and restores it at arm exit.
         """
+        if displaced is None:
+            displaced = {}
         variant_types = self._variant_payload_types(scrutinee_type, pattern.variant_name)
         span = pattern.variant_name_span or pattern.loc
 
@@ -1049,23 +1108,24 @@ class BorrowChecker:
             payload_type = variant_types[index] if index < len(variant_types) else None
             if isinstance(binding, str):
                 if binding != "_":  # Skip wildcard bindings
-                    self.borrow_state[binding] = BorrowState(
+                    self._register_binding(binding, BorrowState(
                         name=binding, var_type=payload_type,
                         is_borrowed_binding=True, bound_at_span=span,
-                    )
+                    ), displaced)
             elif isinstance(binding, Pattern):
                 # Nested pattern: its own bindings are typed by the payload enum it matches.
-                self._register_pattern_bindings(binding, payload_type)
+                self._register_pattern_bindings(binding, payload_type, displaced)
             else:
                 # An OwnPattern auto-unwraps `Own@(T)`; its inner pattern binds the pointee.
                 inner = getattr(binding, "inner_pattern", None)
                 if isinstance(inner, Pattern):
-                    self._register_pattern_bindings(inner, self._own_payload(payload_type))
+                    self._register_pattern_bindings(
+                        inner, self._own_payload(payload_type), displaced)
                 elif isinstance(inner, str) and inner != "_":
-                    self.borrow_state[inner] = BorrowState(
+                    self._register_binding(inner, BorrowState(
                         name=inner, var_type=self._own_payload(payload_type),
                         is_borrowed_binding=True, bound_at_span=span,
-                    )
+                    ), displaced)
 
     def _variant_payload_types(self, enum_type: Optional[Type],
                                variant_name: str) -> tuple:
