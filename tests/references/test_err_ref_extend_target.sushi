@@ -1,0 +1,10 @@
+# An extension on a reference target compiles and is permanently uncallable: dead code the
+# author believes they wrote (#319). Extend the referent instead -- the methods on `&T`
+# ARE the methods on `T`.
+# EXPECT_ERROR_CODE: CE2420
+extend &peek i32 weird() i32:
+    return 1
+
+fn main() i32:
+    println("built")
+    return Result.Ok(0)

@@ -1,0 +1,7 @@
+# A container of borrows has no semantics, and the backend cannot lay one out: this used
+# to be a CE0022 internal error (#318).
+# EXPECT_ERROR_CODE: CE2419
+fn main() i32:
+    let List@(&peek i32) l = List.new()
+    println(l.len())
+    return Result.Ok(0)

@@ -35,7 +35,7 @@ from sushi_lang.semantics.generics.types import (
     TypeParam,
 )
 
-from .utils import extract_type_param_names, param_from_node
+from .utils import extract_type_param_names, param_from_node, reject_reference_in
 from sushi_lang.semantics.generics.type_display import display_type
 
 
@@ -552,6 +552,12 @@ class FunctionCollector:
         if ret_ty is None:
             er.emit(self.r, ERR.CE0103, name_span, name=name)
 
+        # Returning a borrow lets a function hand out a view of its own frame (CE2417,
+        # #314). Checked on the DECLARED return type, before `resolve_return_type_to_result`
+        # wraps it: after the wrap the reference sits inside an interned `Result<T, E>`,
+        # which is built structurally and never passes the enum-payload check.
+        reject_reference_in(self.r, ret_ty, ret_span, ERR.CE2417)
+
         # Check for mixing explicit Result<T, E> with | ErrorType syntax
         err_ty: Optional[Type] = getattr(fn, "err_type", None)
         if is_explicit_result_type(ret_ty) and err_ty is not None:
@@ -689,6 +695,8 @@ class FunctionCollector:
         if ret_ty is None:
             er.emit(self.r, ERR.CE0103, name_span, name=name)
 
+        reject_reference_in(self.r, ret_ty, ret_span, ERR.CE2417)
+
         # Check for mixing explicit Result<T, E> with | ErrorType syntax
         err_ty = getattr(fn, "err_type", None)
         if is_explicit_result_type(ret_ty) and err_ty is not None:
@@ -741,6 +749,13 @@ class FunctionCollector:
         # Check for missing return type
         if ret_ty is None:
             er.emit(self.r, ERR.CE0103, name_span, name=f"extension method '{name}'")
+
+        reject_reference_in(self.r, ret_ty, ret_span, ERR.CE2417)
+
+        # A reference TARGET falls through both isinstance filters below, so the method is
+        # collected and then unreachable: every call reports "no such method" and the body
+        # is dead code (CE2420, #319).
+        reject_reference_in(self.r, target_type, target_type_span or name_span, ERR.CE2420)
 
         # Collect parameters (excluding implicit 'self')
         params: List[Param] = []

@@ -483,6 +483,49 @@ binding are the same kind of thing under §4.2 — both `BORROWED`, both reject 
 CE2411, both escape with `.clone()` — which is exactly what Rust requires
 (`match &x { Some(v) => take(v.clone()) }`).
 
+## 8.5 Where a reference type may appear (decided, R4)
+
+The grammar's `?type` rule is recursive and universal, so `&peek T` / `&poke T` parses in EVERY
+type position. Semantics defines **two**, and rejects the other six at the declaration until each
+is designed. A borrow is a promise about a lifetime, and every rejected position is one where
+nothing relates the borrow to the value it names.
+
+| position | status | code |
+|---|---|---|
+| function parameter — `fn f(&peek T x)` | **supported** — the position the whole subsystem is built for | — |
+| parameter inside a function type — `fn(&peek i32) -> i32`, and the lambda `\|&peek i32 x\|` that satisfies it | **supported** (promoted to tested support by R4; it had worked untested) | — |
+| `let` binding — `let &peek T x = ...` | rejected | CE2413 (#252) |
+| struct field | rejected | CE2415 (#315) |
+| enum variant payload | rejected | CE2416 (#316) |
+| return type | rejected | CE2417 (#314) |
+| nested reference — `&peek &peek T` | rejected | CE2418 (#317) |
+| generic type argument — `List@(&peek T)` | rejected | CE2419 (#318) |
+| extension / perk-impl target — `extend &peek T` | rejected | CE2420 (#319) |
+| FFI signature | rejected | CE5003 |
+| variadic element — `...&peek T` | rejected | CE0114 |
+
+Three notes on the shape of this, because each was a decision rather than a detail:
+
+- **One walk, six sites.** `contains_reference` (`semantics/type_predicates.py`) is the single
+  question; the six emits live at the collect/validate sites, which is the convention the `ptr`
+  gates already follow (the predicate module stays free of the reporter). **The function-type
+  carve-out is load-bearing**: the walk does not descend into `FunctionType.param_types`, because
+  a borrow parameter inside a function type is the supported position wherever that function type
+  appears — as a struct field, as a generic argument, anywhere. It DOES reject a reference in a
+  function type's RETURN, by the same reasoning as CE2417.
+- **Six codes, not one parameterized code.** Each position has its own rationale and its own way
+  out, which is what the registry's long-form text carries, and each will be lifted separately as
+  its feature is designed — a shared code could only be retired all at once. Precedents: foreign
+  `ptr` (CE5002/5008/5009/5012) and the variadic marker (CE0114/0115/0116).
+- **No `Maybe`/`Result` exemption on CE2419**, unlike the `ptr` twin CE5012. `Maybe@(&peek T)` and
+  `Result@(&peek T, E)` are exactly how a returned borrow escaped into a `match` (#314), so
+  exempting them would leave open the hole CE2417 closes.
+
+Rejecting a position is reported and then **kept** where the declaration is a table entry (a
+struct field, an enum payload): dropping it would be error recovery that reports a spurious arity
+error at every construction of the type. The report already stops the compile before codegen,
+which is what the internal errors needed protecting from.
+
 ## 9. Risks, and how they resolved
 
 **Annotation completeness was a new failure mode.** `Provenance` had to survive Pass 1.6

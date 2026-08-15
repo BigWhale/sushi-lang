@@ -2,6 +2,8 @@
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 from lark import Tree, Token
+from sushi_lang.internals.diagnostics import SyntaxDiagnostic
+from sushi_lang.semantics.ast_builder.utils.tree_navigation import span_of
 from sushi_lang.semantics.typesys import ReferenceType, BorrowMode, Type, TYPE_NODE_NAMES
 
 if TYPE_CHECKING:
@@ -38,5 +40,19 @@ def parse_reference_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type
     referenced_type = ast_builder._parse_type(referenced_type_node)
     if referenced_type is None:
         return None
+
+    # `&peek &peek i32` PARSES: the grammar rule is recursive (line 28 accepts a
+    # `reference_t` as the referenced type). It has no meaning at any layer -- a borrow of
+    # a borrow is the same borrow -- and used to be accepted at a declaration, producing a
+    # function nothing could call (CE2418, #317).
+    #
+    # Rejected HERE, in the type builder, because one site then covers every position a
+    # type can appear in. The compiler-synthesized closure-environment parameter is built
+    # directly in the AST and never goes through the parser, so it is unaffected.
+    if isinstance(referenced_type, ReferenceType):
+        raise SyntaxDiagnostic(
+            "CE2418", span=span_of(node),
+            outer=mutability.value, inner=referenced_type.mutability.value,
+        ).help("write the single borrow: a borrow of a borrow is the same borrow")
 
     return ReferenceType(referenced_type=referenced_type, mutability=mutability)

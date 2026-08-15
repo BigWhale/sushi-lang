@@ -1,0 +1,12 @@
+# A struct field cannot borrow: nothing relates the field to the value it points at, so
+# the struct may outlive it. It used to be accepted, and reading it was a CE0017 internal
+# error (#315).
+# EXPECT_ERROR_CODE: CE2415
+struct Holder:
+    &peek i32 value
+
+fn main() i32:
+    let i32 n = 42
+    let Holder h = Holder(&peek n)
+    println(h.value)
+    return Result.Ok(0)

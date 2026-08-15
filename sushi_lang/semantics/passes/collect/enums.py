@@ -20,7 +20,7 @@ from sushi_lang.semantics.typesys import (
 )
 from sushi_lang.semantics.generics.types import GenericEnumType, TypeParameter
 
-from .utils import extract_type_param_names, note_first_declaration
+from .utils import extract_type_param_names, note_first_declaration, reject_reference_in
 
 
 @dataclass
@@ -320,6 +320,15 @@ class EnumCollector:
             # Convert associated types list to tuple
             if variant_types is None:
                 variant_types = []
+
+            # A reference payload has no semantics -- the enum may outlive what it borrows
+            # (CE2416, #316) -- and `Result@(&peek T, E)` is exactly how a returned borrow
+            # escapes into a `match` (#314). Reported, then kept, for the same
+            # error-recovery reason as a struct field: dropping the payload would report a
+            # spurious arity error at every construction. There is no per-payload span, so
+            # the variant's own span carries it.
+            for assoc_type in variant_types:
+                reject_reference_in(self.r, assoc_type, variant_loc, ERR.CE2416)
 
             variant_names.add(variant_name)
             variants_list.append(EnumVariantInfo(
