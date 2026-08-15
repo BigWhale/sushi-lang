@@ -1,0 +1,21 @@
+# A `&poke` borrow OF a `&peek` parameter upgrades a read-only borrow: the callee
+# writes to the caller's value through a parameter that promised not to. It used to
+# compile, and the caller's value changed from 1 to 2.
+# EXPECT_ERROR_CODE: CE2408
+fn bump(&poke i32 x) ~:
+    x := x + 1
+    return Result.Ok(~)
+
+fn outer(&peek i32 x) ~:
+    bump(&poke x)
+    return Result.Ok(~)
+
+fn run_test() i32:
+    let i32 n = 1
+    outer(&peek n)
+    println(n)
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 code = run_test().realise(1)
+    return Result.Ok(code)
