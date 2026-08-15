@@ -228,10 +228,39 @@ for the captured variable's provenance and type class, not a closures-specific r
 
 1. Synthesize an environment struct `__closure_env_N { <captured fields> }`, registered in the
    struct table (so the recursive destructor and struct lowering handle it for free).
-2. Synthesize the lifted function `__lambda_N(env: &__closure_env_N, <lambda params>)` with the
-   lambda body, rewriting each captured-name read to an env-field access. This reuses the
+2. Synthesize the lifted function `__lambda_N(env: &poke __closure_env_N, <lambda params>)` with
+   the lambda body, rewriting each captured-name read to an env-field access. This reuses the
    monomorphizer's "synthesize a `FuncDef`, register a `FuncSig`, append to `program.functions`"
    machinery, so the backend emits it with zero special-casing.
+
+   **The env parameter is `&poke`, and the mode is load-bearing (2026-08-15).** A move-captured
+   `List@(T)` / `Own@(T)` / dynamic array is MUTABLE inside the body by design (§3, T1.5), and
+   after the rewrite every such write goes through this parameter: `xs.push(x)` is
+   `__closure_env.xs.push(x)`. The environment is the closure's OWN storage — the closure value
+   owns it and frees it through `drop_ptr` — so the lifted function writing to it is not a write
+   to a caller's value.
+
+   It was declared `&peek` until the `&peek` write rule became total (`FIX.md` R1): nothing
+   enforced read-only before that, so the untruthful mode had no consequence. Once it was
+   enforced, it made two legal shapes a **CE2408** — a mutating method on a capture
+   (`tests/closures/test_closure_list_mutate.sushi`) and a `&poke` borrow of a capture
+   (`tests/closures/test_closure_env_poke_borrow.sushi`). The declaration was corrected rather
+   than the rule carved out.
+
+   The mode is a SEMANTIC declaration only: no backend code reads `ReferenceType.mutability`, so
+   codegen is identical either way (the env is a pointer in both cases). Five semantics sites read
+   it, and for this parameter four are inert — the rebind check (captures are field accesses, the
+   env is never rebound), the CW2409 re-borrow warning (bare-`Name` arm only), the `&poke`→`&peek`
+   coercion (the env is never a checked argument), and `_poke_param_indices` for the #168
+   destroy-effect analysis (round 1 needs a bare-`Name` receiver, round 2 needs a by-name call
+   site, and a lifted function is only ever dispatched indirectly).
+
+   **Open structural note.** This is a COMPILER-SYNTHESIZED borrow riding on the same
+   `ReferenceType` machinery as a user borrow, so every new reference rule has to be checked
+   against it by hand. If a second rule needs an accommodation for it, that is the signal to give
+   it its own kind (a `synthesized` flag on `Param`, or a distinct param kind) so a rule can ask
+   "is this a user borrow?" instead of matching the name `__closure_env`. One accommodation is a
+   coincidence; two is a missing concept.
 3. At the lambda site, heap-allocate the env, populate captured fields (copy or move), and build
    `{@__lambda_N, env_ptr, @__closure_env_N_drop}`.
 
