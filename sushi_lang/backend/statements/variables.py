@@ -171,11 +171,25 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
     semantic_type = codegen.variable_types.get(var_name) or codegen.memory.find_semantic_type(var_name)
 
     if isinstance(semantic_type, ReferenceType):
-        # For reference parameters, the slot stores a pointer to the actual variable
-        # We need to:
-        # 1. Load the pointer from the slot (1st dereference)
-        # 2. Store the new value through that pointer
+        # A `&poke` rebind stores THROUGH the pointer, so it overwrites a value the CALLER
+        # owns. Ownership applies at both ends, exactly as it does for a local rebind:
+        #
+        #   1. the new value is taken from its source through the seam, and
+        #   2. the OLD value is freed here, because the caller frees only what its binding
+        #      holds at scope exit -- which is the new value.
+        #
+        # This arm used to store and return before both steps, so an owning pointee was
+        # double-freed (a string, #303) or leaked (an array, #304).
+        #
+        # The slot itself holds a POINTER and is never registered for cleanup
+        # (`functions/helpers.py`), so there is no move mark to consult on this path: the
+        # pointee always belongs to the caller. `consume` runs BEFORE the destructor for
+        # the reason `_emit_dynamic_array_rebind` states -- a source that aliases the
+        # value about to be freed must be read first.
+        referent_type = semantic_type.referenced_type
+        val = consume(codegen, stmt.value, val, referent_type, ConsumingUse.REBIND)
         ref_ptr = codegen.builder.load(slot, name=f"{var_name}_ref_ptr")
+        _destroy_old_value(codegen, ref_ptr, referent_type)
         codegen.builder.store(val, ref_ptr)
         return  # Done - skip the rest of the function
 
@@ -200,6 +214,37 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
             _emit_struct_rebind(codegen, stmt, slot, val)
     else:
         raise_internal_error("CE0022", type=str(dst))
+
+
+def _destroy_old_value(codegen: 'LLVMCodegen', value_ptr: 'ir.Value', value_type) -> None:
+    """Free the value that a rebind is about to overwrite.
+
+    The ONE implementation of destroy-before-overwrite. Both rebind arms that store a
+    whole value call it: the local arm (`_emit_struct_rebind`) and the reference arm.
+    Two copies of this step is how #303 happened -- the reference arm simply did not
+    have one.
+
+    It carries no per-kind ladder. `emit_value_destructor` resolves a named type,
+    dispatches a composite through the lifecycle handler table, guards a string on its
+    runtime `owned` bit and a closure on its `drop_ptr`, so a literal-backed or
+    non-capturing old value destroys to a runtime no-op.
+
+    The CALLER decides whether the old value is still there to free, because the two
+    arms answer that differently: a local can have moved its value away (the move mark),
+    while a reference's pointee always belongs to the caller.
+
+    Args:
+        codegen: The main LLVMCodegen instance.
+        value_ptr: Pointer to the value being overwritten.
+        value_type: The semantic type of that value.
+    """
+    from sushi_lang.backend.destructors import (
+        emit_value_destructor, needs_cleanup, resolve_named_type,
+    )
+
+    resolved = resolve_named_type(codegen, value_type)
+    if needs_cleanup(resolved):
+        emit_value_destructor(codegen, value_ptr, resolved)
 
 
 def _emit_dynamic_array_rebind(
@@ -281,9 +326,7 @@ def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value'
         slot: The destination slot.
         val: The new value to store.
     """
-    from sushi_lang.semantics.typesys import (
-        BuiltinType, EnumType, FunctionType, StructType, UnknownType,
-    )
+    from sushi_lang.backend.destructors import resolve_named_type
     from sushi_lang.semantics.ast import Name
 
     # Extract variable name from target (must be Name for this function)
@@ -292,33 +335,17 @@ def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value'
     var_name = stmt.target.id
 
     # User-defined struct / enum rebind - free the OLD owning value before overwriting it.
-    semantic_type = codegen.memory.find_semantic_type(var_name)
-    resolved = semantic_type
-    if isinstance(resolved, UnknownType):
-        resolved = (codegen.struct_table.by_name.get(resolved.name)
-                    or codegen.enum_table.by_name.get(resolved.name)
-                    or resolved)
+    # The private name lookup that used to stand here answered for an `UnknownType` only;
+    # `resolve_named_type` is the shared one and also resolves a generic spelling.
+    resolved = resolve_named_type(codegen, codegen.memory.find_semantic_type(var_name))
 
     # Destroy the old value's heap so it does not leak when overwritten (#139) -- but
     # only when this binding still OWNS it. A moved-away value (`f(s); s := "new"`)
     # belongs to its new owner, and freeing the stale copy here would double-free (F5).
-    old_is_owned = not codegen.moves.is_moved(slot)
-    if (isinstance(resolved, (StructType, EnumType))
-            and hasattr(codegen, 'dynamic_arrays') and codegen.dynamic_arrays is not None
-            and codegen.dynamic_arrays.struct_needs_cleanup(resolved)):
-        if old_is_owned:
-            codegen.dynamic_arrays.emit_struct_field_cleanup(var_name, resolved, slot)
-    elif resolved == BuiltinType.STRING:
-        # The old string buffer was never freed on rebind at all (found with F5):
-        # the owned-bit guard makes this a no-op for a literal-bound old value.
-        if old_is_owned:
-            from sushi_lang.backend.destructors import emit_string_destructor
-            emit_string_destructor(codegen, slot)
-    elif isinstance(resolved, FunctionType):
-        # Same for a closure's old environment; drop_ptr-guarded.
-        if old_is_owned:
-            from sushi_lang.backend.destructors import emit_function_value_destructor
-            emit_function_value_destructor(codegen, slot)
+    # The per-kind ladder that used to stand here (struct/enum, then string, then closure)
+    # is gone: every arm of it called the destructor this helper calls.
+    if not codegen.moves.is_moved(slot):
+        _destroy_old_value(codegen, slot, resolved)
 
     # A rebind takes ownership of its RHS. Run this for EVERY resolved type, not only the
     # cleanup-needing composites above: the gate belongs to the destroy-the-old-value step,

@@ -1,4 +1,8 @@
+# A `&poke i32[]` rebind in the callee. The leak directive is the point: without it
+# this test passed while the caller's original buffer was never freed (F2).
 # EXPECT_STDOUT_EXACT: "3\n1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
 fn replace_array(&poke i32[] arr) ~:
     arr := from([1, 2, 3])
     return Result.Ok(~)

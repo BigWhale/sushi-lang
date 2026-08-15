@@ -105,6 +105,44 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
         validate_type_name(validator, type_obj.base_type, span)
 
 
+def resolve_declared_type(validator: 'TypeValidator', ty: Optional[Type]) -> Optional[Type]:
+    """The concrete type that a DECLARED type names.
+
+    A declaration writes a type in source spelling. Three of those spellings name a type
+    that the tables already hold in concrete form, and the tables are the sole authority
+    for its contents:
+
+      - `UnknownType('Point')`            -- a named struct or enum
+      - `GenericTypeRef('List', (i32,))`  -- a monomorphized generic, interned under the
+        mangled name `str()` spells for it ("List<i32>")
+      - `FunctionType`                    -- resolved member by member
+
+    Every other spelling already IS concrete and comes back unchanged.
+
+    ONE implementation, because a reference parameter used to get a private and shorter
+    one: it resolved a named referent but left a generic referent in its source spelling,
+    so `&poke List@(i32)` registered a type that compared unequal to the interned
+    `List<i32>` every value of that type infers. That is #305 -- a rebind through such a
+    parameter reported `CE2002: cannot assign List@(i32) to List@(i32)`.
+    """
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    from sushi_lang.semantics.typesys import FunctionType
+
+    if isinstance(ty, UnknownType):
+        return resolve_unknown_type(ty, validator.struct_table.by_name,
+                                    validator.enum_table.by_name)
+    if isinstance(ty, GenericTypeRef):
+        interned = str(ty)
+        return (validator.enum_table.by_name.get(interned)
+                or validator.struct_table.by_name.get(interned)
+                or ty)
+    if isinstance(ty, FunctionType):
+        from sushi_lang.semantics.type_resolution import resolve_type_recursively
+        return resolve_type_recursively(ty, validator.struct_table.by_name,
+                                        validator.enum_table.by_name)
+    return ty
+
+
 def validate_and_register_parameters(validator: 'TypeValidator', params: List['Param']) -> None:
     """Validate parameter types and register them in the variable_types table.
 
@@ -127,13 +165,10 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
         # Handle ReferenceType by registering the full reference type
         # This is important for pattern matching and method resolution on reference params
         if isinstance(param.ty, ReferenceType):
-            # Resolve the referenced type if it's an UnknownType
-            ref_type = param.ty.referenced_type
-            if isinstance(ref_type, UnknownType):
-                ref_type = resolve_unknown_type(ref_type, validator.struct_table.by_name, validator.enum_table.by_name)
-            # Create a new ReferenceType with the resolved inner type
+            # The REFERENT gets the same resolution as a by-value parameter of that type
+            # (#305). A borrow of a type is not a different type.
             resolved_ref = ReferenceType(
-                referenced_type=ref_type,
+                referenced_type=resolve_declared_type(validator, param.ty.referenced_type),
                 mutability=param.ty.mutability
             )
             validator.variable_types[param.name] = resolved_ref
@@ -143,18 +178,14 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
         if isinstance(param.ty, FunctionType):
             # First-class function parameter: resolve members (binds the implicit
             # UnknownType("StdError") error type) and register the function type.
-            from sushi_lang.semantics.type_resolution import resolve_type_recursively
-            resolved_fn = resolve_type_recursively(
-                param.ty, validator.struct_table.by_name, validator.enum_table.by_name
-            )
-            validator.variable_types[param.name] = resolved_fn
+            validator.variable_types[param.name] = resolve_declared_type(validator, param.ty)
             continue
 
         if isinstance(param.ty, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
             validator.variable_types[param.name] = param.ty
         elif isinstance(param.ty, UnknownType):
             # Resolve UnknownType to StructType/EnumType for struct/enum-typed parameters
-            resolved_type = resolve_unknown_type(param.ty, validator.struct_table.by_name, validator.enum_table.by_name)
+            resolved_type = resolve_declared_type(validator, param.ty)
             if resolved_type != param.ty:
                 validator.variable_types[param.name] = resolved_type
         else:
@@ -162,15 +193,9 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
             from sushi_lang.semantics.generics.types import GenericTypeRef
             if isinstance(param.ty, GenericTypeRef):
                 # Resolve GenericTypeRef to monomorphized EnumType or StructType
-                type_args_str = ", ".join(str(arg) for arg in param.ty.type_args)
-                type_name = f"{param.ty.base_name}<{type_args_str}>"
-
-                # Check both enum and struct tables
-                resolved_type = None
-                if type_name in validator.enum_table.by_name:
-                    resolved_type = validator.enum_table.by_name[type_name]
-                elif type_name in validator.struct_table.by_name:
-                    resolved_type = validator.struct_table.by_name[type_name]
+                resolved_type = resolve_declared_type(validator, param.ty)
+                if isinstance(resolved_type, GenericTypeRef):
+                    resolved_type = None
 
                 if resolved_type is not None:
                     validator.variable_types[param.name] = resolved_type
