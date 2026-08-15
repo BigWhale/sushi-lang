@@ -1,0 +1,15 @@
+# A rebind from one reference to another (#311). The source is a borrow, so it cannot
+# be consumed. It used to compile and double-free; after the rebind went through the
+# ownership seam it was an internal error.
+# EXPECT_ERROR_CODE: CE2411
+fn f(&poke string a, &poke string b) ~:
+    a := b
+    return Result.Ok(~)
+
+fn main() i32:
+    let string x = "x-{1}"
+    let string y = "y-{2}"
+    let Result@(~, StdError) r = f(&poke x, &poke y)
+    if (r):
+        println(x)
+    return Result.Ok(0)

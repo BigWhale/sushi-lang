@@ -215,11 +215,67 @@ def test_a_resolver_that_misses_leaves_the_type_alone():
     assert type_class_of(UnknownType(name="W"), resolve) is TypeClass.PLAIN
 
 
-def test_reference_is_never_an_owner():
-    """A `&peek`/`&poke` parameter is a borrow; the value it names is owned elsewhere."""
+def test_reference_classifies_as_its_referent():
+    """A reference carries the type class of the value it names, in both modes.
+
+    This row used to assert PLAIN for every reference, on the reading that "a borrow owns
+    nothing". That conflated the two halves of the decision: the borrow is the PROVENANCE
+    (BORROWED, which `_name_provenance` answers for a reference-typed name), and this
+    function answers the OTHER half -- does the value own heap? Answering PLAIN here made
+    (BORROWED, MOVE) unreachable through a reference, so `f(a)` on a `&poke i32[]`
+    parameter classified ADOPT in the checker and REJECT in the backend: #301's CE0129,
+    #310's compile-clean double free, #311's ref-to-ref rebind.
+    """
     owning = DynamicArrayType(base_type=I32)
-    assert type_class_of(ReferenceType(referenced_type=owning,
-                                       mutability=BorrowMode.PEEK)) is TypeClass.PLAIN
+    for mode in (BorrowMode.PEEK, BorrowMode.POKE):
+        assert type_class_of(ReferenceType(referenced_type=owning,
+                                           mutability=mode)) is TypeClass.MOVE
+    for mode in (BorrowMode.PEEK, BorrowMode.POKE):
+        assert type_class_of(ReferenceType(referenced_type=I32,
+                                           mutability=mode)) is TypeClass.PLAIN
+
+
+def test_reference_to_string_moves():
+    """`string` owns heap at the type level, so a borrow of one classifies MOVE."""
+    assert type_class_of(ReferenceType(referenced_type=STR,
+                                       mutability=BorrowMode.PEEK)) is TypeClass.MOVE
+
+
+def test_reference_referent_is_resolved_through_the_reference():
+    """The resolver must reach the referent, not stop at the reference wrapper.
+
+    An unresolved referent answers PLAIN, which would reclassify an owning value as owning
+    nothing -- the same miss `test_a_resolver_that_misses_leaves_the_type_alone` guards for
+    a bare name.
+    """
+    owning = _struct("W", ("items", DynamicArrayType(base_type=I32)))
+
+    def resolve(ty):
+        return owning if getattr(ty, "name", None) == "W" else ty
+
+    ref = ReferenceType(referenced_type=UnknownType(name="W"), mutability=BorrowMode.POKE)
+    assert type_class_of(ref, resolve) is TypeClass.MOVE
+
+
+def test_consuming_a_reference_is_rejected():
+    """The cell that follows: a borrow of an owning value cannot be given away.
+
+    (BORROWED, MOVE) -> REJECT is CE2411, and `.clone()` is the escape. This is the whole
+    reason the row above had to change.
+    """
+    owning = ReferenceType(referenced_type=DynamicArrayType(base_type=I32),
+                           mutability=BorrowMode.POKE)
+    assert classify(Provenance.BORROWED, type_class_of(owning)) is Ownership.REJECT
+
+
+def test_consuming_a_reference_to_a_plain_value_adopts():
+    """(BORROWED, PLAIN) stays ADOPT: copying a value that owns no heap transfers nothing.
+
+    This is what keeps `fn f(&peek i32 x)` usable -- passing `x` on by value is a copy of
+    four bytes, not a transfer of an owner.
+    """
+    plain = ReferenceType(referenced_type=I32, mutability=BorrowMode.PEEK)
+    assert classify(Provenance.BORROWED, type_class_of(plain)) is Ownership.ADOPT
 
 
 def test_none_is_plain():

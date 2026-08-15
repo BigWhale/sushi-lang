@@ -175,9 +175,20 @@ def type_class_of(ty: Optional[Type], resolve: Callable[[Type], Type] = _IDENTIT
     if ty is None:
         return TypeClass.PLAIN
 
-    # A reference is a borrow, never a value that owns anything.
+    # A reference classifies as its REFERENT. The borrow is in the PROVENANCE, which
+    # `_name_provenance` already answers BORROWED for a reference-typed name, and the
+    # question this function asks is the other half: does the value own heap?
+    #
+    # Short-circuiting to PLAIN here answered the ownership question with the borrow
+    # question, and that made the (BORROWED, MOVE) cell -- the cell that says "you
+    # cannot consume a borrow" -- UNREACHABLE through a reference type. So every
+    # consuming use of a reference parameter landed in (BORROWED, PLAIN) = ADOPT, which
+    # the checker performed silently while the backend classified the same transfer from
+    # the TARGET type and answered REJECT: #301's CE0129, #310's compile-clean double
+    # free, #311's ref-to-ref rebind. One question, two answers -- the thing this module
+    # exists to make impossible.
     if isinstance(ty, ReferenceType):
-        return TypeClass.PLAIN
+        ty = ty.referenced_type
 
     resolved = ty
     if isinstance(ty, UnknownType):

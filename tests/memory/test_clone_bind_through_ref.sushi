@@ -1,0 +1,22 @@
+# Bind the clone first, then mutate it and give it away. This is the shape both
+# CE2408 and CE2411 name as the escape, and it needs `.clone()` on a reference
+# receiver to exist. The caller's array is untouched: 2 in, 2 out.
+# EXPECT_STDOUT_EXACT: "ate 3\nafter: 2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+fn eat(i32[] a) ~:
+    println("ate {a.len()}")
+    return Result.Ok(~)
+
+fn f(&peek i32[] a) ~:
+    let i32[] b = a.clone()
+    b.push(9)
+    eat(b)
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32[] arr = from([1, 2])
+    let Result@(~, StdError) r = f(&peek arr)
+    if (r):
+        println("after: {arr.len()}")
+    return Result.Ok(0)

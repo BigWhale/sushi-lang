@@ -236,6 +236,26 @@ def _try_emit_auto_derived(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCa
     if semantic_type is None or expr.method != method:
         return None
 
+    # Normalize the receiver's type to the concrete struct/enum it names, in two steps:
+    #
+    #   deref  -- the methods on `&T` are the methods on `T` (the same unwrap
+    #             `try_emit_function_clone` states below). Without it a reference receiver
+    #             matched no `kind` (#301, #308).
+    #   resolve -- a PARAMETER's type reaches the backend as the declared spelling, so a
+    #             struct parameter arrives as `UnknownType('Holder')`, which is not a
+    #             `StructType` and matched no `kind` either. That hit a by-value parameter
+    #             just as hard as a reference one (#312).
+    #
+    # Both misses fell through to the extension-method lookup and raised
+    # `Extension method not found: Holder_clone` -- a CE0000 for a plain `.clone()`. This is
+    # the ONE body behind all four auto-derived dispatchers, so one normalization covers
+    # clone and hash, struct and enum. `resolve_named_type` is the same helper every
+    # destructor gate uses, and for the same reason: an unresolved name silently matches
+    # nothing.
+    from sushi_lang.backend.destructors import resolve_named_type
+    from sushi_lang.semantics.typesys import deref_type
+    semantic_type = resolve_named_type(codegen, deref_type(semantic_type))
+
     if kind is EnumType:
         from sushi_lang.semantics.generics.types import GenericTypeRef
         if isinstance(semantic_type, GenericTypeRef) and semantic_type.base_name == "Result":

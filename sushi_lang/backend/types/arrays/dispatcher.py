@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.semantics.typesys import DynamicArrayType, Type
+from sushi_lang.semantics.typesys import DynamicArrayType, Type, deref_type
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -148,6 +148,14 @@ def emit_array_method(
     else:
         array_struct_type = receiver_type
 
+    # The methods on `&T` are the methods on `T`. The receiver may be a `&peek`/`&poke`
+    # array parameter, and the arms below read `semantic_type.base_type` for the element
+    # type -- `.free()` and `.clone()` raise CE0042 on a miss, which is what made
+    # `a.clone()` on a reference receiver unusable as CE2411's documented escape (#301).
+    # Unwrapped ONCE here, where the dynamic-array section starts, rather than per arm:
+    # `push` used to carry its own copy of this unwrap.
+    semantic_type = deref_type(semantic_type)
+
     match method_name:
         case "len":
             return core.emit_dynamic_array_len(codegen, receiver_value, to_i1)
@@ -168,16 +176,12 @@ def emit_array_method(
 
         case "push":
             # The array stores the element shallowly and frees it, so this is a consuming
-            # use like List.push and HashMap.insert. The receiver may be a `&poke T[]`
-            # parameter, so unwrap the reference before reaching for the element type.
+            # use like List.push and HashMap.insert. The reference unwrap this arm used to
+            # do for itself now happens once, above.
             from sushi_lang.backend.ownership import ConsumingUse, consume
-            from sushi_lang.semantics.typesys import ReferenceType as _RefType
-            receiver_sem = semantic_type
-            if isinstance(receiver_sem, _RefType):
-                receiver_sem = receiver_sem.referenced_type
             element_value = consume(
                 codegen, expr.args[0], codegen.expressions.emit_expr(expr.args[0]),
-                getattr(receiver_sem, "base_type", None),
+                getattr(semantic_type, "base_type", None),
                 ConsumingUse.CONTAINER_INSERT,
             )
             return core.emit_dynamic_array_push(codegen, receiver_value, array_struct_type, element_value)

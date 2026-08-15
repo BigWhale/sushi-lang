@@ -1,0 +1,46 @@
+# `.clone()` through a reference, over the type kinds that reach different emitters:
+# a struct, an enum, a string and a List. Each must deref the receiver first.
+# `.hash()` goes through the same auto-derived dispatch, so a struct hash pins that half.
+# EXPECT_STDOUT_EXACT: "2\n1\nhi there\n2\n1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+struct Holder:
+    i32[] items
+
+fn take_struct(Holder h) ~:
+    println(h.items.len())
+    return Result.Ok(~)
+
+fn take_string(string s) ~:
+    println(s)
+    return Result.Ok(~)
+
+fn take_list(List@(i32) l) ~:
+    println(l.len())
+    return Result.Ok(~)
+
+fn take_maybe(Maybe@(i32[]) m) ~:
+    println(m.is_some())
+    return Result.Ok(~)
+
+fn copy_out(&peek Holder h, &peek string s, &peek List@(i32) l, &peek Maybe@(i32[]) m) ~:
+    take_struct(h.clone())
+    println(h.items.get(0)??)
+    take_string(s.clone())
+    take_list(l.clone())
+    take_maybe(m.clone())
+    return Result.Ok(~)
+
+fn run_test() i32:
+    let Holder holder = Holder(from([1, 2]))
+    let string text = "hi {'there'}"
+    let List@(i32) numbers = List.new()
+    numbers.push(7)
+    numbers.push(8)
+    let Maybe@(i32[]) maybe = Maybe.Some(from([4, 5, 6]))
+    copy_out(&peek holder, &peek text, &peek numbers, &peek maybe)
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 code = run_test().realise(1)
+    return Result.Ok(code)

@@ -1,0 +1,18 @@
+# A reference parameter handed to a position that takes ownership (#301). It is a
+# borrow: the caller keeps the value and still frees it, so this is the ordinary
+# CE2411, not an internal error. The escape is `eat(a.clone())`.
+# EXPECT_ERROR_CODE: CE2411
+fn eat(i32[] a) ~:
+    println("ate {a.len()}")
+    return Result.Ok(~)
+
+fn f(&poke i32[] a) ~:
+    eat(a)
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32[] arr = from([1, 2, 3])
+    let Result@(~, StdError) r = f(&poke arr)
+    if (r):
+        println("after")
+    return Result.Ok(0)
