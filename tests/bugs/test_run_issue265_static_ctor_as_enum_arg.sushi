@@ -1,0 +1,46 @@
+# #265: a static constructor (`Own.alloc`, `List.new`) as an argument to a USER enum
+# constructor was CE0055 -- "unknown variable or constant: Own".
+#
+# Type propagation stamps `resolved_struct_type` on a static constructor so the backend's
+# Own/List probe can claim the call. `_propagate_generic_enum_type` did that, and recursed
+# into the constructor's arguments, only when the enum itself was GENERIC. A plain enum
+# stopped there, so the argument was never stamped, the probe declined the call, and the
+# receiver `Own` was emitted as an ordinary name.
+#
+# Only the `resolved_enum_type` stamp is generic-specific. A plain enum's variant payload
+# types are just as much the expected type of each argument. That is why the struct twin
+# `Box(Own.alloc(l))` and the generic-enum twin `Maybe.Some(Own.alloc(l))` both worked --
+# the gap looked arbitrary because it was.
+# EXPECT_STDOUT_EXACT: "own: 7\nlist: 2\nempty\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+struct Holder:
+    i32 n
+
+enum Boxed:
+    Wrap(Own@(Holder))
+    Items(List@(i32))
+    Empty
+
+fn main() i32:
+    let Boxed b = Boxed.Wrap(Own.alloc(Holder(7)))
+    match b:
+        Boxed.Wrap(o) -> println("own: {o.get().n}")
+        Boxed.Items(l) -> println("items: {l.len()}")
+        Boxed.Empty -> println("empty")
+
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    let Boxed c = Boxed.Items(xs)
+    match c:
+        Boxed.Wrap(o) -> println("own: {o.get().n}")
+        Boxed.Items(l) -> println("list: {l.len()}")
+        Boxed.Empty -> println("empty")
+
+    let Boxed d = Boxed.Empty
+    match d:
+        Boxed.Wrap(o) -> println("own: {o.get().n}")
+        Boxed.Items(l) -> println("list: {l.len()}")
+        Boxed.Empty -> println("empty")
+    return Result.Ok(0)
