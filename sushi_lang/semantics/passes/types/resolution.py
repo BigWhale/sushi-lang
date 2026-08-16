@@ -119,18 +119,23 @@ def resolve_variable_type(validator: 'TypeValidator',
     Consolidates lines 41-101 from validate_let_statement().
     """
     # Already resolved types - return as-is
-    if isinstance(declared_type, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
+    if isinstance(declared_type, (BuiltinType, StructType, EnumType)):
         return declared_type
 
-    # FunctionType → resolve params/ok/err (binds implicit UnknownType("StdError"))
     from sushi_lang.semantics.typesys import FunctionType
-    from sushi_lang.semantics.type_resolution import resolve_type_recursively
-    if isinstance(declared_type, FunctionType):
-        return resolve_type_recursively(
-            declared_type,
-            validator.struct_table.by_name,
-            validator.enum_table.by_name,
-        )
+
+    # Types that CONTAIN another type: resolve the members, not the wrapper. An array
+    # sat in the "already resolved" list above, which is only true of the wrapper --
+    # `let P[] arr` parses as DynamicArrayType(UnknownType("P")), and returning that
+    # unchanged put an UnknownType in the variable table. Every later compare against
+    # the interned StructType then failed, and since both spell themselves "P" the
+    # message read `expected P, got P` (issue #284). A FunctionType was already routed
+    # here for the same reason: its implicit UnknownType("StdError") binds to the
+    # StdError enum. Delegated to `resolve_declared_type`, which is the ONE answer to
+    # "what concrete type does this declared spelling name" (see its docstring on #305).
+    if isinstance(declared_type, (ArrayType, DynamicArrayType, FunctionType)):
+        from .utils import resolve_declared_type
+        return resolve_declared_type(validator, declared_type)
 
     # UnknownType → resolve to StructType or EnumType
     if isinstance(declared_type, UnknownType):

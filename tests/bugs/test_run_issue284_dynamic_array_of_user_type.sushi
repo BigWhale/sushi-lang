@@ -1,0 +1,44 @@
+# #284: a dynamic array of a struct or an enum could not be filled. `arr.push(p)`
+# reported `CE2006: expected P, got P` -- one type printed twice, the signature of a
+# compare between two resolution depths of one type.
+#
+# `P[]` parses as DynamicArrayType(UnknownType("P")), and both the `let` path and the
+# parameter path registered that wrapper unchanged, so the element stayed an
+# UnknownType while every value of that type infers the interned StructType.
+#
+# All four spellings the issue names: a named value, an inline constructor, an enum
+# element, and a push through a `&poke P[]` parameter.
+#
+# The element is read back with `foreach` and not with `es[0].label()`: a method call
+# on an INDEXED element is issue #286, which is a different defect.
+# EXPECT_STDOUT_EXACT: "4 2\n1 2 3 9\nA\nB(7)\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+struct P:
+    i32 x
+
+enum E:
+    A
+    B(i32)
+
+fn fill(&poke P[] xs) ~:
+    xs.push(P(9))
+    return Result.Ok(~)
+
+fn main() i32:
+    let P[] arr = from([P(1)])
+    let P p = P(2)
+    arr.push(p)
+    arr.push(P(3))
+    fill(&poke arr)
+
+    let E[] es = from([E.A])
+    es.push(E.B(7))
+
+    println("{arr.len()} {es.len()}")
+    println("{arr[0].x} {arr[1].x} {arr[2].x} {arr[3].x}")
+    foreach(e in es.iter()):
+        match e:
+            E.A -> println("A")
+            E.B(n) -> println("B({n})")
+    return Result.Ok(0)

@@ -1,0 +1,29 @@
+# #288: a closure rebind reported `CE2002: cannot assign fn(i32) -> i32 to
+# fn(i32) -> i32`. One type printed twice, the signature of a compare between two
+# resolution depths of one type: the declared local carries a resolved StdError
+# err_type, and the type inferred from the call still carries UnknownType("StdError").
+#
+# The rebind site compared with a bare `!=` where every other CE2002 site uses the
+# shared `types_compatible`, which resolves both sides and recurses into the function
+# members.
+#
+# The rebind must also release the environment of the OLD closure exactly once, which
+# is what EXPECT_NO_LEAKS pins here.
+# EXPECT_STDOUT_EXACT: "6\n15\nok\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+fn make(i32 m) fn(i32) -> i32:
+    return Result.Ok(|i32 x| x * m)
+
+fn run() i32:
+    let fn(i32) -> i32 g = make(2)??
+    println(g(3)??)
+    g := make(5)??
+    println(g(3)??)
+    return Result.Ok(0)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

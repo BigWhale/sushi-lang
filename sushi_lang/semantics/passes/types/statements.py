@@ -321,8 +321,17 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
         # Can't infer expression type - validation already failed elsewhere
         return
 
-    # Check type compatibility with the actual type (unwrapped for references)
-    if actual_type != expr_type:
+    # Check type compatibility with the actual type (unwrapped for references).
+    #
+    # `types_compatible` and NOT a bare `!=`: the two sides reach here at different
+    # resolution depths, and a bare compare makes "how far resolved is it?" part of
+    # type identity -- the #240 defect. `g := make(5)??` on a `fn(i32) -> i32` local
+    # compared a resolved err_type against an UnknownType("StdError") one and reported
+    # `cannot assign fn(i32) -> i32 to fn(i32) -> i32` (issue #288). One type printed
+    # twice is that failure's signature. The shared compare resolves both sides and
+    # recurses into function members, which is what every other CE2002 site uses.
+    from .compatibility import types_compatible
+    if not types_compatible(validator, expr_type, actual_type):
         # Type mismatch in rebind statement
         er.emit(validator.reporter, er.ERR.CE2002, stmt.loc,
                expected=display_type(actual_type), got=display_type(expr_type))

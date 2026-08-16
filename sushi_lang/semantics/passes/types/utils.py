@@ -129,6 +129,7 @@ def resolve_declared_type(validator: 'TypeValidator', ty: Optional[Type]) -> Opt
       - `GenericTypeRef('List', (i32,))`  -- a monomorphized generic, interned under the
         mangled name `str()` spells for it ("List<i32>")
       - `FunctionType`                    -- resolved member by member
+      - `P[]` / `P[3]`                    -- the same, through the ELEMENT
 
     Every other spelling already IS concrete and comes back unchanged.
 
@@ -137,6 +138,12 @@ def resolve_declared_type(validator: 'TypeValidator', ty: Optional[Type]) -> Opt
     so `&poke List@(i32)` registered a type that compared unequal to the interned
     `List<i32>` every value of that type infers. That is #305 -- a rebind through such a
     parameter reported `CE2002: cannot assign List@(i32) to List@(i32)`.
+
+    An array was the same defect one container over (#284). The WRAPPER is concrete, so
+    it read as needing no resolution -- but `P[]` parses as
+    `DynamicArrayType(UnknownType('P'))`, and the element stayed unresolved all the way
+    into the variable table. Every later compare against the interned `StructType('P')`
+    failed, and because both spell themselves "P" the message read `expected P, got P`.
     """
     from sushi_lang.semantics.generics.types import GenericTypeRef
     from sushi_lang.semantics.typesys import FunctionType
@@ -149,7 +156,7 @@ def resolve_declared_type(validator: 'TypeValidator', ty: Optional[Type]) -> Opt
         return (validator.enum_table.by_name.get(interned)
                 or validator.struct_table.by_name.get(interned)
                 or ty)
-    if isinstance(ty, FunctionType):
+    if isinstance(ty, (FunctionType, ArrayType, DynamicArrayType)):
         from sushi_lang.semantics.type_resolution import resolve_type_recursively
         return resolve_type_recursively(ty, validator.struct_table.by_name,
                                         validator.enum_table.by_name)
@@ -188,13 +195,14 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
             continue
 
         from sushi_lang.semantics.typesys import FunctionType
-        if isinstance(param.ty, FunctionType):
-            # First-class function parameter: resolve members (binds the implicit
-            # UnknownType("StdError") error type) and register the function type.
+        if isinstance(param.ty, (FunctionType, ArrayType, DynamicArrayType)):
+            # A container spelling: the WRAPPER is concrete but its members may not be.
+            # A function type binds its implicit UnknownType("StdError"); an array binds
+            # its element, which `P[]` leaves unresolved (#284).
             validator.variable_types[param.name] = resolve_declared_type(validator, param.ty)
             continue
 
-        if isinstance(param.ty, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
+        if isinstance(param.ty, (BuiltinType, StructType, EnumType)):
             validator.variable_types[param.name] = param.ty
         elif isinstance(param.ty, UnknownType):
             # Resolve UnknownType to StructType/EnumType for struct/enum-typed parameters
