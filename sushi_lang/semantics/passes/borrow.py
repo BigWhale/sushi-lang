@@ -1932,8 +1932,8 @@ class BorrowChecker:
         name = self._param_name(call, index) or f"#{index + 1}"
         if mode.consumes:
             self.err.emit_with(er.ERR.CE2427, span, name=name) \
-                .help(f"the callee takes ownership here; write `nom` at the call site "
-                      f"too, or `nom <arg>.clone()` to keep your own value").emit()
+                .help("the callee takes ownership here; write `nom` at the call site "
+                      "too, or `nom <arg>.clone()` to keep your own value").emit()
         else:
             self.err.emit_with(er.ERR.CE2427, span, name=name) \
                 .help("the callee only borrows this argument, so it stays yours after "

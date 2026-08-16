@@ -297,7 +297,7 @@ class FunctionType:
     def __str__(self) -> str:
         params = ", ".join(
             f"{m.marker} {p}" if m.marker and not m.by_pointer else str(p)
-            for p, m in zip(self.param_types, self.modes)
+            for p, m in zip(self.param_types, self.modes, strict=True)
         )
         base = f"fn({params}) -> {self.ok_type}"
         # Hide the implicit StdError to match the surface syntax in diagnostics.

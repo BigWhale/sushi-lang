@@ -75,7 +75,7 @@ def display_type(ty) -> str:
         params = ", ".join(
             f"{m.marker} {display_type(p)}" if m.marker and not m.by_pointer
             else display_type(p)
-            for p, m in zip(ty.param_types, ty.modes)
+            for p, m in zip(ty.param_types, ty.modes, strict=True)
         )
         base = f"fn({params}) -> {display_type(ty.ok_type)}"
         # Hide the implicit StdError, matching FunctionType.__str__.
