@@ -51,5 +51,8 @@ DYNAMIC_ARRAY_SIZE_BYTES = 16
 # Iterator struct: {i32 current_index, i32 length, T* data_ptr} = 4 + 4 + 8 = 16 bytes
 ITERATOR_SIZE_BYTES = 16
 
-# Enum tag size (discriminant field)
-ENUM_TAG_SIZE_BYTES = 4
+# Enum payload base offset: the i32 tag plus 4 bytes of struct padding before the
+# [K x i64] data member (#300 phase 2). The payload therefore starts 8-aligned, which
+# is what lets every payload field access use natural alignment (the align=1 family
+# was retired with this change).
+ENUM_TAG_SIZE_BYTES = 8

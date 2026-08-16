@@ -210,8 +210,9 @@ def emit_stdlib_file_call(
         seekfrom_value = codegen.expressions.emit_expr(args[1])
 
         # SeekFrom is a unit enum (no associated data)
-        # Use correct type: {i32 tag, [1 x i8] data}
-        seekfrom_struct_ty = ir.LiteralStructType([i32, ir.ArrayType(i8, 1)])
+        # New shape (#300 phase 2): {i32 tag, [1 x i64] data} -- must byte-match the .bc
+        from sushi_lang.sushi_stdlib.src.type_definitions import get_unit_enum_type
+        seekfrom_struct_ty = get_unit_enum_type()
 
         # seekfrom_value is the enum by value (from emit_name loading it)
         # Stdlib expects a pointer, so store it in a slot
@@ -289,14 +290,13 @@ def emit_files_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: boo
             raise_internal_error("CE0023", method=func_name, expected=1, got=len(expr.args))
         path_value = codegen.expressions.emit_expr(expr.args[0])
 
-        if func_name == "file_size":
-            # Result<i64> is {i32 tag, [8 x i8] data}
-            data_array_type = ir.ArrayType(i8, 8)
-        else:
-            # Result<i32> is {i32 tag, [4 x i8] data}
-            data_array_type = ir.ArrayType(i8, 4)
-
-        result_type = ir.LiteralStructType([i32, data_array_type])
+        # Result<i64|i32, FileError> is {i32 tag, [2 x i64] data} (#300 phase 2):
+        # FileError is a unit enum {i32, [1 x i64]} = 16 bytes, so K = max(payload, 16)/8 = 2.
+        # Shared helper keeps this byte-matched with the stdlib .bc.
+        from sushi_lang.sushi_stdlib.src.type_definitions import get_result_type, get_unit_enum_type
+        i64 = ir.IntType(64)
+        ok_type = i64 if func_name == "file_size" else i32
+        result_type = get_result_type(ok_type, get_unit_enum_type())
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, result_type, [string_type])
         result = codegen.builder.call(stdlib_func, [path_value], name=f"{func_name}_result")
         return codegen.utils.as_i1(result) if to_i1 else result
@@ -310,8 +310,9 @@ def emit_files_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: boo
         arg1_value = codegen.expressions.emit_expr(expr.args[0])
         arg2_value = codegen.expressions.emit_expr(expr.args[1])
 
-        data_array_type = ir.ArrayType(i8, 4)
-        result_type = ir.LiteralStructType([i32, data_array_type])
+        # Result<i32, FileError> is {i32 tag, [2 x i64] data} (#300 phase 2, see file_size)
+        from sushi_lang.sushi_stdlib.src.type_definitions import get_result_type, get_unit_enum_type
+        result_type = get_result_type(i32, get_unit_enum_type())
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, result_type, [string_type, string_type])
         result = codegen.builder.call(stdlib_func, [arg1_value, arg2_value], name=f"{func_name}_result")
         return codegen.utils.as_i1(result) if to_i1 else result
@@ -324,8 +325,9 @@ def emit_files_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: boo
         path_value = codegen.expressions.emit_expr(expr.args[0])
         mode_value = codegen.expressions.emit_expr(expr.args[1])
 
-        data_array_type = ir.ArrayType(i8, 4)
-        result_type = ir.LiteralStructType([i32, data_array_type])
+        # Result<i32, FileError> is {i32 tag, [2 x i64] data} (#300 phase 2, see file_size)
+        from sushi_lang.sushi_stdlib.src.type_definitions import get_result_type, get_unit_enum_type
+        result_type = get_result_type(i32, get_unit_enum_type())
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, result_type, [string_type, i32])
         result = codegen.builder.call(stdlib_func, [path_value, mode_value], name="mkdir_result")
         return codegen.utils.as_i1(result) if to_i1 else result

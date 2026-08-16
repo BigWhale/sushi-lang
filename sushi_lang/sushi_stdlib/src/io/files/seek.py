@@ -18,7 +18,7 @@ def generate_seek(module: ir.Module) -> None:
     SeekFrom enum: Start (0), Current (1), End (2)
     Maps to C constants: SEEK_SET (0), SEEK_CUR (1), SEEK_END (2)
 
-    SeekFrom enum struct: {i32 tag, [N x i8] data}
+    SeekFrom enum struct (#300 phase 2): {i32 tag, [1 x i64] data}
     We only need the tag field.
     """
     i32 = ir.IntType(32)

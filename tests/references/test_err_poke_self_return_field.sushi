@@ -1,0 +1,12 @@
+# #327: `&poke self` changes what the method may WRITE, not what it may consume --
+# the receiver is still a borrow, so returning an owning field out of it is CE2411
+# with .clone() as the escape.
+# EXPECT_ERROR_CODE: CE2411
+struct Box:
+    i32[] items
+
+extend Box grab(&poke self) i32[]:
+    return self.items
+
+fn main() i32:
+    return Result.Ok(0)

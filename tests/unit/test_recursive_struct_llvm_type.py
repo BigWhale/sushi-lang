@@ -125,8 +125,8 @@ def test_anonymous_fat_pointers_stay_literal(tmp_path):
     They are anonymous layout descriptors, not nominal types, and several backend checks
     identify them by structural shape (`is_string_type`, `is_dynamic_array_type`). Naming
     them would break those, and would also serve no purpose: an enum's payload is a
-    `[N x i8]` byte blob, so it never embeds an element type and never had the
-    back-fill problem in the first place.
+    `[K x i64]` word blob (#300 phase 2), so it never embeds an element type and never
+    had the back-fill problem in the first place.
     """
     src = (
         "enum Colour:\n"
@@ -144,7 +144,7 @@ def test_anonymous_fat_pointers_stay_literal(tmp_path):
         "    return Result.Ok(0)\n"
     )
     decls = _struct_decls(_emit_ir(tmp_path, src))
-    assert "Colour" not in decls, "enums keep their {i32 tag, [N x i8]} literal layout"
+    assert "Colour" not in decls, "enums keep their {i32 tag, [K x i64]} literal layout"
     assert not any(n.startswith("List<") or n.startswith("HashMap<") for n in decls), (
         f"container layout descriptors must stay literal, got {sorted(decls)}"
     )

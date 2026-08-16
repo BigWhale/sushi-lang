@@ -98,6 +98,15 @@ def validate_function(self, func: FuncDef) -> None:
     self.current_function = None
 
 
+def _self_registration_type(target_type, self_mode):
+    """The type `self` registers under: the bare target, or its reference (#327)."""
+    if self_mode is None:
+        return target_type
+    from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
+    mode = BorrowMode.POKE if self_mode == "poke" else BorrowMode.PEEK
+    return ReferenceType(target_type, mode)
+
+
 def validate_extension_method(self, ext: ExtendDef) -> None:
     """Validate types within an extension method."""
     self.current_function = None  # Extension methods are not functions, but we can reuse some logic
@@ -114,14 +123,19 @@ def validate_extension_method(self, ext: ExtendDef) -> None:
     if ext.target_type == BuiltinType.BLANK:
         self.err.emit(er.ERR.CE2032, ext.target_type_span)
 
-    # Add 'self' parameter with target type to variable table
+    # Add 'self' parameter with target type to variable table. A `&poke self` /
+    # `&peek self` receiver (#327) registers its full ReferenceType, so every consumer
+    # that asks "is this name a borrow?" answers truthfully and inference auto-derefs.
+    self_type = None
     if isinstance(ext.target_type, (BuiltinType, ArrayType, DynamicArrayType, StructType)):
-        self.variable_types["self"] = ext.target_type
+        self_type = ext.target_type
     elif isinstance(ext.target_type, UnknownType):
         # Resolve UnknownType to StructType for struct-typed self
         resolved_type = resolve_unknown_type(ext.target_type, self.struct_table.by_name, self.enum_table.by_name)
         if resolved_type != ext.target_type:
-            self.variable_types["self"] = resolved_type
+            self_type = resolved_type
+    if self_type is not None:
+        self.variable_types["self"] = _self_registration_type(self_type, getattr(ext, "self_mode", None))
 
     # Validate explicit parameter types and add them to variable table
     validate_and_register_parameters(self, ext.params)
@@ -174,13 +188,16 @@ def validate_perk_implementation_method(self, impl: ExtendWithDef) -> None:
         # Validate target type
         validate_type_name(self, impl.target_type, impl.target_type_span)
 
-        # Add 'self' parameter with target type
+        # Add 'self' parameter with target type (ReferenceType for `&poke self`, #327)
+        self_type = None
         if isinstance(impl.target_type, (BuiltinType, ArrayType, DynamicArrayType, StructType)):
-            self.variable_types["self"] = impl.target_type
+            self_type = impl.target_type
         elif isinstance(impl.target_type, UnknownType):
             resolved_type = resolve_unknown_type(impl.target_type, self.struct_table.by_name, self.enum_table.by_name)
             if resolved_type != impl.target_type:
-                self.variable_types["self"] = resolved_type
+                self_type = resolved_type
+        if self_type is not None:
+            self.variable_types["self"] = _self_registration_type(self_type, getattr(method, "self_mode", None))
 
         # Validate method parameters
         validate_and_register_parameters(self, method.params)

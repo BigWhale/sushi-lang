@@ -337,6 +337,7 @@ def register_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
         pattern: The pattern with bindings to register.
         variant: The enum variant being matched.
     """
+    from sushi_lang.semantics.ast import RefBinding
     for binding, binding_type in zip(pattern.bindings, variant.associated_types, strict=False):
         if isinstance(binding, str):
             # Simple variable binding or wildcard
@@ -348,6 +349,17 @@ def register_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
                     resolved_type = resolve_unknown_type(binding_type, validator.struct_table.by_name, validator.enum_table.by_name)
 
                 validator.variable_types[binding] = resolved_type
+        elif isinstance(binding, RefBinding):
+            # `Variant(&poke x)` (#300 phase 3): the binding IS a reference into the
+            # scrutinee's payload storage, so register the reference type -- every
+            # consumer that asks "is this name a borrow?" answers truthfully, and
+            # inference auto-derefs the name.
+            from sushi_lang.semantics.typesys import BorrowMode, ReferenceType, UnknownType
+            resolved_type = binding_type
+            if isinstance(binding_type, UnknownType):
+                resolved_type = resolve_unknown_type(binding_type, validator.struct_table.by_name, validator.enum_table.by_name)
+            mode = BorrowMode.POKE if binding.mode == "poke" else BorrowMode.PEEK
+            validator.variable_types[binding.name] = ReferenceType(resolved_type, mode)
         elif isinstance(binding, Pattern):
             # Nested pattern - recursively register its bindings
             # First, resolve the binding_type to an EnumType
@@ -453,6 +465,11 @@ def get_pattern_signature(pattern: 'Pattern') -> str:
                 elif isinstance(binding.inner_pattern, Pattern):
                     inner_sig = get_pattern_signature(binding.inner_pattern)
                     binding_signatures.append(f"Own({inner_sig})")
+            else:
+                # A RefBinding (#300 phase 3) binds like a plain name: the marker changes
+                # how the binding is materialized, not which values the arm matches, so
+                # `Poly(p)` and `Poly(&poke p)` are duplicates of each other.
+                binding_signatures.append("_")
         signature += "(" + ",".join(binding_signatures) + ")"
 
     return signature

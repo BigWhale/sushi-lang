@@ -125,7 +125,7 @@ _add(ErrorMessage("CE2420", Severity.ERROR,
 
 _add(ErrorMessage("CE2421", Severity.ERROR,
     "cannot write through 'self': a method receiver is a read-only borrow",
-    Category.BORROW, "An extension or perk method receives `self` as a BORROW: the caller keeps the value (the ruling on issue #298, `docs/design/ownership-conventions.md` S8.6). The compiled receiver is a private copy, so a write through it -- a mutating method, a field assignment, or a `&poke` borrow of it -- never reaches the caller. A plain field was silently LOST; an owning field was a double free plus a leak, because the field rebind released the caller's buffer through the copy (issue #326). This is CE2414's rule for the one receiver CE2414 does not cover. There is no way to spell a mutating receiver yet: `&poke self` (issue #327) is designed separately. Until then, return the new value and let the caller store it, or take a `&poke T` parameter on a plain function."))
+    Category.BORROW, "An extension or perk method receives `self` as a BORROW: the caller keeps the value (the ruling on issue #298, `docs/design/ownership-conventions.md` S8.6). The compiled receiver is a private copy, so a write through it -- a mutating method, a field assignment, or a `&poke` borrow of it -- never reaches the caller. A plain field was silently LOST; an owning field was a double free plus a leak, because the field rebind released the caller's buffer through the copy (issue #326). This is CE2414's rule for the one receiver CE2414 does not cover. The mutating receiver is spelled `&poke self` (issue #327): declare the method `extend T name(&poke self, ...)` and the write reaches the caller. Alternatively return the new value and let the caller store it."))
 
 _add(ErrorMessage("CE2422", Severity.ERROR,
     "cannot write through '{name}': a by-value method parameter is a read-only borrow",
@@ -143,5 +143,9 @@ _add(ErrorMessage("CE2423", Severity.ERROR,
     Category.BORROW, "A `&peek`/`&poke` foreach binding is a pointer into the container's element storage, so the iterable must HAVE element storage. A range (`0..10`) synthesizes its values, and `HashMap.entries()` synthesizes each `Entry` pair on the fly -- there is no address to bind (issue #300). Iterate a container (`arr.iter()`, `list.iter()`, `map.keys()`, `map.values()`) or drop the marker and take the value."))
 
 _add(ErrorMessage("CE2424", Severity.ERROR,
-    "a reference binding in a match pattern is not supported yet",
-    Category.BORROW, "`Variant(&poke x)` needs a pointer into the enum's payload storage, which is byte-packed behind the tag -- handing that under-aligned interior pointer to code that assumes natural alignment is the #149 crash class, so the feature waits on the enum payload alignment fix (issue #300, phase 3). Two spellings work today: `Own(&poke x)` (the pointee is a whole malloc'd allocation), and `foreach(&poke r in ...)` (elements sit in naturally aligned buffers). Otherwise: clone out, mutate, store back."))
+    "a reference binding in a NESTED match pattern is not supported",
+    Category.BORROW, "A top-level `Variant(&poke x)` binds a pointer into the scrutinee's payload storage and is supported (issue #300 phase 3, on the aligned enum payload layout). A NESTED pattern is different: extraction walks through temporary copies of the inner enums, so a pointer into one writes to storage nobody reads -- the silently-lost-write class of issue #253. Bind the payload by value in the nested pattern, or restructure to match the inner enum at the top level."))
+
+_add(ErrorMessage("CE2425", Severity.ERROR,
+    "a '&peek self'/'&poke self' receiver parameter is not valid here",
+    Category.BORROW, "The receiver parameter (#327) is the FIRST parameter of an EXTENSION or PERK method: `extend Counter bump(&poke self) ~:`. It is not valid in a plain top-level function (a plain function has no receiver -- take `&poke T name`), not valid after the first position, and a bare `&poke name` that is not `self` is a reference parameter missing its type."))

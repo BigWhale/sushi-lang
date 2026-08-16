@@ -80,22 +80,8 @@ def resolve_generic_type_ref(
     raise_internal_error("CE0045", type=concrete_name)
 
 
-def calculate_max_variant_size(
-    enum_type: EnumType,
-    size_calculator,
-) -> int:
-    """Calculate the maximum size needed for enum variant data.
-
-    Args:
-        enum_type: The enum type to analyze.
-        size_calculator: Callable that takes a type and returns its size.
-
-    Returns:
-        Maximum size in bytes across all variants.
-    """
-    max_size = 0
-    for variant in enum_type.variants:
-        if variant.associated_types:
-            variant_size = sum(size_calculator(t) for t in variant.associated_types)
-            max_size = max(max_size, variant_size)
-    return max_size
+# calculate_max_variant_size was RETIRED with the aligned enum payload layout (#300
+# phase 2): a plain sum of field sizes under-sizes an aligned layout, and two
+# derivations of one layout is how construct and extract could disagree. The one
+# authority is TypeSizing.payload_field_offsets / variant_payload_size /
+# enum_payload_word_count (backend/types/core/sizing.py).

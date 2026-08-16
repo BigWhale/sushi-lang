@@ -64,6 +64,11 @@ def _perk_method_to_extend_def(perk_impl, method) -> ExtendDef:
         loc=method.loc,
         name_span=method.name_span,
         ret_span=method.ret_span,
+        # The receiver mode MUST ride along (#327): dropping it here would compile the
+        # impl with a by-value receiver against a poke-self declaration -- the silently
+        # lost write of #326, reintroduced through the perk door.
+        self_mode=getattr(method, "self_mode", None),
+        self_mode_span=getattr(method, "self_mode_span", None),
     )
 
 

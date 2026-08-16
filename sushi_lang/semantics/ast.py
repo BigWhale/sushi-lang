@@ -53,6 +53,9 @@ class Param:
                                       # `ty` then holds the collected DynamicArrayType(T)
     is_pack: bool = False             # True for a v2 type-pack value parameter (...Ts args);
                                       # ty is the bare pack type-param reference, NOT a DynamicArrayType.
+    self_mode: Optional[str] = None   # "peek"/"poke" for a `&poke self` receiver parameter
+                                      # (#327); ty is None. Stripped-and-lifted onto the
+                                      # declaration by the builders, never reaches collect.
 
 @dataclass
 class BoundedTypeParam:
@@ -90,6 +93,10 @@ class FuncDef(Node):
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
     is_library_template: bool = False  # True if reconstructed from a consumed library's .slib templates
+    self_mode: Optional[str] = None  # "peek"/"poke" for a perk-IMPL method declared
+                                     # `(&poke self, ...)` (#327). Always None on a plain
+                                     # top-level function (collect rejects it there).
+    self_mode_span: Optional[Span] = None
 
 @dataclass
 class ConstDef(Node):
@@ -141,6 +148,9 @@ class ExtendDef(Node):
     target_type_span: Optional[Span] = None
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
+    self_mode: Optional[str] = None  # "peek"/"poke" when declared `(&poke self, ...)` (#327);
+                                     # None is the classic read-only-borrow receiver
+    self_mode_span: Optional[Span] = None
 
 @dataclass
 class PerkMethodSignature:
@@ -151,6 +161,8 @@ class PerkMethodSignature:
     loc: Optional[Span] = None
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
+    self_mode: Optional[str] = None  # "peek"/"poke" when the perk declares `(&poke self, ...)` (#327)
+    self_mode_span: Optional[Span] = None
 
 @dataclass
 class PerkDef(Node):
@@ -312,7 +324,7 @@ class Pattern(Node):
     """
     enum_name: str                                      # Enum type name (e.g., "FileResult")
     variant_name: str                                   # Variant name (e.g., "Err")
-    bindings: List[Union[str, 'Pattern', 'OwnPattern']] # Variable names, nested patterns, Own patterns, or '_'
+    bindings: List[Union[str, 'Pattern', 'OwnPattern', 'RefBinding']] # Names, nested patterns, Own patterns, reference bindings, or '_'
     enum_name_span: Optional[Span] = None
     variant_name_span: Optional[Span] = None
 
@@ -320,6 +332,20 @@ class Pattern(Node):
 class WildcardPattern(Node):
     """Wildcard pattern (_) for match arms - catches all remaining variants"""
     pass
+
+@dataclass
+class RefBinding(Node):
+    """A reference binding in a match pattern: `Shape.Poly(&poke p)` (#300 phase 3).
+
+    Binds `name` as a POINTER into the scrutinee's payload storage, so a write through
+    it reaches the owner in place; `"peek"` is the copy-free read-only twin. Legal only
+    in a TOP-LEVEL pattern with a named scrutinee: nested-pattern extraction walks
+    through temporary copies (a pointer into one is a silently lost write), and a
+    temporary scrutinee has no storage to point into (CE2404).
+    """
+    name: str
+    mode: str                        # "peek" | "poke"
+
 
 @dataclass
 class OwnPattern(Node):
@@ -493,6 +519,10 @@ class MethodCall(Node):
     method: str         # Method name (add, multiply, etc.)
     args: List["Expr"]  # Arguments to the method
     inferred_return_type: Optional["Type"] = None  # Return type inferred by type checker
+    callee_self_mode: Optional[str] = None  # "peek"/"poke" when the resolved method takes
+                                            # `&poke self` (#327); stamped by Pass 2, read
+                                            # by Pass 3 (a poke call is a receiver WRITE)
+                                            # and the backend (pass a pointer)
 
 @dataclass
 class DotCall(Node):
@@ -512,6 +542,8 @@ class DotCall(Node):
     inferred_return_type: Optional["Type"] = None  # Return type inferred by type checker
     resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type (populated by type checker)
     external_ref: Optional[Tuple[str, str]] = None  # (namespace, name) for FFI calls (set by type checker)
+    callee_self_mode: Optional[str] = None  # "peek"/"poke" when the resolved method takes
+                                            # `&poke self` (#327); see MethodCall
 
 @dataclass
 class MemberAccess(Node):
@@ -663,6 +695,6 @@ __all__ = [
     "Node", "Program", "UseStatement", "FuncDef", "ConstDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "Block", "Param",
     "Let", "ExprStmt", "Return", "Print", "PrintLn", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "WildcardPattern", "Break", "Continue",
     "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda",
-    "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern",
+    "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",
 ]

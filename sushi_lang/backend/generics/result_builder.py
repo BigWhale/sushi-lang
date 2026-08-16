@@ -124,7 +124,8 @@ def _build_err_variant(
         error_ptr_typed = codegen.builder.bitcast(
             data_ptr, ir.PointerType(error_value.type), name="err_ptr_typed"
         )
-        codegen.builder.store(error_value, error_ptr_typed, align=1)  # under-aligned enum payload (#145)
+        # Natural alignment: the data member is a [K x i64] array (#300 phase 2).
+        codegen.builder.store(error_value, error_ptr_typed)
 
         packed_data = codegen.builder.load(temp_alloca, name="packed_err_data")
         enum_value = enum_utils.set_enum_data(

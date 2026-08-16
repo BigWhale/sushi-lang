@@ -151,6 +151,15 @@ class LLVMTypeSystem:
         size_bytes = self.sizing.get_type_size_bytes(semantic_type)
         return ir.Constant(self.i32, size_bytes)
 
+    def get_type_alignment(self, semantic_type: Ty) -> int:
+        """Get the natural alignment in bytes of a Sushi type."""
+        return self.sizing.get_type_alignment(semantic_type)
+
+    def payload_field_offsets(self, associated_types) -> list[int]:
+        """Naturally aligned enum payload field offsets -- the ONE layout authority
+        (#300 phase 2, see TypeSizing.payload_field_offsets)."""
+        return self.sizing.payload_field_offsets(associated_types)
+
     def _get_type_alignment(self, semantic_type: Ty) -> int:
         """Get alignment requirement for a Sushi type.
 

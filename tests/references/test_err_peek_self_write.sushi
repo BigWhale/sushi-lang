@@ -1,0 +1,13 @@
+# #327: `&peek self` states the read-only default explicitly, and a write through it
+# is CE2408 -- more precise than the CE2421 a modeless receiver gets, because the
+# user DECLARED the mode.
+# EXPECT_ERROR_CODE: CE2408
+struct Counter:
+    i32 n
+
+extend Counter peek_bump(&peek self) ~:
+    self.n := 5
+    return ~
+
+fn main() i32:
+    return Result.Ok(0)

@@ -1,0 +1,18 @@
+# Issue #341: the foreach ITEM's type must not outlive the loop in Pass 2. The item
+# `p` (an i32 here) shadows the outer `i32[] p` for the LOOP ONLY; after the loop the
+# outer local's type is back, so `eat(p)` type-checks. It used to be a false CE2006
+# ("expected i32[], got i32") because `validator.variable_types` kept the item's entry.
+# The borrow-pass half of the same defect was fixed with #337. The shadowing itself
+# still warns (CW1002), which is why this is a warning test.
+# EXPECT_ERROR_CODE: CW1002
+fn eat(i32[] a) i32:
+    return Result.Ok(a.len())
+
+fn main() i32:
+    let i32[] p = from([9, 9])
+    foreach(p in 0..3):
+        println(p)
+    match eat(p):
+        Result.Ok(n) -> println(n)
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

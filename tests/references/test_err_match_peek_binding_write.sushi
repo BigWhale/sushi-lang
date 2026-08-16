@@ -1,0 +1,14 @@
+# #300 phase 3: a `&peek` match binding is read-only -- a write through it is CE2408,
+# by the same gate row every `&peek` reference goes through.
+# EXPECT_ERROR_CODE: CE2408
+enum Shape:
+    Poly(i32[])
+    Empty
+
+fn main() i32:
+    let Shape s = Shape.Poly(from([1]))
+    match s:
+        Shape.Poly(&peek p) ->
+            p.push(9)
+        Shape.Empty -> println("empty")
+    return Result.Ok(0)

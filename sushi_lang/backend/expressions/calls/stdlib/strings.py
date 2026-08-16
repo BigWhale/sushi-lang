@@ -162,46 +162,41 @@ def emit_stdlib_string_call(
         call_args = [receiver_value, suffix_value]
     elif method == "find":
         # find(string needle) -> Maybe<i32> (enum struct)
-        # Maybe<i32> layout: {i32 tag, [4 x i8] data}
+        # Maybe<i32> layout (#300 phase 2): {i32 tag, [1 x i64] data}
         # tag = 0 for Some, tag = 1 for None
-        i8_array_4 = ir.ArrayType(i8, 4)
-        maybe_i32_type = ir.LiteralStructType([i32, i8_array_4])
-        return_type = maybe_i32_type
+        from sushi_lang.sushi_stdlib.src.type_definitions import get_maybe_type
+        return_type = get_maybe_type(i32)
         param_types = [string_type, string_type]
         arg_value = codegen.expressions.emit_expr(args[0])
         call_args = [receiver_value, arg_value]
     elif method == "find_last":
         # find_last(string needle) -> Maybe<i32> (enum struct)
-        # Maybe<i32> layout: {i32 tag, [4 x i8] data}
+        # Maybe<i32> layout (#300 phase 2): {i32 tag, [1 x i64] data}
         # tag = 0 for Some, tag = 1 for None
-        i8_array_4 = ir.ArrayType(i8, 4)
-        maybe_i32_type = ir.LiteralStructType([i32, i8_array_4])
-        return_type = maybe_i32_type
+        from sushi_lang.sushi_stdlib.src.type_definitions import get_maybe_type
+        return_type = get_maybe_type(i32)
         param_types = [string_type, string_type]
         arg_value = codegen.expressions.emit_expr(args[0])
         call_args = [receiver_value, arg_value]
     elif method == "to_i32":
         # to_i32() -> Maybe<i32> (enum struct)
-        # Maybe<i32> layout: {i32 tag, [4 x i8] data}
-        i8_array_4 = ir.ArrayType(i8, 4)
-        maybe_i32_type = ir.LiteralStructType([i32, i8_array_4])
-        return_type = maybe_i32_type
+        # Maybe<i32> layout (#300 phase 2): {i32 tag, [1 x i64] data}
+        from sushi_lang.sushi_stdlib.src.type_definitions import get_maybe_type
+        return_type = get_maybe_type(i32)
         param_types = [string_type]
         call_args = [receiver_value]
     elif method == "to_i64":
         # to_i64() -> Maybe<i64> (enum struct)
-        # Maybe<i64> layout: {i32 tag, [8 x i8] data}
-        i8_array_8 = ir.ArrayType(i8, 8)
-        maybe_i64_type = ir.LiteralStructType([i32, i8_array_8])
-        return_type = maybe_i64_type
+        # Maybe<i64> layout (#300 phase 2): {i32 tag, [1 x i64] data}
+        from sushi_lang.sushi_stdlib.src.type_definitions import get_maybe_type
+        return_type = get_maybe_type(ir.IntType(64))
         param_types = [string_type]
         call_args = [receiver_value]
     elif method == "to_f64":
         # to_f64() -> Maybe<f64> (enum struct)
-        # Maybe<f64> layout: {i32 tag, [8 x i8] data}
-        i8_array_8 = ir.ArrayType(i8, 8)
-        maybe_f64_type = ir.LiteralStructType([i32, i8_array_8])
-        return_type = maybe_f64_type
+        # Maybe<f64> layout (#300 phase 2): {i32 tag, [1 x i64] data}
+        from sushi_lang.sushi_stdlib.src.type_definitions import get_maybe_type
+        return_type = get_maybe_type(ir.DoubleType())
         param_types = [string_type]
         call_args = [receiver_value]
     else:

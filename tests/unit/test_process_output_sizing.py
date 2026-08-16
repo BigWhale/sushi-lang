@@ -55,8 +55,10 @@ def test_stdlib_process_output_size_matches_backend_sizing():
 
 
 def test_result_data_array_holds_process_output():
-    # Result<ProcessOutput, ProcessError> = {i32 tag, [N x i8] data}; N must fit ProcessOutput.
+    # Result<ProcessOutput, ProcessError> = {i32 tag, [K x i64] data} (#300 phase 2);
+    # K i64 words must fit ProcessOutput's aligned byte size.
     result_ty = get_process_output_result_type()
     data_array = result_ty.elements[1]
-    assert data_array.count == _process_output_size_bytes()
-    assert data_array.count >= 5  # at least large enough for the ProcessError variant too
+    assert data_array.element.width == 64
+    assert data_array.count * 8 >= _process_output_size_bytes()
+    assert data_array.count == (_process_output_size_bytes() + 7) // 8

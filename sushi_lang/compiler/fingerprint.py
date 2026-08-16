@@ -180,6 +180,11 @@ def _stdlib_generator_sources() -> list:
     # (build.py: `from sushi_lang.backend.types import primitives`).
     sources.extend((sushi_lang_dir / "backend" / "types" / "primitives").rglob("*.py"))
     sources.append(sushi_lang_dir / "sushi_stdlib" / "build.py")
+    # The ABI files: the enum layout lives in mapping.py/sizing.py, and the stdlib .bc
+    # must byte-match it. Before these were hashed, a backend-only layout change linked
+    # a stale .bc SILENTLY (found while landing #300 phase 2).
+    sources.append(sushi_lang_dir / "backend" / "types" / "core" / "mapping.py")
+    sources.append(sushi_lang_dir / "backend" / "types" / "core" / "sizing.py")
     return sorted(sources, key=str)
 
 

@@ -87,13 +87,16 @@ def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
     return MatchArm(pattern=pattern, body=body, loc=span_of(t))
 
 
-def parse_pattern(t: Tree, ast_builder: 'ASTBuilder') -> Pattern:
+def parse_pattern(t: Tree, ast_builder: 'ASTBuilder', nested: bool = False) -> Pattern:
     """Parse pattern: NAME "." NAME ["(" pattern_list ")"]
 
     Supports nested patterns for matching nested enums:
     - FileResult.Ok(f) - simple binding
     - FileResult.Err(FileError.NotFound()) - nested pattern
     - FileResult.Err(_) - wildcard
+    - Shape.Poly(&poke p) - reference binding (#300 phase 3; TOP-LEVEL patterns only,
+      because nested-pattern extraction walks through temporary copies and a pointer
+      into one is a silently lost write -- `nested` carries that fact down)
     """
     t = expect(t, "pattern")
 
@@ -117,15 +120,26 @@ def parse_pattern(t: Tree, ast_builder: 'ASTBuilder') -> Pattern:
                     # Store underscore as "_" - scope analyzer will skip it
                     bindings.append("_")
             elif isinstance(child, Tree):
-                # A reference binding directly in a pattern (`Variant(&poke x)`) waits on
-                # the enum payload alignment fix (#300 phase 3): the payload is byte-packed
-                # behind the tag, and a pointer into it is the #149 crash class. The two
-                # working spellings are `Own(&poke x)` and `foreach(&poke r in ...)`.
+                # A reference binding (`Variant(&poke x)`): legal in a TOP-LEVEL pattern
+                # (#300 phase 3, on the aligned enum payload layout). In a NESTED pattern
+                # it stays CE2424: nested extraction walks through temporary copies, so a
+                # pointer into one writes to storage nobody reads.
                 if child.data == "ref_binding":
-                    raise SyntaxDiagnostic("CE2424", span=span_of(child)) \
-                        .help("supported today: `Own(&poke x)` in a pattern, and "
-                              "`foreach(&poke r in ...)`; otherwise clone out, mutate, "
-                              "store back")
+                    if nested:
+                        raise SyntaxDiagnostic("CE2424", span=span_of(child)) \
+                            .help("bind the payload by value in the nested pattern, or "
+                                  "restructure to match the inner enum at the top level")
+                    mode_tok = next((c for c in child.children
+                                     if isinstance(c, Token) and c.type == "BORROW_MODE"), None)
+                    name_tok = next((c for c in child.children
+                                     if isinstance(c, Token) and c.type == "NAME"), None)
+                    if mode_tok is None or name_tok is None:
+                        ice(t, "malformed ref_binding in pattern")
+                    from sushi_lang.semantics.ast import RefBinding
+                    bindings.append(RefBinding(
+                        name=str(name_tok.value), mode=str(mode_tok.value),
+                        loc=span_of(child)))
+                    continue
                 # Recurse for pattern_item
                 if child.data == "pattern_item":
                     # pattern_item can be: pattern | NAME | wildcard_pattern | own_pattern_call
@@ -135,7 +149,7 @@ def parse_pattern(t: Tree, ast_builder: 'ASTBuilder') -> Pattern:
                     inner_own = first_tree(child.children, "own_pattern_call")
                     if inner_pattern is not None:
                         # Nested pattern - recurse
-                        bindings.append(parse_pattern(inner_pattern, ast_builder))
+                        bindings.append(parse_pattern(inner_pattern, ast_builder, nested=True))
                     elif inner_wildcard is not None:
                         # Wildcard pattern
                         bindings.append("_")
@@ -203,7 +217,7 @@ def parse_own_pattern(t: Tree, ast_builder: 'ASTBuilder') -> 'OwnPattern':
 
     if inner_pattern is not None:
         # Nested pattern
-        inner = parse_pattern(inner_pattern, ast_builder)
+        inner = parse_pattern(inner_pattern, ast_builder, nested=True)
     elif inner_wildcard is not None:
         # Wildcard - store as "_"
         inner = "_"

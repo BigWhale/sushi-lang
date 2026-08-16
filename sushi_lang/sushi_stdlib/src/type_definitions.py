@@ -197,7 +197,7 @@ def _process_output_size_bytes() -> int:
 
 
 def get_process_output_result_type() -> ir.LiteralStructType:
-    """Result<ProcessOutput, ProcessError> LLVM layout: { i32 tag, [40 x i8] data }.
+    """Result<ProcessOutput, ProcessError> LLVM layout: { i32 tag, [5 x i64] data }.
 
     Uses the ALIGNED ProcessOutput size (see `_process_output_size_bytes`), matching the
     compiler's enum-data sizing (backend/types/core/sizing.py). Single source of truth used
@@ -206,28 +206,41 @@ def get_process_output_result_type() -> ir.LiteralStructType:
     """
     i32 = ir.IntType(32)
     data_bytes = max(_process_output_size_bytes(), 1)
-    return ir.LiteralStructType([i32, ir.ArrayType(ir.IntType(8), data_bytes)])
+    return ir.LiteralStructType([i32, ir.ArrayType(ir.IntType(64), _payload_word_count(data_bytes))])
 
 
 # ==============================================================================
 # Enum Type Helpers
 # ==============================================================================
 
+def _payload_word_count(byte_size: int) -> int:
+    """i64 words needed for `byte_size` payload bytes, minimum 1 (#300 phase 2).
+
+    The enum LLVM shape is `{i32 tag, [K x i64] data}`: the i64 array member gives the
+    struct 8-alignment, so the payload starts at offset 8 and naturally aligned field
+    offsets inside it are naturally aligned absolutely. This mirrors the backend's
+    TypeSizing.enum_payload_word_count and MUST stay in step with it -- the compiler
+    re-declares these stdlib signatures at call sites, and a drift is a CE0017 or a
+    silent miscompile.
+    """
+    return max((byte_size + 7) // 8, 1)
+
+
 def get_unit_enum_type() -> ir.LiteralStructType:
     """Get the LLVM type for a unit enum (enum with no associated data).
 
     Unit enums have only discriminant tags, no variant data.
-    LLVM layout: {i32 tag, [1 x i8] data}
-    The data array has minimum 1 byte even though variants have no data.
+    LLVM layout: {i32 tag, [1 x i64] data} (#300 phase 2) -- the data array keeps one
+    i64 word so the shape (and alignment) is uniform with every payload-carrying enum.
 
     Examples: SeekFrom, FileMode, ProcessError, StdError
 
     Returns:
         LLVM struct type for unit enums
     """
-    i8 = ir.IntType(8)
     i32 = ir.IntType(32)
-    return ir.LiteralStructType([i32, ir.ArrayType(i8, 1)])
+    i64 = ir.IntType(64)
+    return ir.LiteralStructType([i32, ir.ArrayType(i64, 1)])
 
 
 # ==============================================================================
@@ -237,12 +250,12 @@ def get_unit_enum_type() -> ir.LiteralStructType:
 def get_result_type(ok_type: ir.Type, err_type: ir.Type = None) -> ir.LiteralStructType:
     """Get the Result<T, E> enum type.
 
-    Result structure: { i32 tag, [N x i8] data }
+    Result structure: { i32 tag, [K x i64] data } (#300 phase 2)
     - Field 0: i32 tag - discriminant (0=Ok, 1=Err)
-    - Field 1: [N x i8] data - byte array containing the packed value
+    - Field 1: [K x i64] data - 8-aligned payload storage
 
     This matches the actual LLVM layout used by the backend.
-    The data field size N is max(sizeof(ok_type), sizeof(err_type), 1).
+    K is max(sizeof(ok_type), sizeof(err_type), 1) rounded up to i64 words.
 
     Args:
         ok_type: Type of the Ok value
@@ -253,7 +266,6 @@ def get_result_type(ok_type: ir.Type, err_type: ir.Type = None) -> ir.LiteralStr
     """
     from sushi_lang.backend.expressions.memory import calculate_llvm_type_size
 
-    i8 = ir.IntType(8)
     i32 = ir.IntType(32)
 
     # Calculate size of ok_type in bytes
@@ -268,19 +280,19 @@ def get_result_type(ok_type: ir.Type, err_type: ir.Type = None) -> ir.LiteralStr
         # Legacy behavior: use only ok_type size
         size_bytes = max(ok_size, 1)
 
-    data_array = ir.ArrayType(i8, size_bytes)
+    data_array = ir.ArrayType(ir.IntType(64), _payload_word_count(size_bytes))
     return ir.LiteralStructType([i32, data_array])
 
 
 def get_maybe_type(some_type: ir.Type) -> ir.LiteralStructType:
     """Get the Maybe<T> enum type.
 
-    Maybe structure: { i32 tag, [N x i8] data }
+    Maybe structure: { i32 tag, [K x i64] data } (#300 phase 2)
     - Field 0: i32 tag - discriminant (0=Some, 1=None)
-    - Field 1: [N x i8] data - byte array containing the packed value
+    - Field 1: [K x i64] data - 8-aligned payload storage
 
     This matches the actual LLVM layout used by the backend.
-    The data field size N is determined by sizeof(some_type).
+    K is sizeof(some_type) rounded up to i64 words.
 
     Args:
         some_type: Type of the Some value
@@ -290,13 +302,12 @@ def get_maybe_type(some_type: ir.Type) -> ir.LiteralStructType:
     """
     from sushi_lang.backend.expressions.memory import calculate_llvm_type_size
 
-    i8 = ir.IntType(8)
     i32 = ir.IntType(32)
 
     # Calculate size of some_type in bytes using existing infrastructure
     size_bytes = calculate_llvm_type_size(some_type)
 
-    data_array = ir.ArrayType(i8, size_bytes)
+    data_array = ir.ArrayType(ir.IntType(64), _payload_word_count(max(size_bytes, 1)))
     return ir.LiteralStructType([i32, data_array])
 
 

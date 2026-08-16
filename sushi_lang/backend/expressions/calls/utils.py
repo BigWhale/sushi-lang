@@ -136,6 +136,51 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
     return None
 
 
+def _stdlib_call_return_enum(codegen: 'LLVMCodegen', func_name: str) -> Optional[EnumType]:
+    """The Result/Maybe enum a direct stdlib-module call returns, or None.
+
+    Mirrors the return-type facts Pass 1.5 registers for these functions
+    (semantics/generics/instantiate/expressions.py). Keep the two in step: a
+    function listed there and missed here falls back to LLVM-layout matching,
+    which cannot tell same-shaped enums apart (#300 phase 2).
+    """
+    from sushi_lang.semantics.typesys import BuiltinType
+    from sushi_lang.backend.generics.result_builder import intern_result
+
+    enums = codegen.enum_table.by_name
+    if func_name == 'getenv':
+        return enums.get('Maybe<string>')
+
+    result_specs = {
+        'sleep': (BuiltinType.I32, 'StdError'),
+        'msleep': (BuiltinType.I32, 'StdError'),
+        'usleep': (BuiltinType.I32, 'StdError'),
+        'nanosleep': (BuiltinType.I32, 'StdError'),
+        'setenv': (BuiltinType.I32, 'EnvError'),
+        'file_size': (BuiltinType.I64, 'FileError'),
+        'remove': (BuiltinType.I32, 'FileError'),
+        'rename': (BuiltinType.I32, 'FileError'),
+        'copy': (BuiltinType.I32, 'FileError'),
+        'mkdir': (BuiltinType.I32, 'FileError'),
+        'rmdir': (BuiltinType.I32, 'FileError'),
+        'chdir': (BuiltinType.I32, 'ProcessError'),
+        'getcwd': (BuiltinType.STRING, 'ProcessError'),
+    }
+    spec = result_specs.get(func_name)
+    if spec is None:
+        if func_name == 'run':
+            out_struct = codegen.struct_table.by_name.get('ProcessOutput')
+            err_enum = enums.get('ProcessError')
+            if out_struct is not None and err_enum is not None:
+                return intern_result(codegen, out_struct, err_enum)
+        return None
+    ok_type, err_name = spec
+    err_enum = enums.get(err_name)
+    if err_enum is None:
+        return None
+    return intern_result(codegen, ok_type, err_enum)
+
+
 def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_value: ir.Value, prefix: str) -> Optional[EnumType]:
     """Infer generic enum type (Result<T> or Maybe<T>) from receiver using multiple strategies."""
     from sushi_lang.semantics.typesys import ReferenceType
@@ -163,6 +208,17 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
             if type_name in codegen.enum_table.by_name:
                 return codegen.enum_table.by_name[type_name] if type_name.startswith(prefix) else None
 
+    # Strategy 1b: a method-call (or `??`) receiver carries the type Pass 2 stamped
+    # on the node (`inferred_return_type` / `inferred_unwrapped_type`, the chained-
+    # receiver support). Authoritative like Strategy 1: a stamped enum of the other
+    # family answers None instead of falling through to the layout heuristic, which
+    # cannot tell same-shaped enums apart under the #300 phase 2 uniform layout
+    # (e.g. `args.get(1).realise(d)` -- Maybe<string> == Result<i32, StdError> in LLVM).
+    for stamp_attr in ('inferred_return_type', 'inferred_unwrapped_type'):
+        stamped = getattr(receiver, stamp_attr, None)
+        if isinstance(stamped, EnumType):
+            return stamped if stamped.name.startswith(prefix) else None
+
     # Strategy 2: Infer from function call return type (for Call expressions).
     #
     # Both lookups here used to build a ONE-argument name -- f"Result<{ok}>" -- which can never
@@ -187,6 +243,19 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
                 result_type = codegen.function_return_types[func_name]
                 if isinstance(result_type, EnumType) and result_type.name.startswith(prefix):
                     return result_type
+
+            # Stdlib module functions (getenv, file_size, getcwd, ...) are in no
+            # function table, so they used to fall through to Strategy 3. Under the
+            # #300 phase 2 uniform {i32, [K x i64]} enum layout that is no longer
+            # safe: Maybe<string> and Result<i32, StdError> share ONE LLVM type, so
+            # the layout heuristic let the wrong family claim the receiver of
+            # `getenv(x).realise(d)`. Resolve these calls from the same facts Pass
+            # 1.5 registers (semantics/generics/instantiate/expressions.py); a
+            # known stdlib return is authoritative, so a non-matching prefix
+            # answers None rather than falling through.
+            stdlib_ret = _stdlib_call_return_enum(codegen, func_name)
+            if stdlib_ret is not None:
+                return stdlib_ret if stdlib_ret.name.startswith(prefix) else None
 
     # Strategy 3: Fallback to LLVM type matching (last resort, only when the
     # receiver's semantic type could not be determined above).

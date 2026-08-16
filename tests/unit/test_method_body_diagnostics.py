@@ -84,11 +84,11 @@ def test_consuming_a_reference_param_is_relational_in_every_callable(analyze, fo
 
 
 def test_writing_through_self_names_the_future_feature(analyze):
-    """CE2421's help must name `&poke self` (#327), not a dead end.
+    """CE2421's help must name `&poke self` (#327) -- the spelling that works.
 
-    There is no way to spell a mutating receiver today, so a help that only said "do not
-    do this" would leave the user with no next step. The ruling on #298 chose the
-    rejection precisely because the feature it points at is designed separately.
+    The receiver of a modeless method stays a read-only borrow, and the help points at
+    the mutable-receiver spelling the language now has: declare the method
+    `(&poke self, ...)` and the write reaches the caller.
     """
     src = (
         "struct Counter:\n"

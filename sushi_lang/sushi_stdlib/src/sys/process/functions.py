@@ -247,8 +247,8 @@ def generate_run(module: ir.Module) -> None:
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
     out_type = get_process_output_type()                 # {i32, string, string}
-    err_type = get_process_error_type()                  # unit enum, 5 bytes
-    result_type = get_process_output_result_type()       # {i32, [40 x i8]} (aligned; matches compiler)
+    err_type = get_process_error_type()                  # unit enum {i32, [1 x i64]}, 16 bytes
+    result_type = get_process_output_result_type()       # {i32, [5 x i64]} (aligned; matches compiler)
     argv_type = ir.LiteralStructType([i32, i32, string_type.as_pointer()])  # string[]
     char_pp = i8_ptr.as_pointer()
 
@@ -301,7 +301,8 @@ def generate_run(module: ir.Module) -> None:
         b.store(ir.Constant(i32, 1), b.gep(res, [z, z]))          # Result tag = Err
         ev = b.alloca(err_type)
         b.store(ir.Constant(i32, variant_tag), b.gep(ev, [z, z]))  # ProcessError variant tag
-        b.store(ir.Constant(ir.ArrayType(i8, 1), bytearray(1)), b.gep(ev, [z, one_i32]))
+        # Zero the unit enum's [1 x i64] data word (#300 phase 2)
+        b.store(ir.Constant(err_type.elements[1], None), b.gep(ev, [z, one_i32]))
         data = b.bitcast(b.gep(res, [z, one_i32]), err_type.as_pointer())
         b.store(b.load(ev), data)
         b.ret(b.load(res))

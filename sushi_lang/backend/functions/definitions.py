@@ -133,9 +133,18 @@ class FunctionDefinitions:
         # Mark that we're compiling an extension method (for return handling)
         self.codegen.in_extension_method = True
 
-        # Track 'self' and parameter types in variable_types for struct member access resolution
-        if ext.target_type is not None:
-            self.codegen.variable_types["self"] = ext.target_type
+        # Track 'self' and parameter types in variable_types for struct member access
+        # resolution. A moded receiver (#327) registers its full ReferenceType -- the
+        # single fact `is_reference_parameter` keys on, so every deref/write consumer
+        # treats `self` as the pointer it now is.
+        self_semantic = ext.target_type
+        if self_semantic is not None and getattr(ext, "self_mode", None) is not None:
+            from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
+            self_semantic = ReferenceType(
+                ext.target_type,
+                BorrowMode.POKE if ext.self_mode == "poke" else BorrowMode.PEEK)
+        if self_semantic is not None:
+            self.codegen.variable_types["self"] = self_semantic
         for param in ext.params:
             if param.ty is not None:
                 self.codegen.variable_types[param.name] = param.ty
@@ -145,8 +154,8 @@ class FunctionDefinitions:
         # them. Extension bodies begin_function with fn_def=None, so begin_function
         # never records these. set_semantic_type does NOT register for RAII cleanup,
         # keeping the by-value `self` unfreed (no double-free of a shared buffer).
-        if ext.target_type is not None:
-            self.codegen.memory.set_semantic_type("self", ext.target_type)
+        if self_semantic is not None:
+            self.codegen.memory.set_semantic_type("self", self_semantic)
         for param in ext.params:
             if param.ty is not None:
                 self.codegen.memory.set_semantic_type(param.name, param.ty)

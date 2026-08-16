@@ -1,6 +1,8 @@
 """File utility functions for <io/files> module."""
 from llvmlite import ir
-from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types, get_string_type
+from sushi_lang.sushi_stdlib.src.type_definitions import (
+    get_basic_types, get_string_type, get_result_type, get_unit_enum_type,
+)
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.backend.platform_detect import get_current_platform
 from sushi_lang.sushi_stdlib.src.string_helpers import fat_pointer_to_cstr
@@ -170,7 +172,8 @@ def generate_file_size(module: ir.Module) -> None:
     Uses POSIX stat() and returns st_size field.
     Returns: Result.Ok(size) on success, Result.Err() on failure
 
-    Result<i64> layout: {i32 tag, [8 x i8] data}
+    Result<i64, FileError> layout (#300 phase 2): {i32 tag, [2 x i64] data}
+    (FileError is a unit enum {i32, [1 x i64]} = 16 bytes, so K = max(8, 16)/8 = 2)
     """
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
@@ -183,9 +186,9 @@ def generate_file_size(module: ir.Module) -> None:
 
     memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
-    # Result<i64> = {i32 tag, [8 x i8] data}
-    data_array_type = ir.ArrayType(i8, 8)
-    result_type = ir.LiteralStructType([i32, data_array_type])
+    # Result<i64, FileError> = {i32 tag, [2 x i64] data} (#300 phase 2)
+    result_type = get_result_type(i64, get_unit_enum_type())
+    data_array_type = result_type.elements[1]
 
     func_type = ir.FunctionType(result_type, [string_type])
     func = ir.Function(module, func_type, name="sushi_io_files_file_size")
@@ -243,6 +246,7 @@ def generate_file_size(module: ir.Module) -> None:
     i64_alloca = builder.alloca(i64, name="size_value")
     builder.store(st_size, i64_alloca)
     data_alloca = builder.alloca(data_array_type, name="data_array")
+    builder.store(ir.Constant(data_array_type, None), data_alloca)
 
     # Bitcast and memcpy
     src_ptr = builder.bitcast(i64_alloca, i8_ptr)
@@ -276,8 +280,10 @@ def generate_remove(module: ir.Module) -> None:
 
     memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
-    data_array_type = ir.ArrayType(i8, 4)
-    result_type = ir.LiteralStructType([i32, data_array_type])
+    # Result<i32, FileError> = {i32 tag, [2 x i64] data} (#300 phase 2):
+    # FileError is a unit enum {i32, [1 x i64]} = 16 bytes, so K = max(4, 16)/8 = 2
+    result_type = get_result_type(i32, get_unit_enum_type())
+    data_array_type = result_type.elements[1]
 
     func_type = ir.FunctionType(result_type, [string_type])
     func = ir.Function(module, func_type, name="sushi_io_files_remove")
@@ -309,6 +315,7 @@ def generate_remove(module: ir.Module) -> None:
     value_alloca = builder.alloca(i32, name="value")
     builder.store(zero, value_alloca)
     data_alloca = builder.alloca(data_array_type, name="data_array")
+    builder.store(ir.Constant(data_array_type, None), data_alloca)
 
     src_ptr = builder.bitcast(value_alloca, i8_ptr)
     dest_ptr = builder.bitcast(data_alloca, i8_ptr)
@@ -339,8 +346,10 @@ def generate_rmdir(module: ir.Module) -> None:
 
     memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
-    data_array_type = ir.ArrayType(i8, 4)
-    result_type = ir.LiteralStructType([i32, data_array_type])
+    # Result<i32, FileError> = {i32 tag, [2 x i64] data} (#300 phase 2):
+    # FileError is a unit enum {i32, [1 x i64]} = 16 bytes, so K = max(4, 16)/8 = 2
+    result_type = get_result_type(i32, get_unit_enum_type())
+    data_array_type = result_type.elements[1]
 
     func_type = ir.FunctionType(result_type, [string_type])
     func = ir.Function(module, func_type, name="sushi_io_files_rmdir")
@@ -372,6 +381,7 @@ def generate_rmdir(module: ir.Module) -> None:
     value_alloca = builder.alloca(i32, name="value")
     builder.store(zero, value_alloca)
     data_alloca = builder.alloca(data_array_type, name="data_array")
+    builder.store(ir.Constant(data_array_type, None), data_alloca)
 
     src_ptr = builder.bitcast(value_alloca, i8_ptr)
     dest_ptr = builder.bitcast(data_alloca, i8_ptr)
@@ -402,8 +412,10 @@ def generate_mkdir(module: ir.Module) -> None:
 
     memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
-    data_array_type = ir.ArrayType(i8, 4)
-    result_type = ir.LiteralStructType([i32, data_array_type])
+    # Result<i32, FileError> = {i32 tag, [2 x i64] data} (#300 phase 2):
+    # FileError is a unit enum {i32, [1 x i64]} = 16 bytes, so K = max(4, 16)/8 = 2
+    result_type = get_result_type(i32, get_unit_enum_type())
+    data_array_type = result_type.elements[1]
 
     func_type = ir.FunctionType(result_type, [string_type, i32])
     func = ir.Function(module, func_type, name="sushi_io_files_mkdir")
@@ -437,6 +449,7 @@ def generate_mkdir(module: ir.Module) -> None:
     value_alloca = builder.alloca(i32, name="value")
     builder.store(zero, value_alloca)
     data_alloca = builder.alloca(data_array_type, name="data_array")
+    builder.store(ir.Constant(data_array_type, None), data_alloca)
 
     src_ptr = builder.bitcast(value_alloca, i8_ptr)
     dest_ptr = builder.bitcast(data_alloca, i8_ptr)
@@ -467,8 +480,10 @@ def generate_rename(module: ir.Module) -> None:
 
     memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
-    data_array_type = ir.ArrayType(i8, 4)
-    result_type = ir.LiteralStructType([i32, data_array_type])
+    # Result<i32, FileError> = {i32 tag, [2 x i64] data} (#300 phase 2):
+    # FileError is a unit enum {i32, [1 x i64]} = 16 bytes, so K = max(4, 16)/8 = 2
+    result_type = get_result_type(i32, get_unit_enum_type())
+    data_array_type = result_type.elements[1]
 
     func_type = ir.FunctionType(result_type, [string_type, string_type])
     func = ir.Function(module, func_type, name="sushi_io_files_rename")
@@ -503,6 +518,7 @@ def generate_rename(module: ir.Module) -> None:
     value_alloca = builder.alloca(i32, name="value")
     builder.store(zero, value_alloca)
     data_alloca = builder.alloca(data_array_type, name="data_array")
+    builder.store(ir.Constant(data_array_type, None), data_alloca)
 
     src_ptr = builder.bitcast(value_alloca, i8_ptr)
     dest_ptr = builder.bitcast(data_alloca, i8_ptr)
@@ -551,8 +567,10 @@ def generate_copy(module: ir.Module) -> None:
 
     memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
 
-    data_array_type = ir.ArrayType(i8, 4)
-    result_type = ir.LiteralStructType([i32, data_array_type])
+    # Result<i32, FileError> = {i32 tag, [2 x i64] data} (#300 phase 2):
+    # FileError is a unit enum {i32, [1 x i64]} = 16 bytes, so K = max(4, 16)/8 = 2
+    result_type = get_result_type(i32, get_unit_enum_type())
+    data_array_type = result_type.elements[1]
 
     func_type = ir.FunctionType(result_type, [string_type, string_type])
     func = ir.Function(module, func_type, name="sushi_io_files_copy")
@@ -632,6 +650,7 @@ def generate_copy(module: ir.Module) -> None:
     value_alloca = builder.alloca(i32, name="value")
     builder.store(zero_i32, value_alloca)
     data_alloca = builder.alloca(data_array_type, name="data_array")
+    builder.store(ir.Constant(data_array_type, None), data_alloca)
 
     src_ptr_cast = builder.bitcast(value_alloca, i8_ptr)
     dest_ptr_cast = builder.bitcast(data_alloca, i8_ptr)

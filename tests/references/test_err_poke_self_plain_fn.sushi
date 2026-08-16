@@ -1,0 +1,7 @@
+# #327: a plain top-level function has no receiver -- `&poke self` is CE2425 there.
+# EXPECT_ERROR_CODE: CE2425
+fn plain(&poke self) i32:
+    return Result.Ok(1)
+
+fn main() i32:
+    return Result.Ok(0)

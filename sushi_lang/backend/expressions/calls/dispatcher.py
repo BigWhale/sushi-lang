@@ -445,6 +445,15 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     if llvm_fn is None:
         raise KeyError(f"Extension method not found: {func_name}")
 
+    # A `&poke self` / `&peek self` method (#327) takes its receiver by POINTER, so a
+    # write through `self` reaches the caller's value. Pass 2 stamped the resolution on
+    # the node; `emit_receiver_as_pointer` returns the receiver's slot address (with the
+    # load-through for a reference-parameter receiver). Pass 2/3 reject the shapes with
+    # no address (a temporary, a constant, a read-only root) before codegen.
+    if getattr(expr, "callee_self_mode", None) is not None:
+        from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer
+        receiver_value = emit_receiver_as_pointer(codegen, expr.receiver)
+
     emitted_args = [receiver_value]
     arg_values = [codegen.expressions.emit_expr(arg) for arg in expr.args]
     _register_inline_closure_temps(codegen, expr.args, arg_values)

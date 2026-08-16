@@ -456,19 +456,24 @@ that before this design shipped was already double-freeing.
 
 ### 8.4 What is NOT decided
 
-**How to opt into a mutable binding** — DECIDED and phase 1 SHIPPED (#300, 2026-08-16). The
-spelling is the binding site, with Sushi's own vocabulary: `foreach(&poke r in rows.iter())`
-and `Own(&poke x)` bind a POINTER into the container's / pointee's storage, so a write
-through the binding reaches the owner; `&peek` is the copy-free read-only twin. The binding
-registers with its full `ReferenceType`, which wires in every existing rule by construction:
-a write through `&peek` is CE2408, a consuming use is CE2411, and the owner is FROZEN for
-the binding's scope (CE2412) exactly like a `let`-borrow's. Fences: an iterable whose items
-have no address (a range, `.entries()`) is **CE2423**; a `&poke` binding out of a `&peek`
-container is CE2408; out of a constant is CE2400; and the match-pattern position
-(`Shape.Poly(&poke p)`) is **CE2424** until the enum payload alignment fix (#300 phase 3),
-because the payload is byte-packed behind the tag and an interior pointer into it is the
-#149 crash class. Rust's scrutinee-side spelling (`match &mut x`) stays foreclosed-by-none
-but unimplemented.
+**How to opt into a mutable binding** — DECIDED and SHIPPED, all three phases (#300,
+2026-08-16). The spelling is the binding site, with Sushi's own vocabulary:
+`foreach(&poke r in rows.iter())`, `Own(&poke x)`, and a top-level match binding
+`Shape.Poly(&poke p)` bind a POINTER into the owner's storage, so a write through the
+binding reaches the owner in place; `&peek` is the copy-free read-only twin, and value and
+reference bindings mix in one pattern. The binding registers with its full `ReferenceType`,
+which wires in every existing rule by construction: a write through `&peek` is CE2408, a
+consuming use is CE2411, and the owner is FROZEN for the binding's scope (CE2412) exactly
+like a `let`-borrow's — including the tag-change hazard (rebinding the scrutinee under a
+live payload borrow, Rust's E0506). The match half rests on the phase-2 enum layout
+(`{i32 tag, [K x i64] data}`, naturally aligned payload offsets from one authority), which
+is what retired the `align=1` family and made an interior payload pointer safe to hand out.
+Fences: an iterable whose items have no address (a range, `.entries()`) is **CE2423**; a
+`&poke` binding out of a `&peek` owner is CE2408; out of a constant is CE2400; a TEMPORARY
+scrutinee is CE2404 (no storage to point into); and a reference binding in a NESTED pattern
+is **CE2424** — nested extraction walks through temporary copies, so a pointer into one is
+a silently lost write. Rust's scrutinee-side spelling (`match &mut x`) stays
+foreclosed-by-none but unimplemented.
 
 **Numbering, untangled.** Two different issues get invoked near this decision and are easy to
 conflate:
@@ -610,9 +615,8 @@ as `return self`. `.clone()` on a `string` now copies unconditionally; the destr
 keeps its guard. A clone that sometimes aliases was a hole in the ".clone() is the only
 deep copy" contract, independent of #338.
 
-There is no way to spell the working version today, so the diagnostic names the future
-feature rather than a dead end: **`&poke self`** (#327), an opt-in first parameter carrying
-the borrow vocabulary the language already has —
+The working version is spelled **`&poke self`** (#327, SHIPPED 2026-08-16), an opt-in
+first parameter carrying the borrow vocabulary the language already has —
 
 ```sushi
 extend Counter bump(&poke self) ~:
@@ -620,9 +624,15 @@ extend Counter bump(&poke self) ~:
     return ~
 ```
 
-— which inherits CE2408 / CE2407 / CE2404 at the call site for free, because it is the same
-`&poke`. This is the order #252 → CE2413 and #253 → CE2414 both followed: reject the
-unchecked form, design the feature separately.
+— the receiver arrives by POINTER, so the write reaches the caller's value and an owning
+field's old buffer is freed exactly once. It inherits the write gates at the call site,
+because a `&poke self` call IS a write to the receiver root: through a `&peek` parameter
+it is CE2408, on a binding CE2414, on a temporary CE2404, on a constant CE2400.
+`&peek self` states the read-only default explicitly; a perk declares the mode in its
+signature and the impl must match (CE4004); the receiver stays a borrow for consuming
+purposes (CE2411, `.clone()` escapes); and the parameter is CE2425 anywhere but first in
+an extension/perk method. This followed the order #252 → CE2413 and #253 → CE2414 set:
+reject the unchecked form first, then ship the feature.
 
 **Reads are unaffected, and one of them became expressible.** A field read, a read-only
 method under the receiver, `.clone()` of an owning field, and `.clone()` of the whole

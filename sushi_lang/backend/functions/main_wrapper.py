@@ -72,10 +72,9 @@ class MainFunctionWrapper:
         self.codegen.builder.store(data_array, data_alloca)
 
         value_ptr = self.codegen.builder.bitcast(data_alloca, value_type.as_pointer())
-        # align=1: the payload lives in a [N x i8] slot (byte-aligned), so an over-aligned
-        # value type (a 16-byte {i8*,i32,i8} string) must be read unaligned, or LLVM emits an
-        # aligned vector move that faults (SIGSEGV) on x86-64 (#145).
-        value = self.codegen.builder.load(value_ptr, name="result_value", align=1)
+        # Natural alignment: the payload slot is a [K x i64] array (#300 phase 2), so
+        # the alloca is 8-aligned and the packed-layout `align=1` (#145) is gone.
+        value = self.codegen.builder.load(value_ptr, name="result_value")
 
         return (is_ok, value)
 

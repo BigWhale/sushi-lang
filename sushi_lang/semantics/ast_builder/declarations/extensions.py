@@ -44,9 +44,10 @@ def parse_extenddef(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDef:
         ice(t, "missing body block")
 
     # Parse components
-    from sushi_lang.semantics.ast_builder.declarations.functions import parse_params
+    from sushi_lang.semantics.ast_builder.declarations.functions import parse_params, strip_self_param
     target_type = ast_builder._parse_type(target_type_node) if target_type_node else None
     params = parse_params(params_node, ast_builder) if params_node else []
+    self_mode, self_mode_span, params = strip_self_param(params, span_of(t))
     return_type = ast_builder._parse_type(return_type_node) if return_type_node else None
 
     return ExtendDef(
@@ -59,6 +60,8 @@ def parse_extenddef(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDef:
         target_type_span=span_of(target_type_node),
         name_span=span_of(name_tok),
         ret_span=span_of(return_type_node),
+        self_mode=self_mode,
+        self_mode_span=self_mode_span,
     )
 
 
@@ -105,9 +108,10 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
         ice(suffix, "missing body block")
 
     # Parse components
-    from sushi_lang.semantics.ast_builder.declarations.functions import parse_params
+    from sushi_lang.semantics.ast_builder.declarations.functions import parse_params, strip_self_param
     target_type = ast_builder._parse_type(target_type_node) if target_type_node else None
     params = parse_params(params_node, ast_builder) if params_node else []
+    self_mode, self_mode_span, params = strip_self_param(params, span_of(t))
     return_type = ast_builder._parse_type(return_type_node) if return_type_node else None
 
     return ExtendDef(
@@ -120,4 +124,6 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
         target_type_span=span_of(target_type_node),
         name_span=span_of(name_tok),
         ret_span=span_of(return_type_node),
+        self_mode=self_mode,
+        self_mode_span=self_mode_span,
     )

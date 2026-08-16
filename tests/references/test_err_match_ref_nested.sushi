@@ -1,0 +1,20 @@
+# #300 phase 3 fence: a reference binding in a NESTED pattern stays CE2424 -- nested
+# extraction walks through temporary copies of the inner enums, so a pointer into one
+# writes to storage nobody reads (the #253 silently-lost-write class).
+# EXPECT_ERROR_CODE: CE2424
+enum Inner:
+    Deep(i32[])
+    Nil
+
+enum Outer:
+    Wrap(Inner)
+    Nothing
+
+fn main() i32:
+    let Outer o = Outer.Wrap(Inner.Deep(from([1])))
+    match o:
+        Outer.Wrap(Inner.Deep(&poke p)) ->
+            p.push(9)
+        Outer.Wrap(Inner.Nil) -> println("nil")
+        Outer.Nothing -> println("none")
+    return Result.Ok(0)

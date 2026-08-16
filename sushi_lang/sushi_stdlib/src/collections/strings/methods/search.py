@@ -15,7 +15,7 @@ find() and find_last() return UTF-8 character indices.
 
 import llvmlite.ir as ir
 from ..intrinsics import declare_utf8_count_intrinsic
-from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
+from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types, get_maybe_type
 
 
 def emit_string_starts_with(module: ir.Module) -> ir.Function:
@@ -321,15 +321,15 @@ def emit_string_find(module: ir.Module) -> ir.Function:
 
     # Get common types
     i8, i8_ptr, i32, i64, string_type = get_string_types()
-    # Maybe<i32> uses the standard enum layout: {i32 tag, [4 x i8] data}
-    # The i32 value is packed into the 4-byte data array
-    i8_array_4 = ir.ArrayType(i8, 4)
-    maybe_type = ir.LiteralStructType([i32, i8_array_4])
+    # Maybe<i32> uses the standard enum layout (#300 phase 2): {i32 tag, [1 x i64] data}
+    # The i32 value is packed at payload offset 0 of the data array
+    maybe_type = get_maybe_type(i32)
+    data_array_ty = maybe_type.elements[1]
 
     # Declare utf8_count intrinsic
     utf8_count = declare_utf8_count_intrinsic(module)
 
-    # Function signature: {i32, [4 x i8]} string_find({ i8*, i32 } str, { i8*, i32 } needle)
+    # Function signature: {i32, [1 x i64]} string_find({ i8*, i32 } str, { i8*, i32 } needle)
     fn_ty = ir.FunctionType(maybe_type, [string_type, string_type])
     func = ir.Function(module, fn_ty, name=func_name)
     func.args[0].name = "str"
@@ -416,12 +416,13 @@ def emit_string_find(module: ir.Module) -> ir.Function:
     char_index = builder.call(utf8_count, [str_data, found_pos_phi], name="char_index")
 
     # Build Maybe.Some(char_index): tag = 0 (Some variant), data = packed i32
-    # Enum layout: {i32 tag, [4 x i8] data}
+    # Enum layout: {i32 tag, [1 x i64] data}
     undef_maybe = ir.Constant(maybe_type, ir.Undefined)
     maybe_with_tag = builder.insert_value(undef_maybe, ir.Constant(i32, 0), 0, name="maybe_some_tag")
 
-    # Pack the i32 value into the [4 x i8] data field
-    temp_alloca = builder.alloca(i8_array_4, name="data_temp")
+    # Pack the i32 value into the [1 x i64] data field (payload offset 0)
+    temp_alloca = builder.alloca(data_array_ty, name="data_temp")
+    builder.store(ir.Constant(data_array_ty, None), temp_alloca)
     data_ptr_i8 = builder.bitcast(temp_alloca, i8_ptr, name="data_ptr_i8")
     data_ptr_i32 = builder.bitcast(data_ptr_i8, ir.PointerType(i32), name="data_ptr_i32")
     builder.store(char_index, data_ptr_i32)
@@ -434,7 +435,7 @@ def emit_string_find(module: ir.Module) -> ir.Function:
     undef_maybe_none = ir.Constant(maybe_type, ir.Undefined)
     maybe_none_with_tag = builder.insert_value(undef_maybe_none, ir.Constant(i32, 1), 0, name="maybe_none_tag")
     # Data field doesn't matter for None variant, but we need to fill it
-    zero_data = ir.Constant(i8_array_4, [0, 0, 0, 0])
+    zero_data = ir.Constant(data_array_ty, None)
     maybe_none_complete = builder.insert_value(maybe_none_with_tag, zero_data, 1, name="maybe_none_data")
     builder.ret(maybe_none_complete)
 
@@ -594,8 +595,8 @@ def emit_string_find_last(module: ir.Module) -> ir.Function:
         module: The LLVM module to emit the function into.
 
     Returns:
-        The emitted function: { i32, [4 x i8] } string_find_last({ i8*, i32 } str, { i8*, i32 } needle)
-        Returns Maybe<i32> represented as { i32 tag, [4 x i8] data }
+        The emitted function: { i32, [1 x i64] } string_find_last({ i8*, i32 } str, { i8*, i32 } needle)
+        Returns Maybe<i32> represented as { i32 tag, [1 x i64] data }
     """
     func_name = "string_find_last"
 
@@ -607,15 +608,15 @@ def emit_string_find_last(module: ir.Module) -> ir.Function:
 
     # Get common types
     i8, i8_ptr, i32, i64, string_type = get_string_types()
-    # Maybe<i32> uses the standard enum layout: {i32 tag, [4 x i8] data}
-    # The i32 value is packed into the 4-byte data array
-    i8_array_4 = ir.ArrayType(i8, 4)
-    maybe_type = ir.LiteralStructType([i32, i8_array_4])
+    # Maybe<i32> uses the standard enum layout (#300 phase 2): {i32 tag, [1 x i64] data}
+    # The i32 value is packed at payload offset 0 of the data array
+    maybe_type = get_maybe_type(i32)
+    data_array_ty = maybe_type.elements[1]
 
     # Declare utf8_count intrinsic
     utf8_count = declare_utf8_count_intrinsic(module)
 
-    # Function signature: {i32, [4 x i8]} string_find_last({ i8*, i32 } str, { i8*, i32 } needle)
+    # Function signature: {i32, [1 x i64]} string_find_last({ i8*, i32 } str, { i8*, i32 } needle)
     fn_ty = ir.FunctionType(maybe_type, [string_type, string_type])
     func = ir.Function(module, fn_ty, name=func_name)
     func.args[0].name = "str"
@@ -705,12 +706,13 @@ def emit_string_find_last(module: ir.Module) -> ir.Function:
     char_index = builder.call(utf8_count, [str_data, found_pos_phi], name="char_index")
 
     # Build Maybe.Some(char_index): tag = 0 (Some variant), data = packed i32
-    # Enum layout: {i32 tag, [4 x i8] data}
+    # Enum layout: {i32 tag, [1 x i64] data}
     undef_maybe = ir.Constant(maybe_type, ir.Undefined)
     maybe_with_tag = builder.insert_value(undef_maybe, ir.Constant(i32, 0), 0, name="maybe_some_tag")
 
-    # Pack the i32 value into the [4 x i8] data field
-    temp_alloca = builder.alloca(i8_array_4, name="data_temp")
+    # Pack the i32 value into the [1 x i64] data field (payload offset 0)
+    temp_alloca = builder.alloca(data_array_ty, name="data_temp")
+    builder.store(ir.Constant(data_array_ty, None), temp_alloca)
     data_ptr_i8 = builder.bitcast(temp_alloca, i8_ptr, name="data_ptr_i8")
     data_ptr_i32 = builder.bitcast(data_ptr_i8, ir.PointerType(i32), name="data_ptr_i32")
     builder.store(char_index, data_ptr_i32)
@@ -723,7 +725,7 @@ def emit_string_find_last(module: ir.Module) -> ir.Function:
     undef_maybe_none = ir.Constant(maybe_type, ir.Undefined)
     maybe_none_with_tag = builder.insert_value(undef_maybe_none, ir.Constant(i32, 1), 0, name="maybe_none_tag")
     # Data field doesn't matter for None variant, but we need to fill it
-    zero_data = ir.Constant(i8_array_4, [0, 0, 0, 0])
+    zero_data = ir.Constant(data_array_ty, None)
     maybe_none_complete = builder.insert_value(maybe_none_with_tag, zero_data, 1, name="maybe_none_data")
     builder.ret(maybe_none_complete)
 

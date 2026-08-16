@@ -58,11 +58,11 @@ class LLVMUtils:
         if isinstance(ty, ir.PointerType):
             return self.codegen.builder.icmp_unsigned('!=', v, ir.Constant(ty, None))
 
-        # Check for Result<T> enum type: {i32 tag, [N x i8] data}
+        # Check for Result<T> enum type: {i32 tag, [K x i64] data} (#300 phase 2)
         # For Result, check if tag == 0 (Ok variant)
         # LiteralStructType on purpose (#257): enums keep their anonymous
-        # {i32 tag, [N x i8]} layout -- only user STRUCTS became identified types. A user
-        # struct shaped {i32, [N x i8]} must not be read as a Result here.
+        # {i32 tag, [K x i64]} layout -- only user STRUCTS became identified types. A user
+        # struct shaped {i32, [K x i64]} must not be read as a Result here.
         if isinstance(ty, ir.LiteralStructType) and len(ty.elements) == 2:
             # Check if first element is i32 (tag) and second is an array (data)
             if isinstance(ty.elements[0], ir.IntType) and ty.elements[0].width == 32:

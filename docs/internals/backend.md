@@ -110,13 +110,20 @@ enum Status:
 ```
 
 ```python
-# LLVM: { i32, [largest_variant_size x i8] }
-#        ^tag  ^variant data (union-style)
+# LLVM: { i32, [K x i64] }   (#300 phase 2)
+#        ^tag  ^variant data (union-style), K = ceil(widest aligned payload / 8), min 1
 ir.LiteralStructType([
-    ir.IntType(32),                    # discriminant tag
-    ir.ArrayType(ir.IntType(8), size)  # variant data buffer
+    ir.IntType(32),                     # discriminant tag (4 bytes pad follow it)
+    ir.ArrayType(ir.IntType(64), words) # variant data buffer, 8-aligned
 ])
 ```
+
+The data member is an **i64 array on purpose**: it gives the struct 8-alignment, so the
+payload starts at offset 8 and every payload field sits at a naturally aligned offset
+(computed by the one authority, `TypeSizing.payload_field_offsets` — C struct layout
+rules). Payload accesses bitcast the data pointer to `i8*` and GEP by byte offset, with
+**natural alignment** — the old byte-array layout forced `align=1` on every access
+(#145), which is retired.
 
 ## Expression Emission
 

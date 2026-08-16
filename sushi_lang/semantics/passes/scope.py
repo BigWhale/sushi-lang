@@ -54,6 +54,9 @@ class ScopeAnalyzer:
         # use resolving to a scope BELOW a collector's boundary is captured by that
         # lambda (and every enclosing lambda whose boundary is also above it).
         self._capture_collectors: List[dict] = []
+        # True while checking a `&poke self` method body (#327): `self := v` is then
+        # the store-through write, not the forbidden receiver rebind.
+        self._self_is_poke: bool = False
 
     def run(self, program: Program) -> None:
         """Entry point for scope analysis."""
@@ -256,6 +259,10 @@ class ScopeAnalyzer:
         """Check a function definition."""
         self._push_scope()
 
+        # A plain function has no receiver; a stale flag from a previously checked
+        # `&poke self` method must not make `self := v` legal here (#327).
+        self._self_is_poke = False
+
         # A (possibly nested) function starts a fresh loop context: a
         # break/continue in its body must not see a loop in an enclosing function.
         saved_loop_depth = self._loop_depth
@@ -281,7 +288,9 @@ class ScopeAnalyzer:
         self._push_scope()
 
         # Add implicit 'self' parameter first - this is the receiver of the method
-        # It should not be declared explicitly by the user
+        # It should not be declared explicitly by the user. A `&poke self` receiver
+        # (#327) is rebindable (`self := 0` writes the caller's primitive).
+        self._self_is_poke = getattr(ext, "self_mode", None) == "poke"
         self._declare_variable("self", None)
 
         # Add explicit parameters from the extension method signature
@@ -300,7 +309,9 @@ class ScopeAnalyzer:
         for method in perk_impl.methods:
             self._push_scope()
 
-            # Add implicit 'self' parameter - represents the target type instance
+            # Add implicit 'self' parameter - represents the target type instance.
+            # `&poke self` (#327) makes it rebindable, as in extension methods.
+            self._self_is_poke = getattr(method, "self_mode", None) == "poke"
             self._declare_variable("self", None)
 
             # Add explicit parameters from the method signature
@@ -343,8 +354,11 @@ class ScopeAnalyzer:
         # For field rebind (obj.field := value), target is a MemberAccess
         if isinstance(stmt.target, Name):
             var_name = stmt.target.id
-            # Check if trying to rebind 'self' - this is not allowed in extension methods
-            if var_name == "self":
+            # A rebind of 'self' is not allowed for the classic read-only receiver --
+            # but a `&poke self` method (#327) writes its primitive receiver exactly
+            # this way (`self := 0`), the same store-through a `&poke T` parameter's
+            # rebind performs.
+            if var_name == "self" and not self._self_is_poke:
                 er.emit(self.reporter, er.ERR.CE1002, stmt.loc, name=var_name)
             else:
                 self._use_variable(var_name, stmt.loc, is_rebind=True)
@@ -484,6 +498,10 @@ class ScopeAnalyzer:
                 elif isinstance(inner, Pattern):
                     # Nested pattern inside Own(...)
                     self._declare_pattern_bindings(inner)
+            else:
+                # A RefBinding (#300 phase 3) declares its name like a plain binding;
+                # it carries its own span.
+                self._declare_variable(binding_item.name, binding_item.loc or pattern.loc)
 
     def _check_break(self, stmt: Break) -> None:
         """Check a break statement (only legal inside a loop)."""

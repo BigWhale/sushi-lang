@@ -405,6 +405,15 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
             er.emit(validator.reporter, er.ERR.CE2423,
                     stmt.item_borrow_span or stmt.loc)
             return
+
+    # The item binding lives for the LOOP and no longer (#341): save whatever entry it
+    # shadows and restore it after the body, the way a match arm already scopes its
+    # bindings (types/matching.py). Without the bracket, an outer local of the same
+    # name kept the ITEM's type for the rest of the function -- a false CE2006 on its
+    # next use.
+    _MISSING = object()
+    previous = validator.variable_types.get(stmt.item_name, _MISSING)
+    if stmt.item_borrow is not None:
         # The binding's registered type is the REFERENCE, so every consumer that asks
         # "is this name a borrow?" (Pass 3 rules, backend deref machinery) gets the
         # truthful answer; expression inference auto-derefs a reference-typed name.
@@ -416,7 +425,13 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
         validator.variable_types[stmt.item_name] = stmt.item_type
 
     # Validate the body block
-    validator._validate_block(stmt.body)
+    try:
+        validator._validate_block(stmt.body)
+    finally:
+        if previous is _MISSING:
+            validator.variable_types.pop(stmt.item_name, None)
+        else:
+            validator.variable_types[stmt.item_name] = previous
 
 
 def _foreach_iterable_is_addressable(iterable) -> bool:

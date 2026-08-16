@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from llvmlite import ir
-from sushi_lang.backend.constants import INT32_BIT_WIDTH, FAT_POINTER_SIZE_BYTES
+from sushi_lang.backend.constants import INT32_BIT_WIDTH
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.backend.utils import require_builder
@@ -54,12 +54,11 @@ def emit_process_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: b
         if len(expr.args) != 0:
             raise_internal_error("CE0023", method="getcwd", expected=0, got=len(expr.args))
 
-        # Result<string, ProcessError> type
-        # string (fat pointer) = 12 bytes
-        # ProcessError (unit enum) = 5 bytes
-        # Result data size = max(12, 5) = 12 bytes
-        result_string_data_size = FAT_POINTER_SIZE_BYTES  # 12 bytes
-        result_string_type = ir.LiteralStructType([i32, ir.ArrayType(ir.IntType(8), result_string_data_size)])
+        # Result<string, ProcessError> type (#300 phase 2): {i32 tag, [2 x i64] data}
+        # string (fat pointer) = 16 bytes; ProcessError (unit enum {i32, [1 x i64]}) = 16 bytes
+        # K = max(16, 16)/8 = 2. Shared helper byte-matches the .bc.
+        from sushi_lang.sushi_stdlib.src.type_definitions import get_result_type, get_unit_enum_type
+        result_string_type = get_result_type(string_type, get_unit_enum_type())
 
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, result_string_type, [])
         result = codegen.builder.call(stdlib_func, [], name="getcwd_result")
@@ -89,7 +88,7 @@ def emit_process_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: b
 
         # Build Result<ProcessOutput, ProcessError> from the shared aligned-layout helper
         # so the returned type matches both the .bc and the caller's variable type
-        # ({i32, [40 x i8]} — aligned ProcessOutput size).
+        # ({i32, [5 x i64]} -- aligned ProcessOutput size, 40 bytes -> K=5).
         from sushi_lang.sushi_stdlib.src.type_definitions import get_process_output_result_type
         result_type = get_process_output_result_type()
         argv_type = ir.LiteralStructType([i32, i32, string_type.as_pointer()])
@@ -108,11 +107,11 @@ def emit_process_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: b
 
         path_value = codegen.expressions.emit_expr(expr.args[0])
 
-        # Result<i32, ProcessError> type
-        # ProcessError is a unit enum: {i32 tag, [1 x i8] data} = 5 bytes
-        # i32 = 4 bytes
-        # Result data size = max(4, 5) = 5 bytes
-        result_i32_type = ir.LiteralStructType([i32, ir.ArrayType(ir.IntType(8), 5)])
+        # Result<i32, ProcessError> type (#300 phase 2): {i32 tag, [2 x i64] data}
+        # ProcessError is a unit enum {i32 tag, [1 x i64] data} = 16 bytes; i32 = 4 bytes
+        # K = max(4, 16)/8 = 2. Shared helper byte-matches the .bc.
+        from sushi_lang.sushi_stdlib.src.type_definitions import get_result_type, get_unit_enum_type
+        result_i32_type = get_result_type(i32, get_unit_enum_type())
 
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, result_i32_type, [string_type])
         result = codegen.builder.call(stdlib_func, [path_value], name="chdir_result")

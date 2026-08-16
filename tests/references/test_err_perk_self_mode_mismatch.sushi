@@ -1,0 +1,16 @@
+# #327: a perk that declares `(&poke self)` needs an impl that writes through the
+# receiver -- a by-value impl would silently lose the writes (#326 through the perk
+# door), so the signature mismatch is CE4004.
+# EXPECT_ERROR_CODE: CE4004
+perk Resettable:
+    fn reset(&poke self) ~
+
+struct Counter:
+    i32 n
+
+extend Counter with Resettable:
+    fn reset() ~:
+        return ~
+
+fn main() i32:
+    return Result.Ok(0)

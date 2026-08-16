@@ -557,6 +557,12 @@ class ExpressionValidator(RecursiveVisitor):
         if hasattr(temp_method_call, 'resolved_enum_type') and temp_method_call.resolved_enum_type is not None:
             node.resolved_enum_type = temp_method_call.resolved_enum_type
 
+        # CRITICAL: Copy the receiver-mode stamp back (#327) -- Pass 3 and the backend
+        # read it off THIS node, and losing it here would pass a poke-self receiver by
+        # value (the silently lost write of #326).
+        if getattr(temp_method_call, 'callee_self_mode', None) is not None:
+            node.callee_self_mode = temp_method_call.callee_self_mode
+
     def _validate_from_bits(self, node: DotCall) -> None:
         """Validate f64.from_bits(u64) / f32.from_bits(u32) static reinterpret calls."""
         tv = self.type_validator

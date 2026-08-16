@@ -1,0 +1,21 @@
+# #300 phase 3: a `&poke` match binding is a pointer into the SCRUTINEE'S payload
+# storage, so a mutating method through it reaches the owner in place -- the issue's
+# motivating program. The `&peek` twin reads without a payload copy.
+# EXPECT_STDOUT_EXACT: "4\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+enum Shape:
+    Poly(i32[])
+    Empty
+
+fn main() i32:
+    let Shape s = Shape.Poly(from([1, 2, 3]))
+    match s:
+        Shape.Poly(&poke p) ->
+            p.push(9)
+        Shape.Empty -> println("empty")
+    match s:
+        Shape.Poly(&peek q) ->
+            println(q.len())
+        Shape.Empty -> println("empty")
+    return Result.Ok(0)
