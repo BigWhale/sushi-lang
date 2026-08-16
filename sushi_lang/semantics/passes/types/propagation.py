@@ -203,13 +203,33 @@ def _propagate_generic_enum_type(validator: 'TypeValidator', node: Expr,
     elif isinstance(node, DotCall) and isinstance(node.receiver, Name):
         enum_name = node.receiver.id
 
+    if not (enum_name and isinstance(enum_type, EnumType)):
+        return
+
     # Check if this is a generic enum constructor
-    if (enum_name and enum_name in validator.generic_enum_table.by_name and
-        isinstance(enum_type, EnumType)):
+    if enum_name in validator.generic_enum_table.by_name:
         # Store the resolved enum type in the AST node for backend
         node.resolved_enum_type = enum_type
 
         # Recursively propagate to constructor arguments
+        _propagate_to_enum_args(validator, node, enum_type)
+
+    # A PLAIN enum still has to propagate to its arguments. Only the
+    # `resolved_enum_type` stamp above is generic-specific -- a plain enum needs no
+    # monomorphized identity, but its variant payload types are just as much the
+    # expected type of each argument, and `_propagate_to_enum_args` reads them off the
+    # variant either way.
+    #
+    # Without this, `Boxed.Wrap(Own.alloc(l))` never stamped `resolved_struct_type` on
+    # the `Own.alloc`, so the backend's Own probe declined the call, the receiver `Own`
+    # was emitted as an ordinary name, and it died as CE0055 -- for a static constructor
+    # in the one argument position that had no propagation (#265). The struct-constructor
+    # twin `Box(Own.alloc(l))` and the generic-enum twin `Maybe.Some(Own.alloc(l))` both
+    # worked, which is what made the gap look arbitrary.
+    #
+    # Keyed on an EXACT name match, so a constructor for some other enum -- a type error
+    # validation reports on its own -- cannot be handed this enum's payload types.
+    elif enum_name == enum_type.name:
         _propagate_to_enum_args(validator, node, enum_type)
 
 
