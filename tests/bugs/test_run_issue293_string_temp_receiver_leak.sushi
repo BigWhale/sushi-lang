@@ -1,0 +1,40 @@
+# #293: an owned `string` temporary leaked in every consuming position except a print
+# argument -- a method receiver, a condition operand. The leak repeats per call, so it
+# accumulates in a loop.
+#
+# The registration machinery already existed: `_own_receiver_temp` gives a receiver that
+# nobody owns a scope temp, gated on `needs_cleanup` and `expression_is_temporary`. It was
+# never REACHED, because the receiver was mis-typed. `_infer_enum_construction_type`
+# claimed any node carrying `resolved_enum_type`, and Pass 2 stamps that on a Result/Maybe
+# METHOD call too -- where it names the enum the method was called ON, not what the call
+# RETURNS. So `go().realise("err")`, whose value is a `string`, came back typed
+# `Result<string, StdError>`, the caller saw a non-None semantic type, and skipped the
+# registration.
+#
+# The loop is the point: it is what turns a bounded leak into an unbounded one.
+# EXPECT_STDOUT_EXACT: "8\nlong\n40\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+use <collections/strings>
+
+fn go() string:
+    let string base = "there"
+    return Result.Ok("hi-{base}")
+
+fn main() i32:
+    # a method receiver
+    let i32 n = go().realise("err").len()
+    println(n)
+
+    # a condition operand
+    if (go().realise("e").len() > 2):
+        println("long")
+
+    # and the same receiver inside a loop, where the leak used to accumulate
+    let i32 total = 0
+    let i32 seen = 0
+    while (seen < 5):
+        total := total + go().realise("e").len()
+        seen := seen + 1
+    println(total)
+    return Result.Ok(0)
