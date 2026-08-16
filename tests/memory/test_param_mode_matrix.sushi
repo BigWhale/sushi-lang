@@ -1,0 +1,47 @@
+# The four parameter modes, over an OWNING value, at runtime.
+#
+# `tests/unit/test_callee_mode_matrix.py` pins the compile-time half of every cell -- the
+# resolver's answer, whether a later use is CE2405, and whether the callee registers
+# cleanup. This file pins the fourth assertion, the one only a running program can make:
+# each mode frees the value EXACTLY ONCE.
+#
+# The bug class this closes is invisible from the outside. Both sides of a call hold a
+# valid-looking 16-byte descriptor over ONE buffer, so a program in which the wrong side
+# frees prints the right answer and corrupts the heap somewhere else, later. Only the
+# leak counter and the double-free counter can tell the four cells apart.
+#
+# See docs/design/borrow-model.md sections 2 and 4.
+# EXPECT_STDOUT_EXACT: "borrow=3 still=3\nnom=3\npeek=3 still=3\npoke=4 still=4\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+# borrow (unmarked): the caller keeps the value and frees it.
+fn borrows(i32[] a) i32:
+    return Result.Ok(a.len())
+
+# nom: the callee becomes the owner and frees it.
+fn eats(nom i32[] a) i32:
+    return Result.Ok(a.len())
+
+# peek: by pointer, read only. The caller frees.
+fn reads(peek i32[] a) i32:
+    return Result.Ok(a.len())
+
+# poke: by pointer, read/write. The caller frees, and sees the write.
+fn writes(poke i32[] a) i32:
+    a.push(4)
+    return Result.Ok(a.len())
+
+fn main() i32:
+    let i32[] b = from([1, 2, 3])
+    println("borrow={borrows(b).realise(-1)} still={b.len()}")
+
+    let i32[] n = from([1, 2, 3])
+    println("nom={eats(nom n).realise(-1)}")
+
+    let i32[] p = from([1, 2, 3])
+    println("peek={reads(peek p).realise(-1)} still={p.len()}")
+
+    let i32[] w = from([1, 2, 3])
+    println("poke={writes(poke w).realise(-1)} still={w.len()}")
+    return Result.Ok(0)

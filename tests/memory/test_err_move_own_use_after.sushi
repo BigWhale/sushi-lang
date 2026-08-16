@@ -2,14 +2,14 @@
 # afterward is a use-after-move error.
 # EXPECT_ERROR_CODE: CE2405
 
-fn unwrap(Own@(i32) b) i32:
+fn unwrap(nom Own@(i32) b) i32:
     return Result.Ok(b.get())
 
 fn run() i32:
     let Own@(i32) box = Own.alloc(5)
-    let i32 a = unwrap(box)??
+    let i32 a = unwrap(nom box)??
     # box was moved into unwrap() -- this reuse is illegal.
-    let i32 b = unwrap(box)??
+    let i32 b = unwrap(nom box)??
     return Result.Ok(b)
 
 fn main() i32:

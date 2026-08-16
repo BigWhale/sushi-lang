@@ -1,32 +1,32 @@
 # Test simple generic identity function
 # This is the most basic test of generic function body substitution
 
-fn identity@(T)(T value) T:
+fn identity@(T)(nom T value) T:
     return Result.Ok(value)
 
 fn run_test() i32:
     # Test with various primitive types
-    let i32 num = identity(42)??
+    let i32 num = identity(nom 42)??
     if (num != 42):
         return Result.Ok(1)
 
-    let i64 big = identity(1000 as i64)??
+    let i64 big = identity(nom 1000 as i64)??
     if (big != 1000 as i64):
         return Result.Ok(2)
 
-    let i8 small = identity(10 as i8)??
+    let i8 small = identity(nom 10 as i8)??
     if (small != 10 as i8):
         return Result.Ok(3)
 
-    let u32 unsigned = identity(999 as u32)??
+    let u32 unsigned = identity(nom 999 as u32)??
     if (unsigned != 999 as u32):
         return Result.Ok(4)
 
     # String test - just verify monomorphization happens
-    if (identity("Mostly Harmless")?? == ""):
+    if (identity(nom "Mostly Harmless")?? == ""):
         return Result.Ok(10)
 
-    let f64 pi = identity(3.14)??
+    let f64 pi = identity(nom 3.14)??
     if (pi < 3.13 or pi > 3.15):
         return Result.Ok(5)
 

@@ -2,30 +2,30 @@
 # EXPECT_RUNTIME_EXIT: 0
 
 # Test: Nested generic function calls
-fn identity@(T)(T x) T:
+fn identity@(T)(nom T x) T:
     return Result.Ok(x)
 
-fn wrap@(U)(U y) U:
-    let U result = identity(y)??
+fn wrap@(U)(nom U y) U:
+    let U result = identity(nom y)??
     return Result.Ok(result)
 
-fn double_wrap@(V)(V z) V:
-    let V result = wrap(z)??
+fn double_wrap@(V)(nom V z) V:
+    let V result = wrap(nom z)??
     return Result.Ok(result)
 
 fn run_test() i32:
     # Test deeply nested calls with i32
-    let i32 a = double_wrap(42)??
+    let i32 a = double_wrap(nom 42)??
     if (a != 42):
         return Result.Ok(1)
 
     # Test with string
-    let string s = double_wrap("test")??
+    let string s = double_wrap(nom "test")??
     if (s != "test"):
         return Result.Ok(2)
 
     # Test with bool
-    let bool b = double_wrap(true)??
+    let bool b = double_wrap(nom true)??
     if (not b):
         return Result.Ok(3)
 

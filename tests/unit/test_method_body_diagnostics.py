@@ -20,18 +20,19 @@ import pytest
 
 
 _EAT = (
-    "fn eat(i32[] a) i32:\n"
+    "fn eat(nom i32[] a) i32:\n"
     "    return Result.Ok(a.len())\n"
     "\n"
 )
 
-# The same body, once as a plain function and once as each method kind. Each consumes a
-# `peek` parameter, which is CE2411 -- a relational error, so a note is mandatory.
+# The same body, once as a plain function and once as each method kind. Each hands a
+# `peek` parameter to a `nom` one, which is CE2411 -- a relational error, so a note is
+# mandatory.
 FORMS = {
     "function": (
         _EAT +
         "fn swallow(peek i32[] a) i32:\n"
-        "    return Result.Ok(eat(a)??)\n"
+        "    return Result.Ok(eat(nom a)??)\n"
         "\n"
         "fn main() i32:\n"
         "    return Result.Ok(0)\n"
@@ -42,7 +43,7 @@ FORMS = {
         "    i32 n\n"
         "\n"
         "extend Box swallow(peek i32[] a) i32:\n"
-        "    return eat(a)??\n"
+        "    return eat(nom a)??\n"
         "\n"
         "fn main() i32:\n"
         "    return Result.Ok(0)\n"
@@ -57,7 +58,7 @@ FORMS = {
         "\n"
         "extend Box with Swallower:\n"
         "    fn swallow(peek i32[] a) i32:\n"
-        "        return eat(a)??\n"
+        "        return eat(nom a)??\n"
         "\n"
         "fn main() i32:\n"
         "    return Result.Ok(0)\n"

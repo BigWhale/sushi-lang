@@ -69,7 +69,9 @@ from sushi_lang.semantics.ast import (
     While,
 )
 from sushi_lang.semantics.typesys import BorrowMode, ReferenceType, DynamicArrayType, Type
-from sushi_lang.semantics.param_modes import CalleeKind, CalleeModes, ParamMode
+from sushi_lang.semantics.param_modes import (
+    CalleeKind, CalleeModes, ParamMode, param_mode,
+)
 from sushi_lang.semantics.ownership import (
     ConsumingUse, Ownership, Provenance, TypeClass, classify, is_get_out_container,
     type_class_of,
@@ -100,8 +102,14 @@ def _build_callee_modes(tables) -> CalleeModes:
     struct_names |= set(
         getattr(getattr(tables, "generic_structs", None), "by_name", None) or ())
     stdlib_sigs = funcs.stdlib_by_name() if funcs is not None else {}
+    # A generic function is called by its BARE name inside a template body, and its
+    # monomorphized instances land in `funcs.by_name` under mangled ones. Both carry the
+    # same declared modes -- the mode does not vary per instantiation (S7) -- so both
+    # tables answer, with the concrete one first.
+    sigs = dict(getattr(getattr(tables, "generic_funcs", None), "by_name", None) or {})
+    sigs.update(getattr(funcs, "by_name", None) or {})
     return CalleeModes(
-        func_sigs=getattr(funcs, "by_name", None) or {},
+        func_sigs=sigs,
         struct_names=struct_names,
         stdlib_sigs=stdlib_sigs,
     )
@@ -137,7 +145,7 @@ class BorrowState:
                                 # which is spelled `peek`/`poke` in the source.
     is_let_borrow: bool = False  # ...and this one is the `let` spelling specifically
                                 # (#242). The narrower flag exists for the DIAGNOSTIC, the
-                                # same way `is_method_receiver` narrows `is_method_param`:
+                                # same way `is_method_receiver` narrows `is_borrow_param`:
                                 # a match/foreach binding is a private DEEP copy, so a
                                 # write through it is merely lost (CE2414), while a
                                 # `let`-borrow shares the owner's DATA -- a reallocating
@@ -149,25 +157,29 @@ class BorrowState:
                                 # leaves that field None while the binding is a `let`-borrow
                                 # all the same, and the temporary's buffer is just as real.
                                 # `is_let_borrow` implies `is_borrowed_binding`.
-    is_method_param: bool = False  # A parameter of an extension or perk method body --
-                                # `self` and the explicit ones alike. A BORROW of the
-                                # caller's value (#298 S8.6): the body registers no
-                                # parameter cleanup and the caller keeps ownership, so
-                                # writing through one cannot reach the caller (CE2421 /
-                                # CE2422) and consuming an owning one gives the value a
-                                # second owner (CE2411, #333).
+    is_borrow_param: bool = False  # A parameter whose declared MODE is a borrow -- i.e.
+                                # anything but `nom`, in ANY kind of callable, `self`
+                                # included. The body registers no cleanup for it and the
+                                # caller keeps ownership, so writing through one cannot
+                                # reach the caller (CE2421 / CE2422) and consuming an
+                                # owning one gives the value a second owner (CE2411).
+                                #
+                                # It was `is_method_param` until borrow by default, when
+                                # the #298 method rule became the general rule: a method
+                                # used to be the one callable whose parameters did not
+                                # transfer. See docs/design/borrow-model.md S1.
                                 #
                                 # Its own KIND rather than a flavour of is_borrowed_binding:
                                 # a binding is a private DEEP copy, so a write through it is
-                                # merely lost, while a method parameter is a SHALLOW copy
-                                # whose fields alias the caller's heap -- which is why the
-                                # same write was a double free here (#326).
+                                # merely lost, while a parameter is a SHALLOW copy whose
+                                # fields alias the caller's heap -- which is why the same
+                                # write was a double free here (#326).
     is_method_receiver: bool = False  # ...and this one is `self` specifically. The narrower
                                 # flag exists for the DIAGNOSTIC, not for the rule: the
                                 # receiver has no escape yet (`poke self` is #327) while an
                                 # explicit parameter can be redeclared `poke T` today, so
                                 # the two carry different codes and different help.
-                                # `is_method_receiver` implies `is_method_param`.
+                                # `is_method_receiver` implies `is_borrow_param`.
     owns_no_heap: bool = False  # Option B (MM.md S0.4): this binding's CURRENT value owns no
                                 # heap, so a consuming use of it transfers nothing. Today only
                                 # a `string` bound directly from a literal sets it.
@@ -364,7 +376,7 @@ _READONLY_RECEIVERS: tuple[_ReadOnlyReceiver, ...] = (
         # escape this code names, and the reason the two are one row apart rather than one
         # row.
         code=er.ERR.CE2422,
-        matches=lambda state: (state.is_method_param
+        matches=lambda state: (state.is_borrow_param
                                and not state.is_method_receiver
                                and not isinstance(state.var_type, ReferenceType)),
         note_span=lambda state: state.declared_at_span,
@@ -679,7 +691,7 @@ class BorrowChecker:
 
         `is_method` is the whole difference between the two callable kinds, and it says
         one thing: every parameter of a method body is a BORROW of the caller's value
-        (#298 S8.6). See `_mark_method_param` for what follows from that.
+        (#298 S8.6). See `_mark_borrow_param` for what follows from that.
         """
         self.borrow_state = {}
         self.active_borrows = set()
@@ -700,7 +712,7 @@ class BorrowChecker:
             receiver = BorrowState(name="self", var_type=receiver_type,
                                    declared_at_span=self_span,
                                    is_method_receiver=True)
-            self._mark_method_param(receiver)
+            self._mark_borrow_param(receiver)
             self.borrow_state["self"] = receiver
 
         for param in params:
@@ -711,15 +723,18 @@ class BorrowChecker:
             # move that makes the callee free argv (N2).
             if fn_name == "main" and self._is_argv_view_param(param.ty):
                 state.is_argv_view = True
-            if is_method:
-                self._mark_method_param(state)
+            # Every mode but `nom` is a borrow, in every kind of callable. `is_method`
+            # used to be the condition, because a method was the only callable whose
+            # parameters did not transfer (docs/design/borrow-model.md S1).
+            if not param_mode(param).consumes:
+                self._mark_borrow_param(state)
             self.borrow_state[param.name] = state
 
         self._check_block(body)
 
     @staticmethod
-    def _mark_method_param(state: BorrowState) -> None:
-        """A parameter of a method body is a BORROW -- every parameter, `string` included.
+    def _mark_borrow_param(state: BorrowState) -> None:
+        """A parameter whose mode is a borrow does not own its value -- `string` included.
 
         The body registers NO parameter cleanup and the caller keeps ownership (#298),
         so handing the value to a position that takes ownership gives it a second owner.
@@ -737,7 +752,7 @@ class BorrowChecker:
         parameter is a borrow like every other owning type, and the escape is
         `return self.clone()`.
         """
-        state.is_method_param = True
+        state.is_borrow_param = True
 
     @staticmethod
     def _is_argv_view_param(ty: Optional[Type]) -> bool:
@@ -1888,8 +1903,82 @@ class BorrowChecker:
             if variadic_at is not None and i >= variadic_at:
                 self._consume(arg, ConsumingUse.ARRAY_ELEMENT)
                 continue
-            if self.callee_modes.mode_at(modes, i, kind).consumes:
+            mode = self.callee_modes.mode_at(modes, i, kind)
+            self._check_nom_marker(expr, arg, i, mode, kind)
+            if mode.consumes:
                 self._consume(arg, ConsumingUse.CALL_ARG)
+            elif not mode.by_pointer:
+                self._register_implicit_borrow(arg)
+
+    def _check_nom_marker(self, call: Call, arg: Expr, index: int,
+                          mode: ParamMode, kind: CalleeKind) -> None:
+        """The `nom` marker must be written at the call site if and only if it is declared.
+
+        That symmetry is what keeps a consume VISIBLE (docs/design/borrow-model.md S3):
+        without it, `f(s)` would not say whether `s` survives, and the reader would have
+        to open the callee. `peek` and `poke` already had it, for free -- a reference
+        parameter carries a `ReferenceType`, so a missing marker is an argument type
+        mismatch (CE2006) before this pass runs.
+
+        A constructor and a container insert are exempt: they consume by POSITION and
+        declare nothing, so there is no marker to match.
+        """
+        if kind in (CalleeKind.CONSTRUCTOR, CalleeKind.CONTAINER):
+            return
+        marked = bool(getattr(arg, "nom_marked", False))
+        if marked == mode.consumes:
+            return
+        span = getattr(arg, "nom_span", None) or arg.loc
+        name = self._param_name(call, index) or f"#{index + 1}"
+        if mode.consumes:
+            self.err.emit_with(er.ERR.CE2427, span, name=name) \
+                .help(f"the callee takes ownership here; write `nom` at the call site "
+                      f"too, or `nom <arg>.clone()` to keep your own value").emit()
+        else:
+            self.err.emit_with(er.ERR.CE2427, span, name=name) \
+                .help("the callee only borrows this argument, so it stays yours after "
+                      "the call; drop the `nom`").emit()
+
+    def _param_name(self, call: Call, index: int) -> Optional[str]:
+        """The declared name of parameter `index` of a call's callee, if it is known."""
+        if not isinstance(call.callee, Name):
+            return None
+        sig = self.callee_modes.signature_of(call.callee.id)
+        params = getattr(sig, "params", None) or ()
+        return params[index].name if index < len(params) else None
+
+    def _register_implicit_borrow(self, arg: Expr) -> None:
+        """Count an unmarked argument as the shared borrow it now is.
+
+        Before borrow by default, every borrow was SPELLED at the call site, so the
+        exclusivity counters could be driven entirely from `Borrow` nodes. An unmarked
+        argument was a move, and CE2401 caught it against a live borrow.
+
+        It is a borrow now, and it aliases: the callee gets a copy of the DESCRIPTOR
+        while the buffer stays the caller's. So `both(poke a, a)` hands one callee a
+        write pointer and a second view of the same buffer, and a `push` through the
+        pointer leaves the view reading released memory -- #329's shape, arriving by a
+        different route. Registering it here makes that CE2407, in either argument order,
+        because the call arm checks every argument before it settles any of them.
+
+        Only a MOVE-class argument aliases; a plain one is a snapshot taken before the
+        call and has no hazard, which is the same line `Copy` draws in Rust.
+        """
+        if not isinstance(arg, Name):
+            return
+        state = self.borrow_state.get(arg.id)
+        if state is None or state.is_moved:
+            return
+        if self._type_class_of_source(state, state.var_type) is not TypeClass.MOVE:
+            return
+        if state.poke_borrow_count > 0:
+            self.err.emit_with(er.ERR.CE2407, arg.loc, name=arg.id) \
+                .note("first borrowed here", state.first_borrow_span).emit()
+            return
+        if state.peek_borrow_count == 0:
+            state.first_borrow_span = arg.loc
+        state.peek_borrow_count += 1
+        self.active_borrows.add(arg.id)
 
     def _apply_destroy_effects(self, call: Call) -> None:
         """Mark each argument the callee destroys through a `poke` parameter (#168)."""
@@ -2029,7 +2118,7 @@ class BorrowChecker:
             # `owned = 0` frees nothing.
             return Provenance.OWNED
         if (state.is_borrowed_binding
-                or state.is_method_param
+                or state.is_borrow_param
                 or isinstance(state.var_type, ReferenceType)):
             return Provenance.BORROWED
         return Provenance.OWNED
@@ -2502,7 +2591,7 @@ class BorrowChecker:
             # nothing. The parameter arm below needs its location to read at all.
             diag.note("'self' is the receiver of a method on this type, which borrows "
                       "the caller's value", state.declared_at_span)
-        elif state.is_method_param and state.declared_at_span is not None:
+        elif state.is_borrow_param and state.declared_at_span is not None:
             diag.note(f"'{name}' is declared here, and a method parameter borrows the "
                       f"caller's value", state.declared_at_span)
         diag.help(f"clone it to take an independent value: `{name}.clone()`")

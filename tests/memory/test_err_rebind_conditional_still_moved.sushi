@@ -3,14 +3,14 @@
 # use after the `if` is a use-after-move.
 # EXPECT_ERROR_CODE: CE2405
 
-fn take(string s) ~:
+fn take(nom string s) ~:
     println(s)
     return Result.Ok(~)
 
 fn go(bool flag) ~:
     let string y = "yy"
     let string s = "m-{y}"
-    take(s)
+    take(nom s)
     if (flag):
         s := "new-{y}"
     println(s)

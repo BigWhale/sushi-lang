@@ -45,11 +45,6 @@ class ExpressionParser:
         if tag == "borrow":
             return operators.expr_borrow(t, self.ast_builder)
 
-        # Call-site consume marker: `nom x`. Returns the marked expression with a flag,
-        # not a node of its own -- see expr_consume.
-        if tag == "consume":
-            return operators.expr_consume(t, self.ast_builder)
-
         # Binary operator chains
         if tag in {"add", "mul", "equality", "comparison", "shift",
                    "bitwise_and", "bitwise_xor", "bitwise_or",

@@ -170,13 +170,12 @@ def test_string_marshalling_no_leak_multi_return(tmp_path):
     frees = _count_in_function(ir_text, "work", 'call void @"free"')
     assert mallocs == 1, f"expected exactly one marshalling malloc, got {mallocs}"
     # Each mutually-exclusive exit block (the early `if (flag)` return AND the
-    # fall-through return) frees the marshalled char* PLUS the by-value `string`
-    # parameter `s` (owned-bit-guarded; the callee owns it since the 2026-08-14
-    # by-value-parameter ruling): 2 exits x 2 frees. Exactly one exit runs at
-    # runtime, so this is no double free.
-    assert frees == 4, (
-        f"expected a marshal free and a param free in EACH of the two exit blocks, "
-        f"got {frees}; an exit path is leaking the marshalled char* or the parameter"
+    # fall-through return) frees the marshalled char*. `s` itself is an UNMARKED
+    # parameter, so it is a BORROW and the callee frees nothing of it -- 2 exits x
+    # 1 free. Exactly one exit runs at runtime, so this is no double free.
+    assert frees == 2, (
+        f"expected a marshal free in EACH of the two exit blocks, got {frees}; an "
+        f"exit path is leaking the marshalled char*"
     )
 
     # The early-return block (if.0.body) must itself contain a free, not only the
@@ -221,11 +220,11 @@ def test_string_marshalling_no_leak_try_success_path(tmp_path):
     frees = _count_in_function(ir_text, "work", 'call void @"free"')
     assert mallocs == 1, f"expected one marshalling malloc, got {mallocs}"
     # Each of the two mutually-exclusive paths (the `??` error-propagation and the
-    # success continuation) frees the marshalled char* PLUS the by-value `string`
-    # parameter `s` (owned-bit-guarded; callee-owned since the 2026-08-14 ruling).
-    assert frees == 4, (
-        f"expected a marshal free and a param free on both the ?? propagate and "
-        f"success paths, got {frees}; a path is leaking the marshalled char* or the parameter"
+    # success continuation) frees the marshalled char*. `s` is an UNMARKED parameter,
+    # so it is a BORROW: the caller keeps its buffer and the callee frees nothing of it.
+    assert frees == 2, (
+        f"expected a marshal free on both the ?? propagate and success paths, got "
+        f"{frees}; a path is leaking the marshalled char*"
     )
 
     # The success continuation block must carry a free.
@@ -278,9 +277,7 @@ def test_variadic_string_arg_freed_no_leak(tmp_path):
 
     # Two strings are marshalled in `emit`: the fixed format string and the
     # VARIADIC string `s`. Both must be freed on EVERY mutually-exclusive exit
-    # block (the early `if (flag)` return and the fall-through return), and each
-    # exit also frees the by-value `string` parameter `s` itself (owned-bit-guarded;
-    # callee-owned since the 2026-08-14 ruling): 2 exits x (2 marshal + 1 param) == 6.
+    # block (the early `if (flag)` return and the fall-through return).
     # Without the variadic char* registration the count would drop by 2.
     mallocs = _count_in_function(ir_text, "emit", 'call i8* @"malloc"')
     marshal_frees = _count_in_function(ir_text, "emit", 'call void @"free"(i8* %"malloc_result')
@@ -293,8 +290,11 @@ def test_variadic_string_arg_freed_no_leak(tmp_path):
         f"expected every marshalled char* freed on every exit path (4), got "
         f"{marshal_frees}; a variadic-marshalled char* is leaking"
     )
-    assert param_frees == 2, (
-        f"expected the by-value string param freed once per exit path (2), got {param_frees}"
+    # `s` is an UNMARKED parameter, so it is a BORROW: the caller keeps the buffer and
+    # frees it. The marshalled char* is a separate, caller-side allocation and is the
+    # only thing `emit` may free. Freeing `s` here would be a double free.
+    assert param_frees == 0, (
+        f"a borrow parameter's buffer must never be freed by the callee, got {param_frees}"
     )
 
 

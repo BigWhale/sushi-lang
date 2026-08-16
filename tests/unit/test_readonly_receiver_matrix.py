@@ -135,11 +135,33 @@ def _let_borrow_program(write: str) -> str:
     )
 
 
+def _function_param_program(write: str) -> str:
+    """An unmarked parameter of a PLAIN function -- CE2422's kind, generalized.
+
+    Until borrow by default, a plain function OWNED its by-value parameters, so a write
+    through one was legal and only a method's was rejected. Now every mode but `nom`
+    borrows in every callable, so the same write lands on the callee's private shallow
+    copy here too: a plain field is silently lost, and an owning one is a double free
+    plus a leak. Declaring the parameter `poke Holder r` is the escape, exactly as the
+    code says (docs/design/borrow-model.md S1).
+    """
+    return (
+        _STRUCT + _GROW +
+        "fn touch(Holder r) ~:\n"
+        f"    {write}\n"
+        "    return Result.Ok(~)\n"
+        "\n"
+        "fn main() i32:\n"
+        "    return Result.Ok(0)\n"
+    )
+
+
 KINDS = {
     "peek_reference":  ("CE2408", _peek_program),
     "pattern_binding": ("CE2414", _binding_program),
     "method_receiver": ("CE2421", _self_program),
     "method_parameter": ("CE2422", _method_param_program),
+    "function_parameter": ("CE2422", _function_param_program),
     "let_borrow": ("CE2426", _let_borrow_program),
 }
 
@@ -196,6 +218,28 @@ def test_poke_borrow_of_a_whole_method_parameter_is_rejected(analyze):
         "    return Result.Ok(0)\n"
     )
     assert "CE2422" in _codes(analyze(src))
+
+
+def test_a_nom_parameter_stays_writable(analyze):
+    """The other escape, and the line that keeps the gate off `nom`.
+
+    A `nom` parameter is OWNED by the callee -- the caller transferred the value and its
+    binding is moved -- so the callee may do what it likes with its own value, writes
+    included. The gate must therefore key on the declared MODE and not on "is this a
+    parameter?" (docs/design/borrow-model.md S2).
+    """
+    src = (
+        _STRUCT + _GROW +
+        "fn touch(nom Holder r) ~:\n"
+        "    r.n := 42\n"
+        "    r.items.push(9)\n"
+        "    return Result.Ok(~)\n"
+        "\n"
+        "fn main() i32:\n"
+        "    return Result.Ok(0)\n"
+    )
+    codes = _codes(analyze(src))
+    assert "CE2422" not in codes and "CE2421" not in codes, codes
 
 
 def test_a_poke_method_parameter_stays_writable(analyze):

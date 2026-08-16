@@ -2,16 +2,16 @@
 # afterward is a use-after-move error.
 # EXPECT_ERROR_CODE: CE2405
 
-fn total(List@(i32) xs) i32:
+fn total(nom List@(i32) xs) i32:
     return Result.Ok(xs.len())
 
 fn run() i32:
     let List@(i32) xs = List.new()
     xs.push(1)
     xs.push(2)
-    let i32 a = total(xs)??
+    let i32 a = total(nom xs)??
     # xs was moved into total() -- this reuse is illegal.
-    let i32 b = total(xs)??
+    let i32 b = total(nom xs)??
     return Result.Ok(b)
 
 fn main() i32:

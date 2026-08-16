@@ -18,12 +18,12 @@ fn tag@(T)(peek T v) i32:
 fn add_one(i32 n) i32:
     return Result.Ok(n + 1)
 
-fn box@(T)(T v) T:
+fn box@(T)(nom T v) T:
     let i32 t = add_one(tag(peek v)??)??
     println("t = {t}")
     return Result.Ok(v)
 
 fn main() i32:
-    let string s = box("hi").realise("?")
+    let string s = box(nom "hi").realise("?")
     println("s = {s}")
     return Result.Ok(0)

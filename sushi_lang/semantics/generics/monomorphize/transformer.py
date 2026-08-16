@@ -271,6 +271,8 @@ class TypeSubstitutor:
                     # only way to consume these synthesized params is unavailable, and
                     # they carry user-invisible names like args_0/args_1).
                     is_pack=True,
+                    is_nom=getattr(param, 'is_nom', False),
+                    nom_span=getattr(param, 'nom_span', None),
                 )
                 for i, element_type in enumerate(pack.types)
             ]
@@ -285,6 +287,11 @@ class TypeSubstitutor:
                 type_span=param.type_span,
                 loc=getattr(param, 'loc', None),
                 is_variadic=getattr(param, 'is_variadic', False),
+                # The MODE is declared, so it is the same for every instantiation
+                # (docs/design/borrow-model.md S7). Dropping it here would make one
+                # body's parameters transfer and another's borrow.
+                is_nom=getattr(param, 'is_nom', False),
+                nom_span=getattr(param, 'nom_span', None),
             )
         ]
 

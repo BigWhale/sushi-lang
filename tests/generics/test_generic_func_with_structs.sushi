@@ -12,12 +12,12 @@ struct Pair@(T, U):
     T first
     U second
 
-fn box_value@(T)(T item) Box@(T):
+fn box_value@(T)(nom T item) Box@(T):
     # Create generic struct with generic type parameter
     let Box@(T) result = Box(item)
     return Result.Ok(result)
 
-fn make_pair@(T, U)(T a, U b) Pair@(T, U):
+fn make_pair@(T, U)(nom T a, nom U b) Pair@(T, U):
     # Create generic struct with multiple generic type parameters
     let Pair@(T, U) result = Pair(a, b)
     return Result.Ok(result)
@@ -30,23 +30,23 @@ fn unbox@(T)(Box@(T) boxed) T:
 
 fn run_test() i32:
     # Test with i32
-    let Box@(i32) box1 = box_value(42)??
+    let Box@(i32) box1 = box_value(nom 42)??
     let i32 val1 = unbox(box1)??
     if (val1 != 42):
         return Result.Ok(1)
 
     # Test with string
-    let Box@(string) box2 = box_value("test")??
+    let Box@(string) box2 = box_value(nom "test")??
     let string val2 = unbox(box2)??
     println(val2)
 
     # Test pair with mixed types
-    let Pair@(i32, string) p1 = make_pair(100, "hello")??
+    let Pair@(i32, string) p1 = make_pair(nom 100, nom "hello")??
     if (p1.first != 100):
         return Result.Ok(2)
 
     # Test pair with same types
-    let Pair@(i32, i32) p2 = make_pair(10, 20)??
+    let Pair@(i32, i32) p2 = make_pair(nom 10, nom 20)??
     if (p2.first != 10 or p2.second != 20):
         return Result.Ok(3)
 

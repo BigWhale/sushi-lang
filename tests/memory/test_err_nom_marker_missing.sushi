@@ -1,0 +1,16 @@
+# A `nom` parameter must be marked at the CALL SITE too (CE2427).
+#
+# The symmetry is what keeps a consume visible: without the marker, `eat(s)` would not
+# show whether `s` survives the call, and the reader would have to open the callee to
+# find out. See docs/design/borrow-model.md section 3.
+# EXPECT_ERROR_CODE: CE2427
+
+fn eat(nom string s) ~:
+    println(s)
+    return Result.Ok(~)
+
+fn main() i32:
+    let string base = "Ford"
+    let string s = "{base} Prefect"
+    eat(s)
+    return Result.Ok(0)

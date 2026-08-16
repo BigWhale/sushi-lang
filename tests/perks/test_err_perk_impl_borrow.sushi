@@ -14,13 +14,13 @@ perk Summable:
 struct Bag:
     i32 tag
 
-fn consume(i32[] a) i32:
+fn consume(nom i32[] a) i32:
     return Result.Ok(a.len())
 
 extend Bag with Summable:
     fn total() i32:
         let i32[] items = from([1, 2, 3])
-        let i32 n = consume(items).realise(0)
+        let i32 n = consume(nom items).realise(0)
         return n + items.len()
 
 fn main() i32:

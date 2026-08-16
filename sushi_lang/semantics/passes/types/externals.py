@@ -145,6 +145,12 @@ def _validate_block_signatures(reporter: Reporter, block: 'ExternalBlock') -> No
             er.emit(reporter, er.ERR.CE5004, decl.name_span or decl.loc,
                     name=decl.name)
         for param in decl.params:
+            # FFI is outside the mode system: the C callee never receives a Sushi value,
+            # so there is nothing for it to take ownership of (borrow-model.md S5).
+            if getattr(param, "is_nom", False):
+                er.emit(reporter, er.ERR.CE2428,
+                        getattr(param, "nom_span", None) or param.name_span or decl.loc,
+                        name=param.name)
             if param.ty is not None and not _is_c_abi_type(param.ty):
                 er.emit(reporter, er.ERR.CE5003, param.type_span or decl.loc,
                         type=display_type(param.ty))

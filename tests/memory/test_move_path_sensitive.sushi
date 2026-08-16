@@ -8,7 +8,7 @@
 # EXPECT_STDOUT_EXACT: "hi1\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS
-fn pick(i32 which, string val) string:
+fn pick(i32 which, nom string val) string:
     if (which > 0):
         return Result.Ok(val)
     return Result.Ok(val)
@@ -16,7 +16,7 @@ fn pick(i32 which, string val) string:
 fn run() i32:
     let i32 n = 1
     let string s = "hi{n}"
-    let string got = pick(1, s)??
+    let string got = pick(1, nom s)??
     println(got)
     return Result.Ok(0)
 

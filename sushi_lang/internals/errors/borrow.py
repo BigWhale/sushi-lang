@@ -163,3 +163,20 @@ _add(ErrorMessage("CE2425", Severity.ERROR,
 _add(ErrorMessage("CE2426", Severity.ERROR,
     "cannot write through '{name}': it borrows storage another value still owns",
     Category.BORROW, "A `let` bound from a read THROUGH an owner -- `let v = h.items`, `let v = c.get(0)??` -- BORROWS: it names storage the owner keeps and still frees (issue #242). A write through it is not merely lost, which is what CE2414 says for a match/foreach binding: the binding holds its own copy of the descriptor while the DATA is shared, so a mutating method updates a length nobody reads, a field assignment lands on the private copy, and a `.push()` that reallocates frees the OWNER's buffer -- a double free plus a read of released memory that compiled clean before issue #344. Write to the owner directly (`h.items.push(9)`), or take an independent value with `.clone()`, mutate it, and store it back. CE2412 is the complementary question -- may the OWNER be changed while the binding lives -- not an alternative to this one."))
+
+
+# --- Borrow by default: the mode markers (docs/design/borrow-model.md) ------------------
+#
+# A marked mode is written at BOTH ends -- the declaration and the call site -- and the
+# unmarked default is written at neither. `peek` and `poke` already had that symmetry, and
+# they get it for free: a reference parameter carries a `ReferenceType`, so a missing or
+# wrong marker is CE2006, an argument type mismatch. `nom` changes no type, so it needs a
+# code of its own.
+
+_add(ErrorMessage("CE2427", Severity.ERROR,
+    "argument mode does not match the declared mode of parameter '{name}'",
+    Category.BORROW, "A `nom` parameter takes OWNERSHIP of its argument, and that must be visible where the value is handed over: without the marker, `f(s)` would not show whether `s` survives the call, and the reader would have to open the callee to find out (docs/design/borrow-model.md S3). So the marker is written at both ends, or at neither. Add `nom` at the call site to hand the value over, or drop it if the callee only borrows. `.clone()` is the escape when the caller needs to keep its own value: `f(nom s.clone())`."))
+
+_add(ErrorMessage("CE2428", Severity.ERROR,
+    "`nom` has no meaning on the foreign parameter '{name}'",
+    Category.BORROW, "FFI is outside the mode system. A C callee never receives a Sushi value: the compiler marshals the argument into a fresh C representation that the CALLER owns and frees at scope exit, so there is nothing for a foreign parameter to take ownership of. Declare the parameter without the marker. The four modes describe how a value crosses a SUSHI call boundary (docs/design/borrow-model.md S5)."))

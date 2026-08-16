@@ -1,0 +1,14 @@
+# `nom` has no meaning on a foreign parameter (CE2428).
+#
+# FFI is outside the mode system: a C callee never receives a Sushi value. The compiler
+# marshals the argument into a fresh C string that the CALLER owns and frees at scope
+# exit, so there is nothing for the callee to take ownership of.
+# EXPECT_ERROR_CODE: CE2428
+
+unsafe external "C" as libc because "the four guarantees do not apply to a C callee":
+    fn puts(nom string s) i32 = "puts"
+
+fn main() i32:
+    let i32 n = libc.puts("Mostly Harmless")
+    println(n)
+    return Result.Ok(0)

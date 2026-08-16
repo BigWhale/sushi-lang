@@ -86,29 +86,6 @@ def handle_cast(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
     return expr
 
 
-def expr_consume(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
-    """Handle the call-site consume marker: `nom expr`.
-
-    `nom` is a MARKER, not an operator: it changes neither the value nor its type, it
-    only states out loud that the callee takes ownership here. So it stamps a flag on
-    the marked expression and returns that expression unchanged, rather than wrapping
-    it in a node every pass would have to dispatch on.
-
-    Whether the marker AGREES with the callee's declared mode is checked where the
-    modes are known (CE2427). A marker on something that is not a whole call argument
-    is inert: what a value does at a call site is decided by the parameter's mode, not
-    by the marker.
-    """
-    from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree_child
-
-    sub = first_tree_child(t)
-    marked = ast_builder._expr(sub)
-    marked.nom_marked = True
-    marked.nom_span = span_of(next((c for c in t.children
-                                    if isinstance(c, Token) and c.type == "NOM"), t))
-    return marked
-
-
 def expr_borrow(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
     """Handle borrow expression: peek expr or poke expr."""
     from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree_child

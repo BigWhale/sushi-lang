@@ -8,7 +8,7 @@ fn multiply(i32 x, i32 y) i32:
   let i32 result = x * y
   return Result.Ok(result)
 
-fn greet(string name) string:
+fn greet(nom string name) string:
   println("Hello")
   println(name)
   return Result.Ok(name)

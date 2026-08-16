@@ -73,17 +73,10 @@ _ALWAYS_CONSUMES: frozenset[CalleeKind] = frozenset({
     CalleeKind.CONTAINER,
 })
 
-# PHASE 3 SCAFFOLD -- delete in phase 4 (the flip).
-#
-# An unmarked by-value parameter of these kinds still CONSUMES, which is what the
-# compiler did before the mode existed. Keeping it means phase 3 changes exactly one
-# thing: a stdlib parameter is a borrow, so the phantom consume at every stdlib call
-# site is gone. Phase 4 empties this set, and then the declared mode is the whole
-# answer for every kind.
-_UNMARKED_STILL_CONSUMES: frozenset[CalleeKind] = frozenset({
-    CalleeKind.FUNCTION,
-    CalleeKind.INDIRECT,
-})
+# EMPTY, and that is the whole flip. An unmarked by-value parameter is a BORROW for
+# every kind of callee, so the declared mode is the entire answer and `effective_modes`
+# differs from `declared_modes` only at the two positional sinks above.
+_UNMARKED_STILL_CONSUMES: frozenset[CalleeKind] = frozenset()
 
 
 def mode_of_type(ty: Optional[Type], is_nom: bool = False) -> ParamMode:
@@ -177,6 +170,10 @@ class CalleeModes:
         # conservative answer: it is what the compiler applied to every call before the
         # mode existed.
         return CalleeKind.FUNCTION
+
+    def signature_of(self, name: str):
+        """The declared signature of `name`, from whichever table carries it."""
+        return self._func_sigs.get(name) or self._stdlib_sigs.get(name)
 
     def variadic_from(self, name: str) -> Optional[int]:
         """The index at which trailing arguments collect into a `...T` array, or None.

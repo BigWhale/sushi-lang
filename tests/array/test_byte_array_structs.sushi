@@ -12,7 +12,7 @@ struct NestedBuffer:
     DataBuffer buffer1
     DataBuffer buffer2
 
-fn create_buffer(string name) DataBuffer:
+fn create_buffer(nom string name) DataBuffer:
     return Result.Ok(DataBuffer(from([72 as u8, 101 as u8, 108 as u8, 108 as u8, 111 as u8]), name, 5))
 
 fn process_buffer(DataBuffer buf) i32:

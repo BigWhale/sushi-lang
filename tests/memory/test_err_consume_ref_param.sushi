@@ -2,12 +2,12 @@
 # borrow: the caller keeps the value and still frees it, so this is the ordinary
 # CE2411, not an internal error. The escape is `eat(a.clone())`.
 # EXPECT_ERROR_CODE: CE2411
-fn eat(i32[] a) ~:
+fn eat(nom i32[] a) ~:
     println("ate {a.len()}")
     return Result.Ok(~)
 
 fn f(poke i32[] a) ~:
-    eat(a)
+    eat(nom a)
     return Result.Ok(~)
 
 fn main() i32:

@@ -110,25 +110,43 @@ def test_byvalue_struct_string_arg_moves_at_call_site(tmp_path):
     )
 
 
-def test_byvalue_struct_string_arg_is_use_after_move(tmp_path):
-    """The user-visible half of the flip: reusing the value after the call is CE2405.
+def test_nom_struct_string_arg_is_use_after_move(tmp_path):
+    """The user-visible half of `nom`: reusing the value after the call is CE2405.
 
     This is the whole point of deleting the COPY tier. Before Phase 9 this program compiled,
     because the call site cloned `x`'s string field and the caller kept an independent buffer.
-    Now `consume(x)` takes ownership, so reading `x.name` afterwards is a use-after-move.
+    A `nom` parameter takes ownership, so reading `x.name` afterwards is a use-after-move.
 
     `.clone()` at the call site is the escape, which is what the diagnostic says.
     """
     src = _STRUCT + (
-        "fn consume(P d) i32:\n"
+        "fn consume(nom P d) i32:\n"
         "    return Result.Ok(d.name.len())\n"
         "\n"
         "fn main() i32:\n"
         "    let P x = P(name: \"hi\".upper())\n"
-        "    let i32 n = consume(x).realise(0)\n"
+        "    let i32 n = consume(nom x).realise(0)\n"
         "    return Result.Ok(x.name.len())\n"
     )
     assert "CE2405" in _analysis_codes(tmp_path, src)
+
+
+def test_borrow_struct_string_arg_stays_usable(tmp_path):
+    """The twin: an UNMARKED parameter borrows, so the same program is clean.
+
+    One word separates the two files' programs, and it is the word the reader can see at
+    the call site (docs/design/borrow-model.md S3).
+    """
+    src = _STRUCT + (
+        "fn look(P d) i32:\n"
+        "    return Result.Ok(d.name.len())\n"
+        "\n"
+        "fn main() i32:\n"
+        "    let P x = P(name: \"hi\".upper())\n"
+        "    let i32 n = look(x).realise(0)\n"
+        "    return Result.Ok(x.name.len())\n"
+    )
+    assert "CE2405" not in _analysis_codes(tmp_path, src)
 
 
 def test_ffi_char_return_copied_to_owned(tmp_path):

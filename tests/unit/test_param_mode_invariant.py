@@ -141,11 +141,11 @@ def test_a_nom_parameter_makes_a_different_function_type():
 # What an UNMARKED by-value parameter means at each kind of callee. Every member of
 # CalleeKind must appear here; a new one with no row fails the coverage test below.
 UNMARKED_MEANS = {
-    CalleeKind.FUNCTION: ParamMode.NOM,      # phase 4 flips this to BORROW
+    CalleeKind.FUNCTION: ParamMode.BORROW,
     CalleeKind.METHOD: ParamMode.BORROW,
     CalleeKind.STDLIB: ParamMode.BORROW,
     CalleeKind.FFI_EXTERN: ParamMode.BORROW,
-    CalleeKind.INDIRECT: ParamMode.NOM,      # phase 4 flips this to BORROW
+    CalleeKind.INDIRECT: ParamMode.BORROW,
     CalleeKind.CONSTRUCTOR: ParamMode.NOM,   # a field takes ownership, always
     CalleeKind.CONTAINER: ParamMode.NOM,     # a container slot takes ownership, always
 }

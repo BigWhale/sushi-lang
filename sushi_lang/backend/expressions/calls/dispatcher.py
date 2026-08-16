@@ -5,6 +5,7 @@ This module orchestrates the dispatching of function and method calls to
 appropriate handlers based on receiver type and method name.
 """
 from __future__ import annotations
+import itertools
 from typing import TYPE_CHECKING, Union
 
 from llvmlite import ir
@@ -93,21 +94,17 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     if variadic_param is not None:
         fixed_count = len(func_sig.params) - 1
         fixed_args = [codegen.expressions.emit_expr(a) for a in expr.args[:fixed_count]]
-        # The FIXED by-value parameters of a variadic function take ownership exactly
-        # like a non-variadic call's (the ruling of 2026-08-14: the callee owns). The
-        # trailing arguments are consumed by build_variadic_array into the synthesized
-        # T[], which the callee owns as a whole.
-        _consume_call_arguments(codegen, expr.args[:fixed_count], fixed_args, func_sig)
+        # The FIXED parameters of a variadic function follow their declared modes
+        # exactly like a non-variadic call's. The trailing arguments are consumed by
+        # build_variadic_array into the synthesized T[], which the callee owns whole --
+        # the caller made it, so nothing else can.
+        _settle_named_call_arguments(codegen, expr.args[:fixed_count], fixed_args, func_sig)
         array_struct = build_variadic_array(
             codegen, expr.args[fixed_count:], variadic_param.ty, callee)
         args = fixed_args + [array_struct]
     else:
         args = [codegen.expressions.emit_expr(a) for a in expr.args]
-        # A by-value parameter takes ownership; the callee frees its value at scope exit.
-        # That includes an inline-lambda argument: the callee's FunctionType param is
-        # registered for cleanup (begin_function), so the caller-side temp registration
-        # (#123) is gone from this path -- it would double-free.
-        _consume_call_arguments(codegen, expr.args, args, func_sig)
+        _settle_named_call_arguments(codegen, expr.args, args, func_sig)
 
     params = list(llvm_fn.args)
     if len(args) != len(params):
@@ -179,7 +176,7 @@ def _emit_indirect_call(codegen: 'LLVMCodegen', expr: Call, fat_value: 'ir.Value
     args = [codegen.expressions.emit_expr(a) for a in expr.args]
     # The callee's modes travel WITH the function type, which is why the type is
     # invariant on them: without that, one indirection would defeat the rule (#335).
-    consume_arguments_by_mode(
+    settle_call_arguments(
         codegen, list(expr.args), args, list(fn_type.param_types),
         effective_modes(fn_type.modes, CalleeKind.INDIRECT))
     return closures.emit_indirect_call(codegen, fat_value, fn_type, args, to_i1)
@@ -218,34 +215,75 @@ def _resolve_param_type(codegen: 'LLVMCodegen', ty):
     return ty
 
 
-def consume_arguments_by_mode(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
-                              param_types: list, modes) -> None:
-    """THE call-argument seam: transfer exactly the arguments the modes say to, in place.
+_ARG_TEMP_SEQ = itertools.count()
 
-    An argument moves if and only if its parameter DECLARES a consume. Every other mode
-    -- the unmarked borrow, `peek`, `poke` -- leaves the caller as the owner and needs no
-    transfer at all (docs/design/borrow-model.md S4).
+
+def _park_argument_temp(codegen: 'LLVMCodegen', value: ir.Value, resolved) -> None:
+    """Give a caller-kept argument temporary an owner, so scope exit frees it once.
+
+    The value has no binding, so nothing would free it: under callee-owns the CALLEE
+    did, and a borrow parameter has no such owner. This is the same answer
+    `_spill_receiver` gives an unbound owning receiver -- register it as a scope temp.
+
+    An owning argument reaches this point in one of two shapes. `make()??` hands back
+    the descriptor by VALUE; an inline `from([...])` hands back a POINTER to it. Load
+    the pointer first, or the temp slot holds an address where the destructor expects
+    the descriptor and every element GEP is off by one indirection.
+    """
+    ll_type = codegen.types.ll_type(resolved)
+    if isinstance(value.type, ir.PointerType) and value.type.pointee == ll_type:
+        value = codegen.builder.load(value, name="arg_temp_val")
+    elif value.type != ll_type:
+        return
+
+    name = f"__arg_temp_{next(_ARG_TEMP_SEQ)}"
+    slot = codegen.memory.create_local(name, value.type, value, resolved,
+                                       register_cleanup=False)
+    codegen.memory.register_owning_value(name, resolved, slot)
+
+
+def settle_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
+                          param_types: list, modes) -> None:
+    """THE call-argument seam: give every argument exactly one owner, in place.
+
+    Two answers, and the mode picks between them (docs/design/borrow-model.md S4):
+
+    - **`nom`** -- the callee becomes the owner, so the argument goes through the
+      ownership seam. A `Name` source is marked moved; a temporary adopts in.
+    - **every other mode** -- the CALLER stays the owner. That is free for a value some
+      binding already names, and it is not free for a TEMPORARY: `look(make()??)` and
+      `look(v.clone())` produce a value nobody names, and under callee-owns the callee
+      used to free it. Register it as a caller scope temp, which is the answer the
+      language already gives an unbound owning temporary everywhere else.
 
     Pass 3 asked the same question of the same resolver before codegen ran, so the two
     halves cannot disagree about who frees. Disagreeing is exactly what they used to do.
     """
+    from sushi_lang.backend.destructors import needs_cleanup
+    from sushi_lang.backend.expressions.memory import expression_is_temporary
+
     for i, mode in enumerate(modes):
-        if i >= len(args) or i >= len(arg_exprs) or not mode.consumes:
+        if i >= len(args) or i >= len(arg_exprs):
             continue
         arg_expr = arg_exprs[i]
         if arg_expr is None:
             continue
-        args[i] = consume(codegen, arg_expr, args[i],
-                          _resolve_param_type(codegen, param_types[i]),
-                          ConsumingUse.CALL_ARG)
+        resolved = _resolve_param_type(codegen, param_types[i])
+        if mode.consumes:
+            args[i] = consume(codegen, arg_expr, args[i], resolved,
+                              ConsumingUse.CALL_ARG)
+        elif (resolved is not None and needs_cleanup(resolved)
+                and expression_is_temporary(codegen, arg_expr)):
+            _park_argument_temp(codegen, args[i], resolved)
 
 
-def _consume_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list, func_sig) -> None:
-    """Transfer the arguments a named callee's signature declares it takes."""
+def _settle_named_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
+                                 func_sig) -> None:
+    """Settle the ownership of a named callee's arguments, from its declared signature."""
     from sushi_lang.semantics.param_modes import CalleeKind, modes_for
     if func_sig is None or not func_sig.params:
         return
-    consume_arguments_by_mode(
+    settle_call_arguments(
         codegen, arg_exprs, args,
         [p.ty for p in func_sig.params],
         modes_for(func_sig.params, CalleeKind.FUNCTION))

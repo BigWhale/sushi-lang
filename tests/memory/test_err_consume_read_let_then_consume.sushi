@@ -11,12 +11,12 @@
 struct Holder:
     i32[] items
 
-fn total(i32[] xs) i32:
+fn total(nom i32[] xs) i32:
     return Result.Ok(xs.len())
 
 fn main() i32:
     let Holder h = Holder(from([1, 2, 3]))
     let i32[] view = h.items
-    let i32 n = total(view).realise(-1)
+    let i32 n = total(nom view).realise(-1)
     println("n={n}")
     return Result.Ok(0)

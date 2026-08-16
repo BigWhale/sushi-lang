@@ -146,7 +146,6 @@ cast: add (AS type)*
       | NOT unary        -> not
       | BITNOT unary     -> bitnot
       | BORROW_MODE unary    -> borrow
-      | NOM unary            -> consume
       | postfix
 
 ?postfix: atom (call | method_call | member_access | index | try_op)*    -> maybe_call
@@ -216,6 +215,7 @@ arg_list: positional_args
 positional_args: positional_arg ("," positional_arg)*
 ?positional_arg: expr
               | expr ELLIPSIS   -> spread_arg
+              | NOM expr        -> nom_arg
 
 named_args: named_arg ("," named_arg)*
 named_arg: NAME ":" expr

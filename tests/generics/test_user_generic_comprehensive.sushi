@@ -12,15 +12,15 @@ enum Pair@(T, U):
     Left(T)
     Right(U)
 
-fn create_int_string_pair(i32 x, string y) Pair@(i32, string):
+fn create_int_string_pair(nom i32 x, nom string y) Pair@(i32, string):
     return Result.Ok(Pair.Both(x, y))
 
-fn create_float_int_pair(f64 x, i32 y) Pair@(f64, i32):
+fn create_float_int_pair(nom f64 x, nom i32 y) Pair@(f64, i32):
     return Result.Ok(Pair.Both(x, y))
 
 fn main() i32:
     # Test 1: Pair@(i32, string)
-    let Result@(Pair@(i32, string), StdError) r1 = create_int_string_pair(42, "hello")
+    let Result@(Pair@(i32, string), StdError) r1 = create_int_string_pair(nom 42, nom "hello")
     let Pair@(i32, string) p1 = r1.realise(Pair.Left(0))
     match p1:
         Pair.Both(a, b) ->
@@ -31,7 +31,7 @@ fn main() i32:
             println("Test 1: Right {b}")
 
     # Test 2: Pair@(f64, i32)
-    let Result@(Pair@(f64, i32), StdError) r2 = create_float_int_pair(3.14, 100)
+    let Result@(Pair@(f64, i32), StdError) r2 = create_float_int_pair(nom 3.14, nom 100)
     let Pair@(f64, i32) p2 = r2.realise(Pair.Left(0.0))
     match p2:
         Pair.Both(x, y) ->

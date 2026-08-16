@@ -17,16 +17,16 @@ fn process(Message m) string:
         Message.Silent ->
             return Result.Ok("Silence")
 
-fn make_greeting(string name) string:
+fn make_greeting(nom string name) string:
     let Message m = Message.Greeting(name)
     let string result = process(m).realise("error")
     # m leaves scope here; string payload freed
     return Result.Ok(result)
 
 fn main() i32:
-    let string s1 = make_greeting("Alice").realise("error")
-    let string s2 = make_greeting("Bob").realise("error")
-    let string s3 = make_greeting("Carol").realise("error")
+    let string s1 = make_greeting(nom "Alice").realise("error")
+    let string s2 = make_greeting(nom "Bob").realise("error")
+    let string s3 = make_greeting(nom "Carol").realise("error")
 
     println("{s1}")
     println("{s2}")
