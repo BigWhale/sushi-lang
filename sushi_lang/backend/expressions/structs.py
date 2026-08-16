@@ -279,6 +279,53 @@ def _resolve_to_struct(codegen: 'LLVMCodegen', ty) -> Optional[StructType]:
     return None
 
 
+def _infer_call_struct(codegen: 'LLVMCodegen', expr: Expr) -> Optional[StructType]:
+    """The struct a call receiver produces, or None.
+
+    Stamp FIRST, `.get()` knowledge second. `_infer_get_element_struct` knows exactly one
+    method name, so every other call receiver fell past it to CE0068 / CE0069 -- an
+    internal-error code for ordinary user code, on the grounds that the method was not
+    called `get`. That is why `m.realise(Row(0)).n` crashed (#285). Pass 2 had already
+    stamped the return type on that very node, so the answer was there the whole time and
+    the backend was reading the wrong place -- the same shape as #286, one node type over.
+
+    The `.get()` derivation stays as the fallback rather than being deleted: it answers for
+    a node Pass 2 left unstamped, and removing it would change the failure mode of cases
+    that pass today.
+
+    The two callers keep their own `raise_internal_error` with a LITERAL code, which is
+    what `test_error_registry.py` scans for. Folding them into one raise with a computed
+    code made CE0069 read as dead.
+    """
+    return (_stamped_struct_type(codegen, expr)
+            or _infer_get_element_struct(codegen, expr))
+
+
+def _stamped_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional[StructType]:
+    """The struct Pass 2 stamped as this call's return type, or None.
+
+    The backend does not re-derive a receiver's type; it reads what Pass 2 recorded. This
+    is the same seam `backend/expressions/calls/utils.py::_stamped_semantic_type` reads --
+    duplicated here only because that one answers "any semantic type" while
+    `infer_struct_type` must answer "a StructType or an internal error", and returning a
+    non-struct from here would turn a reported CE0068/CE0069 into a wrong GEP.
+
+    None whenever the stamp is missing or is not a struct, which reproduces the previous
+    behaviour exactly: the caller then tries `_infer_get_element_struct` and reports its
+    own code.
+    """
+    stamped = getattr(expr, "inferred_return_type", None)
+    if stamped is None:
+        return None
+    if isinstance(stamped, ReferenceType):
+        stamped = stamped.referenced_type
+    resolved = _resolve_to_struct(codegen, stamped)
+    if resolved is None:
+        return None
+    # Never rebuild a named type -- the table is what a name means (#240).
+    return codegen.struct_table.by_name.get(resolved.name, resolved)
+
+
 def _infer_get_element_struct(codegen: 'LLVMCodegen',
                               expr: Expr) -> Optional[StructType]:
     """Struct type produced by a `.get()` call, or None if this is not one.
@@ -411,8 +458,7 @@ def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
             raise_internal_error("CE0044", type=str(field_type))
 
     elif isinstance(expr, MethodCall):
-        # Infer struct type from method call return type
-        inferred = _infer_get_element_struct(codegen, expr)
+        inferred = _infer_call_struct(codegen, expr)
         if inferred is not None:
             return inferred
 
@@ -420,7 +466,7 @@ def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
 
     elif isinstance(expr, DotCall):
         # DotCall: unified X.Y(args)
-        inferred = _infer_get_element_struct(codegen, expr)
+        inferred = _infer_call_struct(codegen, expr)
         if inferred is not None:
             return inferred
 
