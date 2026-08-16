@@ -1,0 +1,10 @@
+# #300 phase 1: a `&peek` foreach binding reads the element through a pointer --
+# no element copy, no arm-exit destructor, and owning elements stay leak-clean.
+# EXPECT_STDOUT_EXACT: "a-1\nb-2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+fn main() i32:
+    let string[] xs = from(["a-{1}", "b-{2}"])
+    foreach(&peek r in xs.iter()):
+        println(r)
+    return Result.Ok(0)

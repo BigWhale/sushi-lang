@@ -130,3 +130,18 @@ _add(ErrorMessage("CE2421", Severity.ERROR,
 _add(ErrorMessage("CE2422", Severity.ERROR,
     "cannot write through '{name}': a by-value method parameter is a read-only borrow",
     Category.BORROW, "Every parameter of an extension or perk method is a BORROW of the caller's value, `self` and the explicit ones alike (the ruling on issue #298). A by-value one is compiled as a private copy, so a write through it -- a mutating method, a field assignment, or a `&poke` borrow of it -- never reaches the caller: a plain field was silently lost, and an owning field was a double free plus a leak, because the field rebind released the caller's buffer through the copy. CE2421 is the same rule for the receiver, and the plain-function form has no such problem, because there the callee OWNS its by-value parameters. Unlike the receiver, this one has an escape that exists today: declare the parameter `&poke T` and the write reaches the caller."))
+
+# --- Reference bindings (#300 phase 1) --------------------------------------------------
+#
+# `foreach(&poke r in ...)` and `Own(&poke inner)` bind a POINTER into the container's /
+# pointee's storage, so a write through the binding reaches the owner. The two codes here
+# fence the phase-1 boundary: an iterable whose items have no address (CE2423), and the
+# match-pattern position, which waits on the enum payload alignment fix (CE2424).
+
+_add(ErrorMessage("CE2423", Severity.ERROR,
+    "a reference binding needs addressable elements; this iterable yields values",
+    Category.BORROW, "A `&peek`/`&poke` foreach binding is a pointer into the container's element storage, so the iterable must HAVE element storage. A range (`0..10`) synthesizes its values, and `HashMap.entries()` synthesizes each `Entry` pair on the fly -- there is no address to bind (issue #300). Iterate a container (`arr.iter()`, `list.iter()`, `map.keys()`, `map.values()`) or drop the marker and take the value."))
+
+_add(ErrorMessage("CE2424", Severity.ERROR,
+    "a reference binding in a match pattern is not supported yet",
+    Category.BORROW, "`Variant(&poke x)` needs a pointer into the enum's payload storage, which is byte-packed behind the tag -- handing that under-aligned interior pointer to code that assumes natural alignment is the #149 crash class, so the feature waits on the enum payload alignment fix (issue #300, phase 3). Two spellings work today: `Own(&poke x)` (the pointee is a whole malloc'd allocation), and `foreach(&poke r in ...)` (elements sit in naturally aligned buffers). Otherwise: clone out, mutate, store back."))

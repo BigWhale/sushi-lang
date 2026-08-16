@@ -393,8 +393,41 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
         # Infer item type from iterator's element type
         stmt.item_type = element_type
 
-    # Track the item variable type
-    validator.variable_types[stmt.item_name] = stmt.item_type
+    # A reference binding (#300 phase 1) is a pointer into the container's element
+    # storage, so the iterable must HAVE element storage. Only the four container
+    # iterators qualify: `arr.iter()`, `list.iter()`, `map.keys()`, `map.values()`.
+    # A range synthesizes its values and `map.entries()` synthesizes each Entry pair
+    # (the backend insert_values it from two GEPs); stdin lines are read into fresh
+    # buffers. The allowlist is deliberate: a new iterable kind must be PROVEN
+    # addressable before a reference binding may point into it.
+    if stmt.item_borrow is not None:
+        if not _foreach_iterable_is_addressable(stmt.iterable):
+            er.emit(validator.reporter, er.ERR.CE2423,
+                    stmt.item_borrow_span or stmt.loc)
+            return
+        # The binding's registered type is the REFERENCE, so every consumer that asks
+        # "is this name a borrow?" (Pass 3 rules, backend deref machinery) gets the
+        # truthful answer; expression inference auto-derefs a reference-typed name.
+        from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
+        mode = BorrowMode.POKE if stmt.item_borrow == "poke" else BorrowMode.PEEK
+        validator.variable_types[stmt.item_name] = ReferenceType(stmt.item_type, mode)
+    else:
+        # Track the item variable type
+        validator.variable_types[stmt.item_name] = stmt.item_type
 
     # Validate the body block
     validator._validate_block(stmt.body)
+
+
+def _foreach_iterable_is_addressable(iterable) -> bool:
+    """True when the iterable's elements live in addressable container storage.
+
+    The #300 phase 1 allowlist: a direct `.iter()` on an array or a `List` (both walk a
+    `{index, length, T*}` view of the container's buffer) and HashMap `.keys()` /
+    `.values()` (both GEP into the entries buffer). Everything else -- ranges,
+    `.entries()`, stdin lines -- yields synthesized VALUES with no address to bind.
+    """
+    from sushi_lang.semantics.ast import DotCall, MethodCall
+    if isinstance(iterable, (MethodCall, DotCall)):
+        return iterable.method in ("iter", "keys", "values")
+    return False

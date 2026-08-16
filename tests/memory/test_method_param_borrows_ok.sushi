@@ -6,11 +6,12 @@
 #
 #   1. `.clone()` out of the receiver, the escape CE2411 names.
 #   2. A `&poke` parameter, the escape CE2422 names -- the write reaches the caller.
-#   3. A bare `return self` on a `string` receiver: the `extend T with Display` idiom the
-#      whole corpus uses. The backend clears a method body's string parameters' owned bit
-#      at entry, so the returned value owns nothing and the caller does not free it.
-#   4. The same for an explicit `string` parameter, for the same reason. The carve-out is
-#      a fact about strings, not about the receiver.
+#   3. `return self.clone()` on a `string` receiver: the `extend T with Display` idiom.
+#      (Bare `return self` was legal through the owned-bit carve-out until the #338
+#      ruling removed it -- the view it returned dangled when the receiver was a local
+#      of the calling function.)
+#   4. The same for an explicit `string` parameter: the rule is a fact about method
+#      parameters, not about the receiver.
 #
 # A PLAIN parameter (an i32, a struct of primitives) was never affected either way: it
 # copies, and BORROWED x PLAIN adopts.
@@ -31,10 +32,10 @@ extend Box relabel(&poke Holder h) i32:
     return 1
 
 extend string say_it() string:
-    return self
+    return self.clone()
 
 extend Box echo_it(string s) string:
-    return s
+    return s.clone()
 
 extend Box plus(Box other) i32:
     return self.n + other.n

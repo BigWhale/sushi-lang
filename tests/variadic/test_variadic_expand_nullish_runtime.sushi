@@ -15,7 +15,7 @@ extend i32 with Display:
 
 extend string with Display:
     fn display() string:
-        return self
+        return self.clone()
 
 extend bool with Display:
     fn display() string:

@@ -1,0 +1,22 @@
+# The #338 ruling, explicit-parameter half: the carve-out was a fact about the type, not
+# about the receiver, so an explicit `string` parameter of a method handed out the same
+# dangling view. Each consuming use of one is CE2411 now, the same as #333 ruled for
+# every other owning type.
+# EXPECT_ERROR_CODE: CE2411
+struct Box:
+    i32 n
+
+fn eat(string s) i32:
+    return Result.Ok(s.len())
+
+extend Box swallow(string s) i32:
+    match eat(s):
+        Result.Ok(n) -> return n
+        Result.Err(_) -> return 0
+
+fn main() i32:
+    let Box b = Box(1)
+    let string words = "words-{1}"
+    let i32 n = b.swallow(words).realise(0)
+    println(n)
+    return Result.Ok(0)

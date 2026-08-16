@@ -1,0 +1,12 @@
+# #300 phase 1: the container is FROZEN while a reference binding points into it
+# (Rust's E0502): a push can realloc the buffer under the binding, so mutating the
+# owner inside the loop and reading the binding after it is CE2412. Finding this
+# ALSO found a pre-existing hole: the loop discovery pass used to consume the
+# invalidation, so CE2412 never fired inside any loop body.
+# EXPECT_ERROR_CODE: CE2412
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    foreach(&poke r in xs.iter()):
+        xs.push(9)
+        r := r + 1
+    return Result.Ok(0)

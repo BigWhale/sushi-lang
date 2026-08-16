@@ -21,7 +21,7 @@ extend i32 double() i32:
 
 extend string announce() string:
     println(self)
-    return self
+    return self.clone()
 
 fn run_test() i32:
     # Test basic function calls as statements (return values discarded)

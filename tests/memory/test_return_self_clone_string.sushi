@@ -1,0 +1,18 @@
+# The escape the #338 ruling names: `return self.clone()` on a `string` receiver returns
+# an OWNED copy, so the value survives the receiver and the caller frees it exactly once.
+# This is the new spelling of the `extend T with Display` idiom.
+# EXPECT_STDOUT_EXACT: "t: tag-1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+extend string say_it() string:
+    return self.clone()
+
+fn make_tag() string:
+    let string s = "tag-{1}"
+    return Result.Ok(s.say_it())
+
+fn main() i32:
+    match make_tag():
+        Result.Ok(t) -> println("t: {t}")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

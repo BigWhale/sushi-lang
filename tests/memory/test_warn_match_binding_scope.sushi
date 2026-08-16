@@ -1,0 +1,29 @@
+# Issue #337: a match arm binding must not overwrite an outer local's borrow state.
+# The arm's `p` shadows the outer `p` for the ARM ONLY. Consuming the outer `p` after
+# the match is legal -- it used to be a false CE2411, because the binding's
+# BorrowState replaced the outer entry for the rest of the function. The shadowing
+# itself still warns (CW1002), which is why this is a warning test.
+# The second match TAKES the binding arm, so the restore is exercised on both the
+# taken and the not-taken path.
+# EXPECT_ERROR_CODE: CW1002
+enum Shape:
+    Poly(i32[])
+    Empty
+
+fn eat(i32[] a) i32:
+    return Result.Ok(a.len())
+
+fn main() i32:
+    let i32[] p = from([9, 9])
+    let Shape s = Shape.Empty
+    match s:
+        Shape.Poly(p) -> println("poly {p.len()}")
+        Shape.Empty -> println("empty")
+    let Shape t = Shape.Poly(from([1, 2, 3]))
+    match t:
+        Shape.Poly(p) -> println("poly {p.len()}")
+        Shape.Empty -> println("empty")
+    match eat(p):
+        Result.Ok(n) -> println(n)
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

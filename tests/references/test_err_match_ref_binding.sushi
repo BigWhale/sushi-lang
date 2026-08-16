@@ -1,0 +1,16 @@
+# #300 phase 3 fence: a reference binding directly in a match pattern needs a
+# pointer into the enum's byte-packed payload -- the #149 alignment crash class --
+# so it waits on the payload layout fix and is rejected with CE2424. The working
+# spellings today: Own(&poke x), and foreach(&poke r in ...).
+# EXPECT_ERROR_CODE: CE2424
+enum Shape:
+    Poly(i32[])
+    Empty
+
+fn main() i32:
+    let Shape s = Shape.Poly(from([1]))
+    match s:
+        Shape.Poly(&poke p) ->
+            p.push(9)
+        Shape.Empty -> println("empty")
+    return Result.Ok(0)

@@ -1,0 +1,25 @@
+# Pinned with the #337 fix: two arms may bind ONE name with DIFFERENT types. Each
+# arm's binding lives for its arm only, so the second arm's `v` (a string) never sees
+# the first arm's `v` (an i32[]). Before the fix this worked only because each arm
+# registered its bindings immediately before its own body -- an ordering accident,
+# now a rule with a scope.
+# EXPECT_STDOUT_EXACT: "arr 2\nword hello-1\ndone\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+enum Mixed:
+    Arr(i32[])
+    Word(string)
+
+fn show(&peek Mixed m) i32:
+    match m:
+        Mixed.Arr(v) -> println("arr {v.len()}")
+        Mixed.Word(v) -> println("word {v}")
+    return Result.Ok(0)
+
+fn main() i32:
+    let Mixed a = Mixed.Arr(from([1, 2]))
+    let Mixed w = Mixed.Word("hello-{1}")
+    let i32 r1 = show(&peek a).realise(1)
+    let i32 r2 = show(&peek w).realise(1)
+    println("done")
+    return Result.Ok(r1 + r2)

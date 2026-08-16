@@ -1,0 +1,18 @@
+# The #338 ruling: a `string` method parameter is a borrow like every other owning type.
+# A bare `return self` on a `string` receiver made a non-owning VIEW of the caller's
+# buffer. The view dangles when the receiver is a local of the calling function: this
+# program compiled clean and printed an empty string. The consuming use is now CE2411;
+# the escape is `return self.clone()`.
+# EXPECT_ERROR_CODE: CE2411
+extend string say_it() string:
+    return self
+
+fn make_tag() string:
+    let string s = "tag-{1}"
+    return Result.Ok(s.say_it())
+
+fn main() i32:
+    match make_tag():
+        Result.Ok(t) -> println("t: {t}")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

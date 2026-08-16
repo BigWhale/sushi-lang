@@ -1,0 +1,17 @@
+# #300 phase 1: HashMap .values() elements sit in the entries buffer (heap,
+# naturally aligned), so a `&poke` binding mutates the stored value in place.
+# EXPECT_STDOUT_EXACT: "11\n21\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(i32, i32) m = HashMap.new()
+    m.insert(1, 10)
+    m.insert(2, 20)
+    foreach(&poke v in m.values()):
+        v := v + 1
+    foreach(v in m.values()):
+        println(v)
+    m.free()
+    return Result.Ok(0)

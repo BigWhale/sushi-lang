@@ -393,7 +393,18 @@ def register_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
                 if isinstance(inner_pattern, str):
                     # Simple variable binding
                     if inner_pattern != "_":
-                        validator.variable_types[inner_pattern] = element_type
+                        if binding.inner_borrow is not None:
+                            # `Own(&poke x)` (#300 phase 1): the binding IS a reference
+                            # to the pointee, so register the reference type -- every
+                            # consumer that asks "is this name a borrow?" then answers
+                            # truthfully, and inference auto-derefs the name.
+                            from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
+                            mode = (BorrowMode.POKE if binding.inner_borrow == "poke"
+                                    else BorrowMode.PEEK)
+                            validator.variable_types[inner_pattern] = ReferenceType(
+                                element_type, mode)
+                        else:
+                            validator.variable_types[inner_pattern] = element_type
                 elif isinstance(inner_pattern, Pattern):
                     # Nested pattern inside Own(...)
                     if isinstance(element_type, EnumType):

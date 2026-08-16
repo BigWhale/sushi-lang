@@ -355,23 +355,38 @@ def _emit_array_foreach_body(
 
     # Index into the array: data_ptr[current_index]
     element_ptr = codegen.builder.gep(data_ptr, [current_index], name="element_ptr")
-    element_value = codegen.builder.load(element_ptr, name=node.item_name)
 
-    # Create slot for loop variable and store element. A foreach item is a read-only BORROW
-    # of the container's element: the shallow-loaded value aliases the array's heap buffer,
-    # which the array destructor frees. So it must NOT be registered for its own RAII free
-    # (register_cleanup=False), else an owning element (string #147, or an owning enum /
-    # struct #139) is freed by both the item and the container -- double-free.
-    element_ll_type = codegen.types.ll_type(node.item_type)
-    codegen.memory.create_local(node.item_name, element_ll_type, element_value, node.item_type,
-                                register_cleanup=False)
+    previous_entry = _MISSING
+    if node.item_borrow is not None:
+        # Reference binding (#300 phase 1): store the element POINTER, not a copy. The
+        # slot then has the exact shape of a `&peek`/`&poke` parameter's (a T** holding
+        # a T*), and registering the `ReferenceType` in `variable_types` flips every
+        # consumer at once -- `is_reference_parameter` keys on nothing else -- so reads
+        # deref, writes land in the container, and no cleanup is ever registered.
+        previous_entry = _bind_element_reference(codegen, node.item_name, node.item_borrow,
+                                                 node.item_type, element_ptr)
+    else:
+        element_value = codegen.builder.load(element_ptr, name=node.item_name)
+
+        # Create slot for loop variable and store element. A foreach item is a read-only BORROW
+        # of the container's element: the shallow-loaded value aliases the array's heap buffer,
+        # which the array destructor frees. So it must NOT be registered for its own RAII free
+        # (register_cleanup=False), else an owning element (string #147, or an owning enum /
+        # struct #139) is freed by both the item and the container -- double-free.
+        element_ll_type = codegen.types.ll_type(node.item_type)
+        codegen.memory.create_local(node.item_name, element_ll_type, element_value, node.item_type,
+                                    register_cleanup=False)
 
     # Increment current_index
     incremented_index = codegen.builder.add(current_index, ir.Constant(codegen.types.i32, 1), name="next_index")
     codegen.builder.store(incremented_index, index_ptr)
 
     # Emit the foreach body
-    _emit_block(codegen, node.body)
+    try:
+        _emit_block(codegen, node.body)
+    finally:
+        if node.item_borrow is not None:
+            _unbind_element_reference(codegen, node.item_name, previous_entry)
 
     codegen.memory.pop_scope()
     codegen.loop_stack.pop()
@@ -504,14 +519,27 @@ def _emit_hashmap_foreach(
     else:
         # Extract the key (field 0) or value (field 1) from the current entry
         element_ptr = gep_utils.gep_struct_field(codegen, current_entry_ptr, entry_field_index, "element_ptr")
-        element_value = codegen.builder.load(element_ptr, name=node.item_name)
 
-        element_ll_type = codegen.types.ll_type(element_type)
-        codegen.memory.create_local(node.item_name, element_ll_type, element_value, element_type,
-                                    register_cleanup=False)
+        if node.item_borrow is not None:
+            # Reference binding (#300 phase 1): the entries buffer is heap storage, so
+            # the GEP'd key/value pointer is bindable exactly like an array element's.
+            # (`.entries()` bindings have NO address -- the user Entry is insert_value'd
+            # above -- and Pass 2 rejects the marker there with CE2423.)
+            previous_entry = _bind_element_reference(codegen, node.item_name, node.item_borrow,
+                                                     element_type, element_ptr)
+        else:
+            element_value = codegen.builder.load(element_ptr, name=node.item_name)
+
+            element_ll_type = codegen.types.ll_type(element_type)
+            codegen.memory.create_local(node.item_name, element_ll_type, element_value, element_type,
+                                        register_cleanup=False)
 
     # Emit the foreach body
-    _emit_block(codegen, node.body)
+    try:
+        _emit_block(codegen, node.body)
+    finally:
+        if node.item_borrow is not None:
+            _unbind_element_reference(codegen, node.item_name, previous_entry)
 
     codegen.memory.pop_scope()
     codegen.loop_stack.pop()
@@ -694,6 +722,41 @@ def _emit_range_loop_path(
         next_val = codegen.builder.sub(current_val, ir.Constant(codegen.types.i32, 1), name="next_val")
     codegen.builder.store(next_val, counter_slot)
     codegen.builder.branch(cond_bb)
+
+
+_MISSING = object()
+
+
+def _bind_element_reference(codegen: 'LLVMCodegen', name: str, borrow_mode: str,
+                            element_type, element_ptr):
+    """Bind a foreach item as a REFERENCE to the container's element (#300 phase 1).
+
+    The slot mimics a `&peek`/`&poke` parameter's exactly: a pointer-typed alloca
+    (`T**`) holding the element pointer (`T*`), plus a `ReferenceType` entry in
+    `codegen.variable_types` -- the single fact `is_reference_parameter` keys on, so
+    every deref/write/method consumer treats the binding as the borrow it is. No
+    cleanup is registered (the container owns the element).
+
+    Returns the PREVIOUS `variable_types` entry (or the `_MISSING` sentinel) for
+    `_unbind_element_reference`: the entry must not outlive the loop, or a later
+    same-named value binding in the same function is double-dereferenced.
+    """
+    from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
+    mode = BorrowMode.POKE if borrow_mode == "poke" else BorrowMode.PEEK
+    ref_type = ReferenceType(element_type, mode)
+    codegen.memory.create_local(name, element_ptr.type, element_ptr, ref_type,
+                                register_cleanup=False)
+    previous = codegen.variable_types.get(name, _MISSING)
+    codegen.variable_types[name] = ref_type
+    return previous
+
+
+def _unbind_element_reference(codegen: 'LLVMCodegen', name: str, previous) -> None:
+    """End a reference binding's `variable_types` entry at loop exit (#300)."""
+    if previous is _MISSING:
+        codegen.variable_types.pop(name, None)
+    else:
+        codegen.variable_types[name] = previous
 
 
 def _emit_block(codegen: 'LLVMCodegen', block) -> None:

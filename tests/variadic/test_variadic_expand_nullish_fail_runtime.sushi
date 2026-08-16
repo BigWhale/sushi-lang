@@ -14,7 +14,7 @@ perk Display:
 
 extend string with Display:
     fn display() string:
-        return self
+        return self.clone()
 
 fn check(string s) string:
     if (s == "boom"):
