@@ -44,6 +44,35 @@ from sushi_lang.semantics.generics.type_display import display_type
 _MUTATING_ARRAY_METHODS = frozenset({"fill", "reverse"})
 
 
+def _validate_element_argument(call: MethodCall, element_type: Type, reporter: Any,
+                               validator: Any) -> None:
+    """The one check for "is this argument an element of this array?" (CE2006).
+
+    `push(x)` and both spellings of `fill(x)` ask it, and each used to answer with its
+    own bare `arg_type != element_type`. A bare compare makes "how far resolved is it?"
+    part of type identity, which is the #240 defect: `P[]` parses as
+    `DynamicArrayType(UnknownType("P"))`, so the element compared unequal to the interned
+    `StructType("P")` every value of that type infers, and since both spell themselves
+    "P" the diagnostic read `expected P, got P` (issue #284).
+
+    `types_compatible` is the shared, resolving compare -- the same one the function-call
+    argument check uses. The declaration sites now resolve their element type too
+    (`resolve_declared_type`), so this is the second half of a belt-and-braces pair: the
+    root is fixed, and a future path that reintroduces an unresolved element reports the
+    real mismatch rather than a type against itself.
+    """
+    if validator is None:
+        return
+    validator.validate_expression(call.args[0])
+    arg_type = validator.infer_expression_type(call.args[0])
+    if arg_type is None:
+        return
+    from .compatibility import types_compatible
+    if not types_compatible(validator, arg_type, element_type):
+        er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
+                index=1, expected=display_type(element_type), got=display_type(arg_type))
+
+
 def _reject_mutation_of_constant(call: MethodCall, reporter: Any, validator: Any) -> bool:
     """Reject an in-place array method whose receiver is a global constant.
 
@@ -154,11 +183,7 @@ def _validate_dynamic_array_push(call: MethodCall, array_type: DynamicArrayType,
         from sushi_lang.semantics.passes.types.utils import propagate_enum_type_to_dotcall
         propagate_enum_type_to_dotcall(validator, call.args[0], array_type.base_type)
 
-        validator.validate_expression(call.args[0])
-        arg_type = validator.infer_expression_type(call.args[0])
-        if arg_type is not None and arg_type != array_type.base_type:
-            er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
-                   index=1, expected=display_type(array_type.base_type), got=display_type(arg_type))
+        _validate_element_argument(call, array_type.base_type, reporter, validator)
 
 
 def _validate_dynamic_array_pop(call: MethodCall, array_type: DynamicArrayType, reporter: Any) -> None:
@@ -239,12 +264,7 @@ def _validate_fixed_array_fill(call: MethodCall, array_type: ArrayType, reporter
         return
 
     # Validate argument type matches array element type
-    if validator:
-        validator.validate_expression(call.args[0])
-        arg_type = validator.infer_expression_type(call.args[0])
-        if arg_type is not None and arg_type != array_type.base_type:
-            er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
-                   index=1, expected=display_type(array_type.base_type), got=display_type(arg_type))
+    _validate_element_argument(call, array_type.base_type, reporter, validator)
 
 
 def _validate_dynamic_array_fill(call: MethodCall, array_type: DynamicArrayType, reporter: Any, validator: Any = None) -> None:
@@ -255,12 +275,7 @@ def _validate_dynamic_array_fill(call: MethodCall, array_type: DynamicArrayType,
         return
 
     # Validate argument type matches array element type
-    if validator:
-        validator.validate_expression(call.args[0])
-        arg_type = validator.infer_expression_type(call.args[0])
-        if arg_type is not None and arg_type != array_type.base_type:
-            er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
-                   index=1, expected=display_type(array_type.base_type), got=display_type(arg_type))
+    _validate_element_argument(call, array_type.base_type, reporter, validator)
 
 
 def _validate_fixed_array_reverse(call: MethodCall, array_type: ArrayType, reporter: Any) -> None:

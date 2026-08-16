@@ -1,0 +1,14 @@
+# CE0052: an array whose ELEMENT the compiler gives no hash cannot be hashed.
+#
+# This is what CE0052 is really about, and it is what keeps the code path live now that
+# `Row[]` (a struct with an `i32[]` field) hashes -- that rejection was issue #284 wearing
+# a different code, not a backend limit. A foreign `ptr` is opaque: it has no identity and
+# no methods (CE5011), so the element hasher has nothing to call.
+# EXPECT_ERROR_CODE: CE0052
+unsafe external "C" as libc because "the test needs a ptr in scope; nothing is called":
+    fn strlen(string s) i64 = "strlen"
+
+fn main() i32:
+    let ptr[] handles = from([])
+    println("{handles.hash()}")
+    return Result.Ok(0)
