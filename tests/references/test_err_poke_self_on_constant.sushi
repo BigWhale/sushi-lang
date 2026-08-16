@@ -1,0 +1,12 @@
+# #327: a constant lives in .rodata -- a `&poke self` call on one is CE2400, the
+# borrow-of-a-non-local code.
+# EXPECT_ERROR_CODE: CE2400
+extend i32 zero_out(&poke self) ~:
+    self := 0
+    return ~
+
+const i32 LIMIT = 5
+
+fn main() i32:
+    LIMIT.zero_out()
+    return Result.Ok(0)

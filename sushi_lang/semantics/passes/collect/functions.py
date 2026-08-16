@@ -303,6 +303,8 @@ class ExtensionMethod:
     ret_type: Optional[Type] = None
     ret_span: Optional[Span] = None
     params: List[Param] = field(default_factory=list)  # Parameters excluding implicit 'self'
+    self_mode: Optional[str] = None  # "peek"/"poke" for a `&poke self` receiver (#327);
+                                     # None is the classic read-only-borrow receiver
 
 
 @dataclass
@@ -341,6 +343,7 @@ class GenericExtensionMethod:
     ret_span: Optional[Span] = None
     params: List[Param] = field(default_factory=list)  # May contain TypeParameter in param types
     body: Optional[Any] = None       # Method body (Block AST node)
+    self_mode: Optional[str] = None  # "peek"/"poke" for a `&poke self` receiver (#327)
 
 
 @dataclass
@@ -517,6 +520,13 @@ class FunctionCollector:
         """
         name = getattr(fn, "name", None)
         if not isinstance(name, str):
+            return
+
+        # A receiver parameter has no meaning on a plain top-level function (#327):
+        # there is no receiver. The builder lifts the marker onto the FuncDef, so this
+        # is the one place the plain-function context can say no.
+        if getattr(fn, "self_mode", None) is not None:
+            er.emit(self.r, ERR.CE2425, fn.self_mode_span or fn.name_span)
             return
 
         # Check if function has type parameters (generic function)
@@ -827,6 +837,7 @@ class FunctionCollector:
                 ret_span=ret_span,
                 params=concrete_params,
                 body=body,
+                self_mode=getattr(ext, "self_mode", None),
             )
 
             # Check for duplicate generic extension methods
@@ -861,6 +872,7 @@ class FunctionCollector:
                 ret_type=ret_ty,
                 ret_span=ret_span,
                 params=params,
+                self_mode=getattr(ext, "self_mode", None),
             )
 
             # Check for duplicate extension methods on the same type (only for known types)

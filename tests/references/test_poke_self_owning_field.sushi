@@ -1,0 +1,24 @@
+# #327: the exact #326 shapes, now working through `&poke self`: a write to an OWNING
+# field frees the old buffer exactly once, and a mutating method under `self` reaches
+# the caller's container.
+# EXPECT_STDOUT_EXACT: "fresh! 2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+struct Holder:
+    string label
+    i32[] items
+
+extend Holder relabel(&poke self, string label) ~:
+    self.label := "{label}!"
+    return ~
+
+extend Holder add(&poke self, i32 v) ~:
+    self.items.push(v)
+    return ~
+
+fn main() i32:
+    let Holder h = Holder("start-{0}", from([1]))
+    h.relabel("fresh")
+    h.add(9)
+    println("{h.label} {h.items.len()}")
+    return Result.Ok(0)

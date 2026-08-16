@@ -296,14 +296,18 @@ class _ReadOnlyReceiver:
 # documentation rather than precedence.
 _READONLY_RECEIVERS: tuple[_ReadOnlyReceiver, ...] = (
     _ReadOnlyReceiver(
+        # `and not ReferenceType`: a `&poke self` receiver (#327) is WRITABLE and must
+        # fall through this row; a `&peek self` receiver falls to the CE2408 row below,
+        # which names its actual mode.
         code=er.ERR.CE2421,
-        matches=lambda state: state.is_method_receiver,
+        matches=lambda state: (state.is_method_receiver
+                               and not isinstance(state.var_type, ReferenceType)),
         note_span=lambda state: state.declared_at_span,
         note="'{name}' is the receiver of a method on this type, a read-only borrow",
         help="the write ({what}) would land on the method's private copy of the "
-             "receiver; return the new value and let the caller store it, or take a "
-             "`&poke` parameter on a plain function. A mutating receiver "
-             "(`&poke self`) is a separate feature and is not designed yet",
+             "receiver; declare the receiver mutable -- `(&poke self, ...)` -- and "
+             "the write reaches the caller (#327), or return the new value and let "
+             "the caller store it",
     ),
     _ReadOnlyReceiver(
         # A reference parameter carries its full `ReferenceType` as `var_type`, so the
@@ -580,7 +584,8 @@ class BorrowChecker:
             for method in perk_impl.methods:
                 self._check_callable(method.params, method.body, fn_name=method.name,
                                      self_type=perk_impl.target_type,
-                                     self_span=perk_impl.target_type_span)
+                                     self_span=perk_impl.target_type_span,
+                                     self_mode=getattr(method, "self_mode", None))
 
     def _check_function(self, func: FuncDef) -> None:
         """Check borrow safety for a single plain function."""
@@ -590,12 +595,14 @@ class BorrowChecker:
         """Check borrow safety for an extension method."""
         self._check_callable(ext.params, ext.body, fn_name=ext.name,
                              self_type=ext.target_type,
-                             self_span=ext.target_type_span)
+                             self_span=ext.target_type_span,
+                             self_mode=getattr(ext, "self_mode", None))
 
     def _check_callable(self, params: List[Param], body: Block, *,
                         fn_name: Optional[str] = None,
                         self_type: Optional[Type] = None,
-                        self_span: Optional[Span] = None) -> None:
+                        self_span: Optional[Span] = None,
+                        self_mode: Optional[str] = None) -> None:
         """Set up the state for one callable body and check it. THE entry point.
 
         There used to be two: `_check_function` for plain functions and perk methods, and
@@ -620,7 +627,17 @@ class BorrowChecker:
         is_method = self_type is not None
 
         if is_method:
-            receiver = BorrowState(name="self", var_type=self_type,
+            # A `&poke self` / `&peek self` receiver (#327) carries its full
+            # ReferenceType, which is what wires the rules in by construction: a write
+            # through `&poke self` falls through every read-only row (writable, the
+            # feature), a write through `&peek self` is CE2408 (accurate, better than
+            # the CE2421 the modeless receiver gets), and consuming either is CE2411.
+            receiver_type = self_type
+            if self_mode is not None and self_type is not None:
+                receiver_type = ReferenceType(
+                    self_type,
+                    BorrowMode.POKE if self_mode == "poke" else BorrowMode.PEEK)
+            receiver = BorrowState(name="self", var_type=receiver_type,
                                    declared_at_span=self_span,
                                    is_method_receiver=True)
             self._mark_method_param(receiver)
@@ -2173,7 +2190,10 @@ class BorrowChecker:
         method THROUGH a match/foreach binding, a `&peek` reference or a method receiver
         cannot reach the value it appears to write. See `_reject_readonly_write`.
         """
-        if getattr(expr, "method", None) not in _MUTATING_METHODS:
+        # A call to a `&poke self` method (#327) IS a write to the receiver root --
+        # Pass 2 stamps the resolution on the node, so this pass never re-resolves.
+        is_poke_self_call = getattr(expr, "callee_self_mode", None) == "poke"
+        if getattr(expr, "method", None) not in _MUTATING_METHODS and not is_poke_self_call:
             return
         root = self._root_owner(getattr(expr, "receiver", None))
         what = f"call `.{expr.method}()`"

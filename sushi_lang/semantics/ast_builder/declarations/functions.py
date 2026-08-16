@@ -6,7 +6,32 @@ from sushi_lang.semantics.ast import FuncDef, Param
 from sushi_lang.semantics.typesys import Type, TYPE_NODE_NAMES
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_name, first_tree, find_tree_recursive, ice, expect
 from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
+from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.internals.report import span_of
+
+
+def strip_self_param(params: List[Param], where_span=None):
+    """Lift a `&poke self` / `&peek self` parameter off a parsed param list (#327).
+
+    Returns (self_mode, self_mode_span, remaining_params). The receiver parameter is
+    legal only as the FIRST parameter -- anywhere else is CE2425 -- and the caller
+    decides whether a receiver is legal AT ALL in its context (a plain top-level
+    function rejects it in collect). One helper for all three method kinds
+    (extension, perk signature, perk impl), so the four AST shapes cannot drift.
+    """
+    self_mode = None
+    self_mode_span = None
+    remaining: List[Param] = []
+    for index, param in enumerate(params):
+        if param.self_mode is not None:
+            if index != 0:
+                raise SyntaxDiagnostic("CE2425", span=param.loc or where_span) \
+                    .help("the receiver comes first: `(&poke self, <params>)`")
+            self_mode = param.self_mode
+            self_mode_span = param.loc
+        else:
+            remaining.append(param)
+    return self_mode, self_mode_span, remaining
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
@@ -55,6 +80,9 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
     )
 
     params = parse_params(params_node, ast_builder, pack_names) if params_node else []
+    # A perk-impl method parses through this rule and may declare a receiver (#327);
+    # a plain top-level function may not -- collect rejects it there (CE2425).
+    self_mode, self_mode_span, params = strip_self_param(params, span_of(t))
     ret_ty: Optional[Type] = ast_builder._parse_type(ret_node) if ret_node is not None else None
     err_ty: Optional[Type] = ast_builder._parse_type(err_node) if err_node is not None else None
 
@@ -69,6 +97,8 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
         loc=span_of(t),
         name_span=span_of(name_tok),
         ret_span=span_of(ret_node),
+        self_mode=self_mode,
+        self_mode_span=self_mode_span,
     )
 
 
@@ -111,6 +141,27 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> 
             node = inner
 
         if not isinstance(node, Tree):
+            continue
+
+        if node.data == "self_param":
+            # `&poke self` / `&peek self` (#327): a receiver-mode parameter. The mode
+            # rides on the Param; `strip_self_param` lifts it onto the declaration and
+            # validates the position, so collect never sees a `self`-named Param.
+            mode_tok = next((c for c in node.children
+                             if isinstance(c, Token) and c.type == "BORROW_MODE"), None)
+            name_tok = first_name(node.children)
+            if mode_tok is None or name_tok is None:
+                ice(node, "malformed self_param")
+            if str(name_tok) != "self":
+                # `&poke x` in a parameter list is a missing type, not a receiver.
+                raise SyntaxDiagnostic("CE2425", span=span_of(node)) \
+                    .help("a reference parameter is written `&poke T name`; the bare "
+                          "form is only the receiver, spelled `&poke self`")
+            out.append(Param(
+                name="self", ty=None,
+                name_span=span_of(name_tok), loc=span_of(node),
+                self_mode=str(mode_tok.value),
+            ))
             continue
 
         if node.data in ("typed_param", "variadic_param"):

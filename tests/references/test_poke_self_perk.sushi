@@ -1,0 +1,22 @@
+# #327: a perk declares the receiver mode in its signature and the implementation
+# must match (a by-value impl against a `&poke self` declaration is CE4004 -- the
+# silently lost write of #326 through the perk door).
+# EXPECT_STDOUT_EXACT: "0\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+perk Resettable:
+    fn reset(&poke self) ~
+
+struct Counter:
+    i32 n
+
+extend Counter with Resettable:
+    fn reset(&poke self) ~:
+        self.n := 0
+        return ~
+
+fn main() i32:
+    let Counter c = Counter(9)
+    c.reset()
+    println(c.n)
+    return Result.Ok(0)

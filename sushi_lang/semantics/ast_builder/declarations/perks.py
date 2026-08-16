@@ -53,9 +53,10 @@ def parse_perk_method_signature(t: Tree, ast_builder: 'ASTBuilder') -> PerkMetho
         ice(t, "missing method NAME")
 
     # Extract parameters
-    from sushi_lang.semantics.ast_builder.declarations.functions import parse_params
+    from sushi_lang.semantics.ast_builder.declarations.functions import parse_params, strip_self_param
     params_node = first_tree(t.children, "parameters")
     params = parse_params(params_node, ast_builder) if params_node else []
+    self_mode, self_mode_span, params = strip_self_param(params, span_of(t))
 
     # Extract return type
     return_type_node = None
@@ -73,6 +74,8 @@ def parse_perk_method_signature(t: Tree, ast_builder: 'ASTBuilder') -> PerkMetho
         name=str(name_tok),
         params=params,
         ret=return_type,
+        self_mode=self_mode,
+        self_mode_span=self_mode_span,
         loc=span_of(t),
         name_span=span_of(name_tok),
         ret_span=span_of(return_type_node),

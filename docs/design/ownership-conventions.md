@@ -615,9 +615,8 @@ as `return self`. `.clone()` on a `string` now copies unconditionally; the destr
 keeps its guard. A clone that sometimes aliases was a hole in the ".clone() is the only
 deep copy" contract, independent of #338.
 
-There is no way to spell the working version today, so the diagnostic names the future
-feature rather than a dead end: **`&poke self`** (#327), an opt-in first parameter carrying
-the borrow vocabulary the language already has —
+The working version is spelled **`&poke self`** (#327, SHIPPED 2026-08-16), an opt-in
+first parameter carrying the borrow vocabulary the language already has —
 
 ```sushi
 extend Counter bump(&poke self) ~:
@@ -625,9 +624,15 @@ extend Counter bump(&poke self) ~:
     return ~
 ```
 
-— which inherits CE2408 / CE2407 / CE2404 at the call site for free, because it is the same
-`&poke`. This is the order #252 → CE2413 and #253 → CE2414 both followed: reject the
-unchecked form, design the feature separately.
+— the receiver arrives by POINTER, so the write reaches the caller's value and an owning
+field's old buffer is freed exactly once. It inherits the write gates at the call site,
+because a `&poke self` call IS a write to the receiver root: through a `&peek` parameter
+it is CE2408, on a binding CE2414, on a temporary CE2404, on a constant CE2400.
+`&peek self` states the read-only default explicitly; a perk declares the mode in its
+signature and the impl must match (CE4004); the receiver stays a borrow for consuming
+purposes (CE2411, `.clone()` escapes); and the parameter is CE2425 anywhere but first in
+an extension/perk method. This followed the order #252 → CE2413 and #253 → CE2414 set:
+reject the unchecked form first, then ship the feature.
 
 **Reads are unaffected, and one of them became expressible.** A field read, a read-only
 method under the receiver, `.clone()` of an owning field, and `.clone()` of the whole

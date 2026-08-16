@@ -1,0 +1,10 @@
+# #327: the receiver comes first -- `&poke self` after another parameter is CE2425.
+# EXPECT_ERROR_CODE: CE2425
+struct Counter:
+    i32 n
+
+extend Counter bad(i32 v, &poke self) ~:
+    return ~
+
+fn main() i32:
+    return Result.Ok(0)

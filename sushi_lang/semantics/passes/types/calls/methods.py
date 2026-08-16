@@ -22,6 +22,28 @@ if TYPE_CHECKING:
     from .. import TypeValidator
 
 
+def _reject_immutable_poke_receiver(validator: 'TypeValidator', call: MethodCall) -> None:
+    """A `&poke self` method call writes through its receiver's ADDRESS (#327).
+
+    So the receiver must HAVE an address the write can reach: a temporary would be
+    spilled to a copy nobody reads (a silently lost write, the #326 class) and is
+    CE2404; a constant lives in `.rodata` and is CE2400. A binding/`&peek` receiver
+    is Pass 3's half -- the write gate treats a poke-self call as a write to the root.
+    """
+    from sushi_lang.semantics.ast import DotCall, MemberAccess
+
+    root = call.receiver
+    while isinstance(root, (MethodCall, DotCall, MemberAccess)):
+        root = root.receiver if not isinstance(root, MemberAccess) else root.obj
+    if not isinstance(root, Name):
+        er.emit(validator.reporter, er.ERR.CE2404, call.receiver.loc,
+                expr=f"<expression>.{call.method}() receiver")
+        return
+    if (root.id not in validator.variable_types
+            and root.id in validator.const_table.by_name):
+        er.emit(validator.reporter, er.ERR.CE2400, root.loc, name=root.id)
+
+
 def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     """Validate method call - receiver type, method existence, argument types."""
     # A bloom spread `arr...` is never valid in a method call (methods cannot be
@@ -166,6 +188,15 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     perk_method = validator.perk_impl_table.get_method(receiver_type, call.method)
     if perk_method is not None:
         # Found a perk method - validate it
+        # A `&poke self` / `&peek self` perk method (#327): stamp the mode for Pass 3
+        # and the backend, and reject a receiver with no address for the poke form --
+        # the same rule as the extension arm below.
+        perk_self_mode = getattr(perk_method, "self_mode", None)
+        if perk_self_mode is not None:
+            call.callee_self_mode = perk_self_mode
+            if perk_self_mode == "poke":
+                _reject_immutable_poke_receiver(validator, call)
+
         # Validate argument count (receiver is implicit, so compare explicit args)
         expected = len(perk_method.params)
         got = len(call.args)
@@ -265,6 +296,16 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
         # Method doesn't exist for this type
         er.emit(validator.reporter, er.ERR.CE2008, call.loc, name=f"{display_type(receiver_type)}.{call.method}")
         return
+
+    # A `&poke self` / `&peek self` method (#327) receives its receiver's ADDRESS. Stamp
+    # the mode on the call node -- Pass 3 treats a poke-self call as a WRITE to the
+    # receiver root (the CE2408/CE2412 gates), and the backend passes a pointer instead
+    # of a value. Both read the stamp instead of re-resolving the method.
+    self_mode = getattr(method, "self_mode", None)
+    if self_mode is not None:
+        call.callee_self_mode = self_mode
+        if self_mode == "poke":
+            _reject_immutable_poke_receiver(validator, call)
 
     # Validate argument count (receiver is implicit, so compare explicit args)
     expected_params = method.params
