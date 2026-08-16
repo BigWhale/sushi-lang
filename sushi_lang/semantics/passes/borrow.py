@@ -58,6 +58,7 @@ from sushi_lang.semantics.ast import (
     PrintLn,
     Program,
     RangeExpr,
+    RefBinding,
     Rebind,
     Return,
     Spread,
@@ -1202,6 +1203,32 @@ class BorrowChecker:
                         name=binding, var_type=payload_type,
                         is_borrowed_binding=True, bound_at_span=span,
                     ), displaced)
+            elif isinstance(binding, RefBinding):
+                # `Variant(&poke x)` (#300 phase 3): the binding is a REFERENCE into the
+                # scrutinee's payload storage. The full ReferenceType wires the rules in
+                # by construction (a `&peek` write is CE2408, a consume is CE2411, the
+                # backend derefs by type), and the scrutinee is frozen for the arm --
+                # rebinding it would change the variant tag under the pointer, which is
+                # the hazard the issue's own example names (Rust's E0506).
+                mode = BorrowMode.POKE if binding.mode == "poke" else BorrowMode.PEEK
+                ref_span = binding.loc or span
+                state = BorrowState(
+                    name=binding.name,
+                    var_type=ReferenceType(payload_type, mode),
+                    bound_at_span=ref_span, declared_at_span=ref_span,
+                )
+                self._register_binding(binding.name, state, displaced)
+                if scrutinee is not None:
+                    # The pointer aims INTO the scrutinee's own storage, so the
+                    # scrutinee must HAVE storage: a bare local (or reference
+                    # parameter) name. A temporary has none -- the backend would
+                    # spill a copy and the write would land on storage nobody reads.
+                    if not isinstance(scrutinee, Name):
+                        self.err.emit(er.ERR.CE2404, ref_span,
+                                      expr=self._expr_to_string(scrutinee))
+                    elif frozen is not None:
+                        self._freeze_ref_binding_owner(
+                            state, scrutinee, ref_span, frozen, poke_span=ref_span)
             elif isinstance(binding, Pattern):
                 # Nested pattern: its own bindings are typed by the payload enum it matches.
                 self._register_pattern_bindings(binding, payload_type, displaced,

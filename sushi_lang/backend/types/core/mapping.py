@@ -28,7 +28,7 @@ from sushi_lang.semantics.typesys import (
     FunctionType,
 )
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.backend.types.core.resolution import resolve_unknown_type, resolve_generic_type_ref, calculate_max_variant_size
+from sushi_lang.backend.types.core.resolution import resolve_unknown_type, resolve_generic_type_ref
 
 
 class TypeMapper:
@@ -348,23 +348,31 @@ class TypeMapper:
         return llvm_struct
 
     def _get_enum_type(self, enum_type: EnumType) -> ir.LiteralStructType:
-        """Create LLVM struct type for enum (tagged union) with caching."""
+        """Create LLVM struct type for enum (tagged union) with caching.
+
+        The shape is `{i32 tag, [K x i64] data}` (#300 phase 2). The data member is an
+        i64 array ON PURPOSE: it gives the struct 8-alignment, so the payload starts at
+        offset 8 from an 8-aligned base and every naturally aligned field offset inside
+        it is naturally aligned absolutely. A byte-array data member has alignment 1,
+        which left the whole struct 4-aligned and every wide payload field under-aligned
+        -- the #145/#149 crash class the `align=1` workaround family papered over.
+        Payload accesses still go through an `i8*` bitcast of the data pointer; only the
+        member's TYPE carries the alignment.
+        """
         # Check cache first
         cached = self.cache.get_enum(enum_type.name)
         if cached is not None:
             return cached
 
-        # Calculate the maximum size needed for variant data using shared helper
+        # Payload word count from the layout authority, so the array can never be
+        # smaller than the aligned field offsets it must hold.
         from sushi_lang.backend.types.core.sizing import TypeSizing
         sizing = TypeSizing(self.struct_table, self.enum_table)
-        max_size = calculate_max_variant_size(enum_type, sizing.get_type_size_bytes)
+        word_count = sizing.enum_payload_word_count(enum_type)
 
-        # Create tagged union: {i32 tag, [max_size x i8] data}
-        # Ensure minimum 1 byte for data array to match sizing.py calculation
-        data_size = max(max_size, 1)
         llvm_enum = ir.LiteralStructType([
             self.i32,
-            ir.ArrayType(self.i8, data_size),
+            ir.ArrayType(self.i64, word_count),
         ])
 
         # Cache for reuse

@@ -456,19 +456,24 @@ that before this design shipped was already double-freeing.
 
 ### 8.4 What is NOT decided
 
-**How to opt into a mutable binding** — DECIDED and phase 1 SHIPPED (#300, 2026-08-16). The
-spelling is the binding site, with Sushi's own vocabulary: `foreach(&poke r in rows.iter())`
-and `Own(&poke x)` bind a POINTER into the container's / pointee's storage, so a write
-through the binding reaches the owner; `&peek` is the copy-free read-only twin. The binding
-registers with its full `ReferenceType`, which wires in every existing rule by construction:
-a write through `&peek` is CE2408, a consuming use is CE2411, and the owner is FROZEN for
-the binding's scope (CE2412) exactly like a `let`-borrow's. Fences: an iterable whose items
-have no address (a range, `.entries()`) is **CE2423**; a `&poke` binding out of a `&peek`
-container is CE2408; out of a constant is CE2400; and the match-pattern position
-(`Shape.Poly(&poke p)`) is **CE2424** until the enum payload alignment fix (#300 phase 3),
-because the payload is byte-packed behind the tag and an interior pointer into it is the
-#149 crash class. Rust's scrutinee-side spelling (`match &mut x`) stays foreclosed-by-none
-but unimplemented.
+**How to opt into a mutable binding** — DECIDED and SHIPPED, all three phases (#300,
+2026-08-16). The spelling is the binding site, with Sushi's own vocabulary:
+`foreach(&poke r in rows.iter())`, `Own(&poke x)`, and a top-level match binding
+`Shape.Poly(&poke p)` bind a POINTER into the owner's storage, so a write through the
+binding reaches the owner in place; `&peek` is the copy-free read-only twin, and value and
+reference bindings mix in one pattern. The binding registers with its full `ReferenceType`,
+which wires in every existing rule by construction: a write through `&peek` is CE2408, a
+consuming use is CE2411, and the owner is FROZEN for the binding's scope (CE2412) exactly
+like a `let`-borrow's — including the tag-change hazard (rebinding the scrutinee under a
+live payload borrow, Rust's E0506). The match half rests on the phase-2 enum layout
+(`{i32 tag, [K x i64] data}`, naturally aligned payload offsets from one authority), which
+is what retired the `align=1` family and made an interior payload pointer safe to hand out.
+Fences: an iterable whose items have no address (a range, `.entries()`) is **CE2423**; a
+`&poke` binding out of a `&peek` owner is CE2408; out of a constant is CE2400; a TEMPORARY
+scrutinee is CE2404 (no storage to point into); and a reference binding in a NESTED pattern
+is **CE2424** — nested extraction walks through temporary copies, so a pointer into one is
+a silently lost write. Rust's scrutinee-side spelling (`match &mut x`) stays
+foreclosed-by-none but unimplemented.
 
 **Numbering, untangled.** Two different issues get invoked near this decision and are easy to
 conflate:

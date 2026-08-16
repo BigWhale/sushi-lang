@@ -15,7 +15,7 @@ Uses C standard library functions (strtol, strtoll, strtod) for robust parsing.
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_strtol, declare_strtoll, declare_strtod, declare_malloc
-from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
+from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types, get_maybe_type
 
 
 def emit_string_to_i32(module: ir.Module) -> ir.Function:
@@ -47,10 +47,10 @@ def emit_string_to_i32(module: ir.Module) -> ir.Function:
     # Get common types
     i8, i8_ptr, i32, i64, string_type = get_string_types()
 
-    # Maybe<i32> = {i32 tag, [4 x i8] data}
+    # Maybe<i32> = {i32 tag, [1 x i64] data} (#300 phase 2)
     # tag = 0 for Some(i32), 1 for None()
-    # data holds the i32 value when tag=0
-    maybe_i32_type = ir.LiteralStructType([i32, ir.ArrayType(i8, 4)])
+    # data holds the i32 value when tag=0 (payload offset 0)
+    maybe_i32_type = get_maybe_type(i32)
 
     # Declare external functions
     malloc = declare_malloc(module)
@@ -142,8 +142,8 @@ def emit_string_to_i32(module: ir.Module) -> ir.Function:
     undef_some = ir.Constant(maybe_i32_type, ir.Undefined)
     some_with_tag = builder.insert_value(undef_some, ir.Constant(i32, 0), 0, name="some_with_tag")
 
-    # Pack i32 into [4 x i8] array
-    data_temp = builder.alloca(ir.ArrayType(i8, 4), name="data_temp")
+    # Pack i32 into the [1 x i64] data array (payload offset 0)
+    data_temp = builder.alloca(maybe_i32_type.elements[1], name="data_temp")
     data_temp_i8 = builder.bitcast(data_temp, i8_ptr, name="data_temp_i8")
     data_temp_i32 = builder.bitcast(data_temp_i8, i32.as_pointer(), name="data_temp_i32")
     builder.store(result_i32, data_temp_i32)
@@ -157,7 +157,7 @@ def emit_string_to_i32(module: ir.Module) -> ir.Function:
     undef_none = ir.Constant(maybe_i32_type, ir.Undefined)
     none_with_tag = builder.insert_value(undef_none, ir.Constant(i32, 1), 0, name="none_with_tag")
     # data field is undefined for None
-    undef_data = ir.Constant(ir.ArrayType(i8, 4), ir.Undefined)
+    undef_data = ir.Constant(maybe_i32_type.elements[1], ir.Undefined)
     none_complete = builder.insert_value(none_with_tag, undef_data, 1, name="none_complete")
     builder.branch(return_block)
 
@@ -195,8 +195,8 @@ def emit_string_to_i64(module: ir.Module) -> ir.Function:
     # Get common types
     i8, i8_ptr, i32, i64, string_type = get_string_types()
 
-    # Maybe<i64> = {i32 tag, [8 x i8] data}
-    maybe_i64_type = ir.LiteralStructType([i32, ir.ArrayType(i8, 8)])
+    # Maybe<i64> = {i32 tag, [1 x i64] data} (#300 phase 2)
+    maybe_i64_type = get_maybe_type(i64)
 
     # Declare external functions
     malloc = declare_malloc(module)
@@ -272,8 +272,8 @@ def emit_string_to_i64(module: ir.Module) -> ir.Function:
     undef_some = ir.Constant(maybe_i64_type, ir.Undefined)
     some_with_tag = builder.insert_value(undef_some, ir.Constant(i32, 0), 0, name="some_with_tag")
 
-    # Pack i64 into [8 x i8] array
-    data_temp = builder.alloca(ir.ArrayType(i8, 8), name="data_temp")
+    # Pack i64 into the [1 x i64] data array (payload offset 0)
+    data_temp = builder.alloca(maybe_i64_type.elements[1], name="data_temp")
     data_temp_i8 = builder.bitcast(data_temp, i8_ptr, name="data_temp_i8")
     data_temp_i64 = builder.bitcast(data_temp_i8, i64.as_pointer(), name="data_temp_i64")
     builder.store(result_i64, data_temp_i64)
@@ -286,7 +286,7 @@ def emit_string_to_i64(module: ir.Module) -> ir.Function:
     builder.position_at_end(failure_block)
     undef_none = ir.Constant(maybe_i64_type, ir.Undefined)
     none_with_tag = builder.insert_value(undef_none, ir.Constant(i32, 1), 0, name="none_with_tag")
-    undef_data = ir.Constant(ir.ArrayType(i8, 8), ir.Undefined)
+    undef_data = ir.Constant(maybe_i64_type.elements[1], ir.Undefined)
     none_complete = builder.insert_value(none_with_tag, undef_data, 1, name="none_complete")
     builder.branch(return_block)
 
@@ -325,8 +325,8 @@ def emit_string_to_f64(module: ir.Module) -> ir.Function:
     i8, i8_ptr, i32, i64, string_type = get_string_types()
     f64 = ir.DoubleType()
 
-    # Maybe<f64> = {i32 tag, [8 x i8] data}
-    maybe_f64_type = ir.LiteralStructType([i32, ir.ArrayType(i8, 8)])
+    # Maybe<f64> = {i32 tag, [1 x i64] data} (#300 phase 2)
+    maybe_f64_type = get_maybe_type(f64)
 
     # Declare external functions
     malloc = declare_malloc(module)
@@ -401,8 +401,8 @@ def emit_string_to_f64(module: ir.Module) -> ir.Function:
     undef_some = ir.Constant(maybe_f64_type, ir.Undefined)
     some_with_tag = builder.insert_value(undef_some, ir.Constant(i32, 0), 0, name="some_with_tag")
 
-    # Pack f64 into [8 x i8] array
-    data_temp = builder.alloca(ir.ArrayType(i8, 8), name="data_temp")
+    # Pack f64 into the [1 x i64] data array (payload offset 0)
+    data_temp = builder.alloca(maybe_f64_type.elements[1], name="data_temp")
     data_temp_i8 = builder.bitcast(data_temp, i8_ptr, name="data_temp_i8")
     data_temp_f64 = builder.bitcast(data_temp_i8, f64.as_pointer(), name="data_temp_f64")
     builder.store(result_f64, data_temp_f64)
@@ -415,7 +415,7 @@ def emit_string_to_f64(module: ir.Module) -> ir.Function:
     builder.position_at_end(failure_block)
     undef_none = ir.Constant(maybe_f64_type, ir.Undefined)
     none_with_tag = builder.insert_value(undef_none, ir.Constant(i32, 1), 0, name="none_with_tag")
-    undef_data = ir.Constant(ir.ArrayType(i8, 8), ir.Undefined)
+    undef_data = ir.Constant(maybe_f64_type.elements[1], ir.Undefined)
     none_complete = builder.insert_value(none_with_tag, undef_data, 1, name="none_complete")
     builder.branch(return_block)
 

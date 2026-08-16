@@ -312,7 +312,7 @@ class Pattern(Node):
     """
     enum_name: str                                      # Enum type name (e.g., "FileResult")
     variant_name: str                                   # Variant name (e.g., "Err")
-    bindings: List[Union[str, 'Pattern', 'OwnPattern']] # Variable names, nested patterns, Own patterns, or '_'
+    bindings: List[Union[str, 'Pattern', 'OwnPattern', 'RefBinding']] # Names, nested patterns, Own patterns, reference bindings, or '_'
     enum_name_span: Optional[Span] = None
     variant_name_span: Optional[Span] = None
 
@@ -320,6 +320,20 @@ class Pattern(Node):
 class WildcardPattern(Node):
     """Wildcard pattern (_) for match arms - catches all remaining variants"""
     pass
+
+@dataclass
+class RefBinding(Node):
+    """A reference binding in a match pattern: `Shape.Poly(&poke p)` (#300 phase 3).
+
+    Binds `name` as a POINTER into the scrutinee's payload storage, so a write through
+    it reaches the owner in place; `"peek"` is the copy-free read-only twin. Legal only
+    in a TOP-LEVEL pattern with a named scrutinee: nested-pattern extraction walks
+    through temporary copies (a pointer into one is a silently lost write), and a
+    temporary scrutinee has no storage to point into (CE2404).
+    """
+    name: str
+    mode: str                        # "peek" | "poke"
+
 
 @dataclass
 class OwnPattern(Node):
@@ -663,6 +677,6 @@ __all__ = [
     "Node", "Program", "UseStatement", "FuncDef", "ConstDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "Block", "Param",
     "Let", "ExprStmt", "Return", "Print", "PrintLn", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "WildcardPattern", "Break", "Continue",
     "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda",
-    "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern",
+    "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",
 ]

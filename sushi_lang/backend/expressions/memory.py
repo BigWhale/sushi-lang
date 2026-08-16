@@ -815,19 +815,19 @@ def _clone_enum_value(codegen: 'LLVMCodegen', value: ir.Value, value_type) -> ir
         switch.add_case(make_i32_const(tag_val), case_bb)
         b.position_at_end(case_bb)
 
-        offset = 0
-        for assoc_type in variant.associated_types:
+        # Field offsets from the ONE layout authority (#300 phase 2).
+        field_offsets = codegen.types.payload_field_offsets(variant.associated_types)
+        for assoc_type, field_offset in zip(variant.associated_types, field_offsets, strict=True):
             if field_needs_cleanup(codegen, assoc_type):
                 data_i8_ptr = b.bitcast(data_ptr, ir.PointerType(ir.IntType(8)),
                                         name="clone_enum_data_i8")
-                field_i8_ptr = b.gep(data_i8_ptr, [make_i32_const(offset)],
+                field_i8_ptr = b.gep(data_i8_ptr, [make_i32_const(field_offset)],
                                      name="clone_enum_field_i8")
                 field_llvm = codegen.types.ll_type(assoc_type)
                 field_ptr = b.bitcast(field_i8_ptr, ir.PointerType(field_llvm),
                                       name="clone_enum_field_ptr")
                 orig = b.load(field_ptr, name="clone_enum_orig")
                 b.store(emit_value_clone(codegen, orig, assoc_type), field_ptr)
-            offset += codegen.types.get_type_size_bytes(assoc_type)
 
         b.branch(end_bb)
 

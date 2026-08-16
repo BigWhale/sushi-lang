@@ -1,0 +1,21 @@
+# #300 phase 3: value bindings and reference bindings mix in one pattern, and the
+# reference points at the SECOND field -- its naturally aligned nonzero offset is the
+# exact shape the phase-2 layout exists for (an i32 then a 16-byte array descriptor).
+# EXPECT_STDOUT_EXACT: "5 3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+enum Mix:
+    Pair(i32, i32[])
+    Nil
+
+fn main() i32:
+    let Mix m = Mix.Pair(5, from([1, 2]))
+    match m:
+        Mix.Pair(n, &poke arr) ->
+            arr.push(n)
+        Mix.Nil -> println("nil")
+    match m:
+        Mix.Pair(k, &peek a) ->
+            println("{k} {a.len()}")
+        Mix.Nil -> println("nil")
+    return Result.Ok(0)

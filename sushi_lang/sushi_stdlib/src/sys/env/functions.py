@@ -12,7 +12,7 @@ from __future__ import annotations
 import typing
 from llvmlite import ir
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
-from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types, get_string_type
+from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types, get_string_type, get_maybe_type
 from sushi_lang.sushi_stdlib.src.string_helpers import fat_pointer_to_cstr, cstr_to_fat_pointer_with_len
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc
 
@@ -48,9 +48,9 @@ def generate_getenv(module: ir.Module) -> None:
              d. Build string fat pointer {buffer, length}
              e. Return Maybe.Some(string)
 
-    Maybe<string> Layout:
-        { i32 tag, [12 x i8] data }
-        - tag = 0: Some, data contains string fat pointer {i8* ptr, i32 size}
+    Maybe<string> Layout (#300 phase 2):
+        { i32 tag, [2 x i64] data }
+        - tag = 0: Some, data contains string fat pointer {i8* ptr, i32 size, i8 owned}
         - tag = 1: None, data is unused
     """
     i8, i8_ptr, i32, i64 = get_basic_types()
@@ -67,10 +67,9 @@ def generate_getenv(module: ir.Module) -> None:
     else:
         libc_strlen = module.globals["strlen"]
 
-    # Maybe<string> type: {i32 tag, [12 x i8] data}
-    # data must hold a string (12 bytes is enough for {i8*, i32} on 64-bit)
-    maybe_string_data_size = 16
-    maybe_string_type = ir.LiteralStructType([i32, ir.ArrayType(i8, maybe_string_data_size)])
+    # Maybe<string> type: {i32 tag, [2 x i64] data} (#300 phase 2)
+    # data must hold a string fat pointer (16 bytes -> K=2 i64 words)
+    maybe_string_type = get_maybe_type(string_type)
 
     # Define function signature: sushi_getenv(string key) -> Maybe<string>
     func_type = ir.FunctionType(maybe_string_type, [string_type])
@@ -125,9 +124,9 @@ def generate_getenv(module: ir.Module) -> None:
     # Build Sushi string fat pointer using helper
     string_complete = cstr_to_fat_pointer_with_len(builder, string_buffer, result_len, owned=1)
 
-    # Pack string into Maybe.Some
+    # Pack string into Maybe.Some (payload field offset stays 0)
     # Create a temporary array to hold the string
-    data_temp = builder.alloca(ir.ArrayType(i8, maybe_string_data_size), name="data_temp")
+    data_temp = builder.alloca(maybe_string_type.elements[1], name="data_temp")
 
     # Bitcast to string pointer and store
     data_temp_string = builder.bitcast(data_temp, string_type.as_pointer(), name="data_temp_string")

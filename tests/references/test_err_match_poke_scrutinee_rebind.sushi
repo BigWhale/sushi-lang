@@ -1,0 +1,16 @@
+# #300 phase 3, the hazard the issue names: rebinding the scrutinee while a payload
+# borrow is live would change the variant tag under the pointer, so it is CE2412 --
+# Rust's E0506, falling out of the same owner freeze a let-borrow gets.
+# EXPECT_ERROR_CODE: CE2412
+enum Shape:
+    Poly(i32[])
+    Empty
+
+fn main() i32:
+    let Shape s = Shape.Poly(from([1]))
+    match s:
+        Shape.Poly(&poke p) ->
+            s := Shape.Empty
+            p.push(9)
+        Shape.Empty -> println("empty")
+    return Result.Ok(0)

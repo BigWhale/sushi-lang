@@ -1,0 +1,19 @@
+# #300 phase 3: a match reference binding is a BORROW -- consuming it is CE2411, with
+# .clone() as the escape, exactly like every other reference.
+# EXPECT_ERROR_CODE: CE2411
+enum Shape:
+    Poly(i32[])
+    Empty
+
+fn eat(i32[] a) i32:
+    return Result.Ok(a.len())
+
+fn main() i32:
+    let Shape s = Shape.Poly(from([1]))
+    match s:
+        Shape.Poly(&poke p) ->
+            match eat(p):
+                Result.Ok(n) -> println(n)
+                Result.Err(_) -> println("e")
+        Shape.Empty -> println("empty")
+    return Result.Ok(0)

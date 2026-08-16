@@ -484,6 +484,10 @@ class ScopeAnalyzer:
                 elif isinstance(inner, Pattern):
                     # Nested pattern inside Own(...)
                     self._declare_pattern_bindings(inner)
+            else:
+                # A RefBinding (#300 phase 3) declares its name like a plain binding;
+                # it carries its own span.
+                self._declare_variable(binding_item.name, binding_item.loc or pattern.loc)
 
     def _check_break(self, stmt: Break) -> None:
         """Check a break statement (only legal inside a loop)."""

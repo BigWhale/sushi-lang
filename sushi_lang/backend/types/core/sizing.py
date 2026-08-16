@@ -16,7 +16,12 @@ from sushi_lang.semantics.typesys import (
 )
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.constants import FAT_POINTER_SIZE_BYTES, DYNAMIC_ARRAY_SIZE_BYTES, ITERATOR_SIZE_BYTES, ENUM_TAG_SIZE_BYTES
-from sushi_lang.backend.types.core.resolution import resolve_unknown_type, resolve_generic_type_ref, calculate_max_variant_size
+from sushi_lang.backend.types.core.resolution import resolve_unknown_type, resolve_generic_type_ref
+
+
+def align_up(offset: int, alignment: int) -> int:
+    """Round `offset` up to the next multiple of `alignment`."""
+    return (offset + alignment - 1) // alignment * alignment
 
 
 class TypeSizing:
@@ -84,12 +89,11 @@ class TypeSizing:
                 element_size = self.get_type_size_bytes(semantic_type.base_type)
                 return element_size * semantic_type.size
             case EnumType():
-                # Enum: {i32 tag, [max_size x i8] data}
-                max_variant_size = calculate_max_variant_size(
-                    semantic_type, self.get_type_size_bytes
-                )
-                # Tag (4 bytes) + data array (max_variant_size, minimum 1)
-                return ENUM_TAG_SIZE_BYTES + max(max_variant_size, 1)
+                # Enum: {i32 tag, [K x i64] data} (#300 phase 2). The payload starts at
+                # offset 8 (the i64 array member gives the struct 8-alignment) and is a
+                # whole number of i64 words, so the total is 8 + 8*K -- exactly LLVM's
+                # sizeof for the mapped type.
+                return ENUM_TAG_SIZE_BYTES + 8 * self.enum_payload_word_count(semantic_type)
             case IteratorType():
                 # Iterator struct: {i32 current_index, i32 length, T* data_ptr} = 4 + 4 + 8 = 16 bytes
                 return ITERATOR_SIZE_BYTES
@@ -160,6 +164,48 @@ class TypeSizing:
 
         return offset
 
+    def payload_field_offsets(self, associated_types) -> list[int]:
+        """The naturally aligned offset of each payload field, relative to the payload base.
+
+        THE enum payload layout authority (#300 phase 2). Every walk over a variant's
+        fields -- construction, match extraction, destructor, clone, hash, key equality --
+        derives its offsets from here (directly, or through `pack_variant_field` /
+        `unpack_variant_field`, which apply the same rule incrementally), and
+        `variant_payload_size` closes the loop so the data array can never be smaller
+        than the offsets it must hold. Two derivations of this rule is how construct and
+        extract could disagree; this is the one.
+
+        The rule is C struct layout: each field starts at the next multiple of its
+        natural alignment. The payload base itself is 8-aligned (the data member is an
+        i64 array), so a naturally aligned RELATIVE offset is naturally aligned
+        ABSOLUTELY -- no Sushi type needs more than 8.
+        """
+        offsets = []
+        offset = 0
+        for field_type in associated_types:
+            offset = align_up(offset, self.get_type_alignment(field_type))
+            offsets.append(offset)
+            offset += self.get_type_size_bytes(field_type)
+        return offsets
+
+    def variant_payload_size(self, associated_types) -> int:
+        """One variant's payload size in bytes, under the aligned layout."""
+        if not associated_types:
+            return 0
+        offsets = self.payload_field_offsets(associated_types)
+        return offsets[-1] + self.get_type_size_bytes(associated_types[-1])
+
+    def enum_payload_word_count(self, enum_type: 'EnumType') -> int:
+        """K in the enum's LLVM shape `{i32 tag, [K x i64] data}`: the widest variant's
+        payload, in i64 words, minimum 1 (a payload-less enum keeps a 1-word array so
+        the shape is uniform)."""
+        max_size = max(
+            (self.variant_payload_size(v.associated_types)
+             for v in enum_type.variants if v.associated_types),
+            default=0,
+        )
+        return max(align_up(max_size, 8) // 8, 1)
+
     def get_type_alignment(self, semantic_type: Ty) -> int:
         """Get the alignment requirement in bytes for a semantic type.
 
@@ -219,8 +265,10 @@ class TypeSizing:
                 # Array aligned to element alignment
                 return self.get_type_alignment(semantic_type.base_type)
             case EnumType():
-                # Enum aligned to i32 tag (4 bytes)
-                return 4
+                # Enum aligned to its [K x i64] data member (#300 phase 2). Leaving this
+                # at 4 would make the compiler's struct sizing disagree with LLVM's
+                # stride for any struct holding an enum field.
+                return 8
             case ReferenceType() | PointerType() | ForeignPtrType() | FunctionType():
                 # Pointers (incl. function pointers) aligned to 8 bytes
                 return 8

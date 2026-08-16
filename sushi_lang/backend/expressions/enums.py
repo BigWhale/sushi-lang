@@ -111,15 +111,19 @@ def emit_enum_constructor_from_method_call(
 
     # If there are associated values, pack them into the data field
     if args:
-        # Allocate temporary storage for the data
-        data_array_type = llvm_enum_type.elements[1]  # [N x i8] array
+        # Allocate temporary storage for the data. The [K x i64] member type makes the
+        # alloca 8-aligned (#300 phase 2), so the naturally aligned field offsets below
+        # are naturally aligned absolutely.
+        data_array_type = llvm_enum_type.elements[1]  # [K x i64] array
         temp_alloca = codegen.builder.alloca(data_array_type, name="enum_data_temp")
 
         # Cast to i8* for bitcasting
         data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")
 
-        # Pack each argument into the data field
-        offset = 0
+        # Pack each argument at its offset from the ONE layout authority -- extraction,
+        # destroy, clone and hash all read the same offsets, so construct and extract
+        # cannot disagree (they used to derive offsets from two different size walks).
+        field_offsets = codegen.types.payload_field_offsets(variant.associated_types)
         for i, (arg_expr, arg_type) in enumerate(zip(args, variant.associated_types, strict=True)):
             # Special handling for dynamic arrays to ensure proper ownership
             # Similar to how struct constructors handle dynamic arrays
@@ -164,19 +168,13 @@ def emit_enum_constructor_from_method_call(
                 arg_value = consume(codegen, arg_expr, arg_value, arg_type,
                                     ConsumingUse.ENUM_PAYLOAD)
 
-            # Calculate size of this argument
-            from sushi_lang.backend.expressions import memory
+            # Store the argument at its aligned offset. Natural alignment throughout:
+            # the base is 8-aligned and the offset is naturally aligned (#300 phase 2),
+            # so the packed-layout `align=1` workaround (#145) is gone.
             arg_llvm_type = arg_value.type
-            arg_size = memory.calculate_llvm_type_size(arg_llvm_type)
-
-            # Store the argument at the current offset. align=1: enum variant data is a byte
-            # array, so a 16-byte {i8*,i32,i8} string here is under-aligned; without align=1
-            # LLVM emits an aligned vector move that faults (SIGSEGV) on x86-64 (#145).
-            arg_ptr_i8 = codegen.builder.gep(data_ptr, [ir.Constant(codegen.types.i32, offset)], name=f"arg{i}_ptr")
+            arg_ptr_i8 = codegen.builder.gep(data_ptr, [ir.Constant(codegen.types.i32, field_offsets[i])], name=f"arg{i}_ptr")
             arg_ptr_typed = codegen.builder.bitcast(arg_ptr_i8, ir.PointerType(arg_llvm_type), name=f"arg{i}_ptr_typed")
-            codegen.builder.store(arg_value, arg_ptr_typed, align=1)
-
-            offset += arg_size
+            codegen.builder.store(arg_value, arg_ptr_typed)
 
         # Load the packed data array
         packed_data = codegen.builder.load(temp_alloca, name="packed_data")

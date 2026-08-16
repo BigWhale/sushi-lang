@@ -155,33 +155,29 @@ def _emit_variant_data_hash(codegen: Any, enum_value: ir.Value, variant: Any, in
     # Cast to i8* for byte-level access
     data_ptr = builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")
 
-    # Unpack and hash each associated value
+    # Unpack and hash each associated value, at the offsets the ONE layout authority
+    # gives (#300 phase 2). Natural alignment throughout: the payload base is 8-aligned
+    # and the offsets are naturally aligned, so the `align=1` workaround (#145) is gone.
     hash_value = initial_hash
-    offset = 0
+    field_offsets = codegen.types.payload_field_offsets(variant.associated_types)
 
-    for assoc_idx, assoc_type in enumerate(variant.associated_types):
+    for assoc_idx, (assoc_type, field_offset) in enumerate(
+            zip(variant.associated_types, field_offsets, strict=True)):
         # Get LLVM type for this associated value
         llvm_type = codegen.types.ll_type(assoc_type)
 
-        # Calculate pointer to this value in the data array
-        from sushi_lang.backend.expressions import memory
-        value_size = memory.calculate_llvm_type_size(llvm_type)
-
-        # Get pointer at current offset
-        value_ptr_i8 = builder.gep(data_ptr, [ir.Constant(codegen.types.i32, offset)], name=f"assoc{assoc_idx}_ptr")
+        # Get pointer at this field's offset
+        value_ptr_i8 = builder.gep(data_ptr, [ir.Constant(codegen.types.i32, field_offset)], name=f"assoc{assoc_idx}_ptr")
         value_ptr_typed = builder.bitcast(value_ptr_i8, ir.PointerType(llvm_type), name=f"assoc{assoc_idx}_ptr_typed")
 
         # Load the value
-        value = builder.load(value_ptr_typed, name=f"assoc{assoc_idx}_value", align=1)  # under-aligned enum payload (#145)
+        value = builder.load(value_ptr_typed, name=f"assoc{assoc_idx}_value")
 
         # Get hash of this value by calling its .hash() method
         value_hash = _emit_associated_value_hash(codegen, value, assoc_type)
 
         # Combine using FNV-1a
         hash_value = emit_fnv1a_combine(codegen, hash_value, value_hash)
-
-        # Move to next value
-        offset += value_size
 
     return hash_value
 

@@ -363,7 +363,7 @@ def _emit_array_foreach_body(
         # a T*), and registering the `ReferenceType` in `variable_types` flips every
         # consumer at once -- `is_reference_parameter` keys on nothing else -- so reads
         # deref, writes land in the container, and no cleanup is ever registered.
-        previous_entry = _bind_element_reference(codegen, node.item_name, node.item_borrow,
+        previous_entry = bind_element_reference(codegen, node.item_name, node.item_borrow,
                                                  node.item_type, element_ptr)
     else:
         element_value = codegen.builder.load(element_ptr, name=node.item_name)
@@ -386,7 +386,7 @@ def _emit_array_foreach_body(
         _emit_block(codegen, node.body)
     finally:
         if node.item_borrow is not None:
-            _unbind_element_reference(codegen, node.item_name, previous_entry)
+            unbind_element_reference(codegen, node.item_name, previous_entry)
 
     codegen.memory.pop_scope()
     codegen.loop_stack.pop()
@@ -525,7 +525,7 @@ def _emit_hashmap_foreach(
             # the GEP'd key/value pointer is bindable exactly like an array element's.
             # (`.entries()` bindings have NO address -- the user Entry is insert_value'd
             # above -- and Pass 2 rejects the marker there with CE2423.)
-            previous_entry = _bind_element_reference(codegen, node.item_name, node.item_borrow,
+            previous_entry = bind_element_reference(codegen, node.item_name, node.item_borrow,
                                                      element_type, element_ptr)
         else:
             element_value = codegen.builder.load(element_ptr, name=node.item_name)
@@ -539,7 +539,7 @@ def _emit_hashmap_foreach(
         _emit_block(codegen, node.body)
     finally:
         if node.item_borrow is not None:
-            _unbind_element_reference(codegen, node.item_name, previous_entry)
+            unbind_element_reference(codegen, node.item_name, previous_entry)
 
     codegen.memory.pop_scope()
     codegen.loop_stack.pop()
@@ -727,7 +727,7 @@ def _emit_range_loop_path(
 _MISSING = object()
 
 
-def _bind_element_reference(codegen: 'LLVMCodegen', name: str, borrow_mode: str,
+def bind_element_reference(codegen: 'LLVMCodegen', name: str, borrow_mode: str,
                             element_type, element_ptr):
     """Bind a foreach item as a REFERENCE to the container's element (#300 phase 1).
 
@@ -738,7 +738,7 @@ def _bind_element_reference(codegen: 'LLVMCodegen', name: str, borrow_mode: str,
     cleanup is registered (the container owns the element).
 
     Returns the PREVIOUS `variable_types` entry (or the `_MISSING` sentinel) for
-    `_unbind_element_reference`: the entry must not outlive the loop, or a later
+    `unbind_element_reference`: the entry must not outlive the loop, or a later
     same-named value binding in the same function is double-dereferenced.
     """
     from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
@@ -751,7 +751,7 @@ def _bind_element_reference(codegen: 'LLVMCodegen', name: str, borrow_mode: str,
     return previous
 
 
-def _unbind_element_reference(codegen: 'LLVMCodegen', name: str, previous) -> None:
+def unbind_element_reference(codegen: 'LLVMCodegen', name: str, previous) -> None:
     """End a reference binding's `variable_types` entry at loop exit (#300)."""
     if previous is _MISSING:
         codegen.variable_types.pop(name, None)

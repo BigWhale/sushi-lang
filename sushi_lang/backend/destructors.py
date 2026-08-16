@@ -553,16 +553,17 @@ def _emit_enum_destructor(
         for tag_val, _variant, resolved_types in variants_needing_cleanup:
             builder.position_at_end(cleanup_blocks[tag_val])
 
-            # Calculate offset into data array for each associated value
-            offset = 0
-            for j, assoc_type in enumerate(resolved_types):
+            # Field offsets from the ONE layout authority (#300 phase 2), so the
+            # destructor reads exactly where construction wrote.
+            field_offsets = codegen.types.payload_field_offsets(resolved_types)
+            for j, (assoc_type, field_offset) in enumerate(zip(resolved_types, field_offsets, strict=True)):
                 if needs_cleanup(assoc_type):
                     # Get pointer to this field within the data array
-                    # Cast the [N x i8]* to i8* first
+                    # Cast the data array pointer to i8* first
                     data_i8_ptr = builder.bitcast(data_ptr, ir.PointerType(ir.IntType(8)), name=f"data_i8_ptr_{j}")
 
                     # Add offset to get to this field
-                    offset_const = make_i32_const(offset)
+                    offset_const = make_i32_const(field_offset)
                     field_i8_ptr = builder.gep(data_i8_ptr, [offset_const], name=f"field_{j}_i8_ptr")
 
                     # Cast to the actual field type pointer
@@ -571,9 +572,6 @@ def _emit_enum_destructor(
 
                     # Recursively destroy this field
                     emit_value_destructor(codegen, field_ptr, assoc_type)
-
-                # Update offset for next field
-                offset += codegen.types.get_type_size_bytes(assoc_type)
 
             builder.branch(end_block)
 

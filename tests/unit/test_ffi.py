@@ -390,8 +390,8 @@ def test_foreign_ptr_in_enum_payload_sizes():
         ),
     )
     sizing = TypeSizing(StructTable(), EnumTable())
-    # Tag (4) + max variant payload (8 for the ptr) = 12.
-    assert sizing.get_type_size_bytes(result_like) == 12
+    # Tag+pad (8) + one i64 payload word (the 8-byte ptr) = 16 (#300 phase 2 layout).
+    assert sizing.get_type_size_bytes(result_like) == 16
 
 
 def test_contains_foreign_ptr_walk():

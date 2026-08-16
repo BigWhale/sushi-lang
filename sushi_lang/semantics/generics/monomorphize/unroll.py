@@ -89,6 +89,9 @@ def _pattern_binding_names(pattern) -> set:
                     names.add(b)
             elif isinstance(b, (Pattern, OwnPattern)):
                 names |= _pattern_binding_names(b)
+            else:
+                # A RefBinding (#300 phase 3) shadows its name like a plain binding.
+                names.add(b.name)
     elif isinstance(pattern, OwnPattern):
         inner = pattern.inner_pattern
         if isinstance(inner, str):

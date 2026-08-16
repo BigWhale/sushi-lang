@@ -79,9 +79,11 @@ def construct_file_error_from_errno(codegen: 'LLVMCodegen', errno_value: ir.Valu
         file_error_value, file_error_tag, 0, name="file_error_tag"
     )
 
-    # FileError data field should be zero (unit variants)
+    # FileError data field should be zero (unit variants). Use zeroinitializer (None)
+    # so the constant's element type always matches the data array ([1 x i64] since
+    # #300 phase 2; bytearray would build i8 elements and fail IR parsing).
     file_error_data_type = file_error_llvm_type.elements[1]
-    zero_file_error_data = ir.Constant(file_error_data_type, bytearray(file_error_data_type.count))
+    zero_file_error_data = ir.Constant(file_error_data_type, None)
     file_error_value = codegen.builder.insert_value(
         file_error_value, zero_file_error_data, 1, name="file_error"
     )

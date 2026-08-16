@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from llvmlite import ir
-from sushi_lang.backend.constants import INT32_BIT_WIDTH, FAT_POINTER_SIZE_BYTES
+from sushi_lang.backend.constants import INT32_BIT_WIDTH
 from sushi_lang.backend.constants.llvm_values import FALSE_I1
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.typesys import BuiltinType
@@ -56,9 +56,10 @@ def emit_env_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
 
         key_value = codegen.expressions.emit_expr(expr.args[0])
 
-        # Maybe<string> type: {i32 tag, [12 x i8] data}
-        maybe_string_data_size = FAT_POINTER_SIZE_BYTES
-        maybe_string_type = ir.LiteralStructType([i32, ir.ArrayType(ir.IntType(8), maybe_string_data_size)])
+        # Maybe<string> type (#300 phase 2): {i32 tag, [2 x i64] data}
+        # (string fat pointer = 16 bytes -> K=2). Shared helper byte-matches the .bc.
+        from sushi_lang.sushi_stdlib.src.type_definitions import get_maybe_type
+        maybe_string_type = get_maybe_type(string_type)
 
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, maybe_string_type, [string_type])
         result = codegen.builder.call(stdlib_func, [key_value], name="getenv_result")

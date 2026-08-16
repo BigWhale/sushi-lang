@@ -8,7 +8,7 @@ from __future__ import annotations
 import itertools
 from typing import TYPE_CHECKING
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.backend import enum_utils
+from sushi_lang.backend import enum_utils, gep_utils
 from sushi_lang.backend.utils import require_both_initialized
 
 if TYPE_CHECKING:
@@ -421,8 +421,11 @@ def _emit_match_arms(
             # Find the next arm with the same outer tag (for nested pattern fallthrough)
             next_arm_bb = _find_next_arm_with_same_tag(codegen, stmt, arm_blocks, scrutinee_type, i)
 
-            # Extract and bind pattern variables
-            _extract_pattern_bindings(codegen, arm.pattern, scrutinee_value, scrutinee_type, next_arm_bb)
+            # Extract and bind pattern variables. The scrutinee EXPRESSION rides along
+            # for reference bindings (#300 phase 3), which need a pointer into the
+            # scrutinee's own storage rather than into the arm's temporary copy.
+            _extract_pattern_bindings(codegen, arm.pattern, scrutinee_value, scrutinee_type, next_arm_bb,
+                                      scrutinee_expr=stmt.scrutinee)
 
         # Emit the arm body
         try:
@@ -442,7 +445,7 @@ def _emit_match_arms(
             codegen.builder.branch(end_bb)
 
 
-def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scrutinee_value: 'ir.Value', scrutinee_type: 'EnumType | None', next_arm_bb: 'ir.Block | None' = None) -> None:
+def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scrutinee_value: 'ir.Value', scrutinee_type: 'EnumType | None', next_arm_bb: 'ir.Block | None' = None, scrutinee_expr: 'Expr | None' = None) -> None:
     """Extract and bind pattern variables from enum data.
 
     Supports nested patterns by recursively extracting and matching nested enum values.
@@ -456,6 +459,7 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
     """
     from llvmlite import ir
     from sushi_lang.semantics.ast import Pattern as PatternNode, OwnPattern
+    from sushi_lang.semantics.ast import RefBinding as RefBindingNode
 
     if not pattern.bindings:
         return
@@ -491,16 +495,44 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
     # Cast to i8* for accessing fields
     data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")
 
-    # Extract each binding
-    offset = 0
-    for binding_item, binding_type in zip(pattern.bindings, variant.associated_types, strict=True):
+    # Extract each binding at its offset from the ONE layout authority (#300 phase 2);
+    # the offsets are naturally aligned and the payload base is 8-aligned, so the loads
+    # need no `align=1` any more.
+    field_offsets = codegen.types.payload_field_offsets(variant.associated_types)
+    for (binding_item, binding_type), field_offset in zip(
+            zip(pattern.bindings, variant.associated_types, strict=True), field_offsets,
+            strict=True):
         # Get the LLVM type for this binding
         binding_llvm_type = codegen.types.ll_type(binding_type)
 
+        # A reference binding (#300 phase 3) points into the SCRUTINEE'S OWN payload
+        # storage, never into this arm's temporary copy -- a pointer into the copy
+        # would make every write through it a silently lost write (#253's class). The
+        # payload base is 8-aligned and the field offset naturally aligned (phase 2),
+        # so the interior pointer is safe to hand to natural-alignment code. Pass 3
+        # guarantees the scrutinee is a bare local/parameter name (CE2404 otherwise).
+        if isinstance(binding_item, RefBindingNode):
+            from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer
+            from sushi_lang.backend.statements.loops import bind_element_reference
+            scrutinee_ptr = emit_receiver_as_pointer(codegen, scrutinee_expr)
+            orig_data_ptr = gep_utils.gep_struct_field(
+                codegen, scrutinee_ptr, 1, "scrutinee_data_ptr")
+            orig_data_i8 = codegen.builder.bitcast(
+                orig_data_ptr, codegen.types.str_ptr, name="scrutinee_data_i8")
+            payload_field_ptr = codegen.builder.gep(
+                orig_data_i8, [ir.Constant(codegen.types.i32, field_offset)],
+                name="ref_binding_field_i8")
+            payload_field_typed = codegen.builder.bitcast(
+                payload_field_ptr, ir.PointerType(binding_llvm_type),
+                name="ref_binding_field_ptr")
+            bind_element_reference(codegen, binding_item.name, binding_item.mode,
+                                   binding_type, payload_field_typed)
+            continue
+
         # Load the value from the data field
-        field_ptr_i8 = codegen.builder.gep(data_ptr, [ir.Constant(codegen.types.i32, offset)], name="field_ptr")
+        field_ptr_i8 = codegen.builder.gep(data_ptr, [ir.Constant(codegen.types.i32, field_offset)], name="field_ptr")
         field_ptr_typed = codegen.builder.bitcast(field_ptr_i8, ir.PointerType(binding_llvm_type), name="field_ptr_typed")
-        field_value = codegen.builder.load(field_ptr_typed, name="field_value", align=1)  # under-aligned enum payload (#145)
+        field_value = codegen.builder.load(field_ptr_typed, name="field_value")
 
         # Handle simple bindings (strings), nested patterns (Pattern), and Own patterns (OwnPattern)
         if isinstance(binding_item, str):
@@ -518,9 +550,6 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
         elif isinstance(binding_item, OwnPattern):
             # Own pattern: unwrap Own<T> via .get() and bind inner pattern
             _extract_own_pattern(codegen, binding_item, field_value, binding_type, next_arm_bb)
-
-        # Calculate offset for next field using semantic type size (accounts for padding/alignment)
-        offset += codegen.types.get_type_size_bytes(binding_type)
 
 
 def _extract_nested_pattern(codegen: 'LLVMCodegen', nested_pattern: 'Pattern', enum_value: 'ir.Value', enum_type: 'Type', next_arm_bb: 'ir.Block | None' = None) -> None:

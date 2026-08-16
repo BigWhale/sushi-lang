@@ -247,16 +247,21 @@ def unpack_variant_field(
         name: Optional name for the loaded value
 
     Returns:
-        Tuple of (loaded_value, next_offset) where next_offset is
-        offset + sizeof(field_type)
+        Tuple of (loaded_value, next_offset). The given `offset` is first rounded up to
+        the field's natural alignment (#300 phase 2), so a running offset threaded
+        through consecutive calls reproduces exactly the offsets
+        `TypeSizing.payload_field_offsets` computes; next_offset is the aligned offset
+        plus sizeof(field_type).
 
     Example:
         data_ptr = get_data_ptr(enum_value)
         value1, offset = unpack_variant_field(codegen, data_ptr, int32_type, 0, "field1")
         value2, offset = unpack_variant_field(codegen, data_ptr, string_type, offset, "field2")
     """
+    from sushi_lang.backend.types.core.sizing import align_up
     field_llvm_type = codegen.types.ll_type(field_type)
     field_size = codegen.types.get_type_size_bytes(field_type)
+    offset = align_up(offset, codegen.types.get_type_alignment(field_type))
 
     if offset > 0:
         field_ptr = codegen.builder.gep(
@@ -274,10 +279,10 @@ def unpack_variant_field(
         name=f"{name}_typed_ptr"
     )
 
-    # align=1: enum variant data is under-aligned (byte array after the i32 tag); load
-    # unaligned so an over-aligned field (a 16-byte string at a 4-aligned offset) does not
-    # fault on x86-64 (see pack_variant_field) (#145).
-    value = codegen.builder.load(typed_ptr, name=name, align=1)
+    # Natural alignment: the payload base is 8-aligned (the enum's data member is an
+    # i64 array, #300 phase 2) and the offset was aligned above, so the access needs no
+    # `align=1` any more -- that workaround existed for the packed layout (#145).
+    value = codegen.builder.load(typed_ptr, name=name)
     return value, offset + field_size
 
 
@@ -342,15 +347,19 @@ def pack_variant_field(
         name: Optional name for GEP operations
 
     Returns:
-        Next offset (offset + sizeof(field_type))
+        Next offset. The given `offset` is first rounded up to the field's natural
+        alignment (#300 phase 2), matching `TypeSizing.payload_field_offsets`; the
+        return is the aligned offset plus sizeof(field_type).
 
     Example:
         data_ptr = get_data_ptr(enum_value)
         offset = pack_variant_field(codegen, data_ptr, value1, int32_type, 0, "field1")
         offset = pack_variant_field(codegen, data_ptr, value2, string_type, offset, "field2")
     """
+    from sushi_lang.backend.types.core.sizing import align_up
     field_llvm_type = codegen.types.ll_type(field_type)
     field_size = codegen.types.get_type_size_bytes(field_type)
+    offset = align_up(offset, codegen.types.get_type_alignment(field_type))
 
     if offset > 0:
         field_ptr = codegen.builder.gep(
@@ -368,11 +377,9 @@ def pack_variant_field(
         name=f"{name}_typed_ptr"
     )
 
-    # align=1: an enum variant's data is a byte array after the i32 tag, so fields sit at
-    # under-aligned offsets. A field whose natural alignment exceeds its actual offset (e.g. a
-    # 16-byte {i8*,i32,i8} string at data offset 0 -> enum offset 4) must be stored unaligned,
-    # or LLVM emits an aligned 16-byte vector move that faults (SIGSEGV) on x86-64 (#145).
-    codegen.builder.store(field_value, typed_ptr, align=1)
+    # Natural alignment: the payload base is 8-aligned and the offset was aligned above
+    # (#300 phase 2), so the `align=1` workaround for the packed layout (#145) is gone.
+    codegen.builder.store(field_value, typed_ptr)
     return offset + field_size
 
 
