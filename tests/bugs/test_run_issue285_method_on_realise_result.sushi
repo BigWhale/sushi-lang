@@ -1,0 +1,35 @@
+# #285: a field read or a method call chained onto `.realise(x)` was a CE0000 -- an
+# internal-error code for ordinary user code.
+#
+# `infer_struct_type`'s call arms knew exactly ONE method name: `.get()`, through
+# `_infer_get_element_struct`. Every other call receiver fell past it to CE0068 / CE0069,
+# on the grounds that the method was not called `get`. Pass 2 had already stamped the
+# return type on that very node, so the answer was there the whole time -- the backend was
+# reading the wrong place, which is the same shape as #286 one node type over.
+#
+# Both chained shapes, and an OWNING struct so the discarded default value has to be
+# freed exactly once.
+# EXPECT_STDOUT_EXACT: "5\n10\nstable: 1\nsize: 3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+struct Point:
+    i32 n
+
+extend Point doubled() i32:
+    return self.n * 2
+
+struct Row:
+    i32[] cells
+
+extend Row size() i32:
+    return self.cells.len()
+
+fn main() i32:
+    let Maybe@(Point) p = Maybe.Some(Point(5))
+    println("{p.realise(Point(0)).n}")
+    println("{p.realise(Point(0)).doubled()}")
+    println("stable: {p.realise(Point(0)).hash() == p.realise(Point(0)).hash()}")
+
+    let Maybe@(Row) r = Maybe.Some(Row(from([1, 2, 3])))
+    println("size: {r.realise(Row(from([]))).size()}")
+    return Result.Ok(0)
