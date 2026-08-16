@@ -202,7 +202,7 @@ class ScopeAnalyzer:
         tell it from a name that is declared nowhere (CE1001). The borrow checker used to
         ask the same question from `borrow_state`, which cannot distinguish the two, so it
         answered CE2400 for BOTH -- and the scope pass answered CE1001 for both, giving one
-        token two diagnostics, one of them wrong (F15 of BORROW.md).
+        token two diagnostics, one of them wrong (F15 of old/BORROW.md).
         """
         for i in range(len(self.scopes) - 1, -1, -1):
             if name in self.scopes[i]:

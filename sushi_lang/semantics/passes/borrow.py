@@ -607,7 +607,7 @@ class BorrowChecker:
 
         There used to be two: `_check_function` for plain functions and perk methods, and
         `_check_extension` for extension methods -- two setups for one concept, and they
-        had drifted (BORROW.md section 7). The extension form registered its parameters
+        had drifted (old/BORROW.md section 7). The extension form registered its parameters
         WITHOUT `declared_at_span`, so every relational diagnostic in an extension body
         rendered without its second location; it also skipped the `_scope_binding_borrows`
         reset; and NEITHER registered the receiver.
@@ -763,7 +763,7 @@ class BorrowChecker:
                     # There is deliberately no "rebind while borrowed" check here. It used
                     # to be CE2401's only emit site and could never fire -- this runs
                     # BEFORE the value walk, so no borrow of the target is registered yet
-                    # (F14 of BORROW.md). Moving it after the walk would reject
+                    # (F14 of old/BORROW.md). Moving it after the walk would reject
                     # `x := f(&peek x)`, where the borrow is dead by the time the store
                     # happens; Rust accepts the same shape. CE2401 now lives at the
                     # consuming use, which is where the two really conflict.
@@ -1533,7 +1533,7 @@ class BorrowChecker:
             # which is the pass that owns names: CE1001 if it is declared nowhere, CE2400
             # if it names something that is not a local (a constant, a function, an enum
             # type, an FFI namespace). Repeating the question here is what produced two
-            # diagnostics for one token (F15 of BORROW.md), and it produced the WRONG one
+            # diagnostics for one token (F15 of old/BORROW.md), and it produced the WRONG one
             # too, because `borrow_state` cannot tell those two cases apart.
             if var_name not in self.borrow_state:
                 return
@@ -1967,7 +1967,7 @@ class BorrowChecker:
         decision = classify(provenance, self._type_class_of_source(state, state.var_type))
         if decision is Ownership.MOVE:
             # The same value cannot be borrowed and handed away in ONE statement (F6 of
-            # BORROW.md). This is where CE2401 belongs and where it had never been wired:
+            # old/BORROW.md). This is where CE2401 belongs and where it had never been wired:
             # its old emit site ran BEFORE the value walk, so no borrow was ever live when
             # it looked -- a registered code with no reachable path. Here the counters ARE
             # live, because the call arm checks every argument (registering the borrows)

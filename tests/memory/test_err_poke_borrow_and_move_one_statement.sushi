@@ -4,7 +4,7 @@
 # itself by value. The pushes grow the buffer, so the by-value copy's data pointer is the
 # one `realloc` released -- and the callee frees it again at scope exit. It compiled clean
 # and reported `leaked=32 blocks=1 double_frees=1`, after printing `owned[0]: 2` out of
-# freed memory. BORROW.md called F6 "latent; memory-clean today"; this shape is not.
+# freed memory. old/BORROW.md called F6 "latent; memory-clean today"; this shape is not.
 # EXPECT_ERROR_CODE: CE2401
 fn both(&poke i32[] r, i32[] owned) i32:
     r.push(4)

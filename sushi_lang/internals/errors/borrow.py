@@ -26,8 +26,9 @@ _add(ErrorMessage("CE2401", Severity.ERROR,
     "cannot move '{name}' while it is borrowed",
     Category.BORROW, "One statement borrowed a value and also handed it to a position that takes ownership -- `both(&peek s, s)`. The new owner frees the buffer while the borrow still points at it, so `both(&poke a, a)` is a double free plus a read of released memory, whichever order the arguments are written in. Borrow it twice (`&peek` is shareable), or clone the value the owning position needs: `both(&peek s, s.clone())`. A borrow lasts only for the statement that creates it, so the same two lines written as two statements are unaffected."))
 
-# CE2402 ("cannot destroy '{name}' while it is borrowed") was RETIRED in R7 of FIX.md. It
-# was unreachable: `.destroy()` returns `~`, so it is only ever a statement of its own, and
+# CE2402 ("cannot destroy '{name}' while it is borrowed") was RETIRED in R7 of the reference
+# seam plan (`old/FIX-reference-seam.md`). It was unreachable: `.destroy()` returns `~`, so
+# it is only ever a statement of its own, and
 # borrow counters are cleared at the end of every statement -- no borrow can be live when
 # it runs. Its intent is covered three ways: CE2408 (destroy through a `&peek` reference),
 # CE2412 (destroy an owner a `let`-borrow binding reads out of) and CE2406 (use after
@@ -78,7 +79,7 @@ _add(ErrorMessage("CE2411", Severity.ERROR,
 # The grammar's `?type` rule is recursive and universal, so `&peek T` / `&poke T` parses in
 # EVERY type position. Semantics defines it for exactly ONE: the parameter. Each of the six
 # positions below was accepted and then failed in its own way -- an internal error, a
-# dangling read, or silent dead code (BORROW.md section 6).
+# dangling read, or silent dead code (old/BORROW.md section 6).
 #
 # SIX codes, not one parameterized code, following the two precedents this repo already has
 # for a type with restricted positions: foreign `ptr` (CE5002/CE5008/CE5009/CE5012) and the
@@ -120,8 +121,9 @@ _add(ErrorMessage("CE2420", Severity.ERROR,
 # rationale and its own escape -- the same reasoning as the six position codes above.
 #
 # The two here are one rule (#298: every parameter of an extension or perk method is a
-# borrow) with two escapes: a by-value parameter can be redeclared `&poke T` today, and a
-# receiver cannot, because `&poke self` (#327) is not designed yet.
+# borrow) with two escapes: a by-value parameter is redeclared `&poke T`, and a receiver
+# `&poke self` (#327, shipped 2026-08-16). The codes stay separate because the escapes are
+# what the help text has to name.
 
 _add(ErrorMessage("CE2421", Severity.ERROR,
     "cannot write through 'self': a method receiver is a read-only borrow",
