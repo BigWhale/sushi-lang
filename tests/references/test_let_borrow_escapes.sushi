@@ -1,0 +1,23 @@
+# #344: the two escapes CE2426 names, and the reads it must leave alone.
+#
+# Reading through the binding is free. Writing to the OWNER directly reaches the real
+# storage, and `.clone()` takes an independent value the owner never sees again. Both are
+# leak-clean and double-free-clean, which is what makes the rejection a redirection rather
+# than a ban.
+# EXPECT_STDOUT_EXACT: "read: 3 1 1\nowner: 4 first: 1\nclone: 5 owner: 4\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+struct Holder:
+    i32 n
+    i32[] items
+
+fn main() i32:
+    let Holder h = Holder(1, from([1, 2, 3]))
+    let i32[] v = h.items
+    println("read: {v.len()} {v[0]} {h.n}")
+    h.items.push(9)
+    println("owner: {h.items.len()} first: {h.items[0]}")
+    let i32[] c = h.items.clone()
+    c.push(11)
+    println("clone: {c.len()} owner: {h.items.len()}")
+    return Result.Ok(0)

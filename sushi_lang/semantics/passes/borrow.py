@@ -114,6 +114,20 @@ class BorrowState:
                                 # Distinct from is_argv_view, which is one specific borrow
                                 # with its own diagnostic, and from a ReferenceType param,
                                 # which is spelled `&peek`/`&poke` in the source.
+    is_let_borrow: bool = False  # ...and this one is the `let` spelling specifically
+                                # (#242). The narrower flag exists for the DIAGNOSTIC, the
+                                # same way `is_method_receiver` narrows `is_method_param`:
+                                # a match/foreach binding is a private DEEP copy, so a
+                                # write through it is merely lost (CE2414), while a
+                                # `let`-borrow shares the owner's DATA -- a reallocating
+                                # write frees the owner's buffer (CE2426, #344). Different
+                                # escapes, so different codes.
+                                #
+                                # NOT derived from `borrows_from is not None`: an owner with
+                                # no BorrowState (a temporary -- `let v = make()??.items`)
+                                # leaves that field None while the binding is a `let`-borrow
+                                # all the same, and the temporary's buffer is just as real.
+                                # `is_let_borrow` implies `is_borrowed_binding`.
     is_method_param: bool = False  # A parameter of an extension or perk method body --
                                 # `self` and the explicit ones alike. A BORROW of the
                                 # caller's value (#298 S8.6): the body registers no
@@ -276,10 +290,10 @@ _MUTATING_METHODS = frozenset({
 class _ReadOnlyReceiver:
     """One kind of receiver a write cannot reach through, as DATA.
 
-    The three kinds differ only in how the state is recognised, which code says so, and
-    what the note and the help say. Everything else -- the three write shapes, the
-    root-owner walk, the relational rendering -- is identical, so the varying part is a
-    row here and the invariant part is `BorrowChecker._reject_readonly_write`.
+    The kinds differ only in how the state is recognised, which code says so, and what the
+    note and the help say. Everything else -- the three write shapes, the root-owner walk,
+    the relational rendering -- is identical, so the varying part is a row here and the
+    invariant part is `BorrowChecker._reject_readonly_write`.
 
     `note` and `help` are format strings: `{name}` is the receiver, `{what}` names the
     write that was attempted ("call `.push()`", "assign to a field", ...).
@@ -291,9 +305,9 @@ class _ReadOnlyReceiver:
     help: str
 
 
-# The three kinds, most specific first. They are disjoint in practice -- the receiver is
-# never a reference parameter, and neither is ever a pattern binding -- so the order is
-# documentation rather than precedence.
+# The five kinds, most specific first. They are disjoint by construction -- the receiver is
+# never a reference parameter, neither is ever a binding, and the two binding rows split on
+# `is_let_borrow` -- so the order is documentation rather than precedence.
 _READONLY_RECEIVERS: tuple[_ReadOnlyReceiver, ...] = (
     _ReadOnlyReceiver(
         # `and not ReferenceType`: a `&poke self` receiver (#327) is WRITABLE and must
@@ -339,17 +353,38 @@ _READONLY_RECEIVERS: tuple[_ReadOnlyReceiver, ...] = (
              "it, or take an independent value with `{name}.clone()`",
     ),
     _ReadOnlyReceiver(
-        # `is_borrowed_binding and borrows_from is None`: a `let`-borrow binding (#242)
-        # names its owner in `borrows_from`, and mutating its OWNER is the CE2412
-        # question with its own machinery. A match/foreach binding has no named owner.
+        # `and not is_let_borrow`: the two binding kinds split here. A match/foreach
+        # binding is compiled as a private DEEP copy, so the write is only LOST -- which
+        # is what this text says. The `let` spelling shares the owner's data and gets
+        # CE2426 below, whose first escape is different.
         code=er.ERR.CE2414,
         matches=lambda state: (state.is_borrowed_binding
-                               and state.borrows_from is None),
+                               and not state.is_let_borrow),
         note_span=lambda state: state.bound_at_span,
         note="'{name}' is bound here, as a read-only view",
         help="the write ({what}) would land on a private copy and be lost; take an "
              "independent value with `{name}.clone()`, mutate it, and store it back "
              "into the owner",
+    ),
+    _ReadOnlyReceiver(
+        # The fifth kind (#344): a `let` bound from a read through an owner. It was left
+        # out of the CE2414 row on the argument that CE2412 covers it -- but CE2412
+        # answers "may I mutate the OWNER while the binding lives?", and nothing answered
+        # "may I write THROUGH the binding?". Complementary questions, not alternatives:
+        # the write here reaches storage the owner keeps, so a reallocating `.push()`
+        # frees the owner's buffer and the owner's scope exit frees it again.
+        #
+        # Keyed on `is_let_borrow` and NOT on `borrows_from is not None`: a `let` bound
+        # out of a TEMPORARY (`let v = make()??.items`) records no owner name, and used
+        # to fall into the CE2414 row above and be told it was a match binding.
+        code=er.ERR.CE2426,
+        matches=lambda state: state.is_let_borrow,
+        note_span=lambda state: state.bound_at_span,
+        note="'{name}' is bound here, borrowing storage its owner keeps",
+        help="the write ({what}) reaches storage another value owns and still frees, so "
+             "it is lost from the owner's view and a reallocating write frees the "
+             "owner's buffer; write to the owner directly, or take an independent value "
+             "with `{name}.clone()`, mutate it, and store it back",
     ),
 )
 
@@ -988,9 +1023,9 @@ class BorrowChecker:
           real leak instead.
         - `invalidated_at` / `invalidated_by`: kept, so a binding whose owner had changed
           reported CE2412 even after the binding was given a value of its own.
-        - `is_borrowed_binding` / `borrows_from`: kept, so a binding re-initialized from a
-          fresh value still counted as a borrow and a consuming use of it was a false
-          CE2411.
+        - `is_borrowed_binding` / `is_let_borrow` / `borrows_from`: kept, so a binding
+          re-initialized from a fresh value still counted as a borrow -- a consuming use of
+          it was a false CE2411, and a write through it a false CE2426.
 
         The value expression is checked BEFORE this runs, so `s := "{s}-x"` still reports a
         use of a moved `s`. A rebind on ONE branch of an `if` stays conservative: the flow
@@ -1002,6 +1037,7 @@ class BorrowChecker:
         state.invalidated_at = None
         state.invalidated_by = ()
         state.is_borrowed_binding = False
+        state.is_let_borrow = False
         state.borrows_from = None
 
     @classmethod
@@ -2048,6 +2084,7 @@ class BorrowChecker:
         can dangle, which is the whole reason a borrow needs a lifetime.
         """
         dest.is_borrowed_binding = True
+        dest.is_let_borrow = True
         dest.bound_at_span = stmt.loc
 
         owner = self._root_owner(stmt.value)
@@ -2205,23 +2242,28 @@ class BorrowChecker:
                                what: str) -> bool:
         """THE gate: a write that cannot reach the value it appears to write is rejected.
 
-        The language has three read-only receivers, each found as its own bug and each
+        The language has five read-only receivers, each found as its own bug and each
         keeping its own code and its own escape:
 
           a match/foreach binding  CE2414  (#253) -- a private DEEP copy: the write is lost
           a `&peek` reference      CE2408  (#302) -- a read-only borrow of the caller
           the method receiver      CE2421  (#326) -- a SHALLOW copy: the write is lost, and
                                                      on an owning field it is a double free
+          a by-value method param  CE2422  (#298) -- the same, one line over
+          a `let`-borrow binding   CE2426  (#344) -- shares the owner's DATA: the write is
+                                                     lost, and a reallocating one is a
+                                                     double free
 
         and three shapes the write comes in -- a mutating method on (or under) the
         receiver, a field assignment whose root owner is it, and a `&poke` borrow of it,
-        which hands the write to a callee. Nine cells, ONE dispatcher, four call sites.
-        Each kind was implemented separately as it was found, and each time all three
-        shapes had to be re-covered by hand; the table is what makes a fourth kind one
-        entry instead of a fourth walk.
+        which hands the write to a callee. Fifteen cells, ONE dispatcher, four call sites.
+        Each kind was implemented separately as it was found, and the first two times all
+        three shapes had to be re-covered by hand; the table is what made the fifth kind
+        one entry instead of a fifth walk.
 
-        The order is most-specific first, though the kinds are disjoint in practice: the
-        receiver is never a reference parameter, and neither is ever a pattern binding.
+        The order is most-specific first, though the kinds are disjoint by construction:
+        the receiver is never a reference parameter, neither is ever a binding, and the
+        two binding rows split on `is_let_borrow`.
 
         A REBIND of the receiver itself does not route here on purpose. For a binding it
         re-initializes a local (Rust's `Some(mut n) => n = 99`); for a `&peek` reference
