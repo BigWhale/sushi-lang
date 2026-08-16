@@ -1,0 +1,39 @@
+# #289: a BARE enum-constant initializer (`Shape.Empty`, no parentheses) left the binding
+# unregistered for cleanup, so a later rebind storing an owning payload leaked. The
+# explicit `Shape.Empty()` spelling was leak-clean. Two spellings of one value must
+# classify the same way.
+#
+# `Shape.Empty` parses as a MemberAccess -- receiver `Shape`, member `Empty` --
+# structurally indistinguishable from a field read, so it classified as a BORROW. But it
+# CONSTRUCTS a payload-free variant and owns what it makes. The answer therefore comes
+# from the tables, not the shape: the receiver names an enum and the member is one of its
+# variants.
+#
+# Both spellings are exercised, so the test fails if they ever diverge again in either
+# direction -- an unregistered binding leaks, and a double registration double-frees.
+# EXPECT_STDOUT_EXACT: "bare: 3\nexplicit: 2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+enum Shape:
+    Poly(i32[])
+    Empty
+
+fn describe(&peek Shape s) i32:
+    match s:
+        Shape.Poly(cells) -> return Result.Ok(cells.len())
+        Shape.Empty -> return Result.Ok(0)
+
+fn run() i32:
+    let i32[] arr = from([1, 2, 3])
+    let Shape bare = Shape.Empty
+    bare := Shape.Poly(arr.clone())
+    println("bare: {describe(&peek bare)??}")
+
+    let i32[] other = from([4, 5])
+    let Shape explicit = Shape.Empty()
+    explicit := Shape.Poly(other.clone())
+    println("explicit: {describe(&peek explicit)??}")
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run().realise(1))

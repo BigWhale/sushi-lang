@@ -1886,6 +1886,15 @@ class BorrowChecker:
             # `c.get(i)??` -- the get-out sits under the propagation operator.
             expr = expr.expr
 
+        if self._is_bare_enum_constant(expr):
+            # `Shape.Empty` parses as a MemberAccess, so it read as "a field of `Shape`"
+            # and classified BORROWED -- but it CONSTRUCTS a payload-free variant and owns
+            # what it makes, exactly like the `Shape.Empty()` spelling one character over.
+            # The binding was therefore never registered for cleanup, and a later rebind
+            # storing an owning payload into it leaked (#289). Two spellings of one value
+            # must classify the same way.
+            return False
+
         if isinstance(expr, (MemberAccess, IndexAccess)):
             return True
 
@@ -1897,6 +1906,34 @@ class BorrowChecker:
             return self._reads_through_owner(receiver)
 
         return False
+
+    def _is_bare_enum_constant(self, expr: Optional[Expr]) -> bool:
+        """Is `expr` the parenthesis-free spelling of a payload-free variant (#289)?
+
+        `Shape.Empty` is a `MemberAccess`: receiver `Shape`, member `Empty`. Structurally
+        that is indistinguishable from a field read, which is why it classified as a
+        borrow -- so the answer has to come from the TABLES, not from the shape.
+
+        Three conditions, all required: the receiver is a bare name, that name is an enum,
+        and the member is one of its variants.
+
+        The `borrow_state` check declines to call it a construction when a LOCAL of that
+        name exists. It is defensive rather than load-bearing: a local named after an enum
+        does not in fact shadow it in this position today -- `Shape.Empty` still resolves
+        to the enum constant and a struct field of that name is unreachable -- so the
+        guard never fires on a program that compiles. It is kept because its failure
+        direction is the safe one: declining leaves the pre-#289 classification, which
+        leaks at worst, while claiming a field read as a construction would free storage
+        an owner keeps.
+        """
+        if not isinstance(expr, MemberAccess) or not isinstance(expr.receiver, Name):
+            return False
+        if expr.receiver.id in self.borrow_state:
+            return False  # a local shadows the enum name
+        enums = getattr(self.tables, "enums", None) if self.tables is not None else None
+        enum_type = getattr(enums, "by_name", {}).get(expr.receiver.id) if enums else None
+        get_variant = getattr(enum_type, "get_variant", None)
+        return get_variant is not None and get_variant(expr.member) is not None
 
     def _name_provenance(self, name: str) -> Provenance:
         """The `Provenance` of a source that is a bare name.

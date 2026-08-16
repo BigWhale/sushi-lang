@@ -275,6 +275,14 @@ def emit_scope_cleanup(codegen: 'LLVMCodegen', cleanup_type: str = 'all') -> Non
         if hasattr(codegen.memory, 'emit_string_cleanup_all'):
             codegen.memory.emit_string_cleanup_all()
 
+    # Print-argument temporaries (#295): a `??` inside a print argument leaves the
+    # statement through here rather than through the frame's straight-line pop, so the
+    # buffers built before the propagation had no free at all. Same no-mutation
+    # discipline as the registries above. Lives on the codegen rather than on the memory
+    # manager because that is where the frame stack lives.
+    if cleanup_type == 'all' and hasattr(codegen, 'emit_string_temp_frame_cleanup_all'):
+        codegen.emit_string_temp_frame_cleanup_all()
+
 
 # ============================================================================
 # Basic Block Management Helpers

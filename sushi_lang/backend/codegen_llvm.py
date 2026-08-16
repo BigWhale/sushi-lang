@@ -336,6 +336,34 @@ class LLVMCodegen:
         for fat_value in value_temps:
             emit_string_destructor_from_value(self, fat_value)
 
+    def emit_string_temp_frame_cleanup_all(self) -> None:
+        """Free every open print-arg frame's temporaries on an EARLY-EXIT path (#295).
+
+        `pop_and_free_string_temp_scope` handles the straight-line path: emit the
+        argument, print it, free the frame. A `??` INSIDE the argument leaves the print
+        statement through the early-exit path instead, which never reached that pop -- so
+        `println("{go().realise('a')} and {fail()??}")` printed nothing and leaked the
+        buffer `go()` had already built.
+
+        Same no-mutation discipline as `emit_cstr_cleanup_all`: the frees go into the
+        CURRENT (terminating) block and the registry is left alone, so the straight-line
+        pop still frees exactly once on its own mutually exclusive path.
+
+        Every OPEN frame is freed, not just the innermost: an early exit leaves them all.
+        """
+        if not self._string_temp_stack:
+            return
+        if self.builder is None or self.builder.block is None or self.builder.block.is_terminated:
+            return
+        from sushi_lang.backend.memory.heap import emit_free
+        from sushi_lang.backend.destructors import emit_string_destructor_from_value
+        for frame in self._string_temp_stack:
+            for data_ptr in frame:
+                emit_free(self.builder, self, data_ptr)
+        for frame in self._string_value_temp_stack:
+            for fat_value in frame:
+                emit_string_destructor_from_value(self, fat_value)
+
     def get_realloc_func(self) -> ir.Function:
         """Get or declare realloc function."""
         if self._realloc_func is None:

@@ -1,0 +1,44 @@
+# #295: a `??` that PROPAGATES inside a print argument leaked the frame's earlier
+# temporaries.
+#
+# The print statement pushes a temp frame, emits its argument, prints, and frees the frame
+# on the straight-line path. A `??` inside the argument leaves the statement through the
+# EARLY-EXIT path instead, which emits every scope registry's cleanup but never reached
+# that pop -- so the buffer `go()` had already built had no free at all.
+#
+# `emit_string_temp_frame_cleanup_all` follows the same no-mutation discipline as the cstr
+# registry: the frees go into the current terminating block and the registry is left
+# alone, so the straight-line pop still frees exactly once on its own path. Both paths are
+# exercised here, which is what proves it is not a double free.
+# EXPECT_STDOUT_EXACT: "hi-there and 7\nok\npropagated\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+enum MyErr:
+    Nope
+
+fn go() string:
+    let string base = "there"
+    return Result.Ok("hi-{base}")
+
+fn ok() i32 | MyErr:
+    return Result.Ok(7)
+
+fn fail() i32 | MyErr:
+    return Result.Err(MyErr.Nope())
+
+fn show_ok() ~ | MyErr:
+    println("{go().realise('a')} and {ok()??}")
+    return Result.Ok(~)
+
+fn show_fail() ~ | MyErr:
+    println("{go().realise('a')} and {fail()??}")
+    return Result.Ok(~)
+
+fn main() i32:
+    match show_ok():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("propagated")
+    match show_fail():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("propagated")
+    return Result.Ok(0)

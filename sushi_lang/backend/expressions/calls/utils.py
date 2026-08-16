@@ -365,11 +365,14 @@ def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Valu
         if semantic_type is None:
             # Any other chained receiver -- `o.get().clone()`, `map.get(1).clone()`,
             # `make()??.clone()`. Enum construction keeps first place because it is the
-            # narrower question and this stays purely additive. That order preserves one
-            # latent edge: _infer_enum_construction_type matches ANY DotCall whose
-            # receiver is a Name, so a local shadowing an enum name still resolves to the
-            # enum. Recorded, not fixed -- no report, no test, and reordering to fix it
-            # would change a currently green path.
+            # narrower question and this stays purely additive.
+            #
+            # The order is only safe because the probe above now answers the question it
+            # is named for. It used to claim ANY node carrying `resolved_enum_type`, which
+            # Pass 2 also stamps on a Result/Maybe METHOD call -- so `go().realise("err")`
+            # was typed as its receiver's enum instead of the `string` it produces, this
+            # branch never ran, and the string temporary was registered nowhere and leaked
+            # (#293). A non-variant method falls through to the stamp now.
             semantic_type = _stamped_semantic_type(codegen, receiver)
             _own_receiver_temp(codegen, receiver, receiver_value, semantic_type)
 
@@ -409,28 +412,58 @@ def _own_receiver_temp(codegen: 'LLVMCodegen', receiver: Expr, value: ir.Value,
 
 
 def _infer_enum_construction_type(codegen: 'LLVMCodegen', receiver: Expr) -> Optional['Type']:
-    """Recover the EnumType for a receiver that constructs an enum variant.
+    """Recover the EnumType for a receiver that CONSTRUCTS an enum variant.
 
-    Handles inline constructions like ``Suit.Hearts()`` (a DotCall whose receiver
-    is the enum name) and EnumConstructor nodes. Returns None when the receiver is
-    not a recognised enum construction.
+    Handles inline constructions like ``Suit.Hearts()`` (a DotCall whose receiver is the
+    enum name) and EnumConstructor nodes. Returns None when the receiver is not a
+    recognised enum construction -- and "not a construction" is the answer it gives for
+    every other `X.Y(args)`, which is the point (#293).
+
+    It used to claim any node carrying `resolved_enum_type`. Pass 2 stamps that on a
+    Result/Maybe METHOD call too, where it names the enum the method was called ON rather
+    than what the call RETURNS. So `go().realise("err")` -- whose value is a `string` --
+    came back typed as `Result<string, StdError>`, and the caller, seeing a non-None
+    answer, skipped the temp registration that would have freed the string.
+
+    The test is now the one the name implies: is the method a VARIANT of that enum? `Ok`
+    and `Err` are variants of Result; `realise` is not. That also narrows the shadowing
+    edge the caller used to record: a local named after an enum has to be called with one
+    of that enum's variant names to be mistaken for a construction now.
     """
     from sushi_lang.semantics.ast import EnumConstructor
 
-    # A resolved annotation (set for generic enums) takes precedence.
-    resolved = getattr(receiver, 'resolved_enum_type', None)
-    if resolved is not None:
-        return resolved
-
-    enum_name = None
+    # An EnumConstructor node IS a construction by definition -- there is nothing else it
+    # can be, so its annotation (set for generic enums) or its name is the whole answer.
     if isinstance(receiver, EnumConstructor):
-        enum_name = receiver.enum_name
-    elif isinstance(receiver, DotCall) and isinstance(receiver.receiver, Name):
-        enum_name = receiver.receiver.id
+        resolved = getattr(receiver, 'resolved_enum_type', None)
+        if resolved is not None:
+            return resolved
+        return codegen.enum_table.by_name.get(receiver.enum_name)
 
-    if enum_name is not None:
-        return codegen.enum_table.by_name.get(enum_name)
-    return None
+    if not isinstance(receiver, DotCall):
+        return None
+
+    # A DotCall is `X.Y(args)`, and only SOME of those construct a variant. Pass 2 stamps
+    # `resolved_enum_type` on a Result/Maybe METHOD call too, where it names the enum the
+    # method was called ON rather than what the call RETURNS -- so claiming every node
+    # that carries the annotation typed `go().realise("err")` as `Result<string, StdError>`
+    # when its value is a `string`. That wrong answer then reached `_own_receiver_temp`'s
+    # caller as a non-None semantic type, which skipped the temp registration entirely and
+    # leaked the string (#293).
+    #
+    # The question this function is for is "does this node construct a variant", so ask it:
+    # `Ok` and `Err` are variants of Result, `realise` is not. A method that is not a
+    # variant falls through to the stamp, which carries the type of the VALUE.
+    enum_type = getattr(receiver, 'resolved_enum_type', None)
+    if enum_type is None and isinstance(receiver.receiver, Name):
+        enum_type = codegen.enum_table.by_name.get(receiver.receiver.id)
+    if enum_type is None:
+        return None
+
+    get_variant = getattr(enum_type, 'get_variant', None)
+    if get_variant is None or get_variant(receiver.method) is None:
+        return None
+    return enum_type
 
 
 def get_resolved_type(expr: Union[MethodCall, DotCall], type_attr: str) -> Optional['Type']:
