@@ -1,4 +1,4 @@
-# Borrowing a value and moving it in ONE statement is CE2401 (F6 of BORROW.md).
+# Borrowing a value and moving it in ONE statement is CE2401 (F6 of old/BORROW.md).
 #
 # Nothing related a borrow to a move inside a single statement: the borrow counters are
 # live only for the statement that made them, and no consuming use ever consulted them. So

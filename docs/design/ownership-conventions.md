@@ -652,8 +652,11 @@ dispatcher (`_reject_readonly_write`), called from the four write sites, so a fi
 one row rather than a fifth walk; `tests/unit/test_readonly_receiver_matrix.py` pins all
 twelve cells and fails if a kind in the table has no row in the matrix. The codes stay
 separate for the reason the six position codes do (§8.5): each carries its own escape.
-Here the escapes are what separate the last two — a by-value parameter can be redeclared
-`&poke T` today, and a receiver cannot, because `&poke self` is not designed yet.
+Here the escapes are what separate the last two — a by-value parameter is redeclared
+`&poke T`, and a receiver `&poke self` (#327, shipped 2026-08-16).
+
+The mechanisms themselves — the six ways a borrow is created, their extents, and the gate
+that backs each rule — are `docs/design/borrowing.md`.
 
 ## 9. Risks, and how they resolved
 

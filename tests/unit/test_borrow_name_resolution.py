@@ -1,9 +1,9 @@
 """A name under a borrow is classified ONCE, by the pass that owns names.
 
 Borrowing an undeclared name used to report TWO diagnostics for one token (F15 of
-BORROW.md): CE1001 from the scope pass and CE2400 from the borrow checker. Two passes
+old/BORROW.md): CE1001 from the scope pass and CE2400 from the borrow checker. Two passes
 answering one question -- "does this name exist?" -- is the duplicated-predicate shape
-that BORROW.md section 4 names as the root cause of the whole bug family, and it also
+that old/BORROW.md section 4 names as the root cause of the whole bug family, and it also
 made the answer WRONG for a name that exists but is not a local: `&peek SOME_CONST`
 reported CE1001 ("undeclared identifier") about a constant declared two lines above,
 because the borrow arm of the scope pass was a copy of the plain-use arm and had lost

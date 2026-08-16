@@ -310,6 +310,10 @@ References allow temporary access without transferring ownership. Sushi has two 
 - **`&peek T`** - Read-only borrow (multiple allowed)
 - **`&poke T`** - Read-write borrow (exclusive access)
 
+The design document for the borrow mechanisms — where a reference type may appear, the six
+ways a borrow is created, and the diagnostic for each rule — is
+[docs/design/borrowing.md](design/borrowing.md).
+
 ### Read-Only References (&peek)
 
 Use `&peek` when you only need to read data:

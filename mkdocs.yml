@@ -127,4 +127,8 @@ nav:
       - "Move Semantics (design)": design/move-semantics.md
       - "Omakase Install (design)": design/omakase-install.md
       - "String Representation (design)": design/string-representation.md
+      - "Method Resolution (design)": design/method-resolution.md
+      - "Type Identity (design)": design/type-identity.md
+      - "Ownership Conventions (design)": design/ownership-conventions.md
+      - "Borrowing (design)": design/borrowing.md
   - Examples: examples/README.md
