@@ -144,3 +144,76 @@ def test_stamp_survives_to_the_end_of_analysis(analyze_program, src):
     analysis = analyze_program(src)
     _assert_clean(analysis)
     assert _find_get_call(analysis.program).inferred_return_type is not None
+
+
+# ---------------------------------------------------------------------------
+# The INDEXED receiver (#286). The same premise, one node type over: the backend
+# reads a stamp rather than re-deriving, so the stamp has to be there.
+# ---------------------------------------------------------------------------
+
+INDEX_STRUCT = """\
+struct Row:
+    i32 n
+
+fn run() u64:
+    let Row[] rows = from([Row(1), Row(2)])
+    return Result.Ok(rows[0].hash())
+
+fn main() i32:
+    return Result.Ok(0)
+"""
+
+INDEX_ENUM = """\
+enum E:
+    A
+    B(i32)
+
+fn run() u64:
+    let E[] es = from([E.A, E.B(2)])
+    return Result.Ok(es[1].hash())
+
+fn main() i32:
+    return Result.Ok(0)
+"""
+
+
+def _find_index_access(program):
+    """The single `<array>[i]` expression in the program."""
+    from sushi_lang.semantics.ast import IndexAccess
+
+    found = [n for n in _walk(program) if isinstance(n, IndexAccess)]
+    assert len(found) == 1, f"expected exactly one index access, found {len(found)}"
+    return found[0]
+
+
+def test_indexed_struct_receiver_carries_its_element_type(analyze_program):
+    """`rows[0]` on a `Row[]` stamps the interned `Row`.
+
+    Without the stamp this receiver reached `emit_receiver_value`'s fallback with no
+    semantic type, and the backend fell through to mapping the LLVM layout back to a
+    language type -- CE0019 for every struct and enum element (#286). A primitive
+    element never failed, because its LLVM type maps back to exactly one language type,
+    which is what made the defect look narrower than it was.
+    """
+    analysis = analyze_program(INDEX_STRUCT)
+    _assert_clean(analysis)
+
+    stamped = _find_index_access(analysis.program).inferred_element_type
+
+    assert stamped is not None, "Pass 2 left the indexed receiver untyped"
+    assert isinstance(stamped, StructType), f"expected a StructType, got {type(stamped)}"
+    assert stamped.name == "Row"
+    assert stamped is analysis.analyzer.structs.by_name["Row"]
+
+
+def test_indexed_enum_receiver_carries_its_element_type(analyze_program):
+    """The enum half. Both element kinds failed; both are pinned."""
+    analysis = analyze_program(INDEX_ENUM)
+    _assert_clean(analysis)
+
+    stamped = _find_index_access(analysis.program).inferred_element_type
+
+    assert stamped is not None, "Pass 2 left the indexed receiver untyped"
+    assert isinstance(stamped, EnumType), f"expected an EnumType, got {type(stamped)}"
+    assert stamped.name == "E"
+    assert stamped is analysis.analyzer.enums.by_name["E"]
