@@ -41,11 +41,18 @@ def _stamped_semantic_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional['Type
     success type is `inferred_unwrapped_type` (`passes/types/expressions.py`), which
     `backend/expressions/try_expr.py` already reads for the value itself.
 
+    An INDEXED receiver (`rows[0].hash()`) is the third node asking it. It carried no
+    stamp at all, so a struct or enum element fell through to the LLVM-layout mapping and
+    died as CE0019 (#286) -- a dynamic array of a user type could be built but not read
+    through methods. A primitive element was unaffected, because its LLVM type maps back
+    to exactly one language type. `infer_index_access_type` stamps
+    `inferred_element_type` at the one place the element type is decided.
+
     Returns None rather than a half-resolved type when the name is in neither table.
     Handing a `GenericTypeRef` to `try_emit_struct_clone` would change the failure mode
     of a case that fails today; None reproduces today's behaviour exactly.
     """
-    from sushi_lang.semantics.ast import TryExpr
+    from sushi_lang.semantics.ast import IndexAccess, TryExpr
     from sushi_lang.semantics.generics.types import GenericTypeRef
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
     from sushi_lang.semantics.typesys import UnknownType
@@ -54,6 +61,8 @@ def _stamped_semantic_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional['Type
         stamped = getattr(expr, 'inferred_unwrapped_type', None)
     elif isinstance(expr, (MethodCall, DotCall)):
         stamped = getattr(expr, 'inferred_return_type', None)
+    elif isinstance(expr, IndexAccess):
+        stamped = getattr(expr, 'inferred_element_type', None)
     else:
         return None
 

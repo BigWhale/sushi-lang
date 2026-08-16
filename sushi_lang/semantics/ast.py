@@ -441,6 +441,15 @@ class ArrayLiteral(Node):
 class IndexAccess(Node):
     array: "Expr"
     index: "Expr"
+    inferred_element_type: Optional["Type"] = None  # Element type inferred by Pass 2.
+                                            # The backend does not re-derive a receiver's
+                                            # type, it reads what Pass 2 stamped -- and an
+                                            # IndexAccess used to carry no stamp at all,
+                                            # so `rows[0].hash()` reached the fallback
+                                            # with no semantic type and died as CE0019
+                                            # (#286). The sibling stamps are
+                                            # MethodCall/DotCall.inferred_return_type and
+                                            # TryExpr.inferred_unwrapped_type.
 
 UnOp = Literal["neg", "not", "~"]
 @dataclass

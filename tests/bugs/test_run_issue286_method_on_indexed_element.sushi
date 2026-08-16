@@ -1,0 +1,42 @@
+# #286: a method call on an INDEXED element crashed with CE0019 for every struct and
+# enum element type. Together with #284 that made a dynamic array of a user type close to
+# unusable: you could not push into it, and you could not call a method on what you read
+# out of it.
+#
+# The backend does not re-derive a receiver's type, it reads what Pass 2 stamped. A
+# `MethodCall`, a `DotCall` and a `TryExpr` all carry one; an `IndexAccess` carried none,
+# so a struct or enum element reached the extension-method fallback with no semantic type
+# and fell through to mapping the LLVM layout back to a language type, which cannot be
+# done. A PRIMITIVE element was unaffected -- its LLVM type maps back to exactly one
+# language type -- which is why the defect looked narrower than it was.
+#
+# All four receiver shapes: a built-in on a struct, an extension method on a struct,
+# `.clone()`, and a built-in on an enum. The clone must be INDEPENDENT of the owner, and
+# nothing here may leak or double-free: the element is a read through a live owner, so it
+# is not a temporary and must not be registered for cleanup.
+# EXPECT_STDOUT_EXACT: "3 2\n7\n4 3\nstable: 1\nenum: 1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+struct Row:
+    i32[] cells
+
+extend Row size() i32:
+    return self.cells.len()
+
+enum E:
+    A
+    B(i32)
+
+fn main() i32:
+    let Row[] rows = from([Row(from([1, 2, 3])), Row(from([4, 5]))])
+    println("{rows[0].size()} {rows[1].size()}")
+    println("{rows[0].cells[0] + rows[0].cells[1] + rows[1].cells[0]}")
+
+    let Row c = rows[0].clone()
+    c.cells.push(9)
+    println("{c.cells.len()} {rows[0].cells.len()}")
+    println("stable: {rows[0].hash() == rows[0].hash()}")
+
+    let E[] es = from([E.A, E.B(2)])
+    println("enum: {es[1].hash() == es[1].hash()}")
+    return Result.Ok(0)

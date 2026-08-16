@@ -44,13 +44,21 @@ def infer_array_literal_type(validator: 'TypeValidator', expr: ArrayLiteral) -> 
 
 
 def infer_index_access_type(validator: 'TypeValidator', expr: IndexAccess) -> Optional[Type]:
-    """Infer type of array indexing - should return element type."""
+    """Infer type of array indexing - should return element type.
+
+    The answer is also STAMPED on the node. The backend does not re-derive a receiver's
+    type; it reads what Pass 2 recorded (the rule CE0124 states). An `IndexAccess` carried
+    no stamp, so `rows[0].hash()` on a struct or enum element reached the extension-method
+    fallback with no semantic type and died as CE0019 (#286). This is the one place the
+    element type is decided, so it is the one place to record it.
+    """
     array_type = validator.infer_expression_type(expr.array)
     if array_type is None:
         return None
 
     # Both fixed (T[N]) and dynamic (T[]) arrays index to their element type
     if isinstance(array_type, (ArrayType, DynamicArrayType)):
+        expr.inferred_element_type = array_type.base_type
         return array_type.base_type
 
     # If not an array type, this will be caught by other validation
