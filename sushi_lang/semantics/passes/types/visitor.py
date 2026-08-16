@@ -563,6 +563,15 @@ class ExpressionValidator(RecursiveVisitor):
         if getattr(temp_method_call, 'callee_self_mode', None) is not None:
             node.callee_self_mode = temp_method_call.callee_self_mode
 
+        # CRITICAL: and the parameter-mode stamp with it. Pass 3 reads it off THIS node
+        # to decide which arguments the method takes ownership of, so losing it here
+        # would make every `nom` parameter of a method inert -- a declared mode nothing
+        # enforced, which is the defect the mode exists to remove.
+        if getattr(temp_method_call, 'callee_param_modes', None) is not None:
+            node.callee_param_modes = temp_method_call.callee_param_modes
+            node.callee_param_names = temp_method_call.callee_param_names
+            node.callee_param_types = temp_method_call.callee_param_types
+
     def _validate_from_bits(self, node: DotCall) -> None:
         """Validate f64.from_bits(u64) / f32.from_bits(u32) static reinterpret calls."""
         tv = self.type_validator

@@ -1,0 +1,33 @@
+# Rebinding a BORROW parameter re-initializes the callee's own copy (BORROW.md bug 1).
+#
+# The parameter names the caller's value, so the rebind must not free it -- that was a
+# double free. And the value the rebind PUTS there has no other owner, so it must be
+# freed at scope exit -- that was a leak once the double free was gone. Both follow from
+# one arrangement: the slot is registered and then relinquished at entry, so the destroy-
+# the-old-value step skips the caller's value, and the rebind's `unmark` hands the new
+# one to scope exit.
+#
+# The caller's value is unchanged afterwards, which is the whole point of a borrow.
+# EXPECT_STDOUT_EXACT: "in: replaced-1\nout: original-2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+struct Box:
+    i32 n
+
+extend Box swap(string s) ~:
+    s := "replaced-{1}"
+    println("in: {s}")
+    return ~
+
+fn plain_swap(string s) ~:
+    s := "replaced-{1}"
+    return Result.Ok(~)
+
+fn main() i32:
+    let Box b = Box(1)
+    let string orig = "original-{2}"
+    b.swap(orig)
+    plain_swap(orig)
+    println("out: {orig}")
+    return Result.Ok(0)

@@ -1,0 +1,23 @@
+# `run()` collects its trailing arguments into an argv `string[]` that the CALLER owns
+# (BORROW.md bug 2).
+#
+# The collected array used to be relinquished to the callee, exactly as a Sushi `...T`
+# call does -- but `run`'s body is generated IR that frees nothing, so the whole argv had
+# no owner anywhere and leaked on every call. A stdlib parameter is a borrow, so the
+# caller keeps the array and its scope exit frees it and every string in it.
+#
+# ONE `run` per file on purpose: two spawns in one program report a double free with the
+# malloc interposer even with no arguments at all, which is a separate defect in `run`.
+# EXPECT_STDOUT_EXACT: "collected ok\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+use <sys/process>
+
+fn main() i32:
+    let string a = "hi-{1}"
+    let string b = "there-{2}"
+    match run("true", a, b):
+        Result.Ok(_) -> println("collected ok")
+        Result.Err(_) -> println("collected err")
+    return Result.Ok(0)

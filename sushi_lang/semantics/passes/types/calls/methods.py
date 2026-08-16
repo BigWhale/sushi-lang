@@ -197,6 +197,8 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
             if perk_self_mode == "poke":
                 _reject_immutable_poke_receiver(validator, call)
 
+        _stamp_param_modes(call, perk_method)
+
         # Validate argument count (receiver is implicit, so compare explicit args)
         expected = len(perk_method.params)
         got = len(call.args)
@@ -307,6 +309,8 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
         if self_mode == "poke":
             _reject_immutable_poke_receiver(validator, call)
 
+    _stamp_param_modes(call, method)
+
     # Validate argument count (receiver is implicit, so compare explicit args)
     expected_params = method.params
     actual_args = call.args
@@ -330,3 +334,19 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     # Validate any excess arguments (if more args than params)
     for i in range(len(expected_params), len(actual_args)):
         validator.validate_expression(actual_args[i])
+
+
+def _stamp_param_modes(call, method) -> None:
+    """Record the resolved method's declared parameter modes on the call node.
+
+    Pass 3 and the backend both need "what does this callee take?", and only Pass 2
+    resolves WHICH method a `receiver.name(...)` denotes -- through the perk table, the
+    extension table and the generic-extension table, with built-ins winning first. The
+    stamp is the same mechanism `callee_self_mode` already uses: resolve once, read
+    twice, rather than re-deriving the answer in two more places.
+    """
+    from sushi_lang.semantics.param_modes import CalleeKind, modes_for
+    params = getattr(method, "params", None) or ()
+    call.callee_param_modes = modes_for(params, CalleeKind.METHOD)
+    call.callee_param_names = tuple(p.name for p in params)
+    call.callee_param_types = tuple(p.ty for p in params)

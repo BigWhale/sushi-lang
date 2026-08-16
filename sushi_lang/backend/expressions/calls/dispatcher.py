@@ -182,24 +182,6 @@ def _emit_indirect_call(codegen: 'LLVMCodegen', expr: Call, fat_value: 'ir.Value
     return closures.emit_indirect_call(codegen, fat_value, fn_type, args, to_i1)
 
 
-def _register_inline_closure_temps(codegen: 'LLVMCodegen', arg_exprs: list, arg_values: list) -> None:
-    """Register inline-closure argument temporaries for scope-exit cleanup (#123).
-
-    ONLY the extension-method fallback still needs this: an extension body is compiled
-    with fn_def=None, registers no parameter cleanup, and so never owns its arguments --
-    the caller stays the owner of an inline lambda's env. Every plain (direct, variadic,
-    indirect) call instead transfers ownership to the callee through the seam, and the
-    callee's registered FunctionType param frees the env (the 2026-08-14 ruling); a
-    caller-side registration there would double-free. Only a syntactic inline `Lambda`
-    is registered: a `Name` arg is owned by its local's cleanup slot, and a container
-    get-out / struct-field read is a non-owning borrow.
-    """
-    from sushi_lang.semantics.ast import Lambda
-    for arg_expr, value in zip(arg_exprs, arg_values, strict=True):
-        if isinstance(arg_expr, Lambda):
-            codegen.memory.register_closure_temp(value)
-
-
 def _resolve_param_type(codegen: 'LLVMCodegen', ty):
     """Resolve an UnknownType param name to its concrete StructType/EnumType.
 
@@ -275,6 +257,23 @@ def settle_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
         elif (resolved is not None and needs_cleanup(resolved)
                 and expression_is_temporary(codegen, arg_expr)):
             _park_argument_temp(codegen, args[i], resolved)
+
+
+def _settle_method_call_arguments(codegen: 'LLVMCodegen', expr, args: list) -> None:
+    """Settle a method call's arguments from the modes Pass 2 resolved.
+
+    Only Pass 2 knows WHICH method `receiver.name(...)` denotes, so it stamps the modes
+    and both later halves read the stamp (`callee_param_modes`). A built-in method
+    carries no stamp: its arguments are container inserts and the like, which have their
+    own rules and must not be settled here.
+    """
+    modes = getattr(expr, "callee_param_modes", None)
+    if modes is None:
+        return
+    param_types = list(getattr(expr, "callee_param_types", None) or ())
+    if len(param_types) < len(modes):
+        param_types += [None] * (len(modes) - len(param_types))
+    settle_call_arguments(codegen, list(expr.args), args, param_types, modes)
 
 
 def _settle_named_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
@@ -498,7 +497,12 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
 
     emitted_args = [receiver_value]
     arg_values = [codegen.expressions.emit_expr(arg) for arg in expr.args]
-    _register_inline_closure_temps(codegen, expr.args, arg_values)
+    # A method's arguments follow the declared modes exactly like a plain call's: a
+    # `nom` one transfers, and every other one stays the caller's -- which is what
+    # registers an unbound owning temporary, so `b.eat(make_list())` is freed once.
+    # That was `_register_inline_closure_temps`, which covered a syntactic `Lambda`
+    # argument only and leaked every other temporary shape.
+    _settle_method_call_arguments(codegen, expr, arg_values)
     emitted_args.extend(arg_values)
 
     params = list(llvm_fn.args)

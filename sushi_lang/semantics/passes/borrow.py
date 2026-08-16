@@ -1451,6 +1451,7 @@ class BorrowChecker:
             for arg in expr.args:
                 self._check_expr(arg)
             self._maybe_reject_mutation(expr)
+            self._settle_method_args(expr)
             self._maybe_mark_container_insert(expr)
             self._maybe_mark_own_alloc_move(expr)
 
@@ -1498,6 +1499,7 @@ class BorrowChecker:
                     if self.callee_modes.mode_at(modes, i, CalleeKind.INDIRECT).consumes:
                         self._consume(arg, ConsumingUse.CALL_ARG)
             else:
+                self._settle_method_args(expr)
                 self._maybe_mark_container_insert(expr)
             self._maybe_mark_own_alloc_move(expr)
 
@@ -1899,8 +1901,16 @@ class BorrowChecker:
           transfers whatever the parameter says.
         """
         kind, modes, variadic_at = self._call_modes(expr)
+        collected_owner_is_callee = (
+            isinstance(expr.callee, Name)
+            and self.callee_modes.variadic_callee_owns(expr.callee.id))
         for i, arg in enumerate(expr.args):
             if variadic_at is not None and i >= variadic_at:
+                # A bloomed `arr...` hands the WHOLE array over, so it transfers only
+                # when something else takes it. A collected element always transfers --
+                # into the synthesized array, whoever ends up owning that.
+                if isinstance(arg, Spread) and not collected_owner_is_callee:
+                    continue
                 self._consume(arg, ConsumingUse.ARRAY_ELEMENT)
                 continue
             mode = self.callee_modes.mode_at(modes, i, kind)
@@ -1910,7 +1920,7 @@ class BorrowChecker:
             elif not mode.by_pointer:
                 self._register_implicit_borrow(arg)
 
-    def _check_nom_marker(self, call: Call, arg: Expr, index: int,
+    def _check_nom_marker(self, call, arg: Expr, index: int,
                           mode: ParamMode, kind: CalleeKind) -> None:
         """The `nom` marker must be written at the call site if and only if it is declared.
 
@@ -1939,13 +1949,44 @@ class BorrowChecker:
                 .help("the callee only borrows this argument, so it stays yours after "
                       "the call; drop the `nom`").emit()
 
-    def _param_name(self, call: Call, index: int) -> Optional[str]:
-        """The declared name of parameter `index` of a call's callee, if it is known."""
-        if not isinstance(call.callee, Name):
+    def _param_name(self, call, index: int) -> Optional[str]:
+        """The declared name of parameter `index` of a call's callee, if it is known.
+
+        A method call carries the names Pass 2 resolved; a plain call names its callee,
+        so the signature is one table lookup away.
+        """
+        names = getattr(call, "callee_param_names", None)
+        if names is not None:
+            return names[index] if index < len(names) else None
+        if not isinstance(getattr(call, "callee", None), Name):
             return None
         sig = self.callee_modes.signature_of(call.callee.id)
         params = getattr(sig, "params", None) or ()
         return params[index].name if index < len(params) else None
+
+    def _settle_method_args(self, expr) -> None:
+        """Apply the declared modes of an extension or perk method to its arguments.
+
+        Pass 2 resolves WHICH method `receiver.name(...)` denotes -- perk table, then
+        extension table, with every built-in winning first -- and stamps the modes it
+        found (`callee_param_modes`). Only a user-declared method carries the stamp, so
+        a built-in method, an FFI call and an enum constructor keep their own rules by
+        construction: they never reach this loop at all.
+
+        A method used to be the one callable whose parameters could not transfer (#298).
+        It is now the general rule with an opt-out, so `nom` means the same thing in
+        `b.eat(nom s)` as in `eat(nom s)`.
+        """
+        modes = getattr(expr, "callee_param_modes", None)
+        if modes is None:
+            return
+        for i, arg in enumerate(expr.args):
+            mode = self.callee_modes.mode_at(modes, i, CalleeKind.METHOD)
+            self._check_nom_marker(expr, arg, i, mode, CalleeKind.METHOD)
+            if mode.consumes:
+                self._consume(arg, ConsumingUse.CALL_ARG)
+            elif not mode.by_pointer:
+                self._register_implicit_borrow(arg)
 
     def _register_implicit_borrow(self, arg: Expr) -> None:
         """Count an unmarked argument as the shared borrow it now is.

@@ -11,6 +11,7 @@ from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef, Param, ExtendDef
 from sushi_lang.semantics.typesys import Type as Ty, BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType, UnknownType, ReferenceType, ForeignPtrType
 from sushi_lang.backend import enum_utils
+from sushi_lang.backend.ownership import relinquish
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -355,6 +356,18 @@ class FunctionHelpers:
                                and isinstance(param.ty, DynamicArrayType))
                 if is_variadic or callee_owns_param(param):
                     self.codegen.memory.register_owning_value(param.name, param.ty, slot)
+                    continue
+
+                # A BORROW parameter is registered and immediately RELINQUISHED. The
+                # registration is what a REBIND needs -- `s := "new"` re-initializes the
+                # callee's local copy, and the new value has no other owner, so without a
+                # registry entry it leaks. The relinquish is what the caller needs: the
+                # value that arrives belongs to the caller, so no exit path may free it,
+                # and the rebind's destroy-the-old-value step must skip it too. A rebind
+                # then `unmark`s the slot, and scope exit frees the value the callee
+                # itself put there. Two facts, one slot, in the right order.
+                self.codegen.memory.register_owning_value(param.name, param.ty, slot)
+                relinquish(self.codegen, param.name)
 
     def end_function(self) -> None:
         """Clean up function emission context.

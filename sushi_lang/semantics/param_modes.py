@@ -14,8 +14,8 @@ Two invariants hold this together, and both are pinned by
 1. **The mode is `PEEK` or `POKE` if and only if the parameter's type is a
    `ReferenceType` with that mutability.** There is one derivation (`mode_of_type`) and
    nothing else may compute a mode. Two spellings of one fact drift; one does not.
-2. **`CalleeKind` is CLOSED.** A member with no row in `_UNMARKED_STILL_CONSUMES`'s
-   coverage test is a red test, the same property that makes `ConsumingUse` work
+2. **`CalleeKind` is CLOSED.** A member with no row in the coverage test is a red test,
+   the same property that makes `ConsumingUse` work
    (`docs/design/ownership-conventions.md` S3.1).
 """
 from __future__ import annotations
@@ -121,8 +121,8 @@ def normalize_modes(param_types: Sequence[Type],
 def effective_modes(modes: Sequence[ParamMode], kind: CalleeKind) -> Tuple[ParamMode, ...]:
     """What the declared modes MEAN at a call to this kind of callee.
 
-    The identity function once the phase-3 scaffold above is gone, except for the two
-    kinds that consume by position and have nothing declared.
+    The identity function, except for the two kinds that consume by POSITION and have
+    nothing declared: a struct/enum field and a container slot.
     """
     if kind in _ALWAYS_CONSUMES or kind in _UNMARKED_STILL_CONSUMES:
         # Only the UNMARKED mode is reinterpreted. A by-pointer mode is never turned
@@ -192,6 +192,18 @@ class CalleeModes:
             params = getattr(std, "params", None) or ()
             return max(len(params) - 1, 0)
         return None
+
+    def variadic_callee_owns(self, name: str) -> bool:
+        """Does the CALLEE free the collected `...T` array, or does the caller keep it?
+
+        A Sushi `...T` body registers the array (`begin_function`), so the callee owns
+        it. A stdlib variadic -- `run` is the only one -- is generated IR that frees
+        nothing, so the caller keeps it. That is the one place the collected array's
+        owner still depends on the callee's implementation, and it is stated HERE rather
+        than derived at each of the three sites that need it (docs/design/borrow-model.md
+        S7 defers a consuming variadic).
+        """
+        return name not in self._stdlib_sigs
 
     def for_name(self, name: str, local_type: Optional[Type] = None
                  ) -> Tuple[CalleeKind, Tuple[ParamMode, ...]]:
