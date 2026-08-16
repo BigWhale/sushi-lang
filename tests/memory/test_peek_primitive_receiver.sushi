@@ -2,7 +2,7 @@
 #
 # The same defect as `test_peek_string_receiver`, and not string-specific: a borrow is a
 # pointer, `try_emit_primitive_method` tested `str(semantic_type)` against a list of
-# primitive names, and `&peek i32` is not in that list. So `.hash()` on a borrowed
+# primitive names, and `peek i32` is not in that list. So `.hash()` on a borrowed
 # primitive matched no built-in, fell through to the user extension-method path, and died
 # there as a bare `KeyError: 'Extension method not found: i32_hash'` -- a CE0000 internal
 # compiler error for a program that is perfectly legal.
@@ -17,21 +17,21 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 
-fn borrowed_hash(&peek i32 x) u64:
+fn borrowed_hash(peek i32 x) u64:
     return Result.Ok(x.hash())
 
-fn borrowed_to_str(&peek i32 x) string:
+fn borrowed_to_str(peek i32 x) string:
     return Result.Ok(x.to_str())
 
-fn add_borrowed(&peek i32 a, &peek i32 b) i32:
+fn add_borrowed(peek i32 a, peek i32 b) i32:
     return Result.Ok(a + b)
 
 fn main() i32:
     let i32 n = 42
     let i32 m = 3
 
-    let string shown = borrowed_to_str(&peek n).realise("?")
-    println("hash_equal={borrowed_hash(&peek n).realise(0 as u64) == n.hash()}")
+    let string shown = borrowed_to_str(peek n).realise("?")
+    println("hash_equal={borrowed_hash(peek n).realise(0 as u64) == n.hash()}")
     println("str={shown}")
-    println("sum={add_borrowed(&peek n, &peek m).realise(-1)}")
+    println("sum={add_borrowed(peek n, peek m).realise(-1)}")
     return Result.Ok(0)

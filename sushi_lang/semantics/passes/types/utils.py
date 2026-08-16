@@ -31,10 +31,10 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
     if isinstance(type_obj, GenericTypeRef):
         # CE2419: a reference as a generic type argument. Checked FIRST, above the Result
         # branch, and with NO Maybe/Result exemption -- unlike the `ptr` gate below, whose
-        # exemption is safe because a `ptr` has no lifetime to outlive. `Maybe@(&peek T)`
-        # and `Result@(&peek T, E)` are precisely how a returned borrow escapes into a
+        # exemption is safe because a `ptr` has no lifetime to outlive. `Maybe@(peek T)`
+        # and `Result@(peek T, E)` are precisely how a returned borrow escapes into a
         # `match` (#314/#316), so exempting them would leave the hole CE2417 closes.
-        # This also pre-empts the backend's CE0022 on `List@(&peek T)` (#318): Pass 2 runs
+        # This also pre-empts the backend's CE0022 on `List@(peek T)` (#318): Pass 2 runs
         # first, so the ICE is now unreachable.
         from sushi_lang.semantics.type_predicates import contains_reference
         if any(contains_reference(arg) for arg in type_obj.type_args):
@@ -135,7 +135,7 @@ def resolve_declared_type(validator: 'TypeValidator', ty: Optional[Type]) -> Opt
 
     ONE implementation, because a reference parameter used to get a private and shorter
     one: it resolved a named referent but left a generic referent in its source spelling,
-    so `&poke List@(i32)` registered a type that compared unequal to the interned
+    so `poke List@(i32)` registered a type that compared unequal to the interned
     `List<i32>` every value of that type infers. That is #305 -- a rebind through such a
     parameter reported `CE2002: cannot assign List@(i32) to List@(i32)`.
 

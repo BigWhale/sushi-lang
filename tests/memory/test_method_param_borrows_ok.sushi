@@ -5,7 +5,7 @@
 # by-value one is CE2422. Four things must stay legal, and this file is what says so:
 #
 #   1. `.clone()` out of the receiver, the escape CE2411 names.
-#   2. A `&poke` parameter, the escape CE2422 names -- the write reaches the caller.
+#   2. A `poke` parameter, the escape CE2422 names -- the write reaches the caller.
 #   3. `return self.clone()` on a `string` receiver: the `extend T with Display` idiom.
 #      (Bare `return self` was legal through the owned-bit carve-out until the #338
 #      ruling removed it -- the view it returned dangled when the receiver was a local
@@ -27,7 +27,7 @@ struct Box:
 extend Holder copy_of() Holder:
     return self.clone()
 
-extend Box relabel(&poke Holder h) i32:
+extend Box relabel(poke Holder h) i32:
     h.label := "fresh-{9}"
     return 1
 
@@ -47,7 +47,7 @@ fn run_test() i32:
 
     let Box b = Box(1)
     let Holder target = Holder("start-{0}")
-    b.relabel(&poke target)
+    b.relabel(poke target)
     println("poke: {target.label}")
 
     let string greeting = "hi-{1}"

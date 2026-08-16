@@ -1,6 +1,6 @@
 # A borrowed string works as a HashMap key, and a borrowed map as a receiver.
 #
-# The lookup path is the one a `&peek string` parameter idiom hits most: a helper takes
+# The lookup path is the one a `peek string` parameter idiom hits most: a helper takes
 # the map and the key by borrow, and neither is consumed. `m.get(k)` must hash the key
 # through the borrow and must not take ownership of either side, so the caller still
 # owns the map and frees it.
@@ -10,7 +10,7 @@
 
 use <collections/hashmap>
 
-fn look(&peek HashMap@(string, i32) m, &peek string k) i32:
+fn look(peek HashMap@(string, i32) m, peek string k) i32:
     return Result.Ok(m.get(k).realise(-1))
 
 fn main() i32:
@@ -22,7 +22,7 @@ fn main() i32:
     let string kb = "b"
     let string missing = "zz"
 
-    println("a={look(&peek m, &peek ka).realise(-99)} b={look(&peek m, &peek kb).realise(-99)} missing={look(&peek m, &peek missing).realise(-99)}")
+    println("a={look(peek m, peek ka).realise(-99)} b={look(peek m, peek kb).realise(-99)} missing={look(peek m, peek missing).realise(-99)}")
     println("still_here={m.len()}")
 
     m.free()

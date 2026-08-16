@@ -21,7 +21,7 @@ Generic growable array with automatic memory management.
 
 `List@(T)` is an owning type: assigning it, or passing it by value to a function, **moves**
 it (the source binding can no longer be used; the destination now owns and frees it). Borrow
-it with `&peek List@(T)` / `&poke List@(T)` to use it without transferring ownership. There is no
+it with `peek List@(T)` / `poke List@(T)` to use it without transferring ownership. There is no
 direct `list[i]` indexing operator (unlike `T[]` arrays) — use `.get(i)` for safe access.
 
 ## Construction

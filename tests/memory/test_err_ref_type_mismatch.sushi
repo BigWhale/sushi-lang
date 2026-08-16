@@ -2,11 +2,11 @@
 # EXPECT_ERROR_CODE: CE2002
 # Should fail with CE2002: type mismatch error
 
-fn update_value(&poke i32 x) ~:
+fn update_value(poke i32 x) ~:
     x := "hello"
     return Result.Ok(~)
 
 fn main(string[] args) i32:
     let i32 n = 42
-    let Result@(~, StdError) r = update_value(&poke n)
+    let Result@(~, StdError) r = update_value(poke n)
     return Result.Ok(0)

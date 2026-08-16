@@ -133,7 +133,7 @@ also refuses to move out of an index.
 | container get-out (`list.get(i)??`, `arr[i]`) | cloned (#203/#185) | **stays cloned** | V5 rule; the guard tests must stay green |
 | struct-field read (`let x = s.field`) | cloned | **stays cloned** | same |
 | `match` / `foreach` bindings | borrow | unchanged | |
-| `&peek` / `&poke` arguments | borrow | unchanged | the way to *not* move |
+| `peek` / `poke` arguments | borrow | unchanged | the way to *not* move |
 | HashMap/List insert of struct/enum values | key+value moved into container (T2.2/N1) | unchanged | already move-shaped |
 
 **Phase 9 moved the "stays cloned" rows again, and made two "borrow" cells true.** Two kinds of claim
@@ -149,7 +149,7 @@ in this table did not survive as written:
   with no type recorded and no diagnosis possible for misuse of it
   (`ownership-conventions.md` §8.1) — so "borrow" described the codegen shape, not a checked
   property. It is now **actually true**: `ownership-conventions.md` §8 makes it a typed, tracked
-  borrow, with **CE2408** on mutation and **CE2411** on consumption. The `&peek`/`&poke`-argument row
+  borrow, with **CE2408** on mutation and **CE2411** on consumption. The `peek`/`poke`-argument row
   was already backed by real borrow checking at the time and needed no such correction.
 
 ### 3.1 The deliberate residual copy, and its implications (historical — resolved)
@@ -157,7 +157,7 @@ in this table did not survive as written:
 **Resolved by `docs/design/ownership-conventions.md`.** This section's "upgrade path" asked for one
 missing feature — `let`-borrow bindings — before the residual copy below could become a hard error.
 That feature landed, but not in the shape this section anticipated: rather than a new *syntax*
-(`let &peek T x = s.field`), a `let` reading through a live owner now implicitly BORROWS
+(`let peek T x = s.field`), a `let` reading through a live owner now implicitly BORROWS
 (`ownership-conventions.md` §8), tracked with a real lifetime (**CE2412** on mutating the owner
 while the binding is live) and a real consuming-use check (**CE2411**, `.clone()` as the escape).
 The explicit reference-typed-`let` syntax this section imagined was itself proposed later as #252,
@@ -179,7 +179,7 @@ upgrade path below: one rule, one rationale, and both gated on the same missing 
 
 **Why copy anyway.** Rust's alternative is a hard error ("cannot move out of a field"), forcing
 explicit `.clone()` or a borrow — ergonomic in Rust only because reference *bindings* exist
-(`let x = &s.field`). **Sushi has no `let`-borrow bindings** (the grammar has `&peek T` types, but
+(`let x = &s.field`). **Sushi has no `let`-borrow bindings** (the grammar has `peek T` types, but
 borrows work only as parameter types and call-site expressions; zero tests bind one locally). A
 hard error today would therefore force `.clone()` on *every* read of an owning field — including
 `let payload = msg.data` in exactly the decoder-shaped code R1 will write — mandatory ceremony
@@ -348,7 +348,7 @@ locations** of the relational diagnostic; value tests use `EXPECT_STDOUT_EXACT`.
   composites" paragraph; strike the #134 tracking sentence; document `.clone()` for structs/enums
   and the string-only-struct copy tier.
 - `docs/tutorial/` + examples — PR #133 precedent: every example that reuses a struct after
-  passing it needs `&peek` or `.clone()`.
+  passing it needs `peek` or `.clone()`.
 - Close #134 with a pointer to this doc.
 
 ---
@@ -366,7 +366,7 @@ locations** of the relational diagnostic; value tests use `EXPECT_STDOUT_EXACT`.
 - **CW warning or hard error on `MemberAccess` deep copies** — **done**, and superseded by a better
   answer than either option this bullet considered. See §3.1: neither a warning nor an error was
   needed, because the read stopped copying (or erroring) and started borrowing.
-- **`let`-borrow bindings** (`let &peek T x = s.field`) — **landed, in a different shape.** Not the
+- **`let`-borrow bindings** (`let peek T x = s.field`) — **landed, in a different shape.** Not the
   explicit reference-typed syntax this bullet named (that syntax was assessed later, as #252, and
   rejected as CE2413) — instead, every `let` reading through an owner implicitly borrows. See
   `docs/design/ownership-conventions.md` §8.
@@ -379,7 +379,7 @@ locations** of the relational diagnostic; value tests use `EXPECT_STDOUT_EXACT`.
 |---|---|
 | Semantics/backend predicate divergence (unsoundness) | single predicate consumed by both + sync unit test (§2.1) |
 | Predicate recursion on recursive types (`enum MsgValue: Arr(MsgValue[])`) | visited-set cycle guard; template exists (`can_struct_be_hashed`) |
-| Hidden reliance on implicit struct copies in the existing corpus | the flipped suite run is the inventory (F2 lesson); each failure is triaged into `.clone()`, `&peek`, or a genuine move |
+| Hidden reliance on implicit struct copies in the existing corpus | the flipped suite run is the inventory (F2 lesson); each failure is triaged into `.clone()`, `peek`, or a genuine move |
 | Borrow-checker branch/loop paths untested for struct moves | dedicated loop/branch tests (§6); T2.1 machinery is type-agnostic |
 | Dispatcher name-before-type ordering repeating #199 for `clone` | gate on receiver type first (V3/V7 rule), noted in §4 |
 | `main`'s `string[] args` interplay | unchanged — CE2410 already forbids moving it; it is an array, not a struct |

@@ -3,7 +3,7 @@
 # Test reference to string
 # EXPECT_NO_LEAKS: true
 
-fn print_string(&poke string s) ~:
+fn print_string(poke string s) ~:
     println(s)
     return Result.Ok(~)
 
@@ -11,7 +11,7 @@ fn main() i32:
     let string message = "Hello, references!"
 
     # Borrow the string
-    print_string(&poke message)
+    print_string(poke message)
 
     # String still valid
     println(message)

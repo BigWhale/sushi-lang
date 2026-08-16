@@ -322,7 +322,7 @@ class EnumCollector:
                 variant_types = []
 
             # A reference payload has no semantics -- the enum may outlive what it borrows
-            # (CE2416, #316) -- and `Result@(&peek T, E)` is exactly how a returned borrow
+            # (CE2416, #316) -- and `Result@(peek T, E)` is exactly how a returned borrow
             # escapes into a `match` (#314). Reported, then kept, for the same
             # error-recovery reason as a struct field: dropping the payload would report a
             # spurious arity error at every construction. There is no per-payload span, so

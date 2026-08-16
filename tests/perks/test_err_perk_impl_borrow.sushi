@@ -1,7 +1,7 @@
 # Guards issue #176: BorrowChecker.run() walked functions, extensions and generic
 # extensions, but never program.perk_impls -- so the body of a perk implementation was
 # never borrow-checked AT ALL. Every borrow diagnostic (use-after-move, use-after-destroy,
-# conflicting borrows, write-through-&peek) was silently unenforced inside a perk method.
+# conflicting borrows, write-through-peek) was silently unenforced inside a perk method.
 # ScopeAnalyzer.run() walked perk_impls the whole time; the borrow checker did not.
 #
 # `items` is MOVED into consume() by value, then used again -- CE2405 anywhere else.

@@ -99,9 +99,9 @@ class TypeSubstitutor:
                 pointee_type=self.substitute_type(ty.pointee_type, substitution)
             )
 
-        # For reference types (&peek T / &poke T), substitute the referenced type,
+        # For reference types (peek T / poke T), substitute the referenced type,
         # keeping the mutability (F7, 2026-08-14). Without this arm a monomorphized
-        # signature kept the literal `&peek Pair@(A, B)` and every call failed CE2006.
+        # signature kept the literal `peek Pair@(A, B)` and every call failed CE2006.
         if isinstance(ty, ReferenceType):
             return ReferenceType(
                 referenced_type=self.substitute_type(ty.referenced_type, substitution),

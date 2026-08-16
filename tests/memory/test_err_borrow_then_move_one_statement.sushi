@@ -2,17 +2,17 @@
 #
 # Nothing related a borrow to a move inside a single statement: the borrow counters are
 # live only for the statement that made them, and no consuming use ever consulted them. So
-# the callee held a `&peek` view of a buffer it also owned by value and freed at scope exit.
+# the callee held a `peek` view of a buffer it also owned by value and freed at scope exit.
 # The borrow comes first here; the sibling test moves first. Both orders are one rule,
 # because the call arm checks every argument before it consumes any of them.
 # EXPECT_ERROR_CODE: CE2401
-fn both(&peek string r, string owned) i32:
+fn both(peek string r, string owned) i32:
     println("ref: {r} owned: {owned}")
     return Result.Ok(1)
 
 fn run_test() i32:
     let string s = "hello-{1}"
-    let i32 x = both(&peek s, s)??
+    let i32 x = both(peek s, s)??
     println("x: {x}")
     return Result.Ok(0)
 

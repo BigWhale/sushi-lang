@@ -265,24 +265,24 @@ fn main() i32:
 
 The same holds for `List@(T)`, `Own@(T)`, and **owning struct/enum** value parameters: a bare owning
 argument is moved into the callee, which frees it exactly once at scope exit. To pass an owning value
-without giving it up, borrow it (`&peek` / `&poke`) or pass an explicit `.clone()`.
+without giving it up, borrow it (`peek` / `poke`) or pass an explicit `.clone()`.
 
 > **`main`'s `args`.** The `string[] args` parameter of `main` is a borrowed view of the process
 > argument vector (its strings alias C `argv` memory), not a heap-owned array. Do not move it by
-> value into a helper -- borrow it (`fn run(&peek string[] args)`), or the callee would try to free
+> value into a helper -- borrow it (`fn run(peek string[] args)`), or the callee would try to free
 > `argv` and crash.
 
 ### Solution: Use References
 
 ```sushi
-fn borrow(&peek i32[] arr) ~:
+fn borrow(peek i32[] arr) ~:
     println("Length: {arr.len()}")
     # arr not owned, so not freed
     return Result.Ok(~)
 
 fn main() i32:
     let i32[] data = from([1, 2, 3])
-    borrow(&peek data)  # Pass by read-only reference
+    borrow(peek data)  # Pass by read-only reference
 
     println(data.len())  # OK: data still valid
 
@@ -307,26 +307,26 @@ fn main() i32:
 
 References allow temporary access without transferring ownership. Sushi has two borrow modes:
 
-- **`&peek T`** - Read-only borrow (multiple allowed)
-- **`&poke T`** - Read-write borrow (exclusive access)
+- **`peek T`** - Read-only borrow (multiple allowed)
+- **`poke T`** - Read-write borrow (exclusive access)
 
 The design document for the borrow mechanisms — where a reference type may appear, the six
 ways a borrow is created, and the diagnostic for each rule — is
 [docs/design/borrowing.md](design/borrowing.md).
 
-### Read-Only References (&peek)
+### Read-Only References (peek)
 
-Use `&peek` when you only need to read data:
+Use `peek` when you only need to read data:
 
 ```sushi
-fn add_one(&peek i32 x) i32:
+fn add_one(peek i32 x) i32:
     let i32 val = x
     return Result.Ok(val + 1)
 
 fn main() i32:
     let i32 num = 42
 
-    let i32 result = add_one(&peek num).realise(0)
+    let i32 result = add_one(peek num).realise(0)
 
     println("Original: {num}")    # OK: num not moved
     println("Result: {result}")   # 43
@@ -334,20 +334,20 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### Mutable References (&poke)
+### Mutable References (poke)
 
-Use `&poke` when you need to modify the borrowed value:
+Use `poke` when you need to modify the borrowed value:
 
 ```sushi
-fn increment(&poke i32 counter) ~:
+fn increment(poke i32 counter) ~:
     counter := counter + 1
     return Result.Ok(~)
 
 fn main() i32:
     let i32 count = 0
 
-    increment(&poke count)
-    increment(&poke count)
+    increment(poke count)
+    increment(poke count)
 
     println("Count: {count}")  # 2
 
@@ -361,7 +361,7 @@ struct Config:
     i32 port
     string host
 
-fn update_port(&poke i32 p) ~:
+fn update_port(poke i32 p) ~:
     p := p + 100
     return Result.Ok(~)
 
@@ -369,7 +369,7 @@ fn main() i32:
     let Config cfg = Config(port: 8080, host: "localhost")
 
     # Borrow struct field directly (mutable)
-    update_port(&poke cfg.port)
+    update_port(poke cfg.port)
 
     println("Port: {cfg.port}")  # 8180
 
@@ -387,7 +387,7 @@ struct Rectangle:
     Point top_left
     Point bottom_right
 
-fn move_x(&poke i32 coord) ~:
+fn move_x(poke i32 coord) ~:
     coord := coord + 10
     return Result.Ok(~)
 
@@ -398,7 +398,7 @@ fn main() i32:
     )
 
     # Borrow nested field (mutable)
-    move_x(&poke rect.top_left.x)
+    move_x(poke rect.top_left.x)
 
     println("X: {rect.top_left.x}")  # 10
 
@@ -408,7 +408,7 @@ fn main() i32:
 ### Array References
 
 ```sushi
-fn sum_array(&peek i32[] numbers) i32:
+fn sum_array(peek i32[] numbers) i32:
     let i32 total = 0
     foreach(n in numbers.iter()):
         total := total + n
@@ -417,7 +417,7 @@ fn sum_array(&peek i32[] numbers) i32:
 fn main() i32:
     let i32[] data = from([1, 2, 3, 4, 5])
 
-    let i32 sum = sum_array(&peek data).realise(0)  # Zero-cost borrow
+    let i32 sum = sum_array(peek data).realise(0)  # Zero-cost borrow
 
     println("Sum: {sum}")
     println("Array: {data.len()}")  # data still valid
@@ -429,63 +429,63 @@ fn main() i32:
 
 The compiler enforces these rules at compile time:
 
-1. **Multiple `&peek` borrows allowed**
+1. **Multiple `peek` borrows allowed**
 
 ```sushi
-fn read_both(&peek i32 a, &peek i32 b) i32:
+fn read_both(peek i32 a, peek i32 b) i32:
     return Result.Ok(a + b)
 
 fn main() i32:
     let i32 x = 42
-    # Multiple &peek borrows of the same variable OK
-    let i32 sum = read_both(&peek x, &peek x).realise(0)
+    # Multiple peek borrows of the same variable OK
+    let i32 sum = read_both(peek x, peek x).realise(0)
     println(sum)  # 84
     return Result.Ok(0)
 ```
 
-2. **Only one `&poke` borrow at a time**
+2. **Only one `poke` borrow at a time**
 
 ```sushi
 fn main() i32:
     let i32 x = 42
-    # ERROR CE2403: x already has an active &poke borrow
-    # bad_func(&poke x, &poke x)
+    # ERROR CE2403: x already has an active poke borrow
+    # bad_func(poke x, poke x)
     return Result.Ok(0)
 ```
 
-3. **Cannot mix `&peek` and `&poke`**
+3. **Cannot mix `peek` and `poke`**
 
 ```sushi
 fn main() i32:
     let i32 x = 42
-    # ERROR CE2407: cannot have &peek and &poke borrows simultaneously
-    # mixed_func(&peek x, &poke x)
+    # ERROR CE2407: cannot have peek and poke borrows simultaneously
+    # mixed_func(peek x, poke x)
     return Result.Ok(0)
 ```
 
-4. **`&poke` coerces to `&peek`**
+4. **`poke` coerces to `peek`**
 
 ```sushi
-fn read_only(&peek i32 x) i32:
+fn read_only(peek i32 x) i32:
     return Result.Ok(x)
 
 fn main() i32:
     let i32 x = 42
-    # OK: &poke can be passed where &peek is expected
-    let i32 val = read_only(&poke x).realise(0)
+    # OK: poke can be passed where peek is expected
+    let i32 val = read_only(poke x).realise(0)
     return Result.Ok(0)
 ```
 
 5. **Cannot move/rebind while borrowed**
 
 ```sushi
-fn use_ref(&poke i32 x) ~:
+fn use_ref(poke i32 x) ~:
     x := x + 1
     return Result.Ok(~)
 
 fn main() i32:
     let i32 num = 42
-    use_ref(&poke num)
+    use_ref(poke num)
     # ERROR CE2401: Cannot rebind while borrowed
     # num := 50
     return Result.Ok(0)
@@ -495,11 +495,11 @@ fn main() i32:
 
 ```sushi
 # ERROR: Cannot borrow temporary
-# let i32 x = add_one(&peek (5 + 3))
+# let i32 x = add_one(peek (5 + 3))
 
 # OK: Use variable
 let i32 temp = 5 + 3
-let i32 x = add_one(&peek temp).realise(0)
+let i32 x = add_one(peek temp).realise(0)
 ```
 
 ### Borrowed `let` Bindings
@@ -544,7 +544,7 @@ fn main() i32:
    or a direct field read -- `.clone()` is the escape (see
    [Reading Through a Borrow, Without Consuming](#reading-through-a-borrow-without-consuming)).
 
-**A `let` cannot instead declare a reference *type*.** `let &peek T x = ...` parses but is rejected
+**A `let` cannot instead declare a reference *type*.** `let peek T x = ...` parses but is rejected
 with `CE2413`: the binding above already behaves like a checked borrow without any new syntax, so a
 first-class reference-typed local would be a second, overlapping way to say the same thing.
 
@@ -555,8 +555,8 @@ struct Wrapper:
 fn main() i32:
     let Wrapper w = Wrapper(inner: "hi")
 
-    # ERROR CE2413: a 'let' binding cannot have a reference type ('&peek string')
-    # let &peek string x = w.inner
+    # ERROR CE2413: a 'let' binding cannot have a reference type ('peek string')
+    # let peek string x = w.inner
 
     let string x = w.inner  # write the plain value type instead
     println(x)
@@ -800,7 +800,7 @@ fn process() ~:
 
 ```sushi
 # Good: Zero-cost read-only borrow
-fn sum(&peek i32[] numbers) i32:
+fn sum(peek i32[] numbers) i32:
     let i32 total = 0
     foreach(n in numbers.iter()):
         total := total + n

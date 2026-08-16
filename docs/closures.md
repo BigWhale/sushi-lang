@@ -114,7 +114,7 @@ fn main() i32:
 
 Two capture shapes are still rejected, both as **CE2094**:
 
-- **Capturing a `&peek`/`&poke` borrow.** Threading a borrow's exclusivity through an escaping
+- **Capturing a `peek`/`poke` borrow.** Threading a borrow's exclusivity through an escaping
   closure is deferred to Tier 2.
 - **A lambda parameter whose type is owning** (the indirect-call path has no deep-copy for an
   owning parameter yet) — see [Limitations](#limitations).
@@ -145,7 +145,7 @@ and any closure of that shape — capture is not part of the type. A mismatch is
 
 | Code | Meaning |
 | --- | --- |
-| **CE2094** | illegal closure capture — a `&peek`/`&poke` borrow, or an owning lambda-parameter type |
+| **CE2094** | illegal closure capture — a `peek`/`poke` borrow, or an owning lambda-parameter type |
 | **CE2092** | function value type mismatch at call-through (reused, unchanged from v1) |
 | **CE2002** | function value assigned to an incompatible function-typed variable (reused, unchanged from v1) |
 
@@ -161,7 +161,7 @@ Tier 1 is complete, plus two Tier 2 items (T2.3/T2.4) have landed. Known gaps th
   (`map(xs, f)`, not `xs.map(f)`); owned-element combinators are not authored yet.
 - **Nested lambdas** (a lambda written inside another lambda's body) are lifted best-effort; deep
   nested capture chains are not guaranteed to work.
-- **Deferred to Tier 2**: `&peek`/`&poke` borrow capture, bound method values (`obj.method` as a
+- **Deferred to Tier 2**: `peek`/`poke` borrow capture, bound method values (`obj.method` as a
   bare callable), and first-class C callbacks. Generic-function references now work when an
   explicit expected `fn` type is present (`let fn(i32) -> i32 g = identity`); a bare reference with
   no expected type is still **CE2093**. Calling through a fn-typed struct field, a container

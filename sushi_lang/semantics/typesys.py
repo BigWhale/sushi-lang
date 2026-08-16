@@ -148,34 +148,34 @@ class IteratorType:
 
 @dataclass(frozen=True)
 class ReferenceType:
-    """Represents a borrowed reference to a value (&peek T or &poke T).
+    """Represents a borrowed reference to a value (peek T or poke T).
 
     References allow temporary access to data without transferring ownership.
     Two borrow modes:
-    - &peek T: Read-only borrow (multiple allowed)
-    - &poke T: Read-write borrow (exclusive access)
+    - peek T: Read-only borrow (multiple allowed)
+    - poke T: Read-write borrow (exclusive access)
 
     Borrow Rules (enforced at compile time):
-    - Multiple &peek borrows allowed (read-only)
-    - Only one &poke borrow at a time (exclusive)
-    - Cannot have &peek and &poke borrows simultaneously
+    - Multiple peek borrows allowed (read-only)
+    - Only one poke borrow at a time (exclusive)
+    - Cannot have peek and poke borrows simultaneously
     - Can't move, rebind, or destroy a variable while it's borrowed
     - Borrows are function-scoped (end at function return)
 
     Type Coercion:
-    - &poke T can be passed where &peek T is expected (safe downgrade)
-    - &peek T cannot be passed where &poke T is expected
+    - poke T can be passed where peek T is expected (safe downgrade)
+    - peek T cannot be passed where poke T is expected
 
     Usage:
-    - Read-only params: fn read(&peek i32[] arr) i32
-    - Mutable params: fn modify(&poke i32 x) ~
+    - Read-only params: fn read(peek i32[] arr) i32
+    - Mutable params: fn modify(poke i32 x) ~
     - Zero-cost: compiles to LLVM pointers
     """
     referenced_type: "Type"  # The type being borrowed (e.g., i32[], MyStruct)
     mutability: BorrowMode = BorrowMode.POKE  # Default to poke for backward compat during migration
 
     def __str__(self) -> str:
-        return f"&{self.mutability} {self.referenced_type}"
+        return f"{self.mutability} {self.referenced_type}"
 
     def __hash__(self) -> int:
         return hash(("reference", self.referenced_type, self.mutability))
@@ -200,7 +200,7 @@ def deref_type(t: Optional["Type"]) -> Optional["Type"]:
     "The methods on `&T` are the methods on `T`", and the same holds for fields, indexing
     and iteration: a borrow is transparent to everything except ownership. Roughly twenty
     sites spell this unwrap by hand, and each one that forgets it silently loses a whole
-    receiver family -- `&peek i32` and `&peek string` reached no built-in method at all,
+    receiver family -- `peek i32` and `peek string` reached no built-in method at all,
     fell through to the user extension path, and died there as a CE0000 rather than a
     diagnostic.
     """

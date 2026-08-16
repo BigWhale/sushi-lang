@@ -1,15 +1,15 @@
 # #327: on a primitive or string receiver the write-through is spelled `self := v` --
-# the same store-through a `&poke T` parameter's rebind performs. The old string
+# the same store-through a `poke T` parameter's rebind performs. The old string
 # buffer is freed exactly once (the pointer receiver bypasses the #145 owned-bit
 # clear, so the reference-rebind machinery sees the true owned bit).
 # EXPECT_STDOUT_EXACT: "0\ntagged-1\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS
-extend i32 zero_out(&poke self) ~:
+extend i32 zero_out(poke self) ~:
     self := 0
     return ~
 
-extend string retag(&poke self) ~:
+extend string retag(poke self) ~:
     self := "tagged-{1}"
     return ~
 

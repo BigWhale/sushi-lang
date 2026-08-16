@@ -10,7 +10,7 @@ enum Mixed:
     Arr(i32[])
     Word(string)
 
-fn show(&peek Mixed m) i32:
+fn show(peek Mixed m) i32:
     match m:
         Mixed.Arr(v) -> println("arr {v.len()}")
         Mixed.Word(v) -> println("word {v}")
@@ -19,7 +19,7 @@ fn show(&peek Mixed m) i32:
 fn main() i32:
     let Mixed a = Mixed.Arr(from([1, 2]))
     let Mixed w = Mixed.Word("hello-{1}")
-    let i32 r1 = show(&peek a).realise(1)
-    let i32 r2 = show(&peek w).realise(1)
+    let i32 r1 = show(peek a).realise(1)
+    let i32 r2 = show(peek w).realise(1)
     println("done")
     return Result.Ok(r1 + r2)

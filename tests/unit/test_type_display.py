@@ -70,7 +70,7 @@ def test_array_dynarray_recursion():
 def test_reference_and_pointer_recursion():
     lst = GenericTypeRef("List", (I32,))
     ref = ReferenceType(referenced_type=lst)
-    assert "List@(i32)" in display_type(ref) and display_type(ref).startswith("&")
+    assert "List@(i32)" in display_type(ref) and display_type(ref).startswith("poke ")
     assert display_type(PointerType(pointee_type=lst)) == "List@(i32)*"
 
 

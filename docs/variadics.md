@@ -63,7 +63,7 @@ Key properties:
 - A variadic may follow fixed parameters: `fn log(string prefix, ...i32 values) ~:`.
 - The synthesized `T[]` is **moved into the callee**, which owns it and RAII-destroys it at scope
   exit. The lowered LLVM function stays non-variadic.
-- Reference element types (`...&peek T`) are rejected (**CE0114**). A dynamic-array element
+- Reference element types (`...peek T`) are rejected (**CE0114**). A dynamic-array element
   (`...T[]`) is allowed — each trailing array argument is moved into the callee's array-of-arrays,
   not copied.
 

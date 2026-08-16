@@ -1,9 +1,9 @@
 # A function cannot return a borrow: it would hand out a view of its own frame. This
 # program used to compile, run, and print the dead local's value (#314).
 # EXPECT_ERROR_CODE: CE2417
-fn leak_ref() &peek i32:
+fn leak_ref() peek i32:
     let i32 local = 99
-    return Result.Ok(&peek local)
+    return Result.Ok(peek local)
 
 fn main() i32:
     println("built")

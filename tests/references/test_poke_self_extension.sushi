@@ -1,5 +1,5 @@
-# #327: `&poke self` -- the mutable receiver. The receiver arrives by POINTER, so a
-# field write through `self` reaches the CALLER's value; `&peek self` states the
+# #327: `poke self` -- the mutable receiver. The receiver arrives by POINTER, so a
+# field write through `self` reaches the CALLER's value; `peek self` states the
 # read-only default explicitly. Call sites are unchanged.
 # EXPECT_STDOUT_EXACT: "3\n"
 # EXPECT_RUNTIME_EXIT: 0
@@ -7,11 +7,11 @@
 struct Counter:
     i32 n
 
-extend Counter bump(&poke self) ~:
+extend Counter bump(poke self) ~:
     self.n := self.n + 1
     return ~
 
-extend Counter total(&peek self) i32:
+extend Counter total(peek self) i32:
     return self.n
 
 fn main() i32:

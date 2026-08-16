@@ -321,7 +321,7 @@ class PerkCollector:
         perk_name_span: Optional[Span] = getattr(impl, "perk_name_span", None) or getattr(impl, "loc", None)
         target_type: Optional[Type] = getattr(impl, "target_type", None)
 
-        # `extend &peek T with P` has the same problem as a reference extension target
+        # `extend peek T with P` has the same problem as a reference extension target
         # (CE2420, #319): the implementation is registered against a type no receiver ever
         # resolves to, so it is unreachable.
         if reject_reference_in(self.r, target_type,

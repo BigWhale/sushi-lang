@@ -1,6 +1,6 @@
-# #300 phase 1: `Own(&poke inner)` binds the heap POINTER, so a write through the
+# #300 phase 1: `Own(poke inner)` binds the heap POINTER, so a write through the
 # binding lands in the allocation the Own owns. Malloc'd storage is naturally
-# aligned; the enum-payload wall (CE2424) does not apply. The `&peek` twin reads
+# aligned; the enum-payload wall (CE2424) does not apply. The `peek` twin reads
 # through the pointer with no copy.
 # EXPECT_STDOUT_EXACT: "107\n107\n"
 # EXPECT_RUNTIME_EXIT: 0
@@ -13,11 +13,11 @@ fn main() i32:
     let Own@(i32) o = Own.alloc(7)
     let Holder h = Holder.Full(o)
     match h:
-        Holder.Full(Own(&poke inner)) ->
+        Holder.Full(Own(poke inner)) ->
             inner := inner + 100
         Holder.Nil -> println("nil")
     match h:
-        Holder.Full(Own(&peek v)) -> println(v)
+        Holder.Full(Own(peek v)) -> println(v)
         Holder.Nil -> println("nil")
     match h:
         Holder.Full(Own(v)) -> println(v)

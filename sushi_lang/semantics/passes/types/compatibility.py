@@ -159,16 +159,16 @@ def compare_resolved_types(validator: 'TypeValidator', actual: Type, expected: T
 def _params_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -> bool:
     """Compatibility for one parameter INSIDE a function type: no borrow coercion.
 
-    `&poke T` may be handed to a place that only reads, so it coerces to `&peek T` at a
+    `poke T` may be handed to a place that only reads, so it coerces to `peek T` at a
     call site. That coercion is a property of the POSITION -- a value being passed once,
     now -- and it must not travel into a function type, where it would make parameters
     covariant in mutability:
 
-        fn poker(&poke i32 x) i32: x := 999 ...
-        let fn(&peek i32) -> i32 g = poker      # accepted before this check
-        g(&peek n)                              # writes 999 through a `&peek`
+        fn poker(poke i32 x) i32: x := 999 ...
+        let fn(peek i32) -> i32 g = poker      # accepted before this check
+        g(peek n)                              # writes 999 through a `peek`
 
-    That compiled clean and defeated the entire `&peek` write gate (CE2408) through one
+    That compiled clean and defeated the entire `peek` write gate (CE2408) through one
     indirection. The function-type arm recursed through `types_compatible`, which applies
     the coercion, although its own comment said parameters are invariant. They are: the
     mutability is part of what the value promises its callers.
@@ -188,7 +188,7 @@ def types_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -
     - Direct type equality
     - UnknownType -> StructType/EnumType resolution
     - GenericTypeRef -> EnumType/StructType resolution (for generic types like Result<T>, Box<T>)
-    - ReferenceType compatibility with coercion (&poke T -> &peek T allowed)
+    - ReferenceType compatibility with coercion (poke T -> peek T allowed)
     - Recursive comparison for container types (arrays, etc.)
     """
     from sushi_lang.semantics.typesys import FunctionType
@@ -209,8 +209,8 @@ def types_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -
                 types_compatible(validator, actual.err_type, expected.err_type))
 
     # Reference type compatibility with coercion
-    # - &poke T can be passed where &peek T is expected (safe downgrade)
-    # - &peek T cannot be passed where &poke T is expected
+    # - poke T can be passed where peek T is expected (safe downgrade)
+    # - peek T cannot be passed where poke T is expected
     if isinstance(actual, ReferenceType) and isinstance(expected, ReferenceType):
         # First check if referenced types are compatible
         if not types_compatible(validator, actual.referenced_type, expected.referenced_type):
@@ -220,9 +220,9 @@ def types_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -
         if actual.mutability == expected.mutability:
             return True  # Same mutability
         elif actual.mutability == BorrowMode.POKE and expected.mutability == BorrowMode.PEEK:
-            return True  # &poke -> &peek coercion allowed
+            return True  # poke -> peek coercion allowed
         else:
-            return False  # &peek -> &poke not allowed
+            return False  # peek -> poke not allowed
 
     # Step 1: Resolve GenericTypeRef to monomorphized EnumType or StructType (if applicable)
     resolved_actual = resolve_generic_type_ref(validator, actual)

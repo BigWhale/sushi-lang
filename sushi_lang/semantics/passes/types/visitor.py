@@ -407,13 +407,13 @@ class ExpressionValidator(RecursiveVisitor):
         tv = self.type_validator
         ft = infer_lambda_type(tv, node)  # fills param + capture types (idempotent)
 
-        # CE2094: capturing a &peek/&poke borrow is deferred to Tier 2. A captured
+        # CE2094: capturing a peek/poke borrow is deferred to Tier 2. A captured
         # name whose enclosing type is a reference is a borrow capture.
         from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, DynamicArrayType, owns_heap
         for cap in (node.captures or []):
             if isinstance(cap.ty, ReferenceType):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
-                        reason=f"cannot capture '{cap.name}': it is a borrow (&peek/&poke capture is deferred to Tier 2)")
+                        reason=f"cannot capture '{cap.name}': it is a borrow (peek/poke capture is deferred to Tier 2)")
             elif isinstance(cap.ty, DynamicArrayType):
                 # Move-capture (T1.5): a dynamic array is moved into the heap environment,
                 # which owns it and frees it in the env destructor. The outer binding is
@@ -1260,7 +1260,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return infer_range_expression_type(self.type_validator, node)
 
     def visit_borrow(self, node: Borrow) -> Optional[Type]:
-        """Infer type of borrow expression (&peek expr or &poke expr).
+        """Infer type of borrow expression (peek expr or poke expr).
 
         Returns ReferenceType with the correct mutability based on the
         borrow mode (peek or poke) specified in the node.

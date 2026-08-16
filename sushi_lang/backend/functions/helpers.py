@@ -343,7 +343,7 @@ class FunctionHelpers:
             slot_by_name = {arg.name or f"arg{i}": slot
                             for i, (arg, slot) in enumerate(param_slots)}
             for param in fn_def.params:
-                # Reference parameters (&peek/&poke) are borrows -- never owned/freed.
+                # Reference parameters (peek/poke) are borrows -- never owned/freed.
                 if isinstance(param.ty, ReferenceType):
                     continue
                 slot = slot_by_name.get(param.name)

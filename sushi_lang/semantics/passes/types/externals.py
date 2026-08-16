@@ -190,7 +190,7 @@ def _emit_block_warning(reporter: Reporter, block: 'ExternalBlock') -> None:
 
     builder = er.emit_with(reporter, er.ERR.CW5001, block.loc)
     # Four suspended guarantees.
-    builder.note("guarantee 1/4 suspended: borrow checking (&peek/&poke) - aliasing not tracked")
+    builder.note("guarantee 1/4 suspended: borrow checking (peek/poke) - aliasing not tracked")
     builder.note("guarantee 2/4 suspended: RAII / move semantics - foreign `ptr` is unmanaged")
     builder.note("guarantee 3/4 suspended: Result / Maybe - externals return raw C values")
     builder.note("guarantee 4/4 suspended: bounds / null safety - a returned `ptr` may be null")

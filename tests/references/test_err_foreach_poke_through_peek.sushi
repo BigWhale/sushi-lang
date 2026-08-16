@@ -1,14 +1,14 @@
-# #300 phase 1: a `&poke` element binding out of a `&peek` container parameter
+# #300 phase 1: a `poke` element binding out of a `peek` container parameter
 # would write the caller's value through a read-only borrow -- CE2408, the #307
 # upgrade shape one level deeper.
 # EXPECT_ERROR_CODE: CE2408
-fn zero_all(&peek i32[] xs) i32:
-    foreach(&poke r in xs.iter()):
+fn zero_all(peek i32[] xs) i32:
+    foreach(poke r in xs.iter()):
         r := 0
     return Result.Ok(0)
 
 fn main() i32:
     let i32[] a = from([1])
-    let i32 t = zero_all(&peek a).realise(0)
+    let i32 t = zero_all(peek a).realise(0)
     println(t)
     return Result.Ok(0)

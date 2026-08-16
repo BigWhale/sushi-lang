@@ -1,4 +1,4 @@
-# #327: the exact #326 shapes, now working through `&poke self`: a write to an OWNING
+# #327: the exact #326 shapes, now working through `poke self`: a write to an OWNING
 # field frees the old buffer exactly once, and a mutating method under `self` reaches
 # the caller's container.
 # EXPECT_STDOUT_EXACT: "fresh! 2\n"
@@ -8,11 +8,11 @@ struct Holder:
     string label
     i32[] items
 
-extend Holder relabel(&poke self, string label) ~:
+extend Holder relabel(poke self, string label) ~:
     self.label := "{label}!"
     return ~
 
-extend Holder add(&poke self, i32 v) ~:
+extend Holder add(poke self, i32 v) ~:
     self.items.push(v)
     return ~
 

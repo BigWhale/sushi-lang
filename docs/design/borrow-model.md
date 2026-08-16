@@ -231,7 +231,7 @@ Two more follow:
 
 - **A library can declare a borrow.** The `.slib` manifest carries the mode as its own
   field, so a consumer sees the same signature the library author wrote. Before this, the
-  manifest serialized `&peek string` into a type string that the consumer's parser could
+  manifest serialized `peek string` into a type string that the consumer's parser could
   not read back.
 - **The default is the safe one.** The mode a careless author gets is the one that cannot
   double-free, and the dangerous one has to be written down at both ends.

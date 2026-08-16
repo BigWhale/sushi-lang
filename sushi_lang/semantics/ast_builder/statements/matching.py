@@ -94,7 +94,7 @@ def parse_pattern(t: Tree, ast_builder: 'ASTBuilder', nested: bool = False) -> P
     - FileResult.Ok(f) - simple binding
     - FileResult.Err(FileError.NotFound()) - nested pattern
     - FileResult.Err(_) - wildcard
-    - Shape.Poly(&poke p) - reference binding (#300 phase 3; TOP-LEVEL patterns only,
+    - Shape.Poly(poke p) - reference binding (#300 phase 3; TOP-LEVEL patterns only,
       because nested-pattern extraction walks through temporary copies and a pointer
       into one is a silently lost write -- `nested` carries that fact down)
     """
@@ -120,7 +120,7 @@ def parse_pattern(t: Tree, ast_builder: 'ASTBuilder', nested: bool = False) -> P
                     # Store underscore as "_" - scope analyzer will skip it
                     bindings.append("_")
             elif isinstance(child, Tree):
-                # A reference binding (`Variant(&poke x)`): legal in a TOP-LEVEL pattern
+                # A reference binding (`Variant(poke x)`): legal in a TOP-LEVEL pattern
                 # (#300 phase 3, on the aligned enum payload layout). In a NESTED pattern
                 # it stays CE2424: nested extraction walks through temporary copies, so a
                 # pointer into one writes to storage nobody reads.
@@ -185,10 +185,10 @@ def parse_own_pattern(t: Tree, ast_builder: 'ASTBuilder') -> 'OwnPattern':
     if name_token is None or str(name_token.value) != "Own":
         ice(t, f"expected 'Own' in pattern, got {name_token.value if name_token else 'nothing'}")
 
-    # `Own(&poke x)` / `Own(&peek x)` (#300 phase 1): the alias renames the whole
+    # `Own(poke x)` / `Own(peek x)` (#300 phase 1): the alias renames the whole
     # pattern_item tree, so the reference form arrives as a `ref_binding` sibling.
     # Malloc'd storage is naturally aligned, so the enum-payload wall that defers
-    # plain `&poke` pattern bindings (CE2424) does not apply here.
+    # plain `poke` pattern bindings (CE2424) does not apply here.
     ref_tree = first_tree(t.children, "ref_binding")
     if ref_tree is not None:
         mode_tok = next((c for c in ref_tree.children

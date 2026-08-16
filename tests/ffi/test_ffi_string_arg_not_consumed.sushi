@@ -3,7 +3,7 @@
 # The callee is C. It cannot own a Sushi string, and the compiler already frees the
 # marshalled buffer at scope exit, so there is no ownership to transfer. Rust passes
 # `as_ptr(&self)`, Zig takes `[*:0]const u8`, cgo leaves the pointer caller-owned; every
-# precedent draws the line here. The alternative -- writing `&peek string` in the extern
+# precedent draws the line here. The alternative -- writing `peek string` in the extern
 # declaration -- is illegal today: `_is_c_abi_type` is a strict allowlist, so a reference
 # type is CE5003.
 #

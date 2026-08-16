@@ -64,7 +64,7 @@ def display_type(ty) -> str:
         return f"{display_type(ty.base_type)}[]"
 
     if isinstance(ty, ReferenceType):
-        return f"&{ty.mutability} {display_type(ty.referenced_type)}"
+        return f"{ty.mutability} {display_type(ty.referenced_type)}"
 
     if isinstance(ty, PointerType):
         return f"{display_type(ty.pointee_type)}*"

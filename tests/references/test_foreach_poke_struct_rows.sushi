@@ -10,7 +10,7 @@ struct Row:
 
 fn main() i32:
     let Row[] rows = from([Row(1, from([1])), Row(2, from([2, 2]))])
-    foreach(&poke r in rows.iter()):
+    foreach(poke r in rows.iter()):
         r.n := r.n + 100
         r.cells.push(9)
     foreach(v in rows.iter()):

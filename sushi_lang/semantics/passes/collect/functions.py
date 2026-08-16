@@ -87,7 +87,7 @@ def validate_variadic_params(reporter: 'Reporter', params: List['Param']) -> Non
                 message="a variadic '...T' parameter must be the last parameter")
         return
 
-    # Reject a reference element type (T cannot be &peek/&poke). A borrow cannot be
+    # Reject a reference element type (T cannot be peek/poke). A borrow cannot be
     # owned or moved into the callee-owned collected array.
     element_ty = vparam.ty.base_type if isinstance(vparam.ty, DynamicArrayType) else vparam.ty
     if isinstance(element_ty, ReferenceType):
@@ -303,7 +303,7 @@ class ExtensionMethod:
     ret_type: Optional[Type] = None
     ret_span: Optional[Span] = None
     params: List[Param] = field(default_factory=list)  # Parameters excluding implicit 'self'
-    self_mode: Optional[str] = None  # "peek"/"poke" for a `&poke self` receiver (#327);
+    self_mode: Optional[str] = None  # "peek"/"poke" for a `poke self` receiver (#327);
                                      # None is the classic read-only-borrow receiver
 
 
@@ -343,7 +343,7 @@ class GenericExtensionMethod:
     ret_span: Optional[Span] = None
     params: List[Param] = field(default_factory=list)  # May contain TypeParameter in param types
     body: Optional[Any] = None       # Method body (Block AST node)
-    self_mode: Optional[str] = None  # "peek"/"poke" for a `&poke self` receiver (#327)
+    self_mode: Optional[str] = None  # "peek"/"poke" for a `poke self` receiver (#327)
 
 
 @dataclass

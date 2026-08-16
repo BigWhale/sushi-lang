@@ -7,7 +7,7 @@ landed in #125/#126, and this release ships their payoff: the `collections/iter`
 module (`map`/`filter`/`fold`/`compose`), `Call.callee` widened to any expression (T2.4), and
 generic-function references under an explicit expected type (T2.3). What remains is documented in
 Part II: the UFCS method form `xs.map(f)` (Gap B), owned-element combinators, and the rest of
-Tier 2 (`&peek`/`&poke` capture, bound-method values, indirect-path parity for owning/variadic
+Tier 2 (`peek`/`poke` capture, bound-method values, indirect-path parity for owning/variadic
 params, C callbacks).
 
 This document is organized in two parts: **Part I** describes what is implemented and shippable
@@ -193,7 +193,7 @@ for the captured variable's provenance and type class, not a closures-specific r
 - **A captured closure *value*** (a `fn(...)` local that is itself a capturing closure) is also
   move-captured, same as any other owning type — this is what makes `compose` and capture-and-call
   bodies work (§7).
-- **Borrow capture (`&poke`/`&peek`) is rejected** with CE2094 — deferred to Tier 2 (Part II §3).
+- **Borrow capture (`poke`/`peek`) is rejected** with CE2094 — deferred to Tier 2 (Part II §3).
 - **Reading a captured field back out of the environment is a BORROW**, exactly like reading a
   struct field (`docs/design/ownership-conventions.md` §4.2): a lambda body that reads a captured
   owning value (e.g. `|~| greeting` returning a captured `string`) sees a borrow of the environment's
@@ -228,29 +228,29 @@ for the captured variable's provenance and type class, not a closures-specific r
 
 1. Synthesize an environment struct `__closure_env_N { <captured fields> }`, registered in the
    struct table (so the recursive destructor and struct lowering handle it for free).
-2. Synthesize the lifted function `__lambda_N(env: &poke __closure_env_N, <lambda params>)` with
+2. Synthesize the lifted function `__lambda_N(env: poke __closure_env_N, <lambda params>)` with
    the lambda body, rewriting each captured-name read to an env-field access. This reuses the
    monomorphizer's "synthesize a `FuncDef`, register a `FuncSig`, append to `program.functions`"
    machinery, so the backend emits it with zero special-casing.
 
-   **The env parameter is `&poke`, and the mode is load-bearing (2026-08-15).** A move-captured
+   **The env parameter is `poke`, and the mode is load-bearing (2026-08-15).** A move-captured
    `List@(T)` / `Own@(T)` / dynamic array is MUTABLE inside the body by design (§3, T1.5), and
    after the rewrite every such write goes through this parameter: `xs.push(x)` is
    `__closure_env.xs.push(x)`. The environment is the closure's OWN storage — the closure value
    owns it and frees it through `drop_ptr` — so the lifted function writing to it is not a write
    to a caller's value.
 
-   It was declared `&peek` until the `&peek` write rule became total (`FIX.md` R1): nothing
+   It was declared `peek` until the `peek` write rule became total (`FIX.md` R1): nothing
    enforced read-only before that, so the untruthful mode had no consequence. Once it was
    enforced, it made two legal shapes a **CE2408** — a mutating method on a capture
-   (`tests/closures/test_closure_list_mutate.sushi`) and a `&poke` borrow of a capture
+   (`tests/closures/test_closure_list_mutate.sushi`) and a `poke` borrow of a capture
    (`tests/closures/test_closure_env_poke_borrow.sushi`). The declaration was corrected rather
    than the rule carved out.
 
    The mode is a SEMANTIC declaration only: no backend code reads `ReferenceType.mutability`, so
    codegen is identical either way (the env is a pointer in both cases). Five semantics sites read
    it, and for this parameter four are inert — the rebind check (captures are field accesses, the
-   env is never rebound), the CW2409 re-borrow warning (bare-`Name` arm only), the `&poke`→`&peek`
+   env is never rebound), the CW2409 re-borrow warning (bare-`Name` arm only), the `poke`→`peek`
    coercion (the env is never a checked argument), and `_poke_param_indices` for the #168
    destroy-effect analysis (round 1 needs a bare-`Name` receiver, round 2 needs a by-name call
    site, and a lifted function is only ever dispatched indirectly).
@@ -519,7 +519,7 @@ Test coverage: `tests/generics/test_generic_fn_ref.sushi`,
   expected function type in context (Part II §4 has the exact remaining boundary). Extension
   methods, perk methods, and FFI externals are not bare-referenceable at all — they surface as an
   undeclared identifier (**CE1001**), not CE2093.
-- **CE2094** — illegal closure capture: a `&peek`/`&poke` borrow (Tier 2, Part II §3); or an owning
+- **CE2094** — illegal closure capture: a `peek`/`poke` borrow (Tier 2, Part II §3); or an owning
   /variadic fn-value *parameter* type (before T2.5, Part II §3). **Dynamic-array**, **`List@(T)`**,
   **`Own@(T)`**, and now **closure-value** captures are all allowed (move-capture). The former
   "capturing and calling a closure value" clause is **lifted** by T2.4 (§7) — that call now compiles
@@ -631,7 +631,7 @@ before advertising owned-element support, not a capability that was evaluated an
 
 ## 3. Remaining Tier 2
 
-- **T2.1 — `&peek`/`&poke` borrow capture.** Lift CE2094 for borrows; track the borrow's lifetime
+- **T2.1 — `peek`/`poke` borrow capture.** Lift CE2094 for borrows; track the borrow's lifetime
   *through* the closure value under the exclusivity rules. **Why deferred:** this is the genuinely
   hard problem the whole closures feature was scoped around — a borrow captured into an escaping,
   heap-allocated environment can outlive the stack frame that issued it, which the current

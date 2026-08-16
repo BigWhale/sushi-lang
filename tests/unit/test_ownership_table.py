@@ -222,7 +222,7 @@ def test_reference_classifies_as_its_referent():
     nothing". That conflated the two halves of the decision: the borrow is the PROVENANCE
     (BORROWED, which `_name_provenance` answers for a reference-typed name), and this
     function answers the OTHER half -- does the value own heap? Answering PLAIN here made
-    (BORROWED, MOVE) unreachable through a reference, so `f(a)` on a `&poke i32[]`
+    (BORROWED, MOVE) unreachable through a reference, so `f(a)` on a `poke i32[]`
     parameter classified ADOPT in the checker and REJECT in the backend: #301's CE0129,
     #310's compile-clean double free, #311's ref-to-ref rebind.
     """
@@ -271,7 +271,7 @@ def test_consuming_a_reference_is_rejected():
 def test_consuming_a_reference_to_a_plain_value_adopts():
     """(BORROWED, PLAIN) stays ADOPT: copying a value that owns no heap transfers nothing.
 
-    This is what keeps `fn f(&peek i32 x)` usable -- passing `x` on by value is a copy of
+    This is what keeps `fn f(peek i32 x)` usable -- passing `x` on by value is a copy of
     four bytes, not a transfer of an owner.
     """
     plain = ReferenceType(referenced_type=I32, mutability=BorrowMode.PEEK)

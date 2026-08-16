@@ -95,7 +95,7 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
     # Strategy 1: Check if receiver is a Name (variable)
     if isinstance(receiver, Name):
         semantic_type = codegen.memory.find_semantic_type(receiver.id)
-        # Unwrap ReferenceType if present (for &peek T or &poke T parameters)
+        # Unwrap ReferenceType if present (for peek T or poke T parameters)
         if isinstance(semantic_type, ReferenceType):
             semantic_type = semantic_type.referenced_type
 
@@ -198,7 +198,7 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
     # Strategy 1: Check if receiver is a Name (variable)
     if isinstance(receiver, Name):
         semantic_type = codegen.memory.find_semantic_type(receiver.id)
-        # Unwrap ReferenceType if present (for &peek T or &poke T parameters)
+        # Unwrap ReferenceType if present (for peek T or poke T parameters)
         if isinstance(semantic_type, ReferenceType):
             semantic_type = semantic_type.referenced_type
 
@@ -533,7 +533,7 @@ def emit_receiver_as_pointer(codegen: 'LLVMCodegen', receiver: Expr,
 
     This is used by HashMap and List methods that need to mutate the receiver.
 
-    For reference parameters (&peek T or &poke T), the slot contains a pointer
+    For reference parameters (peek T or poke T), the slot contains a pointer
     to the actual variable, so we need to load that pointer first.
 
     A receiver that is a whole expression -- `get_map()??`, a call result -- has no

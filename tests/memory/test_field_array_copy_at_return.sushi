@@ -14,11 +14,11 @@
 struct W:
     i32[] items
 
-fn get_it(&peek W w) i32[]:
+fn get_it(peek W w) i32[]:
     return Result.Ok(w.items.clone())
 
 fn main() i32:
     let W w = W(from([1, 2, 3]))
-    let i32[] b = get_it(&peek w).realise(from([0]))
+    let i32[] b = get_it(peek w).realise(from([0]))
     println("returned={b.len()} src={w.items.len()}")
     return Result.Ok(0)

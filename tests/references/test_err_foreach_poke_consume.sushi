@@ -10,7 +10,7 @@ struct Row:
 
 fn main() i32:
     let Row[] rows = from([Row(from([1]))])
-    foreach(&poke r in rows.iter()):
+    foreach(poke r in rows.iter()):
         match eat(r.cells):
             Result.Ok(n) -> println(n)
             Result.Err(_) -> println("e")

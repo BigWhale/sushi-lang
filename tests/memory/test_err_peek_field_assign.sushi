@@ -1,16 +1,16 @@
-# A field assignment through a `&peek` reference. The store used to land in the
+# A field assignment through a `peek` reference. The store used to land in the
 # caller's struct with no diagnostic, so a read-only parameter changed it.
 # EXPECT_ERROR_CODE: CE2408
 struct Counter:
     i32 n
 
-fn bump(&peek Counter c) ~:
+fn bump(peek Counter c) ~:
     c.n := 42
     return Result.Ok(~)
 
 fn run_test() i32:
     let Counter counter = Counter(1)
-    bump(&peek counter)
+    bump(peek counter)
     println(counter.n)
     return Result.Ok(0)
 

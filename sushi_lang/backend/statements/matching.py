@@ -413,7 +413,7 @@ def _emit_match_arms(
         # per-function dict (`memory._types` is scoped; this dict never was), so an arm's
         # entry used to shadow a same-named outer local for the rest of the function --
         # wrong TYPE info for a value binding (the structs.py hazard), wrong CODE for a
-        # reference binding (`Own(&poke x)`, #300: `is_reference_parameter` keys on this
+        # reference binding (`Own(poke x)`, #300: `is_reference_parameter` keys on this
         # dict, so a later same-named value binding would be double-dereferenced).
         saved_variable_types = dict(codegen.variable_types)
 
@@ -670,7 +670,7 @@ def _extract_own_pattern(codegen: 'LLVMCodegen', own_pattern: 'OwnPattern', own_
         # Fixing that no-op (#162/#183) made the bogus owner real.
         if inner_pattern != "_":
             if own_pattern.inner_borrow is not None:
-                # `Own(&poke x)` (#300 phase 1): bind the heap POINTER itself, not a
+                # `Own(poke x)` (#300 phase 1): bind the heap POINTER itself, not a
                 # copy of the pointee, so a write through the binding lands in the
                 # allocation the Own owns. Malloc'd storage is naturally aligned, so
                 # the enum-payload alignment wall does not apply. The slot mimics a

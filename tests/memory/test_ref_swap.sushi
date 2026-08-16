@@ -1,7 +1,7 @@
 # EXPECT_STDOUT_EXACT: "20\n10\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
-fn swap(&poke i32 a, &poke i32 b) ~:
+fn swap(poke i32 a, poke i32 b) ~:
     let i32 temp = a
     a := b
     b := temp
@@ -10,7 +10,7 @@ fn swap(&poke i32 a, &poke i32 b) ~:
 fn main() i32:
     let i32 x = 10
     let i32 y = 20
-    swap(&poke x, &poke y)
+    swap(poke x, poke y)
     println(x)
     println(y)
     return Result.Ok(0)

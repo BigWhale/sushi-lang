@@ -136,7 +136,7 @@ class FunctionDeclarations:
         if ext.target_type:
             self_ll = self.codegen.types.ll_type(ext.target_type)
             if getattr(ext, "self_mode", None) is not None:
-                # `&poke self` / `&peek self` (#327): the receiver arrives by POINTER,
+                # `poke self` / `peek self` (#327): the receiver arrives by POINTER,
                 # so a write through it reaches the caller's value.
                 self_ll = ir.PointerType(self_ll)
             param_types.append(self_ll)

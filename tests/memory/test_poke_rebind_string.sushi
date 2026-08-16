@@ -1,17 +1,17 @@
-# A `&poke string` rebind in the callee: the store goes through the pointer, so the
+# A `poke string` rebind in the callee: the store goes through the pointer, so the
 # CALLER's old buffer must be freed exactly once by the rebind (the caller frees only
 # what its binding holds at scope exit, which is the NEW value).
 # EXPECT_STDOUT_EXACT: "longer-aa-1\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS
-fn swap_in(&poke string s) ~:
+fn swap_in(poke string s) ~:
     let string n = "longer-{s}"
     s := n
     return Result.Ok(~)
 
 fn main() i32:
     let string a = "aa-{1}"
-    let Result@(~, StdError) r = swap_in(&poke a)
+    let Result@(~, StdError) r = swap_in(poke a)
     if (r):
         println(a)
     return Result.Ok(0)

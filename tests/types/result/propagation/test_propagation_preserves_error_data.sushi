@@ -9,21 +9,21 @@ enum ValidationError:
     TooLong
     InvalidFormat
 
-fn validate_length(&peek string s) bool | ValidationError:
+fn validate_length(peek string s) bool | ValidationError:
     if (s == "a"):
         return Result.Err(ValidationError.TooShort)
     if (s == "verylongstring"):
         return Result.Err(ValidationError.TooLong)
     return Result.Ok(true)
 
-fn validate_format(&peek string s) bool | ValidationError:
+fn validate_format(peek string s) bool | ValidationError:
     if (s == "###"):
         return Result.Err(ValidationError.InvalidFormat)
     return Result.Ok(true)
 
 fn full_validation(string s) i32 | ValidationError:
-    let bool len_ok = validate_length(&peek s)??
-    let bool fmt_ok = validate_format(&peek s)??
+    let bool len_ok = validate_length(peek s)??
+    let bool fmt_ok = validate_format(peek s)??
     println("{len_ok}, {fmt_ok}")
     return Result.Ok(100)
 

@@ -8,12 +8,12 @@ enum IntList:
     Nil()
     Cons(i32, Own@(IntList))
 
-fn length(&peek IntList list) i32:
+fn length(peek IntList list) i32:
     match list:
         IntList.Nil() ->
             return Result.Ok(0)
         IntList.Cons(_, Own(tail)) ->
-            let i32 tail_len = length(&peek tail)??
+            let i32 tail_len = length(peek tail)??
             return Result.Ok(1 + tail_len)
 
 fn run_test() i32:
@@ -23,7 +23,7 @@ fn run_test() i32:
     let Own@(IntList) tail1 = Own.alloc(IntList.Cons(2, tail2))
     let IntList list = IntList.Cons(1, tail1)
 
-    let i32 len = length(&peek list)??
+    let i32 len = length(peek list)??
     println("Length: {len}")
     let i32 expected = 3
     return Result.Ok(len - expected)

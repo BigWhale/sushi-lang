@@ -11,8 +11,8 @@ describes the borrow half only, and does not repeat it.
 
 | spelling | meaning | how many at a time |
 |---|---|---|
-| `&peek T` | read-only borrow | many |
-| `&poke T` | read-write borrow | one, and no `&peek` with it |
+| `peek T` | read-only borrow | many |
+| `poke T` | read-write borrow | one, and no `peek` with it |
 
 A borrow names storage that something else owns. The owner keeps the value and frees it.
 Four rules follow from that one sentence, and everything below is one of them:
@@ -29,12 +29,12 @@ Four rules follow from that one sentence, and everything below is one of them:
 
 ## 2. Where a reference type may appear
 
-The grammar's `?type` rule is recursive and universal, so `&peek T` / `&poke T` parses in
+The grammar's `?type` rule is recursive and universal, so `peek T` / `poke T` parses in
 every type position. Semantics defines **two**:
 
-- a function **parameter** — `fn f(&peek T x)`;
-- a **parameter inside a function type** — `fn(&peek i32) -> i32`, and the lambda
-  `|&peek i32 x|` that satisfies it.
+- a function **parameter** — `fn f(peek T x)`;
+- a **parameter inside a function type** — `fn(peek i32) -> i32`, and the lambda
+  `|peek i32 x|` that satisfies it.
 
 Every other position is a registered rejection at the declaration: CE2413 (`let`), CE2415
 (struct field), CE2416 (enum payload), CE2417 (return type), CE2418 (nested reference),
@@ -51,28 +51,28 @@ One surface vocabulary, six mechanisms. Each has its own extent and its own diag
 
 | # | mechanism | spelling | extent | write through it | consume it |
 |---|---|---|---|---|---|
-| 1 | call-site borrow | `f(&peek x)`, `f(&poke y)` | one statement | the callee's mode decides | the argument is not consumed |
-| 2 | reference parameter | `fn f(&poke T x)` | the function body | `&peek`: **CE2408**; `&poke`: in place | **CE2411** |
+| 1 | call-site borrow | `f(peek x)`, `f(poke y)` | one statement | the callee's mode decides | the argument is not consumed |
+| 2 | reference parameter | `fn f(poke T x)` | the function body | `peek`: **CE2408**; `poke`: in place | **CE2411** |
 | 3 | `let` binding of a read | `let v = c.get(0)??` | the enclosing block | not gated (§8) | **CE2411** |
 | 4 | pattern value binding | `E.V(p)`, `foreach(n in ...)` | the arm or the loop body | **CE2414** | **CE2411** |
-| 5 | pattern reference binding | `foreach(&poke r in xs.iter())`, `Own(&poke x)`, `E.V(&poke p)` | the arm or the loop body | `&poke`: in place; `&peek`: **CE2408** | **CE2411** |
+| 5 | pattern reference binding | `foreach(poke r in xs.iter())`, `Own(poke x)`, `E.V(poke p)` | the arm or the loop body | `poke`: in place; `peek`: **CE2408** | **CE2411** |
 | 6 | method parameter, `self` included | `extend T m(H h)` | the method body | **CE2421** (receiver), **CE2422** (by value) | **CE2411** |
 
 **1 — the call-site borrow** is tracked by counters that are cleared at the end of every
 statement. Therefore the exclusivity rules have jurisdiction inside one statement only: a
-second `&poke` is CE2403, a mixed pair is CE2407, and a `&poke` of a `&poke` parameter is
+second `poke` is CE2403, a mixed pair is CE2407, and a `poke` of a `poke` parameter is
 the CW2409 warning. A move and a borrow of one owner in one statement is CE2401, in either
 argument order. Two statements are two borrows, and are unaffected.
 
 **2 — the reference parameter** is the position the subsystem is built for. It carries its
 full `ReferenceType` in the borrow state, which is what makes the write gate answerable
 (§5). A borrow is created at a USE site, so a reference parameter is forwarded as
-`f(&peek v)`, never as bare `f(v)`.
+`f(peek v)`, never as bare `f(v)`.
 
 **3 — the `let` binding of a read** inherits BORROWED provenance: a field read
 (`h.inner`), an index (`rows[i]`) and a container get-out (`c.get(0)??`, `own.get()`) all
 borrow. The owner is frozen until the end of the block that declares the binding
-(**CE2412**). A reference-typed `let` (`let &peek T x = ...`) is **CE2413** — it parses,
+(**CE2412**). A reference-typed `let` (`let peek T x = ...`) is **CE2413** — it parses,
 but it would be an alias the checker does not track.
 
 **4 — the pattern value binding** is compiled as a private copy, so a write through it
@@ -87,7 +87,7 @@ every rule above applies by construction. The match half rests on the enum paylo
 authority (`TypeSizing.payload_field_offsets`). Four fences: an iterable whose items have
 no address is **CE2423** (a range, `HashMap.entries()`); a reference binding in a NESTED
 match pattern is **CE2424** (extraction walks through temporary copies there); a temporary
-scrutinee is CE2404; and a `&poke` binding out of a `&peek` owner is CE2408, out of a
+scrutinee is CE2404; and a `poke` binding out of a `peek` owner is CE2408, out of a
 constant CE2400.
 
 **6 — the method parameter.** Every parameter of an extension or perk method is a borrow,
@@ -95,21 +95,21 @@ constant CE2400.
 carve-out (#338). The mutable form is an opt-in FIRST parameter:
 
 ```sushi
-extend Counter bump(&poke self) ~:
+extend Counter bump(poke self) ~:
     self.n := self.n + 1
     return ~
 ```
 
-The receiver then arrives by pointer, so the write reaches the caller's value. `&peek self`
+The receiver then arrives by pointer, so the write reaches the caller's value. `peek self`
 states the read-only default. A perk declares the mode in its signature, and the
 implementation must match it (**CE4004**). A receiver parameter anywhere else is
 **CE2425**. The full ruling is in `ownership-conventions.md` §8.6.
 
 ## 4. Coercion
 
-`&poke T` coerces to `&peek T` at a **call site** — a safe downgrade of a borrow that is
+`poke T` coerces to `peek T` at a **call site** — a safe downgrade of a borrow that is
 passed once. The coercion is a property of the position, not of the type pair, so it does
-NOT apply to a stored function type: `fn(&peek T)` and `fn(&poke T)` are different types
+NOT apply to a stored function type: `fn(peek T)` and `fn(poke T)` are different types
 in both directions (CE2002). Without that invariance, one indirection defeats the write
 gate (#335). The single coercion site is `semantics/passes/types/compatibility.py`;
 `tests/references/test_borrow_coercion_matrix.sushi` and its two rejection companions pin
@@ -118,14 +118,14 @@ every position where the coercion does and does not apply.
 ## 5. One gate for each rule
 
 **A write cannot reach through a read-only receiver.** Five kinds, three write shapes each
-(a mutating method under the receiver, a field assignment, a `&poke` borrow of it):
+(a mutating method under the receiver, a field assignment, a `poke` borrow of it):
 
 | kind | code | escape |
 |---|---|---|
 | `match` / `foreach` value binding | CE2414 | `.clone()`, mutate, store back; or a reference binding |
-| `&peek` reference | CE2408 | declare the parameter `&poke` |
-| method receiver | CE2421 | `&poke self` |
-| by-value method parameter | CE2422 | declare the parameter `&poke T` |
+| `peek` reference | CE2408 | declare the parameter `poke` |
+| method receiver | CE2421 | `poke self` |
+| by-value method parameter | CE2422 | declare the parameter `poke T` |
 | `let`-borrow binding | CE2426 | write to the owner; or `.clone()`, mutate, store back |
 
 The kinds are a TABLE (`_READONLY_RECEIVERS`) behind one dispatcher
@@ -189,7 +189,7 @@ Until #344 the second question had no answer, because the CE2414 row excluded th
 by pointing at CE2412. `let i32[] v = h.items` followed by `v.push(9)` compiled: the write
 was lost from the owner's view, a push that forced a reallocation freed the owner's buffer
 (a double free plus a read of released memory), and `v.destroy()` did the same directly. A
-field assignment and a `&poke` borrow of the binding were ungated the same way.
+field assignment and a `poke` borrow of the binding were ungated the same way.
 
 The row keys on `is_let_borrow`, not on `borrows_from is not None`. An owner with no
 `BorrowState` — a temporary, as in `let v = make()??.items` — records no owner name, and

@@ -10,22 +10,22 @@ enum Tree:
     Leaf(string)
     Node(Own@(Tree), Own@(Tree))
 
-fn count_leaves(&peek Tree t) i32:
+fn count_leaves(peek Tree t) i32:
     match t:
         Tree.Leaf(_) ->
             return Result.Ok(1)
         Tree.Node(Own(l), Own(r)) ->
-            let i32 lc = count_leaves(&peek l)??
-            let i32 rc = count_leaves(&peek r)??
+            let i32 lc = count_leaves(peek l)??
+            let i32 rc = count_leaves(peek r)??
             return Result.Ok(lc + rc)
 
-fn depth(&peek Tree t) i32:
+fn depth(peek Tree t) i32:
     match t:
         Tree.Leaf(_) ->
             return Result.Ok(0)
         Tree.Node(Own(l), Own(r)) ->
-            let i32 ld = depth(&peek l)??
-            let i32 rd = depth(&peek r)??
+            let i32 ld = depth(peek l)??
+            let i32 rd = depth(peek r)??
             if (ld > rd):
                 return Result.Ok(1 + ld)
             return Result.Ok(1 + rd)
@@ -41,8 +41,8 @@ fn main() i32:
     let Tree root = Tree.Node(left, right)
 
     # Both traversals borrow, so root is read twice with no copy.
-    let i32 leaves = count_leaves(&peek root).realise(0)
-    let i32 d = depth(&peek root).realise(0)
+    let i32 leaves = count_leaves(peek root).realise(0)
+    let i32 d = depth(peek root).realise(0)
 
     if (leaves != 4):
         println("FAIL: expected 4 leaves got {leaves}")

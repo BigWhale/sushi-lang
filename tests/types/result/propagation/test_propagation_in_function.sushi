@@ -8,19 +8,19 @@ enum MyFileError:
     NotFound
     PermissionDenied
 
-fn check_exists(&peek string path) bool | MyFileError:
+fn check_exists(peek string path) bool | MyFileError:
     if (path == "missing"):
         return Result.Err(MyFileError.NotFound)
     return Result.Ok(true)
 
-fn check_readable(&peek string path) bool | MyFileError:
+fn check_readable(peek string path) bool | MyFileError:
     if (path == "forbidden"):
         return Result.Err(MyFileError.PermissionDenied)
     return Result.Ok(true)
 
 fn validate_file(string path) i32 | MyFileError:
-    check_exists(&peek path)??
-    check_readable(&peek path)??
+    check_exists(peek path)??
+    check_readable(peek path)??
     return Result.Ok(42)
 
 fn main() i32:

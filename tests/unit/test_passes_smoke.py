@@ -34,9 +34,9 @@ def test_non_result_return_reports_CE2030(analyze):
 
 
 def test_modify_through_peek_reports_CE2408(analyze):
-    # Writing through a read-only &peek borrow is rejected by the borrow checker.
+    # Writing through a read-only peek borrow is rejected by the borrow checker.
     src = (
-        "fn bad(&peek i32 x) ~:\n"
+        "fn bad(peek i32 x) ~:\n"
         "    x := x + 1\n"
         "    return Result.Ok(~)\n"
         "fn main() i32:\n"

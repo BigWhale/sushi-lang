@@ -22,8 +22,8 @@ _add(ErrorMessage("CW2511", Severity.WARNING,
     Category.TYPE, "While ?? works in main, explicit error handling with .realise(), if statements, or match expressions makes error behavior clearer at the program entry point."))
 
 _add(ErrorMessage("CW2409", Severity.WARNING,
-    "re-borrowing '{name}' as &poke (nested mutable borrow)",
-    Category.TYPE, "Creating a &poke borrow of a &poke reference parameter passes through exclusive access. Ensure the original reference is not used until the nested borrow ends."))
+    "re-borrowing '{name}' as poke (nested mutable borrow)",
+    Category.TYPE, "Creating a poke borrow of a poke reference parameter passes through exclusive access. Ensure the original reference is not used until the nested borrow ends."))
 
 # General warnings
 _add(ErrorMessage("CW0001", Severity.WARNING,

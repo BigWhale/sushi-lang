@@ -1,12 +1,12 @@
-# The `&poke` member of the F6 family, and the one that corrupts memory today.
+# The `poke` member of the F6 family, and the one that corrupts memory today.
 #
-# `both(&poke a, a)` gives the callee a mutable view of the caller's array AND the array
+# `both(poke a, a)` gives the callee a mutable view of the caller's array AND the array
 # itself by value. The pushes grow the buffer, so the by-value copy's data pointer is the
 # one `realloc` released -- and the callee frees it again at scope exit. It compiled clean
 # and reported `leaked=32 blocks=1 double_frees=1`, after printing `owned[0]: 2` out of
 # freed memory. old/BORROW.md called F6 "latent; memory-clean today"; this shape is not.
 # EXPECT_ERROR_CODE: CE2401
-fn both(&poke i32[] r, i32[] owned) i32:
+fn both(poke i32[] r, i32[] owned) i32:
     r.push(4)
     r.push(5)
     r.push(6)
@@ -17,7 +17,7 @@ fn both(&poke i32[] r, i32[] owned) i32:
 
 fn run_test() i32:
     let i32[] a = from([1, 2, 3])
-    let i32 x = both(&poke a, a)??
+    let i32 x = both(poke a, a)??
     println("x: {x}")
     return Result.Ok(0)
 

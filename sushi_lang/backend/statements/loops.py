@@ -359,7 +359,7 @@ def _emit_array_foreach_body(
     previous_entry = _MISSING
     if node.item_borrow is not None:
         # Reference binding (#300 phase 1): store the element POINTER, not a copy. The
-        # slot then has the exact shape of a `&peek`/`&poke` parameter's (a T** holding
+        # slot then has the exact shape of a `peek`/`poke` parameter's (a T** holding
         # a T*), and registering the `ReferenceType` in `variable_types` flips every
         # consumer at once -- `is_reference_parameter` keys on nothing else -- so reads
         # deref, writes land in the container, and no cleanup is ever registered.
@@ -731,7 +731,7 @@ def bind_element_reference(codegen: 'LLVMCodegen', name: str, borrow_mode: str,
                             element_type, element_ptr):
     """Bind a foreach item as a REFERENCE to the container's element (#300 phase 1).
 
-    The slot mimics a `&peek`/`&poke` parameter's exactly: a pointer-typed alloca
+    The slot mimics a `peek`/`poke` parameter's exactly: a pointer-typed alloca
     (`T**`) holding the element pointer (`T*`), plus a `ReferenceType` entry in
     `codegen.variable_types` -- the single fact `is_reference_parameter` keys on, so
     every deref/write/method consumer treats the binding as the borrow it is. No

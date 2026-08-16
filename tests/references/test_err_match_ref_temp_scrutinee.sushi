@@ -11,7 +11,7 @@ fn make() Shape:
 
 fn main() i32:
     match make().realise(Shape.Empty):
-        Shape.Poly(&poke p) ->
+        Shape.Poly(poke p) ->
             p.push(9)
         Shape.Empty -> println("empty")
     return Result.Ok(0)

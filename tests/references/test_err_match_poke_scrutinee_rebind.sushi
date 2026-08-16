@@ -9,7 +9,7 @@ enum Shape:
 fn main() i32:
     let Shape s = Shape.Poly(from([1]))
     match s:
-        Shape.Poly(&poke p) ->
+        Shape.Poly(poke p) ->
             s := Shape.Empty
             p.push(9)
         Shape.Empty -> println("empty")

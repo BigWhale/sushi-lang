@@ -1,6 +1,6 @@
-# #300 phase 3: the scrutinee may be a `&poke` reference parameter -- the binding's
+# #300 phase 3: the scrutinee may be a `poke` reference parameter -- the binding's
 # pointer goes through the caller's pointer, so the mutation lands in the CALLER's
-# enum. The write gate composes: the same match through a `&peek` parameter is CE2408.
+# enum. The write gate composes: the same match through a `peek` parameter is CE2408.
 # EXPECT_STDOUT_EXACT: "2\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS
@@ -8,18 +8,18 @@ enum Shape:
     Poly(i32[])
     Empty
 
-fn grow(&poke Shape s) ~:
+fn grow(poke Shape s) ~:
     match s:
-        Shape.Poly(&poke p) ->
+        Shape.Poly(poke p) ->
             p.push(9)
         Shape.Empty -> println("empty")
     return Result.Ok(~)
 
 fn main() i32:
     let Shape s = Shape.Poly(from([1]))
-    let Result@(~, StdError) r = grow(&poke s)
+    let Result@(~, StdError) r = grow(poke s)
     if (r):
         match s:
-            Shape.Poly(&peek q) -> println(q.len())
+            Shape.Poly(peek q) -> println(q.len())
             Shape.Empty -> println("empty")
     return Result.Ok(0)

@@ -29,14 +29,14 @@ extend Ship with Describable:
         return "Ship: {self.name} (crew: {self.crew})"
 
 # Generic function with perk constraint. It only reads its argument, so it
-# borrows it: type inference binds T through the `&peek` parameter, and one
+# borrows it: type inference binds T through the `peek` parameter, and one
 # value can be used by many calls with no copies.
-fn print_description@(T: Describable)(&peek T item) ~:
+fn print_description@(T: Describable)(peek T item) ~:
     println(item.describe())
     return Result.Ok(~)
 
 # Another generic function
-fn get_description@(T: Describable)(&peek T item) string:
+fn get_description@(T: Describable)(peek T item) string:
     return Result.Ok(item.describe())
 
 fn main() i32:
@@ -49,16 +49,16 @@ fn main() i32:
 
     # Generic function with type inference
     println("1. Using generic function with Robot:")
-    print_description(&peek marvin)
+    print_description(peek marvin)
 
     println("")
     println("2. Using generic function with Ship:")
-    print_description(&peek hog)
+    print_description(peek hog)
 
     println("")
     println("3. Getting description as string:")
-    let string desc1 = get_description(&peek marvin).realise("")
-    let string desc2 = get_description(&peek hog).realise("")
+    let string desc1 = get_description(peek marvin).realise("")
+    let string desc2 = get_description(peek hog).realise("")
     println("Desc 1: {desc1}")
     println("Desc 2: {desc2}")
 

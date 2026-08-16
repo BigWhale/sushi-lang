@@ -5,21 +5,21 @@
 # instantiated from main, so tag<string> is discoverable only after substitution.
 # Pre-fix: CE2061 "monomorphized function 'tag__string' not found".
 #
-# `tag` only reads its argument, so it borrows it -- F7 (inference through a `&peek`
+# `tag` only reads its argument, so it borrows it -- F7 (inference through a `peek`
 # parameter) was fixed 2026-08-14 by Phase 9.5, and the `v.clone()` workaround is gone.
 # The positive pins for the two former holes are test_peek_generic_param_inference.sushi
 # and test_infer_from_non_name_arg.sushi.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_CONTAINS: "s = hi"
 
-fn tag@(T)(&peek T v) i32:
+fn tag@(T)(peek T v) i32:
     return Result.Ok((v.hash() as i32) & 1)
 
 fn add_one(i32 n) i32:
     return Result.Ok(n + 1)
 
 fn box@(T)(T v) T:
-    let i32 t = add_one(tag(&peek v)??)??
+    let i32 t = add_one(tag(peek v)??)??
     println("t = {t}")
     return Result.Ok(v)
 

@@ -11,7 +11,7 @@ from sushi_lang.internals.report import span_of
 
 
 def strip_self_param(params: List[Param], where_span=None):
-    """Lift a `&poke self` / `&peek self` parameter off a parsed param list (#327).
+    """Lift a `poke self` / `peek self` parameter off a parsed param list (#327).
 
     Returns (self_mode, self_mode_span, remaining_params). The receiver parameter is
     legal only as the FIRST parameter -- anywhere else is CE2425 -- and the caller
@@ -26,7 +26,7 @@ def strip_self_param(params: List[Param], where_span=None):
         if param.self_mode is not None:
             if index != 0:
                 raise SyntaxDiagnostic("CE2425", span=param.loc or where_span) \
-                    .help("the receiver comes first: `(&poke self, <params>)`")
+                    .help("the receiver comes first: `(poke self, <params>)`")
             self_mode = param.self_mode
             self_mode_span = param.loc
         else:
@@ -144,7 +144,7 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> 
             continue
 
         if node.data == "self_param":
-            # `&poke self` / `&peek self` (#327): a receiver-mode parameter. The mode
+            # `poke self` / `peek self` (#327): a receiver-mode parameter. The mode
             # rides on the Param; `strip_self_param` lifts it onto the declaration and
             # validates the position, so collect never sees a `self`-named Param.
             mode_tok = next((c for c in node.children
@@ -153,10 +153,10 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> 
             if mode_tok is None or name_tok is None:
                 ice(node, "malformed self_param")
             if str(name_tok) != "self":
-                # `&poke x` in a parameter list is a missing type, not a receiver.
+                # `poke x` in a parameter list is a missing type, not a receiver.
                 raise SyntaxDiagnostic("CE2425", span=span_of(node)) \
-                    .help("a reference parameter is written `&poke T name`; the bare "
-                          "form is only the receiver, spelled `&poke self`")
+                    .help("a reference parameter is written `poke T name`; the bare "
+                          "form is only the receiver, spelled `poke self`")
             out.append(Param(
                 name="self", ty=None,
                 name_span=span_of(name_tok), loc=span_of(node),
@@ -206,6 +206,11 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> 
                     # element type stays recoverable as `ty.base_type`.
                     ty = DynamicArrayType(base_type=ty)
 
+            # `nom T name`: the callee takes ownership. The grammar admits the marker on
+            # `typed_param` only, so a variadic or a pack can never carry one.
+            nom_tok = next((c for c in node.children
+                            if isinstance(c, Token) and c.type == "NOM"), None)
+
             out.append(
                 Param(
                     name=str(nm_tok),
@@ -215,6 +220,8 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> 
                     loc=span_of(node),
                     is_variadic=is_variadic,
                     is_pack=is_pack,
+                    is_nom=nom_tok is not None,
+                    nom_span=span_of(nom_tok) if nom_tok is not None else None,
                 )
             )
 

@@ -159,7 +159,7 @@ def test_rebind_of_a_borrowed_binding_makes_it_an_owner(analyze):
         "fn eat(i32[] a) i32:\n"
         "    return Result.Ok(a.len())\n"
         "\n"
-        "fn f(&peek i32[] src) i32:\n"
+        "fn f(peek i32[] src) i32:\n"
         "    let i32[] b = src\n"
         "    b := from([1, 2, 3])\n"
         "    return Result.Ok(eat(b)??)\n"

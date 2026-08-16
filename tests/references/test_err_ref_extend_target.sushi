@@ -2,7 +2,7 @@
 # author believes they wrote (#319). Extend the referent instead -- the methods on `&T`
 # ARE the methods on `T`.
 # EXPECT_ERROR_CODE: CE2420
-extend &peek i32 weird() i32:
+extend peek i32 weird() i32:
     return 1
 
 fn main() i32:

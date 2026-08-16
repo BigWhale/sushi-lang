@@ -1,13 +1,13 @@
-# A mutating method through a `&peek` reference is a write to the caller's value
+# A mutating method through a `peek` reference is a write to the caller's value
 # through a read-only borrow (#302). It used to compile, and the push landed.
 # EXPECT_ERROR_CODE: CE2408
-fn grow(&peek i32[] a) ~:
+fn grow(peek i32[] a) ~:
     a.push(9)
     return Result.Ok(~)
 
 fn run_test() i32:
     let i32[] xs = from([1, 2, 3])
-    grow(&peek xs)
+    grow(peek xs)
     println(xs.len())
     return Result.Ok(0)
 

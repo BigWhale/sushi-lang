@@ -1,20 +1,20 @@
-# A `&poke` borrow of `self` is the third write shape (#326): it hands the write to a
+# A `poke` borrow of `self` is the third write shape (#326): it hands the write to a
 # callee, which reaches the private copy and is lost just the same.
 #
 # It used to report CE2400 ("variable does not exist"), which was true of the borrow
 # checker's state and confusing to a user who can see `self` on the line above. The
-# rejection's help names the spelling that works: declare the method `(&poke self, ...)`
+# rejection's help names the spelling that works: declare the method `(poke self, ...)`
 # (#327) and the write reaches the caller -- a MODELESS receiver stays read-only.
 # EXPECT_ERROR_CODE: CE2421
 struct Counter:
     i32 n
 
-fn bump(&poke Counter c) ~:
+fn bump(poke Counter c) ~:
     c.n := c.n + 1
     return Result.Ok(~)
 
 extend Counter inc() i32:
-    bump(&poke self)
+    bump(poke self)
     return 1
 
 fn main() i32:

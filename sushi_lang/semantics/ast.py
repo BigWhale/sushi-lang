@@ -53,9 +53,13 @@ class Param:
                                       # `ty` then holds the collected DynamicArrayType(T)
     is_pack: bool = False             # True for a v2 type-pack value parameter (...Ts args);
                                       # ty is the bare pack type-param reference, NOT a DynamicArrayType.
-    self_mode: Optional[str] = None   # "peek"/"poke" for a `&poke self` receiver parameter
+    self_mode: Optional[str] = None   # "peek"/"poke" for a `poke self` receiver parameter
                                       # (#327); ty is None. Stripped-and-lifted onto the
                                       # declaration by the builders, never reaches collect.
+    is_nom: bool = False              # `nom T name`: the CALLEE takes ownership. The only
+                                      # mode bit the type cannot carry -- peek/poke ride on
+                                      # ReferenceType. See docs/design/borrow-model.md S6.
+    nom_span: Optional[Span] = None   # the `nom` marker itself, for diagnostics
 
 @dataclass
 class BoundedTypeParam:
@@ -94,7 +98,7 @@ class FuncDef(Node):
     ret_span: Optional[Span] = None
     is_library_template: bool = False  # True if reconstructed from a consumed library's .slib templates
     self_mode: Optional[str] = None  # "peek"/"poke" for a perk-IMPL method declared
-                                     # `(&poke self, ...)` (#327). Always None on a plain
+                                     # `(poke self, ...)` (#327). Always None on a plain
                                      # top-level function (collect rejects it there).
     self_mode_span: Optional[Span] = None
 
@@ -148,7 +152,7 @@ class ExtendDef(Node):
     target_type_span: Optional[Span] = None
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
-    self_mode: Optional[str] = None  # "peek"/"poke" when declared `(&poke self, ...)` (#327);
+    self_mode: Optional[str] = None  # "peek"/"poke" when declared `(poke self, ...)` (#327);
                                      # None is the classic read-only-borrow receiver
     self_mode_span: Optional[Span] = None
 
@@ -161,7 +165,7 @@ class PerkMethodSignature:
     loc: Optional[Span] = None
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
-    self_mode: Optional[str] = None  # "peek"/"poke" when the perk declares `(&poke self, ...)` (#327)
+    self_mode: Optional[str] = None  # "peek"/"poke" when the perk declares `(poke self, ...)` (#327)
     self_mode_span: Optional[Span] = None
 
 @dataclass
@@ -274,7 +278,7 @@ class Foreach(Stmt):
     """Foreach loop statement: foreach(type item in iterable):
 
     `item_borrow` is the reference-binding marker (#300 phase 1):
-    `foreach(&poke r in rows.iter())` binds `r` as a pointer INTO the container's
+    `foreach(poke r in rows.iter())` binds `r` as a pointer INTO the container's
     element storage, so a write through it reaches the owner. `"peek"` is the
     read-only twin (no element copy). None is the classic value binding (a
     read-only private copy). A reference-typed `item_type` is normalized to this
@@ -335,7 +339,7 @@ class WildcardPattern(Node):
 
 @dataclass
 class RefBinding(Node):
-    """A reference binding in a match pattern: `Shape.Poly(&poke p)` (#300 phase 3).
+    """A reference binding in a match pattern: `Shape.Poly(poke p)` (#300 phase 3).
 
     Binds `name` as a POINTER into the scrutinee's payload storage, so a write through
     it reaches the owner in place; `"peek"` is the copy-free read-only twin. Legal only
@@ -361,10 +365,10 @@ class OwnPattern(Node):
     The compiler generates Own<T>.get() to unwrap the owned value
     before matching the inner pattern.
 
-    `inner_borrow` (#300 phase 1): `Own(&poke inner)` binds `inner` as a pointer
+    `inner_borrow` (#300 phase 1): `Own(poke inner)` binds `inner` as a pointer
     to the heap pointee instead of a private copy, so a write through it reaches
     the owned value. Malloc'd storage is naturally aligned, so the enum-payload
-    alignment wall that defers plain `&poke` pattern bindings does not apply.
+    alignment wall that defers plain `poke` pattern bindings does not apply.
     """
     inner_pattern: Union[str, 'Pattern']  # Variable name or nested pattern
     inner_borrow: Optional[str] = None    # None | "peek" | "poke"
@@ -529,7 +533,7 @@ class MethodCall(Node):
     args: List["Expr"]  # Arguments to the method
     inferred_return_type: Optional["Type"] = None  # Return type inferred by type checker
     callee_self_mode: Optional[str] = None  # "peek"/"poke" when the resolved method takes
-                                            # `&poke self` (#327); stamped by Pass 2, read
+                                            # `poke self` (#327); stamped by Pass 2, read
                                             # by Pass 3 (a poke call is a receiver WRITE)
                                             # and the backend (pass a pointer)
 
@@ -552,7 +556,7 @@ class DotCall(Node):
     resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type (populated by type checker)
     external_ref: Optional[Tuple[str, str]] = None  # (namespace, name) for FFI calls (set by type checker)
     callee_self_mode: Optional[str] = None  # "peek"/"poke" when the resolved method takes
-                                            # `&poke self` (#327); see MethodCall
+                                            # `poke self` (#327); see MethodCall
 
 @dataclass
 class MemberAccess(Node):
@@ -586,18 +590,18 @@ class CastExpr(Node):
 
 @dataclass
 class Borrow(Node):
-    """Borrow expression: &peek expr or &poke expr
+    """Borrow expression: peek expr or poke expr
 
     Creates a reference (borrow) to a variable without transferring ownership.
     The borrowed variable cannot be moved, rebound, or destroyed while the borrow is active.
 
     Borrow modes:
-    - &peek: Read-only borrow (multiple allowed)
-    - &poke: Read-write borrow (exclusive access)
+    - peek: Read-only borrow (multiple allowed)
+    - poke: Read-write borrow (exclusive access)
 
     Examples:
-        read_value(&peek num)   # Read-only access
-        increment(&poke num)    # Read-write access
+        read_value(peek num)   # Read-only access
+        increment(poke num)    # Read-write access
     """
     expr: "Expr"  # The expression being borrowed (typically a Name)
     mutability: Literal["peek", "poke"]  # Borrow mode

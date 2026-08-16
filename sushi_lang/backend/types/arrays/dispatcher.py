@@ -148,7 +148,7 @@ def emit_array_method(
     else:
         array_struct_type = receiver_type
 
-    # The methods on `&T` are the methods on `T`. The receiver may be a `&peek`/`&poke`
+    # The methods on `&T` are the methods on `T`. The receiver may be a `peek`/`poke`
     # array parameter, and the arms below read `semantic_type.base_type` for the element
     # type -- `.free()` and `.clone()` raise CE0042 on a miss, which is what made
     # `a.clone()` on a reference receiver unusable as CE2411's documented escape (#301).

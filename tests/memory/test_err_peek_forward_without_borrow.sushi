@@ -1,26 +1,26 @@
 # Forwarding a borrowed parameter needs the borrow written at the call site.
 #
 # A borrow reads exactly like the value it refers to, so `infer_expression_type`
-# dereferences one -- `v + 1` has to see `i32`, not `&peek i32`. At an argument position
-# that dereference makes the message read "expected &peek string, got string", naming two
+# dereferences one -- `v + 1` has to see `i32`, not `peek i32`. At an argument position
+# that dereference makes the message read "expected peek string, got string", naming two
 # types the user never wrote and no fix at all.
 #
 # The rule itself is right and stays: a borrow is created AT the call site in Sushi,
-# whether the place is owned or already borrowed, so `inner(&peek s)` is the same syntax
+# whether the place is owned or already borrowed, so `inner(peek s)` is the same syntax
 # the caller writes everywhere else. What was missing is the `help` line that says so.
 # It matters here more than anywhere, because forwarding is the shape that every
-# `&peek string` signature produces.
+# `peek string` signature produces.
 # EXPECT_ERROR_CODE: CE2006
 
-fn inner(&peek string s) ~:
+fn inner(peek string s) ~:
     println("inner {s}")
     return Result.Ok(~)
 
-fn outer(&peek string s) ~:
+fn outer(peek string s) ~:
     inner(s)
     return Result.Ok(~)
 
 fn main() i32:
     let string v = "Ford"
-    outer(&peek v)
+    outer(peek v)
     return Result.Ok(0)

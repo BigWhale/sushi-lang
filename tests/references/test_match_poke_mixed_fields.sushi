@@ -11,11 +11,11 @@ enum Mix:
 fn main() i32:
     let Mix m = Mix.Pair(5, from([1, 2]))
     match m:
-        Mix.Pair(n, &poke arr) ->
+        Mix.Pair(n, poke arr) ->
             arr.push(n)
         Mix.Nil -> println("nil")
     match m:
-        Mix.Pair(k, &peek a) ->
+        Mix.Pair(k, peek a) ->
             println("{k} {a.len()}")
         Mix.Nil -> println("nil")
     return Result.Ok(0)

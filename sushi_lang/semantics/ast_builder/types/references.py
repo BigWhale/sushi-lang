@@ -13,8 +13,8 @@ if TYPE_CHECKING:
 def parse_reference_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]:
     """Parse reference type (reference_t).
 
-    Syntax: "&" ("peek" | "poke") type
-    Example: &peek i32, &poke string
+    Syntax: ("peek" | "poke") type
+    Example: peek i32, poke string
     """
     # Extract borrow mode (peek or poke)
     mutability = None
@@ -41,7 +41,7 @@ def parse_reference_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type
     if referenced_type is None:
         return None
 
-    # `&peek &peek i32` PARSES: the grammar rule is recursive (line 28 accepts a
+    # `peek peek i32` PARSES: the grammar rule is recursive (line 28 accepts a
     # `reference_t` as the referenced type). It has no meaning at any layer -- a borrow of
     # a borrow is the same borrow -- and used to be accepted at a declaration, producing a
     # function nothing could call (CE2418, #317).

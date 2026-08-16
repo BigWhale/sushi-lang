@@ -4,15 +4,15 @@
 # Should compile and run successfully
 # EXPECT_NO_LEAKS: true
 
-fn set_to_zero(&poke i32 x) ~:
+fn set_to_zero(poke i32 x) ~:
     x := 0
     return Result.Ok(~)
 
-fn add_ten(&poke i32 x) ~:
+fn add_ten(poke i32 x) ~:
     x := x + 10
     return Result.Ok(~)
 
-fn double_it(&poke i32 x) ~:
+fn double_it(poke i32 x) ~:
     x := x * 2
     return Result.Ok(~)
 
@@ -20,13 +20,13 @@ fn main() i32:
     let i32 value = 5
     println(value)
 
-    set_to_zero(&poke value)
+    set_to_zero(poke value)
     println(value)
 
-    add_ten(&poke value)
+    add_ten(poke value)
     println(value)
 
-    double_it(&poke value)
+    double_it(poke value)
     println(value)
 
     return Result.Ok(0)

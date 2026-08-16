@@ -117,7 +117,7 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
     # to the array-struct POINTER) against a by-value struct parameter, so cast_for_param
     # does not raise CE0017 (issue #131). Mirrors the self-by-value reconcile in
     # emit_method_call; fires only on an exact pointer-to-value-struct mismatch, so a
-    # &peek/&poke pointer param (PointerType != struct) never triggers it.
+    # peek/poke pointer param (PointerType != struct) never triggers it.
     # BaseStructType so a user struct's identified type (#257) still reconciles here; it is
     # a sibling of LiteralStructType, not a subclass.
     args = [
@@ -227,7 +227,7 @@ def _consume_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
 
     A by-value parameter takes ownership: the callee frees the value at scope exit (see
     begin_function's param registration). Reference parameters are borrows and are skipped
-    -- a borrow is spelled `&peek x` at the call site, which is a `Borrow` node, so it
+    -- a borrow is spelled `peek x` at the call site, which is a `Borrow` node, so it
     never reaches the seam at all.
 
     This position was the reference implementation before the seam existed: it was the one
@@ -412,7 +412,7 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     # ========================================================================
     # Use semantic type if available to distinguish bool from i8
     if semantic_type is not None:
-        # Unwrap ReferenceType if present (for &peek T or &poke T parameters)
+        # Unwrap ReferenceType if present (for peek T or poke T parameters)
         from sushi_lang.semantics.typesys import deref_type
         actual_type = deref_type(semantic_type)
         lang_type = str(actual_type)
@@ -445,7 +445,7 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     if llvm_fn is None:
         raise KeyError(f"Extension method not found: {func_name}")
 
-    # A `&poke self` / `&peek self` method (#327) takes its receiver by POINTER, so a
+    # A `poke self` / `peek self` method (#327) takes its receiver by POINTER, so a
     # write through `self` reaches the caller's value. Pass 2 stamped the resolution on
     # the node; `emit_receiver_as_pointer` returns the receiver's slot address (with the
     # load-through for a reference-parameter receiver). Pass 2/3 reject the shapes with
@@ -468,7 +468,7 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     # emit_receiver_value hands us the alloca POINTER, but user extension methods
     # declare `self` by value (ll_type of the target). Load the header value here so
     # `cast_for_param` does not raise CE0017. Only the receiver (index 0) is affected;
-    # a &peek/&poke reference param has a pointer param type, so PointerType(ptr) !=
+    # a peek/poke reference param has a pointer param type, so PointerType(ptr) !=
     # arg.type and this never misfires. The by-value `self` is a shallow copy sharing
     # the caller's `data*`; the extension callee never registers it for RAII cleanup
     # (its body is emitted with fn_def=None), so there is no double-free.

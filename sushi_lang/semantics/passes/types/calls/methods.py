@@ -23,11 +23,11 @@ if TYPE_CHECKING:
 
 
 def _reject_immutable_poke_receiver(validator: 'TypeValidator', call: MethodCall) -> None:
-    """A `&poke self` method call writes through its receiver's ADDRESS (#327).
+    """A `poke self` method call writes through its receiver's ADDRESS (#327).
 
     So the receiver must HAVE an address the write can reach: a temporary would be
     spilled to a copy nobody reads (a silently lost write, the #326 class) and is
-    CE2404; a constant lives in `.rodata` and is CE2400. A binding/`&peek` receiver
+    CE2404; a constant lives in `.rodata` and is CE2400. A binding/`peek` receiver
     is Pass 3's half -- the write gate treats a poke-self call as a write to the root.
     """
     from sushi_lang.semantics.ast import DotCall, MemberAccess
@@ -188,7 +188,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     perk_method = validator.perk_impl_table.get_method(receiver_type, call.method)
     if perk_method is not None:
         # Found a perk method - validate it
-        # A `&poke self` / `&peek self` perk method (#327): stamp the mode for Pass 3
+        # A `poke self` / `peek self` perk method (#327): stamp the mode for Pass 3
         # and the backend, and reject a receiver with no address for the poke form --
         # the same rule as the extension arm below.
         perk_self_mode = getattr(perk_method, "self_mode", None)
@@ -297,7 +297,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
         er.emit(validator.reporter, er.ERR.CE2008, call.loc, name=f"{display_type(receiver_type)}.{call.method}")
         return
 
-    # A `&poke self` / `&peek self` method (#327) receives its receiver's ADDRESS. Stamp
+    # A `poke self` / `peek self` method (#327) receives its receiver's ADDRESS. Stamp
     # the mode on the call node -- Pass 3 treats a poke-self call as a WRITE to the
     # receiver root (the CE2408/CE2412 gates), and the backend passes a pointer instead
     # of a value. Both read the stamp instead of re-resolving the method.

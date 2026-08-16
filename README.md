@@ -71,7 +71,7 @@ and LLVM-powered code generation.
 - Generic functions with automatic type inference and perk constraints
 - Perks (traits/interfaces) for polymorphic behavior with static dispatch
 - Error propagation operator (`??`) for ergonomic error handling
-- References (`&peek`/`&poke`) with compile-time borrow checking
+- References (`peek`/`poke`) with compile-time borrow checking
 - `Own@(T)` heap allocation for recursive types (linked lists, trees)
 - Extension methods for zero-cost method chaining
 - Closures / lambdas (`|x| expr`) with RAII-managed, move-semantics captures
@@ -215,13 +215,13 @@ fn main() i32:
 Compile-time borrow checking and RAII:
 
 ```sushi
-fn increment(&poke i32 counter) ~:
+fn increment(poke i32 counter) ~:
     counter := counter + 1
     return Result.Ok(~)
 
 fn main() i32:
     let i32 count = 0
-    increment(&poke count)
+    increment(poke count)
     println("Count: {count}")  # 1
     return Result.Ok(0)
 ```

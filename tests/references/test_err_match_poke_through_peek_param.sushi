@@ -1,19 +1,19 @@
-# #300 phase 3: a `&poke` payload binding out of a `&peek` scrutinee parameter would
+# #300 phase 3: a `poke` payload binding out of a `peek` scrutinee parameter would
 # write the caller's enum through a read-only borrow -- CE2408, the upgrade shape.
 # EXPECT_ERROR_CODE: CE2408
 enum Shape:
     Poly(i32[])
     Empty
 
-fn peek_at(&peek Shape s) i32:
+fn peek_at(peek Shape s) i32:
     match s:
-        Shape.Poly(&poke p) ->
+        Shape.Poly(poke p) ->
             p.push(9)
         Shape.Empty -> println("empty")
     return Result.Ok(0)
 
 fn main() i32:
     let Shape s = Shape.Poly(from([1]))
-    let i32 r = peek_at(&peek s).realise(0)
+    let i32 r = peek_at(peek s).realise(0)
     println(r)
     return Result.Ok(0)

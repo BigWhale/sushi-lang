@@ -7,7 +7,7 @@
 fn eat(i32[] a) i32:
     return Result.Ok(a.len())
 
-fn run_test(&peek i32[] src) i32:
+fn run_test(peek i32[] src) i32:
     let i32[] b = src
     b := from([1, 2, 3])
     println(eat(b)??)
@@ -15,5 +15,5 @@ fn run_test(&peek i32[] src) i32:
 
 fn main() i32:
     let i32[] arr = from([9])
-    println(run_test(&peek arr).realise(-1))
+    println(run_test(peek arr).realise(-1))
     return Result.Ok(0)

@@ -13,7 +13,7 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   (`typesys.owns_heap`), the compiler inserts NO implicit deep copy, and `.clone()` is the only
   deep copy in a program. The user-visible consequences:
   - **`string` moves.** `f(s)` then a use of `s` is `CE2405`. The read-only parameter idiom is
-    `&peek string`. A string bound directly from a literal owns no heap and still copies freely
+    `peek string`. A string bound directly from a literal owns no heap and still copies freely
   - **A field read, an index and a container get-out are BORROWS.** Consuming one -- a call
     argument, a constructor field, a container insert, a return, a capture -- is `CE2411`; the
     escape is `.clone()`. `HashMap.get()` / `List.get()` / `arr[i]` no longer return independent
@@ -23,7 +23,7 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   - **A by-value parameter is owned by the callee**, which frees it at scope exit -- uniformly for
     strings, function values, arrays, structs and enums, over direct, variadic and indirect calls.
     Extension/perk-method parameters stay borrows
-  - **A reference-typed `let` is rejected** (`let &peek T x = ...`, `CE2413`, #252). It used to
+  - **A reference-typed `let` is rejected** (`let peek T x = ...`, `CE2413`, #252). It used to
     compile as an unchecked alias
 - **Generic syntax is now `@(...)`, not `<...>`** (#235). This applies to every user-facing position:
   type references (`List@(i32)`, `Result@(T, E)`, `Maybe@(T)`, `Own@(T)`, `HashMap@(K, V)`), generic
@@ -57,9 +57,9 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
   `extend f64 clone()` and `extend string clone()` are `CE2097`, on the same footing as
   `extend P clone()`. A method call on a function value is validated at all now: `g.shout()`
   reports `CE2008` instead of an internal error
-- **Type-argument inference through a borrow.** `fn f@(T)(&peek T x)` called as `f(&peek v)` infers
-  `T`; `&peek Pair@(A, B)` binds both. The instantiation collector also infers from a `.clone()`
-  argument (`f(p.clone())`). A generic that only reads its argument takes it as `&peek T`
+- **Type-argument inference through a borrow.** `fn f@(T)(peek T x)` called as `f(peek v)` infers
+  `T`; `peek Pair@(A, B)` binds both. The instantiation collector also infers from a `.clone()`
+  argument (`f(p.clone())`). A generic that only reads its argument takes it as `peek T`
 - **A rebind re-initializes its binding.** `f(s); s := "new"; println(s)` compiles and runs: the
   rebind clears the move and the scope exit frees the new value. The rebind also frees the OLD
   value where the binding still owned it (a string buffer and a closure environment were not freed
@@ -126,7 +126,7 @@ the leak/RAII cluster. Everything below landed after the 0.10.0 release on 2026-
 - The borrow checker now has an arm for every expression node (`CE0125` backstop). The previous
   silent fall-through meant *no borrow checking at all* for unhandled nodes -- the root cause of a
   bloom use-after-free that segfaulted, an unchecked range bound, and unchecked perk bodies
-- `.destroy()` through a `&poke` parameter now reaches the caller, via a cross-unit destroy-effect
+- `.destroy()` through a `poke` parameter now reaches the caller, via a cross-unit destroy-effect
   summary. This also fixed a pre-existing false positive where a `.destroy()` in one `if` arm leaked
   into its sibling arms
 - The incremental cache key folds in a compiler-source digest, so editing any compiler `.py` is a
@@ -366,7 +366,7 @@ CI/docs improvements.
 ### Fixed
 - One-argument `Result<T>` annotation was rejected (CE2001); it now normalizes to
   `Result<T, StdError>` at parse time
-- `foreach` / `.iter()` over a borrowed dynamic array (`&peek`/`&poke T[]`) failed with CE0042
+- `foreach` / `.iter()` over a borrowed dynamic array (`peek`/`poke T[]`) failed with CE0042
 - Higher-order function call-through (`??` through an `fn`-typed parameter) was order-dependent
   (CE0055 depending on definition order)
 - `Maybe<enum>.realise(default)` with a non-primitive (enum) payload misrouted to the `Result`
@@ -642,23 +642,23 @@ correctness fixes.
 
 ### Added
 - Dual-mode borrow syntax replacing single `&` operator
-  - `&peek T`: Read-only borrow (multiple allowed simultaneously)
-  - `&poke T`: Read-write borrow (exclusive access)
-- Type coercion: `&poke T` can be passed where `&peek T` is expected
+  - `peek T`: Read-only borrow (multiple allowed simultaneously)
+  - `poke T`: Read-write borrow (exclusive access)
+- Type coercion: `poke T` can be passed where `peek T` is expected
 - New error codes for borrow checking:
-  - CE2407: Cannot have &peek and &poke borrows simultaneously
-  - CE2408: Cannot modify through &peek reference (read-only)
+  - CE2407: Cannot have peek and poke borrows simultaneously
+  - CE2408: Cannot modify through peek reference (read-only)
 
 ### Changed
 - Reference syntax now requires explicit borrow mode (peek or poke)
   - Old: `fn process(&i32 x) ~`
-  - New: `fn process(&poke i32 x) ~` or `fn process(&peek i32 x) ~`
+  - New: `fn process(poke i32 x) ~` or `fn process(peek i32 x) ~`
 - Borrow checker updated for dual-mode semantics
-- All tests migrated to new &peek/&poke syntax (29 files)
+- All tests migrated to new peek/poke syntax (29 files)
 
 ### Breaking Changes
 - Plain `&T` syntax removed (no backward compatibility)
-- All existing code using `&T` must be updated to `&peek T` or `&poke T`
+- All existing code using `&T` must be updated to `peek T` or `poke T`
 
 ## [0.1.0] - 2025-11-27
 

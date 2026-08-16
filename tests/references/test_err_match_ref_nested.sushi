@@ -13,7 +13,7 @@ enum Outer:
 fn main() i32:
     let Outer o = Outer.Wrap(Inner.Deep(from([1])))
     match o:
-        Outer.Wrap(Inner.Deep(&poke p)) ->
+        Outer.Wrap(Inner.Deep(poke p)) ->
             p.push(9)
         Outer.Wrap(Inner.Nil) -> println("nil")
         Outer.Nothing -> println("none")

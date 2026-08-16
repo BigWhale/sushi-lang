@@ -54,7 +54,7 @@ class ScopeAnalyzer:
         # use resolving to a scope BELOW a collector's boundary is captured by that
         # lambda (and every enclosing lambda whose boundary is also above it).
         self._capture_collectors: List[dict] = []
-        # True while checking a `&poke self` method body (#327): `self := v` is then
+        # True while checking a `poke self` method body (#327): `self := v` is then
         # the store-through write, not the forbidden receiver rebind.
         self._self_is_poke: bool = False
 
@@ -148,7 +148,7 @@ class ScopeAnalyzer:
 
         This is the ONE place that answers "what kind of name is this", because this pass
         is the one that owns names. `_borrow_variable` used to be a copy of `_use_variable`
-        that had lost every case here, which is why `&peek SOME_CONST` reported CE1001
+        that had lost every case here, which is why `peek SOME_CONST` reported CE1001
         about a constant declared two lines above.
 
         A local of the same name SHADOWS a constant, a function name or an FFI namespace,
@@ -185,7 +185,7 @@ class ScopeAnalyzer:
         """A borrow needs a LOCAL. Mark it used, or say which way it is not one.
 
         A BORROW IS A USE. This used to set a separate `borrowed` flag and deliberately
-        leave `used` false, so a variable only ever passed by `&peek`/`&poke` was reported
+        leave `used` false, so a variable only ever passed by `peek`/`poke` was reported
         as CW1003 ("only used through borrows ... may indicate unnecessary indirection").
 
         That advice became wrong when a `match`/`foreach` binding of an owning type stopped
@@ -260,7 +260,7 @@ class ScopeAnalyzer:
         self._push_scope()
 
         # A plain function has no receiver; a stale flag from a previously checked
-        # `&poke self` method must not make `self := v` legal here (#327).
+        # `poke self` method must not make `self := v` legal here (#327).
         self._self_is_poke = False
 
         # A (possibly nested) function starts a fresh loop context: a
@@ -288,7 +288,7 @@ class ScopeAnalyzer:
         self._push_scope()
 
         # Add implicit 'self' parameter first - this is the receiver of the method
-        # It should not be declared explicitly by the user. A `&poke self` receiver
+        # It should not be declared explicitly by the user. A `poke self` receiver
         # (#327) is rebindable (`self := 0` writes the caller's primitive).
         self._self_is_poke = getattr(ext, "self_mode", None) == "poke"
         self._declare_variable("self", None)
@@ -310,7 +310,7 @@ class ScopeAnalyzer:
             self._push_scope()
 
             # Add implicit 'self' parameter - represents the target type instance.
-            # `&poke self` (#327) makes it rebindable, as in extension methods.
+            # `poke self` (#327) makes it rebindable, as in extension methods.
             self._self_is_poke = getattr(method, "self_mode", None) == "poke"
             self._declare_variable("self", None)
 
@@ -355,8 +355,8 @@ class ScopeAnalyzer:
         if isinstance(stmt.target, Name):
             var_name = stmt.target.id
             # A rebind of 'self' is not allowed for the classic read-only receiver --
-            # but a `&poke self` method (#327) writes its primitive receiver exactly
-            # this way (`self := 0`), the same store-through a `&poke T` parameter's
+            # but a `poke self` method (#327) writes its primitive receiver exactly
+            # this way (`self := 0`), the same store-through a `poke T` parameter's
             # rebind performs.
             if var_name == "self" and not self._self_is_poke:
                 er.emit(self.reporter, er.ERR.CE1002, stmt.loc, name=var_name)
@@ -411,7 +411,7 @@ class ScopeAnalyzer:
         # Check the iterable expression first (in outer scope)
         self._check_expression(stmt.iterable)
 
-        # A `&poke` element binding (#300 phase 1) writes through a pointer into the
+        # A `poke` element binding (#300 phase 1) writes through a pointer into the
         # container's storage, so the container must be a LOCAL -- a constant is emitted
         # into `.rodata` and a store through it is undefined behaviour, not a diagnostic
         # (the CE2096 rationale). This pass owns the "what kind of name is this"
@@ -654,9 +654,9 @@ class ScopeAnalyzer:
                 self._check_expression(expr.expr)
             case Borrow():
                 # Borrow expression: &expr. What is borrowed is the ROOT of the place --
-                # `&peek cfg.port` borrows out of `cfg` -- so the whole chain resolves
+                # `peek cfg.port` borrows out of `cfg` -- so the whole chain resolves
                 # through the one borrow-specific arm. Walking to the base here is what
-                # gives `&peek nope.x` the same single diagnostic as `&peek nope`; it used
+                # gives `peek nope.x` the same single diagnostic as `peek nope`; it used
                 # to fall through to the ordinary member-access walk and be reported twice.
                 base = expr.expr
                 while isinstance(base, MemberAccess):

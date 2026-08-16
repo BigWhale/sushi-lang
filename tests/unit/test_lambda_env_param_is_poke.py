@@ -1,4 +1,4 @@
-"""The lifted closure environment is a `&poke` borrow, not a `&peek` one.
+"""The lifted closure environment is a `poke` borrow, not a `peek` one.
 
 Lambda lifting turns a closure into a top-level function whose first parameter is the
 heap environment, and rewrites every captured read into a field access on it. So a
@@ -6,7 +6,7 @@ capture mutation -- `xs.push(x)`, legal by design since T1.5, because the enviro
 OWNS a move-captured `List@(T)` -- becomes `__closure_env.xs.push(x)`, a write THROUGH
 that parameter.
 
-It was declared `&peek` until the `&peek` write rule became total (FIX.md R1). Nothing
+It was declared `peek` until the `peek` write rule became total (FIX.md R1). Nothing
 enforced read-only before that, so the untruthful mode had no consequence; once it was
 enforced, it turned two legal shapes into CE2408. The declaration was corrected rather
 than the rule carved out, because the environment is the closure's own storage and not a
@@ -14,7 +14,7 @@ borrow of any caller's value.
 
 This test pins the DECLARATION, where the behavioural tests
 (`tests/closures/test_closure_list_mutate.sushi` for the mutating method,
-`tests/closures/test_closure_env_poke_borrow.sushi` for the `&poke` borrow of a capture)
+`tests/closures/test_closure_env_poke_borrow.sushi` for the `poke` borrow of a capture)
 pin the consequence. Both halves are worth having: the mode is invisible in codegen -- no
 backend code reads `ReferenceType.mutability` -- so nothing but a semantics rule can ever
 catch a silent flip back.
@@ -68,7 +68,7 @@ def test_lifted_env_param_is_a_poke_reference(analyze_program):
         assert env_param.ty.mutability is BorrowMode.POKE, (
             f"{fn.name}: the environment parameter is &{env_param.ty.mutability}, but the "
             f"lifted body writes through it whenever the closure mutates a capture. "
-            f"&peek makes that a CE2408"
+            f"peek makes that a CE2408"
         )
 
 

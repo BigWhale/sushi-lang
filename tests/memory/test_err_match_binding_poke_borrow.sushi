@@ -1,4 +1,4 @@
-# Issue #253: a &poke borrow of a match binding hands out a mutable view of a
+# Issue #253: a poke borrow of a match binding hands out a mutable view of a
 # private copy. The callee's writes are lost, so the borrow must be rejected.
 # EXPECT_ERROR_CODE: CE2414
 
@@ -6,7 +6,7 @@ enum Shape:
     Poly(i32[])
     Empty
 
-fn grow(&poke i32[] arr) ~:
+fn grow(poke i32[] arr) ~:
     arr.push(9)
     return Result.Ok(~)
 
@@ -14,7 +14,7 @@ fn main() i32:
     let Shape s = Shape.Poly(from([1, 2, 3]))
     match s:
         Shape.Poly(p) ->
-            let Result@(~, StdError) r = grow(&poke p)
+            let Result@(~, StdError) r = grow(poke p)
             if (r):
                 println("grown")
         Shape.Empty -> println("empty")

@@ -43,8 +43,8 @@ function_def: PUBLIC? FN NAME [type_params] "(" [parameters] ")" type? ["|" type
 
 parameters: param ("," param)*
 param: typed_param | variadic_param
-     | BIT_AND BORROW_MODE NAME -> self_param
-typed_param: type NAME
+     | BORROW_MODE NAME -> self_param
+typed_param: NOM? type NAME
 variadic_param: ELLIPSIS type NAME
 
 ?statement: function_def
@@ -79,7 +79,7 @@ else_part: ELSE ":" block
 
 while_stmt: WHILE "(" expr ")" ":" block
 foreach_stmt: FOREACH "(" [type] NAME "in" expr ")" ":" block
-            | FOREACH "(" BIT_AND BORROW_MODE NAME "in" expr ")" ":" block -> foreach_ref
+            | FOREACH "(" BORROW_MODE NAME "in" expr ")" ":" block -> foreach_ref
 expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block
 
 match_stmt: MATCH expr ":" _NEWLINE _INDENT match_arm+ _DEDENT
@@ -88,15 +88,15 @@ match_arm_inline: (return_stmt | print_stmt | println_stmt | call_stmt | break_s
 pattern: NAME "." NAME ["(" [pattern_list] ")"]
 pattern_list: pattern_item ("," pattern_item)*
 pattern_item: pattern | NAME | wildcard_pattern | own_pattern
-            | BIT_AND BORROW_MODE NAME -> ref_binding
+            | BORROW_MODE NAME -> ref_binding
 own_pattern: NAME "(" pattern_item ")"  -> own_pattern_call
 wildcard_pattern: UNDERSCORE
 
 break_stmt: BREAK _NEWLINE
 continue_stmt: CONTINUE _NEWLINE
 
-?type: BIT_AND BORROW_MODE type -> reference_t
-     | FN "(" [type_list] ")" "->" type ["|" type] -> fn_type_t
+?type: BORROW_MODE type -> reference_t
+     | FN "(" [fn_param_types] ")" "->" type ["|" type] -> fn_type_t
      | atom_type "[" INT "]" -> array_t
      | atom_type "[" "]" -> dynamic_array_t
      | atom_type
@@ -120,6 +120,12 @@ continue_stmt: CONTINUE _NEWLINE
 
 type_list: type ("," type)*
 
+# A function type's parameter list carries a mode per parameter, unlike a generic
+# argument list. `peek` / `poke` ride on the type; only `nom` needs a slot of its
+# own (docs/design/borrow-model.md S6).
+fn_param_types: fn_param_type ("," fn_param_type)*
+fn_param_type: NOM? type
+
 ?expr: or_expr
 
 or_expr: xor_expr (OR xor_expr)*
@@ -139,7 +145,8 @@ cast: add (AS type)*
 ?unary: "-" unary        -> neg
       | NOT unary        -> not
       | BITNOT unary     -> bitnot
-      | BIT_AND BORROW_MODE unary    -> borrow
+      | BORROW_MODE unary    -> borrow
+      | NOM unary            -> consume
       | postfix
 
 ?postfix: atom (call | method_call | member_access | index | try_op)*    -> maybe_call
@@ -190,7 +197,7 @@ lambda_block: BIT_OR lambda_params BIT_OR lambda_ret? ":" block
 
 lambda_params: BITNOT                              -> lambda_no_params
              | lambda_param ("," lambda_param)*
-lambda_param: type NAME    -> lambda_typed_param
+lambda_param: NOM? type NAME    -> lambda_typed_param
             | NAME          -> lambda_bare_param
 lambda_ret: "->" type ["|" type]
 
@@ -279,6 +286,7 @@ BREAK.2: /break\b/
 CONTINUE.2: /continue\b/
 AS.2: /as\b/
 BORROW_MODE.2: /peek\b/ | /poke\b/
+NOM.2: /nom\b/
 STDIN.2: /stdin\b/
 STDOUT.2: /stdout\b/
 STDERR.2: /stderr\b/

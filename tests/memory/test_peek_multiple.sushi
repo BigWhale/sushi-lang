@@ -1,10 +1,10 @@
 # EXPECT_STDOUT_EXACT: "42\n"
 # EXPECT_RUNTIME_EXIT: 0
-# Test multiple &peek borrows allowed
+# Test multiple peek borrows allowed
 # Multiple read-only borrows should work
 # EXPECT_NO_LEAKS: true
 
-fn sum_two(&peek i32 a, &peek i32 b) i32:
+fn sum_two(peek i32 a, peek i32 b) i32:
     return Result.Ok(a + b)
 
 fn main() i32:
@@ -13,8 +13,8 @@ fn main() i32:
     # Print num directly to avoid CW1003 warning
     println(num)
 
-    # Multiple &peek borrows of the same variable - should be allowed
-    let Result@(i32, StdError) sum_result = sum_two(&peek num, &peek num)
+    # Multiple peek borrows of the same variable - should be allowed
+    let Result@(i32, StdError) sum_result = sum_two(peek num, peek num)
     let i32 result = sum_result.realise(0)
 
     if (result == 84):

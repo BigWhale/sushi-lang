@@ -350,7 +350,7 @@ def register_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
 
                 validator.variable_types[binding] = resolved_type
         elif isinstance(binding, RefBinding):
-            # `Variant(&poke x)` (#300 phase 3): the binding IS a reference into the
+            # `Variant(poke x)` (#300 phase 3): the binding IS a reference into the
             # scrutinee's payload storage, so register the reference type -- every
             # consumer that asks "is this name a borrow?" answers truthfully, and
             # inference auto-derefs the name.
@@ -406,7 +406,7 @@ def register_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
                     # Simple variable binding
                     if inner_pattern != "_":
                         if binding.inner_borrow is not None:
-                            # `Own(&poke x)` (#300 phase 1): the binding IS a reference
+                            # `Own(poke x)` (#300 phase 1): the binding IS a reference
                             # to the pointee, so register the reference type -- every
                             # consumer that asks "is this name a borrow?" then answers
                             # truthfully, and inference auto-derefs the name.
@@ -468,7 +468,7 @@ def get_pattern_signature(pattern: 'Pattern') -> str:
             else:
                 # A RefBinding (#300 phase 3) binds like a plain name: the marker changes
                 # how the binding is materialized, not which values the arm matches, so
-                # `Poly(p)` and `Poly(&poke p)` are duplicates of each other.
+                # `Poly(p)` and `Poly(poke p)` are duplicates of each other.
                 binding_signatures.append("_")
         signature += "(" + ",".join(binding_signatures) + ")"
 

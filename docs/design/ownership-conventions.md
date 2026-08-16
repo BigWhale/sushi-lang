@@ -167,7 +167,7 @@ Three, not four:
 | provenance | meaning | expression shapes |
 |---|---|---|
 | **OWNED** | a registered owner in this scope | a bare `Name` bound by `let` or a by-value parameter |
-| **BORROWED** | names storage owned elsewhere, for a shorter lifetime | a `match` payload binding, a `foreach` binding, a `&peek`/`&poke` parameter, a `let` bound from any of these, **and every read THROUGH a still-live owner** — `s.field`, `own.get()`, `arr[i]`, `list.get(i)??` |
+| **BORROWED** | names storage owned elsewhere, for a shorter lifetime | a `match` payload binding, a `foreach` binding, a `peek`/`poke` parameter, a `let` bound from any of these, **and every read THROUGH a still-live owner** — `s.field`, `own.get()`, `arr[i]`, `list.get(i)??` |
 | **FRESH** | nothing owns it yet | a constructor, a call result, `.clone()`, a literal, `List.pop()` (which REMOVES the element, so the container stops owning it) |
 
 **`THROUGH_OWNER` merged into `BORROWED`.** The design as originally written kept these as separate
@@ -196,11 +196,11 @@ existed. Per §8 it is not a code-generation question at all — it is rejected,
 explicit escape.
 
 **A reference has the type class of its REFERENT.** The two halves of a decision must not answer
-each other's question: the borrow is the PROVENANCE (a `&peek`/`&poke` parameter is BORROWED, per
+each other's question: the borrow is the PROVENANCE (a `peek`/`poke` parameter is BORROWED, per
 the table in §4.2), and the type class asks only "does this value own heap?". `type_class_of` used
 to short-circuit any `ReferenceType` to PLAIN — reading the borrow into the ownership answer — and
 that made the (BORROWED, MOVE) cell UNREACHABLE through a reference. The checker then classified
-`f(a)` on a `&poke i32[]` parameter as ADOPT and stayed silent while the backend classified the
+`f(a)` on a `poke i32[]` parameter as ADOPT and stayed silent while the backend classified the
 same transfer from the TARGET type and answered REJECT. One question, two answers: #301's CE0129
 ICE, #310's compile-clean double free through a `let` bound from a reference, #311's ref-to-ref
 rebind. A reference now classifies as `referenced_type`, so all three are the ordinary CE2411 and
@@ -234,11 +234,11 @@ It is a **relational** error, so it carries a second location per the tier-3 rul
 the use, and the binding site it borrows from (or the owner's declaration, for a direct read like
 `h.inner`). Rendering it with one location is a bug.
 
-**Mutating through a binding needs no new code for the `&peek`/`&poke`-parameter case.** A
+**Mutating through a binding needs no new code for the `peek`/`poke`-parameter case.** A
 reference parameter is read-only/exclusive per the ordinary borrow rules, so a write through a
-`&peek` one is **CE2408** ("cannot modify through &peek reference"). That rule became TOTAL in
+`peek` one is **CE2408** ("cannot modify through peek reference"). That rule became TOTAL in
 R1: the same three write shapes CE2414 rejects for a binding — a mutating method on or under it,
-a field assignment, and a `&poke` borrow of it — are rejected for a `&peek` reference, next to
+a field assignment, and a `poke` borrow of it — are rejected for a `peek` reference, next to
 the rebind that was checked before. One helper, four call sites, keyed on `_MUTATING_METHODS`
 so the method list is never copied. A *bound* borrow
 (a `let` reading through an owner, §8) gets its own diagnostic instead — **CE2412**, "cannot mutate
@@ -380,7 +380,7 @@ the sites that used to spell `("Own<", "List<", "HashMap<")` by hand now share
 
 **A `match` payload binding and a `foreach` loop binding are read-only borrows of storage their
 scrutinee or container still owns.** Reads are free and copy nothing. Writing through one is
-**CE2414** — a mutating method, a field assignment, and a `&poke` borrow of the binding are all
+**CE2414** — a mutating method, a field assignment, and a `poke` borrow of the binding are all
 rejected (#253; the compiled binding is a private copy, so such a write could never reach the
 owner). A rebind of the binding ITSELF (`n := 99`) stays legal: it re-initializes a local, the
 Rust `Some(mut n) => n = 99` shape, and does not claim to write through. Consuming a binding
@@ -458,18 +458,18 @@ that before this design shipped was already double-freeing.
 
 **How to opt into a mutable binding** — DECIDED and SHIPPED, all three phases (#300,
 2026-08-16). The spelling is the binding site, with Sushi's own vocabulary:
-`foreach(&poke r in rows.iter())`, `Own(&poke x)`, and a top-level match binding
-`Shape.Poly(&poke p)` bind a POINTER into the owner's storage, so a write through the
-binding reaches the owner in place; `&peek` is the copy-free read-only twin, and value and
+`foreach(poke r in rows.iter())`, `Own(poke x)`, and a top-level match binding
+`Shape.Poly(poke p)` bind a POINTER into the owner's storage, so a write through the
+binding reaches the owner in place; `peek` is the copy-free read-only twin, and value and
 reference bindings mix in one pattern. The binding registers with its full `ReferenceType`,
-which wires in every existing rule by construction: a write through `&peek` is CE2408, a
+which wires in every existing rule by construction: a write through `peek` is CE2408, a
 consuming use is CE2411, and the owner is FROZEN for the binding's scope (CE2412) exactly
 like a `let`-borrow's — including the tag-change hazard (rebinding the scrutinee under a
 live payload borrow, Rust's E0506). The match half rests on the phase-2 enum layout
 (`{i32 tag, [K x i64] data}`, naturally aligned payload offsets from one authority), which
 is what retired the `align=1` family and made an interior payload pointer safe to hand out.
 Fences: an iterable whose items have no address (a range, `.entries()`) is **CE2423**; a
-`&poke` binding out of a `&peek` owner is CE2408; out of a constant is CE2400; a TEMPORARY
+`poke` binding out of a `peek` owner is CE2408; out of a constant is CE2400; a TEMPORARY
 scrutinee is CE2404 (no storage to point into); and a reference binding in a NESTED pattern
 is **CE2424** — nested extraction walks through temporary copies, so a pointer into one is
 a silently lost write. Rust's scrutinee-side spelling (`match &mut x`) stays
@@ -484,7 +484,7 @@ conflate:
   `let` of one bind rather than own — no new syntax needed, and `.clone()` (already the escape a hard
   error would have required) is the one this ships with.
 - **#252** is a distinct, later request: a first-class *reference-typed* local binding
-  (`let &peek T x = ...`) as its own kind of value. That is NOT what #242 needed and is NOT what §8
+  (`let peek T x = ...`) as its own kind of value. That is NOT what #242 needed and is NOT what §8
   implements — §8's binding still declares an ordinary value type `T`; it is tracked as a borrow by
   provenance, not by a reference type. #252 was assessed and **rejected** as **CE2413**: the form
   parses but would add a second, overlapping way to say the same thing the implicit binding already
@@ -499,24 +499,24 @@ CE2411, both escape with `.clone()` — which is exactly what Rust requires
 
 ## 8.5 Where a reference type may appear (decided, R4)
 
-The grammar's `?type` rule is recursive and universal, so `&peek T` / `&poke T` parses in EVERY
+The grammar's `?type` rule is recursive and universal, so `peek T` / `poke T` parses in EVERY
 type position. Semantics defines **two**, and rejects the other six at the declaration until each
 is designed. A borrow is a promise about a lifetime, and every rejected position is one where
 nothing relates the borrow to the value it names.
 
 | position | status | code |
 |---|---|---|
-| function parameter — `fn f(&peek T x)` | **supported** — the position the whole subsystem is built for | — |
-| parameter inside a function type — `fn(&peek i32) -> i32`, and the lambda `\|&peek i32 x\|` that satisfies it | **supported** (promoted to tested support by R4; it had worked untested) | — |
-| `let` binding — `let &peek T x = ...` | rejected | CE2413 (#252) |
+| function parameter — `fn f(peek T x)` | **supported** — the position the whole subsystem is built for | — |
+| parameter inside a function type — `fn(peek i32) -> i32`, and the lambda `\|peek i32 x\|` that satisfies it | **supported** (promoted to tested support by R4; it had worked untested) | — |
+| `let` binding — `let peek T x = ...` | rejected | CE2413 (#252) |
 | struct field | rejected | CE2415 (#315) |
 | enum variant payload | rejected | CE2416 (#316) |
 | return type | rejected | CE2417 (#314) |
-| nested reference — `&peek &peek T` | rejected | CE2418 (#317) |
-| generic type argument — `List@(&peek T)` | rejected | CE2419 (#318) |
-| extension / perk-impl target — `extend &peek T` | rejected | CE2420 (#319) |
+| nested reference — `peek peek T` | rejected | CE2418 (#317) |
+| generic type argument — `List@(peek T)` | rejected | CE2419 (#318) |
+| extension / perk-impl target — `extend peek T` | rejected | CE2420 (#319) |
 | FFI signature | rejected | CE5003 |
-| variadic element — `...&peek T` | rejected | CE0114 |
+| variadic element — `...peek T` | rejected | CE0114 |
 
 Three notes on the shape of this, because each was a decision rather than a detail:
 
@@ -531,8 +531,8 @@ Three notes on the shape of this, because each was a decision rather than a deta
   out, which is what the registry's long-form text carries, and each will be lifted separately as
   its feature is designed — a shared code could only be retired all at once. Precedents: foreign
   `ptr` (CE5002/5008/5009/5012) and the variadic marker (CE0114/0115/0116).
-- **No `Maybe`/`Result` exemption on CE2419**, unlike the `ptr` twin CE5012. `Maybe@(&peek T)` and
-  `Result@(&peek T, E)` are exactly how a returned borrow escaped into a `match` (#314), so
+- **No `Maybe`/`Result` exemption on CE2419**, unlike the `ptr` twin CE5012. `Maybe@(peek T)` and
+  `Result@(peek T, E)` are exactly how a returned borrow escaped into a `match` (#314), so
   exempting them would leave open the hole CE2417 closes.
 
 Rejecting a position is reported and then **kept** where the declaration is a table entry (a
@@ -573,7 +573,7 @@ things a borrow must not do were both accepted and both corrupted memory:
   now **CE2421** for the receiver and **CE2422** for a by-value parameter, with the same
   relational rendering CE2414 uses, and the same three shapes CE2414 rejects: a mutating
   method under it (`self.items.push(9)` — which did not even reach codegen, it was a
-  CE0129), a field assignment, and a `&poke` borrow of it.
+  CE0129), a field assignment, and a `poke` borrow of it.
 - **Handing one to a position that takes ownership.** The value gets a second owner and
   both free it. `return self`, `eat(self)`, `sink.push(self)` and all three again for an
   explicit parameter were compile-clean double frees (#333); two of them printed the
@@ -615,20 +615,20 @@ as `return self`. `.clone()` on a `string` now copies unconditionally; the destr
 keeps its guard. A clone that sometimes aliases was a hole in the ".clone() is the only
 deep copy" contract, independent of #338.
 
-The working version is spelled **`&poke self`** (#327, SHIPPED 2026-08-16), an opt-in
+The working version is spelled **`poke self`** (#327, SHIPPED 2026-08-16), an opt-in
 first parameter carrying the borrow vocabulary the language already has —
 
 ```sushi
-extend Counter bump(&poke self) ~:
+extend Counter bump(poke self) ~:
     self.n := self.n + 1
     return ~
 ```
 
 — the receiver arrives by POINTER, so the write reaches the caller's value and an owning
 field's old buffer is freed exactly once. It inherits the write gates at the call site,
-because a `&poke self` call IS a write to the receiver root: through a `&peek` parameter
+because a `poke self` call IS a write to the receiver root: through a `peek` parameter
 it is CE2408, on a binding CE2414, on a temporary CE2404, on a constant CE2400.
-`&peek self` states the read-only default explicitly; a perk declares the mode in its
+`peek self` states the read-only default explicitly; a perk declares the mode in its
 signature and the impl must match (CE4004); the receiver stays a borrow for consuming
 purposes (CE2411, `.clone()` escapes); and the parameter is CE2425 anywhere but first in
 an extension/perk method. This followed the order #252 → CE2413 and #253 → CE2414 set:
@@ -636,14 +636,14 @@ reject the unchecked form first, then ship the feature.
 
 **Reads are unaffected, and one of them became expressible.** A field read, a read-only
 method under the receiver, `.clone()` of an owning field, and `.clone()` of the whole
-receiver all stay legal — the last is the escape CE2411 names. `&peek self` and
-`&peek self.field` now WORK; they used to be
+receiver all stay legal — the last is the escape CE2411 names. `peek self` and
+`peek self.field` now WORK; they used to be
 `CE2400: cannot borrow 'self': variable does not exist`, which was true of the borrow
 checker's state and puzzling to anyone who could see `self` on the line above. And a
 PLAIN parameter — an i32, a struct of primitives — was never affected in either
 direction: it copies, and (BORROWED, PLAIN) adopts.
 
-**Four read-only receivers, one gate.** A `match`/`foreach` binding (CE2414), a `&peek`
+**Four read-only receivers, one gate.** A `match`/`foreach` binding (CE2414), a `peek`
 reference (CE2408), the method receiver (CE2421) and a by-value method parameter (CE2422)
 are the same rule with four rationales: a write through any of them cannot reach the value
 it appears to write. Each was found as its own bug, and each time all three write shapes
@@ -653,7 +653,7 @@ one row rather than a fifth walk; `tests/unit/test_readonly_receiver_matrix.py` 
 twelve cells and fails if a kind in the table has no row in the matrix. The codes stay
 separate for the reason the six position codes do (§8.5): each carries its own escape.
 Here the escapes are what separate the last two — a by-value parameter is redeclared
-`&poke T`, and a receiver `&poke self` (#327, shipped 2026-08-16).
+`poke T`, and a receiver `poke self` (#327, shipped 2026-08-16).
 
 The mechanisms themselves — the six ways a borrow is created, their extents, and the gate
 that backs each rule — are `docs/design/borrowing.md`.
