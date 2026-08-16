@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 from lark import Tree, Token
+from sushi_lang.semantics.param_modes import ParamMode, normalize_modes
 from sushi_lang.semantics.typesys import FunctionType, UnknownType, Type
 
 if TYPE_CHECKING:
@@ -60,10 +61,11 @@ def parse_function_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]
     else:
         err_type = UnknownType("StdError")
 
-    # `nom_flags` is collected but not carried yet: phase 3 gives FunctionType its
-    # `param_modes` field. Until then a function type means what it meant before.
     return FunctionType(
         param_types=tuple(param_types),
         ok_type=ok_type,
         err_type=err_type,
+        param_modes=normalize_modes(param_types, [
+            ParamMode.NOM if flag else ParamMode.BORROW for flag in nom_flags
+        ]),
     )

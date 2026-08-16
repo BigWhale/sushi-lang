@@ -181,6 +181,8 @@ class Param:
                                       # `ty` holds the collected DynamicArrayType(T)
     is_pack: bool = False             # True for a v2 type-pack value-param (...Ts args);
                                       # `ty` is the bare pack type-param reference (UnknownType)
+    is_nom: bool = False              # `nom T name`: the CALLEE takes ownership. Read it
+                                      # through semantics/param_modes.py, never directly.
 
 
 @dataclass
@@ -266,6 +268,15 @@ class FunctionTable:
             True if function is stdlib, False otherwise
         """
         return (module_path, function_name) in self._stdlib_functions
+
+    def stdlib_by_name(self) -> Dict[str, Any]:
+        """Every imported stdlib function, keyed by its BARE name.
+
+        A call site writes the bare name (`chdir(p)`), so this is the shape the mode
+        resolver needs to tell a stdlib callee from a user one -- and to find the
+        collecting slot of a stdlib variadic such as `run`.
+        """
+        return {name: func for (_module, name), func in self._stdlib_functions.items()}
 
 
 @dataclass
@@ -823,7 +834,8 @@ class FunctionCollector:
                     name_span=param.name_span,
                     type_span=param.type_span,
                     index=param.index,
-                    is_variadic=getattr(param, "is_variadic", False)
+                    is_variadic=getattr(param, "is_variadic", False),
+                    is_nom=getattr(param, "is_nom", False),
                 ))
 
             generic_method = GenericExtensionMethod(

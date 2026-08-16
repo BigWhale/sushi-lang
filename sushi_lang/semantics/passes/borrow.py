@@ -69,6 +69,7 @@ from sushi_lang.semantics.ast import (
     While,
 )
 from sushi_lang.semantics.typesys import BorrowMode, ReferenceType, DynamicArrayType, Type
+from sushi_lang.semantics.param_modes import CalleeKind, CalleeModes, ParamMode
 from sushi_lang.semantics.ownership import (
     ConsumingUse, Ownership, Provenance, TypeClass, classify, is_get_out_container,
     type_class_of,
@@ -84,6 +85,26 @@ from sushi_lang.semantics.error_reporter import PassErrorReporter
 # so there is nothing for the borrow checker to do with them. Listing them EXPLICITLY is
 # what lets _check_expr's `else` be a hard error instead of a silent skip.
 _INERT_EXPRS = (IntLit, FloatLit, BoolLit, BlankLit, StringLit, DynamicArrayNew)
+
+
+def _build_callee_modes(tables) -> CalleeModes:
+    """Build the mode resolver from Pass 0's tables.
+
+    A missing table means "recognise nothing", which makes every callee a FUNCTION --
+    the answer the compiler gave every call before the mode existed.
+    """
+    if tables is None:
+        return CalleeModes()
+    funcs = getattr(tables, "funcs", None)
+    struct_names = set(getattr(getattr(tables, "structs", None), "by_name", None) or ())
+    struct_names |= set(
+        getattr(getattr(tables, "generic_structs", None), "by_name", None) or ())
+    stdlib_sigs = funcs.stdlib_by_name() if funcs is not None else {}
+    return CalleeModes(
+        func_sigs=getattr(funcs, "by_name", None) or {},
+        struct_names=struct_names,
+        stdlib_sigs=stdlib_sigs,
+    )
 
 
 @dataclass
@@ -596,6 +617,10 @@ class BorrowChecker:
         # a `let`-borrow binding a LEXICAL lifetime. `active_borrows` cannot serve: it is
         # emptied after every statement, and a binding outlives the statement that made it.
         self._scope_binding_borrows: list[list[tuple[str, str]]] = []
+        # THE mode resolver. Which kind of callee a `Call` names, and what each of its
+        # parameters declares. Built from the same tables the backend's copy reads, so
+        # the two halves cannot reach different answers (docs/design/borrow-model.md S1).
+        self.callee_modes = _build_callee_modes(tables)
 
     def run(self, program: Program) -> None:
         """Run borrow checking on the entire program."""
@@ -1394,13 +1419,10 @@ class BorrowChecker:
             for arg in expr.args:
                 self._check_expr(arg)
 
-            # A by-value owning argument (dynamic array / List / Own) is MOVED into the
-            # callee. Borrows are spelled explicitly at the call site (`peek x` is a
-            # Borrow node, not a Name), so a bare owning Name argument is by definition
-            # by-value and therefore moved. This holds uniformly for ordinary function
-            # calls, indirect closure calls, and struct constructors.
-            for arg in expr.args:
-                self._consume(arg, ConsumingUse.CALL_ARG)
+            # An argument is consumed if and only if the parameter it lands on DECLARES
+            # a consume. The callee's kind decides where the declaration is read from
+            # (docs/design/borrow-model.md S5); the mode decides what happens.
+            self._consume_call_args(expr)
 
             # A callee that destroys its `poke` parameter destroys the CALLER's value
             # (#168). Without this the borrow checker only ever saw a literal
@@ -1451,13 +1473,15 @@ class BorrowChecker:
                     self._consume(arg, ConsumingUse.ENUM_PAYLOAD)
             elif getattr(expr, "callee_fn_type", None) is not None:
                 # An indirect call through a fn-typed FIELD (`obj.handler(x)`, `env.f(x)`)
-                # is a real call: a by-value argument transfers to the callee exactly like
-                # the Call arm's (the 2026-08-14 ruling -- the callee owns its by-value
-                # parameters). Keyed on the `callee_fn_type` stamp Pass 2 writes when it
-                # resolves the field call, so an FFI / extension / builtin method (which
-                # never carries the stamp) keeps the no-consume rule above.
-                for arg in expr.args:
-                    self._consume(arg, ConsumingUse.CALL_ARG)
+                # is a real call, so its arguments follow the callee's declared modes
+                # exactly like the Call arm's. Keyed on the `callee_fn_type` stamp Pass 2
+                # writes when it resolves the field call, so an FFI / extension / builtin
+                # method (which never carries the stamp) keeps the no-consume rule above.
+                from sushi_lang.semantics.param_modes import effective_modes
+                modes = effective_modes(expr.callee_fn_type.modes, CalleeKind.INDIRECT)
+                for i, arg in enumerate(expr.args):
+                    if self.callee_modes.mode_at(modes, i, CalleeKind.INDIRECT).consumes:
+                        self._consume(arg, ConsumingUse.CALL_ARG)
             else:
                 self._maybe_mark_container_insert(expr)
             self._maybe_mark_own_alloc_move(expr)
@@ -1825,6 +1849,47 @@ class BorrowChecker:
         if state.moved_at_span is not None:
             diag.note(f"'{name}' was moved here", state.moved_at_span)
         diag.emit()
+
+    def _call_modes(self, expr: Call) -> tuple[CalleeKind, tuple[ParamMode, ...], Optional[int]]:
+        """The callee's kind, its parameter modes, and where a `...T` slot starts.
+
+        A callee that is not a plain `Name` is a call THROUGH a value: the type checker
+        stamped the resolved `FunctionType`, and the modes come off it.
+        """
+        if not isinstance(expr.callee, Name):
+            fn_type = getattr(expr, "callee_fn_type", None)
+            modes = getattr(fn_type, "modes", ()) if fn_type is not None else ()
+            from sushi_lang.semantics.param_modes import effective_modes
+            return CalleeKind.INDIRECT, effective_modes(modes, CalleeKind.INDIRECT), None
+
+        name = expr.callee.id
+        state = self.borrow_state.get(name)
+        local_type = state.var_type if state is not None else None
+        kind, modes = self.callee_modes.for_name(name, local_type)
+        variadic_at = (None if kind is CalleeKind.INDIRECT
+                       else self.callee_modes.variadic_from(name))
+        return kind, modes, variadic_at
+
+    def _consume_call_args(self, expr: Call) -> None:
+        """Consume the arguments the callee's declared modes say it takes ownership of.
+
+        The one place a call argument's fate is decided. Three cases, and the third is
+        the reason this is not just a mode lookup:
+
+        - a declared parameter: consume when its mode is `nom`;
+        - an argument past the declared list: the resolver could not find the callee, so
+          fall back to what its kind means for an unmarked parameter;
+        - a trailing `...T` argument: it is not a call argument at all. It becomes an
+          ELEMENT of the array the CALLER synthesizes, which the callee then owns, so it
+          transfers whatever the parameter says.
+        """
+        kind, modes, variadic_at = self._call_modes(expr)
+        for i, arg in enumerate(expr.args):
+            if variadic_at is not None and i >= variadic_at:
+                self._consume(arg, ConsumingUse.ARRAY_ELEMENT)
+                continue
+            if self.callee_modes.mode_at(modes, i, kind).consumes:
+                self._consume(arg, ConsumingUse.CALL_ARG)
 
     def _apply_destroy_effects(self, call: Call) -> None:
         """Mark each argument the callee destroys through a `poke` parameter (#168)."""

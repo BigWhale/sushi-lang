@@ -274,14 +274,31 @@ class FunctionType:
     EXCLUDED from __eq__/__hash__ so type identity stays capture-agnostic — `fn(i32) -> i32`
     names both a plain fn and any closure of that arity/ok/err (compatibility is invariant on
     arity + each param + ok + err, never on capture).
+
+    `param_modes` carries the PARAMETER MODE of each parameter and IS part of identity:
+    `fn(nom string) -> i32` and `fn(string) -> i32` are different types in both directions.
+    Without that, one indirection defeats the mode rule — which is what #335 showed for
+    `peek`/`poke` (docs/design/borrow-model.md §7). It is normalized on read through
+    `param_modes.normalize_modes`, so a type built with no modes and one built with all
+    default modes are the same type, and `peek`/`poke` always agree with the type.
     """
     param_types: tuple["Type", ...]
     ok_type: "Type"
     err_type: "Type"
     captures: Optional[tuple] = None
+    param_modes: Optional[tuple] = None
+
+    @property
+    def modes(self) -> tuple:
+        """The normalized parameter modes. Read this, never `param_modes` directly."""
+        from sushi_lang.semantics.param_modes import normalize_modes
+        return normalize_modes(self.param_types, self.param_modes)
 
     def __str__(self) -> str:
-        params = ", ".join(str(p) for p in self.param_types)
+        params = ", ".join(
+            f"{m.marker} {p}" if m.marker and not m.by_pointer else str(p)
+            for p, m in zip(self.param_types, self.modes)
+        )
         base = f"fn({params}) -> {self.ok_type}"
         # Hide the implicit StdError to match the surface syntax in diagnostics.
         if str(self.err_type) != "StdError":
@@ -289,13 +306,15 @@ class FunctionType:
         return base
 
     def __hash__(self) -> int:
-        return hash(("function", self.param_types, self.ok_type, self.err_type))
+        return hash(("function", self.param_types, self.ok_type, self.err_type,
+                     self.modes))
 
     def __eq__(self, other) -> bool:
         return (isinstance(other, FunctionType) and
                 self.param_types == other.param_types and
                 self.ok_type == other.ok_type and
-                self.err_type == other.err_type)
+                self.err_type == other.err_type and
+                self.modes == other.modes)
 
 
 def owns_heap(t: Optional["Type"], _visited: Optional[set] = None,

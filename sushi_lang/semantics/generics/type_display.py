@@ -70,7 +70,13 @@ def display_type(ty) -> str:
         return f"{display_type(ty.pointee_type)}*"
 
     if isinstance(ty, FunctionType):
-        params = ", ".join(display_type(p) for p in ty.param_types)
+        # A `nom` parameter is part of the type, so it must be visible in a diagnostic;
+        # `peek`/`poke` already render from the ReferenceType arm above.
+        params = ", ".join(
+            f"{m.marker} {display_type(p)}" if m.marker and not m.by_pointer
+            else display_type(p)
+            for p, m in zip(ty.param_types, ty.modes)
+        )
         base = f"fn({params}) -> {display_type(ty.ok_type)}"
         # Hide the implicit StdError, matching FunctionType.__str__.
         if str(ty.err_type) != "StdError":

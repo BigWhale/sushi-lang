@@ -142,6 +142,7 @@ class LibraryRegistry:
 
     def _parse_functions(self, func_list: list[dict]) -> dict[str, 'FuncSig']:
         """Parse function signatures from manifest."""
+        from sushi_lang.semantics.param_modes import ParamMode
         from sushi_lang.semantics.passes.collect.functions import FuncSig, Param
         from sushi_lang.semantics.type_resolution import parse_type_string
 
@@ -161,7 +162,8 @@ class LibraryRegistry:
                     ty=param_type,
                     name_span=None,
                     type_span=None,
-                    index=idx
+                    index=idx,
+                    is_nom=p.get("mode") == ParamMode.NOM.value,
                 ))
 
             ret_type_str = func_info.get("return_type", "~")

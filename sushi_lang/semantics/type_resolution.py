@@ -519,8 +519,14 @@ def parse_type_string(
     - Blank type: ~
     - Array types: i32[], string[]
     - Fixed arrays: i32[10]
+    - References: peek string, poke i32[]
     - Struct types (looked up in struct_table)
     - Enum types (looked up in enum_table)
+
+    The reference arm is what lets a LIBRARY declare a borrow. The manifest always
+    serialized `peek string` correctly; with no arm to read it back, a consumer got
+    `UnknownType("peek string")` and the parameter's mode was lost at the boundary
+    (docs/design/borrow-model.md S10).
 
     Args:
         type_str: Type string from manifest (e.g., "i32", "Result<bool, StdError>")
@@ -531,7 +537,7 @@ def parse_type_string(
         Parsed Type object
     """
     from sushi_lang.semantics.typesys import (
-        BuiltinType, ArrayType, DynamicArrayType, UnknownType
+        BuiltinType, ArrayType, BorrowMode, DynamicArrayType, ReferenceType, UnknownType
     )
 
     type_str = type_str.strip()
@@ -539,6 +545,12 @@ def parse_type_string(
     # Blank type
     if type_str == "~":
         return BuiltinType.BLANK
+
+    # References: `peek T` / `poke T`
+    for word, mode in (("peek ", BorrowMode.PEEK), ("poke ", BorrowMode.POKE)):
+        if type_str.startswith(word):
+            referent = parse_type_string(type_str[len(word):], struct_table, enum_table)
+            return ReferenceType(referenced_type=referent, mutability=mode)
 
     # Primitive types
     primitives = {

@@ -117,7 +117,10 @@ class LibraryFormat:
 
     # Magic bytes: 🍣SUSHILIB🍣 (each emoji is 4 UTF-8 bytes)
     MAGIC = b'\xf0\x9f\x8d\xa3SUSHILIB\xf0\x9f\x8d\xa3'
-    VERSION = 2
+    # 3: every public-function parameter carries a `mode` field (borrow / nom /
+    #    peek / poke). A v2 library states no mode, so its parameters cannot be
+    #    told apart from unmarked ones -- CE3509 rejects it rather than guess.
+    VERSION = 3
     FIXED_HEADER_SIZE = 52  # 16 (magic) + 4 (version) + 24 (spares) + 8 (meta_len)
     MAX_FILE_SIZE = 1024 * 1024 * 1024  # 1GB sanity limit
 

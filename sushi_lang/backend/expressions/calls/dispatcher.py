@@ -175,17 +175,13 @@ def _emit_indirect_call(codegen: 'LLVMCodegen', expr: Call, fat_value: 'ir.Value
     Result<T,E> struct flows downstream exactly like a direct call's.
     """
     from sushi_lang.backend.runtime import closures
-    from sushi_lang.semantics.typesys import ReferenceType
+    from sushi_lang.semantics.param_modes import CalleeKind, effective_modes
     args = [codegen.expressions.emit_expr(a) for a in expr.args]
-    # A by-value parameter of the indirect callee takes ownership, exactly like a
-    # direct call's (the ruling of 2026-08-14): every indirect callee is a lifted
-    # lambda or a plain fn, and both compile through begin_function's param
-    # registration, so the callee frees. Reference params are borrows and are skipped.
-    for i, pty in enumerate(fn_type.param_types):
-        if i >= len(args) or isinstance(pty, ReferenceType):
-            continue
-        args[i] = consume(codegen, expr.args[i], args[i],
-                          _resolve_param_type(codegen, pty), ConsumingUse.CALL_ARG)
+    # The callee's modes travel WITH the function type, which is why the type is
+    # invariant on them: without that, one indirection would defeat the rule (#335).
+    consume_arguments_by_mode(
+        codegen, list(expr.args), args, list(fn_type.param_types),
+        effective_modes(fn_type.modes, CalleeKind.INDIRECT))
     return closures.emit_indirect_call(codegen, fat_value, fn_type, args, to_i1)
 
 
@@ -222,29 +218,37 @@ def _resolve_param_type(codegen: 'LLVMCodegen', ty):
     return ty
 
 
-def _consume_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list, func_sig) -> None:
-    """Route every by-value argument through the ownership seam, in place.
+def consume_arguments_by_mode(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
+                              param_types: list, modes) -> None:
+    """THE call-argument seam: transfer exactly the arguments the modes say to, in place.
 
-    A by-value parameter takes ownership: the callee frees the value at scope exit (see
-    begin_function's param registration). Reference parameters are borrows and are skipped
-    -- a borrow is spelled `peek x` at the call site, which is a `Borrow` node, so it
-    never reaches the seam at all.
+    An argument moves if and only if its parameter DECLARES a consume. Every other mode
+    -- the unmarked borrow, `peek`, `poke` -- leaves the caller as the owner and needs no
+    transfer at all (docs/design/borrow-model.md S4).
 
-    This position was the reference implementation before the seam existed: it was the one
-    of eleven that got the rule right, and it did so with two cooperating passes (one
-    deciding copies, one marking moves) plus its own resolver. All three collapse here.
+    Pass 3 asked the same question of the same resolver before codegen ran, so the two
+    halves cannot disagree about who frees. Disagreeing is exactly what they used to do.
     """
-    if func_sig is None or not func_sig.params:
-        return
-    from sushi_lang.semantics.typesys import ReferenceType
-    for i, param in enumerate(func_sig.params):
-        if i >= len(args) or isinstance(param.ty, ReferenceType):
+    for i, mode in enumerate(modes):
+        if i >= len(args) or i >= len(arg_exprs) or not mode.consumes:
             continue
-        arg_expr = arg_exprs[i] if i < len(arg_exprs) else None
+        arg_expr = arg_exprs[i]
         if arg_expr is None:
             continue
         args[i] = consume(codegen, arg_expr, args[i],
-                          _resolve_param_type(codegen, param.ty), ConsumingUse.CALL_ARG)
+                          _resolve_param_type(codegen, param_types[i]),
+                          ConsumingUse.CALL_ARG)
+
+
+def _consume_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list, func_sig) -> None:
+    """Transfer the arguments a named callee's signature declares it takes."""
+    from sushi_lang.semantics.param_modes import CalleeKind, modes_for
+    if func_sig is None or not func_sig.params:
+        return
+    consume_arguments_by_mode(
+        codegen, arg_exprs, args,
+        [p.ty for p in func_sig.params],
+        modes_for(func_sig.params, CalleeKind.FUNCTION))
 
 
 def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool = False, is_dotcall: bool = False) -> ir.Value:
