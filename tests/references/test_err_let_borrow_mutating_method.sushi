@@ -1,0 +1,13 @@
+# #344: a `let` bound from a read through an owner is a BORROW, so a mutating method
+# through it is CE2426. Without the gate this compiled clean: the push updated the
+# binding's private descriptor and the owner never saw it, and a push that reallocated
+# freed the owner's buffer while the owner's scope exit freed it again.
+# EXPECT_ERROR_CODE: CE2426
+struct Holder:
+    i32[] items
+
+fn main() i32:
+    let Holder h = Holder(from([1, 2, 3]))
+    let i32[] v = h.items
+    v.push(9)
+    return Result.Ok(0)

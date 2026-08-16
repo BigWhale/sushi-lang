@@ -117,7 +117,7 @@ every position where the coercion does and does not apply.
 
 ## 5. One gate for each rule
 
-**A write cannot reach through a read-only receiver.** Four kinds, three write shapes each
+**A write cannot reach through a read-only receiver.** Five kinds, three write shapes each
 (a mutating method under the receiver, a field assignment, a `&poke` borrow of it):
 
 | kind | code | escape |
@@ -126,10 +126,15 @@ every position where the coercion does and does not apply.
 | `&peek` reference | CE2408 | declare the parameter `&poke` |
 | method receiver | CE2421 | `&poke self` |
 | by-value method parameter | CE2422 | declare the parameter `&poke T` |
+| `let`-borrow binding | CE2426 | write to the owner; or `.clone()`, mutate, store back |
 
 The kinds are a TABLE (`_READONLY_RECEIVERS`) behind one dispatcher
-(`_reject_readonly_write`) with four call sites, so a fifth kind is one row and not a fifth
-walk. The codes stay separate because each carries its own escape.
+(`_reject_readonly_write`) with four call sites, so a sixth kind is one row and not a sixth
+walk — the fifth one (#344) cost exactly that. The codes stay separate because each carries
+its own escape, and the last two rows show why that convention earns its keep: a
+`match`/`foreach` binding is a private DEEP copy, so its write is only lost, while a
+`let`-borrow shares the owner's DATA, so its write is lost AND a reallocating one frees the
+owner's buffer. Same rule, different first answer.
 
 **A borrow cannot be consumed.** The ownership table's `(BORROWED, MOVE)` cell rejects, and
 that is the whole implementation: `type_class_of` derefs a reference to its referent, so
@@ -172,17 +177,24 @@ Each gate turns the next occurrence of its bug class into a red test:
 | `test_enum_payload_layout.py` | the payload offsets mechanism 5 depends on |
 | `tests/references/` | the behaviour corpus, ~50 programs |
 
-## 8. Known gap (#344)
+## 8. Two questions about a `let`-borrow, not one
 
-A write through mechanism 3 — a `let` binding of a read — is **not** gated. `let i32[] v =
-h.items` followed by `v.push(9)` compiles: the write is lost from the owner's view, and a
-push that forces a reallocation frees the owner's buffer, which is a double free plus a
-read of released memory. A field assignment, a `&poke` borrow of the binding and
-`v.destroy()` are ungated in the same way.
+Mechanism 3 — a `let` binding of a read — is the kind that shows the two rules are
+complementary rather than alternatives:
 
-The CE2414 row of §5 excludes this kind on purpose, because CE2412 answers "may I mutate
-the OWNER?". Nothing answers "may I write THROUGH the binding?". This is the §5 rule for a
-fifth receiver kind, and the table there is where the row belongs.
+- **May I change the OWNER while the binding lives?** CE2412, answered NLL-style.
+- **May I write THROUGH the binding?** CE2426, the §5 gate's fifth row.
+
+Until #344 the second question had no answer, because the CE2414 row excluded this kind
+by pointing at CE2412. `let i32[] v = h.items` followed by `v.push(9)` compiled: the write
+was lost from the owner's view, a push that forced a reallocation freed the owner's buffer
+(a double free plus a read of released memory), and `v.destroy()` did the same directly. A
+field assignment and a `&poke` borrow of the binding were ungated the same way.
+
+The row keys on `is_let_borrow`, not on `borrows_from is not None`. An owner with no
+`BorrowState` — a temporary, as in `let v = make()??.items` — records no owner name, and
+the `borrows_from` spelling would have handed that case to CE2414, which tells the author
+their `let` is a match binding. The temporary's buffer is just as real.
 
 ## 9. Not designed
 

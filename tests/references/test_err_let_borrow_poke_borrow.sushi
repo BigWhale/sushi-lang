@@ -1,0 +1,15 @@
+# #344: a `&poke` borrow of the binding hands the same write to a callee, so it is
+# rejected at the borrow. The callee's push left the owner at its old length.
+# EXPECT_ERROR_CODE: CE2426
+struct Holder:
+    i32[] items
+
+fn grow(&poke i32[] a) ~:
+    a.push(9)
+    return Result.Ok(~)
+
+fn main() i32:
+    let Holder h = Holder(from([1, 2, 3]))
+    let i32[] v = h.items
+    grow(&poke v)
+    return Result.Ok(0)

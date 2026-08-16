@@ -1,12 +1,14 @@
 """Every read-only receiver rejects every write shape, through ONE gate.
 
-The language has four receivers a write cannot reach through, each found as its own bug
+The language has five receivers a write cannot reach through, each found as its own bug
 and each given its own code, because each carries its own escape:
 
   a match/foreach binding    -> CE2414 (#253) -- compiled as a private deep copy
   a `&peek` reference        -> CE2408 (#302, R1) -- a read-only borrow of the caller
   the method receiver        -> CE2421 (#326) -- a borrow, per the #298 ruling
   a by-value method PARAM    -> CE2422 -- the same borrow, one line over
+  a `let`-borrow binding     -> CE2426 (#344) -- shares the OWNER's data, so the write is
+                                not merely lost: a reallocating one is a double free
 
 and three shapes the write comes in, each of which had to be found separately for the
 first two kinds:
@@ -15,11 +17,11 @@ first two kinds:
   a field assignment under the receiver  `x.n := 42`
   a `&poke` borrow of the receiver       `f(&poke x)`
 
-Twelve cells. The gate is one dispatcher (`_reject_readonly_write`) over a table of kinds,
-called from the four write sites, so a new kind is one table entry and a new write shape
-is one call -- never a fourth copy of the same walk. This test is what makes the table
-load-bearing: a kind wired into the table but missing from a call site, or a call site
-that forgets the dispatcher, turns a cell red instead of shipping a silent write.
+Fifteen cells. The gate is one dispatcher (`_reject_readonly_write`) over a table of
+kinds, called from the four write sites, so a new kind is one table entry and a new write
+shape is one call -- never a fifth copy of the same walk. This test is what makes the
+table load-bearing: a kind wired into the table but missing from a call site, or a call
+site that forgets the dispatcher, turns a cell red instead of shipping a silent write.
 
 `test_peek_write_gate_is_total.py` covers the other axis for the `&peek` kind: every
 member of `_MUTATING_METHODS`, not every shape.
@@ -113,11 +115,32 @@ def _method_param_program(write: str) -> str:
     )
 
 
+def _let_borrow_program(write: str) -> str:
+    """A `let` bound from a read THROUGH a live owner (#344).
+
+    The kind the table was missing. Unlike the pattern binding above, the binding shares
+    the owner's heap rather than copying it, so the same write that is merely lost there
+    frees the owner's buffer here as soon as it reallocates.
+    """
+    return (
+        _STRUCT + _GROW +
+        "struct Outer:\n"
+        "    Holder inner\n"
+        "\n"
+        "fn main() i32:\n"
+        "    let Outer o = Outer(Holder(1, from([1, 2])))\n"
+        "    let Holder r = o.inner\n"
+        f"    {write}\n"
+        "    return Result.Ok(0)\n"
+    )
+
+
 KINDS = {
     "peek_reference":  ("CE2408", _peek_program),
     "pattern_binding": ("CE2414", _binding_program),
     "method_receiver": ("CE2421", _self_program),
     "method_parameter": ("CE2422", _method_param_program),
+    "let_borrow": ("CE2426", _let_borrow_program),
 }
 
 
@@ -197,6 +220,74 @@ def test_a_poke_method_parameter_stays_writable(analyze):
     )
     codes = _codes(analyze(src))
     assert "CE2422" not in codes and "CE2408" not in codes, codes
+
+
+def test_poke_borrow_of_a_whole_let_borrow_binding_is_rejected(analyze):
+    """The binding itself handed to a `&poke` parameter -- the third shape of #344."""
+    src = (
+        _STRUCT + _GROW +
+        "fn main() i32:\n"
+        "    let Holder h = Holder(1, from([1, 2]))\n"
+        "    let i32[] v = h.items\n"
+        "    grow(&poke v)\n"
+        "    return Result.Ok(0)\n"
+    )
+    assert "CE2426" in _codes(analyze(src))
+
+
+def test_destroy_through_a_let_borrow_binding_is_rejected(analyze):
+    """`.destroy()` releases the OWNER's storage: a double free, not a lost write."""
+    src = (
+        _STRUCT +
+        "fn main() i32:\n"
+        "    let Holder h = Holder(1, from([1, 2]))\n"
+        "    let i32[] v = h.items\n"
+        "    v.destroy()\n"
+        "    return Result.Ok(0)\n"
+    )
+    assert "CE2426" in _codes(analyze(src))
+
+
+def test_a_let_borrow_out_of_a_temporary_keeps_its_own_code(analyze):
+    """An owner with no BorrowState is still an owner, and its buffer is still real.
+
+    The reason the row keys on `is_let_borrow` rather than on `borrows_from is not None`:
+    a temporary records no owner NAME, and the `borrows_from` spelling would hand this
+    case to the CE2414 row, which tells the user their `let` is a match binding.
+    """
+    src = (
+        _STRUCT +
+        "fn make() Holder:\n"
+        "    return Result.Ok(Holder(1, from([1, 2])))\n"
+        "\n"
+        "fn f() i32:\n"
+        "    let i32[] v = make()??.items\n"
+        "    v.push(9)\n"
+        "    return Result.Ok(0)\n"
+        "\n"
+        "fn main() i32:\n"
+        "    return Result.Ok(0)\n"
+    )
+    codes = _codes(analyze(src))
+    assert "CE2426" in codes and "CE2414" not in codes, codes
+
+
+def test_a_rebound_let_borrow_becomes_writable(analyze):
+    """A rebind RE-INITIALIZES: the new value is the binding's own, so writes are legal.
+
+    The `is_let_borrow` twin of `test_rebind_of_a_borrowed_binding_makes_it_an_owner`.
+    Without the clear in `_reinitialize`, this is a false CE2426.
+    """
+    src = (
+        _STRUCT +
+        "fn main() i32:\n"
+        "    let Holder h = Holder(1, from([1, 2]))\n"
+        "    let i32[] v = h.items\n"
+        "    v := from([3, 4])\n"
+        "    v.push(9)\n"
+        "    return Result.Ok(0)\n"
+    )
+    assert "CE2426" not in _codes(analyze(src))
 
 
 def test_every_readonly_kind_is_in_the_gate_table(analyze):

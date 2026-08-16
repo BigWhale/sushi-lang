@@ -1,6 +1,6 @@
 """What each control-flow event does to each `BorrowState` flag. One cell, one assertion.
 
-`BorrowState` carries eleven fields, and a rule that forgets one combination fails
+`BorrowState` carries twenty fields, and a rule that forgets one combination fails
 SILENTLY -- there is no crash, only a diagnostic that is missing or invented. That shape
 shipped five times:
 
@@ -119,6 +119,7 @@ _REBIND_CLEARS = [
     ("invalidated_at", None),
     ("invalidated_by", ()),
     ("is_borrowed_binding", False),
+    ("is_let_borrow", False),
     ("borrows_from", None),
 ]
 
@@ -133,7 +134,8 @@ def test_rebind_clears(flag, cleared_value):
     setattr(state, flag, {"is_moved": True, "moved_at_span": Span(1, 1, 1, 2),
                           "is_destroyed": True, "invalidated_at": Span(1, 1, 1, 2),
                           "invalidated_by": ("c", "assign"),
-                          "is_borrowed_binding": True, "borrows_from": "c"}[flag])
+                          "is_borrowed_binding": True, "is_let_borrow": True,
+                          "borrows_from": "c"}[flag])
     BorrowChecker._reinitialize(state)
     assert getattr(state, flag) == cleared_value
 

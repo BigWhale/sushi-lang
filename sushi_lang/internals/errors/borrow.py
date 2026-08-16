@@ -151,3 +151,15 @@ _add(ErrorMessage("CE2424", Severity.ERROR,
 _add(ErrorMessage("CE2425", Severity.ERROR,
     "a '&peek self'/'&poke self' receiver parameter is not valid here",
     Category.BORROW, "The receiver parameter (#327) is the FIRST parameter of an EXTENSION or PERK method: `extend Counter bump(&poke self) ~:`. It is not valid in a plain top-level function (a plain function has no receiver -- take `&poke T name`), not valid after the first position, and a bare `&poke name` that is not `self` is a reference parameter missing its type."))
+
+# --- The `let`-borrow binding (#344) ----------------------------------------------------
+#
+# The FIFTH read-only receiver, and the last member of the family CE2414, CE2408, CE2421
+# and CE2422 close. Its own code rather than a widened CE2414 because the two escapes
+# differ: a match/foreach binding is a private DEEP copy, so the only way out is to clone,
+# mutate and store back, while a `let`-borrow names storage an owner still holds -- so the
+# FIRST answer is "write to the owner".
+
+_add(ErrorMessage("CE2426", Severity.ERROR,
+    "cannot write through '{name}': it borrows storage another value still owns",
+    Category.BORROW, "A `let` bound from a read THROUGH an owner -- `let v = h.items`, `let v = c.get(0)??` -- BORROWS: it names storage the owner keeps and still frees (issue #242). A write through it is not merely lost, which is what CE2414 says for a match/foreach binding: the binding holds its own copy of the descriptor while the DATA is shared, so a mutating method updates a length nobody reads, a field assignment lands on the private copy, and a `.push()` that reallocates frees the OWNER's buffer -- a double free plus a read of released memory that compiled clean before issue #344. Write to the owner directly (`h.items.push(9)`), or take an independent value with `.clone()`, mutate it, and store it back. CE2412 is the complementary question -- may the OWNER be changed while the binding lives -- not an alternative to this one."))

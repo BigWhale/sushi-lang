@@ -1,0 +1,12 @@
+# #344: `.destroy()` through the binding releases the OWNER's storage, which the owner
+# then releases again at scope exit -- a double free that compiled clean. This is F4 of
+# the reference-seam review (`old/BORROW.md`) one mechanism over.
+# EXPECT_ERROR_CODE: CE2426
+struct Holder:
+    i32[] items
+
+fn main() i32:
+    let Holder h = Holder(from([1, 2, 3]))
+    let i32[] v = h.items
+    v.destroy()
+    return Result.Ok(0)
