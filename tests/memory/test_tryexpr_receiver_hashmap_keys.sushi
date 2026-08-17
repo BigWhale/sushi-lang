@@ -19,7 +19,7 @@
 #
 # (c) is a language decision, not a patch. Rust and C++ both answer it the same way: a
 # temporary lives to the end of the enclosing statement and is dropped there. That is the
-# precedent to follow, and MM.md's Phase 10 already expects to need it (`relinquish_temp`).
+# precedent to follow (`relinquish_temp`).
 #
 # Phase 7.6. Do NOT rewrite this file two-step (`let HashMap@(i32, i32) m = get_map()??`
 # then `m.keys()`) -- that passes and hides the defect.

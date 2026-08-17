@@ -13,5 +13,4 @@ Generic types like Result<T> and Maybe<T> work with any type parameter T (built-
 or user-defined). Pre-generating all possible monomorphizations is impractical, so
 these methods are emitted on-demand during compilation.
 
-See docs/stdlib/ISSUES.md for detailed explanation.
 """

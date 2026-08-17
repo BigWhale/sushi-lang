@@ -6,7 +6,7 @@ capture mutation -- `xs.push(x)`, legal by design since T1.5, because the enviro
 OWNS a move-captured `List@(T)` -- becomes `__closure_env.xs.push(x)`, a write THROUGH
 that parameter.
 
-It was declared `peek` until the `peek` write rule became total (FIX.md R1). Nothing
+It was declared `peek` until the `peek` write rule became total. Nothing
 enforced read-only before that, so the untruthful mode had no consequence; once it was
 enforced, it turned two legal shapes into CE2408. The declaration was corrected rather
 than the rule carved out, because the environment is the closure's own storage and not a

@@ -182,7 +182,7 @@ def validate_builtin_string_method_with_validator(call: MethodCall, string_type:
     method_name = call.method
 
     # Inline intrinsics, not in METHOD_SPECS. `clone` is the explicit deep copy and the
-    # escape from CE2411; it must not need `use <collections/strings>` (#242, MM.md B4).
+    # escape from CE2411; it must not need `use <collections/strings>` (#242).
     if method_name in ("is_empty", "clone"):
         if len(call.args) != 0:
             er.emit(reporter, er.ERR.CE2009, call.loc,

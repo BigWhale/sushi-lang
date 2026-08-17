@@ -238,7 +238,7 @@ fn convert_errors() Result@(i32, AppError):
 
 ## Implementation Phases
 
-These tests align with the RES.md implementation phases:
+These tests align with the original implementation phases:
 
 - **Phase 1-2**: Basic construction, type system (basic/)
 - **Phase 2**: Pattern matching, methods (pattern/, methods/)

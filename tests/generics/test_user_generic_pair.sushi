@@ -7,7 +7,7 @@
 # EXPECTED_OUTPUT: Neither
 
 # Test user-defined generic enum with multiple type parameters
-# Demonstrates that Pair@(T, U) works as described in GENERICS.md
+# Demonstrates that Pair@(T, U) works as documented
 
 enum Pair@(T, U):
     Both(T, U)

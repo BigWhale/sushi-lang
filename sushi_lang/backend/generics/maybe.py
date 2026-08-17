@@ -9,7 +9,6 @@ of types, Maybe<T> must support any type T that users define (custom structs,
 nested generics, etc.). Pre-generating all possible instantiations is not
 feasible.
 
-See docs/stdlib/ISSUES.md for why Maybe<T> cannot be moved to stdlib.
 
 Implemented methods:
 - is_some() -> bool: Check if value is present (Some variant)

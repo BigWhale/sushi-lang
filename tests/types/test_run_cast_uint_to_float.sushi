@@ -1,4 +1,4 @@
-# Guards PLAN.md T1.1: an unsigned-to-float cast must emit `uitofp`, not `sitofp`.
+# An unsigned-to-float cast must emit `uitofp`, not `sitofp`.
 # cast_int_to_float always emits sitofp, so a u64 above i64::MAX becomes negative.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "1.8e+19\n"

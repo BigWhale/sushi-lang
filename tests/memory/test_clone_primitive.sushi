@@ -2,7 +2,6 @@
 # Rust makes `Copy: Clone` for exactly this reason: one monomorphized body must satisfy
 # both `T = i32` and `T = string`, and only the string instantiation needs a deep copy.
 # Without a primitive clone the escape from CE2411 does not survive monomorphization --
-# MM.md section 2.F, finding F1.
 # EXPECT_STDOUT_EXACT: "5 5\n2.5 2.5\nyes\n7 7\n1 a\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true

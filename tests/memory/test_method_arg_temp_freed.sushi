@@ -1,5 +1,4 @@
 # An owning TEMPORARY handed to a method's borrow parameter is freed exactly once
-# (BORROW.md bug 3).
 #
 # The caller keeps a borrow parameter's value, and `make()??` names no binding, so
 # without a caller-side owner nothing frees it. Only a syntactic inline `Lambda` used to

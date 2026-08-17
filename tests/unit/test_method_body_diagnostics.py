@@ -2,7 +2,7 @@
 
 There were TWO Pass 3 entry points for one concept -- `_check_function` for plain
 functions and perk methods, `_check_extension` for extension methods -- and they set up
-the borrow state differently (old/BORROW.md section 7). The divergence was unpinned by any
+the borrow state differently. The divergence was unpinned by any
 test, and it showed as missing evidence: an extension-method parameter was registered
 WITHOUT its declaration span, so every relational diagnostic raised in an extension body
 rendered at tier 2 -- the primary location and nothing else -- while the identical

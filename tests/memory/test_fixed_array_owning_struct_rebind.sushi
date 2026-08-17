@@ -7,7 +7,7 @@
 #
 # Four documents (`docs/design/move-semantics.md:35`, `docs/memory-management.md:94`,
 # `CLAUDE.md:536`, `CHANGELOG.md:23`) state that a fixed array holding an owning value
-# moves. MM.md S2 row 11 / S4.1; no upstream issue.
+# moves.
 # EXPECT_STDOUT_EXACT: "cs=1\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true

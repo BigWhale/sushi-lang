@@ -20,7 +20,7 @@ than because it was wrong:
   duplicated rather than transferred -- `string` and string-only composites. Making a string
   MOVE removed the column, and `Ownership.COPY` went with it, because no cell needed it any
   more. A literal-bound string owns nothing at all and classifies PLAIN, which is a fact
-  about the binding rather than the type (option B, MM.md S0.4).
+  about the binding rather than the type (option B).
 
 Between them those two deletions mean **the compiler inserts no deep copy anywhere**. Every
 deep copy in a Sushi program is a `.clone()` the user wrote.
@@ -142,7 +142,7 @@ def test_string_and_string_composites_move():
 
     The option-B exception -- a string bound straight from a literal owns nothing -- is NOT
     visible here and cannot be: it is a fact about a BINDING, not about a type, and lives on
-    `BorrowState.owns_no_heap` (MM.md S0.4).
+    `BorrowState.owns_no_heap`.
     """
     for ty in (STR,
                _struct("N", ("s", STR)),

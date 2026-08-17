@@ -2,7 +2,7 @@
 
 `variable_types` is the backend's flat name -> semantic-type map. Every deref, write and
 method-dispatch site keys on it -- `is_reference_parameter` asks it whether a name is a
-borrow -- and it was created once per MODULE and never cleared (old/BORROW.md 3.5). So an
+borrow -- and it was created once per MODULE and never cleared. So an
 entry a function wrote stayed readable by every function emitted after it, and a name
 that a later function uses without registering (there is no rule that says every name is
 registered) resolved to the earlier function's type.

@@ -7,7 +7,6 @@
 # `h.handler.clone()` was not a rejection but a CE0000: a method call on a fn value was
 # never validated at all, so dispatch fell through to the user extension-method path, which
 # mangled the name to `fn(i32) - i32_clone` and died looking for a symbol nobody defines.
-# Same failure mode as MM.md finding A2.
 #
 # The environment is duplicated through the fat pointer's `clone_ptr` slot, the structural
 # inverse of the destructor's `drop_ptr`, so each owner frees exactly once. That is what
@@ -16,7 +15,7 @@
 #
 # Two consuming uses are covered here, a container insert and a return. A by-value ARGUMENT
 # is deliberately absent: passing an owning closure to a by-value parameter leaks its
-# environment, which is pre-existing and unrelated to cloning -- MM.md finding F12.
+# environment, which is pre-existing and unrelated to cloning.
 # EXPECT_STDOUT_EXACT: "15 17 19 21\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true

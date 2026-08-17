@@ -21,7 +21,6 @@ for all types (built-in and user-defined) during compilation. There is no
 stdlib IR generation because monomorphizing for all possible user types is
 impractical.
 
-See docs/stdlib/ISSUES.md for why Result<T, E> cannot be moved to stdlib.
 """
 
 from typing import Any

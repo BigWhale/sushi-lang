@@ -1,4 +1,4 @@
-# Guards PLAN.md T1.3: emit_enum_equality compares only the variant tag and sets
+# Emit_enum_equality compares only the variant tag and sets
 # data_equal = TRUE for a struct payload, so two distinct Key.Loc(...) keys collapse
 # into one. Expected len = 2 with independent values; today len = 1.
 # EXPECT_RUNTIME_EXIT: 0

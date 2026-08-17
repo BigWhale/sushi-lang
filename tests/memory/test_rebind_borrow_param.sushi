@@ -1,4 +1,4 @@
-# Rebinding a BORROW parameter re-initializes the callee's own copy (BORROW.md bug 1).
+# Rebinding a BORROW parameter re-initializes the callee's own copy.
 #
 # The parameter names the caller's value, so the rebind must not free it -- that was a
 # double free. And the value the rebind PUTS there has no other owner, so it must be

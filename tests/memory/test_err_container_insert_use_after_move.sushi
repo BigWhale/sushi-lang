@@ -9,7 +9,7 @@
 # whatever the allocator left behind.
 #
 # `docs/design/move-semantics.md:120` claims this sink is "already move-shaped". It is
-# move-shaped in codegen only. MM.md S2 row 8 / S8.1; no upstream issue.
+# move-shaped in codegen only.
 # EXPECT_ERROR_CODE: CE2405
 
 fn main() i32:

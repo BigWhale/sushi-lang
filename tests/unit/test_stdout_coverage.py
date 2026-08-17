@@ -1,7 +1,7 @@
 """
 Coverage ratchet: success-category .sushi tests that print but lack stdout assertions.
 
-The R0 test-correctness baseline (local ROADMAP.md Phase R0.2) drove this gap to 0: every
+The R0 test-correctness baseline drove this gap to 0: every
 success-category test that calls print/println either asserts its stdout (EXPECT_STDOUT_EXACT /
 EXPECT_STDOUT_CONTAINS) or is recorded in QUARANTINE below. BASELINE is therefore 0 — the ratchet
 now only ever admits a new printing test that asserts its output.
@@ -48,7 +48,7 @@ from pathlib import Path
 # After each backfill pass this MUST be lowered to the new gap count — it may
 # never increase (that would mean new unasserted printing tests were added).
 #
-# The R0 test-correctness baseline (see local ROADMAP.md Phase R0.2) drives this
+# The R0 test-correctness baseline drives this
 # to 0: every printing success-category test either asserts its stdout, or — if it
 # reveals a real compiler bug (wrong output), is intentionally silent, or cannot be
 # asserted deterministically — is recorded in QUARANTINE below and excluded from the

@@ -1,4 +1,4 @@
-# Guards PLAN.md T2.3: a bloom source must be a bare array VARIABLE. The validator
+# A bloom source must be a bare array VARIABLE. The validator
 # checks the spread's position and type but never that the inner expression is a Name,
 # so blooming a struct field compiles clean and then double-frees (exit 133).
 # EXPECT_ERROR_CODE: CE0120

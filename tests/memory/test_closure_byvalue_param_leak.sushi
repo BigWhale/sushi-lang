@@ -1,4 +1,4 @@
-# Pins MM.md F12 (X8), fixed 2026-08-14 by the by-value-parameter ruling: the CALLEE owns
+# Fixed 2026-08-14 by the by-value-parameter ruling: the CALLEE owns
 # a by-value `fn` parameter. `begin_function` registers the parameter's fat value for the
 # drop_ptr-guarded free, and every caller shape transfers exactly once -- a bare Name is
 # marked moved at the call site, a temporary (`make(2)??` here) adopts in, and an inline

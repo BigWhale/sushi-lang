@@ -161,7 +161,7 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
                 # A string-typed part is a BORROW when a live owner frees it (`{name}`, a
                 # field read, a container get-out) -- use directly, never free here. A
                 # TEMPORARY string part (`{s.upper()}`, a call result, a `??` unwrap) is an
-                # owned value nobody else frees (MM.md B2): inside a print-arg frame the
+                # owned value nobody else frees: inside a print-arg frame the
                 # frame frees it after output (the concat loop below is disabled there);
                 # outside one the concat loop frees it like any other fresh intermediate.
                 from sushi_lang.backend.expressions.memory import expression_is_temporary

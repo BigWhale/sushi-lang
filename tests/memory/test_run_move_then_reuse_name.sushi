@@ -1,4 +1,4 @@
-# Guards PLAN.md T2.2, move-poisoning variant: MoveTracker._moved is a flat Set[str]
+# Move-poisoning variant: MoveTracker._moved is a flat Set[str]
 # reset only at function boundary and never un-marked. Moving `buf` in one scope marks
 # the NAME moved, so a different `buf` in a later SIBLING scope is treated as already
 # moved and skipped by RAII. No shadowing, so no CW1002. Leaks 16 bytes today.

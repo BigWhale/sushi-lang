@@ -9,7 +9,7 @@
 # corrupts INSIDE the loop (it never writes the flat table, so the outer type wins), a
 # match binding corrupts AFTER the arm (it writes and never pops). Both are
 # `infer_struct_type`'s flat-table lookup; both want `resolve_name_semantic_type`, which
-# is already scope-aware. MM.md S2 row 10.
+# is already scope-aware.
 # Named test_warn_ because CW1002 is unavoidable here -- shadowing IS the subject. The
 # runtime directives below are honoured because the file declares them explicitly;
 # before this branch a test_warn_ file was compilation-only and this defect could not

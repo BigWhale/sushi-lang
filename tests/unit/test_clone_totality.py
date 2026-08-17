@@ -6,8 +6,8 @@ independent value". So a type that can be MOVE and carries no `.clone()` is a re
 with no way out: the compiler tells the user to do something the language does not offer.
 
 **That hole has been found twice by a sweep and never by a test.** Phase 7 found it for
-`List<T>`, `Own<T>` and `string` (MM.md finding A5). Phase 8 found it again for the
-primitives and for fixed arrays (finding F1). Both times a phase stopped mid-flight and the
+`List<T>`, `Own<T>` and `string`. Phase 8 found it again for the
+primitives and for fixed arrays. Both times a phase stopped mid-flight and the
 phase order had to change. This file is the gate that makes the next one a red CI run.
 
 Same spirit as tests/unit/test_builtin_method_seam.py and
@@ -39,7 +39,7 @@ def _fn(captures=None) -> FunctionType:
 
     `FunctionType.__eq__` excludes captures from type identity, so a value arriving
     through a declared type -- a struct field, a `List` element, a parameter -- has already
-    lost it. `is_owning_type` reads `None` as owning for exactly that reason (MM.md A1).
+    lost it. `is_owning_type` reads `None` as owning for exactly that reason.
     """
     return FunctionType(
         param_types=(BuiltinType.I32,),
@@ -114,8 +114,7 @@ def test_a_move_type_has_a_clone(name, ty):
     assert builtin_method_exists(ty, "clone"), (
         f"{name} is a MOVE type, so consuming a borrow of it is CE2411 -- and CE2411's help "
         f"text tells the user to call .clone(), which does not exist on it. That is a "
-        f"rejection with no escape. See MM.md findings A5 and F1: this exact hole has "
-        f"already stopped two phases."
+        f"rejection with no escape. This exact hole has already stopped two phases."
     )
 
 
@@ -126,16 +125,14 @@ def test_a_move_type_has_a_clone(name, ty):
 # A type parameter is substituted with a concrete type and the ONE body is compiled for each.
 # So `.clone()` must exist on every type that can be a type argument, not only on the owning
 # ones -- `fn first@(T)(T[] arr) T` needs `elem.clone()` for `T = string` and is instantiated
-# at `T = i32` as well. That is MM.md finding F1, and it is why a primitive has a clone that
-# does nothing.
+# at `T = i32` as well, which is why a primitive has a clone that does nothing.
 @pytest.mark.parametrize("name,ty", REPRESENTATIVE_TYPES, ids=[n for n, _ in REPRESENTATIVE_TYPES])
 def test_a_generic_type_argument_has_a_clone(name, ty):
     """One monomorphized body must satisfy every instantiation of its type parameter."""
     assert builtin_method_exists(ty, "clone"), (
         f"{name} can be a generic type argument, so a body written as `x.clone()` for an "
         f"owning instantiation fails to compile when it is instantiated at {name}. The "
-        f"escape must survive monomorphization -- Rust makes `Copy: Clone` for this reason. "
-        f"See MM.md finding F1."
+        f"escape must survive monomorphization -- Rust makes `Copy: Clone` for this reason."
     )
 
 

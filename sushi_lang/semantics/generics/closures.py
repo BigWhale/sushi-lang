@@ -12,8 +12,7 @@ environment and still free it. Consuming that borrow is CE2411, whose help text 
 "clone it to take an independent value" -- so the method has to exist, or the compiler is
 naming a fix the language does not have. It did exactly that until this module: dispatch
 fell through to the user extension-method path, which mangled the name to
-`fn(i32) - i32_clone` and raised a bare `KeyError`. That is MM.md finding A2's failure mode,
-one family further on.
+`fn(i32) - i32_clone` and raised a bare `KeyError`.
 
 `clone` is currently the only entry. Bound-method values and a C-callback accessor are
 Tier 2 items and would live here.

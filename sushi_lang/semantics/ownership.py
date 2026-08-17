@@ -101,8 +101,8 @@ class TypeClass(Enum):
     # There used to be a third class, COPY, for a value that owns heap but is duplicated
     # rather than transferred -- a `string`, and string-only composites. Phase 9 deleted it:
     # a string now MOVES like every other owning value, except that a binding initialised
-    # straight from a literal owns nothing at all and classifies PLAIN (option B, MM.md
-    # S0.4). Two classes, one question: does this own heap?
+    # straight from a literal owns nothing at all and classifies PLAIN (option B,
+    # docs/design/ownership-conventions.md). Two classes, one question: does this own heap?
 
 
 class Ownership(Enum):

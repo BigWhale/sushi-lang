@@ -1,4 +1,4 @@
-# Guards PLAN.md T1.7: string interpolation of a cast expression must pick its
+# String interpolation of a cast expression must pick its
 # %d/%u conversion from the cast's target type, not from the operand's type.
 # Deliberately a SAME-WIDTH cast: no extension happens, so T1.1's casts.py fix
 # cannot mask this bug. Both lines must agree.

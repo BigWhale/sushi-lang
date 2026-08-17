@@ -335,7 +335,7 @@ def owns_heap(t: Optional["Type"], _visited: Optional[set] = None,
     BINDING-level fact and lives on `BorrowState.owns_no_heap`, read by the borrow checker.
     It cannot be expressed here: `BuiltinType.STRING` is an enum member with no room for a
     flag, unlike `FunctionType`, which is a dataclass and carries `captures`. That asymmetry
-    is structural (MM.md S0.4) -- do not "fix" it by inventing a string subtype.
+    is structural -- do not "fix" it by inventing a string subtype.
 
     **`FunctionType.captures` is TRI-STATE and the merged predicate keeps all three answers**
     (this is the one place the two old predicates disagreed other than `string`, and the
@@ -349,8 +349,8 @@ def owns_heap(t: Optional["Type"], _visited: Optional[set] = None,
 
     `None` is the common case at a position, because `FunctionType.__eq__` excludes
     `captures` from type identity: a value arriving through a DECLARED type -- a
-    `List@(fn(i32) -> i32)` element, a struct field, a parameter -- has already lost it
-    (MM.md finding A1). Reading `None` as "no captures" answered False for a closure that
+    `List@(fn(i32) -> i32)` element, a struct field, a parameter -- has already lost it.
+    Reading `None` as "no captures" answered False for a closure that
     does own an environment, and the position then aliased it (#123's double frees).
 
     The backend's old `needs_cleanup` answered True for all three. That was a safety

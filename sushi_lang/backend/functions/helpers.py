@@ -258,7 +258,7 @@ class FunctionHelpers:
         # wrote stayed readable by every function emitted afterwards. For a value type
         # that is wrong DATA; for a `ReferenceType` entry it is wrong CODE, because
         # `is_reference_parameter` keys on it and a later function's plain local of the
-        # same name would be dereferenced (old/BORROW.md 3.5). Save and restore rather than
+        # same name would be dereferenced. Save and restore rather than
         # clear: nothing nests today, but an out-of-line destructor body emitted lazily
         # mid-function would, and restoring is correct either way.
         self._variable_types_stack.append(self.codegen.variable_types)

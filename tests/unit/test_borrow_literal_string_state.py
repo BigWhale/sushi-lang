@@ -1,4 +1,4 @@
-"""Option B (MM.md S0.4): a literal-bound string owns no heap, and the binding knows it.
+"""Option B: a literal-bound string owns no heap, and the binding knows it.
 
 **Why the fact lives on the binding and not on the type.** A closure's answer lives in
 `FunctionType.captures` because `FunctionType` is a dataclass with room for a field.
@@ -13,7 +13,7 @@ that did not happen. The diagnostic would be false, not merely strict. Rust
 this same place.
 
 The default is False, meaning "assume it owns heap". That is the safe direction and the same
-fallback an unstated `captures` takes (MM.md finding A1).
+fallback an unstated `captures` takes.
 """
 from __future__ import annotations
 

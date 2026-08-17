@@ -5,8 +5,8 @@ clone fewer buffers -> double free, more -> leak. The two halves register into
 `backend/lifecycle.py`'s handler table from their home modules
 (backend/destructors.py registers destroy; backend/expressions/memory.py registers
 clone). A kind registered on one side only used to be exactly how a missing clone
-arm shipped (MM.md Phase 2: "adding either alone trades a double free for a
-miscompile") -- this test makes it a red build instead.
+arm shipped -- adding either alone trades a double free for a miscompile. This test
+makes it a red build instead.
 """
 from __future__ import annotations
 

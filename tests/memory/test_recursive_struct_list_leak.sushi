@@ -11,7 +11,7 @@
 # its scope exit while main() is still live -- the interposer sees the frees, not process
 # teardown.
 #
-# Caveat worth keeping in mind (BUGS.md): a green leak gate is not proof of memory safety,
+# Caveat worth keeping in mind: a green leak gate is not proof of memory safety,
 # because a double-free is not a leak. The behavioural twins in tests/types/ are what
 # catch a wrong stride; this catches the missing free.
 # EXPECT_STDOUT_EXACT: "nodes=6\n"

@@ -17,7 +17,7 @@ def _register_owned_string_arg(codegen: 'LLVMCodegen', expr, val: 'ir.Value') ->
     """Register an owned string TEMPORARY print argument for the frame's guarded free.
 
     An owned string that no binding names (`println(go().realise("err"))`, a `??` unwrap,
-    a string-method result) had no owner at all and leaked (MM.md F9 / X9). The print-arg
+    a string-method result) had no owner at all and leaked. The print-arg
     frame frees it right after output through the owned-bit-guarded destructor, so a
     borrow-shaped value (owned=0) frees to a no-op.
 

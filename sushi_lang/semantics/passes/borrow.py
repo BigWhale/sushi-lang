@@ -180,7 +180,7 @@ class BorrowState:
                                 # explicit parameter can be redeclared `poke T` today, so
                                 # the two carry different codes and different help.
                                 # `is_method_receiver` implies `is_borrow_param`.
-    owns_no_heap: bool = False  # Option B (MM.md S0.4): this binding's CURRENT value owns no
+    owns_no_heap: bool = False  # Option B: this binding's CURRENT value owns no
                                 # heap, so a consuming use of it transfers nothing. Today only
                                 # a `string` bound directly from a literal sets it.
                                 #
@@ -195,7 +195,7 @@ class BorrowState:
                                 # rebind is unknowable, so it falls back to False.
                                 #
                                 # Default False = "assume it owns heap", the same safe fallback
-                                # an unstated `captures` takes (MM.md finding A1).
+                                # an unstated `captures` takes.
     bound_at_span: Optional[Span] = None  # Where the binding was introduced. CE2411 is a
                                 # RELATIONAL error -- the use is only wrong BECAUSE of what
                                 # the binding borrows from -- so it renders both.
@@ -423,7 +423,7 @@ _READONLY_RECEIVERS: tuple[_ReadOnlyReceiver, ...] = (
 
 
 def binds_a_bare_literal_string(declared_ty, init) -> bool:
-    """Option B (MM.md S0.4): is this binding a `string` whose value is a plain literal?
+    """Option B: is this binding a `string` whose value is a plain literal?
 
     A `StringLit` points into `.rodata` and carries `owned = 0`, so it owns nothing and a
     consuming use of it transfers nothing. An `InterpolatedString` is a DIFFERENT AST node
@@ -679,7 +679,7 @@ class BorrowChecker:
 
         There used to be two: `_check_function` for plain functions and perk methods, and
         `_check_extension` for extension methods -- two setups for one concept, and they
-        had drifted (old/BORROW.md section 7). The extension form registered its parameters
+        had drifted. The extension form registered its parameters
         WITHOUT `declared_at_span`, so every relational diagnostic in an extension body
         rendered without its second location; it also skipped the `_scope_binding_borrows`
         reset; and NEITHER registered the receiver.
@@ -803,7 +803,7 @@ class BorrowChecker:
                 return
             self.borrow_state[stmt.name] = BorrowState(
                 name=stmt.name, var_type=stmt.ty, declared_at_span=stmt.loc,
-                # Option B (MM.md S0.4): a string bound straight from a literal owns no heap,
+                # Option B: a string bound straight from a literal owns no heap,
                 # so consuming it transfers nothing and CE2405 must not fire on it.
                 owns_no_heap=binds_a_bare_literal_string(stmt.ty, stmt.value))
             # Check the initialization expression
@@ -837,13 +837,13 @@ class BorrowChecker:
                     #
                     # There is deliberately no "rebind while borrowed" check here. It used
                     # to be CE2401's only emit site and could never fire -- this runs
-                    # BEFORE the value walk, so no borrow of the target is registered yet
-                    # (F14 of old/BORROW.md). Moving it after the walk would reject
+                    # BEFORE the value walk, so no borrow of the target is registered yet.
+                    # Moving it after the walk would reject
                     # `x := f(peek x)`, where the borrow is dead by the time the store
                     # happens; Rust accepts the same shape. CE2401 now lives at the
                     # consuming use, which is where the two really conflict.
 
-                    # Option B (MM.md S0.4): RE-DERIVE, never inherit. `let string a = "hi"`
+                    # Option B: RE-DERIVE, never inherit. `let string a = "hi"`
                     # owns nothing, but after `a := "Hi {name}"` it owns a buffer. Every
                     # non-literal initializer answers False here, which also covers the
                     # conditional rebind the decision calls unknowable -- the fallback is
@@ -1459,7 +1459,7 @@ class BorrowChecker:
             # DotCall is the unified X.Y(args) node used before type checking
             # Check receiver and arguments (same as MethodCall)
             #
-            # DECISION 1 (MM.md S2.F): an FFI string argument NEVER consumes. `libc.strlen(s)`
+            # An FFI string argument NEVER consumes (docs/design/borrow-model.md S5). `libc.strlen(s)`
             # must not move `s` -- the callee is C, it cannot own a Sushi string, and the
             # marshalled buffer is already freed at scope exit. Rust passes `as_ptr(&self)`,
             # Zig takes `[*:0]const u8`, cgo leaves the pointer caller-owned.
@@ -1610,7 +1610,7 @@ class BorrowChecker:
             # which is the pass that owns names: CE1001 if it is declared nowhere, CE2400
             # if it names something that is not a local (a constant, a function, an enum
             # type, an FFI namespace). Repeating the question here is what produced two
-            # diagnostics for one token (F15 of old/BORROW.md), and it produced the WRONG one
+            # diagnostics for one token, and it produced the WRONG one
             # too, because `borrow_state` cannot tell those two cases apart.
             if var_name not in self.borrow_state:
                 return
@@ -2234,8 +2234,8 @@ class BorrowChecker:
 
         decision = classify(provenance, self._type_class_of_source(state, state.var_type))
         if decision is Ownership.MOVE:
-            # The same value cannot be borrowed and handed away in ONE statement (F6 of
-            # old/BORROW.md). This is where CE2401 belongs and where it had never been wired:
+            # The same value cannot be borrowed and handed away in ONE statement.
+            # This is where CE2401 belongs and where it had never been wired:
             # its old emit site ran BEFORE the value walk, so no borrow was ever live when
             # it looked -- a registered code with no reachable path. Here the counters ARE
             # live, because the call arm checks every argument (registering the borrows)
@@ -2597,7 +2597,7 @@ class BorrowChecker:
         # ONE branch, on purpose. A field read and an index take the clone directly and
         # compile; a get-out takes it and hits CE0019, because a chained method call on a
         # call receiver does not resolve its semantic type. That is a real defect, not a
-        # reason to word around it -- see MM.md B5. This help states the rule, and the
+        # reason to word around it. This help states the rule, and the
         # three RED `test_own_get_*` files hold the branch honest until the defect is
         # fixed. A shape-dependent help would have hidden it.
         diag.help(f"clone it to take an independent value: `{text}.clone()`")
@@ -2644,7 +2644,7 @@ class BorrowChecker:
 
     def _type_class_of_source(self, state: Optional[BorrowState],
                               ty: Optional[Type]) -> TypeClass:
-        """Classify the SOURCE of a consuming use, applying option B (MM.md S0.4).
+        """Classify the SOURCE of a consuming use, applying option B.
 
         Identical to `_type_class` except for one binding-level override: a `string` bound
         straight from a literal owns no heap, so consuming it transfers nothing and it must

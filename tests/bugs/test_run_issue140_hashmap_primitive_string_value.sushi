@@ -3,7 +3,7 @@
 # + free cleanly. Confirms emit_value_clone's passthrough and string branches.
 # https://github.com/BigWhale/sushi-lang/issues/140
 #
-# The leak assertion below also pins X9 (MM.md F9), fixed 2026-08-14: an owned `string`
+# The leak assertion below also pins the 2026-08-14 fix: an owned `string`
 # temporary that no binding names (`println(go().realise("err"))`) is registered into the
 # print-arg frame and freed after output through the owned-bit-guarded destructor.
 # tests/memory/test_string_temp_print_free.sushi pins the reduced shapes.

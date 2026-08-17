@@ -30,7 +30,7 @@ def enum_base_names(*tables) -> set[str]:
     Each argument is a collector table (which HAS a `by_name` mapping) or a plain mapping
     (which IS one). The question is PRESENCE, not truthiness: this used to be an
     `or`-chain, and an EMPTY `by_name` is falsy, so it fell through to the table OBJECT --
-    a dataclass with no `__iter__` -- and raised a bare `TypeError` (F16 of old/BORROW.md).
+    a dataclass with no `__iter__` -- and raised a bare `TypeError`.
     Nothing masked that except Phase 0 always pre-registering `Result` and `Maybe`.
     """
     names: set[str] = set()

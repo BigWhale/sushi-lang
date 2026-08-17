@@ -7,7 +7,7 @@ be built with an `or`-chain:
     getattr(self.generic_enums, 'by_name', None) or self.generic_enums or {}
 
 An EMPTY `by_name` is falsy, so the chain fell through to the table OBJECT -- a dataclass
-with no `__iter__` -- and iterating it raised a bare `TypeError` (F16 of old/BORROW.md). The
+with no `__iter__` -- and iterating it raised a bare `TypeError`. The
 CLI never showed it only because Phase 0 always pre-registers `Result` and `Maybe`, so
 `by_name` is never empty in practice. Nothing about that is a property of the code that
 built the set.

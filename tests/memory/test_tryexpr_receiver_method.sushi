@@ -19,7 +19,7 @@
 # that cannot be followed by a method call buys nothing over a prefix one.
 #
 # Do NOT rewrite this file two-step (`let Row r = parse_row(7)??` then `r.hash()`). That
-# passes and hides the defect. See MM.md B5 for the last time that was tried.
+# passes and hides the defect.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "id=7\n"
 # EXPECT_NO_LEAKS: true
