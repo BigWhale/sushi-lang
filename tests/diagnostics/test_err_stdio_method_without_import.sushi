@@ -1,0 +1,9 @@
+# The message this reports used to contain the literal text `{receiver.id}.{method}()`
+# -- an f-string body passed without the `f` prefix, so the braces reached the user
+# and named no variable they wrote (#270).
+# EXPECT_ERROR_CODE: CE0096
+# EXPECT_STDERR_CONTAINS: "use stdout.write()"
+
+fn main() i32:
+    stdout.write("Mostly Harmless")
+    return Result.Ok(0)

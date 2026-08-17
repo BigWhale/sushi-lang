@@ -27,19 +27,36 @@ def _validate_element_argument(call: MethodCall, element_type: Type, reporter: A
                 index=1, expected=display_type(element_type), got=display_type(arg_type))
 
 
+def _names_an_unshadowed_constant(expr: Any, validator: Any) -> Any:
+    """The constant `expr` names, or None. A local of the same name shadows it."""
+    if validator is None or not isinstance(expr, Name):
+        return None
+    name = expr.id
+    if name in getattr(validator, 'variable_types', {}):
+        return None
+    return name if name in validator.const_table.by_name else None
+
+
+def reject_write_to_constant(target: Any, what: str, loc: Any,
+                             reporter: Any, validator: Any) -> bool:
+    """Reject a write that would reach a global constant (CE2096).
+
+    Both writers ask here: an in-place method, and an indexed assignment. The store
+    would land in .rodata, which is undefined behaviour rather than a diagnostic.
+    """
+    name = _names_an_unshadowed_constant(target, validator)
+    if name is None:
+        return False
+    er.emit(reporter, er.ERR.CE2096, loc, what=what, name=name)
+    return True
+
+
 def _reject_mutation_of_constant(call: MethodCall, reporter: Any, validator: Any) -> bool:
     """Reject an in-place array method whose receiver is a global constant."""
-    if call.method not in _MUTATING_ARRAY_METHODS or validator is None:
+    if call.method not in _MUTATING_ARRAY_METHODS:
         return False
-    if not isinstance(call.receiver, Name):
-        return False
-    name = call.receiver.id
-    if name in getattr(validator, 'variable_types', {}):
-        return False
-    if name not in validator.const_table.by_name:
-        return False
-    er.emit(reporter, er.ERR.CE2096, call.loc, method=call.method, name=name)
-    return True
+    return reject_write_to_constant(call.receiver, f"call '{call.method}()' on",
+                                    call.loc, reporter, validator)
 
 
 def _is_integer_type(type_: Type) -> bool:

@@ -1,0 +1,9 @@
+# The string-element twin of the constant gate. A `const string[N]` now emits a real
+# global (#260), so this shape reaches the CE2096 check instead of dying at CE0055.
+# EXPECT_ERROR_CODE: CE2096
+
+const string[2] NAMES = ["ford", "arthur"]
+
+fn main() i32:
+    NAMES[0] := "zaphod"
+    return Result.Ok(0)

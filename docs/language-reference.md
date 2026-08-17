@@ -822,15 +822,24 @@ fn local_wins() i32:
     return Result.Ok(PRIMES[0])         # 7, and .fill()/.reverse() work on it
 ```
 
+A `string` element type works like any other:
+
+```sushi
+const string[2] NAMES = ["ford", "arthur"]
+
+fn main() i32:
+    println(NAMES[1])                   # arthur
+    let string[2] copy = NAMES          # an ordinary local
+    println(copy[0])                    # ford
+    return Result.Ok(0)
+```
+
 **Restrictions:**
 - Array must be fixed-size (`T[N]`), not dynamic (`T[]`)
 - All elements must be compile-time constant expressions
-- **Immutable**: `.fill()` and `.reverse()` mutate their receiver in place, so calling either on a
-  constant is **CE2096**. The constant lives in read-only memory; copy it into a local and mutate
-  that. (A local shadowing the constant is freely mutable.)
-- **`string` elements are not supported yet**: a `const string[N]` never emits its global, so every
-  use of it fails with `CE0055` — including copying it into a local
-  ([issue #260](https://github.com/BigWhale/sushi-lang/issues/260))
+- **Immutable**: `.fill()`, `.reverse()` and `PRIMES[0] := 9` all write to their receiver, so each
+  of them on a constant is **CE2096**. The constant lives in read-only memory; copy it into a local
+  and mutate that. (A local shadowing the constant is freely mutable.)
 
 ### Restrictions
 

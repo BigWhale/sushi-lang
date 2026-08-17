@@ -38,14 +38,17 @@ def validate_files_function_call(func_name: str, args: list, reporter, loc) -> N
     """Validate a files utility function call."""
     from sushi_lang.internals import errors as er
 
+    # CE2009, the arity code. This used to emit CE0004, which is registered as
+    # "duplicate struct '{name}'" and takes no `func`/`expected`/`got` -- so the
+    # message was about the wrong thing and none of the parameters reached it.
     if func_name in ["exists", "is_file", "is_dir", "file_size", "remove", "rmdir"]:
         if len(args) != 1:
-            er.emit(reporter, er.ERR.CE0004, loc,
-                   func=func_name, expected=1, got=len(args))
+            er.emit(reporter, er.ERR.CE2009, loc,
+                   name=func_name, expected=1, got=len(args))
             return
     elif func_name in ["rename", "copy", "mkdir"]:
         if len(args) != 2:
-            er.emit(reporter, er.ERR.CE0004, loc,
-                   func=func_name, expected=2, got=len(args))
+            er.emit(reporter, er.ERR.CE2009, loc,
+                   name=func_name, expected=2, got=len(args))
             return
 

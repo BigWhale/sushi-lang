@@ -1,0 +1,8 @@
+# An executable needs an entry point. Without this check the missing `_main` symbol
+# reached the LINKER, so the user got raw `cc` stderr and then a CE0000 ICE -- for a
+# condition in their own program (#251).
+# EXPECT_ERROR_CODE: CE3007
+# EXPECT_STDERR_CONTAINS: "--lib"
+
+fn helper(i32 a) i32:
+    return Result.Ok(a + 1)

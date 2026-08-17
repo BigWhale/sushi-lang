@@ -95,6 +95,7 @@ class ConsumingUse(Enum):
     STRUCT_FIELD      # S(field: <source>)
     ENUM_PAYLOAD      # E.Variant(<source>), incl. Result.Ok / Maybe.Some
     ARRAY_ELEMENT     # from([<source>, ...]) and [<source>, ...]
+    ELEMENT_ASSIGN    # arr[i] := <source>
     CONTAINER_INSERT  # List.push/.insert, HashMap.insert (key AND value), T[].push
     RETURN            # return Result.Ok(<source>)
     CAPTURE           # a lambda's captured environment slot
@@ -104,7 +105,10 @@ class ConsumingUse(Enum):
 **Closedness is the property that fixes the recurring bug, not the naming.** Today nobody can answer
 "what are all the positions?" — #250's triage said two, its own fix found five, #277 says one, the
 2026-07-30 audit found eleven. The set is rediscovered empirically each time. An enum makes it
-impossible to add a twelfth without declaring it, and makes coverage assertable.
+impossible to add a thirteenth without declaring it, and makes coverage assertable. `ELEMENT_ASSIGN`
+is the twelfth, and it is the mechanism working: `arr[i] := v` (#261) could not be added without
+naming its position here, so the (BORROWED, MOVE) cell rejected `arr[0] := arr[1]` on an owning
+element type from the first line of the implementation.
 
 `RETURN` is a genuine special case and must stay a distinct variant: a returned value is emitted
 *before* scope cleanup runs, which is why `return Result.Ok(w.items)` handed the caller an

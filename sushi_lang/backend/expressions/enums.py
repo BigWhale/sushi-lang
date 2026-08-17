@@ -54,7 +54,7 @@ def emit_enum_constructor_from_method_call(
     variant = enum_type.get_variant(variant_name)
 
     if len(args) != len(variant.associated_types):
-        raise_internal_error("CE0096", operation="Variant {enum_type.name}.{variant_name} expects {len(variant.associated_types)} arguments, got {len(args)}"
+        raise_internal_error("CE0096", operation=f"Variant {enum_type.name}.{variant_name} expects {len(variant.associated_types)} arguments, got {len(args)}"
         )
 
     llvm_enum_type = codegen.types.get_enum_type(enum_type)

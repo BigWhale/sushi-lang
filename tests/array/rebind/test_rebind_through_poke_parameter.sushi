@@ -13,7 +13,9 @@ fn set_fixed(poke i32[3] numbers, i32 value) ~:
     numbers[1] := value
     return Result.Ok(~)
 
-fn set_word(poke string[] words, string word) ~:
+# The word is CONSUMED into the array, so the parameter must declare `nom`.
+# An unmarked one is a borrow and reports CE2411.
+fn set_word(poke string[] words, nom string word) ~:
     words[0] := word
     return Result.Ok(~)
 
@@ -21,7 +23,7 @@ fn eat_and_write(nom i32[] owned) i32:
     owned[0] := 5
     return Result.Ok(owned[0])
 
-fn main() i32:
+fn run_test() i32:
     let i32[] dynamic = from([1, 2])
     set_first(poke dynamic, 77)
 
@@ -32,7 +34,7 @@ fn main() i32:
 
     let string prefix = "pre"
     let string[] words = from(["{prefix}-old"])
-    set_word(poke words, "{prefix}-new")
+    set_word(poke words, nom "{prefix}-new")
     println("strings: {words[0]}")
 
     let i32[] handover = from([1, 2])
@@ -41,3 +43,7 @@ fn main() i32:
         return Result.Ok(1)
 
     return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

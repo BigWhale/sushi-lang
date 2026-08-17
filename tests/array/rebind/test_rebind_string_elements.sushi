@@ -9,7 +9,7 @@
 fn make_towel() string:
     return Result.Ok("towel")
 
-fn main() i32:
+fn run_test() i32:
     let string prefix = "pre"
 
     # Every element starts OWNING: an interpolation allocates.
@@ -25,3 +25,7 @@ fn main() i32:
     println("dynamic: {dynamic[0]} {dynamic[1]}")
 
     return Result.Ok(0)
+
+fn main() i32:
+    let i32 result = run_test().realise(99)
+    return Result.Ok(result)

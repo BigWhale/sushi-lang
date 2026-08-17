@@ -88,11 +88,15 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
 def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
     """Emit variable or field rebinding (assignment to existing variable or struct field)."""
     from llvmlite import ir
-    from sushi_lang.semantics.ast import Name, MemberAccess
+    from sushi_lang.semantics.ast import IndexAccess, Name, MemberAccess
     from sushi_lang.semantics.typesys import ReferenceType
 
     if isinstance(stmt.target, MemberAccess):
         _emit_field_rebind(codegen, stmt)
+        return
+
+    if isinstance(stmt.target, IndexAccess):
+        _emit_element_rebind(codegen, stmt)
         return
 
     if not isinstance(stmt.target, Name):
@@ -254,6 +258,40 @@ def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value'
     codegen.moves.unmark(slot)
     if da is not None:
         da.reset_destroyed_on_rebind(var_name)
+
+
+def _emit_element_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
+    """Emit indexed assignment (arr[i] := value)."""
+    from sushi_lang.semantics.ast import IndexAccess
+
+    target = stmt.target
+    if not isinstance(target, IndexAccess):
+        raise_internal_error("CE0022", type=f"Expected IndexAccess, got {type(target)}")
+
+    # The value FIRST, then the element address: a dynamic array can reallocate while
+    # the value is emitted, which would leave an address taken earlier pointing into
+    # the freed buffer. Rust orders `a[i] = v` the same way.
+    val = codegen.expressions.emit_expr(stmt.value)
+
+    # The element type is the stamp Pass 2 put on the target while inferring it. The
+    # backend never re-derives it: a miss is a gap in Pass 2, not a user error.
+    element_type = getattr(target, 'inferred_element_type', None)
+    if element_type is None:
+        raise_internal_error("CE0015", message="indexed assignment target carries no "
+                                               "element type from Pass 2")
+
+    val = consume(codegen, stmt.value, val, element_type, ConsumingUse.ELEMENT_ASSIGN)
+
+    # Bounds-checked, and the one address the read side already knows how to take.
+    from sushi_lang.backend.types.arrays.indexing import emit_element_pointer
+    element_ptr = emit_element_pointer(codegen, target)
+
+    # Free what the element held, or overwriting it leaks. AFTER the value is consumed,
+    # so a source aliasing the buffer about to be freed has already been read.
+    _destroy_old_value(codegen, element_ptr, element_type)
+
+    codegen.builder.store(
+        codegen.utils.cast_for_param(val, element_ptr.type.pointee), element_ptr)
 
 
 def _emit_field_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:

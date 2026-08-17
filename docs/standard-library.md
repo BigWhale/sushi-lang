@@ -166,6 +166,7 @@ match open("output.txt", FileMode.Write()):
 - Methods: `len()`, `get()`, `push()`, `pop()`, `iter()`, `clone()`
 - Safe access with `get()` returns `Maybe@(T)`
 - Unsafe direct indexing: `arr[i]`
+- Indexed assignment: `arr[i] := v` (bounds-checked; the element it replaces is freed)
 
 **Strings** - 33 methods (`use <collections/strings>`):
 - Inspection, slicing, transformation, padding, stripping
