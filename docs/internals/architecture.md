@@ -413,7 +413,13 @@ array_len(arr)  # Function call
 
 ### Phase 3: Borrow Checking
 
-**File:** `semantics/passes/borrow.py`
+**File:** `semantics/passes/borrow/`
+
+- `__init__.py` - `BorrowChecker`: the state, `run()`, and the callable/expression walk
+- `statements.py` / `borrows.py` / `bindings.py` / `calls.py` / `consume.py` - the rules
+- `reads.py` / `types.py` - what an expression reads, and the type algebra behind it
+- `writes.py` - the `READONLY_RECEIVERS` gate table
+- `flow.py` / `state.py` / `diagnostics.py` / `destroy_effects.py`
 
 **Responsibilities:**
 - Ensure single active borrow per variable

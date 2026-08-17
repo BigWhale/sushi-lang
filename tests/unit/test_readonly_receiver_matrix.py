@@ -272,9 +272,9 @@ def test_a_rebound_let_borrow_becomes_writable(analyze):
 
 def test_every_readonly_kind_is_in_the_gate_table(analyze):
     """A kind in the checker's table without a row here is a hole in this matrix."""
-    from sushi_lang.semantics.passes.borrow import BorrowChecker
+    from sushi_lang.semantics.passes.borrow import READONLY_RECEIVERS
 
-    table_codes = {kind.code.code for kind in BorrowChecker._READONLY_RECEIVERS}
+    table_codes = {kind.code.code for kind in READONLY_RECEIVERS}
     assert table_codes == {code for code, _ in KINDS.values()}
 
 

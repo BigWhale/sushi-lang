@@ -396,7 +396,7 @@ to take". It was in fact a shallow byte-copy of an owner's fat pointer — which
 through it was silently discarded (#253), re-wrapping it double-freed (#277), and shadowing through
 it read the wrong field index (#279).
 
-**What it is now:** typed. `_register_pattern_bindings` (`semantics/passes/borrow.py`) stamps each
+**What it is now:** typed. `register_pattern_bindings` (`semantics/passes/borrow/bindings.py`) stamps each
 `match` binding's `var_type` from the variant Pass 2 already resolved, and the `foreach` binding is
 stamped from the container's element type — `owns_heap` finally has something to answer on, and
 the three bugs above are closed rather than patched individually: #277 and #279 by the typing

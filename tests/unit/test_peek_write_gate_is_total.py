@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from sushi_lang.semantics.passes.borrow import _MUTATING_METHODS
+from sushi_lang.semantics.passes.borrow import MUTATING_METHODS
 
 
 def _program(mode: str, param_type: str, call: str, setup: str = "") -> str:
@@ -21,7 +21,7 @@ def _program(mode: str, param_type: str, call: str, setup: str = "") -> str:
 
 _HASHMAP = "use <collections/hashmap>\n\n"
 
-# One case per member of `_MUTATING_METHODS`: (parameter type, the call, extra source).
+# One case per member of `MUTATING_METHODS`: (parameter type, the call, extra source).
 # The receiver type must genuinely have the method, or Pass 2 rejects the call before
 # the borrow checker ever runs and the case would prove nothing.
 CASES = {
@@ -46,7 +46,7 @@ def _codes(reporter) -> list[str]:
 
 def test_every_mutating_method_has_a_case():
     """A method added to the set without a case here is a hole in this gate."""
-    assert set(CASES) == set(_MUTATING_METHODS)
+    assert set(CASES) == set(MUTATING_METHODS)
 
 
 @pytest.mark.parametrize("method", sorted(CASES))

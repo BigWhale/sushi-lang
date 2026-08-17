@@ -7,7 +7,7 @@ import textwrap
 import typing
 
 from sushi_lang.semantics import ast as sushi_ast
-from sushi_lang.semantics.passes.borrow import BorrowChecker, _INERT_EXPRS
+from sushi_lang.semantics.passes.borrow import BorrowChecker, INERT_EXPRS
 
 
 def _expr_union_members() -> set[str]:
@@ -32,10 +32,10 @@ def _dispatched_names() -> set[str]:
                 if isinstance(elt, ast.Name):
                     names.add(elt.id)
 
-    # `_INERT_EXPRS` is referenced by name in the source; resolve it to its members.
-    if "_INERT_EXPRS" in names:
-        names.discard("_INERT_EXPRS")
-        names |= {t.__name__ for t in _INERT_EXPRS}
+    # `INERT_EXPRS` is referenced by name in the source; resolve it to its members.
+    if "INERT_EXPRS" in names:
+        names.discard("INERT_EXPRS")
+        names |= {t.__name__ for t in INERT_EXPRS}
 
     return names
 
@@ -45,7 +45,7 @@ def test_every_expression_node_has_an_arm():
     assert not missing, (
         f"BorrowChecker._check_expr has no arm for: {missing}.\n"
         "An expression node with no arm gets NO borrow checking -- silently. Add a real "
-        "arm, or add it to _INERT_EXPRS if it genuinely owns nothing and names nothing."
+        "arm, or add it to INERT_EXPRS if it genuinely owns nothing and names nothing."
     )
 
 
@@ -62,14 +62,14 @@ def test_no_arm_names_a_node_outside_the_expr_union():
 def test_inert_exprs_really_are_leaves():
     """An 'inert' node must have no sub-expression fields -- else we are skipping a subtree."""
     expr_members = _expr_union_members()
-    for node_type in _INERT_EXPRS:
+    for node_type in INERT_EXPRS:
         hints = typing.get_type_hints(node_type, globalns=vars(sushi_ast))
         for field, hint in hints.items():
             referenced = {
                 t.__name__ for t in typing.get_args(hint) if hasattr(t, "__name__")
             } | ({hint.__name__} if hasattr(hint, "__name__") else set())
             assert not (referenced & expr_members), (
-                f"{node_type.__name__} is in _INERT_EXPRS but its field '{field}' holds "
+                f"{node_type.__name__} is in INERT_EXPRS but its field '{field}' holds "
                 f"an expression ({hint}). It is not a leaf -- give it a real arm."
             )
 

@@ -253,7 +253,7 @@ Ordered so each step is independently verifiable. One PR, red-first tests per pr
   whether to extend `is_owning_type` in place or add `type_moves_by_value` delegating to it;
   extending in place is preferred **iff** an audit of all `is_owning_type` call sites confirms
   every caller wants the new answer (expected: yes — they are all move/ownership sites).
-- `semantics/passes/borrow.py` — no structural change expected: `_mark_moved_if_applicable`
+- `semantics/passes/borrow/` — no structural change expected: `_mark_moved_if_applicable`
   (`:847`) and the call-arg loop (`:546-552`) already delegate to the predicate, and CE2405
   already carries the two-location "moved here" note (`_emit_use_after_move`, `:822-832`).
   Verify the branch-join reconciliation (`:427`) behaves for struct moves in `if` arms — the

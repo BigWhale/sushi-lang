@@ -10,8 +10,8 @@
 # The cause was a predicate that did not agree with its own twin. `is_container_get_call`
 # keys on `expr.method == "get"` and never unwrapped the `??`, so `l.get(0)??` answered
 # "not a get-out" and `expression_is_temporary` answered "nobody owns this" -- the exact
-# question whose wrong answer frees a borrow. `_reads_through_owner`
-# (semantics/passes/borrow.py), the same rule on the semantics side, unwraps `TryExpr`
+# question whose wrong answer frees a borrow. `reads_through_owner`
+# (semantics/passes/borrow/reads.py), the same rule on the semantics side, unwraps `TryExpr`
 # first and always did.
 #
 # The enum payload is a dynamic array because that is the cheapest shape whose double free
