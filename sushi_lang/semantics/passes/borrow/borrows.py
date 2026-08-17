@@ -23,10 +23,17 @@ def check_borrow(checker: 'BorrowChecker', borrow: Borrow) -> None:
     """Check a borrow expression: `peek x`, `poke x`, `peek x.field`, `poke x.field`."""
     is_poke = borrow.mutability == "poke"
     target = borrow.expr
-    # The CW2409 re-borrow warning is for the WHOLE variable only: `poke r.field` where
-    # `r` is already a `poke` reference borrows the field, not the reference again.
+    # CW2409 warns on a DIRECT re-borrow only, and that narrow scope is a decision, not
+    # an omission: `inner(poke n)` takes the whole referent, while `set_port(poke
+    # cfg.port)` hands over a strictly SMALLER place. That is disjoint-field borrowing,
+    # the idiomatic way to give a helper one field of a `poke` parameter, and Rust
+    # accepts it without a word. `tests/memory/test_borrow_member_refparam.sushi` is the
+    # gate -- widening this to a field borrow turns it red, which is the intended alarm.
     warn_reborrow = isinstance(target, Name)
     if isinstance(target, MemberAccess):
+        # A field borrow is tracked against the BASE variable: this pass tracks whole
+        # variables, not sub-places, so the two spellings differ in exactly one thing --
+        # where the name comes from.
         target = member_access_base(target)
 
     if not isinstance(target, Name):

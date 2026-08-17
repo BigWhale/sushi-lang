@@ -5,6 +5,20 @@
 # EXPECTED_OUTPUT: 9000
 # EXPECT_NO_LEAKS: true
 
+# This file is also the gate for the SCOPE of CW2409 (nested mutable borrow).
+#
+# `set_port(poke cfg.port)` takes a `poke` borrow through `cfg`, which is itself a
+# `poke` reference. A DIRECT re-borrow of the whole referent (`inner(poke n)`) warns --
+# see test_warn_poke_nested_calls.sushi. This shape does NOT, because it passes
+# exclusive access to a strictly SMALLER place: one field. That is disjoint-field
+# borrowing, the idiomatic way to hand a helper one field of a `poke` parameter, and
+# Rust accepts it without a word.
+#
+# So the exit code here is load-bearing. If CW2409 is ever widened to a field borrow,
+# this test goes red (a warning exits 1), and that is the intended alarm, not a bug in
+# the test. The check lives in `borrow.py:_check_borrow`, keyed on the borrow being a
+# bare `Name`.
+
 struct Config:
     i32 port
 
