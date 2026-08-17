@@ -4,7 +4,7 @@ import typing
 from llvmlite import ir
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types, get_string_type, get_maybe_type
-from sushi_lang.sushi_stdlib.src.string_helpers import fat_pointer_to_cstr, cstr_to_fat_pointer_with_len
+from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer_with_len
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc
 
 _platform_env = get_platform_module('env')
@@ -31,16 +31,16 @@ def generate_getenv(module: ir.Module) -> None:
     # data must hold a string fat pointer (16 bytes -> K=2 i64 words)
     maybe_string_type = get_maybe_type(string_type)
 
-    func_type = ir.FunctionType(maybe_string_type, [string_type])
+    # The key arrives already marshalled as a C string, and the CALLER frees it (#292). The
+    # body used to marshal it here and free nothing.
+    func_type = ir.FunctionType(maybe_string_type, [i8_ptr])
     func = ir.Function(module, func_type, name="sushi_getenv")
 
-    key_param = func.args[0]
-    key_param.name = "key"
+    key_cstr = func.args[0]
+    key_cstr.name = "key"
 
     entry = func.append_basic_block("entry")
     builder = ir.IRBuilder(entry)
-
-    key_cstr = fat_pointer_to_cstr(module, builder, key_param)
 
     result_ptr = builder.call(libc_getenv, [key_cstr], name="result_ptr")
 
@@ -90,23 +90,20 @@ def generate_getenv(module: ir.Module) -> None:
 def generate_setenv(module: ir.Module) -> None:
     """Generate setenv function: setenv(string key, string value) -> i32"""
     i8, i8_ptr, i32, i64 = get_basic_types()
-    string_type = get_string_type()
 
     libc_setenv = _platform_env.declare_setenv(module)
 
-    func_type = ir.FunctionType(i32, [string_type, string_type])
+    # Both arguments arrive already marshalled, and the CALLER frees them (#292).
+    func_type = ir.FunctionType(i32, [i8_ptr, i8_ptr])
     func = ir.Function(module, func_type, name="sushi_setenv")
 
-    key_param = func.args[0]
-    value_param = func.args[1]
-    key_param.name = "key"
-    value_param.name = "value"
+    key_cstr = func.args[0]
+    value_cstr = func.args[1]
+    key_cstr.name = "key"
+    value_cstr.name = "value"
 
     entry = func.append_basic_block("entry")
     builder = ir.IRBuilder(entry)
-
-    key_cstr = fat_pointer_to_cstr(module, builder, key_param)
-    value_cstr = fat_pointer_to_cstr(module, builder, value_param)
 
     overwrite = ir.Constant(i32, 1)
     result = builder.call(libc_setenv, [key_cstr, value_cstr, overwrite], name="setenv_result")

@@ -8,7 +8,7 @@ from sushi_lang.semantics.ast import Call, MethodCall, DotCall, Name
 from sushi_lang.backend.expressions.calls.file_open import emit_open_function
 from sushi_lang.backend.expressions.calls.stdlib import emit_time_function, emit_math_function, emit_env_function
 from sushi_lang.backend.expressions.calls import intrinsics, generics
-from sushi_lang.backend.expressions.calls.utils import emit_receiver_value
+from sushi_lang.backend.expressions.calls.utils import emit_receiver_value, marshal_cstr
 from sushi_lang.backend.expressions.calls.variadic import build_variadic_array
 from sushi_lang.backend.ownership import ConsumingUse, consume
 from sushi_lang.internals.errors import raise_internal_error
@@ -395,9 +395,7 @@ def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     for arg, param_ty in zip(expr.args[:num_fixed], sig.param_types, strict=True):
         value = codegen.expressions.emit_expr(arg)
         if isinstance(param_ty, BuiltinType) and param_ty == BuiltinType.STRING:
-            c_str = codegen.runtime.strings.emit_to_cstr(value)
-            codegen.memory.register_cstr(c_str)
-            emitted_args.append(c_str)
+            emitted_args.append(marshal_cstr(codegen, value))
         else:
             emitted_args.append(value)
 
@@ -436,9 +434,7 @@ def _promote_variadic_arg(codegen: 'LLVMCodegen', value: ir.Value, sushi_ty) -> 
 
     # string -> char* (registered for the per-scope free, no leak).
     if isinstance(sushi_ty, BuiltinType) and sushi_ty == BuiltinType.STRING:
-        c_str = codegen.runtime.strings.emit_to_cstr(value)
-        codegen.memory.register_cstr(c_str)
-        return c_str
+        return marshal_cstr(codegen, value)
 
     builder = codegen.builder
     vty = value.type

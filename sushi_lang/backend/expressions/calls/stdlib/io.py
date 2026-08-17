@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING
 from llvmlite import ir
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.backend.utils import require_builder
+from sushi_lang.backend.expressions.calls.utils import emit_cstr_arg
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -174,20 +174,22 @@ def emit_files_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: boo
 
     from sushi_lang.backend.functions import declare_stdlib_function
 
-    string_type = codegen.types.ll_type(BuiltinType.STRING)
+    # Every path argument is marshalled HERE and freed at scope exit, like an FFI
+    # argument (#292). The callees take `i8*` and free nothing.
+    i8_ptr = codegen.types.i8.as_pointer()
 
     if func_name in ["exists", "is_file", "is_dir"]:
         if len(expr.args) != 1:
             raise_internal_error("CE0023", method=func_name, expected=1, got=len(expr.args))
-        path_value = codegen.expressions.emit_expr(expr.args[0])
-        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, i8, [string_type])
-        result = codegen.builder.call(stdlib_func, [path_value], name=f"{func_name}_result")
+        path_cstr = emit_cstr_arg(codegen, expr.args[0])
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, i8, [i8_ptr])
+        result = codegen.builder.call(stdlib_func, [path_cstr], name=f"{func_name}_result")
         return codegen.utils.as_i1(result) if to_i1 else result
 
     elif func_name in ["file_size", "remove", "rmdir"]:
         if len(expr.args) != 1:
             raise_internal_error("CE0023", method=func_name, expected=1, got=len(expr.args))
-        path_value = codegen.expressions.emit_expr(expr.args[0])
+        path_cstr = emit_cstr_arg(codegen, expr.args[0])
 
         # Result<i64|i32, FileError> is {i32 tag, [2 x i64] data} (#300 phase 2):
         # FileError is a unit enum {i32, [1 x i64]} = 16 bytes, so K = max(payload, 16)/8 = 2.
@@ -196,36 +198,36 @@ def emit_files_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: boo
         i64 = ir.IntType(64)
         ok_type = i64 if func_name == "file_size" else i32
         result_type = get_result_type(ok_type, get_unit_enum_type())
-        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, result_type, [string_type])
-        result = codegen.builder.call(stdlib_func, [path_value], name=f"{func_name}_result")
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, result_type, [i8_ptr])
+        result = codegen.builder.call(stdlib_func, [path_cstr], name=f"{func_name}_result")
         return codegen.utils.as_i1(result) if to_i1 else result
 
     elif func_name == "rename" or func_name == "copy":
         if len(expr.args) != 2:
             raise_internal_error("CE0023", method=func_name, expected=2, got=len(expr.args))
 
-        arg1_value = codegen.expressions.emit_expr(expr.args[0])
-        arg2_value = codegen.expressions.emit_expr(expr.args[1])
+        arg1_cstr = emit_cstr_arg(codegen, expr.args[0])
+        arg2_cstr = emit_cstr_arg(codegen, expr.args[1])
 
         # Result<i32, FileError> is {i32 tag, [2 x i64] data} (#300 phase 2, see file_size)
         from sushi_lang.sushi_stdlib.src.type_definitions import get_result_type, get_unit_enum_type
         result_type = get_result_type(i32, get_unit_enum_type())
-        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, result_type, [string_type, string_type])
-        result = codegen.builder.call(stdlib_func, [arg1_value, arg2_value], name=f"{func_name}_result")
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, result_type, [i8_ptr, i8_ptr])
+        result = codegen.builder.call(stdlib_func, [arg1_cstr, arg2_cstr], name=f"{func_name}_result")
         return codegen.utils.as_i1(result) if to_i1 else result
 
     elif func_name == "mkdir":
         if len(expr.args) != 2:
             raise_internal_error("CE0023", method=func_name, expected=2, got=len(expr.args))
 
-        path_value = codegen.expressions.emit_expr(expr.args[0])
+        path_cstr = emit_cstr_arg(codegen, expr.args[0])
         mode_value = codegen.expressions.emit_expr(expr.args[1])
 
         # Result<i32, FileError> is {i32 tag, [2 x i64] data} (#300 phase 2, see file_size)
         from sushi_lang.sushi_stdlib.src.type_definitions import get_result_type, get_unit_enum_type
         result_type = get_result_type(i32, get_unit_enum_type())
-        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, result_type, [string_type, i32])
-        result = codegen.builder.call(stdlib_func, [path_value, mode_value], name="mkdir_result")
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, result_type, [i8_ptr, i32])
+        result = codegen.builder.call(stdlib_func, [path_cstr, mode_value], name="mkdir_result")
         return codegen.utils.as_i1(result) if to_i1 else result
 
     else:
