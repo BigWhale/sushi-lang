@@ -16,6 +16,7 @@ _GROW = (
 _SHAPES = {
     "mutating_method": "r.items.push(9)",
     "field_assign":    "r.n := 42",
+    "element_assign":  "r.items[0] := 9",
     "poke_borrow":     "grow(poke r.items)",
 }
 

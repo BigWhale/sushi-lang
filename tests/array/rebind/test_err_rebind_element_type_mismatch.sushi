@@ -1,0 +1,8 @@
+# The assigned value must be an element of this array. CE2002, the same code a
+# whole-array rebind reports.
+# EXPECT_ERROR_CODE: CE2002
+
+fn main() i32:
+    let i32[3] numbers = [1, 2, 3]
+    numbers[0] := "not a number"
+    return Result.Ok(0)

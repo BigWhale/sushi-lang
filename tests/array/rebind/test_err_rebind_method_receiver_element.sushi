@@ -1,0 +1,15 @@
+# The receiver of an extension method is a read-only borrow unless it declares
+# `poke self`, so an indexed assignment under it is CE2421.
+# EXPECT_ERROR_CODE: CE2421
+
+struct Board:
+    i32[3] grid
+
+extend Board mark() i32:
+    self.grid[0] := 9
+    return 1
+
+fn main() i32:
+    let Board b = Board([0, 0, 0])
+    let i32 n = b.mark()
+    return Result.Ok(n - 1)

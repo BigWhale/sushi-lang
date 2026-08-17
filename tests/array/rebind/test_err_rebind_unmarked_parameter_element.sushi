@@ -1,0 +1,12 @@
+# Every parameter but `nom` is a borrow, so an unmarked one is a private copy. The
+# write would be lost, and it is CE2422. The escape is `poke i32[]` or `nom i32[]`.
+# EXPECT_ERROR_CODE: CE2422
+
+fn touch(i32[] numbers) ~:
+    numbers[0] := 9
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32[] numbers = from([1, 2])
+    touch(numbers)
+    return Result.Ok(0)

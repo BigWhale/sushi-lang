@@ -1,0 +1,11 @@
+# An indexed assignment is a consuming position, so an OWNED source is moved into the
+# array. Reading the source afterwards is CE2405.
+# EXPECT_ERROR_CODE: CE2405
+
+fn main() i32:
+    let string prefix = "pre"
+    let string gift = "{prefix}-gift"
+    let string[] slots = from(["{prefix}-a"])
+    slots[0] := gift
+    println(gift)
+    return Result.Ok(0)

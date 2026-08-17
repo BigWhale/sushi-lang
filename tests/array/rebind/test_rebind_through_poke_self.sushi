@@ -1,0 +1,20 @@
+# `poke self` makes the receiver arrive by pointer, so an indexed assignment under it
+# must reach the caller's value.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "after: 31 32"
+# EXPECT_NO_LEAKS: true
+
+struct Board:
+    i32[3] grid
+    i32[] items
+
+extend Board mark(poke self, i32 value) ~:
+    self.grid[0] := value
+    self.items[1] := value + 1
+    return ~
+
+fn main() i32:
+    let Board b = Board([0, 0, 0], from([1, 2]))
+    b.mark(31)
+    println("after: {b.grid[0]} {b.items[1]}")
+    return Result.Ok(0)

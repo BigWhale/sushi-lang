@@ -1,0 +1,10 @@
+# A constant is emitted as a read-only global, so a store into one of its elements is
+# undefined behaviour, not a diagnostic. CE2096 is the code that keeps such a binary
+# from ever being produced.
+# EXPECT_ERROR_CODE: CE2096
+
+const i32[3] PRIMES = [2, 3, 5]
+
+fn main() i32:
+    PRIMES[0] := 9
+    return Result.Ok(0)

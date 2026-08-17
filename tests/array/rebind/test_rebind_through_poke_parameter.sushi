@@ -1,0 +1,43 @@
+# A `poke` parameter is a read-write borrow, so an indexed assignment through one
+# must reach the caller's array. A `nom` parameter owns its array and is writable too.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "caller sees: 77 88"
+# EXPECT_STDOUT_CONTAINS: "strings: pre-new"
+# EXPECT_NO_LEAKS: true
+
+fn set_first(poke i32[] numbers, i32 value) ~:
+    numbers[0] := value
+    return Result.Ok(~)
+
+fn set_fixed(poke i32[3] numbers, i32 value) ~:
+    numbers[1] := value
+    return Result.Ok(~)
+
+fn set_word(poke string[] words, string word) ~:
+    words[0] := word
+    return Result.Ok(~)
+
+fn eat_and_write(nom i32[] owned) i32:
+    owned[0] := 5
+    return Result.Ok(owned[0])
+
+fn main() i32:
+    let i32[] dynamic = from([1, 2])
+    set_first(poke dynamic, 77)
+
+    let i32[3] fixed = [1, 2, 3]
+    set_fixed(poke fixed, 88)
+
+    println("caller sees: {dynamic[0]} {fixed[1]}")
+
+    let string prefix = "pre"
+    let string[] words = from(["{prefix}-old"])
+    set_word(poke words, "{prefix}-new")
+    println("strings: {words[0]}")
+
+    let i32[] handover = from([1, 2])
+    let i32 first = eat_and_write(nom handover)??
+    if (first != 5):
+        return Result.Ok(1)
+
+    return Result.Ok(0)

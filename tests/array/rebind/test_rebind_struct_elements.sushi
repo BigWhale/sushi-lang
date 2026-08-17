@@ -1,0 +1,28 @@
+# A struct element, plain and OWNING. The owning one must free the struct it
+# replaces, including the dynamic array inside it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "plain: 7 8"
+# EXPECT_STDOUT_CONTAINS: "owning: 42 2"
+# EXPECT_NO_LEAKS: true
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Bag:
+    i32 tag
+    i32[] items
+
+fn main() i32:
+    let Point[2] points = [Point(1, 2), Point(3, 4)]
+    points[0] := Point(7, 8)
+    println("plain: {points[0].x} {points[0].y}")
+
+    let Bag[] bags = from([Bag(1, from([1, 2, 3])), Bag(2, from([4]))])
+    bags[0] := Bag(42, from([5, 6]))
+    println("owning: {bags[0].tag} {bags[0].items.len()}")
+
+    if (points[1].x != 3 or bags[1].tag != 2):
+        return Result.Ok(1)
+
+    return Result.Ok(0)

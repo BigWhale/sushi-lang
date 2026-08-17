@@ -1,0 +1,25 @@
+# The index is an expression, not a literal: a variable, arithmetic, and a loop
+# counter. Each write must reach the element the index names.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "squares: 0 1 4 9 16"
+# EXPECT_STDOUT_CONTAINS: "picked: 100 200"
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let i32[] squares = from([0, 0, 0, 0, 0])
+    foreach(i in 0..5):
+        squares[i] := i * i
+
+    println("squares: {squares[0]} {squares[1]} {squares[2]} {squares[3]} {squares[4]}")
+
+    let i32[4] fixed = [0, 0, 0, 0]
+    let i32 k = 1
+    fixed[k] := 100
+    fixed[k + 2] := 200
+
+    println("picked: {fixed[1]} {fixed[3]}")
+
+    if (fixed[0] != 0 or fixed[2] != 0):
+        return Result.Ok(1)
+
+    return Result.Ok(0)

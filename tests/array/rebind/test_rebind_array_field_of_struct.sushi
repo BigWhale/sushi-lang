@@ -1,0 +1,21 @@
+# The array is a STRUCT FIELD, fixed and dynamic. The write goes through the field
+# address, so it must reach the struct the local owns.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_CONTAINS: "grid: 5 0"
+# EXPECT_STDOUT_CONTAINS: "items: 99 2"
+# EXPECT_NO_LEAKS: true
+
+struct Board:
+    i32[3] grid
+    i32[] items
+
+fn main() i32:
+    let Board b = Board([0, 0, 0], from([1, 2]))
+
+    b.grid[0] := 5
+    b.items[0] := 99
+
+    println("grid: {b.grid[0]} {b.grid[1]}")
+    println("items: {b.items[0]} {b.items[1]}")
+
+    return Result.Ok(0)

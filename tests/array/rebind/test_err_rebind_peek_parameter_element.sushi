@@ -1,0 +1,12 @@
+# A `peek` parameter is a read-only borrow. An indexed assignment through one would
+# change the caller's array, so it is CE2408 -- the same gate a `.push()` meets.
+# EXPECT_ERROR_CODE: CE2408
+
+fn touch(peek i32[] numbers) ~:
+    numbers[0] := 9
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32[] numbers = from([1, 2])
+    touch(peek numbers)
+    return Result.Ok(0)

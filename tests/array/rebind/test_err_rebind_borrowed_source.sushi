@@ -1,0 +1,10 @@
+# A read out of an array is a BORROW: the array keeps the value and still frees it.
+# Storing it into another element would give it a second owner, so it is CE2411.
+# The escape is `.clone()`.
+# EXPECT_ERROR_CODE: CE2411
+
+fn main() i32:
+    let string prefix = "pre"
+    let string[] words = from(["{prefix}-a", "{prefix}-b"])
+    words[0] := words[1]
+    return Result.Ok(0)
