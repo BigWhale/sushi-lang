@@ -76,11 +76,17 @@ parameter list and return type.
 --8<-- "docs/tutorial/examples/10-generics/inference.sushi"
 ```
 
-`identity@(T)(T x) T` is the simplest possible generic function: hand it a value, get the
-same value back. The crucial part is the call site — `identity(7)` and `identity("towel")`.
-You do **not** write `identity@(i32)(7)`. The compiler looks at the argument `7`, sees it's
-an `i32`, and infers `T = i32` for you. `make_pair` does the same trick with two parameters
-at once.
+`identity@(T)(nom T x) T` is the simplest possible generic function: hand it a value, get the
+same value back. The crucial part is the call site — `identity(nom 7)` and
+`identity(nom "towel")`. You do **not** write `identity@(i32)(nom 7)`. The compiler looks at
+the argument `7`, sees it's an `i32`, and infers `T = i32` for you. `make_pair` does the same
+trick with two parameters at once.
+
+The `nom` is the parameter's **mode**: it says the function takes ownership of its argument,
+which `identity` must, because it hands it straight back out. A parameter borrows by default,
+and a borrow cannot be returned. The mode is part of the signature, so it is the same for
+every instantiation — `nom T` even at `T = i32`, where nothing is actually owned. See
+[Chapter 12](12-memory-management.md#passing-a-value-to-a-function).
 
 Output:
 

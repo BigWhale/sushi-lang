@@ -278,8 +278,11 @@ def test_closure_ships_private_helper_reference(tmp_path):
 
     assert not any(item.code == "CE5006" for item in reporter.items)
     assert [f["name"] for f in templates["private_functions"]] == ["secret"]
+    # The MODE ships with the parameter (`.slib` format 3): the consumer calls this helper
+    # from a monomorphized template body, so it needs the same answer to "who frees this
+    # argument?" the public records carry.
     assert templates["private_functions"][0]["params"] == [
-        {"name": "x", "type": "i32"}
+        {"name": "x", "type": "i32", "mode": "borrow"}
     ]
     assert templates["closure_summary"]["private_functions"] == ["secret"]
 

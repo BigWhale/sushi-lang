@@ -65,9 +65,14 @@ Each sushi emoji is 4 UTF-8 bytes, total magic is 16 bytes.
 
 ### Version
 
-4-byte unsigned integer (little-endian). Current version: `2`.
+4-byte unsigned integer (little-endian). Current version: `3`.
 
 Used for forward compatibility checks. Readers should reject files with unsupported versions.
+
+Version 3 added the per-parameter `mode` field (`borrow` / `nom` / `peek` / `poke`), which
+carries who frees each argument across the boundary. A version-2 file states no mode, so its
+parameters cannot be told apart from unmarked ones; it is rejected with **CE3509** rather than
+read with a guess. See `docs/design/borrow-model.md`.
 
 ### Reserved Fields
 
@@ -77,7 +82,7 @@ Used for forward compatibility checks. Readers should reject files with unsuppor
 - Checksums
 - Additional metadata offsets
 
-All spare fields must be zero in version 2.
+All spare fields must be zero in version 3.
 
 ### Metadata Section
 
@@ -104,7 +109,7 @@ Variable-length raw LLVM bitcode (identical to `.bc` files).
     "public_functions": [
         {
             "name": str,
-            "params": [{"name": str, "type": str}],
+            "params": [{"name": str, "type": str, "mode": str}],
             "return_type": str,
             "is_generic": bool,
             "type_params": [str]       # If is_generic
@@ -189,7 +194,7 @@ Variable-length raw LLVM bitcode (identical to `.bc` files).
         "private_functions": [
             {
                 "name": str,
-                "params": [{"name": str, "type": str}],
+                "params": [{"name": str, "type": str, "mode": str}],
                 "return_type": str
             }
         ],
@@ -260,7 +265,7 @@ Bitcode: 5,432 bytes
 ### Writing
 
 1. Write 16-byte magic
-2. Write 4-byte version (2)
+2. Write 4-byte version (3)
 3. Write 24 bytes of zeros (reserved)
 4. Serialize metadata to MessagePack
 5. Write 8-byte metadata length

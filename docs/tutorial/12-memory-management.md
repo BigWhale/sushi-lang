@@ -73,19 +73,45 @@ independent arrays, ask for one explicitly with `.clone()`.
 The same move rule covers every owning type — dynamic arrays, `List@(T)`, `Own@(T)`, and **any struct
 or enum that holds one of those** (move-ness is compositional: a value moves iff it transitively owns
 heap). A plain-data or string-only struct still copies (its string field is cloned and the source
-stays usable). Passing an owning value by value to a function moves it: the callee takes ownership and
-frees it at scope exit, so the caller must not use it afterwards. Borrow with `peek` / `poke` (or
-pass a `.clone()` — auto-derived for every struct and enum) when you want to keep it. (One special
-case: `main`'s `string[] args` is a borrowed view of the process argument vector, not a heap-owned
-array — borrow it downstream, never move it by value.)
+stays usable).
 
-## References: borrowing without owning
+## Passing a value to a function
 
-Moving is great for ownership, but you often want to *lend* a value to a function without
-giving it away. That's a **borrow**, and Sushi has two flavours:
+Assigning moves, but **calling does not**. A parameter is a *borrow* unless it says otherwise: the
+caller keeps the value and frees it, so `f(x)` leaves `x` usable. To hand a value over, write `nom`
+on the parameter and again at the call site:
+
+```sushi
+fn eat(nom i32[] items) i32:
+    return Result.Ok(items.len())
+    # items is freed here -- this function is the owner now
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3])
+    println(eat(nom data).realise(-1))
+    # println(data.len())   # CE2405: data was handed over
+    return Result.Ok(0)
+```
+
+The marker appears at **both** ends, or at neither. That is the whole point of it: reading `f(s)`
+you know `s` survives the call, and reading `f(nom s)` you know it does not — without opening `f`.
+Writing it at one end only is **CE2427**.
+
+When a callee needs an independent value and the caller wants to keep its own, `.clone()` is the
+answer: `eat(nom data.clone())`.
+
+(One special case: `main`'s `string[] args` is a borrowed view of the process argument vector, not a
+heap-owned array. It passes to an ordinary borrow parameter like anything else; handing it to a `nom`
+one is **CE2410**.)
+
+## References: borrowing by pointer
+
+An unmarked parameter already borrows, but it passes the *value*, so the callee's writes land on its
+own copy. Two more modes pass a **pointer** instead:
 
 - `peek T` — a **read-only** borrow. You may look, not touch. Many peeks can coexist.
-- `poke T` — a **read-write** borrow. You may modify in place. Exclusive: only one at a time.
+- `poke T` — a **read-write** borrow. You may modify the caller's value in place. Exclusive: only
+  one at a time.
 
 ```sushi
 --8<-- "docs/tutorial/examples/12-memory-management/references.sushi"
@@ -182,6 +208,8 @@ null-free.
 ## What you learned
 
 - **RAII** frees resources automatically at scope exit — no collector, no manual `free`.
+- A parameter **borrows** unless it says `nom`, so calling a function does not consume the
+  argument; `nom` is written at the declaration and at the call site alike (**CE2427** if not).
 - Primitives and strings are **copied** on assignment; dynamic arrays are **moved**, leaving
   the source invalid (use-after-move is caught as **CE2405**), so each heap buffer has exactly
   one owner and one free. Use `.clone()` for an independent copy.

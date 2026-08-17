@@ -4,6 +4,14 @@
 (PRs #306, #309, #313, #320, #325, #336, #342, #343 — 2026-08-15 and 2026-08-16). Every
 mechanism in this document is enforced and has tests.
 
+> **Sections 1 to 5 are SUPERSEDED by `docs/design/borrow-model.md`** (ruled 2026-08-16,
+> issue #354). Borrow by default made an unmarked parameter a borrow for every kind of
+> callee, so `peek` and `poke` are no longer the only two ways to say "do not take this".
+> Read that document for the mode rule and this one for the borrow MECHANISMS — where a
+> reference type may appear, the six ways a borrow is created, and the gate behind each
+> rule. Two changes ripple through the text below: the `&` is gone from both words, and
+> the sixth mechanism (a method parameter) is now simply *a parameter*, in any callable.
+
 `docs/design/ownership-conventions.md` is the normative spec for ownership. This document
 describes the borrow half only, and does not repeat it.
 

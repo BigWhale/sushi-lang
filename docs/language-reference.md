@@ -253,19 +253,38 @@ fn divide(i32 a, i32 b) i32:  # Actually returns Result@(i32, StdError)
 
 ### Parameters
 
-**By value:**
+A parameter declares one of four **modes**. The mode says who frees the value, and a marked
+mode is written at the declaration and at the call site alike:
+
+| declaration | call site | who frees | notes |
+|---|---|---|---|
+| `string x` | `f(s)` | caller | the default; the argument stays usable |
+| `nom string x` | `f(nom s)` | **callee** | a later use of the argument is `CE2405` |
+| `peek string x` | `f(peek s)` | caller | by pointer, read only; many at once |
+| `poke string x` | `f(poke s)` | caller | by pointer, read/write; one, exclusive |
+
+**Unmarked (a borrow):**
 ```sushi
 fn modify(i32 x) i32:
-    x := x + 1
+    x := x + 1          # the callee's own copy
     return Result.Ok(x)
 ```
 
-**Borrowed (by reference):**
+**`nom` (a consume):**
+```sushi
+fn eat(nom string s) ~:
+    println(s)
+    return Result.Ok(~)  # s is freed here
 
-Sushi has two borrow modes:
-- `peek T` - Read-only borrow (multiple allowed)
-- `poke T` - Read-write borrow (exclusive access)
+fn main() i32:
+    let string base = "Ford"
+    let string s = "{base} Prefect"
+    eat(nom s)
+    # println(s)          # ERROR CE2405: s was handed over
+    return Result.Ok(0)
+```
 
+**Borrowed by pointer:**
 ```sushi
 fn increment(poke i32 counter) ~:
     counter := counter + 1
@@ -274,6 +293,8 @@ fn increment(poke i32 counter) ~:
 fn read_value(peek i32 x) i32:
     return Result.Ok(x)
 ```
+
+The rule and its reasoning are [docs/design/borrow-model.md](design/borrow-model.md).
 
 ## Operators
 

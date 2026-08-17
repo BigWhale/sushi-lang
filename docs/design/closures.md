@@ -328,7 +328,7 @@ and run. Two gaps were closed to make this possible:
   ownership of the by-value argument to the callee through the seam
   (`docs/design/ownership-conventions.md`), and the callee's own registered `FunctionType` parameter
   frees the
-  environment at its own scope exit, exactly like any other owning by-value parameter; a caller-side
+  environment at its own scope exit, exactly like any other owning `nom` parameter; a caller-side
   registration there would double-free. Binding to a local is still not required either way.
 
 Validated as **free generic functions** (`tests/generics/test_ho_*`): `map@(T, U)(List@(T), fn(T) ->
@@ -407,7 +407,7 @@ fn dbl(i32 x) i32:
     return Result.Ok(x * 2)
 
 fn main() i32:
-    let fn(i32) -> i32 incthendouble = compose(inc, dbl).realise(dbl)
+    let fn(i32) -> i32 incthendouble = compose(nom inc, nom dbl).realise(dbl)
     println(incthendouble(10).realise(-1))    # dbl(inc(10)) = 22
     return Result.Ok(0)
 ```

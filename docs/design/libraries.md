@@ -25,13 +25,13 @@ things the consumer has never seen (a private helper, a private constant, a perk
 library itself implements), and those references have to resolve to *the library's*
 symbols, not to a same-named consumer symbol, without the consumer writing any glue.
 
-## 2. The `.slib` container (VERSION 2)
+## 2. The `.slib` container (VERSION 3)
 
 `sushi_lang/backend/library_format.py` defines `LibraryFormat`, a flat binary
 container — no LLVM in it, no linking logic, just framing:
 
 ```
-MAGIC (16B) 🍣SUSHILIB🍣 | VERSION (u32 LE, =2) | 3 reserved fields (24B, zero)
+MAGIC (16B) 🍣SUSHILIB🍣 | VERSION (u32 LE, =3) | 3 reserved fields (24B, zero)
 | METADATA_LENGTH (u64 LE) | METADATA_BLOB (msgpack dict) | BITCODE_LENGTH (u64 LE) | BITCODE_BLOB
 ```
 
@@ -41,9 +41,11 @@ Integrity is checked strictly in order, one code per failure mode, all in
 `sushi_lang/internals/errors/library.py`:
 
 - **CE3508** — bad magic (not a `.slib` at all)
-- **CE3509** — version mismatch (the reader only accepts `VERSION == 2`; there is no
-  backward-compat shim — a v1 `.slib`, if one still exists anywhere, is rejected, not
-  upgraded)
+- **CE3509** — version mismatch (the reader only accepts `VERSION == 3`; there is no
+  backward-compat shim — an older `.slib`, if one still exists anywhere, is rejected, not
+  upgraded. Version 3 added the per-parameter `mode` field of §4.6; a v2 library states no
+  mode, so its parameters cannot be told apart from unmarked ones, and guessing is exactly
+  what that field exists to stop)
 - **CE3510** / **CE3511** — metadata / bitcode section truncated (`f.read(n)` returned
   fewer bytes than the length prefix promised)
 - **CE3512** — the metadata blob is present but is not valid MessagePack
@@ -243,6 +245,39 @@ namespace (foreign bindings cannot be re-declared at a consumer that never saw t
 exists purely for observability (inspectable via `--lib-info` / direct manifest
 reads) so a library author can see what their public API is quietly dragging along.
 
+## 4.6 Who frees an argument at the boundary
+
+A library's public functions are called from code the library never saw, so the boundary has
+to carry the **parameter mode** — the answer to "who frees this argument?" (the spec is
+`docs/design/borrow-model.md`). Each parameter record in the manifest is
+
+```
+{"name": "path", "type": "string", "mode": "borrow"}
+```
+
+and `mode` is one of `borrow`, `nom`, `peek`, `poke`. The consumer restores it when it
+re-registers the signature (`semantics/library_registry.py`), so a call across the boundary
+obeys the same rule as a call within one unit: unmarked borrows, `nom` transfers, and the
+marker is required at the call site if and only if it is declared.
+
+**The mode is its own field, not part of the type string,** and both halves of that matter:
+
+- **`nom` cannot be spelled in a type at all.** It is a property of the parameter, not of
+  the value, so there is nowhere in `"string"` to put it.
+- **`peek` / `poke` could be, and that is exactly how they were lost.** The manifest always
+  serialized `"peek string"` correctly, because `str(ReferenceType)` produces it — but
+  `parse_type_string` had no reference arm, so the consumer read back
+  `UnknownType("peek string")`: a type that names nothing, with the mode silently gone. A
+  library could therefore *write* a borrow and never have one *read*. The parser learned the
+  two words alongside the field.
+
+`tests/unit/test_lib_param_modes.py` is the gate: it builds a library declaring one function
+per mode, asserts what the manifest records, asserts what the consumer reads back, and
+asserts that a v2 container is rejected with CE3509 rather than guessed at.
+
+**Not yet at the boundary:** a `nom` receiver (`nom self` does not exist), and a consuming
+variadic — a public v1 `...T` cannot ship at all (CE0116, §4.1).
+
 ## 5. Two link paths
 
 A consumer resolves a library's *call sites* the same way regardless of build mode
@@ -296,6 +331,8 @@ source did not change.
 | A perk-impl / generic-function / constant template snippet fails to re-parse | perk-impl: **CW3506** (skip); generic fn/type/constant: silently skipped, no diagnostic | never let a malformed shipped snippet crash or pollute the consumer's own build |
 | Public v1 native `...T` variadic function | **CE0116** | no template exists to monomorphize; the function is one concrete symbol with a runtime-collected array |
 | Platform mismatch (`.slib` built on darwin, consumer on linux) | **CE3504** | bitcode is platform-specific; caught early with a clear message instead of an incomprehensible late `cc`/LLVM failure |
+| Container version older than 3 | **CE3509** | a pre-3 manifest carries no parameter `mode`, so who frees an argument would have to be guessed (§4.6) |
+| Call site's `nom` marker disagrees with the shipped signature | **CE2427** | the same rule as within a unit: a consume is visible at both ends or at neither (§4.6) |
 
 ## 7. What does NOT cross the boundary
 

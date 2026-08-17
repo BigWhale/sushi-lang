@@ -9,7 +9,7 @@ extend i32 with Render:
 
 extend string with Render:
     fn render() string:
-        return self
+        return self.clone()
 
 fn log@(...Ts: Render)(string label, ...Ts items) ~:
     println("{label}:")

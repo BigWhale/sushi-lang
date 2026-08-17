@@ -84,10 +84,15 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `compose@(T, U, V)(fn(T) -> U g, fn(U) -> V f) -> fn(T) -> V`
+### `compose@(T, U, V)(nom fn(T) -> U g, nom fn(U) -> V f) -> fn(T) -> V`
 
 Build a new function that applies `g` first, then `f` (`f` after `g`). The returned
-closure captures `f` and `g`.
+closure captures `f` and `g`, so it becomes their owner -- which is why both parameters
+declare `nom` and both call-site arguments carry the marker. `map`, `filter` and `fold`
+only CALL their function argument, so they borrow it and need no marker.
+
+`map(xs, f)` also borrows `xs`: the list is still yours after the call, so mapping twice
+over one list works.
 
 ```sushi
 use <collections/iter>
@@ -99,7 +104,7 @@ fn dbl(i32 x) i32:
     return Result.Ok(x * 2)
 
 fn main() i32:
-    let fn(i32) -> i32 incthendouble = compose(inc, dbl).realise(dbl)
+    let fn(i32) -> i32 incthendouble = compose(nom inc, nom dbl).realise(dbl)
     println(incthendouble(10).realise(-1))    # dbl(inc(10)) = 22
     return Result.Ok(0)
 ```

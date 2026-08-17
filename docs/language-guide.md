@@ -182,19 +182,24 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-**Parameter passing**:
-- **Primitives, strings, and string-only / plain-data composites**: Passed by copy (cheap, no
-  ownership transfer) — a `struct { string; i32 }` copies (the string field is cloned) and the source
-  stays usable
-- **Owning types** (`T[]`, `List@(T)`, `Own@(T)`, and any struct/enum that transitively contains one):
-  Passed by move — ownership transfers to the callee, which frees the value at scope exit; using the
-  source afterward is `CE2405` (use-after-move)
-- **References**: Use `peek T` for read-only or `poke T` for read-write references without transferring ownership
+**Parameter passing**: every parameter declares a **mode**, and the mode says who frees the value.
+A marked mode is written at the declaration and at the call site alike; the default is written at
+neither.
 
-Move-ness is compositional (a value moves iff it contains an owning resource), and every struct and
-enum gets an auto-derived `.clone()` for an explicit deep copy.
+- **unmarked** — `fn f(string x)`, called `f(s)`. A *borrow*: the caller keeps the value and frees
+  it, so `s` stays usable after the call. This is the default for every type.
+- **`nom`** — `fn f(nom string x)`, called `f(nom s)`. A *consume*: the callee becomes the owner and
+  frees the value, so using `s` afterwards is `CE2405` (use-after-move).
+- **`peek`** — `fn f(peek string x)`, called `f(peek s)`. A read-only borrow *by pointer*; many at
+  once.
+- **`poke`** — `fn f(poke string x)`, called `f(poke s)`. A read-write borrow by pointer, so the
+  callee's writes reach the caller's value; one at a time, exclusive.
 
-If you need to keep using an owning value after passing it to a function, either pass a reference (`peek i32[]` for read-only or `poke i32[]` for modification) or explicitly clone it (`.clone()`) before passing. (One special case: `main`'s `string[] args` is a borrowed view of the process argv — borrow it downstream, never move it by value.)
+Every struct and enum gets an auto-derived `.clone()`, which is how a caller hands over a value it
+wants to keep: `f(nom s.clone())`.
+
+(One special case: `main`'s `string[] args` is a borrowed view of the process argv. Passing it to an
+ordinary borrow parameter is fine; handing it to a `nom` one is `CE2410`.)
 
 ## Control Flow
 
@@ -777,10 +782,15 @@ Sushi provides memory safety without garbage collection through a combination of
 
 ### Borrowing, aka References
 
-References allow functions to access values without taking ownership. Sushi has two borrow modes:
+A parameter never takes ownership unless it says `nom`, so a plain `f(x)` already leaves `x` yours.
+`peek` and `poke` go further: they pass a **pointer** instead of the value.
 
-- **`peek T`** - Read-only borrow (multiple allowed simultaneously)
-- **`poke T`** - Read-write borrow (exclusive access)
+- **`peek T`** - Read-only borrow by pointer (multiple allowed simultaneously)
+- **`poke T`** - Read-write borrow by pointer (exclusive access), so the callee's writes reach the
+  caller's value
+
+Reach for them when the callee must write back (`poke`), or when copying the value would be
+expensive — a large fixed array or plain struct.
 
 Sushi's borrow checker ensures that references are always valid and that aliasing rules are enforced at compile time:
 

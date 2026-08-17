@@ -19,7 +19,7 @@ _KEYWORDS = (
     "fn", "let", "const", "return", "if", "elif", "else", "while", "foreach",
     "expand", "in", "match", "struct", "enum", "perk", "extend", "with", "use",
     "public", "unsafe", "external", "because", "break", "continue", "as", "new",
-    "peek", "poke",
+    "peek", "poke", "nom",
 )
 
 # Word-form operators.

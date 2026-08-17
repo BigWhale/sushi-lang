@@ -542,6 +542,15 @@ which is what the internal errors needed protecting from.
 
 ## 8.6 Method receivers and method parameters (decided 2026-08-15, #298)
 
+> **SUPERSEDED by `docs/design/borrow-model.md`** (ruled 2026-08-16, issue #354). The
+> exception this section records became the RULE: an unmarked parameter is a borrow in
+> every kind of callable, and a consume is spelled `nom` at both ends. So the asymmetry
+> below — `eat(s)` consumes but `b.eat(s)` does not — is gone, and with it the reason
+> this section had to exist. Everything it says about what a borrow parameter may not do
+> still holds, and applies to a plain function's parameters too: a write through one is
+> CE2422, and consuming one is CE2411 with `.clone()` as the escape. Read it for that
+> reasoning, and read the borrow-model spec for what the modes are.
+
 A by-value parameter is owned by the CALLEE (§4.2). An **extension or perk method** is the
 one exception, and it is now a **decision rather than a compromise**: its parameters --
 `self` included -- are BORROWS, and the caller keeps ownership.

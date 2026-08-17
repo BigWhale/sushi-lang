@@ -95,6 +95,8 @@ fn main() i32:
 Key properties:
 
 - **Move, not copy.** The source array is consumed — moved into the callee's synthesized `T[]`.
+  (A STDLIB variadic is the exception: `run` frees nothing, so the caller keeps the collected
+  array and the bloomed source stays readable. See `docs/design/borrow-model.md` S7.)
   Do not use the source array after a bloom call.
 - **Source must be a bare variable** (a `Name`) of array type. Blooming an arbitrary expression
   (a call result, a field access, an inline array literal) is not supported in v1.
