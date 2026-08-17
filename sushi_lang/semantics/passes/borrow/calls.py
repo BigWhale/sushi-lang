@@ -1,0 +1,163 @@
+"""Call sites: which declared mode each argument lands on, and what that mode does."""
+
+from __future__ import annotations
+from typing import Optional, TYPE_CHECKING
+
+from sushi_lang.internals import errors as er
+from sushi_lang.semantics.ast import Borrow, Call, Expr, Name, Spread
+from sushi_lang.semantics.ownership import ConsumingUse
+from sushi_lang.semantics.param_modes import CalleeKind, ParamMode, effective_modes
+
+from .borrows import register_implicit_borrow
+from .consume import consume
+from .reads import read_type
+
+if TYPE_CHECKING:
+    from . import BorrowChecker
+
+
+# These store the argument and free it, so each is a consuming use. Only the METHOD
+# NAME is matched loosely -- the receiver must be a container, so a user extension
+# called `push` is not swept up.
+CONTAINER_INSERT_METHODS = frozenset({"push", "insert"})
+
+
+def is_enum_constructor(checker: 'BorrowChecker', expr: Expr) -> bool:
+    """Is this `X.Y(args)` an enum constructor rather than a method call?"""
+    receiver = getattr(expr, 'receiver', None)
+    if not isinstance(receiver, Name):
+        return False
+    return receiver.id in checker.enum_names and receiver.id not in checker.borrow_state
+
+
+def maybe_mark_container_insert(checker: 'BorrowChecker', expr: Expr) -> None:
+    """`l.push(x)` / `m.insert(k, v)` takes ownership -- the CONTAINER_INSERT use."""
+    if getattr(expr, "method", None) not in CONTAINER_INSERT_METHODS:
+        return
+    # `read_type` is the ONE walker for read-through-an-owner shapes. A narrower
+    # twin here did not unwrap TryExpr, so `outer.get(0)??.push(5)` went unstamped
+    # and the seam reported CE0129.
+    if not checker.types.is_container(
+            read_type(checker, getattr(expr, "receiver", None))):
+        return
+    for arg in expr.args:
+        consume(checker, arg, ConsumingUse.CONTAINER_INSERT)
+
+
+def maybe_mark_own_alloc_move(checker: 'BorrowChecker', expr: Expr) -> None:
+    """`Own.alloc(x)` takes ownership of `x` -- the OWN_ALLOC consuming use."""
+    if getattr(expr, 'method', None) != 'alloc':
+        return
+    receiver = getattr(expr, 'receiver', None)
+    if not (isinstance(receiver, Name) and receiver.id == 'Own'):
+        return
+    for arg in expr.args:
+        consume(checker, arg, ConsumingUse.OWN_ALLOC)
+
+
+def call_modes(checker: 'BorrowChecker',
+               expr: Call) -> tuple[CalleeKind, tuple[ParamMode, ...], Optional[int]]:
+    """The callee's kind, its parameter modes, and where a `...T` slot starts."""
+    if not isinstance(expr.callee, Name):
+        fn_type = getattr(expr, "callee_fn_type", None)
+        modes = getattr(fn_type, "modes", ()) if fn_type is not None else ()
+        return CalleeKind.INDIRECT, effective_modes(modes, CalleeKind.INDIRECT), None
+
+    name = expr.callee.id
+    state = checker.borrow_state.get(name)
+    local_type = state.var_type if state is not None else None
+    kind, modes = checker.callee_modes.for_name(name, local_type)
+    variadic_at = (None if kind is CalleeKind.INDIRECT
+                   else checker.callee_modes.variadic_from(name))
+    return kind, modes, variadic_at
+
+
+def consume_call_args(checker: 'BorrowChecker', expr: Call) -> None:
+    """Consume the arguments the callee's declared modes say it takes ownership of."""
+    kind, modes, variadic_at = call_modes(checker, expr)
+    collected_owner_is_callee = (
+        isinstance(expr.callee, Name)
+        and checker.callee_modes.variadic_callee_owns(expr.callee.id))
+    for i, arg in enumerate(expr.args):
+        if variadic_at is not None and i >= variadic_at:
+            # A bloomed `arr...` hands the WHOLE array over, so it transfers only
+            # when something else takes it. A collected element always transfers --
+            # into the synthesized array, whoever ends up owning that.
+            if isinstance(arg, Spread) and not collected_owner_is_callee:
+                continue
+            consume(checker, arg, ConsumingUse.ARRAY_ELEMENT)
+            continue
+        mode = checker.callee_modes.mode_at(modes, i, kind)
+        check_nom_marker(checker, expr, arg, i, mode, kind)
+        if mode.consumes:
+            consume(checker, arg, ConsumingUse.CALL_ARG)
+        elif not mode.by_pointer:
+            register_implicit_borrow(checker, arg)
+
+
+def check_nom_marker(checker: 'BorrowChecker', call, arg: Expr, index: int,
+                     mode: ParamMode, kind: CalleeKind) -> None:
+    """The `nom` marker must be written at the call site if and only if it is declared."""
+    if kind in (CalleeKind.CONSTRUCTOR, CalleeKind.CONTAINER):
+        return
+    marked = bool(getattr(arg, "nom_marked", False))
+    if marked == mode.consumes:
+        return
+    span = getattr(arg, "nom_span", None) or arg.loc
+    name = param_name(checker, call, index) or f"#{index + 1}"
+    if mode.consumes:
+        checker.err.emit_with(er.ERR.CE2427, span, name=name) \
+            .help("the callee takes ownership here; write `nom` at the call site "
+                  "too, or `nom <arg>.clone()` to keep your own value").emit()
+    else:
+        checker.err.emit_with(er.ERR.CE2427, span, name=name) \
+            .help("the callee only borrows this argument, so it stays yours after "
+                  "the call; drop the `nom`").emit()
+
+
+def param_name(checker: 'BorrowChecker', call, index: int) -> Optional[str]:
+    """The declared name of parameter `index` of a call's callee, if it is known."""
+    names = getattr(call, "callee_param_names", None)
+    if names is not None:
+        return names[index] if index < len(names) else None
+    if not isinstance(getattr(call, "callee", None), Name):
+        return None
+    sig = checker.callee_modes.signature_of(call.callee.id)
+    params = getattr(sig, "params", None) or ()
+    return params[index].name if index < len(params) else None
+
+
+def settle_method_args(checker: 'BorrowChecker', expr) -> None:
+    """Apply the declared modes of an extension or perk method to its arguments."""
+    modes = getattr(expr, "callee_param_modes", None)
+    if modes is None:
+        return
+    for i, arg in enumerate(expr.args):
+        mode = checker.callee_modes.mode_at(modes, i, CalleeKind.METHOD)
+        check_nom_marker(checker, expr, arg, i, mode, CalleeKind.METHOD)
+        if mode.consumes:
+            consume(checker, arg, ConsumingUse.CALL_ARG)
+        elif not mode.by_pointer:
+            register_implicit_borrow(checker, arg)
+
+
+def consume_indirect_args(checker: 'BorrowChecker', expr) -> None:
+    """An indirect call through a fn-typed field follows the fn type's declared modes."""
+    modes = effective_modes(expr.callee_fn_type.modes, CalleeKind.INDIRECT)
+    for i, arg in enumerate(expr.args):
+        if checker.callee_modes.mode_at(modes, i, CalleeKind.INDIRECT).consumes:
+            consume(checker, arg, ConsumingUse.CALL_ARG)
+
+
+def apply_destroy_effects(checker: 'BorrowChecker', call: Call) -> None:
+    """Mark each argument the callee destroys through a `poke` parameter (#168)."""
+    if not isinstance(call.callee, Name):
+        return
+    for index in checker.destroy_effects.get(call.callee.id, ()):
+        if index >= len(call.args):
+            continue
+        arg = call.args[index]
+        if isinstance(arg, Borrow):
+            arg = arg.expr           # `poke map` -> `map`
+        if isinstance(arg, Name) and arg.id in checker.borrow_state:
+            checker.borrow_state[arg.id].is_destroyed = True

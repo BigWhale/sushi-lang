@@ -375,7 +375,7 @@ let i32 y = get_value().realise(0)
 
 ## Phase 3: Borrow Checking
 
-**File:** `semantics/passes/borrow.py`
+**File:** `semantics/passes/borrow/` (`__init__.py` holds `BorrowChecker`)
 
 ### Purpose
 
