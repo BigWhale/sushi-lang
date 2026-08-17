@@ -60,7 +60,10 @@ static int g_ready;
  * scheme lost the key on removal, so both cases probed to an empty slot and were
  * reported identically -- i.e. the gate was structurally unable to see a
  * double-free, which is the failure mode of the whole #238/#250/#256/#277 family.
- * ST_DEAD also keeps the probe chain intact exactly as the tombstone did. */
+ * ST_DEAD also keeps the probe chain intact exactly as the tombstone did.
+ *
+ * A retained key is only valid while the address is unused. tab_retire drops it as soon as
+ * the allocator hands the address out again (#359). */
 #define ST_EMPTY 0u
 #define ST_LIVE  1u
 #define ST_DEAD  2u
@@ -98,6 +101,28 @@ static void tab_insert(uintptr_t key, size_t size) {
             g_live_bytes += (long)size;
             g_live_blocks += 1;
             break;
+        }
+        i = (i + 1) & TAB_MASK;
+    }
+    unlock();
+}
+
+/* An address handed out AGAIN is no longer the block that was freed, so its retained key
+ * must stop matching -- otherwise the tombstone outlives the thing it describes and the
+ * next free of that address reads as a double free that nobody committed (#359). Only an
+ * UNTRACKED allocation needs this: a tracked one revives the slot through tab_insert.
+ *
+ * The slot stays ST_DEAD, because it is still part of a probe chain; only the key is
+ * cleared. Zero is never a tracked key -- the wrappers insert only a non-NULL pointer. */
+static void tab_retire(uintptr_t key) {
+    lock();
+    size_t i = slot(key);
+    for (unsigned n = 0; n < TAB_CAP; n++) {
+        unsigned char st = g_tab[i].state;
+        if (st == ST_EMPTY) break;          /* never used: probe chain ends here */
+        if (g_tab[i].key == key) {
+            if (st == ST_DEAD) g_tab[i].key = 0;
+            break;                          /* an ST_LIVE match is not ours to touch */
         }
         i = (i + 1) & TAB_MASK;
     }
@@ -182,6 +207,15 @@ static int counted_caller(void *caller) {
     return g_text_lo && a >= g_text_lo && a < g_text_hi;
 }
 
+/* What every allocation wrapper does with the pointer it is about to return: track it if
+ * the program asked for it, and otherwise retire any tombstone the address still carries.
+ * ONE place, so the two halves cannot drift -- the retire half was missing entirely and
+ * the gate reported a double free that no code committed (#359). */
+static void track_or_retire(void *p, size_t size, void *caller) {
+    if (counted_caller(caller)) tab_insert((uintptr_t)p, size);
+    else tab_retire((uintptr_t)p);
+}
+
 /* ---- the main-executable text range, resolved once before main() --------- */
 #if defined(__APPLE__)
 __attribute__((constructor)) static void init_range(void) {
@@ -236,7 +270,7 @@ void *WRAP(malloc)(size_t n) {
 #endif
     }
     void *p = real_malloc(n);
-    if (p && counted_caller(caller)) tab_insert((uintptr_t)p, n);
+    if (p) track_or_retire(p, n, caller);
     return p;
 }
 
@@ -254,7 +288,7 @@ void *WRAP(calloc)(size_t cnt, size_t sz) {
 #endif
     }
     void *p = real_calloc(cnt, sz);
-    if (p && counted_caller(caller)) tab_insert((uintptr_t)p, cnt * sz);
+    if (p) track_or_retire(p, cnt * sz, caller);
     return p;
 }
 
@@ -287,7 +321,7 @@ void *WRAP(realloc)(void *p, size_t n) {
         if (had) tab_insert((uintptr_t)p, oldsize); /* realloc failed; keep old */
         return NULL;
     }
-    if (counted_caller(caller)) tab_insert((uintptr_t)np, n);
+    track_or_retire(np, n, caller);
     return np;
 }
 
