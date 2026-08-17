@@ -1,5 +1,6 @@
 """Type resolution utilities for UnknownType to StructType/EnumType conversion."""
 from __future__ import annotations
+from dataclasses import replace
 from typing import Dict, Optional, Set, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -200,7 +201,10 @@ def resolve_type_recursively(
         if (new_params != resolved_ty.param_types or
                 new_ok != resolved_ty.ok_type or
                 new_err != resolved_ty.err_type):
-            return FunctionType(param_types=new_params, ok_type=new_ok, err_type=new_err)
+            # `replace`, so `captures` and `param_modes` ride along. Building a fresh
+            # FunctionType here dropped the declared `nom` of an annotated fn type (#368).
+            return replace(resolved_ty, param_types=new_params, ok_type=new_ok,
+                           err_type=new_err)
         return resolved_ty
 
     if isinstance(resolved_ty, ArrayType):

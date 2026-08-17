@@ -1,7 +1,7 @@
 """Generic type definitions for Sushi Lang."""
 
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Tuple, Union
 
 if TYPE_CHECKING:
@@ -193,11 +193,12 @@ def _substitute_type_params(ty: Type, substitution: dict[str, Type]) -> Type:
         return ReferenceType(referenced_type=substituted_ref, mutability=ty.mutability)
 
     elif isinstance(ty, FunctionType):
-        return FunctionType(
+        # `replace`, so `param_modes` rides along beside `captures` (#368).
+        return replace(
+            ty,
             param_types=tuple(_substitute_type_params(p, substitution) for p in ty.param_types),
             ok_type=_substitute_type_params(ty.ok_type, substitution),
             err_type=_substitute_type_params(ty.err_type, substitution),
-            captures=ty.captures,
         )
 
     else:

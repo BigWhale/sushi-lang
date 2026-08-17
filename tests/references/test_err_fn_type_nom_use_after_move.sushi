@@ -1,0 +1,17 @@
+# A `nom` through a fn-typed local hands the value over, so a later use is CE2405 (#368).
+#
+# The mode used to be dropped from the fn type, so the call read as a borrow and the
+# argument stayed usable -- while the callee freed it. That is the double free of face 2.
+# EXPECT_ERROR_CODE: CE2405
+
+fn eat(nom string owned) i32:
+    println("owned: {owned}")
+    return Result.Ok(1)
+
+fn main() i32:
+    let string base = "Ford"
+    let string s = "{base} Prefect"
+    let fn(nom string) -> i32 g = eat
+    println(g(nom s).realise(-1))
+    println("after: {s}")
+    return Result.Ok(0)

@@ -1,5 +1,6 @@
 """Generic Extension Method Monomorphization"""
 from __future__ import annotations
+from dataclasses import replace
 from typing import Dict, Tuple, Set
 
 from sushi_lang.semantics.ast import ExtendDef, Param
@@ -33,11 +34,12 @@ def substitute_type_params(
         return DynamicArrayType(base_type=new_base)
 
     elif isinstance(ty, FunctionType):
-        return FunctionType(
+        # `replace`, so `param_modes` rides along beside `captures` (#368).
+        return replace(
+            ty,
             param_types=tuple(substitute_type_params(p, substitution) for p in ty.param_types),
             ok_type=substitute_type_params(ty.ok_type, substitution),
             err_type=substitute_type_params(ty.err_type, substitution),
-            captures=ty.captures,
         )
 
     return ty
