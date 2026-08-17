@@ -408,3 +408,21 @@ def _spill_receiver(codegen: 'LLVMCodegen', receiver: Expr,
     slot = codegen.memory.entry_alloca(value.type, "recv_temp_slot")
     codegen.builder.store(value, slot)
     return slot
+
+
+def emit_cstr_arg(codegen: 'LLVMCodegen', arg: Expr) -> ir.Value:
+    """Marshal a `string` argument into a C `char*` the CALLER frees at scope exit.
+
+    THE marshal seam for every callee that wants a C string: an FFI extern, a stdlib symbol,
+    and `open()`. Only the FFI arm used to register the copy, so the other two leaked one
+    block per string argument -- with a literal argument as much as with an owning one, since
+    the copy is a separate allocation either way (#292, #291).
+    """
+    return marshal_cstr(codegen, codegen.expressions.emit_expr(arg))
+
+
+def marshal_cstr(codegen: 'LLVMCodegen', value: ir.Value) -> ir.Value:
+    """The same seam for an already-emitted `string` value."""
+    c_str = codegen.runtime.strings.emit_to_cstr(value)
+    codegen.memory.register_cstr(c_str)
+    return c_str

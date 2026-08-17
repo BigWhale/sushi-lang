@@ -48,9 +48,14 @@ def declare_rename(module: ir.Module) -> ir.Function:
 
 
 def declare_open(module: ir.Module) -> ir.Function:
-    """Declare POSIX open() syscall."""
+    """Declare POSIX open() syscall: `int open(const char *, int, ...)`.
+
+    VARIADIC, as C declares it. Declared with a fixed third parameter, the mode went in a
+    register while Apple arm64 expects a variadic argument on the stack, so the callee read
+    the mode from the wrong place -- `copy()` produced whatever happened to be there (#363).
+    """
     i8, i8_ptr, i32, i64 = get_basic_types()
-    func_type = ir.FunctionType(i32, [i8_ptr, i32, i32])
+    func_type = ir.FunctionType(i32, [i8_ptr, i32], var_arg=True)
 
     try:
         return module.get_global("open")

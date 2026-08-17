@@ -89,22 +89,20 @@ def generate_getcwd(module: ir.Module) -> None:
 def generate_chdir(module: ir.Module) -> None:
     """Generate chdir(string path) -> Result<i32, ProcessError>"""
     i8, i8_ptr, i32, i64 = get_basic_types()
-    string_type = get_string_type()
     process_error_type = get_process_error_type()
     result_type = get_result_type(i32, process_error_type)
 
     platform_process = get_platform_module('process')
     libc_chdir = platform_process.declare_chdir(module)
 
-    func_type = ir.FunctionType(result_type, [string_type])
+    # The path arrives already marshalled, and the CALLER frees it (#292).
+    func_type = ir.FunctionType(result_type, [i8_ptr])
     func = ir.Function(module, func_type, name="sushi_chdir")
-    path_arg = func.args[0]
-    path_arg.name = "path"
+    c_path = func.args[0]
+    c_path.name = "path"
 
     entry = func.append_basic_block("entry")
     builder = ir.IRBuilder(entry)
-
-    c_path = fat_pointer_to_cstr(module, builder, path_arg)
 
     chdir_result = builder.call(libc_chdir, [c_path])
 

@@ -7,6 +7,7 @@ from sushi_lang.backend.constants import INT32_BIT_WIDTH
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.backend.utils import require_builder
+from sushi_lang.backend.expressions.calls.utils import emit_cstr_arg
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -76,7 +77,8 @@ def emit_process_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: b
         if len(expr.args) != 1:
             raise_internal_error("CE0023", method="chdir", expected=1, got=len(expr.args))
 
-        path_value = codegen.expressions.emit_expr(expr.args[0])
+        # Marshalled HERE and freed at scope exit, like an FFI argument (#292).
+        path_cstr = emit_cstr_arg(codegen, expr.args[0])
 
         # Result<i32, ProcessError> type (#300 phase 2): {i32 tag, [2 x i64] data}
         # ProcessError is a unit enum {i32 tag, [1 x i64] data} = 16 bytes; i32 = 4 bytes
@@ -84,8 +86,9 @@ def emit_process_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: b
         from sushi_lang.sushi_stdlib.src.type_definitions import get_result_type, get_unit_enum_type
         result_i32_type = get_result_type(i32, get_unit_enum_type())
 
-        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, result_i32_type, [string_type])
-        result = codegen.builder.call(stdlib_func, [path_value], name="chdir_result")
+        stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, result_i32_type,
+                                              [codegen.types.i8.as_pointer()])
+        result = codegen.builder.call(stdlib_func, [path_cstr], name="chdir_result")
 
         return codegen.utils.as_i1(result) if to_i1 else result
 

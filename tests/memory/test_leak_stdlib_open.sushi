@@ -1,0 +1,26 @@
+# `open()` frees the C string it marshals (#292, path C).
+#
+# `open` marshals at the CALL SITE, in file_open.py, with `emit_to_cstr` and no
+# `register_cstr` beside it -- so it leaked 1 block per call while the FFI path two files
+# away did the same marshal and registered it.
+# EXPECT_STDOUT_EXACT: "read=Mostly Harmless\n"
+# EXPECT_NO_LEAKS
+use <io/files>
+
+fn main() i32:
+    match open('/tmp/sushi_leak_open.txt', FileMode.Write()):
+        FileResult.Ok(f) ->
+            f.write("Mostly Harmless")
+            f.close()
+        FileResult.Err(_) ->
+            return Result.Ok(1)
+
+    match open('/tmp/sushi_leak_open.txt', FileMode.Read()):
+        FileResult.Ok(f) ->
+            println("read={f.read()}")
+            f.close()
+        FileResult.Err(_) ->
+            return Result.Ok(1)
+
+    remove('/tmp/sushi_leak_open.txt').realise(-1)
+    return Result.Ok(0)

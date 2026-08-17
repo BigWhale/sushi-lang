@@ -1,0 +1,23 @@
+# `getenv` and `setenv` free the C string they marshal (#292).
+#
+# Each marshalled its argument inside the generated callee and nothing freed it: `setenv`
+# leaked 2 blocks, `getenv` 1. A string LITERAL leaked exactly as much as an interpolated
+# one, which is what proves the leak is marshalling and not ownership -- a literal owns no
+# heap, so there is no caller buffer to orphan.
+# EXPECT_STDOUT_EXACT: "set=0 got=Zaphod\nset=0 got=Beeblebrox\n"
+# EXPECT_NO_LEAKS
+use <sys/env>
+
+fn main() i32:
+    # A literal argument: nothing here owns heap.
+    let i32 set_a = setenv('SUSHI_LEAK_KEY', 'Zaphod').realise(-1)
+    let string got_a = getenv('SUSHI_LEAK_KEY').realise('none')
+    println("set={set_a} got={got_a}")
+
+    # An owning argument: the caller keeps it and frees it exactly once.
+    let string who = "Beeblebrox"
+    let string value = "{who}"
+    let i32 set_b = setenv('SUSHI_LEAK_KEY', value).realise(-1)
+    let string got_b = getenv('SUSHI_LEAK_KEY').realise('none')
+    println("set={set_b} got={got_b}")
+    return Result.Ok(0)
