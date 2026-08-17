@@ -79,13 +79,10 @@ class FunctionDefinitions:
         if not llvm_fn:
             raise_internal_error("CE0025", name=func_name)
 
-        # An `ExtendDef` is not a `FuncDef`, but `begin_function` reads only `.params`,
-        # and a method's parameters obey the same modes as any other callable's since
-        # borrow by default: a `nom` one is OWNED by the body and must be registered for
-        # cleanup, or it leaks. Passing None here was the `fn_def=None` proxy for "is
-        # this a method body?" -- the question the declared mode now answers directly
-        # (docs/design/borrow-model.md S1). The receiver is not in `.params`, so it is
-        # unaffected: `nom self` does not exist.
+        # An `ExtendDef` is no `FuncDef`, but `begin_function` reads only `.params`, and a
+        # method's parameters obey the same modes as any callable's -- a `nom` one is OWNED
+        # by the body and leaks unless registered. Passing None was the old proxy for "is
+        # this a method body?", which the declared mode now answers (borrow-model.md S1).
         begin_function_fn(llvm_fn, ext)
 
         self.codegen.in_extension_method = True

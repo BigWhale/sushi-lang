@@ -36,9 +36,7 @@ fn identity@(T)(T value) T:
 """
 
 
-# --------------------------------------------------------------------------
 # #191 -- argument shapes, in a plain function (no self, no extension)
-# --------------------------------------------------------------------------
 
 @pytest.mark.parametrize("body,label", [
     ("let i32 r = identity(p.get_x())??",   "method-call arg"),
@@ -72,9 +70,7 @@ fn main() i32:
     assert ("identity", (I32,)) in _collect(src), f"missing instantiation for {label}"
 
 
-# --------------------------------------------------------------------------
 # #171 -- self as a generic-call argument, in an extension and a perk impl
-# --------------------------------------------------------------------------
 
 def test_self_arg_in_extension_body_is_collected():
     src = _IDENTITY + """
@@ -109,9 +105,7 @@ fn main() i32:
     assert ("identity", (I32,)) in _collect(src)
 
 
-# --------------------------------------------------------------------------
 # Regression guard: the shapes Pass 1.5 already handled must keep working
-# --------------------------------------------------------------------------
 
 @pytest.mark.parametrize("arg", ["1", '"s"', "true", "n", "1 as i64"])
 def test_simple_argument_shapes_still_collected(arg):

@@ -94,10 +94,10 @@ def _build_callee_modes(tables) -> CalleeModes:
 class BorrowState:
     """Tracks the borrow state of a single variable."""
     name: str
-    var_type: Optional[Type] = None  # Variable type (for move semantics)
+    var_type: Optional[Type] = None
     poke_borrow_count: int = 0  # Number of active poke borrows (max 1)
     peek_borrow_count: int = 0  # Number of active peek borrows (unlimited)
-    is_moved: bool = False  # Ownership has been transferred
+    is_moved: bool = False
     is_destroyed: bool = False  # Variable has been explicitly destroyed (via .destroy())
     is_argv_view: bool = False  # main's `string[] args`: a borrowed view of process argv;
                                 # moving it by value would free argv, so it is a hard error
@@ -159,7 +159,7 @@ class BorrowState:
                                 # NOT one of the counters above: those clear per statement,
                                 # while a binding borrow lives to the end of its lexical
                                 # scope, so `_check_block` releases it.
-    first_borrow_span: Optional[Span] = None  # Location of the first active borrow
+    first_borrow_span: Optional[Span] = None
     moved_at_span: Optional[Span] = None  # Where ownership was transferred away.
                                           # Use-after-move is a RELATIONAL error: the
                                           # use is only wrong BECAUSE of the move, so
@@ -899,7 +899,7 @@ class BorrowChecker:
         for index, binding in enumerate(pattern.bindings):
             payload_type = variant_types[index] if index < len(variant_types) else None
             if isinstance(binding, str):
-                if binding != "_":  # Skip wildcard bindings
+                if binding != "_":
                     self._register_binding(binding, BorrowState(
                         name=binding, var_type=payload_type,
                         is_borrowed_binding=True, bound_at_span=span,

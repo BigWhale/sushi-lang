@@ -917,8 +917,7 @@ class LLVMCodegen:
         if isinstance(expr, StringLit):
             return None
 
-        # Use constant evaluator to get Python value
-        # Create a silent reporter since we're in the backend (errors should have been caught in Pass 2)
+        # A silent reporter: Pass 2 has already reported anything wrong with this.
         silent_reporter = Reporter()
         evaluator = ConstantEvaluator(silent_reporter, self.const_table, self.ast_constants)
         const_value = evaluator.evaluate(expr, expected_type, None)

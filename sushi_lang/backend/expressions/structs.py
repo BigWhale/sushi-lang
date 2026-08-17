@@ -255,13 +255,9 @@ def _infer_get_element_struct(codegen: 'LLVMCodegen',
 def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
     """Infer the struct type of an expression."""
     if isinstance(expr, Name):
-        # Scope-aware lookup. `codegen.variable_types` is a FLAT map, so a `match` arm
-        # binding that shadows an outer variable overwrites the outer entry and never
-        # restores it (the outer struct is then read through the inner type's field
-        # indices for the rest of the function), and a `foreach` binding never reaches
-        # it at all (so the outer type wins inside the loop). Both are silent wrong
-        # data, not a crash. `resolve_name_semantic_type` consults the scoped table
-        # first and falls back to the flat one, so shadowing resolves correctly.
+        # Scope-aware, because `codegen.variable_types` is FLAT: a shadowing match binding
+        # overwrote the outer entry for the rest of the function, so the outer struct was
+        # read through the inner type's field indices -- silent wrong data, not a crash.
         var_name = expr.id
         var_type = resolve_name_semantic_type(codegen, var_name)
         if var_type is None:

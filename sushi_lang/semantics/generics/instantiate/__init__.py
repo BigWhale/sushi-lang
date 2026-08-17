@@ -107,9 +107,8 @@ class InstantiationCollector:
         for ext in program.extensions:
             function_collector.collect_from_extension(ext)
 
-        # Collect from perk implementation methods
-        # Perk methods return bare types (like extensions), but we still need to
-        # collect generic instantiations from their parameters and bodies
+        # A perk method returns a bare type like an extension, but its parameters and
+        # body still carry generic instantiations.
         for perk_impl in program.perk_impls:
             function_collector.collect_from_perk_impl(perk_impl)
 

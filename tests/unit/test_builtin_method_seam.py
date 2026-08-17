@@ -63,9 +63,7 @@ def test_the_gate_can_actually_see_families():
     assert len(_families(VALIDATION)) >= 8
 
 
-# ---------------------------------------------------------------------------
 # Behaviour, per family
-# ---------------------------------------------------------------------------
 
 def _list(elem="i32"):
     return StructType(name=f"List<{elem}>", fields=())

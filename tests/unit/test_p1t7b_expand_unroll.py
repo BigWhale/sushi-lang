@@ -16,9 +16,7 @@ STR = BuiltinType.STRING
 BOOL = BuiltinType.BOOL
 
 
-# ---------------------------------------------------------------------------
 # fixtures
-# ---------------------------------------------------------------------------
 
 def _param(name, is_pack=False):
     tp = TypeParameter(name)
@@ -106,9 +104,7 @@ def _expands_in(node):
     return out
 
 
-# ---------------------------------------------------------------------------
 # direct unroll_expands properties
-# ---------------------------------------------------------------------------
 
 def test_unroll_arity_2_produces_two_renamed_copies():
     body = _expand_body()
@@ -201,9 +197,7 @@ def test_shadowing_let_suppresses_rename_in_tail():
     assert print_stmt.value.id != "args_0"
 
 
-# ---------------------------------------------------------------------------
 # hygienic per-copy local renaming (the P1-T7b local-collision fix)
-# ---------------------------------------------------------------------------
 
 def _expand_body_with_local(var="a", pack="args"):
     """expand(a in args): let string s = a.display(); println(s)"""
@@ -288,9 +282,7 @@ def test_unroll_nested_block_locals_left_alone():
         assert let_stmt.value.id == fanout
 
 
-# ---------------------------------------------------------------------------
 # end-to-end through monomorphize_function
-# ---------------------------------------------------------------------------
 
 def test_monomorphize_unrolls_expand_end_to_end():
     mono = _make_mono()

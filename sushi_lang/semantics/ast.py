@@ -33,7 +33,7 @@ class Program(Node):
     extensions: List["ExtendDef"]           # Non-generic extensions only
     generic_extensions: List["ExtendDef"]   # Generic extensions only (e.g., extend Box<T>)
     perk_impls: List["ExtendWithDef"]
-    externals: List["ExternalBlock"] = None  # FFI unsafe external blocks
+    externals: List["ExternalBlock"] = None
 
     def __post_init__(self):
         if self.externals is None:
@@ -81,8 +81,8 @@ class FuncDef(Node):
     params: List[Param]
     ret: Optional[Type]
     body: "Block"
-    is_public: bool = False          # True if declared with 'public' keyword
-    type_params: Optional[List[BoundedTypeParam]] = None  # Generic type parameters with constraints
+    is_public: bool = False
+    type_params: Optional[List[BoundedTypeParam]] = None
     err_type: Optional[Type] = None  # Error type for Result<T, E> (None = StdError default)
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
@@ -94,26 +94,26 @@ class FuncDef(Node):
 
 @dataclass
 class ConstDef(Node):
-    name: str                    # Constant name
+    name: str
     ty: Optional[Type]           # Constant type (must be specified)
-    value: "Expr"                # Constant value expression
-    is_public: bool = False      # True if declared with 'public' keyword
+    value: "Expr"
+    is_public: bool = False
     name_span: Optional[Span] = None
     type_span: Optional[Span] = None
 
 @dataclass
 class StructField:
     """Single field in a struct definition."""
-    ty: Optional[Type]           # Field type
-    name: str                    # Field name
+    ty: Optional[Type]
+    name: str
     loc: Optional[Span] = None
 
 @dataclass
 class StructDef(Node):
     """Struct definition with fields."""
-    name: str                             # Struct name
-    fields: List[StructField]             # List of fields
-    type_params: Optional[List[BoundedTypeParam]] = None  # Type parameters with optional constraints
+    name: str
+    fields: List[StructField]
+    type_params: Optional[List[BoundedTypeParam]] = None
     name_span: Optional[Span] = None
 
 @dataclass
@@ -128,17 +128,17 @@ class EnumVariant:
 class EnumDef(Node):
     """Enum definition with variants."""
     name: str                           # Enum name (e.g., "Option", "Result")
-    variants: List[EnumVariant]         # List of variants
-    type_params: Optional[List[BoundedTypeParam]] = None  # Type parameters with optional constraints
+    variants: List[EnumVariant]
+    type_params: Optional[List[BoundedTypeParam]] = None
     name_span: Optional[Span] = None
 
 @dataclass
 class ExtendDef(Node):
     target_type: Optional[Type]  # Type being extended (int, bool, string)
-    name: str                    # Method name (add, multiply, etc.)
+    name: str
     params: List[Param]          # Parameters excluding implicit 'self'
-    ret: Optional[Type]          # Return type
-    body: "Block"                # Method body
+    ret: Optional[Type]
+    body: "Block"
     target_type_span: Optional[Span] = None
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
@@ -162,7 +162,7 @@ class PerkDef(Node):
     """Perk definition (trait/interface)."""
     name: str
     methods: List[PerkMethodSignature]
-    type_params: Optional[List[BoundedTypeParam]] = None  # Generic params with optional constraints
+    type_params: Optional[List[BoundedTypeParam]] = None
     name_span: Optional[Span] = None
 
 @dataclass
@@ -170,7 +170,7 @@ class ExtendWithDef(Node):
     """Perk implementation (extend Type with Perk)."""
     target_type: Optional[Type]
     perk_name: str
-    methods: List[FuncDef]  # Implementation methods
+    methods: List[FuncDef]
     target_type_span: Optional[Span] = None
     perk_name_span: Optional[Span] = None
 
@@ -197,7 +197,7 @@ class ExternalBlock(Node):
     abi: str                          # ABI string (only "C" accepted in v1)
     namespace: str                    # Namespace binding (e.g., "libc")
     reason: Optional[str]             # because "..." reason (None silences nothing)
-    decls: List[ExternalDecl]         # Foreign function declarations
+    decls: List[ExternalDecl]
     abi_span: Optional[Span] = None
     namespace_span: Optional[Span] = None
 
@@ -248,10 +248,10 @@ class While(Stmt):
 @dataclass
 class Foreach(Stmt):
     """Foreach loop statement: foreach(type item in iterable):"""
-    item_name: str              # Loop variable name
+    item_name: str
     item_type: Optional[Type]   # Declared type (may be None for inference)
-    iterable: "Expr"            # Expression yielding iterator
-    body: Block                 # Loop body
+    iterable: "Expr"
+    body: Block
     item_name_span: Optional[Span] = None
     item_type_span: Optional[Span] = None
     item_borrow: Optional[str] = None       # None | "peek" | "poke"
@@ -260,7 +260,7 @@ class Foreach(Stmt):
 @dataclass
 class Expand(Stmt):
     """Compile-time pack-expansion statement: expand(a in args):"""
-    var: str                    # Loop/binding variable name (e.g., 'a')
+    var: str
     iterable: "Expr"            # Value-pack reference being expanded (typically a Name)
     body: Block                 # Body unrolled per pack element
     var_span: Optional[Span] = None
@@ -276,9 +276,9 @@ class Continue(Stmt):
 @dataclass
 class Pattern(Node):
     """Pattern for match arms: EnumName.VariantName(binding1, binding2, ...)"""
-    enum_name: str                                      # Enum type name (e.g., "FileResult")
-    variant_name: str                                   # Variant name (e.g., "Err")
-    bindings: List[Union[str, 'Pattern', 'OwnPattern', 'RefBinding']] # Names, nested patterns, Own patterns, reference bindings, or '_'
+    enum_name: str
+    variant_name: str
+    bindings: List[Union[str, 'Pattern', 'OwnPattern', 'RefBinding']]
     enum_name_span: Optional[Span] = None
     variant_name_span: Optional[Span] = None
 
@@ -297,21 +297,21 @@ class RefBinding(Node):
 @dataclass
 class OwnPattern(Node):
     """Own(inner_pattern) - auto-unwrap Own<T> in pattern matching."""
-    inner_pattern: Union[str, 'Pattern']  # Variable name or nested pattern
+    inner_pattern: Union[str, 'Pattern']
     inner_borrow: Optional[str] = None    # None | "peek" | "poke"
     inner_borrow_span: Optional[Span] = None
 
 @dataclass
 class MatchArm(Node):
     """Single arm in a match statement/expression"""
-    pattern: Union[Pattern, WildcardPattern]  # Pattern to match against
-    body: Union["Expr", "Block"]  # Expression or block to execute
+    pattern: Union[Pattern, WildcardPattern]
+    body: Union["Expr", "Block"]
 
 @dataclass
 class Match(Stmt):
     """Match statement: match expr: pattern -> body"""
-    scrutinee: "Expr"           # Expression being matched
-    arms: List[MatchArm]        # Match arms
+    scrutinee: "Expr"
+    arms: List[MatchArm]
     # Concrete monomorphized enum type of the scrutinee, resolved by the type
     # checker (Pass 2) and consumed by the backend. Stored here because the
     # backend cannot always re-derive it from the scrutinee expression alone
@@ -362,14 +362,11 @@ class IndexAccess(Node):
     array: "Expr"
     index: "Expr"
     inferred_element_type: Optional["Type"] = None  # Element type inferred by Pass 2.
-                                            # The backend does not re-derive a receiver's
-                                            # type, it reads what Pass 2 stamped -- and an
-                                            # IndexAccess used to carry no stamp at all,
-                                            # so `rows[0].hash()` reached the fallback
-                                            # with no semantic type and died as CE0019
-                                            # (#286). The sibling stamps are
-                                            # MethodCall/DotCall.inferred_return_type and
-                                            # TryExpr.inferred_unwrapped_type.
+                                            # The backend reads Pass 2's stamp rather than
+                                            # re-deriving; with none, `rows[0].hash()` died
+                                            # as CE0019 (#286). Siblings:
+                                            # `inferred_return_type`,
+                                            # `inferred_unwrapped_type`.
 
 UnOp = Literal["neg", "not", "~"]
 @dataclass
@@ -433,8 +430,8 @@ class Call(Node):
 @dataclass
 class MethodCall(Node):
     receiver: "Expr"    # The object/expression being called (x in x.add(5))
-    method: str         # Method name (add, multiply, etc.)
-    args: List["Expr"]  # Arguments to the method
+    method: str
+    args: List["Expr"]
     inferred_return_type: Optional["Type"] = None  # Return type inferred by type checker
     callee_self_mode: Optional[str] = None  # "peek"/"poke" when the resolved method takes
                                             # `poke self` (#327); stamped by Pass 2, read
@@ -445,8 +442,8 @@ class MethodCall(Node):
 class DotCall(Node):
     """Unified node for X.Y(args) - resolved during semantic analysis."""
     receiver: "Expr"    # The receiver expression (variable, type name, etc.)
-    method: str         # Method/variant name
-    args: List["Expr"]  # Arguments
+    method: str
+    args: List["Expr"]
     inferred_return_type: Optional["Type"] = None  # Return type inferred by type checker
     resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type (populated by type checker)
     external_ref: Optional[Tuple[str, str]] = None  # (namespace, name) for FFI calls (set by type checker)
@@ -457,13 +454,13 @@ class DotCall(Node):
 class MemberAccess(Node):
     """Member access expression: obj.field"""
     receiver: "Expr"    # The struct expression (p in p.x)
-    member: str         # Member name (x, y, etc.)
+    member: str
 
 @dataclass
 class EnumConstructor(Node):
     """Enum variant constructor: Option.Some(42) or Color.Red"""
-    enum_name: str      # Enum type name (e.g., "Option", "Color")
-    variant_name: str   # Variant name (e.g., "Some", "Red")
+    enum_name: str
+    variant_name: str
     args: List["Expr"]  # Arguments for associated data (empty for unit variants)
     enum_name_span: Optional[Span] = None
     variant_name_span: Optional[Span] = None
@@ -479,15 +476,15 @@ class DynamicArrayFrom(Node):
 
 @dataclass
 class CastExpr(Node):
-    expr: "Expr"           # The expression being cast
-    target_type: Type      # The target type to cast to
+    expr: "Expr"
+    target_type: Type
     source_type: Optional[Type] = None  # Operand's semantic type, stamped in Pass 2 (signedness for codegen)
 
 @dataclass
 class Borrow(Node):
     """Borrow expression: peek expr or poke expr"""
     expr: "Expr"  # The expression being borrowed (typically a Name)
-    mutability: Literal["peek", "poke"]  # Borrow mode
+    mutability: Literal["peek", "poke"]
 
 @dataclass
 class TryExpr(Node):

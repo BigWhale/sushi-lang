@@ -20,13 +20,10 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
 
     from sushi_lang.semantics.generics.types import GenericTypeRef
     if isinstance(type_obj, GenericTypeRef):
-        # CE2419: a reference as a generic type argument. Checked FIRST, above the Result
-        # branch, and with NO Maybe/Result exemption -- unlike the `ptr` gate below, whose
-        # exemption is safe because a `ptr` has no lifetime to outlive. `Maybe@(peek T)`
-        # and `Result@(peek T, E)` are precisely how a returned borrow escapes into a
-        # `match` (#314/#316), so exempting them would leave the hole CE2417 closes.
-        # This also pre-empts the backend's CE0022 on `List@(peek T)` (#318): Pass 2 runs
-        # first, so the ICE is now unreachable.
+        # CE2419. Checked FIRST and with NO Maybe/Result exemption, unlike the `ptr` gate
+        # below -- a `ptr` has no lifetime to outlive, while `Maybe@(peek T)` is precisely
+        # how a returned borrow escapes into a `match` (#314/#316). Also pre-empts the
+        # backend's CE0022 on `List@(peek T)` (#318).
         from sushi_lang.semantics.type_predicates import contains_reference
         if any(contains_reference(arg) for arg in type_obj.type_args):
             offender = next(arg for arg in type_obj.type_args if contains_reference(arg))

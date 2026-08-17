@@ -76,9 +76,7 @@ EXEMPT_REASONS: dict[str, str] = {
 }
 
 
-# ---------------------------------------------------------------------------
 # Clause 1 -- the escape must exist
-# ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("name,ty", REPRESENTATIVE_TYPES, ids=[n for n, _ in REPRESENTATIVE_TYPES])
 def test_a_move_type_has_a_clone(name, ty):
@@ -92,9 +90,7 @@ def test_a_move_type_has_a_clone(name, ty):
     )
 
 
-# ---------------------------------------------------------------------------
 # Clause 2 -- monomorphization
-# ---------------------------------------------------------------------------
 
 # A type parameter is substituted with a concrete type and the ONE body is compiled for each.
 # So `.clone()` must exist on every type that can be a type argument, not only on the owning
@@ -110,9 +106,7 @@ def test_a_generic_type_argument_has_a_clone(name, ty):
     )
 
 
-# ---------------------------------------------------------------------------
 # The auto-derived pair, which needs the analyzer to have run
-# ---------------------------------------------------------------------------
 
 def test_user_struct_and_enum_carry_a_clone(analyze):
     """Pass 1.8 registers clone from SEMANTICS, so the registry answer is import-order safe."""
@@ -152,9 +146,7 @@ fn main() i32:
     assert builtin_method_exists(StructType(name="Bag", fields=()), "clone")
 
 
-# ---------------------------------------------------------------------------
 # The former known hole, now closed
-# ---------------------------------------------------------------------------
 #
 # `test_hashmap_clone_is_a_known_hole_owned_by_phase_10` lived here. It asserted that
 # `HashMap@(K, V)` had NO clone and that a HashMap was not yet a MOVE type, and it carried its

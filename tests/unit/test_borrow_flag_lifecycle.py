@@ -10,9 +10,7 @@ def _codes(reporter) -> list[str]:
     return [item.code for item in reporter.items]
 
 
-# ---------------------------------------------------------------------------
 # The join algebra, asserted directly. A field's join rule is the whole design.
-# ---------------------------------------------------------------------------
 
 def test_monotone_facts_join_by_union():
     """Moved / destroyed / invalidated on ANY path hold after the join (conservative)."""
@@ -48,10 +46,8 @@ def test_invalidation_carries_its_span_through_a_join():
     assert joined.invalidation == (("v", "SPAN", ("c", "assign")),)
 
 
-# ---------------------------------------------------------------------------
 # Snapshot / restore must cover the SAME fields. A field in one and not the other
 # is exactly how a fact leaks across arms.
-# ---------------------------------------------------------------------------
 
 def test_every_flow_fact_field_is_restored():
     """A fact that is snapshot but never restored leaks; the reverse silently drops it."""
@@ -76,9 +72,7 @@ def test_every_flow_fact_field_is_restored():
     assert restore == fields, f"_restore_flow misses {sorted(fields - restore)}"
 
 
-# ---------------------------------------------------------------------------
 # REBIND. A rebind re-initializes: every fact about the OLD value is stale.
-# ---------------------------------------------------------------------------
 
 _REBIND_CLEARS = [
     ("is_moved", False),
@@ -138,9 +132,7 @@ def test_rebind_of_a_borrowed_binding_makes_it_an_owner(analyze):
     assert "CE2411" not in _codes(analyze(src))
 
 
-# ---------------------------------------------------------------------------
 # BRANCH JOIN. Exclusive paths must not see each other's facts.
-# ---------------------------------------------------------------------------
 
 def test_a_move_in_one_if_arm_does_not_reach_its_sibling(analyze):
     """The original per-arm snapshot fix (Tier 2), pinned here as a matrix cell."""
@@ -295,9 +287,7 @@ def test_an_invalidation_still_reaches_a_read_after_the_branch(analyze):
     assert "CE2412" in _codes(analyze(src))
 
 
-# ---------------------------------------------------------------------------
 # KNOWN-CONSERVATIVE cells. Decisions, not omissions.
-# ---------------------------------------------------------------------------
 
 def test_break_does_not_terminate_a_path():
     """`break` leaves the STATEMENT, not the function, and must not drop its facts."""

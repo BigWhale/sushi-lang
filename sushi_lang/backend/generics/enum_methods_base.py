@@ -86,16 +86,10 @@ def emit_enum_realise(
         else:
             raise_internal_error("CE0017", src=str(default_value.type), dst=str(value_llvm_type))
 
-    # Select: is_success ? unpacked_value : default_value
-    #
-    # LLVM `select` on an aggregate whose fields are themselves aggregates (e.g. a
-    # struct with a `string` field, laid out {i32, {i8*, i32}}) miscompiles: the
-    # top-level scalar fields survive but the nested aggregate is corrupted, so the
-    # nested string's length comes out garbage and the first use crashes. A flat
-    # struct of scalars (e.g. {i32, i32}) is unaffected, which is why realise on a
-    # struct without an aggregate field works. Selecting the *pointers* and loading
-    # through the choice is always a scalar select and copies the whole aggregate
-    # correctly, so use that for any aggregate T (mem2reg/O1+ folds the alloca away).
+    # LLVM `select` on an aggregate whose fields are themselves aggregates miscompiles:
+    # the top-level scalars survive but the nested aggregate is corrupted. So for any
+    # aggregate T, select the POINTERS and load through the choice -- always a scalar
+    # select, and mem2reg folds the alloca away.
     if isinstance(value_llvm_type, ir.Aggregate):
         owned_type = resolve_named_type(codegen, t_type)
         if needs_cleanup(owned_type):

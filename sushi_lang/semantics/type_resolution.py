@@ -107,15 +107,10 @@ def resolve_unknown_type(
     # into a ResultType here, which is NOT an EnumType -- so a Result from an annotation and a
     # Result from a call compared unequal (#184).
     elif isinstance(ty, GenericTypeRef):
-        # Generate the concrete type name (e.g., "Box<i32>").
-        #
-        # This needs NAME-level resolution only, so it uses the shallow resolver rather
-        # than resolve_type_recursively. A named type's str() is its name, so walking a
-        # struct's fields cannot change the mangled name -- but it CAN cycle: for
-        # `struct Node: Maybe@(Own@(Node))`, resolving the type argument reached Node,
-        # walked its fields, and came straight back here (#240's RecursionError).
-        # The sibling mangling sites (passes/types/resolution.py, passes/types/utils.py)
-        # use a bare str(arg) for the same reason.
+        # NAME-level resolution only, so the shallow resolver rather than
+        # `resolve_type_recursively`: a named type's str() is its name, so walking fields
+        # cannot change the mangled name but CAN cycle (#240's RecursionError). The sibling
+        # mangling sites use a bare str(arg) for the same reason.
         type_arg_strs = ", ".join(
             str(_resolve_type_name(arg, struct_table, enum_table))
             for arg in ty.type_args

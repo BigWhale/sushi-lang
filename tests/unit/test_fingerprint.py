@@ -26,9 +26,7 @@ def _unit_with_ast(tmp_path, src, name="main"):
     return Unit(name=name, file_path=fp, ast=program, dependencies=[], public_symbols={})
 
 
-# --------------------------------------------------------------------------
 # Determinism and source sensitivity
-# --------------------------------------------------------------------------
 
 def test_fingerprint_is_deterministic(make_unit):
     unit = make_unit(CLEAN)
@@ -44,9 +42,7 @@ def test_fingerprint_changes_with_source(make_unit):
     assert compute_unit_fingerprint(a) != compute_unit_fingerprint(b)
 
 
-# --------------------------------------------------------------------------
 # AST-structure sensitivity (file bytes held constant, only AST varies)
-# --------------------------------------------------------------------------
 
 def test_fingerprint_changes_with_struct_field(tmp_path):
     a = _unit_with_ast(tmp_path, "struct P:\n    i32 x\n" + CLEAN)
@@ -74,9 +70,7 @@ def test_fingerprint_changes_with_use_statement(tmp_path):
     assert compute_unit_fingerprint(a) != compute_unit_fingerprint(b)
 
 
-# --------------------------------------------------------------------------
 # Cross-unit visibility (a dependency's public signature affects dependents)
-# --------------------------------------------------------------------------
 
 def test_fingerprint_changes_when_dependency_signature_changes(make_unit, tmp_path):
     dependent = make_unit(CLEAN, name="dependent")
@@ -95,9 +89,7 @@ def test_fingerprint_changes_when_dependency_signature_changes(make_unit, tmp_pa
     assert fp1 != fp2
 
 
-# --------------------------------------------------------------------------
 # stdlib / library fingerprints
-# --------------------------------------------------------------------------
 
 def test_stdlib_fingerprint_is_order_independent(tmp_path):
     a = tmp_path / "a.bc"; a.write_bytes(b"AAA")
@@ -121,9 +113,7 @@ def test_lib_fingerprint_changes_with_content(tmp_path):
     assert compute_lib_fingerprint(slib) != fp1
 
 
-# --------------------------------------------------------------------------
 # Imported-library template sensitivity (Phase 2 cross-library generics)
-# --------------------------------------------------------------------------
 
 def test_unit_fingerprint_changes_with_imported_library_digest(make_unit):
     """A consumer unit's fingerprint must change when an imported library's digest changes, so a
@@ -158,9 +148,7 @@ def test_unit_fingerprint_no_library_matches_empty_mapping(make_unit):
     )
 
 
-# --------------------------------------------------------------------------
 # Generic exporters (regression: BoundedTypeParam join TypeError)
-# --------------------------------------------------------------------------
 
 def test_definition_signature_with_generic_type_params():
     """A FuncDef whose type_params are BoundedTypeParam objects must produce a signature, not a
@@ -194,9 +182,7 @@ def test_fingerprint_generic_struct_and_enum_do_not_crash(tmp_path):
     assert compute_unit_fingerprint(unit) != compute_unit_fingerprint(plain)
 
 
-# --------------------------------------------------------------------------
 # Monomorphized-extension key: signature AND body, span-insensitive
-# --------------------------------------------------------------------------
 
 def _parse_extension(src):
     program, _ = parse_to_ast(src)
@@ -236,9 +222,7 @@ def test_mono_ext_fingerprint_ignores_source_position(make_unit):
     )
 
 
-# --------------------------------------------------------------------------
 # Stdlib generator-source coverage (regression: silently-skipped dead path)
-# --------------------------------------------------------------------------
 
 def test_stdlib_generator_sources_all_exist():
     """Every path the stdlib source fingerprint hashes must exist. The hasher silently skips

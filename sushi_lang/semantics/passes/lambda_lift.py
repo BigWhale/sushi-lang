@@ -70,12 +70,9 @@ class LambdaLifter:
         ok_type = lam.resolved_type.ok_type if lam.resolved_type is not None else lam.ret
         err_type = lam.resolved_type.err_type if lam.resolved_type is not None else lam.err_type
         # The env borrow is `poke`, and the mode is not decoration: a move-captured
-        # `List@(T)` is MUTABLE inside the body by design (T1.5), so `xs.push(x)` becomes
-        # a mutating method on an env field and the write must persist across calls. The
-        # parameter was spelled `peek` while nothing enforced read-only; once the write
-        # gate became total (R1), that spelling made the language's own closure semantics
-        # a CE2408. The environment is the closure's own storage, not a borrow of the
-        # caller's value.
+        # `List@(T)` is MUTABLE inside the body by design, so the write must persist across
+        # calls. Spelled `peek`, it made the language's own closure semantics a CE2408 once
+        # the write gate became total. The environment is the closure's own storage.
         env_param = Param(
             name=ENV_PARAM_NAME,
             ty=ReferenceType(referenced_type=env_struct, mutability=BorrowMode.POKE),

@@ -66,17 +66,11 @@ def emit_array_method(
                 return emit_value_clone(codegen, receiver_value, semantic_type)
 
             case "fill":
-                # Fixed array fill: fill all elements with a value
-                # Need to get pointer to the array variable for in-place modification
-                #
-                # Deliberately NOT routed through resolve_name_slot (#248), unlike every
-                # other address site. fill/reverse WRITE through the pointer, and a
-                # constant's global carries `global_constant = true` -- i.e. .rodata, so
-                # the store would be undefined behaviour (a likely SIGBUS) rather than a
-                # diagnostic. Pass 2 rejects a mutating method on a constant receiver
-                # with CE2096, so a constant never reaches here; keeping this on the
-                # locals-only lookup means it cannot start writing to .rodata even if
-                # that check is ever bypassed.
+                # Deliberately NOT through resolve_name_slot (#248), unlike every other
+                # address site: fill/reverse WRITE through the pointer, and a constant's
+                # global is .rodata, where a store is undefined behaviour rather than a
+                # diagnostic. CE2096 rejects it in Pass 2; the locals-only lookup here
+                # means no such binary can be produced even if that check is bypassed.
                 from sushi_lang.semantics.ast import Name
                 if isinstance(expr.receiver, Name):
                     array_ptr = codegen.memory.find_local_slot(expr.receiver.id)
@@ -106,12 +100,9 @@ def emit_array_method(
     else:
         array_struct_type = receiver_type
 
-    # The methods on `&T` are the methods on `T`. The receiver may be a `peek`/`poke`
-    # array parameter, and the arms below read `semantic_type.base_type` for the element
-    # type -- `.free()` and `.clone()` raise CE0042 on a miss, which is what made
-    # `a.clone()` on a reference receiver unusable as CE2411's documented escape (#301).
-    # Unwrapped ONCE here, where the dynamic-array section starts, rather than per arm:
-    # `push` used to carry its own copy of this unwrap.
+    # The methods on `&T` are the methods on `T`. The arms below read
+    # `semantic_type.base_type`, so a reference receiver raised CE0042 and made `a.clone()`
+    # unusable as CE2411's escape (#301). Unwrapped ONCE here, not per arm.
     semantic_type = deref_type(semantic_type)
 
     match method_name:

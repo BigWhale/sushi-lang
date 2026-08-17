@@ -10,11 +10,7 @@ DA_CAP_INDEX = 1   # Capacity field (allocated space in elements)
 DA_DATA_INDEX = 2  # Data pointer field (pointer to heap-allocated elements)
 
 
-# ============================================================================
-# List<T> Struct Indices
-# ============================================================================
-# List<T> is represented as: {i32 len, i32 cap, T* data}
-# Same layout as dynamic arrays
+# List<T> indices. `{i32 len, i32 cap, T* data}` -- the dynamic-array layout.
 
 LIST_LEN_INDEX = 0   # Length field
 LIST_CAP_INDEX = 1   # Capacity field

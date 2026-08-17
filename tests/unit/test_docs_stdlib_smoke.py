@@ -9,12 +9,10 @@ from pathlib import Path
 
 import pytest
 
-# --------------------------------------------------------------------------- #
 # Documented stdlib surface -- one representative program per documented module.
 # Each program is warning-free (no `??` in main, no unused bindings) so a clean
 # compile is exit 0. `doc` is the docs/stdlib/ file the case is drawn from; the
 # test asserts it exists, tying the check to the documentation it guards.
-# --------------------------------------------------------------------------- #
 Case = namedtuple("Case", ["id", "doc", "source"])
 
 CASES = [

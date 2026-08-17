@@ -8,9 +8,7 @@ from pathlib import Path
 import pytest
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 def _compile(project_dir: Path, extra_args: list[str] | None = None) -> subprocess.CompletedProcess:
     """Invoke ``sushic main.sushi -o out`` in *project_dir* and return the result."""
@@ -77,9 +75,7 @@ fn main() i32:
     return main, helper
 
 
-# ---------------------------------------------------------------------------
 # Scenario 1 — Cold build
-# ---------------------------------------------------------------------------
 
 def test_cold_build_all_units_rebuilt(tmp_path):
     """Fresh project: every unit reports [rebuilt]; cache artefacts are created."""
@@ -104,9 +100,7 @@ def test_cold_build_all_units_rebuilt(tmp_path):
     assert "42" in out.stdout
 
 
-# ---------------------------------------------------------------------------
 # Scenario 2 — No-op rebuild
-# ---------------------------------------------------------------------------
 
 def test_noop_rebuild_all_units_cached(tmp_path):
     """Second build with no source changes: every unit reports [cached]."""
@@ -120,9 +114,7 @@ def test_noop_rebuild_all_units_cached(tmp_path):
     assert _rebuilt(second.stdout) == set()
 
 
-# ---------------------------------------------------------------------------
 # Scenario 3 — Leaf-body change
-# ---------------------------------------------------------------------------
 
 def test_leaf_body_change_rebuilds_only_that_unit(tmp_path):
     """Editing the helper's function body rebuilds the helper; main stays cached."""
@@ -144,9 +136,7 @@ public fn doubled(i32 x) i32:
     assert "main" in _cached(second.stdout)
 
 
-# ---------------------------------------------------------------------------
 # Scenario 4 — Dependency signature change
-# ---------------------------------------------------------------------------
 
 def test_signature_change_rebuilds_dependent(tmp_path):
     """Adding a new public function to the helper invalidates main's fingerprint."""
@@ -173,9 +163,7 @@ public fn tripled(i32 x) i32:
     assert "main" in _rebuilt(second.stdout)
 
 
-# ---------------------------------------------------------------------------
 # Scenario 5 — Comment/whitespace-only change
-# ---------------------------------------------------------------------------
 
 def test_whitespace_only_change_rebuilds_unit(tmp_path):
     """Whitespace-only change rebuilds that unit (fingerprint hashes raw source bytes)."""
@@ -195,9 +183,7 @@ def test_whitespace_only_change_rebuilds_unit(tmp_path):
     assert "main" in _cached(second.stdout)
 
 
-# ---------------------------------------------------------------------------
 # Scenario 6 — Global-parameter change (opt level)
-# ---------------------------------------------------------------------------
 
 def test_opt_level_change_invalidates_entire_cache(tmp_path):
     """Changing --opt level rebuilds every unit."""
@@ -215,9 +201,7 @@ def test_opt_level_change_invalidates_entire_cache(tmp_path):
     assert _cached(second.stdout) == set()
 
 
-# ---------------------------------------------------------------------------
 # Scenario 7 — Correctness under caching (stale-cache false-hit guard)
-# ---------------------------------------------------------------------------
 
 def test_correctness_under_caching_no_stale_output(tmp_path):
     """Critical false-hit guard: a rebuild after a leaf change must reflect new code."""
@@ -257,9 +241,7 @@ public fn doubled(i32 x) i32:
     assert output_b != output_a, "Output did not change after source edit — stale cache hit?"
 
 
-# ---------------------------------------------------------------------------
 # Scenario 8 — --no-incremental forces full rebuild
-# ---------------------------------------------------------------------------
 
 def test_no_incremental_flag_forces_full_rebuild(tmp_path):
     """--no-incremental bypasses cache; every unit is rebuilt even with no source change."""

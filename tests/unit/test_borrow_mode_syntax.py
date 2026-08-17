@@ -26,9 +26,7 @@ def parser() -> Lark:
     return _parser()
 
 
-# --------------------------------------------------------------------------- #
 # ACCEPT: peek / poke without the `&`, in all six positions
-# --------------------------------------------------------------------------- #
 
 ACCEPT_BARE_MODE = [
     # 1. reference parameter
@@ -77,9 +75,7 @@ def test_bare_peek_poke_parses(parser, src):
     parser.parse(src)
 
 
-# --------------------------------------------------------------------------- #
 # REJECT: the `&`-prefixed spelling is gone
-# --------------------------------------------------------------------------- #
 
 REJECT_AMPERSAND = [
     "fn f(&peek i32 x) i32:\n"
@@ -102,9 +98,7 @@ def test_ampersand_spelling_is_gone(parser, src):
         parser.parse(src)
 
 
-# --------------------------------------------------------------------------- #
 # ACCEPT: `nom` in the four positions that carry a parameter mode
-# --------------------------------------------------------------------------- #
 
 ACCEPT_NOM = [
     # a parameter of a plain function
@@ -148,9 +142,7 @@ def test_nom_parses(parser, src):
     parser.parse(src)
 
 
-# --------------------------------------------------------------------------- #
 # REJECT: `nom` is a parameter mode, not a type
-# --------------------------------------------------------------------------- #
 
 REJECT_NOM = [
     # not a generic type argument
@@ -182,9 +174,7 @@ def test_nom_rejected_outside_a_parameter_mode(parser, src):
         parser.parse(src)
 
 
-# --------------------------------------------------------------------------- #
 # The three words are reserved: no identifier may use them
-# --------------------------------------------------------------------------- #
 
 RESERVED = ["peek", "poke", "nom"]
 

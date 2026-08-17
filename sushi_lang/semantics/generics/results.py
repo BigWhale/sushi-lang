@@ -188,12 +188,9 @@ def ensure_result_type_in_table(
     err_variant = EnumVariantInfo(name="Err", associated_types=(err_type,))
     variants = (ok_variant, err_variant)
 
-    # An abstract Result -- `Result<Either<U, T>, StdError>` from inside a generic body, whose
-    # payloads still name the enclosing template's own type params -- is not a real type. Hand
-    # the caller the enum it asked for, but keep it OUT of the table: interning it would strand
-    # the enum topological sort on an `Either<U, T>` that is never itself interned, which is
-    # then misreported as a recursive enum (CE2052). The concrete instantiations are interned
-    # separately, at the call sites that bind the parameters.
+    # An abstract Result, whose payloads still name an enclosing template's type params, is
+    # not a real type: hand it back but keep it OUT of the table. Interning it strands the
+    # topological sort on a type never interned, misreported as CE2052.
     if (is_abstract_type(ok_type, structs, enums)
             or is_abstract_type(err_type, structs, enums)):
         return EnumType(

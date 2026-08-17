@@ -11,9 +11,7 @@ from sushi_lang.packager import credentials as creds
 HOSTILE = 'quote " backslash \\ newline \n tab \t control \x01 end'
 
 
-# --------------------------------------------------------------------------
 # TOML escaping: tomllib must read back exactly what was written
-# --------------------------------------------------------------------------
 
 def test_credentials_round_trip_hostile_values(tmp_path, monkeypatch):
     """A token containing quotes/backslashes/newlines must survive the write -> read cycle
@@ -48,9 +46,7 @@ def test_toml_escape_is_tomllib_valid():
         assert tomllib.loads(doc)["v"] == raw
 
 
-# --------------------------------------------------------------------------
 # login: the API key must not be an argv surface
-# --------------------------------------------------------------------------
 
 def test_login_parser_takes_no_api_key_argv():
     """An argv key leaks into shell history and ps output; the parser must reject one so the only
@@ -73,9 +69,7 @@ def test_login_reads_key_from_piped_stdin(monkeypatch):
     assert _read_api_key() == "nori_piped_key"
 
 
-# --------------------------------------------------------------------------
 # Entry point: main() returns an int (testable), __main__ exists
-# --------------------------------------------------------------------------
 
 def test_main_returns_int(monkeypatch, capsys):
     import sushi_lang.packager as pkg

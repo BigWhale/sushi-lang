@@ -54,7 +54,6 @@ def test_to_bits_is_float_only():
     assert get_builtin_method(BuiltinType.I32, "to_bits") is None
 
 
-# ---------------------------------------------------------------------------
 # Return types (#239)
 #
 # The tests above assert method NAMES only, and they warm the registry themselves with the
@@ -62,7 +61,6 @@ def test_to_bits_is_float_only():
 # return-type inference was dead for eight weeks: Pass 2 reads the semantics-side table, and
 # in the real pipeline the registry is still empty when it does. These pin the axis that
 # actually broke, on the table Pass 2 actually reads.
-# ---------------------------------------------------------------------------
 
 
 def test_returns_table_is_the_authority_for_carriers():

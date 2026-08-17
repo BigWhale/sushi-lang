@@ -14,9 +14,7 @@ from sushi_lang.semantics.param_modes import (
 )
 
 
-# --------------------------------------------------------------------------- #
 # 1. The resolver returns the declared mode, for every kind
-# --------------------------------------------------------------------------- #
 
 # The kinds whose parameters are DECLARED in Sushi source. The other three consume by
 # position and declare nothing: a struct field, an enum payload and a container slot.
@@ -65,9 +63,7 @@ def test_a_positional_sink_always_consumes(kind):
     assert modes_for([_param(ParamMode.BORROW)], kind) == (ParamMode.NOM,)
 
 
-# --------------------------------------------------------------------------- #
 # 3. The callee registers cleanup iff the mode is nom
-# --------------------------------------------------------------------------- #
 
 @pytest.mark.parametrize("mode", list(ParamMode))
 def test_the_callee_owns_its_parameter_iff_the_mode_is_nom(mode):
@@ -83,9 +79,7 @@ def test_ownership_does_not_depend_on_the_kind_of_callee():
     assert list(signature.parameters) == ["param"]
 
 
-# --------------------------------------------------------------------------- #
 # 2. A later use is CE2405 iff the mode is nom -- through the real compiler
-# --------------------------------------------------------------------------- #
 
 CALL_SITES = {
     ParamMode.BORROW: "    f(s)\n",

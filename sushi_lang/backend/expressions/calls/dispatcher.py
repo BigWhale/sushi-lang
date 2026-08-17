@@ -358,17 +358,11 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     if len(emitted_args) != len(params):
         raise_internal_error("CE0026", expected=len(params), got=len(emitted_args))
 
-    # Reconcile a by-pointer receiver against a by-value `self` parameter (#124).
-    # A List<T> receiver shares the dynamic-array LLVM layout {i32, i32, T*}, so
-    # emit_receiver_value hands us the alloca POINTER, but user extension methods
-    # declare `self` by value (ll_type of the target). Load the header value here so
-    # `cast_for_param` does not raise CE0017. Only the receiver (index 0) is affected;
-    # a peek/poke reference param has a pointer param type, so PointerType(ptr) !=
-    # arg.type and this never misfires. The by-value `self` is a shallow copy sharing
-    # the caller's `data*`; the extension callee never registers it for RAII cleanup
-    # (its body is emitted with fn_def=None), so there is no double-free.
-    # BaseStructType: covers a user struct's identified type (#257) as well as the
-    # anonymous fat pointers.
+    # Reconcile a by-pointer receiver against a by-value `self` parameter (#124), or
+    # `cast_for_param` raises CE0017. The receiver only: a peek/poke param has a pointer
+    # param type, so this never misfires. The by-value `self` shallow-copies the caller's
+    # `data*`, and an extension body registers no cleanup, so there is no double free.
+    # BaseStructType, to cover a user struct's identified type as well (#257).
     if (emitted_args
             and isinstance(params[0].type, ir.types.BaseStructType)
             and emitted_args[0].type == ir.PointerType(params[0].type)):

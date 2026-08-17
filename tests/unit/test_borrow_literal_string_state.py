@@ -22,10 +22,8 @@ def test_field_is_settable():
     assert BorrowState(name="s", owns_no_heap=True).owns_no_heap is True
 
 
-# ---------------------------------------------------------------------------
 # The rule itself. `binds_a_bare_literal_string` is its single spelling -- the `let` path
 # and the rebind path both call it, so pinning it here pins both.
-# ---------------------------------------------------------------------------
 
 def test_a_bare_literal_owns_nothing():
     """The whole point of option B: `let string s = "hi"` must not be a MOVE."""

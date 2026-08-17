@@ -19,7 +19,6 @@ BASELINE = 0
 TESTS_ROOT = Path(__file__).parent.parent  # tests/
 EXCLUDED_DIRS = {"helpers", "bin"}
 
-# --------------------------------------------------------------------------- #
 # Quarantine registry (R0.2)
 #
 # Printing tests that are intentionally left WITHOUT a stdout assertion, keyed by

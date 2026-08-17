@@ -67,24 +67,17 @@ class LibraryManifestGenerator:
                 if not func.is_public:
                     continue
 
-                # Generic functions are NOT concrete callables. They ship only as
-                # instantiable templates (templates.generic_functions) and are
-                # monomorphized at the consumer's call site. Emitting them here too
-                # produced a bogus concrete FuncSig with unresolved type params and
-                # forced defensive consumer-side skips. Route them to templates only.
+                # A generic function is not a concrete callable: it ships only as a
+                # template and monomorphizes at the consumer. Emitting one here produced a
+                # FuncSig with unresolved type params.
                 if func.type_params:
                     continue
 
-                # CE0116: reject a v1 NATIVE variadic '...T' function in a public
-                # library signature. A native variadic collects its trailing args
-                # into a runtime T[] inside a single concrete function -- there is
-                # no template to monomorphize at the consumer, so it genuinely
-                # cannot cross the .slib boundary. This is distinct from a v2 type
-                # pack '...Ts': a pack function carries type_params and was already
-                # routed to templates.generic_functions above (the consumer
-                # monomorphizes it per call site), so it never reaches here. The
-                # discriminator is is_variadic (v1, blocked) vs is_pack (v2,
-                # allowed-as-template), NOT the '...' spelling they share.
+                # CE0116. A v1 native `...T` collects its trailing args into a runtime T[]
+                # in ONE concrete function, so there is no template to monomorphize at the
+                # consumer. A v2 pack `...Ts` carries type_params and left through the
+                # template route above. The discriminator is is_variadic vs is_pack, NOT
+                # the `...` spelling they share.
                 if any(getattr(p, "is_variadic", False) for p in func.params):
                     er.emit(self.analyzer.reporter, er.ERR.CE0116,
                             getattr(func, "name_span", None) or func.loc, name=func.name)

@@ -149,14 +149,10 @@ class FunctionHelpers:
         self.codegen.func = llvm_fn
         self.codegen.entry_branch = None
 
-        # `variable_types` is per-FUNCTION state, like the scope stack below it, and it
-        # used to be per-MODULE: created once and never cleared, so an entry a function
-        # wrote stayed readable by every function emitted afterwards. For a value type
-        # that is wrong DATA; for a `ReferenceType` entry it is wrong CODE, because
-        # `is_reference_parameter` keys on it and a later function's plain local of the
-        # same name would be dereferenced. Save and restore rather than
-        # clear: nothing nests today, but an out-of-line destructor body emitted lazily
-        # mid-function would, and restoring is correct either way.
+        # `variable_types` is per-FUNCTION state. Per-module, an entry one function wrote
+        # stayed readable by every later one -- wrong DATA for a value type, wrong CODE for
+        # a `ReferenceType`, since `is_reference_parameter` keys on it. Save and restore
+        # rather than clear: an out-of-line destructor body emitted mid-function nests.
         self._variable_types_stack.append(self.codegen.variable_types)
         self.codegen.variable_types = {}
 
@@ -207,12 +203,9 @@ class FunctionHelpers:
 
             param_slots.append((arg, slot))
 
-        # A `nom` parameter TAKES OWNERSHIP: the caller transferred the value (the seam
-        # marked a Name source moved, a temp adopted in), so the callee owns the buffer
-        # and its owned bit must survive. Every other mode is a BORROW: the caller keeps
-        # the value, so clear the callee's copy's owned bit to 0 and the body can never
-        # free the caller's buffer, whatever it does with it (#145). Consuming a borrow
-        # is CE2411 in Pass 3, so the cleared bit guards the read paths only.
+        # A `nom` parameter TAKES OWNERSHIP, so its owned bit must survive. Every other
+        # mode is a BORROW: clearing the copy's owned bit means the body can never free the
+        # caller's buffer (#145). Consuming a borrow is CE2411, so this guards reads only.
         owning_params: set[str] = set()
         if fn_def is not None:
             for param in fn_def.params:
@@ -226,14 +219,12 @@ class FunctionHelpers:
                 val = self.codegen.builder.insert_value(arg, ir.Constant(self.codegen.i8, 0), 2)
             self.codegen.builder.store(val, slot)
 
-        # Register the parameters the callee OWNS for RAII cleanup. One question, asked
-        # of the declaration: `callee_owns_param`. It used to be asked of the callee's
-        # implementation instead -- "is `fn_def` None, i.e. is this a method body?" --
-        # which is how the same language feature came to free its parameters in a
-        # `.slib` build and not in a generated stdlib one.
+        # One question, asked of the DECLARATION: `callee_owns_param`. Asking the
+        # implementation instead is how one feature came to free its parameters in a `.slib`
+        # build and not in a generated stdlib one.
         #
-        # A native variadic `...T` array is the one parameter the CALLER synthesizes: it
-        # has no other owner, so the callee adopts it whatever the mode says.
+        # A native variadic `...T` array is the one parameter the CALLER synthesizes, so the
+        # callee adopts it whatever the mode says.
         if fn_def is not None:
             slot_by_name = {arg.name or f"arg{i}": slot
                             for i, (arg, slot) in enumerate(param_slots)}
@@ -248,14 +239,10 @@ class FunctionHelpers:
                     self.codegen.memory.register_owning_value(param.name, param.ty, slot)
                     continue
 
-                # A BORROW parameter is registered and immediately RELINQUISHED. The
-                # registration is what a REBIND needs -- `s := "new"` re-initializes the
-                # callee's local copy, and the new value has no other owner, so without a
-                # registry entry it leaks. The relinquish is what the caller needs: the
-                # value that arrives belongs to the caller, so no exit path may free it,
-                # and the rebind's destroy-the-old-value step must skip it too. A rebind
-                # then `unmark`s the slot, and scope exit frees the value the callee
-                # itself put there. Two facts, one slot, in the right order.
+                # Registered and immediately RELINQUISHED. The registration is what a
+                # REBIND needs -- the value it puts there has no other owner and would leak.
+                # The relinquish is what the CALLER needs -- the value that arrives is
+                # theirs, so no exit path may free it. Two facts, one slot, in that order.
                 self.codegen.memory.register_owning_value(param.name, param.ty, slot)
                 relinquish(self.codegen, param.name)
 

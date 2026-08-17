@@ -166,14 +166,10 @@ def emit_list_get(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Struct
     element_ptr = gep_utils.gep_array_element(codegen, data_ptr, index_value, "element_ptr")
     element_value = codegen.builder.load(element_ptr, name="element")
 
-    # `.get()` READS. It does not detach (#242): `get` does NOT remove the element, so the
-    # list keeps it and still frees it at scope exit, and the returned `Maybe.Some(T)`
-    # carries a BORROW. Pass 3 classifies it BORROWED, a `let` of it binds without owning,
-    # and a position that takes ownership rejects it (CE2411).
-    #
-    # `emit_list_pop` is the opposite and stays that way: pop decrements `len`, so the
-    # popped element falls outside the destructor's `data[0..len)` walk and the list no
-    # longer owns it. That Maybe is FRESH and MOVES the element.
+    # `.get()` READS and does not detach (#242), so the list still frees the element and
+    # the returned `Maybe.Some(T)` carries a BORROW. `emit_list_pop` is the opposite: pop
+    # decrements `len`, so the element falls outside the destructor's walk and that Maybe
+    # is FRESH.
     some_value = maybe.emit_maybe_some(codegen, element_type, element_value)
     codegen.builder.branch(end_block)
     in_bounds_predecessor = codegen.builder.block

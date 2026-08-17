@@ -25,12 +25,7 @@ def emit_hashmap_keys(
 
     key_type, value_type = extract_key_value_types(hashmap_type, codegen)
 
-    # Get HashMap fields:
-    # struct HashMap<K, V>:
-    #     Entry<K, V>[] buckets  (field 0)
-    #     i32 size               (field 1)
-    #     i32 capacity           (field 2)
-    #     i32 tombstones         (field 3)
+    # `{Entry<K, V>[] buckets, i32 size, i32 capacity, i32 tombstones}`.
 
     buckets_ptr = gep_utils.gep_struct_field(codegen, hashmap_value, 0, "buckets_ptr")
 

@@ -35,14 +35,9 @@ def parse_reference_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type
     if referenced_type is None:
         return None
 
-    # `peek peek i32` PARSES: the grammar rule is recursive (line 28 accepts a
-    # `reference_t` as the referenced type). It has no meaning at any layer -- a borrow of
-    # a borrow is the same borrow -- and used to be accepted at a declaration, producing a
-    # function nothing could call (CE2418, #317).
-    #
-    # Rejected HERE, in the type builder, because one site then covers every position a
-    # type can appear in. The compiler-synthesized closure-environment parameter is built
-    # directly in the AST and never goes through the parser, so it is unaffected.
+    # `peek peek i32` PARSES, because the grammar rule is recursive, and it has no meaning
+    # -- a borrow of a borrow is the same borrow (CE2418, #317). Rejected HERE, in the type
+    # builder, because one site then covers every position a type can appear in.
     if isinstance(referenced_type, ReferenceType):
         raise SyntaxDiagnostic(
             "CE2418", span=span_of(node),

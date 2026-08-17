@@ -11,14 +11,9 @@ if TYPE_CHECKING:
 # rather than probabilistic: see the (D) note in mangle_function_name.
 _PACK_MARKER = "pack"
 
-# Separator preceding the pack marker. A single "." (period) is deliberately
-# chosen because it lies OUTSIDE the alphabet of every other symbol component:
-# Sushi identifiers are Lark CNAME = [A-Za-z0-9_] only, and _join_sanitized's
-# output is also [A-Za-z0-9_] only (it strips/replaces < > , [ ] & * and space).
-# A "." therefore can never appear in base_name or any sanitized type-arg
-# segment, so the marker cannot occur anywhere in a no-pack symbol. ("." is a
-# valid LLVM symbol character, already used in this codebase, e.g. "llvm.*"
-# intrinsics.)
+# The pack marker's separator. A "." is chosen because it lies OUTSIDE the alphabet of
+# every other symbol component -- identifiers and sanitized type args are [A-Za-z0-9_]
+# only -- so the marker cannot occur in a no-pack symbol. LLVM accepts it (`llvm.*`).
 _PACK_SEP = "."
 
 

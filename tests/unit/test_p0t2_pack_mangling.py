@@ -9,9 +9,7 @@ STR = BuiltinType.STRING
 BOOL = BuiltinType.BOOL
 
 
-# ---------------------------------------------------------------------------
 # (A) regression: no-pack path unchanged
-# ---------------------------------------------------------------------------
 
 def test_no_pack_two_args_unchanged():
     # Golden value captured from the historical implementation.
@@ -26,9 +24,7 @@ def test_no_pack_keyword_default_matches_positional():
     assert mangle_function_name("f", (I32, STR), pack_arity=None) == "f__i32_string"
 
 
-# ---------------------------------------------------------------------------
 # (B) arity distinctness / no base collapse
-# ---------------------------------------------------------------------------
 
 def test_arity_distinctness():
     s0 = mangle_function_name("f", (), pack_arity=0)
@@ -47,9 +43,7 @@ def test_pack_marker_examples():
     assert mangle_function_name("f", (I32,), pack_arity=0) == "f__i32.pack0"
 
 
-# ---------------------------------------------------------------------------
 # (D) collision-free vs regular generics
-# ---------------------------------------------------------------------------
 
 def test_pack_symbol_never_equals_non_pack_same_flat_args():
     flat = (I32, STR)
@@ -62,9 +56,7 @@ def test_pack_symbol_never_equals_empty_non_pack():
     assert mangle_function_name("f", (), pack_arity=0) != mangle_function_name("f", ())
 
 
-# ---------------------------------------------------------------------------
 # (C) determinism
-# ---------------------------------------------------------------------------
 
 def test_determinism_no_pack():
     a = mangle_function_name("f", (I32, STR))
@@ -78,9 +70,7 @@ def test_determinism_pack():
     assert a == b
 
 
-# ---------------------------------------------------------------------------
 # (D) structural collision-freedom: the adversarial "pack2"-named-type case
-# ---------------------------------------------------------------------------
 
 class _NamedType:
     """A stand-in type whose ``str()`` is a plain CNAME-shaped identifier."""
@@ -105,18 +95,14 @@ def test_pack_named_type_cannot_forge_a_pack_symbol():
     assert forged != real_pack
 
 
-# ---------------------------------------------------------------------------
 # negative-arity guard
-# ---------------------------------------------------------------------------
 
 def test_negative_pack_arity_raises():
     with pytest.raises(ValueError, match="pack_arity must be >= 0"):
         mangle_function_name("f", (I32,), pack_arity=-1)
 
 
-# ---------------------------------------------------------------------------
 # end-to-end wiring: monomorphize_function names a trailing-pack generic
-# ---------------------------------------------------------------------------
 
 def _pack_generic():
     """Build a minimal generic ``f<T, ...Ts>(string prefix)`` fixture."""

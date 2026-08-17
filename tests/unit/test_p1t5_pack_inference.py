@@ -65,9 +65,7 @@ def _infer(generic_func, arg_types):
     return infer_flat_type_args(generic_func, arg_types, infer_leading=_leading)
 
 
-# ---------------------------------------------------------------------------
 # pack-only generic: fn f@(...Ts)(...Ts args)
-# ---------------------------------------------------------------------------
 
 def _pack_only():
     return _generic(
@@ -95,9 +93,7 @@ def test_has_pack_value_param():
     assert has_pack_value_param(_pack_only()) is True
 
 
-# ---------------------------------------------------------------------------
 # leading param + pack: fn f@(T, ...Ts)(T head, ...Ts rest)
-# ---------------------------------------------------------------------------
 
 def _leading_plus_pack():
     return _generic(
@@ -127,9 +123,7 @@ def test_leading_plus_pack_too_few_args():
     assert _infer(g, []) is None
 
 
-# ---------------------------------------------------------------------------
 # non-pack generic delegates unchanged: fn f@(T, U)(T a, U b)
-# ---------------------------------------------------------------------------
 
 def _non_pack():
     return _generic(
@@ -156,9 +150,7 @@ def test_non_pack_arg_count_mismatch():
     assert _infer(g, [I32]) is None
 
 
-# ---------------------------------------------------------------------------
 # end-to-end: real front-end + Pass 1.5 collector discovers the pack key
-# ---------------------------------------------------------------------------
 
 _PROBE_SRC = """\
 perk Display:

@@ -8,9 +8,7 @@ import pytest
 from sushi_lang.compiler.cache import CacheManager
 
 
-# --------------------------------------------------------------------------
 # R-B: a peer's cold start must not delete objects another compiler just stored
-# --------------------------------------------------------------------------
 
 def test_peer_prepare_does_not_destroy_a_stored_object(tmp_path):
     """A peer that sees the cache as invalid must not delete what we stored in it."""
@@ -27,9 +25,7 @@ def test_peer_prepare_does_not_destroy_a_stored_object(tmp_path):
     assert mem2reg.has_cached_unit("main", "fp-1")
 
 
-# --------------------------------------------------------------------------
 # R-A: concurrent cold starts must not crash
-# --------------------------------------------------------------------------
 
 def test_concurrent_cold_start_does_not_raise(tmp_path):
     """N compilers starting at once against one cold cache."""
@@ -99,9 +95,7 @@ def test_concurrent_writers_never_expose_a_partial_object(tmp_path):
     assert not torn, f"a reader saw a partial object (sizes {torn[:5]}, want {len(payload)})"
 
 
-# --------------------------------------------------------------------------
 # The mechanism that makes the above possible: nothing needs to be thrown away
-# --------------------------------------------------------------------------
 
 def test_object_path_is_keyed_by_fingerprint(tmp_path):
     """Two fingerprints for one unit are two files, so neither has to be evicted."""

@@ -30,14 +30,10 @@ class MainFunctionWrapper:
             self.codegen, result_enum, variant_index=0, signed=True, name="is_ok"
         )
 
-        # Extract data field (array of bytes) and read the payload back through a typed
-        # pointer into that byte buffer, mirroring the match-binding path
-        # (statements/matching.py). We deliberately do NOT memcpy the [N x i8] blob into a
-        # separate value-typed alloca and load that: the extra byte-array<->struct round
-        # trip miscompiled the trailing field of a struct payload containing nested string
-        # fat-pointers at -O1/-O2 (issue #119: `run()?? ProcessOutput.stderr_text` read a
-        # garbage {data,len} and segfaulted, while the match/realise paths were unaffected).
-        # A single typed load from the variant buffer is both robust and cheaper.
+        # Read the payload back through a typed pointer INTO the byte buffer. Do NOT memcpy
+        # the [N x i8] blob into a value-typed alloca and load that: the round trip
+        # miscompiled the trailing field of a payload holding nested string fat pointers at
+        # -O1/-O2 (#119). One typed load is both robust and cheaper.
         data_array = enum_utils.extract_enum_data(self.codegen, result_enum, name="result_data")
         data_alloca = self.codegen.builder.alloca(data_array.type, name="result_data_slot")
         self.codegen.builder.store(data_array, data_alloca)

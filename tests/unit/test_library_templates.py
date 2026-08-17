@@ -259,9 +259,7 @@ def test_closure_ships_private_helper_reference(tmp_path):
     assert templates["closure_summary"]["private_functions"] == ["secret"]
 
 
-# ---------------------------------------------------------------------------
 # P2-T4: consumer-side registration of library generic templates.
-# ---------------------------------------------------------------------------
 
 from types import SimpleNamespace
 
@@ -342,9 +340,7 @@ def test_register_library_generic_function_guards_missing_templates():
     assert analyzer.generic_funcs.by_name == {}
 
 
-# ---------------------------------------------------------------------------
 # Phase 2 Step A: perk DEFINITION shipping (definitions only, no impls).
-# ---------------------------------------------------------------------------
 
 PERK_SRC = (
     "perk Ord:\n"
@@ -491,9 +487,7 @@ def test_seed_library_perks_guards_missing_templates():
     assert table.by_name == {}
 
 
-# ---------------------------------------------------------------------------
 # P2-5 Phase 1 (C3): generic STRUCT / ENUM templates.
-# ---------------------------------------------------------------------------
 
 from sushi_lang.semantics.library_templates import (
     serialize_generic_struct,
@@ -695,9 +689,7 @@ def test_register_library_generic_struct_respects_local_definition():
     assert analyzer.generic_structs.order.count("Box") == 1
 
 
-# ---------------------------------------------------------------------------
 # C4a: concrete perk-impl shipping (templates.perk_impls)
-# ---------------------------------------------------------------------------
 
 from sushi_lang.semantics.library_templates import (
     serialize_perk_impl,

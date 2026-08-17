@@ -15,9 +15,7 @@ def _frozen_struct():
     return StructType(name="Box", fields=(("v", I32),))
 
 
-# ---------------------------------------------------------------------------
 # BUG 1: frozen Type nodes reachable from the expand body must not crash
-# ---------------------------------------------------------------------------
 
 def test_rename_does_not_crash_on_frozen_type_on_let():
     # expand(a in args): let b: Box = a   (the `let` carries a FROZEN StructType
@@ -79,9 +77,7 @@ def test_rename_does_not_crash_on_frozen_scrutinee_type():
     assert match_stmt.arms[0].body.statements[0].value.id == "x"
 
 
-# ---------------------------------------------------------------------------
 # BUG 2: a match arm whose pattern binds the loop var shadows it in the arm body
-# ---------------------------------------------------------------------------
 
 def test_match_arm_pattern_binding_shadows_loop_var():
     # expand(a in args):

@@ -38,12 +38,10 @@ class TypeMonomorphizer:
             if base_name not in generic_enums:
                 continue
 
-            # An abstract instantiation still names an enclosing template's own type params
-            # (`Result<Either<U, T>, StdError>`, collected off a generic fn's signature). There
-            # is nothing to monomorphize until a concrete call site binds them, and producing a
-            # bogus concrete enum strands the enum topological sort on an `Either<U, T>` that is
-            # never itself interned -- which then gets misreported as a recursive enum (CE2052).
-            # The concrete instantiations are collected separately.
+            # An abstract instantiation still names an enclosing template's type params, so
+            # there is nothing to monomorphize until a call site binds them. A bogus concrete
+            # enum strands the topological sort on a type never interned, misreported as a
+            # recursive enum (CE2052).
             structs = self.monomorphizer.struct_table.by_name if self.monomorphizer.struct_table else {}
             enums = self.monomorphizer.enum_table.by_name if self.monomorphizer.enum_table else {}
             if any(is_abstract_type(arg, structs, enums) for arg in type_args):
@@ -89,14 +87,10 @@ class TypeMonomorphizer:
 
         concrete_name = self._generate_concrete_name(generic.name, type_args)
 
-        # Tie-the-knot: publish an empty shell into the cache BEFORE substituting
-        # variant types. A self-referential field (e.g. `Node(Own<Tree<T>>)`)
-        # re-enters monomorphize_enum with this same cache_key; it now resolves to
-        # the shell by identity instead of recursing forever. The shell is patched
-        # in place below, so every self-reference sees the final variants once
-        # substitution completes. Sound because the recursion passes through an
-        # opaque pointer (Own<T>) — the backend never needs the pointee's layout
-        # to size the field.
+        # Tie-the-knot: publish an empty shell BEFORE substituting variant types, so a
+        # self-referential field re-entering with this cache_key resolves by identity
+        # instead of recursing forever. The shell is patched IN PLACE below. Sound because
+        # the recursion passes through an opaque `Own<T>` pointer.
         concrete = EnumType(
             name=concrete_name,
             variants=(),

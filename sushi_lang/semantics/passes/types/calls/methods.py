@@ -80,14 +80,9 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
                           receiver_type.name.startswith("HashMap<") or
                           receiver_type.name.startswith("List<")))
 
-    # Allow StructType through for perk method checking and auto-derived methods.
-    #
-    # FunctionType is in this tuple because a function value carries clone(). Before it was,
-    # this early return meant a method call on a fn value was never validated AT ALL: no
-    # arity check, no unknown-method error, nothing. `h.handler.clone()` therefore reached
-    # codegen unexamined, fell through to the extension fallback, and died mangling the type
-    # name into `fn(i32) - i32_clone`. Silence here is what turned a missing method into an
-    # internal compiler error.
+    # StructType for perk and auto-derived methods; FunctionType because a function value
+    # carries clone(). Without the latter a method call on a fn value was never validated
+    # AT ALL, and reached codegen to die mangling `fn(i32) - i32_clone`.
     if not isinstance(receiver_type, (BuiltinType, ArrayType, DynamicArrayType, EnumType, FunctionType, StructType)) and not is_generic_struct:
         return
 

@@ -99,7 +99,6 @@ def test_fallback_leaves_unsafe_names_untouched():
     assert display_type(weird) == "Weird<i32"
 
 
-# --------------------------------------------------------------------------- #
 # display_type_name -- the string-level entry point, for diagnostics that hold an
 # already-interned name and no Type object (CE0122's recursion chain, CE0101, ...).
 

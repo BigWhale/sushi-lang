@@ -84,12 +84,8 @@ def initialize_dynamic_array(
         if isinstance(val.type, ir.PointerType) and codegen.types.is_dynamic_array_type(val.type.pointee):
             val = codegen.builder.load(val, name=f"{name}_init_value")
 
-        # A bare `T[]` binding goes through the same seam as every other `let`. This
-        # position used to have no ownership decision at all: a `MemberAccess` source was
-        # cloned and a bare `Name` source was neither cloned nor marked moved, on the
-        # belief that "the array move path" handled it -- there is no such path here, so
-        # `let b = a` left two registered owners of one buffer and double-freed at scope
-        # exit.
+        # A bare `T[]` binding goes through the same seam as every other `let`. With no
+        # decision here, `let b = a` left two registered owners of one buffer.
         from sushi_lang.backend.ownership import bind, relinquish
         val, owns = bind(codegen, constructor_expr, val, array_type)
 

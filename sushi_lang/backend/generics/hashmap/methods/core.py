@@ -157,9 +157,6 @@ def emit_hashmap_get(
     # takes ownership rejects it (CE2411) with `.clone()` as the escape. The deep copy
     # that used to happen here was the compiler inserting one the user did not ask for.
 
-    # Get the Maybe<V> monomorphized enum type
-    # We need to look it up in the codegen.enum_table
-    # Format the type name properly
     if isinstance(value_type, BuiltinType):
         type_str = str(value_type).lower()
     else:

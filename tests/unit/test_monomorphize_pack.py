@@ -11,9 +11,7 @@ STR = BuiltinType.STRING
 BOOL = BuiltinType.BOOL
 
 
-# ---------------------------------------------------------------------------
 # fixture helpers (mirror test_p0t1/t2/t3)
-# ---------------------------------------------------------------------------
 
 def _param(name, is_pack=False):
     """A type-PARAMETER; the trailing one may carry the pack marker."""
@@ -61,9 +59,7 @@ def _make_mono():
     return Monomorphizer(reporter=Reporter())
 
 
-# ---------------------------------------------------------------------------
 # 1. Regression -- regular generic unchanged
-# ---------------------------------------------------------------------------
 
 def test_regular_generic_monomorphizes_to_historical_names_and_params():
     """identity<T> at i32/string yields the historical mangled names and a single 1:1 param whose
@@ -93,9 +89,7 @@ def test_no_pack_mangling_output_unaffected():
     assert mangle_function_name("f", (I32, STR), pack_arity=None) == "f__i32_string"
 
 
-# ---------------------------------------------------------------------------
 # 2. 0/1/3-element packs -> distinct mangled names (end-to-end)
-# ---------------------------------------------------------------------------
 
 def test_pack_arities_yield_distinct_names_end_to_end():
     """Driving the REAL monomorphize_function at pack arities 0, 1, 3 produces three
@@ -122,9 +116,7 @@ def test_pack_arities_yield_distinct_names_end_to_end():
     assert fn3.name == "f__i32_string_bool_i32.pack3"
 
 
-# ---------------------------------------------------------------------------
 # 3. Cache identity
-# ---------------------------------------------------------------------------
 
 def test_cache_returns_same_object_and_grows_by_one():
     """Same (name, type_args) twice through ONE Monomorphizer -> the identical FuncDef object, and
@@ -166,9 +158,7 @@ def test_distinct_arities_create_two_cache_entries():
     assert (generic.name, (I32, STR, BOOL)) in cache
 
 
-# ---------------------------------------------------------------------------
 # 4. Pairwise-unique mangling collision matrix
-# ---------------------------------------------------------------------------
 
 class _NamedType:
     """A type whose ``str()`` is a plain CNAME-shaped identifier -- models a user type literally
@@ -227,9 +217,7 @@ def test_mangling_matrix_is_pairwise_unique():
     assert forged != real
 
 
-# ---------------------------------------------------------------------------
 # 5. Arity / placement validation raises
-# ---------------------------------------------------------------------------
 
 def _generic_with_typeparams(name, type_params):
     """Minimal GenericFuncDef carrying only the type_params we want to exercise in
@@ -273,9 +261,7 @@ def test_no_pack_arity_mismatch_raises_with_historical_message():
     assert str(exc.value).startswith("Type argument count mismatch")
 
 
-# ---------------------------------------------------------------------------
 # 6. Scalar-position guard
-# ---------------------------------------------------------------------------
 
 def test_substitute_type_rejects_pack_in_scalar_position():
     """A bare pack reference in a scalar type position must raise: a TypePack is not a scalar Type

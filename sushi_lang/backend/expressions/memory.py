@@ -27,13 +27,10 @@ def get_element_size_constant(codegen: 'LLVMCodegen', element_type: ir.Type) -> 
     elif isinstance(element_type, ir.DoubleType):
         return ir.Constant(codegen.types.i32, 8)  # f64 = 8 bytes
 
-    # Struct types: Use LLVM's GEP trick to get actual size with padding
-    # getelementptr(null, 1) gives offset of second element = size of one element
-    #
-    # BaseStructType, not LiteralStructType: a user struct is an *identified* type
-    # (`%Tree`, #257), which is a SIBLING of LiteralStructType rather than a subclass. The
-    # narrower check sent every user-struct element to the CE0079 below -- and this is the
-    # element-size path for `T[]`, so it fired on the first recursive `Node[]`.
+    # `getelementptr(null, 1)` is the offset of the second element, i.e. one element's
+    # padded size. BaseStructType, not LiteralStructType: a user struct is an IDENTIFIED
+    # type and a SIBLING rather than a subclass, so the narrower check sent every one to
+    # the CE0079 below (#257).
     elif isinstance(element_type, ir.types.BaseStructType):
         null_ptr = ir.Constant(ir.PointerType(element_type), None)
         size_gep = codegen.builder.gep(
@@ -60,14 +57,11 @@ def calculate_llvm_type_size(llvm_type: 'ir.Type') -> int:
     elif isinstance(llvm_type, ir.DoubleType):
         return 8
     elif isinstance(llvm_type, ir.types.BaseStructType):
-        # String fat pointer {i8*, i32, i8 owned}: use the ALIGNED sizeof (16), not the raw
-        # field sum (13). The owned byte at offset 12 must survive a round-trip through an
-        # enum/Result/Maybe payload, whose data array is sized from this (#145).
+        # The ALIGNED sizeof (16), not the field sum (13): the owned byte at offset 12 must
+        # survive a round-trip through an enum payload sized from this (#145).
         #
-        # This sniff stays on the LITERAL type deliberately: a string is an anonymous fat
-        # pointer, never a named one, so a user struct that happens to be shaped
-        # {i8*, i32, i8} must NOT be mistaken for one. The general field-sum below covers
-        # every struct, identified (#257) or literal.
+        # The sniff stays on the LITERAL type deliberately -- a string is an anonymous fat
+        # pointer, so a user struct shaped `{i8*, i32, i8}` must not be mistaken for one.
         els = llvm_type.elements
         if (isinstance(llvm_type, ir.LiteralStructType)
                 and len(els) == 3 and isinstance(els[0], ir.PointerType)
@@ -171,11 +165,9 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     cond = codegen.builder.icmp_unsigned('<', idx, source_len)
     codegen.builder.cbranch(cond, copy_loop_body, copy_loop_exit)
 
-    # Loop body: deep-copy element. An owning element (a string / nested array / owning
-    # struct / enum with heap payload) must get its OWN buffers, else the clone and the
-    # source share element buffers and both free them at scope exit (double-free on a
-    # nested container). emit_value_clone is a runtime no-op for a non-owning element type,
-    # and is recursion-safe for a self-referential element type (out-of-line clone fn).
+    # An owning element must get its OWN buffers, or the clone and the source share them
+    # and both free at scope exit. `emit_value_clone` is a no-op for a non-owning element
+    # and recursion-safe for a self-referential one.
     codegen.builder.position_at_end(copy_loop_body)
     src_elem_ptr = codegen.builder.gep(source_data_ptr, [idx])
     elem = codegen.builder.load(src_elem_ptr)
@@ -579,12 +571,9 @@ def _clone_enum_value(codegen: 'LLVMCodegen', value: ir.Value, value_type) -> ir
     return b.load(slot, name="cloned_enum")
 
 
-# ---------------------------------------------------------------------------
-# Lifecycle registration: the CLONE half of every composite kind's handler.
-# The DESTROY half registers in backend/destructors.py; the pairing is asserted
-# by tests/unit/test_lifecycle_handlers.py. A kind registered on one side only
-# is a double free or a leak by construction (see backend/lifecycle.py).
-# ---------------------------------------------------------------------------
+# The CLONE half of every composite kind's handler; the DESTROY half registers in
+# backend/destructors.py. A kind registered on one side only is a double free or a leak by
+# construction, so tests/unit/test_lifecycle_handlers.py asserts the pairing.
 from sushi_lang.backend.lifecycle import register_lifecycle as _register_lifecycle  # noqa: E402
 
 _register_lifecycle(

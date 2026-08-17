@@ -50,11 +50,9 @@ class DynamicArrayManager:
         self.builder = builder
         self.codegen = codegen
         self.scope_stack: List[Set[str]] = []
-        # Track dynamic arrays by name as a per-name STACK of descriptors (innermost last),
-        # so a nested shadow of an owning array does not overwrite the outer descriptor:
-        # the inner binding pushes, its scope pop frees it and pops it, and the outer
-        # binding's descriptor is restored as the top. A flat dict lost the outer descriptor
-        # and the outer pop then double-freed the inner array (CE0015 dominance ICE).
+        # A per-name STACK of descriptors, innermost last, so a nested shadow does not
+        # overwrite the outer one. A flat dict lost the outer descriptor and the outer pop
+        # then double-freed the inner array.
         self.arrays: Dict[str, List[DynamicArrayDescriptor]] = {}
         # Track Own<T> variables for RAII cleanup. Flat by name: Own cleanup is driven by a
         # wholesale iteration (emit_own_cleanup) at function/scope exit, not scope-popped like
@@ -90,12 +88,9 @@ class DynamicArrayManager:
         current_scope = self.scope_stack.pop()
         current_lists = self.list_scope_stack.pop() if self.list_scope_stack else set()
 
-        # Popping the per-name descriptor stacks below is the drain: these arrays / lists are
-        # now out of scope and their outer namesake (if any) is restored as the top. If the
-        # current block already terminated, an early `return`/`??` inside this scope already
-        # emitted the destructors on this path -- emitting again would append a stray free
-        # after the terminator. Skip EMISSION but still drain the stacks so shadowing stays
-        # consistent. (Mirrors the cstr cleanup discipline; see #59.)
+        # Popping the stacks IS the drain, and it restores any outer namesake. If the block
+        # already terminated, an early exit emitted the destructors on that path, so skip
+        # EMISSION but still drain, or shadowing goes inconsistent (#59).
         block = self.builder.block
         emit = not (block is not None and block.is_terminated)
 
@@ -392,11 +387,9 @@ class DynamicArrayManager:
         if ty == BuiltinType.STRING:
             return True
         if isinstance(ty, StructType):
-            # Own<T> / List<T> / HashMap<K,V> always own a heap allocation; other structs
-            # are checked field-by-field. Named-prefix check short-circuits the
-            # self-referential Own<Tree> / List<Node> cycle without recursing into the
-            # payload type. Keyed on the shared CONTAINER_PREFIXES so the container set
-            # is spelled once (it used to match destructors.needs_cleanup by hand, #181).
+            # The containers always own heap; other structs are checked field-by-field. The
+            # prefix check short-circuits a self-referential `Own<Tree>` without recursing.
+            # Keyed on the shared CONTAINER_PREFIXES, so the set is spelled once (#181).
             from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
             if ty.name.startswith(CONTAINER_PREFIXES):
                 return True

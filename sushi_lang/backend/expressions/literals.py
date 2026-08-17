@@ -88,12 +88,9 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
             expr_value = codegen.expressions.emit_expr(part)
 
             if codegen.types.is_string_type(expr_value.type):
-                # A string-typed part is a BORROW when a live owner frees it (`{name}`, a
-                # field read, a container get-out) -- use directly, never free here. A
-                # TEMPORARY string part (`{s.upper()}`, a call result, a `??` unwrap) is an
-                # owned value nobody else frees: inside a print-arg frame the
-                # frame frees it after output (the concat loop below is disabled there);
-                # outside one the concat loop frees it like any other fresh intermediate.
+                # A string part with a live owner is a BORROW -- never free it here. A
+                # TEMPORARY part is owned by nobody: inside a print-arg frame the frame
+                # frees it after output, outside one the concat loop does.
                 from sushi_lang.backend.expressions.memory import expression_is_temporary
                 if expression_is_temporary(codegen, part):
                     if codegen._string_temp_stack:
@@ -117,11 +114,9 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
                         from sushi_lang.backend.expressions.type_utils import (
                             infer_expr_semantic_type, is_unsigned_type,
                         )
-                        # bool-returning methods (contains/starts_with/ends_with)
-                        # lower to i8, not i1, so they fall through to the integer
-                        # path; format them as true/false. Gated on the type
-                        # checker's stamp so a plain bool value keeps its historical
-                        # 1/0 rendering.
+                        # bool-returning string methods lower to i8, not i1, so they reach
+                        # the integer path. Gated on Pass 2's stamp, so a plain bool keeps
+                        # its 1/0 rendering.
                         inferred = getattr(part, 'inferred_return_type', None)
                         if inferred == BuiltinType.BOOL:
                             string_values.append(codegen.runtime.formatting.emit_bool_to_string(expr_value))
@@ -147,12 +142,10 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
     if len(string_values) == 1:
         return string_values[0]
 
-    # Concatenate all string values, freeing each consumed FRESH intermediate right after the
-    # concat copies its bytes (#145). A literal / borrowed variable part is not fresh and is
-    # never freed. The final result is returned unfreed (its new owner -- a `let` local via the
-    # scope registry, or the print statement -- frees it). Skip the freeing entirely inside a
-    # print argument: the #141 print-temp registry already frees these buffers there, and doing
-    # it here too would double-free.
+    # Each consumed FRESH intermediate is freed once the concat has copied its bytes
+    # (#145); a literal or borrowed part is never freed, and the result goes to its new
+    # owner unfreed. Skipped inside a print argument, where the #141 registry already
+    # frees them.
     from sushi_lang.backend.destructors import emit_string_destructor_from_value
     free_intermediates = not codegen._string_temp_stack
 

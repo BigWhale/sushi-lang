@@ -60,21 +60,14 @@ class TypeMapper:
         self.str_ptr: ir.PointerType = ir.PointerType(self.i8)
         self.void: ir.VoidType = ir.VoidType()
 
-        # String fat pointer type: {i8* data, i32 size, i8 owned}
-        # `owned` is the runtime ownership discriminator (issue #145): 0 = literal/borrow
-        # (backed by a global or aliased, never freed), 1 = heap (malloc'd, freed by RAII).
-        # Same role as the closure fat value's drop_ptr slot. LLVM sizeof stays 16 (already
-        # alignment-padded), so enum/struct/Result layouts are byte-identical to the old
-        # {i8*, i32} and FAT_POINTER_SIZE_BYTES stays 12.
+        # `{i8* data, i32 size, i8 owned}`. `owned` is the runtime discriminator (#145):
+        # 0 = literal or borrow, never freed; 1 = heap, freed by RAII. LLVM sizeof stays 16,
+        # so every embedding layout is byte-identical to the old `{i8*, i32}`.
         self.string_struct: ir.LiteralStructType = self._create_string_struct_type()
 
-        # Closure/function-value fat pointer type:
-        # {i8* fn_ptr, i8* env_ptr, i8* drop_ptr, i8* clone_ptr}
-        # `clone_ptr` is `drop_ptr`'s twin and exists for the same reason: capture is
-        # erased from the `fn(...)` type, so a value cloned through a struct field or a
-        # container has no compile-time way to learn its own environment layout. Carrying
-        # a type-erased env duplicator alongside the type-erased env destructor is what
-        # lets a closure be deep-copied at all. Slots 0-2 keep their indices.
+        # `{i8* fn_ptr, i8* env_ptr, i8* drop_ptr, i8* clone_ptr}`. `clone_ptr` is
+        # `drop_ptr`'s twin: capture is erased from the `fn(...)` type, so a value cloned
+        # through a field or container has no compile-time way to learn its env layout.
         self.closure_struct: ir.LiteralStructType = ir.LiteralStructType([
             self.str_ptr,  # fn_ptr  (opaque; bitcast to the real signature at call site)
             self.str_ptr,  # env_ptr (null when non-capturing)
@@ -140,13 +133,9 @@ class TypeMapper:
             case ForeignPtrType():
                 return ir.PointerType(self.i8)
             case FunctionType():
-                # Map a first-class function value to the 4-word fat pointer
-                # {i8* fn_ptr, i8* env_ptr, i8* drop_ptr, i8* clone_ptr}. Capture is
-                # erased: a non-capturing value carries null env/drop/clone; a closure
-                # carries a heap env plus a type-erased destructor and duplicator. The
-                # real callee signature
-                # (Result<T,E>(i8* env, params)) is recovered from the semantic
-                # FunctionType at the call site, not from this opaque LLVM type.
+                # The 4-word fat pointer. Capture is erased, so a non-capturing value
+                # carries null env/drop/clone. The real callee signature is recovered from
+                # the semantic FunctionType at the call site, not from this opaque type.
                 return self.closure_struct
             case UnknownType():
                 resolved = resolve_unknown_type(
@@ -192,12 +181,9 @@ class TypeMapper:
         if cached is not None:
             return cached
 
-        # The generic BUILTIN containers are anonymous LAYOUT DESCRIPTORS, not nominal
-        # types, and each has a hand-written LLVM shape that other backend code builds
-        # directly (`{T*}` in generics/own.py, `{K, V, u8}` in generics/hashmap/types.py).
-        # They must keep matching those, so they stay literal and never take the identified
-        # path below (#257) -- an identified `%Own<i32>` would not equal the `{i32*}` that
-        # emit_own_alloc constructs, which is exactly the CE0017 wall this hit.
+        # The builtin containers are anonymous LAYOUT DESCRIPTORS whose LLVM shape other
+        # backend code builds directly, so they stay LITERAL and never take the identified
+        # path below: an identified `%Own<i32>` would not equal `{i32*}` (#257).
         if struct_type.name.startswith("HashMap<"):
             return self._create_hashmap_struct_type(struct_type)
 
@@ -207,23 +193,15 @@ class TypeMapper:
         if struct_type.name.startswith("Own<") or struct_type.name.startswith("Entry<"):
             return self._create_builtin_literal_struct_type(struct_type)
 
-        # A user struct is an LLVM *identified* type: `%Name = type {...}`. That is what
-        # makes a self-reference expressible (#257) -- `set_body` fills the type IN PLACE,
-        # so a pointer taken to it during the field walk below stays valid and resolves to
-        # the finished layout.
+        # A user struct is an LLVM IDENTIFIED type, which is what makes a self-reference
+        # expressible (#257): `set_body` fills it IN PLACE, so a pointer taken during the
+        # field walk below stays valid. A literal struct type is a structural VALUE with
+        # nothing to fill in, so an embedded `{}` stayed empty and every element GEP
+        # through it had stride ZERO.
         #
-        # This used to cache an empty `ir.LiteralStructType([])` placeholder, walk the
-        # fields, then cache a NEW literal built from them. A literal struct type is a
-        # structural VALUE, so there is nothing to fill in: re-caching replaced the cache
-        # entry, but the `{}` the walk had already embedded into `{i32, i32, {}*}` stayed
-        # empty forever. `struct Tree: List@(Tree) kids` came out as
-        # `{i32, {i32, i32, {}*}}`, so every element GEP through it had stride ZERO and a
-        # freshly computed `Tree[]` disagreed with the struct's own field type.
-        #
-        # `struct_type.name` is used verbatim, including the `<...>` of an interned generic
-        # name (`Pair<i32, bool>`). It must NOT be sanitised or shortened: the name is the
-        # identity, so two monomorphizations that collided on one identified type would
-        # silently share a layout.
+        # `struct_type.name` is used VERBATIM, `<...>` included. It must not be sanitised:
+        # the name is the identity, so two monomorphizations colliding on one identified
+        # type would silently share a layout.
         llvm_struct = self.context.get_identified_type(struct_type.name)
         self.cache.cache_struct(struct_type.name, llvm_struct)
 

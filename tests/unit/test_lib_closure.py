@@ -79,9 +79,7 @@ def _build_lib(tmp_path: Path, source: str, name: str = "closurelib"):
     return result, env
 
 
-# ---------------------------------------------------------------------------
 # Producer: CE5006 retained for genuinely un-shippable references
-# ---------------------------------------------------------------------------
 
 def test_ptr_exposing_private_helper_still_rejected(tmp_path):
     """A private helper whose signature exposes a foreign ptr cannot ship."""
@@ -124,9 +122,7 @@ def test_external_namespace_reference_still_rejected(tmp_path):
     assert "CE5006" in (result.stdout + result.stderr)
 
 
-# ---------------------------------------------------------------------------
 # Consumer: incremental (two-unit) path over the closure
-# ---------------------------------------------------------------------------
 
 def _build_consumer(tmp_path: Path, env: dict[str, str]) -> Path:
     project = tmp_path / "consumer"

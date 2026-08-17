@@ -104,10 +104,8 @@ def test_stamp_survives_to_the_end_of_analysis(analyze_program, src):
     assert _find_get_call(analysis.program).inferred_return_type is not None
 
 
-# ---------------------------------------------------------------------------
 # The INDEXED receiver (#286). The same premise, one node type over: the backend
 # reads a stamp rather than re-deriving, so the stamp has to be there.
-# ---------------------------------------------------------------------------
 
 INDEX_STRUCT = """\
 struct Row:

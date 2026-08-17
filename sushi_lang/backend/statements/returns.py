@@ -26,26 +26,16 @@ def _extract_return_variables(expr: 'Expr') -> set[str]:
 
 def emit_return(codegen: 'LLVMCodegen', stmt: 'Return') -> None:
     """Emit return statement with Result<T> value or bare value for extension methods."""
-    # A `return` hands the value to the caller, so the local that produced it must stop
-    # owning it -- but this position must NOT decide that on its own. It used to: six
-    # ad-hoc type branches that marked the source moved BEFORE the value was emitted. Once
-    # the payload position started deciding too (`return Result.Ok(cwd)` consumes `cwd` at
-    # ENUM_PAYLOAD), the two derivations fought: the pre-move said "moved, skip cleanup"
-    # and the seam said "copy type, clone it", so the original was cloned AND never freed.
-    #
-    # `Result.Ok(x)` / `Maybe.Some(x)` is already an ENUM_PAYLOAD consuming use, so the
-    # whole job here is the shapes that are not: an extension method's bare `return value`.
-    # A wrapped return reaches the seam as a FRESH constructor and is a no-op.
-    # An extension method returns the bare value; a regular function returns the
-    # `Result.Ok(...)` / `Result.Err(...)` the source wrote. Both are just this expression.
+    # `Result.Ok(x)` is already an ENUM_PAYLOAD consuming use, so the job here is the
+    # shapes that are not: an extension method's bare `return value`. This position must
+    # NOT decide ownership on its own -- marking the source moved before the value was
+    # emitted fought the payload position, and the original was cloned AND never freed.
     value = codegen.expressions.emit_expr(stmt.value)
     value = _consume_returned_value(codegen, stmt, value)
 
-    # RAII: cleanup for all resources. Ordering is the whole reason RETURN is its own
-    # position: the value is emitted and consumed BEFORE cleanup runs, so a MOVE has
-    # already flagged the source (cleanup skips it) and a COPY has already taken its
-    # independent buffer (cleanup frees the original). Cleaning up first would hand the
-    # caller a freed buffer, which is what #256 was.
+    # ORDERING is the whole reason RETURN is its own position: the value is emitted and
+    # consumed BEFORE cleanup, so a MOVE has already flagged the source. Cleaning up first
+    # hands the caller a freed buffer (#256).
     from sushi_lang.backend.statements import utils
     utils.emit_scope_cleanup(codegen, cleanup_type='all')
 

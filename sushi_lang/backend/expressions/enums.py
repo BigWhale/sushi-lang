@@ -82,12 +82,9 @@ def emit_enum_constructor_from_method_call(
             from sushi_lang.semantics.typesys import DynamicArrayType
 
             if isinstance(arg_type, DynamicArrayType) and isinstance(arg_expr, DynamicArrayFrom):
-                # Create a fresh dynamic array with its own heap allocation. A heap-owning
-                # element that aliases a live local (a bare Name / member access) is
-                # deep-copied so the array and the source each own independent buffers --
-                # otherwise the enum local (now RAII-owned, #139) and the source both free
-                # the shared element buffer at scope exit (double-free). A fresh temp
-                # element is the sole owner and moved in unchanged.
+                # An owning element that aliases a live local is deep-copied, or the enum
+                # local and the source both free the shared buffer (#139). A fresh temp is
+                # already the sole owner and moves in unchanged.
                 from sushi_lang.backend.types import arrays
                 elements = arrays.emit_array_literal_elements(
                     codegen, arg_expr.elements.elements, arg_type.base_type
@@ -99,12 +96,9 @@ def emit_enum_constructor_from_method_call(
             else:
                 arg_value = codegen.expressions.emit_expr(arg_expr)
 
-                # Some expressions hand back a POINTER to the value rather than the value
-                # itself -- notably an array `.clone()`, which is the documented escape
-                # hatch for keeping an owning value past a move. The payload is stored into
-                # the variant's byte blob verbatim, so an unnormalized pointer was written
-                # as if it were the {len, cap, data} struct and read back a garbage length.
-                # Struct constructors already do this (structs.py:93); enums did not.
+                # Some expressions hand back a POINTER rather than the value -- an array
+                # `.clone()`, for one. The payload goes into the variant's byte blob
+                # verbatim, so an unnormalized pointer read back a garbage length.
                 if (isinstance(arg_value.type, ir.PointerType)
                         and arg_value.type.pointee == codegen.types.ll_type(arg_type)):
                     arg_value = codegen.builder.load(arg_value, name="enum_payload_by_value")

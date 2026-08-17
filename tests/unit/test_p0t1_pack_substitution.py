@@ -36,9 +36,7 @@ def _param(name, is_pack=False):
     return tp
 
 
-# ---------------------------------------------------------------------------
 # (a) regular 1:1 generic: unchanged behavior
-# ---------------------------------------------------------------------------
 
 def test_regular_generic_builds_1to1_substitution():
     mono = _FakeMono()
@@ -62,9 +60,7 @@ def test_regular_generic_arity_mismatch_raises():
         fm.build_substitution(generic, (BuiltinType.I32,))
 
 
-# ---------------------------------------------------------------------------
 # (b) trailing pack param absorbs trailing args into a TypePack
-# ---------------------------------------------------------------------------
 
 def test_trailing_pack_absorbs_all_trailing_args():
     mono = _FakeMono()
@@ -123,9 +119,7 @@ def test_too_few_args_for_leading_params_raises():
         fm.build_substitution(generic, (BuiltinType.I32,))
 
 
-# ---------------------------------------------------------------------------
 # (c) scalar-position guard
-# ---------------------------------------------------------------------------
 
 def test_substitute_type_rejects_pack_in_scalar_position_typeparam():
     sub = TypeSubstitutor(_FakeMono())
@@ -148,9 +142,7 @@ def test_substitute_type_scalar_binding_unchanged():
     assert sub.substitute_type(UnknownType("T"), mapping) == BuiltinType.I32
 
 
-# ---------------------------------------------------------------------------
 # TypePack public shape
-# ---------------------------------------------------------------------------
 
 def test_typepack_str_and_hash():
     p = TypePack((BuiltinType.I32, BuiltinType.STRING))

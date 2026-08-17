@@ -67,12 +67,10 @@ def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
 
     if isinstance(node.iterable, DotCall):
         if node.iterable.method in ("keys", "values", "entries"):
-            # Resolve the receiver's type through the SAME helper the HashMap emitters
-            # use, so this loop and `try_emit_hashmap_method` cannot disagree about what a
-            # HashMap receiver is. It used to require a bare `Name` and look the type up by
-            # variable name, which is why `get_map()??.keys()` silently fell through to the
-            # ARRAY foreach below and iterated the iterator struct as if it were an array:
-            # zero entries, no diagnostic. That was the whole of known-limitation 10.
+            # The SAME helper the HashMap emitters use, so this loop and
+            # `try_emit_hashmap_method` cannot disagree about what a HashMap receiver is.
+            # Asking by variable NAME made `get_map()??.keys()` fall through to the array
+            # foreach and iterate zero entries with no diagnostic.
             from sushi_lang.backend.expressions.calls.utils import infer_generic_struct_type
             receiver_type = infer_generic_struct_type(
                 codegen, node.iterable.receiver, "HashMap<")
@@ -238,21 +236,17 @@ def _emit_array_foreach_body(
 
     previous_entry = _MISSING
     if node.item_borrow is not None:
-        # Reference binding (#300 phase 1): store the element POINTER, not a copy. The
-        # slot then has the exact shape of a `peek`/`poke` parameter's (a T** holding
-        # a T*), and registering the `ReferenceType` in `variable_types` flips every
-        # consumer at once -- `is_reference_parameter` keys on nothing else -- so reads
-        # deref, writes land in the container, and no cleanup is ever registered.
+        # Reference binding (#300): store the element POINTER, not a copy, so the slot has
+        # a `peek`/`poke` parameter's shape. The `ReferenceType` flips every consumer at
+        # once -- `is_reference_parameter` keys on nothing else.
         previous_entry = bind_element_reference(codegen, node.item_name, node.item_borrow,
                                                  node.item_type, element_ptr)
     else:
         element_value = codegen.builder.load(element_ptr, name=node.item_name)
 
-        # Create slot for loop variable and store element. A foreach item is a read-only BORROW
-        # of the container's element: the shallow-loaded value aliases the array's heap buffer,
-        # which the array destructor frees. So it must NOT be registered for its own RAII free
-        # (register_cleanup=False), else an owning element (string #147, or an owning enum /
-        # struct #139) is freed by both the item and the container -- double-free.
+        # A foreach item is a read-only BORROW: the loaded value aliases the array's buffer,
+        # which the array destructor frees. So `register_cleanup=False`, or an owning element
+        # is freed by both the item and the container (#139, #147).
         element_ll_type = codegen.types.ll_type(node.item_type)
         codegen.memory.create_local(node.item_name, element_ll_type, element_value, node.item_type,
                                     register_cleanup=False)

@@ -200,8 +200,7 @@ class StdlibRegistry:
 
         for name in candidates:
             if checker(name):
-                # Create closures that capture the specific values
-                # Note: Different modules have different type_resolver signatures
+                # Different modules have different type_resolver signatures.
                 if module_name in ["time", "env", "process", "random", "files"]:
                     def make_type_resolver(fn_name):
                         return lambda: type_resolver(fn_name)

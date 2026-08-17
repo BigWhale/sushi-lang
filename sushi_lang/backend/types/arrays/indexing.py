@@ -35,12 +35,10 @@ def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
         if type_utils.is_reference_parameter(codegen, expr.array.id):
             array_slot = codegen.builder.load(array_slot, name=f"{expr.array.id}_ref_ptr")
     elif isinstance(expr.array, MemberAccess):
-        # An array that is a STRUCT FIELD must be indexed through its ADDRESS (#200). Emitting it
-        # as an expression hands back a fixed array by VALUE -- `extract_value` of the field -- and
-        # everything below wants a pointer (`.pointee`, the bounds check, the element GEP), so it
-        # died as `AttributeError: 'ArrayType' object has no attribute 'pointee'`. GEP to the field
-        # instead. (A dynamic-array field already came back as a pointer via emit_member_access's
-        # fast path, which is why only the fixed case broke.)
+        # An array that is a STRUCT FIELD is indexed through its ADDRESS (#200): emitting it
+        # as an expression hands back a fixed array by VALUE, and everything below wants a
+        # pointer. Only the fixed case broke -- a dynamic-array field already came back as
+        # a pointer.
         from sushi_lang.backend.expressions.structs import try_get_struct_alloca
         field_ptr = try_get_struct_alloca(codegen, expr.array)
         array_slot = (field_ptr if field_ptr is not None

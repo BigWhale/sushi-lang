@@ -33,15 +33,8 @@ def emit_byte_array_to_string(codegen: "LLVMCodegen", call: MethodCall, receiver
     string_size_i64 = codegen.builder.zext(string_size, ir.IntType(INT64_BIT_WIDTH))
     string_ptr = emit_malloc(codegen, codegen.builder, string_size_i64)
 
-    # PERFORMANCE: No UTF-8 validation for fast conversion
-    # This method assumes byte arrays contain valid UTF-8 for zero-cost conversion.
-    # Invalid UTF-8 sequences result in undefined behavior (similar to unsafe casts).
-    #
-    # FUTURE: A stdlib function bytes_to_string_checked() can provide validation
-    # and return Result<string> for safety-critical code paths.
-    #
-    # Design rationale: Most real-world byte arrays (file I/O, network protocols)
-    # contain valid UTF-8, so validation overhead is unnecessary in the common case.
+    # No UTF-8 validation: this is the zero-cost conversion, so invalid input is undefined
+    # behaviour. `.to_string_checked()` is the validating twin.
 
     from sushi_lang.backend.statements.utils import emit_copy_loop
     emit_copy_loop(

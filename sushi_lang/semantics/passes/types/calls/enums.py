@@ -39,15 +39,10 @@ def resolve_enum_type(validator: 'TypeValidator', constructor: EnumConstructor) 
         return validator.enum_table.by_name[enum_name]
 
     if enum_name in validator.generic_enum_table.by_name:
-        # Fallback path: Generic enum constructor without concrete type context
-        # This handles edge cases where a generic enum (Result, Maybe) is used without
-        # type resolution from let/return statements. In practice, resolved_enum_type
-        # should be set by _validate_return_statement or _validate_let_statement before
-        # validation reaches this point, allowing full type checking against the
-        # monomorphized enum type (e.g., Result<i32>, Maybe<string>).
-        #
-        # We still validate nested arguments to ensure type propagation for cases like:
-        # Result.Ok(Maybe.Some(42)) where the nested Maybe.Some needs processing.
+        # A generic enum constructor with no concrete type context. `resolved_enum_type` is
+        # normally stamped by the let/return validators before this point, so full checking
+        # happens against the monomorphized enum. Nested arguments are still validated, for
+        # the propagation `Result.Ok(Maybe.Some(42))` needs.
         for arg in constructor.args:
             validator.validate_expression(arg)
         return None

@@ -15,9 +15,7 @@ REPO = Path(__file__).resolve().parents[2]
 _HAS_SUSHIC = shutil.which("sushic") is not None
 
 
-# --------------------------------------------------------------------------
 # The bare-except sweep -- an acceptance criterion, made a permanent gate
-# --------------------------------------------------------------------------
 
 def test_no_bare_except_in_sushi_lang():
     """A bare `except:` catches KeyboardInterrupt/SystemExit/MemoryError."""
@@ -33,9 +31,7 @@ def test_no_bare_except_in_sushi_lang():
     assert not offenders, f"bare `except:` found (narrow it): {offenders}"
 
 
-# --------------------------------------------------------------------------
 # CE3504 -- cross-platform .slib rejected at load
-# --------------------------------------------------------------------------
 
 def _host_platform() -> str:
     from sushi_lang.backend.platform_detect import current_platform_name
@@ -62,9 +58,7 @@ def test_check_library_platform_allows_the_host_and_unknown():
     _check_library_platform({}, "lib")
 
 
-# --------------------------------------------------------------------------
 # CE3510 / CE3511 -- truncation, raised with a LITERAL code so the gate sees it
-# --------------------------------------------------------------------------
 
 def test_truncated_metadata_section_is_ce3510():
     from sushi_lang.backend.library_errors import LibraryError
@@ -97,9 +91,7 @@ def test_library_error_renders_through_the_reporter_path():
     assert "platform mismatch" in err.message
 
 
-# --------------------------------------------------------------------------
 # CE3501 -- main() rejected in --lib mode (end to end)
-# --------------------------------------------------------------------------
 
 @pytest.mark.skipif(not _HAS_SUSHIC, reason="sushic not on PATH")
 def test_lib_mode_rejects_main(tmp_path):
@@ -134,9 +126,7 @@ def test_lib_mode_without_main_succeeds(tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-# --------------------------------------------------------------------------
 # CE3507 -- a .slib whose bitcode payload is corrupt (end to end)
-# --------------------------------------------------------------------------
 
 @pytest.mark.skipif(not _HAS_SUSHIC, reason="sushic not on PATH")
 def test_corrupt_library_bitcode_is_ce3507(tmp_path):

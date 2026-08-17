@@ -31,12 +31,9 @@ def emit_struct_cleanup(codegen: 'LLVMCodegen') -> None:
     if not hasattr(codegen, 'dynamic_arrays') or codegen.dynamic_arrays is None:
         return
 
-    # Iterate through all scopes from innermost to outermost. This runs on an early-exit
-    # path (return / ?? / default return); the block terminates immediately after. Emit
-    # the destructor for every live, non-moved struct WITHOUT marking it cleaned: each
-    # exit path is a separate, mutually-exclusive basic block, so every path must emit its
-    # own free (#59/#60). The structural pop_scope drains the tracking on the fall-through
-    # path. Moved structs (ownership transferred to the caller) are skipped.
+    # An early-exit path. Emit the destructor for every live, non-moved struct WITHOUT
+    # marking it cleaned: each exit path is a separate, mutually-exclusive block, so every
+    # one must emit its own free (#59/#60). `pop_scope` drains the tracking.
     for scope_idx in range(len(codegen.memory.struct_variables) - 1, -1, -1):
         struct_scope = codegen.memory.struct_variables[scope_idx]
         for var_name, (struct_type, alloca) in struct_scope.items():
@@ -60,14 +57,9 @@ def emit_dynamic_array_cleanup(codegen: 'LLVMCodegen') -> None:
     if not hasattr(codegen, 'dynamic_arrays') or codegen.dynamic_arrays is None:
         return
 
-    # Iterate through all dynamic array scopes from innermost to outermost.
-    # This runs on an early-exit path (return / ?? / default return); the block
-    # terminates immediately after. Emit the destructor for every live array
-    # WITHOUT marking it globally destroyed: each exit path is a separate, mutually
-    # exclusive basic block, so every path must emit its own free. The `destroyed`
-    # flag means "explicitly .destroy()'d" (a permanent, cross-path state) and must
-    # not be set here, or later exit paths would skip the free and leak (#59). The
-    # structural pop_scope drains the tracking on the fall-through path.
+    # The same discipline as the struct sweep above. `destroyed` must NOT be set here: it
+    # means "explicitly .destroy()'d", a permanent cross-path state, so setting it would
+    # make later exit paths skip the free and leak (#59).
     for scope_idx in range(len(codegen.dynamic_arrays.scope_stack) - 1, -1, -1):
         array_scope = codegen.dynamic_arrays.scope_stack[scope_idx]
         for array_name in array_scope:
@@ -179,11 +171,8 @@ def emit_scope_cleanup(codegen: 'LLVMCodegen', cleanup_type: str = 'all') -> Non
         if hasattr(codegen.memory, 'emit_string_cleanup_all'):
             codegen.memory.emit_string_cleanup_all()
 
-    # Print-argument temporaries (#295): a `??` inside a print argument leaves the
-    # statement through here rather than through the frame's straight-line pop, so the
-    # buffers built before the propagation had no free at all. Same no-mutation
-    # discipline as the registries above. Lives on the codegen rather than on the memory
-    # manager because that is where the frame stack lives.
+    # A `??` inside a print argument leaves through here, not the frame's straight-line
+    # pop, so the buffers built before the propagation had no free at all (#295).
     if cleanup_type == 'all' and hasattr(codegen, 'emit_string_temp_frame_cleanup_all'):
         codegen.emit_string_temp_frame_cleanup_all()
 

@@ -42,9 +42,8 @@ def construct_file_error_from_errno(codegen: 'LLVMCodegen', errno_value: ir.Valu
     file_error_enum = codegen.enum_table.by_name["FileError"]
     file_error_llvm_type = codegen.types.get_enum_type(file_error_enum)
 
-    # Create FileError enum value with the appropriate tag
-    # FileError variants are all unit variants (no associated data)
-    # Note: file_error_tag is runtime, so we can't use construct_enum_variant directly
+    # `file_error_tag` is a runtime value, so construct_enum_variant cannot be used.
+    # Every FileError variant is a unit variant, so only the tag is stored.
     file_error_value = ir.Constant(file_error_llvm_type, ir.Undefined)
     file_error_value = codegen.builder.insert_value(
         file_error_value, file_error_tag, 0, name="file_error_tag"

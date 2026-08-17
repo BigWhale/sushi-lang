@@ -8,9 +8,7 @@ import pytest
 import perf_harness as ph
 
 
-# --------------------------------------------------------------------------- #
 # median_ms
-# --------------------------------------------------------------------------- #
 
 def test_median_odd():
     assert ph.median_ms([3.0, 1.0, 2.0]) == 2.0
@@ -25,9 +23,7 @@ def test_median_empty_raises():
         ph.median_ms([])
 
 
-# --------------------------------------------------------------------------- #
 # platform_key
-# --------------------------------------------------------------------------- #
 
 def test_platform_key_shape():
     key = ph.platform_key()
@@ -37,9 +33,7 @@ def test_platform_key_shape():
     assert key == key.lower()
 
 
-# --------------------------------------------------------------------------- #
 # compare
-# --------------------------------------------------------------------------- #
 
 def _result(name, ms):
     return ph.MetricResult(name=name, median_ms=ms, samples=[ms])
@@ -95,9 +89,7 @@ def test_compare_zero_baseline_does_not_divide_by_zero():
     assert d.regressed is True
 
 
-# --------------------------------------------------------------------------- #
 # format_table
-# --------------------------------------------------------------------------- #
 
 def test_format_table_marks_states():
     deltas = [
@@ -113,9 +105,7 @@ def test_format_table_marks_states():
     assert "report mode" in table
 
 
-# --------------------------------------------------------------------------- #
 # load_baseline / save_baseline
-# --------------------------------------------------------------------------- #
 
 def test_load_missing_file_returns_empty(tmp_path):
     assert ph.load_baseline(tmp_path / "nope.json", "linux-x86_64") == {}

@@ -41,9 +41,7 @@ def _make_mono():
     return Monomorphizer(reporter=Reporter())
 
 
-# ---------------------------------------------------------------------------
 # end-to-end fan-out via monomorphize_function
-# ---------------------------------------------------------------------------
 
 def test_fanout_arity3():
     mono = _make_mono()
@@ -106,9 +104,7 @@ def test_fanout_preserves_spans():
         assert p.loc is loc
 
 
-# ---------------------------------------------------------------------------
 # regular (non-pack) generic still 1:1 with identical fields
-# ---------------------------------------------------------------------------
 
 def test_regular_generic_one_param_per_param():
     from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
@@ -131,9 +127,7 @@ def test_regular_generic_one_param_per_param():
     assert fn.params[0].is_variadic is False
 
 
-# ---------------------------------------------------------------------------
 # direct expand_pack_param unit tests (empty-pack and non-pack branches)
-# ---------------------------------------------------------------------------
 
 def test_expand_pack_param_empty_pack_returns_empty_list():
     from sushi_lang.semantics.ast import Param

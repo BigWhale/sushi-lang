@@ -14,9 +14,7 @@ def cache(tmp_path):
     return cm
 
 
-# --------------------------------------------------------------------------
 # Staleness: the global parameters
-# --------------------------------------------------------------------------
 
 def test_global_key_differs_on_opt_level(tmp_path):
     a = CacheManager(tmp_path, opt_level="mem2reg")
@@ -44,9 +42,7 @@ def test_object_built_with_other_settings_is_not_reused(tmp_path):
     assert o2.has_cached_unit("main", "fp-1") is False
 
 
-# --------------------------------------------------------------------------
 # Staleness: the per-unit fingerprint
-# --------------------------------------------------------------------------
 
 def test_store_then_has_cached_unit_with_matching_fingerprint(cache):
     cache.store_unit_object("main", b"OBJ", "fp-abc")
@@ -76,9 +72,7 @@ def test_nested_unit_name_mirrors_the_source_tree(cache):
     assert cache.unit_object_path("helpers/math", "fp-1").parent.name == "helpers"
 
 
-# --------------------------------------------------------------------------
 # Path mangling
-# --------------------------------------------------------------------------
 
 def test_stdlib_object_path_mangles_separators(cache):
     path = cache.stdlib_object_path("io/stdio", "fp-1")
@@ -91,9 +85,7 @@ def test_lib_object_path_lands_in_the_libs_section(cache):
     assert cache.lib_object_path("mylib", "fp-1").parent == cache.libs_path
 
 
-# --------------------------------------------------------------------------
 # Directory lifecycle
-# --------------------------------------------------------------------------
 
 def test_prepare_is_idempotent(tmp_path):
     cm = CacheManager(tmp_path, opt_level="mem2reg")
@@ -115,9 +107,7 @@ def test_wipe_tolerates_a_missing_cache(tmp_path):
     CacheManager(tmp_path, opt_level="mem2reg").wipe()
 
 
-# --------------------------------------------------------------------------
 # Compiler-source digest in the global key
-# --------------------------------------------------------------------------
 
 def test_global_key_differs_on_compiler_source_digest(tmp_path, monkeypatch):
     """A compiler-source edit must change every cached object's name (a miss by construction).

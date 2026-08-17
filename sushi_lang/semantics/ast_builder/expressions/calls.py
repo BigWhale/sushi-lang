@@ -30,13 +30,10 @@ def extract_call_args(call_node: Tree, ast_builder: 'ASTBuilder') -> Tuple[List[
                             inner = ast_builder._expr(expr_node.children[0])
                             args.append(Spread(value=inner, loc=span_of(expr_node)))
                         elif isinstance(expr_node, Tree) and expr_node.data == "nom_arg":
-                            # `f(nom x)`: a call-site MARKER, not an operator. It changes
-                            # neither the value nor its type, so it stamps a flag on the
-                            # argument rather than wrapping it in a node every pass would
-                            # have to dispatch on. It lives at the ARGUMENT level and not
-                            # in `?unary` so it always marks the WHOLE argument -- in
-                            # `nom 1000 as i64` a unary-level marker would land on the
-                            # literal and leave the cast unmarked.
+                            # `f(nom x)` is a call-site MARKER, not an operator: it stamps
+                            # a flag rather than wrapping the argument in a node every pass
+                            # would dispatch on. At the ARGUMENT level, not in `?unary`, so
+                            # `nom 1000 as i64` marks the cast and not just the literal.
                             marked = ast_builder._expr(expr_node.children[-1])
                             marked.nom_marked = True
                             marked.nom_span = span_of(expr_node.children[0])
