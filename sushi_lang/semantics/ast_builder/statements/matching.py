@@ -88,16 +88,7 @@ def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
 
 
 def parse_pattern(t: Tree, ast_builder: 'ASTBuilder', nested: bool = False) -> Pattern:
-    """Parse pattern: NAME "." NAME ["(" pattern_list ")"]
-
-    Supports nested patterns for matching nested enums:
-    - FileResult.Ok(f) - simple binding
-    - FileResult.Err(FileError.NotFound()) - nested pattern
-    - FileResult.Err(_) - wildcard
-    - Shape.Poly(poke p) - reference binding (#300 phase 3; TOP-LEVEL patterns only,
-      because nested-pattern extraction walks through temporary copies and a pointer
-      into one is a silently lost write -- `nested` carries that fact down)
-    """
+    """Parse pattern: NAME "." NAME ["(" pattern_list ")"]"""
     t = expect(t, "pattern")
 
     # Extract enum and variant names (two NAME tokens)
@@ -173,11 +164,7 @@ def parse_pattern(t: Tree, ast_builder: 'ASTBuilder', nested: bool = False) -> P
 
 
 def parse_own_pattern(t: Tree, ast_builder: 'ASTBuilder') -> 'OwnPattern':
-    """Parse own_pattern: NAME "(" pattern_item ")"
-
-    The NAME should be "Own", but we verify it at runtime.
-    Returns an OwnPattern node with the inner pattern.
-    """
+    """Parse own_pattern: NAME "(" pattern_item ")" """
     t = expect(t, "own_pattern_call")
 
     # Verify the NAME is "Own"

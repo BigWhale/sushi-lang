@@ -1,8 +1,4 @@
-"""Struct field indices for composite types.
-
-This module provides constants for accessing fields in composite structures
-like dynamic arrays, enums, strings, and iterators using extract_value/insert_value.
-"""
+"""Struct field indices for composite types."""
 
 # ============================================================================
 # Dynamic Array Struct Indices

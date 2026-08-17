@@ -1,27 +1,4 @@
-"""
-Built-in extension methods for standard I/O (stdin, stdout, stderr).
-
-This module implements all built-in I/O operations for the Sushi language,
-providing methods for reading from standard input and writing to standard output/error.
-
-stdin methods:
-- readln(): Read one line from standard input (returns string)
-- read(): Read entire input until EOF (returns string)
-- read_bytes(i32): Read n bytes from standard input (returns u8[])
-- lines(): Create an iterator for reading lines (returns Iterator<string>)
-
-stdout methods:
-- write(string): Write string to stdout without newline (returns ~)
-- write_bytes(u8[]): Write byte array to stdout (returns ~)
-
-stderr methods:
-- write(string): Write string to stderr without newline (returns ~)
-- write_bytes(u8[]): Write byte array to stderr (returns ~)
-
-Architecture:
-- Standalone IR generation in stdio/ submodules (stdin.py, stdout.py, stderr.py)
-- Inline emission fallback for backward compatibility (when use <io/stdio> not present)
-"""
+"""Built-in extension methods for standard I/O (stdin, stdout, stderr)."""
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall
@@ -36,14 +13,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 # ==============================================================================
 
 def generate_module_ir() -> ir.Module:
-    """Generate standalone LLVM IR module for stdio extension methods.
-
-    This generates all stdin, stdout, and stderr methods as external functions
-    that can be linked into programs using `use <io/stdio>`.
-
-    Returns:
-        An LLVM IR module containing all stdio method implementations.
-    """
+    """Generate standalone LLVM IR module for stdio extension methods."""
     from sushi_lang.sushi_stdlib.src.ir_common import create_stdlib_module
     from sushi_lang.sushi_stdlib.src.io.stdio.stdin import (
         generate_stdin_readln,

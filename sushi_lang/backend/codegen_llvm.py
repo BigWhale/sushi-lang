@@ -1,18 +1,4 @@
-"""
-LLVM backend orchestrator for the Sushi language compiler.
-
-This module provides the main LLVM compilation interface, coordinating
-between specialized subsystems for type mapping, memory management,
-code emission, and optimization.
-
-API:
-    from sushi_lang.backend.codegen_llvm import LLVMCodegen
-    cg = LLVMCodegen()
-    exe_path = cg.compile(program_ast, out=Path("a.out"), cc="clang")
-
-If you only want the LLVM IR string without linking, call `build_module()`
-then `str(cg.module)`.
-"""
+"""LLVM backend orchestrator for the Sushi language compiler."""
 from __future__ import annotations
 import subprocess
 from pathlib import Path
@@ -50,11 +36,7 @@ import sushi_lang.backend.types  # noqa: F401
 
 
 def _perk_method_to_extend_def(perk_impl, method) -> ExtendDef:
-    """Wrap a perk-impl method as a synthetic ExtendDef.
-
-    Perk methods are declared and emitted as extension methods, so both the
-    declaration and definition passes need the same wrapper.
-    """
+    """Wrap a perk-impl method as a synthetic ExtendDef."""
     return ExtendDef(
         target_type=perk_impl.target_type,
         name=method.name,
@@ -76,16 +58,7 @@ class LLVMCodegen:
     """Main LLVM backend orchestrator for the Sushi language compiler."""
 
     def __init__(self, module_name: str = "lang_module", struct_table: Optional[StructTable] = None, enum_table: Optional[EnumTable] = None, func_table: Optional['FunctionTable'] = None, perk_impl_table: Optional['PerkImplementationTable'] = None, const_table: Optional['ConstantTable'] = None) -> None:
-        """Initialize the LLVM code generator with all specialized subsystems.
-
-        Args:
-            module_name: Name for the LLVM module.
-            struct_table: Optional struct table for resolving struct types.
-            enum_table: Optional enum table for resolving enum types.
-            func_table: Optional function table for stdlib function lookup.
-            perk_impl_table: Optional perk implementation table for method resolution.
-            const_table: Optional constant table for constant evaluation.
-        """
+        """Initialize the LLVM code generator with all specialized subsystems."""
         # A context of our OWN, not llvmlite's process-wide global_context. User structs
         # are emitted as LLVM *identified* types (#257), and identified types are registered
         # per Context -- on the global one they would leak between compilations in a single
@@ -300,29 +273,17 @@ class LLVMCodegen:
         self._string_value_temp_stack.append([])
 
     def register_string_temp(self, data_ptr: ir.Value) -> None:
-        """Register a freshly heap-allocated string buffer if a print-arg frame is open.
-
-        No-op outside a print/println argument (the stack is empty), so ordinary string
-        building elsewhere is unaffected.
-        """
+        """Register a freshly heap-allocated string buffer if a print-arg frame is open."""
         if self._string_temp_stack:
             self._string_temp_stack[-1].append(data_ptr)
 
     def register_string_value_temp(self, fat_value: ir.Value) -> None:
-        """Register a whole string fat VALUE for an owned-bit-guarded free after output.
-
-        No-op outside a print-arg frame, so a `let`/container store (which happens outside
-        any frame) is unaffected -- its new owner frees the value instead.
-        """
+        """Register a whole string fat VALUE for an owned-bit-guarded free after output."""
         if self._string_value_temp_stack:
             self._string_value_temp_stack[-1].append(fat_value)
 
     def pop_and_free_string_temp_scope(self) -> None:
-        """Free every buffer registered in the current print-arg frame and pop it.
-
-        Called after the value has been written to stdout, so the read via `%.*s`
-        happens before the free. Straight-line within the print statement's block.
-        """
+        """Free every buffer registered in the current print-arg frame and pop it."""
         if not self._string_temp_stack:
             return
         temps = self._string_temp_stack.pop()
@@ -337,20 +298,7 @@ class LLVMCodegen:
             emit_string_destructor_from_value(self, fat_value)
 
     def emit_string_temp_frame_cleanup_all(self) -> None:
-        """Free every open print-arg frame's temporaries on an EARLY-EXIT path (#295).
-
-        `pop_and_free_string_temp_scope` handles the straight-line path: emit the
-        argument, print it, free the frame. A `??` INSIDE the argument leaves the print
-        statement through the early-exit path instead, which never reached that pop -- so
-        `println("{go().realise('a')} and {fail()??}")` printed nothing and leaked the
-        buffer `go()` had already built.
-
-        Same no-mutation discipline as `emit_cstr_cleanup_all`: the frees go into the
-        CURRENT (terminating) block and the registry is left alone, so the straight-line
-        pop still frees exactly once on its own mutually exclusive path.
-
-        Every OPEN frame is freed, not just the innermost: an early exit leaves them all.
-        """
+        """Free every open print-arg frame's temporaries on an EARLY-EXIT path (#295)."""
         if not self._string_temp_stack:
             return
         if self.builder is None or self.builder.block is None or self.builder.block.is_terminated:
@@ -380,44 +328,16 @@ class LLVMCodegen:
         return self._realloc_func
 
     def create_string_constant(self, name: str, value: str) -> ir.GlobalVariable:
-        """Create a global string constant without requiring a builder context.
-
-        Args:
-            name: Name of the constant.
-            value: String value.
-
-        Returns:
-            The global variable containing the string array.
-        """
+        """Create a global string constant without requiring a builder context."""
         return self.string_manager.create_string_constant(name, value)
 
     def _generate_argc_argv_conversion(self, argc: ir.Value, argv: ir.Value) -> ir.Value:
-        """Convert C-style argc/argv to Sushi string[] dynamic array.
-
-        Uses helper functions from sushi_lang.backend.runtime.args for cleaner implementation.
-
-        Args:
-            argc: LLVM value representing argc (i32)
-            argv: LLVM value representing argv (char**)
-
-        Returns:
-            LLVM value representing the Sushi string[] dynamic array struct
-        """
+        """Convert C-style argc/argv to Sushi string[] dynamic array."""
         from sushi_lang.backend.runtime.args import generate_argc_argv_conversion
         return generate_argc_argv_conversion(self, argc, argv)
 
     def build_module_multi_unit(self, units: list[Unit]) -> ir.Module:
-        """Generate LLVM IR for multiple compilation units and return the module.
-
-        This method compiles all units together into a single LLVM module,
-        handling cross-unit symbol resolution and visibility rules.
-
-        Args:
-            units: List of compilation units in dependency order.
-
-        Returns:
-            The completed LLVM module containing all units.
-        """
+        """Generate LLVM IR for multiple compilation units and return the module."""
         # Extract stdlib unit imports from all units for conditional code generation
         for unit in units:
             if unit.ast is not None:
@@ -442,24 +362,7 @@ class LLVMCodegen:
         library_linker: 'LibraryResolver' = None,
         library_registry: Optional[LibraryRegistry] = None,
     ) -> Path:
-        """Complete multi-unit compilation pipeline from multiple ASTs to native executable.
-
-        Args:
-            units: List of compilation units in dependency order.
-            out: Output executable path.
-            cc: C compiler for linking.
-            debug: Enable debug information.
-            opt: Optimization level (none/mem2reg/o1/o2/o3).
-            verify: Enable IR verification.
-            keep_object: Retain object files after linking.
-            main_expects_args: Whether main() expects command line args.
-            monomorphized_extensions: List of monomorphized extension methods.
-            library_linker: LibraryResolver with loaded library manifests.
-            library_registry: LibraryRegistry with pre-parsed library metadata.
-
-        Returns:
-            Path to the generated executable.
-        """
+        """Complete multi-unit compilation pipeline from multiple ASTs to native executable."""
         # Store command line arguments information
         self.main_expects_args = main_expects_args
 
@@ -571,20 +474,7 @@ class LLVMCodegen:
         monomorphized_extensions: list['ExtendDef'] = None,
         exported_private_functions: set[str] = frozenset(),
     ) -> bytes:
-        """Compile units to LLVM bitcode without linking to executable.
-
-        Used for library compilation (--lib flag). Does not require main() function.
-
-        Args:
-            units: List of compilation units.
-            debug: Enable debug information.
-            opt: Optimization level.
-            verify: Enable IR verification.
-            monomorphized_extensions: List of monomorphized extension methods.
-
-        Returns:
-            LLVM bitcode as bytes.
-        """
+        """Compile units to LLVM bitcode without linking to executable."""
         # Store monomorphized extensions for emission
         self.monomorphized_extensions = monomorphized_extensions or []
 
@@ -653,19 +543,7 @@ class LLVMCodegen:
         tm: Optional[llvm.TargetMachine] = None,
         keep_object: bool = False,
     ) -> Path:
-        """Emit object file and link to native executable.
-
-        Args:
-            llmod: The LLVM module to compile.
-            out: Output executable path.
-            cc: C compiler for linking.
-            debug: Enable debug information.
-            tm: Target machine (auto-created if None).
-            keep_object: Retain object files after linking.
-
-        Returns:
-            Path to the generated executable.
-        """
+        """Emit object file and link to native executable."""
         self.optimizer.ensure_llvm()
 
         # Get target machine
@@ -700,23 +578,7 @@ class LLVMCodegen:
         return out
 
     def build_module_single_unit(self, target_unit: Unit, all_units: list[Unit]) -> ir.Module:
-        """Generate LLVM IR for a single compilation unit.
-
-        Emits full definitions for symbols owned by *target_unit* and external
-        declarations for symbols from other units that this unit references.
-        Monomorphized generic functions get ordinary ``external``/``internal``
-        linkage (from ``is_public``) and are funnelled into ``units[0]``, so no
-        deduplicating linkage is needed for them; ``linkonce_odr`` is used only
-        by inline runtime helpers, destructor bodies and one memory helper
-        (perk impls get ``weak_odr``).
-
-        Args:
-            target_unit: The unit to compile.
-            all_units: All compilation units (for cross-unit declaration context).
-
-        Returns:
-            A fresh LLVM module containing this unit's code.
-        """
+        """Generate LLVM IR for a single compilation unit."""
         # Create a fresh module for this unit
         saved_module = self.module
         saved_funcs = self.funcs.copy()
@@ -833,20 +695,7 @@ class LLVMCodegen:
 
     def compile_single_unit_to_object(self, target_unit: Unit, all_units: list[Unit],
                                       opt: str = "mem2reg", verify: bool = True) -> bytes:
-        """Compile a single unit to an object file (bytes).
-
-        Does NOT link stdlib or library modules -- those are compiled to
-        separate .o files and linked at the final step.
-
-        Args:
-            target_unit: The unit to compile.
-            all_units: All units for cross-reference context.
-            opt: Optimization level.
-            verify: Whether to verify LLVM IR.
-
-        Returns:
-            Object file bytes.
-        """
+        """Compile a single unit to an object file (bytes)."""
         mod_ir = self.build_module_single_unit(target_unit, all_units)
         llmod = llvm.parse_assembly(str(mod_ir))
 
@@ -865,15 +714,7 @@ class LLVMCodegen:
         return tm.emit_object(llmod)
 
     def compile_stdlib_to_object(self, stdlib_unit: str, opt: str = "mem2reg") -> bytes:
-        """Compile stdlib bitcode files to a single object file.
-
-        Args:
-            stdlib_unit: Stdlib unit path (e.g. "io/stdio").
-            opt: Optimization level.
-
-        Returns:
-            Object file bytes.
-        """
+        """Compile stdlib bitcode files to a single object file."""
         bc_paths = self.stdlib._resolve_stdlib_unit(stdlib_unit)
         # Read and link all bitcode files for this stdlib unit
         first = True
@@ -899,16 +740,7 @@ class LLVMCodegen:
 
     def compile_library_to_object(self, lib_path: str, library_linker,
                                   opt: str = "mem2reg") -> bytes:
-        """Compile a library .slib to an object file.
-
-        Args:
-            lib_path: Library path as used in use statements.
-            library_linker: LibraryResolver with resolved libraries.
-            opt: Optimization level.
-
-        Returns:
-            Object file bytes.
-        """
+        """Compile a library .slib to an object file."""
         from sushi_lang.backend.library_format import LibraryFormat
 
         slib_path = library_linker.resolve_library(lib_path)
@@ -924,17 +756,7 @@ class LLVMCodegen:
 
     def link_object_files(self, obj_paths: list[Path], out: Path, cc: str = "cc",
                           debug: bool = False) -> Path:
-        """Link multiple .o files into a native executable.
-
-        Args:
-            obj_paths: List of object file paths to link.
-            out: Output executable path.
-            cc: C compiler for linking.
-            debug: Enable debug information.
-
-        Returns:
-            Path to the generated executable.
-        """
+        """Link multiple .o files into a native executable."""
         cmd = [cc] + [str(p) for p in obj_paths]
         cmd.extend(["-o", str(out)])
 
@@ -949,31 +771,11 @@ class LLVMCodegen:
         return out
 
     def has_stdlib_unit(self, unit_path: str) -> bool:
-        """Check if a stdlib unit has been imported.
-
-        Args:
-            unit_path: Unit path like "core/primitives" or "collections/strings"
-
-        Returns:
-            True if the unit was imported via use <unit> syntax
-
-        Note:
-            Supports directory imports. If "collections" is imported,
-            then has_stdlib_unit("collections/strings") returns True.
-        """
+        """Check if a stdlib unit has been imported."""
         return self.stdlib.has_stdlib_unit(unit_path)
 
     def _emit_multi_unit_program(self, units: list[Unit]) -> None:
-        """Emit LLVM IR for multiple compilation units.
-
-        Multi-unit compilation strategy:
-        1. Emit global constants from all units (public only for cross-unit access)
-        2. Declare function prototypes from all units (handles forward references)
-        3. Emit function bodies from all units
-
-        Args:
-            units: List of compilation units in dependency order.
-        """
+        """Emit LLVM IR for multiple compilation units."""
         # Pass 0: Build AST constant map and emit global constants from all units
         for unit in units:
             if unit.ast is None:
@@ -1053,17 +855,7 @@ class LLVMCodegen:
             self.functions.emit_extension_method_def(ext)
 
     def _declare_library_perk_impl_methods(self) -> None:
-        """Declare (never define) library-shipped perk-impl methods (C4a).
-
-        Each ``ExtendWithDef`` in ``self.library_perk_impls`` was registered by
-        the semantic analyzer from a library manifest. Its method bodies are
-        already compiled into the library bitcode (weak linkage); the consumer
-        module only needs declarations so perk-method dispatch
-        (``try_emit_perk_method``) finds the symbols in ``self.funcs``. The
-        definitions resolve at link time - from the library ``.o`` on the
-        incremental path, or via dependency-graph reachability under the
-        ``TwoPhaseLinker`` on the monolithic path.
-        """
+        """Declare (never define) library-shipped perk-impl methods (C4a)."""
         from sushi_lang.semantics.ast import ExtendDef
         from sushi_lang.semantics.typesys import UnknownType
         from sushi_lang.backend.types.core.resolution import resolve_unknown_type
@@ -1098,15 +890,7 @@ class LLVMCodegen:
                 self.functions.emit_extension_method_decl(synthetic_ext)
 
     def _declare_library_functions(self) -> None:
-        """Declare library function prototypes for external library functions.
-
-        This creates LLVM function declarations (prototypes without bodies) for
-        public functions from loaded libraries. The actual function bodies will
-        be linked in from the library bitcode during the linking phase.
-
-        Uses pre-parsed FuncSig objects from LibraryRegistry when available,
-        eliminating duplicate manifest parsing.
-        """
+        """Declare library function prototypes for external library functions."""
 
         # Use library_registry if available (pre-parsed metadata)
         if self.library_registry is not None:
@@ -1158,12 +942,7 @@ class LLVMCodegen:
                 self.function_return_types[func_name] = result_type
 
     def _declare_library_functions_from_registry(self) -> None:
-        """Declare library functions using pre-parsed FuncSig from registry.
-
-        Covers both public functions and export-closure private helpers
-        (C4b/C5) - either way the definition lives in the library bitcode and
-        the consumer module only needs an external declaration.
-        """
+        """Declare library functions using pre-parsed FuncSig from registry."""
 
         all_sigs = dict(self.library_registry.get_all_functions())
         for name, (_lib, sig) in self.library_registry.get_all_private_functions().items():
@@ -1193,14 +972,7 @@ class LLVMCodegen:
             self.function_return_types[func_name] = result_type
 
     def _emit_global_constant(self, const: ConstDef) -> None:
-        """Emit a global constant definition.
-
-        Creates a global constant value that can be referenced throughout
-        the program. Constants are evaluated at compile time.
-
-        Args:
-            const: The constant definition to emit.
-        """
+        """Emit a global constant definition."""
         from sushi_lang.semantics.ast import StringLit
 
         # Map Sushi type to LLVM type
@@ -1270,18 +1042,7 @@ class LLVMCodegen:
         self.constants[const.name] = global_const
 
     def _evaluate_constant_expression(self, expr, expected_type=None) -> Optional[ir.Constant]:
-        """Evaluate a constant expression at compile time.
-
-        Returns an LLVM constant value or None if the expression
-        cannot be evaluated at compile time.
-
-        Args:
-            expr: The expression to evaluate.
-            expected_type: Expected Sushi type for the constant.
-
-        Returns:
-            The LLVM constant value or None.
-        """
+        """Evaluate a constant expression at compile time."""
         from sushi_lang.semantics.ast import StringLit
         from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
         from sushi_lang.internals.report import Reporter
@@ -1315,17 +1076,7 @@ _INLINE_RUNTIME_FUNCTIONS = frozenset({
 
 
 def _set_weak_odr_on_perk_impls(module: ir.Module, units: list[Unit]) -> None:
-    """Set weak_odr linkage on every perk-impl method in a library module.
-
-    A library's concrete ``extend T with Perk:`` methods may also be shipped
-    via the manifest (C4a) and a consumer may define its own impl of the same
-    (type, perk). On the incremental link path the whole library bitcode
-    becomes one ``.o`` linked by ``cc``, where two strong definitions are a
-    hard duplicate-symbol error - weak linkage lets the consumer's (strong)
-    local impl win. ``weak_odr`` rather than ``linkonce_odr`` so the
-    definition survives library-module optimization even when nothing inside
-    the library references it.
-    """
+    """Set weak_odr linkage on every perk-impl method in a library module."""
     from sushi_lang.semantics.library_templates import impl_method_symbol
     from sushi_lang.semantics.passes.collect.perks import _get_type_name
 
@@ -1344,12 +1095,7 @@ def _set_weak_odr_on_perk_impls(module: ir.Module, units: list[Unit]) -> None:
 
 
 def _set_linkonce_odr_on_inline_runtime(module: ir.Module) -> None:
-    """Set linkonce_odr linkage on inline-defined runtime functions.
-
-    These functions are emitted with full bodies into every compilation
-    unit's module. Without linkonce_odr, linking multiple .o files together
-    produces duplicate symbol errors.
-    """
+    """Set linkonce_odr linkage on inline-defined runtime functions."""
     for name in _INLINE_RUNTIME_FUNCTIONS:
         fn = module.globals.get(name)
         if fn is not None and isinstance(fn, ir.Function) and not fn.is_declaration:

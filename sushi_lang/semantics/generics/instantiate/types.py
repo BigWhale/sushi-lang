@@ -1,10 +1,5 @@
 # semantics/generics/instantiate/types.py
-"""
-Type inference for instantiation collection.
-
-Handles simple type inference for literals, variables, and built-in types
-to support automatic generic type instantiation detection.
-"""
+"""Type inference for instantiation collection."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -16,38 +11,18 @@ from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter
 
 
 class TypeInferrer:
-    """Simple type inference for instantiation collection.
-
-    Handles common cases like literals, built-in types, and simple expressions
-    without requiring full type checking infrastructure.
-    """
+    """Simple type inference for instantiation collection."""
 
     def __init__(self, variable_types: dict[str, "Type"], struct_table: dict, enum_table: dict,
                  func_table: dict | None = None):
-        """Initialize type inferrer.
-
-        Args:
-            variable_types: Map of variable names to their declared types
-            struct_table: Table of struct definitions
-            enum_table: Table of enum definitions
-            func_table: Table of plain top-level functions (name -> FuncSig), for
-                presenting a FunctionType for a bare function reference argument
-        """
+        """Initialize type inferrer."""
         self.variable_types = variable_types
         self.struct_table = struct_table
         self.enum_table = enum_table
         self.func_table = func_table or {}
 
     def infer_simple_receiver_type(self, receiver) -> "Type | None":
-        """Simple type inference for method call receivers.
-
-        We only need to handle simple cases (literals, builtins) since complex
-        expressions can use explicit type annotations. This is sufficient for
-        detecting calls like "hello".find() where the receiver is a string literal.
-
-        Returns:
-            The type of the receiver, or None if we can't infer it
-        """
+        """Simple type inference for method call receivers."""
         from sushi_lang.semantics.ast import Name, StringLit, IntLit, FloatLit, BoolLit, DotCall
 
         # Dispatch to type-specific handler based on receiver type
@@ -85,12 +60,7 @@ class TypeInferrer:
         return BuiltinType.BOOL
 
     def _infer_dotcall_type(self, expr) -> "Type | None":
-        """Infer type for chained method call expressions.
-
-        This handles chained calls like text.find("x").realise(-1) by
-        recursively inferring the receiver type and looking up the method's
-        return type.
-        """
+        """Infer type for chained method call expressions."""
         # Recursively infer the receiver type
         inner_receiver_type = self.infer_simple_receiver_type(expr.receiver)
         if inner_receiver_type is not None:
@@ -99,12 +69,7 @@ class TypeInferrer:
         return None
 
     def _infer_name_type(self, expr) -> "Type | None":
-        """Infer type for name references (variables, builtins).
-
-        Handles:
-        - Builtin I/O streams (stdin, stdout, stderr)
-        - Known variables with explicit type annotations
-        """
+        """Infer type for name references (variables, builtins)."""
         # Handle builtin I/O streams
         if expr.id == "stdin":
             return BuiltinType.STDIN
@@ -123,14 +88,7 @@ class TypeInferrer:
         return None
 
     def get_builtin_method_return_type(self, receiver_type: "Type", method_name: str) -> "Type | None":
-        """Get return type of built-in extension methods.
-
-        Returns both generic and non-generic return types to support chained
-        method calls (e.g., text.find().realise(-1)).
-
-        Returns:
-            The return type of the method, or None if unknown
-        """
+        """Get return type of built-in extension methods."""
         # String methods
         if receiver_type == BuiltinType.STRING:
             if method_name in ("find", "find_last"):
@@ -158,24 +116,12 @@ class TypeInferrer:
         return None
 
     def unify_types(self, param_type: "Type", arg_type: "Type", type_param_map: dict[str, "Type"]) -> bool:
-        """Unify parameter type with argument type (Pass 1.5 instantiation collection).
-
-        Thin wrapper over the shared ``unify_types`` engine.
-        """
+        """Unify parameter type with argument type (Pass 1.5 instantiation collection)."""
         from sushi_lang.semantics.generics.unify import unify_types
         return unify_types(param_type, arg_type, type_param_map)
 
     def substitute_type_simple(self, ty: "Type", type_params: tuple, type_args: tuple) -> "Type":
-        """Simple type substitution for instantiation detection.
-
-        Args:
-            ty: Type that may contain type parameters
-            type_params: Type parameter definitions (BoundedTypeParam)
-            type_args: Concrete type arguments
-
-        Returns:
-            Type with type parameters substituted
-        """
+        """Simple type substitution for instantiation detection."""
         from sushi_lang.semantics.typesys import UnknownType
 
         # Build substitution map

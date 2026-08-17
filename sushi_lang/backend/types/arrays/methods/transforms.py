@@ -1,10 +1,4 @@
-"""
-Array cloning and type conversion operations.
-
-This module handles:
-- Array deep cloning (creating independent copies)
-- Byte array to string conversion (UTF-8)
-"""
+"""Array cloning and type conversion operations."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -21,24 +15,7 @@ if TYPE_CHECKING:
 
 def emit_byte_array_to_string(codegen: "LLVMCodegen", call: MethodCall, receiver_value: ir.Value,
                                receiver_type: ir.LiteralStructType, _to_i1: bool) -> ir.Value:
-    """Emit LLVM IR for u8[] to_string() method (convert byte array to UTF-8 string).
-
-    This is a zero-cost conversion that assumes the byte array contains valid UTF-8.
-    No validation is performed for performance reasons.
-
-    IMPORTANT: Invalid UTF-8 sequences result in undefined behavior. Use this method
-    only when you're certain the bytes are valid UTF-8 (e.g., from trusted sources,
-    file I/O with known encoding, or network protocols with UTF-8 guarantees).
-
-    Future: A stdlib function bytes_to_string_checked() will provide validation
-    and return Result<string> for safety-critical use cases.
-
-    Args:
-        receiver_value: Pointer to dynamic array struct {i32 len, i32 cap, u8* data}
-
-    Returns:
-        Fat pointer struct {i8* data, i32 size} containing the string data
-    """
+    """Emit LLVM IR for u8[] to_string() method (convert byte array to UTF-8 string)."""
     if len(call.args) != 0:
         raise_internal_error("CE0023", method="to_string", expected=0, got=len(call.args))
 
@@ -95,12 +72,7 @@ def emit_byte_array_to_string(codegen: "LLVMCodegen", call: MethodCall, receiver
 
 def emit_byte_array_to_string_checked(codegen: "LLVMCodegen", call: MethodCall, receiver_value: ir.Value,
                                       receiver_type: ir.LiteralStructType, _to_i1: bool) -> ir.Value:
-    """Emit u8[] to_string_checked() -> Result<string, StdError>.
-
-    Validates the bytes are well-formed UTF-8 (via sushi_utf8_validate). On success
-    returns Result.Ok(string); on invalid UTF-8 returns Result.Err(StdError). Unlike
-    to_string(), this never produces an invalid string.
-    """
+    """Emit u8[] to_string_checked() -> Result<string, StdError>."""
     if len(call.args) != 0:
         raise_internal_error("CE0023", method="to_string_checked", expected=0, got=len(call.args))
 
@@ -164,23 +136,7 @@ def emit_byte_array_to_string_checked(codegen: "LLVMCodegen", call: MethodCall, 
 def emit_dynamic_array_clone(codegen: "LLVMCodegen", call: MethodCall, receiver_value: ir.Value,
                               receiver_type: ir.LiteralStructType, _to_i1: bool,
                               element_semantic_type: "Type") -> ir.Value:
-    """Emit LLVM IR for dynamic array clone() method (deep copy).
-
-    Creates an independent copy of the dynamic array with its own heap memory, so that
-    `arr2 := arr1.clone()` gives each array buffers it alone frees.
-
-    Delegates to `clone_dynamic_array_value`, which deep-copies every element through
-    `emit_value_clone`. Copying the elements with a raw load/store instead would leave an
-    owning element (a string, nested array, owning struct or heap-payload enum) shared
-    between the clone and the source, and both would free it at scope exit (#158).
-
-    Args:
-        receiver_value: Pointer to dynamic array struct {i32 len, i32 cap, T* data}
-        element_semantic_type: Semantic element type, needed to clone owning elements.
-
-    Returns:
-        Pointer to a new dynamic array struct with independent memory
-    """
+    """Emit LLVM IR for dynamic array clone() method (deep copy)."""
     if len(call.args) != 0:
         raise_internal_error("CE0023", method="clone", expected=0, got=len(call.args))
 

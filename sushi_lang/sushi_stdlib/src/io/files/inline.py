@@ -1,13 +1,4 @@
-"""
-Inline emission functions for file.lines() iterator.
-
-This module contains minimal inline emission code needed for foreach loops
-with file.lines(). This is a temporary solution until file.lines() is
-fully ported to standalone IR generation.
-
-NOTE: This is ONLY for file.lines() - all other file methods require
-`use <io/files>` and use the stdlib IR.
-"""
+"""Inline emission functions for file.lines() iterator."""
 
 from typing import Any
 import llvmlite.ir as ir
@@ -16,14 +7,7 @@ from sushi_lang.backend.memory.heap import emit_malloc
 
 
 def _emit_readln(codegen: Any, expr: MethodCall, file_ptr: ir.Value) -> ir.Value:
-    """Emit LLVM IR for file.readln() - read one line from file.
-
-    This is only used by foreach loops with file.lines() iterator.
-    Regular file.readln() calls require `use <io/files>`.
-
-    Note: file_ptr comes from the iterator's data_ptr field which is typed as {i8*, i32}*
-    but actually stores a FILE* (i8*), so we need to bitcast it back.
-    """
+    """Emit LLVM IR for file.readln() - read one line from file."""
     assert codegen.builder is not None
     assert codegen.runtime.libc_stdio.fgets is not None
 

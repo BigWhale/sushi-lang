@@ -1,15 +1,4 @@
-"""Declaration of user-declared foreign functions (FFI `unsafe external` blocks).
-
-Builds one LLVM `declare` per foreign function in the program's ExternalTable and
-stores the resulting `ir.Function` (plus its ExternalSig) on the codegen keyed by
-(namespace, name) for the call dispatcher.
-
-Type lowering at the boundary:
-- `string` param/return  -> i8* (C char*); marshalling happens at the call site.
-- `~` (BLANK) return     -> void.
-- `ptr` (ForeignPtrType) -> i8*.
-- primitives             -> their natural LLVM types.
-"""
+"""Declaration of user-declared foreign functions (FFI `unsafe external` blocks)."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -43,11 +32,7 @@ def _abi_return_type(codegen: 'LLVMCodegen', ty) -> ir.Type:
 
 
 def declare_user_externs(codegen: 'LLVMCodegen', external_table: 'ExternalTable') -> None:
-    """Declare every foreign function in the external table.
-
-    Idempotent via `module.globals.get` dedup. Results are stored on
-    `codegen.external_funcs[(ns, name)]` and `codegen.external_sigs[(ns, name)]`.
-    """
+    """Declare every foreign function in the external table."""
     if not hasattr(codegen, 'external_funcs'):
         codegen.external_funcs = {}
     if not hasattr(codegen, 'external_sigs'):

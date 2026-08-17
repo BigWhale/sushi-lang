@@ -1,15 +1,4 @@
-"""CE2095 must point AT the declaration, not just name it.
-
-An infinitely-sized type is a tier-2 diagnostic: the reader needs the file, line
-and column of the declaration that cannot be sized, plus the caret art. Naming
-the type in prose and leaving the reader to grep for it is a tier-1 diagnostic,
-which is reserved for failures with no meaningful source position.
-
-The span comes from `StructTable.spans` / `EnumTable.spans`, which the collector
-fills per unit. Those tables are then merged into one global table, and the
-merge used to drop `spans` -- so anything reporting against the global table was
-silently demoted to tier 1.
-"""
+"""CE2095 must point AT the declaration, not just name it."""
 from __future__ import annotations
 
 import os
@@ -78,16 +67,18 @@ def test_carries_caret_art(tmp_path):
 
 
 def test_names_the_whole_cycle(tmp_path):
-    """A one-hop cycle names one type; a two-hop cycle must name both, or the
-    reader cannot tell which edge to break."""
+    """A one-hop cycle names one type; a two-hop cycle must name both, or the reader cannot tell
+    which edge to break.
+    """
     stderr = _compile(tmp_path, MUTUAL)
 
     assert "A refers to B refers to A" in stderr, stderr
 
 
 def test_reports_each_cycle_once(tmp_path):
-    """Both A and B are roots into the same cycle. Reporting per-root would
-    print the same defect twice."""
+    """Both A and B are roots into the same cycle. Reporting per-root would print the same defect
+    twice.
+    """
     stderr = _compile(tmp_path, MUTUAL)
 
     assert stderr.count("[CE2095]") == 1, stderr

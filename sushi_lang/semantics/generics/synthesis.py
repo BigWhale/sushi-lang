@@ -1,16 +1,4 @@
-"""Shared function-synthesis wiring.
-
-Both the generic monomorphizer and the lambda-lifting pass synthesize a concrete
-top-level `FuncDef` and must wire it into the compiler identically: register a
-`FuncSig` in the function table (so name resolution and the backend find it) and
-append the `FuncDef` to the program (single-file) or the main unit (multi-file) so
-the backend emits it.
-
-This is that single wiring point. It is intentionally dependency-free — it takes the
-`func_table` and program/units explicitly rather than reaching into the `Monomorphizer`
-god-object (whose reason for existing is type-parameter substitution, irrelevant to a
-lambda that has no type params) — so the two callers cannot drift apart.
-"""
+"""Shared function-synthesis wiring."""
 from __future__ import annotations
 from typing import Optional, List
 
@@ -24,15 +12,7 @@ def register_synthesized_function(
     program: Optional[Program] = None,
     units: Optional[List] = None,
 ) -> bool:
-    """Register a synthesized concrete function and queue it for backend emission.
-
-    Builds a `FuncSig` from `funcdef`, inserts it into `func_table` (`by_name` + `order`),
-    and appends `funcdef` to `program.functions` (single-file) or `units[0].ast.functions`
-    (multi-file). Exactly one of `program` / `units` should be provided.
-
-    Returns True if newly registered, or False if a function of the same (mangled) name
-    already exists (a no-op — the caller may skip re-processing it).
-    """
+    """Register a synthesized concrete function and queue it for backend emission."""
     from sushi_lang.semantics.passes.collect import FuncSig
 
     name = funcdef.name

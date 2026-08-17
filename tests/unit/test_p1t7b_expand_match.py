@@ -1,20 +1,5 @@
-"""P1-T7b: ``expand(...)`` unroll robustness around frozen Type nodes and
-``match`` arm pattern-binding shadowing.
-
-Two regressions are covered here:
-
-BUG 1 (frozen Type nodes): ``_rename_walk`` used to ``setattr`` unconditionally
-for every dataclass field it reached. The ``typesys`` Type nodes
-(``StructType``, ``EnumType``, ...) are ``@dataclass(frozen=True)``; when the
-walk descended into one (e.g. a resolved type carried on a ``let`` or a ``match``
-scrutinee) the write-back raised ``FrozenInstanceError`` -- an uncaught compiler
-crash. The fix makes the rename write-only-if-changed and skip frozen
-dataclasses entirely.
-
-BUG 2 (match-arm shadowing): a ``match`` arm whose pattern binds the loop var
-introduces a shadow scope for THAT arm's body; occurrences of the var inside the
-arm body refer to the pattern binding (a distinct variable) and must NOT be
-renamed to a fan-out param. The scrutinee and other arms are renamed normally.
+"""P1-T7b: ``expand(...)`` unroll robustness around frozen Type nodes and ``match`` arm
+pattern-binding shadowing.
 """
 from sushi_lang.semantics.generics.monomorphize.unroll import unroll_expands
 from sushi_lang.semantics.typesys import BuiltinType, StructType

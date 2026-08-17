@@ -1,10 +1,5 @@
 # semantics/generics/unify.py
-"""Single type-unification engine shared by Pass 1.5 and Pass 2.
-
-Instantiation collection (``TypeInferrer.unify_types``) and call-site inference
-(``_unify_types_for_inference``) were hand-synced twins of this routine. They now
-both delegate here so a new ``Type`` variant is handled in one place.
-"""
+"""Single type-unification engine shared by Pass 1.5 and Pass 2."""
 from __future__ import annotations
 
 from typing import Dict
@@ -23,14 +18,7 @@ from sushi_lang.semantics.generics.types import TypeParameter, GenericTypeRef
 
 
 def unify_types(param_type: Type, arg_type: Type, type_param_map: Dict[str, Type]) -> bool:
-    """Unify a parameter type against a concrete argument type.
-
-    Extracts type-parameter assignments into ``type_param_map`` as a side effect.
-    A type parameter may appear either as a ``TypeParameter`` or as an
-    ``UnknownType`` carrying the parameter name.
-
-    Returns True if unification succeeds.
-    """
+    """Unify a parameter type against a concrete argument type."""
     # Case 0: reference parameter -- unify THROUGH the borrow (F7, 2026-08-14).
     # `peek T item` called as `f(peek x)` binds T from x's type; `peek Pair@(A, B)`
     # binds both. Mutability and the borrow spelling are argument-validation questions

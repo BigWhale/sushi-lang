@@ -1,34 +1,9 @@
 """One identity, one symbol, one out-of-line emitter for a composite type's lifecycle.
 
-A composite type's deep CLONE and its DESTRUCTOR are two halves of one contract: the
-clone duplicates exactly the heap the destructor frees (clone fewer buffers ->
-double free; more -> leak). Before this module the two halves were maintained as
-hand-synced twins -- `destructors._dtor_type_key` / `memory._clone_type_key`,
-`_dtor_symbol` / `_clone_symbol`, `_select_inline_destructor` / `_inline_clone`,
-`_get_or_emit_dtor_func` / `_get_or_emit_clone_func` -- that agreed only by comment.
-One of them had already drifted: the clone's out-of-line emitter swapped only
-`codegen.builder` where the destructor's swaps `codegen.func` too (#257 explains why
-both are needed; the clone twin merely asserted it in a comment).
-
-This module owns the shared pieces:
-
-- `composite_type_key`: the ONE identity key. Its ArrayType arm is load-bearing --
-  without it `Buffer[2]` and `Buffer[3]` collapse onto one linkonce_odr body and the
-  linker keeps whichever was emitted first.
-- `lifecycle_symbol`: the ONE symbol mangler (deterministic across units, so
-  linkonce_odr bodies deduplicate at link time).
-- The HANDLER TABLE: each composite kind (dynamic array, fixed array, struct, enum)
-  registers its `destroy` emitter (backend/destructors.py) and its `clone` emitter
-  (backend/expressions/memory.py) at import. A kind with one half and not the other
-  is a loud KeyError at dispatch, and `tests/unit/test_lifecycle_handlers.py` asserts
-  totality statically -- a missing clone arm is a missing method on a handler, not a
-  silent double free.
-- `get_or_emit_lifecycle_func`: the ONE lazy out-of-line emitter for self-referential
-  types, parameterized by half. Both halves swap `codegen.builder` AND `codegen.func`
-  (the emitters they call reach for the ambient state -- 1388 uses across 78 files).
-
-`semantics` never imports this module (Tier 4.1); the registrations flow backend ->
-backend only.
+A type's deep clone must duplicate exactly the heap its destructor frees, so both halves
+live here. `composite_type_key`'s ArrayType arm is load-bearing: without it `Buffer[2]`
+and `Buffer[3]` collapse onto one linkonce_odr body and the linker keeps whichever came
+first. See docs/design/ownership-conventions.md section 7.
 """
 from __future__ import annotations
 
@@ -50,12 +25,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 def composite_type_key(value_type: Type) -> str:
-    """A stable identity key for a composite type's lifecycle bodies.
-
-    Two occurrences of the same type share a key (so a self-referential type is
-    detected on re-entry and its out-of-line body is emitted once), and two
-    DIFFERENT fixed-array sizes get different keys (see the module docstring).
-    """
+    """A stable identity key for a composite type's lifecycle bodies."""
     if isinstance(value_type, DynamicArrayType):
         return "[]" + composite_type_key(value_type.base_type)
     if isinstance(value_type, ArrayType):
@@ -157,13 +127,9 @@ def get_or_emit_lifecycle_func(codegen: 'LLVMCodegen', value_type: Type,
     stack seeded with this type's key, so the recursion point becomes a self-call
     while unrelated nested types still inline.
 
-    The body is emitted LAZILY, in the middle of emitting some other function, so
-    `codegen.builder` and `codegen.func` point at that other function -- and the
-    emitters this calls reach for the ambient state (emit_container_walk builds its
-    loop through `codegen.builder`; the List emitters append blocks through
-    `codegen.func`). BOTH are swapped for the duration and restored afterwards
-    (#257). The clone half used to swap only the builder; unified here, it cannot
-    drift again.
+    The body is emitted lazily, mid-emission of another function, and the emitters it calls
+    reach for the ambient state. So BOTH `codegen.builder` and `codegen.func` are swapped
+    and restored -- swapping only the builder puts the element loop in the caller (#257).
     """
     if half == "destroy":
         caches = codegen._dtor_funcs

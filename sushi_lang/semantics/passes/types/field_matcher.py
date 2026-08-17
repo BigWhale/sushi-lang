@@ -1,8 +1,4 @@
-"""Field argument matcher for named struct constructors.
-
-This module contains logic to match named arguments to struct field order,
-detect errors (unknown/duplicate/missing fields), and reorder arguments.
-"""
+"""Field argument matcher for named struct constructors."""
 from __future__ import annotations
 from typing import List, Optional, Set, TYPE_CHECKING
 from sushi_lang.semantics.ast import Expr
@@ -20,24 +16,7 @@ def validate_and_reorder_named_args(
     reporter: 'Reporter',
     loc: 'Span'
 ) -> Optional[List[Expr]]:
-    """Validate named arguments and reorder to match field declaration order.
-
-    Validates:
-    - All field names exist in struct
-    - No duplicate field names
-    - All required fields are provided
-
-    Args:
-        struct_type: The struct type being constructed
-        arg_exprs: Argument expressions (in source order)
-        field_names: Field names (in source order, same length as arg_exprs)
-        reporter: Error reporter
-        loc: Location for error reporting
-
-    Returns:
-        Reordered list of expressions matching field declaration order,
-        or None if validation fails
-    """
+    """Validate named arguments and reorder to match field declaration order."""
     if len(arg_exprs) != len(field_names):
         # Internal error - should never happen from AST builder
         er.raise_internal_error("CE0002", node="named struct constructor",
@@ -84,17 +63,7 @@ def validate_and_reorder_named_args(
 
 
 def detect_mixed_args(field_names: Optional[List[str]], args: List[Expr]) -> bool:
-    """Detect if arguments mix positional and named styles.
-
-    This should never happen if the grammar is correct, but we check defensively.
-
-    Args:
-        field_names: Field names from AST (None for positional, List[str] for named)
-        args: Argument expressions
-
-    Returns:
-        True if mixing detected (error condition)
-    """
+    """Detect if arguments mix positional and named styles."""
     # If field_names is None, all positional
     if field_names is None:
         return False

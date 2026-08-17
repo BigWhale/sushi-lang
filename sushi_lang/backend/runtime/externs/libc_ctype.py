@@ -1,9 +1,4 @@
-"""
-External declarations for C standard library character type functions.
-
-This module provides declarations for character classification and conversion from <ctype.h>:
-- toupper, tolower, isspace, isdigit, isalpha, isalnum
-"""
+"""External declarations for C standard library character type functions."""
 from __future__ import annotations
 
 import typing
@@ -18,11 +13,7 @@ class LibCCType:
     """Manages external declarations for C character type functions."""
 
     def __init__(self, codegen: LLVMCodegen) -> None:
-        """Initialize with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance providing context and module.
-        """
+        """Initialize with reference to main codegen instance."""
         self.codegen = codegen
 
         # Function references - declared immediately for type safety
@@ -43,17 +34,7 @@ class LibCCType:
         self._declare_isalnum()
 
     def _declare_ctype_func(self, name: str) -> ir.Function:
-        """Helper to declare ctype function: int func(int c).
-
-        All ctype.h functions have the same signature: int -> int.
-        This eliminates significant duplication.
-
-        Args:
-            name: Function name (e.g., "toupper", "isspace")
-
-        Returns:
-            The declared or existing function (guaranteed non-None).
-        """
+        """Helper to declare ctype function: int func(int c)."""
         # Check if function already exists in module
         existing_global = self.codegen.module.globals.get(name)
         if isinstance(existing_global, ir.Function):

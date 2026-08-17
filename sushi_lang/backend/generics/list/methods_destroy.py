@@ -1,8 +1,4 @@
-"""
-List<T> destruction methods: destroy(), free().
-
-These methods handle memory cleanup and destruction.
-"""
+"""List<T> destruction methods: destroy(), free()."""
 
 from typing import Any
 from sushi_lang.semantics.typesys import StructType
@@ -13,19 +9,7 @@ from .types import get_list_len_ptr, get_list_capacity_ptr, extract_element_type
 
 
 def emit_list_destroy(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.destroy() - destroy all elements and free memory.
-
-    Recursively destroys all elements, frees data pointer, sets data to null.
-    List is unusable after this call (like HashMap.destroy()).
-
-    Args:
-        codegen: LLVM codegen instance.
-        list_ptr: Pointer to the List<T> struct.
-        list_type: The List<T> struct type from semantic analysis.
-
-    Returns:
-        Updated List<T> struct value (with null data pointer).
-    """
+    """Emit LLVM IR for list.destroy() - destroy all elements and free memory."""
     element_type = extract_element_type(list_type, codegen)
 
     # Use the provided pointer directly
@@ -62,19 +46,7 @@ def emit_list_destroy(codegen: Any, list_ptr: ir.Value, list_type: StructType) -
 
 
 def emit_list_free(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.free() - destroy elements and reset to empty.
-
-    Recursively destroys all elements, frees data pointer, resets to empty state.
-    List is still usable after this call (like HashMap.free()).
-
-    Args:
-        codegen: LLVM codegen instance.
-        list_ptr: Pointer to the List<T> struct.
-        list_type: The List<T> struct type from semantic analysis.
-
-    Returns:
-        Empty List<T> struct value (ready for reuse).
-    """
+    """Emit LLVM IR for list.free() - destroy elements and reset to empty."""
     element_type = extract_element_type(list_type, codegen)
 
     # Use the provided pointer directly

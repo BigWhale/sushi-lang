@@ -17,11 +17,7 @@ from sushi_lang.internals.version import print_banner
 
 
 def print_library_info(library_path: Path) -> int:
-    """Print formatted metadata from a .slib library file.
-
-    Returns:
-        0 on success, 2 on error.
-    """
+    """Print formatted metadata from a .slib library file."""
     from sushi_lang.backend.library_format import LibraryFormat
     from sushi_lang.backend.library_errors import LibraryError
 
@@ -131,11 +127,7 @@ def print_library_info(library_path: Path) -> int:
 
 @dataclass
 class Session:
-    """Everything the top-level guard needs to render whatever went wrong.
-
-    The reporter is the one `_run` has been filling in, so diagnostics collected
-    before a crash still print, with the crash appended.
-    """
+    """Everything the top-level guard needs to render whatever went wrong."""
     args: argparse.Namespace
     reporter: Reporter = field(default_factory=Reporter)
     src_path: Optional[Path] = None

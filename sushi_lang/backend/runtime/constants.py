@@ -1,10 +1,4 @@
-"""
-Constants for runtime operations.
-
-This module defines constants used throughout the runtime system:
-- errno constants from <errno.h>
-- Format string specifications for printf/sprintf
-"""
+"""Constants for runtime operations."""
 from __future__ import annotations
 
 # errno constants (from errno.h)

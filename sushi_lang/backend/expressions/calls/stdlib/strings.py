@@ -1,9 +1,4 @@
-"""
-Standard library string method call emission.
-
-This module handles external calls to precompiled stdlib string functions
-used when the collections/strings module is imported via use <collections/strings>.
-"""
+"""Standard library string method call emission."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -23,25 +18,7 @@ def emit_stdlib_string_call(
     args: list,
     to_i1: bool
 ) -> ir.Value:
-    """Emit a call to a stdlib string method.
-
-    This function emits an external call to a precompiled stdlib function
-    instead of emitting inline IR. Used when collections/strings module
-    is imported via use <collections/strings> syntax.
-
-    Args:
-        codegen: The LLVM code generator
-        method: The method name (e.g., "len", "concat", "contains")
-        receiver_value: The LLVM value of the receiver (string fat pointer struct)
-        args: Method arguments
-        to_i1: Whether to convert result to i1 boolean
-
-    Returns:
-        The result of the stdlib function call
-
-    Raises:
-        ValueError: If the method is not implemented in stdlib
-    """
+    """Emit a call to a stdlib string method."""
     require_builder(codegen)
     i32 = ir.IntType(INT32_BIT_WIDTH)
     i8 = ir.IntType(INT8_BIT_WIDTH)

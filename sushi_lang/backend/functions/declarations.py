@@ -1,10 +1,4 @@
-"""
-Function declaration handling for LLVM code generation.
-
-This module handles the creation of LLVM function prototypes (signatures)
-for both regular Sushi functions and extension methods, without emitting
-function bodies.
-"""
+"""Function declaration handling for LLVM code generation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -19,24 +13,11 @@ class FunctionDeclarations:
     """Handles LLVM function prototype generation."""
 
     def __init__(self, codegen: 'LLVMCodegen') -> None:
-        """Initialize declarations handler with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance.
-        """
+        """Initialize declarations handler with reference to main codegen instance."""
         self.codegen = codegen
 
     def emit_func_decl(self, fn: FuncDef, params_of_fn, helpers) -> ir.Function:
-        """Create LLVM function prototype for regular function.
-
-        Args:
-            fn: The function definition AST node.
-            params_of_fn: Function to extract parameters.
-            helpers: FunctionHelpers instance.
-
-        Returns:
-            The LLVM function with declared signature (no body).
-        """
+        """Create LLVM function prototype for regular function."""
         existing = self.codegen.funcs.get(fn.name)
         if existing is not None:
             return existing
@@ -119,15 +100,7 @@ class FunctionDeclarations:
         return llvm_fn
 
     def emit_extension_method_decl(self, ext: ExtendDef, get_name_fn) -> ir.Function:
-        """Create LLVM function prototype for extension method.
-
-        Args:
-            ext: The extension method definition AST node.
-            get_name_fn: Function to get extension method name.
-
-        Returns:
-            The LLVM function with declared signature (no body).
-        """
+        """Create LLVM function prototype for extension method."""
         func_name = get_name_fn(ext)
 
         param_types = []

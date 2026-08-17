@@ -1,24 +1,5 @@
 # semantics/passes/types/calls/__init__.py
-"""
-Call validation facade - maintains backward compatibility.
-
-This module provides the public API for call validation while delegating
-to specialized modules for different call types.
-
-Public API:
-- validate_function_call: User-defined and stdlib function calls
-- validate_struct_constructor: Struct constructor calls
-- validate_enum_constructor: Enum variant constructor calls
-- validate_method_call: Method calls (extension, builtin, perk)
-- validate_open_function: Built-in open() function
-
-Internal modules:
-- user_defined: User-defined and stdlib function calls
-- structs: Struct constructor validation
-- enums: Enum constructor validation
-- generics: Generic function call validation
-- methods: Method call validation
-"""
+"""Call validation facade - maintains backward compatibility."""
 from __future__ import annotations
 
 # Re-export public API for backward compatibility

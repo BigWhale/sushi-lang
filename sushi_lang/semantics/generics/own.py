@@ -1,9 +1,4 @@
-"""Validation and pure helpers for the built-in Own<T> methods.
-
-The ir-free half of the former ``backend/generics/own.py``: method recognition,
-Pass-2 argument validation, and the ``Own<T>`` element-type accessor. LLVM
-emission (alloc/get/destroy) stays in the backend module.
-"""
+"""Validation and pure helpers for the built-in Own<T> methods."""
 from typing import Any
 
 from sushi_lang.semantics.ast import MethodCall
@@ -13,14 +8,7 @@ from sushi_lang.internals.errors import raise_internal_error
 
 
 def is_builtin_own_method(method_name: str) -> bool:
-    """Check if a method name is a builtin Own<T> method.
-
-    Args:
-        method_name: The name of the method to check.
-
-    Returns:
-        True if this is a recognized Own<T> method, False otherwise.
-    """
+    """Check if a method name is a builtin Own<T> method."""
     return method_name in ("alloc", "get", "destroy", "clone")
 
 
@@ -30,16 +18,7 @@ def validate_own_method_with_validator(
     reporter: Any,
     validator: Any
 ) -> None:
-    """Validate Own<T> method calls.
-
-    Routes to specific validation functions based on method name.
-
-    Args:
-        call: The method call AST node.
-        own_type: The Own<T> struct type (after monomorphization).
-        reporter: Error reporter for emitting validation errors.
-        validator: Type validator for inferring expression types.
-    """
+    """Validate Own<T> method calls."""
     if call.method == "alloc":
         _validate_own_alloc(call, own_type, reporter, validator)
     elif call.method == "get":
@@ -59,17 +38,7 @@ def _validate_own_alloc(
     reporter: Any,
     validator: Any
 ) -> None:
-    """Validate Own<T>.alloc(value) method call.
-
-    Validates that exactly 1 argument is provided.
-    Type checking of the argument will be done by the validator.
-
-    Args:
-        call: The method call AST node.
-        own_type: The Own<T> struct type.
-        reporter: Error reporter for emitting validation errors.
-        validator: Type validator for inferring expression types.
-    """
+    """Validate Own<T>.alloc(value) method call."""
     # Validate argument count
     if len(call.args) != 1:
         er.emit(reporter, er.ERR.CE2016, call.loc,
@@ -81,16 +50,7 @@ def _validate_own_get(
     own_type: StructType,
     reporter: Any
 ) -> None:
-    """Validate Own<T>.get() method call.
-
-    Validates that no arguments are provided.
-    Yields the payload as a non-owning borrow (never a second RAII owner).
-
-    Args:
-        call: The method call AST node.
-        own_type: The Own<T> struct type.
-        reporter: Error reporter for emitting validation errors.
-    """
+    """Validate Own<T>.get() method call."""
     # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc,
@@ -102,16 +62,7 @@ def _validate_own_destroy(
     own_type: StructType,
     reporter: Any
 ) -> None:
-    """Validate Own<T>.destroy() method call.
-
-    Validates that no arguments are provided.
-    Returns ~ (blank/void).
-
-    Args:
-        call: The method call AST node.
-        own_type: The Own<T> struct type.
-        reporter: Error reporter for emitting validation errors.
-    """
+    """Validate Own<T>.destroy() method call."""
     # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc,
@@ -123,26 +74,14 @@ def _validate_own_clone(
     own_type: StructType,
     reporter: Any
 ) -> None:
-    """Validate Own<T>.clone() -- arity 0, returns a new Own<T> over a copied payload.
-
-    `.clone()` is the ONLY escape from CE2411 for a read of an `Own@(T)`, so it must exist
-    for every `Own` (#242). Before let-borrow bindings the compiler inserted this copy
-    itself, so no user ever needed to name it and it was never registered.
-    """
+    """Validate Own<T>.clone() -- arity 0, returns a new Own<T> over a copied payload."""
     if call.args:
         er.emit(reporter, er.ERR.CE2016, call.loc,
                 method="clone", expected=0, got=len(call.args))
 
 
 def get_own_element_type(own_type: StructType) -> Type:
-    """Extract element type T from Own<T> struct type.
-
-    Args:
-        own_type: The Own<T> struct type (has field "value" of type T*).
-
-    Returns:
-        The element type T.
-    """
+    """Extract element type T from Own<T> struct type."""
     # Get the "value" field type which is T* (PointerType)
     value_field_type = own_type.fields[0][1]  # First field, second element is type
 

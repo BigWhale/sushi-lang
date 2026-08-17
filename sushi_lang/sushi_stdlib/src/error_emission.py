@@ -1,10 +1,4 @@
-"""
-Runtime Error Emission
-
-Functions for emitting runtime error messages and handling error conditions in generated IR.
-
-Design: Single Responsibility - only runtime error handling.
-"""
+"""Runtime Error Emission"""
 
 import llvmlite.ir as ir
 from sushi_lang.internals.errors import message_for
@@ -24,18 +18,7 @@ def emit_runtime_error(
     error_code: str,
     **params
 ) -> None:
-    """Emit a runtime error and exit.
-
-    Prints an error message to stderr and exits with code 1. The text comes from
-    the diagnostic registry and is rendered in the same form the backend's emitter
-    uses, so one code reads the same wherever it fires.
-
-    Args:
-        module: The LLVM module (for declaring functions).
-        builder: The IR builder for creating instructions.
-        error_code: Error code (e.g., "RE2020", "RE2021").
-        **params: Format parameters for the registry text, if it has any.
-    """
+    """Emit a runtime error and exit."""
     # Declare required functions
     fprintf_fn = declare_fprintf(module)
     exit_fn = declare_exit(module)

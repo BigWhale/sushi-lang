@@ -1,17 +1,4 @@
-"""
-Generic constraint validation for Sushi compiler.
-
-Validates that concrete types satisfy perk constraints when
-generic functions/types are instantiated.
-
-Example:
-    fn compute_hash<T: Hashable>(T value) u64:
-        return value.hash()
-
-    # When called with Point:
-    # - Validates that Point implements Hashable perk
-    # - Emits CE4006 error if not
-"""
+"""Generic constraint validation for Sushi compiler."""
 
 from typing import Optional
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
@@ -23,16 +10,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 
 
 class ConstraintValidator:
-    """Validates perk constraints on generic types.
-
-    This class checks that concrete type arguments satisfy the perk
-    constraints specified in generic type parameters.
-
-    Example:
-        Given: fn process<T: Hashable>(T value) ~:
-        When: process(Point { x: 10, y: 20 })
-        Check: Point implements Hashable
-    """
+    """Validates perk constraints on generic types."""
 
     def __init__(
         self,
@@ -40,13 +18,7 @@ class ConstraintValidator:
         perk_impl_table: PerkImplementationTable,
         reporter: Reporter
     ):
-        """Initialize constraint validator.
-
-        Args:
-            perk_table: Registry of all defined perks
-            perk_impl_table: Registry of perk implementations
-            reporter: Error reporter for constraint violations
-        """
+        """Initialize constraint validator."""
         self.perk_table = perk_table
         self.perk_impl_table = perk_impl_table
         self.reporter = reporter
@@ -57,16 +29,7 @@ class ConstraintValidator:
         constraint_name: str,
         span: Optional['Span']
     ) -> bool:
-        """Check if a type satisfies a single perk constraint.
-
-        Args:
-            type_arg: Concrete type being checked (e.g., i32, Point)
-            constraint_name: Perk name (e.g., "Hashable")
-            span: Source location for error reporting
-
-        Returns:
-            True if constraint is satisfied, False otherwise
-        """
+        """Check if a type satisfies a single perk constraint."""
         type_name = self._get_type_name(type_arg)
 
         # Check if type implements the required perk
@@ -84,19 +47,7 @@ class ConstraintValidator:
         type_arg: Type,
         span: Optional['Span']
     ) -> bool:
-        """Validate all constraints on a type parameter.
-
-        Example: T: Hashable + Eq
-        Checks that type_arg implements both Hashable and Eq.
-
-        Args:
-            bounded_param: Type parameter with constraints
-            type_arg: Concrete type to validate
-            span: Source location for error reporting
-
-        Returns:
-            True if all constraints satisfied, False otherwise
-        """
+        """Validate all constraints on a type parameter."""
         # If no constraints, always valid
         if not bounded_param.constraints or len(bounded_param.constraints) == 0:
             return True
@@ -111,14 +62,7 @@ class ConstraintValidator:
         return all_valid
 
     def _get_type_name(self, ty: Type) -> str:
-        """Extract type name for lookup in implementation table.
-
-        Args:
-            ty: Type object to extract name from
-
-        Returns:
-            String representation of type name
-        """
+        """Extract type name for lookup in implementation table."""
         if isinstance(ty, BuiltinType):
             return str(ty)
         elif isinstance(ty, (StructType, EnumType)):

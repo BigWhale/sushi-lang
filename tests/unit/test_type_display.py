@@ -1,9 +1,4 @@
-"""`display_type` renders the `@(...)` surface form for diagnostics.
-
-Types are interned under their `<...>` identity name; display is a separate layer
-(see semantics/generics/type_display.py). These tests pin the display shapes and
-the key invariant: a type with no generic brackets displays exactly as `str(ty)`.
-"""
+"""`display_type` renders the `@(...)` surface form for diagnostics."""
 from __future__ import annotations
 
 from sushi_lang.semantics.generics.type_display import display_type, display_type_name

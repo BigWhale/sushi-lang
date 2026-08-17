@@ -1,16 +1,4 @@
-"""A diagnostic is reported ONCE, however deep in an expression it occurs.
-
-#201: every diagnostic raised inside the RECEIVER of a method call was emitted twice, because
-Pass 2 validated the receiver expression two times -- once on the way to inferring its type, and
-again as part of validating the call. Errors, not just warnings.
-
-The `.sushi` harness cannot catch this: `EXPECT_ERROR_CODE` / `EXPECT_STDERR_CONTAINS` are
-substring assertions, and a duplicate contains the substring just as well as a single one does.
-Counting the head lines is the only oracle that sees it -- which is why the bug survived.
-
-This is the same family as #199, one layer up: a validator walks the receiver, decides the call
-is not its business, and hands it to another that walks the receiver again.
-"""
+"""A diagnostic is reported ONCE, however deep in an expression it occurs."""
 from __future__ import annotations
 
 import os

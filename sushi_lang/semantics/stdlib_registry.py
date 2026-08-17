@@ -1,21 +1,4 @@
-"""
-Standard Library Function Registry
-
-This module provides a unified registry for stdlib functions, eliminating hardcoded
-special cases throughout the compiler. The registry auto-discovers stdlib modules
-and provides type information, validators, and code emitters.
-
-Design Principles:
-- DRY: Single source of truth for stdlib metadata
-- SOLID: Clean separation of concerns, extensible design
-- Platform Agnostic: Respects existing platform detection
-- Reuses existing stdlib module interfaces
-
-Architecture:
-- StdlibFunction: Metadata for individual function
-- StdlibModule: Metadata for entire module
-- StdlibRegistry: Central registry with discovery and lookup
-"""
+"""Standard Library Function Registry"""
 from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -49,16 +32,7 @@ def resolve_source_stdlib_path(module_path: str) -> Optional[Path]:
 
 @dataclass
 class StdlibFunction:
-    """
-    Metadata for a single stdlib function.
-
-    Attributes:
-        name: Function name (e.g., "sleep", "getenv", "abs")
-        module_path: Module path (e.g., "time", "sys/env", "math")
-        is_constant: True if this is a constant (e.g., PI, E, TAU)
-        get_return_type: Callable to get return type (may depend on params)
-        validator: Callable to validate function call
-    """
+    """Metadata for a single stdlib function."""
     name: str
     module_path: str
     is_constant: bool = False
@@ -70,15 +44,7 @@ class StdlibFunction:
 
 @dataclass
 class StdlibModule:
-    """
-    Metadata for a stdlib module.
-
-    Attributes:
-        path: Module path (e.g., "time", "sys/env", "math")
-        python_module: Imported Python module from stdlib/src/
-        functions: Dict of function name -> StdlibFunction
-        constants: Dict of constant name -> StdlibFunction
-    """
+    """Metadata for a stdlib module."""
     path: str
     python_module: any  # The imported Python module
     functions: Dict[str, StdlibFunction] = field(default_factory=dict)
@@ -93,11 +59,7 @@ _VARIADIC_STDLIB = {("process", "run")}
 _param_specs_cache = None
 
 def _get_param_specs():
-    """Lazily build parameter specs for stdlib functions.
-
-    Returns a dict keyed by (module_short_name, func_name) -> list of BuiltinType or None.
-    None means polymorphic (needs special validation). [] means no args.
-    """
+    """Lazily build parameter specs for stdlib functions."""
     global _param_specs_cache
     if _param_specs_cache is not None:
         return _param_specs_cache
@@ -157,15 +119,7 @@ def _get_param_specs():
 
 
 class StdlibRegistry:
-    """
-    Central registry for stdlib functions.
-
-    Provides:
-    - Auto-discovery of stdlib modules
-    - Function metadata lookup
-    - Type information and validation
-    - Code emitter dispatch
-    """
+    """Central registry for stdlib functions."""
 
     # Known stdlib modules and their Python module paths
     KNOWN_MODULES = {
@@ -185,15 +139,7 @@ class StdlibRegistry:
         self._function_lookup: Dict[Tuple[str, str], StdlibFunction] = {}
 
     def discover_modules(self) -> None:
-        """
-        Discover and register all known stdlib modules.
-
-        This method imports stdlib Python modules and extracts function metadata
-        using the standard interface:
-        - is_builtin_*_function(name) -> bool
-        - get_builtin_*_function_return_type(name, ...) -> Type
-        - validate_*_function_call(name, signature) -> None
-        """
+        """Discover and register all known stdlib modules."""
         for module_path, python_path in self.KNOWN_MODULES.items():
             try:
                 self._discover_module(module_path, python_path)
@@ -203,13 +149,7 @@ class StdlibRegistry:
                 pass
 
     def _discover_module(self, module_path: str, python_path: str) -> None:
-        """
-        Discover and register a single stdlib module.
-
-        Args:
-            module_path: Sushi module path (e.g., "time", "sys/env")
-            python_path: Python import path (e.g., "sushi_stdlib.src.time")
-        """
+        """Discover and register a single stdlib module."""
         # Import the Python module
         py_module = importlib.import_module(python_path)
 
@@ -261,12 +201,7 @@ class StdlibRegistry:
         type_resolver: Callable,
         validator: Callable
     ) -> None:
-        """
-        Discover functions using heuristic approach.
-
-        We try common function names and use the checker to verify existence.
-        This works because stdlib modules have is_builtin_*_function() checks.
-        """
+        """Discover functions using heuristic approach."""
         # Common function names per module
         common_names = {
             "time": ["sleep", "msleep", "usleep", "nanosleep"],
@@ -333,9 +268,7 @@ class StdlibRegistry:
         checker: Callable[[str], bool],
         py_module: any
     ) -> None:
-        """
-        Discover constants (e.g., PI, E, TAU in math module).
-        """
+        """Discover constants (e.g., PI, E, TAU in math module)."""
         common_constants = ["PI", "E", "TAU"]
 
         # Get constant value getter
@@ -358,63 +291,26 @@ class StdlibRegistry:
                 self._function_lookup[(module.path, name)] = func
 
     def register_module(self, module_path: str, imported_units: List[str]) -> None:
-        """
-        Register a module that was imported via 'use <module>'.
-
-        Args:
-            module_path: Module path (e.g., "time", "sys/env")
-            imported_units: List of all imported unit paths
-        """
+        """Register a module that was imported via 'use <module>'."""
         if module_path not in self._modules and module_path in self.KNOWN_MODULES:
             # Lazy registration - only register when actually used
             python_path = self.KNOWN_MODULES[module_path]
             self._discover_module(module_path, python_path)
 
     def get_function(self, module_path: str, function_name: str) -> Optional[StdlibFunction]:
-        """
-        Get function metadata by module and name.
-
-        Args:
-            module_path: Module path (e.g., "time", "sys/env")
-            function_name: Function name (e.g., "sleep", "getenv")
-
-        Returns:
-            StdlibFunction metadata or None if not found
-        """
+        """Get function metadata by module and name."""
         return self._function_lookup.get((module_path, function_name))
 
     def is_stdlib_function(self, module_path: str, function_name: str) -> bool:
-        """
-        Check if a function is a stdlib function.
-
-        Args:
-            module_path: Module path (e.g., "time", "sys/env")
-            function_name: Function name (e.g., "sleep", "getenv")
-
-        Returns:
-            True if function exists in stdlib, False otherwise
-        """
+        """Check if a function is a stdlib function."""
         return (module_path, function_name) in self._function_lookup
 
     def get_module(self, module_path: str) -> Optional[StdlibModule]:
-        """
-        Get module metadata by path.
-
-        Args:
-            module_path: Module path (e.g., "time", "sys/env")
-
-        Returns:
-            StdlibModule metadata or None if not found
-        """
+        """Get module metadata by path."""
         return self._modules.get(module_path)
 
     def get_all_modules(self) -> List[str]:
-        """
-        Get list of all registered module paths.
-
-        Returns:
-            List of module paths
-        """
+        """Get list of all registered module paths."""
         return list(self._modules.keys())
 
 
@@ -423,14 +319,7 @@ _global_registry: Optional[StdlibRegistry] = None
 
 
 def get_stdlib_registry() -> StdlibRegistry:
-    """
-    Get the global stdlib registry instance.
-
-    The registry is created and initialized on first access.
-
-    Returns:
-        Global StdlibRegistry instance
-    """
+    """Get the global stdlib registry instance."""
     global _global_registry
     if _global_registry is None:
         _global_registry = StdlibRegistry()

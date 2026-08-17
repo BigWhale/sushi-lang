@@ -1,32 +1,4 @@
-"""
-Array operations for the Sushi language compiler.
-
-This module handles LLVM IR emission for both fixed and dynamic arrays, including:
-- Array literal emission (fixed-size arrays)
-- Array indexing with bounds checking (runtime error RE2020)
-- Dynamic array constructors (new, from)
-- Dynamic array methods (len, capacity, get, push, pop, destroy)
-- Dynamic array helper utilities
-- Array method dispatching
-
-All dynamic array operations use exponential growth strategy and include
-comprehensive bounds checking for safety.
-
-Submodules:
-- literals: Fixed-size array literal emission
-- indexing: Array element access with bounds checking
-- constructors: Dynamic array construction (new, from)
-- methods: Dynamic array operations (len, capacity, get, push, pop, destroy)
-- iterators: Array iterator emission for foreach loops
-- dispatcher: Central dispatch for array method calls
-- utils: Helper functions for array struct creation
-
-Architecture:
-Arrays are a CORE LANGUAGE FEATURE (not stdlib). They use fully generic inline
-emission at compile time, which works for ANY element type (primitives, strings,
-structs, enums). This avoids the need for monomorphization and pre-compiling
-separate functions for each array type.
-"""
+"""Array operations for the Sushi language compiler."""
 from __future__ import annotations
 
 # Import all public functions for convenience

@@ -10,13 +10,7 @@ CREDENTIALS_FILE = SUSHI_HOME / "credentials.toml"
 
 
 def toml_escape(s: str) -> str:
-    """Escape a string for a hand-written TOML basic string / quoted key.
-
-    The stdlib has a TOML reader (tomllib) but no writer, so the few writers in
-    the packager build lines by hand. Unescaped, a quote, backslash or newline
-    in a value corrupts the whole file -- and the corrupted read used to be
-    silently swallowed downstream.
-    """
+    """Escape a string for a hand-written TOML basic string / quoted key."""
     out = []
     for ch in s:
         if ch == "\\":

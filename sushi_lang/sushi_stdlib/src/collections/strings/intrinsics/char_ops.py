@@ -1,27 +1,10 @@
-"""
-ASCII Character Operations Intrinsics
-
-Pure LLVM IR implementations of character operations, replacing C standard library functions:
-- llvm_toupper: Convert ASCII lowercase to uppercase
-- llvm_tolower: Convert ASCII uppercase to lowercase
-- llvm_isspace: Check if character is ASCII whitespace
-"""
+"""ASCII Character Operations Intrinsics"""
 
 import llvmlite.ir as ir
 
 
 def emit_toupper_intrinsic(module: ir.Module) -> ir.Function:
-    """Emit the ASCII toupper intrinsic function.
-
-    Converts lowercase ASCII characters ('a'-'z') to uppercase ('A'-'Z').
-    All other characters are returned unchanged.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: i32 llvm_toupper(i32 c)
-    """
+    """Emit `i32 llvm_toupper(i32 c)`."""
     func_name = "llvm_toupper"
 
     # Check if already defined
@@ -67,17 +50,7 @@ def emit_toupper_intrinsic(module: ir.Module) -> ir.Function:
 
 
 def emit_tolower_intrinsic(module: ir.Module) -> ir.Function:
-    """Emit the ASCII tolower intrinsic function.
-
-    Converts uppercase ASCII characters ('A'-'Z') to lowercase ('a'-'z').
-    All other characters are returned unchanged.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: i32 llvm_tolower(i32 c)
-    """
+    """Emit `i32 llvm_tolower(i32 c)`."""
     func_name = "llvm_tolower"
 
     # Check if already defined
@@ -123,20 +96,7 @@ def emit_tolower_intrinsic(module: ir.Module) -> ir.Function:
 
 
 def emit_isspace_intrinsic(module: ir.Module) -> ir.Function:
-    """Emit the ASCII isspace intrinsic function.
-
-    Checks if a character is ASCII whitespace:
-    - Space (32)
-    - Tab (9)
-    - Newline (10)
-    - Carriage return (13)
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: i8 llvm_isspace(i32 c)
-    """
+    """Emit `i8 llvm_isspace(i32 c)`."""
     func_name = "llvm_isspace"
 
     # Check if already defined

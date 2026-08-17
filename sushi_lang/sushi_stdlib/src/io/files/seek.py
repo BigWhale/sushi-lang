@@ -1,10 +1,4 @@
-"""
-File seeking methods IR generation.
-
-Implements IR generation for:
-- seek(i64, SeekFrom) - Seek to position in file
-- tell() - Get current file position
-"""
+"""File seeking methods IR generation."""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_fseek, declare_ftell
@@ -12,15 +6,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import get_unit_enum_type
 
 
 def generate_seek(module: ir.Module) -> None:
-    """Generate IR for file.seek(i64, SeekFrom) -> ~
-
-    Seeks to position in file.
-    SeekFrom enum: Start (0), Current (1), End (2)
-    Maps to C constants: SEEK_SET (0), SEEK_CUR (1), SEEK_END (2)
-
-    SeekFrom enum struct (#300 phase 2): {i32 tag, [1 x i64] data}
-    We only need the tag field.
-    """
+    """Generate IR for file.seek(i64, SeekFrom) -> ~"""
     i32 = ir.IntType(32)
     i64 = ir.IntType(64)
     i8 = ir.IntType(8)
@@ -100,10 +86,7 @@ def generate_seek(module: ir.Module) -> None:
 
 
 def generate_tell(module: ir.Module) -> None:
-    """Generate IR for file.tell() -> i64
-
-    Returns current file position.
-    """
+    """Generate IR for file.tell() -> i64"""
     i64 = ir.IntType(64)
     i8_ptr = ir.IntType(8).as_pointer()
 

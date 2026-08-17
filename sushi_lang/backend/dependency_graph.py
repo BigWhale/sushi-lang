@@ -1,9 +1,4 @@
-"""Dependency graph builder for symbol resolution.
-
-This module builds a dependency graph showing which symbols reference which other
-symbols. It's the second phase of the two-phase linking process, enabling dead
-code elimination by finding all symbols reachable from entry points.
-"""
+"""Dependency graph builder for symbol resolution."""
 from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
@@ -26,38 +21,17 @@ class DependencyGraph:
         self.edges: dict[str, set[str]] = {}  # symbol_name -> set of referenced symbols
 
     def add_dependency(self, from_symbol: str, to_symbol: str) -> None:
-        """Record that from_symbol references to_symbol.
-
-        Args:
-            from_symbol: The symbol that has a reference.
-            to_symbol: The symbol being referenced.
-        """
+        """Record that from_symbol references to_symbol."""
         if from_symbol not in self.edges:
             self.edges[from_symbol] = set()
         self.edges[from_symbol].add(to_symbol)
 
     def get_dependencies(self, symbol: str) -> set[str]:
-        """Get all symbols directly referenced by this symbol.
-
-        Args:
-            symbol: Symbol name to look up.
-
-        Returns:
-            Set of symbol names referenced by this symbol.
-        """
+        """Get all symbols directly referenced by this symbol."""
         return self.edges.get(symbol, set())
 
     def get_transitive_closure(self, root_symbols: set[str]) -> set[str]:
-        """Compute transitive closure of dependencies starting from root symbols.
-
-        This implements a breadth-first search to find all reachable symbols.
-
-        Args:
-            root_symbols: Set of entry point symbols (e.g., {"main"}).
-
-        Returns:
-            Set of all symbols reachable from root_symbols.
-        """
+        """Compute transitive closure of dependencies starting from root symbols."""
         reachable = set(root_symbols)
         worklist = list(root_symbols)
 
@@ -78,19 +52,7 @@ class DependencyGraph:
 
 
 def extract_symbol_references(ir_text: str) -> set[str]:
-    """Extract all symbol references from LLVM IR text.
-
-    Looks for patterns like:
-    - @function_name (function calls, declarations)
-    - @global_var (global variable references)
-    - @"quoted.name" (mangled or special names)
-
-    Args:
-        ir_text: LLVM IR code as string.
-
-    Returns:
-        Set of referenced symbol names (without @ prefix).
-    """
+    """Extract all symbol references from LLVM IR text."""
     matches = _SYMBOL_REFERENCE_RE.findall(ir_text)
 
     references = set()
@@ -107,16 +69,7 @@ def extract_symbol_references(ir_text: str) -> set[str]:
 
 
 def build_dependency_graph(symbol_tables: list['SymbolTable']) -> DependencyGraph:
-    """Build dependency graph from symbol tables.
-
-    Parses IR text of each function/global to find references to other symbols.
-
-    Args:
-        symbol_tables: List of symbol tables from all modules.
-
-    Returns:
-        Complete dependency graph.
-    """
+    """Build dependency graph from symbol tables."""
     graph = DependencyGraph()
 
     # Create unified symbol lookup across all tables

@@ -1,25 +1,4 @@
-"""Every mutating method is rejected through a `peek` receiver. No member left out.
-
-`peek T` is a read-only borrow of the caller's value. Before this gate, CE2408 had
-exactly ONE emit site -- the rebind of the reference itself -- so every other write
-shape reached the caller's storage and changed it, with no diagnostic:
-
-  #302  `a.push(9)`   through `peek i32[]`               -> the push landed
-  F4    `m.free()`    through `peek HashMap@(i32, string)` -> the map was emptied
-  F4    `l.destroy()` through `peek List@(i32)`          -> the list was released
-  F5    `a.fill(7)`   through `peek i32[]`               -> the buffer was overwritten
-  #307  `f(poke x)`  through `peek i32`                 -> the borrow was upgraded
-
-The single test that CE2408 had pinned the single emit SITE, not the rule. This test
-pins the RULE: `_MUTATING_METHODS` is the compiler's own list of the methods that change
-or release what a container holds, and the write gate must reject every member of it
-through a `peek` receiver. The `assert set(CASES) == _MUTATING_METHODS` line is what
-makes a method added to that set without a case here a red test rather than a silent
-hole.
-
-The `poke` twin loop is the other half: keying the gate on `is_peek()` is what keeps
-the mutable borrow -- the shape every mutating helper in the corpus uses -- legal.
-"""
+"""Every mutating method is rejected through a `peek` receiver. No member left out."""
 from __future__ import annotations
 
 import pytest

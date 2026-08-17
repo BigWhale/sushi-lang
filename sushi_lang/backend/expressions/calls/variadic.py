@@ -1,20 +1,4 @@
-"""Shared construction of the collected array for a native variadic call.
-
-Both user-function variadic calls and the stdlib `run` builtin funnel their trailing
-arguments through `build_variadic_array`, which produces the single owned `T[]` struct
-value the callee receives. Two shapes are supported:
-
-  - **Collect** (the default): individual trailing values are copied into a freshly
-    synthesized, caller-owned array that is moved into the callee.
-  - **Bloom** (`arr...`): an existing array is moved into the callee whole, with no
-    new allocation and no element copy; the caller relinquishes ownership so its RAII
-    does not free the buffer the callee now owns.
-
-Every ownership transfer here goes through the seam (`backend/ownership.py`): each
-trailing element and the bloom source are CALL_ARG consuming uses, and the synthesized
-temp itself leaves through `relinquish_temp`. `tests/unit/test_consuming_use_coverage.py`
-fails the build if a transfer primitive is called from this module directly.
-"""
+"""Shared construction of the collected array for a native variadic call."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
@@ -33,25 +17,7 @@ _variadic_temp_counter = [0]
 def build_variadic_array(codegen: 'LLVMCodegen', trailing_exprs: List,
                          array_type, callee_name: str,
                          callee_owns: bool = True) -> ir.Value:
-    """Produce the T[] struct value for a variadic callee's collected slot.
-
-    Args:
-        codegen: The LLVM code generator.
-        trailing_exprs: The trailing argument expressions (post fixed prefix). Either a
-            single ``Spread`` (bloom) or zero-or-more individual value expressions.
-        array_type: The variadic parameter's array type (``DynamicArrayType`` or the
-            element type, which is wrapped defensively).
-        callee_name: Used to name the synthesized temp for readable IR.
-        callee_owns: Whether the CALLEE frees the collected array. True for a Sushi
-            ``...T`` parameter, whose body registers it (``begin_function``). False for
-            a stdlib variadic such as ``run``: its body is generated IR that frees
-            nothing, so the caller keeps the array and its scope exit frees it. Passing
-            True there leaked the whole argv on every call, with no owner anywhere.
-
-    Returns:
-        An ``ir.Value`` holding the T[] struct (fat pointer) to pass as the callee's
-        single collected array argument.
-    """
+    """Produce the T[] struct value for a variadic callee's collected slot."""
     if not isinstance(array_type, DynamicArrayType):
         # Defensive: callers should pass the wrapped array type.
         array_type = DynamicArrayType(base_type=array_type)
@@ -93,13 +59,7 @@ def build_variadic_array(codegen: 'LLVMCodegen', trailing_exprs: List,
 
 def _bloom_move_array(codegen: 'LLVMCodegen', source, array_type,
                       callee_owns: bool = True) -> ir.Value:
-    """Move an existing array (the bloom source) into the callee.
-
-    Loads the source's T[] struct by value and consumes the source (a CALL_ARG use of
-    the whole array type) so the caller's RAII skips the buffer the callee now owns.
-    Soundness depends on the source being a bare Name: validate_variadic_trailing_args
-    rejects any other spread source with CE0120.
-    """
+    """Move an existing array (the bloom source) into the callee."""
     value = codegen.expressions.emit_expr(source)
     if isinstance(value.type, ir.PointerType):
         value = codegen.builder.load(value, name="bloom_src_val")

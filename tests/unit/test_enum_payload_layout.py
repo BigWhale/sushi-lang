@@ -1,14 +1,4 @@
-"""The enum payload layout has ONE authority, and it is naturally aligned (#300 phase 2).
-
-The enum LLVM shape is `{i32 tag, [K x i64] data}`: the i64 array member gives the
-struct 8-alignment, so the payload base sits at offset 8 and a naturally aligned
-RELATIVE field offset is naturally aligned ABSOLUTELY. Every walk over a variant's
-fields (construction, match extraction, destructor, clone, hash, key equality) derives
-its offsets from `TypeSizing.payload_field_offsets` -- two derivations of one layout is
-how construct and extract disagreed before (`calculate_llvm_type_size` vs
-`get_type_size_bytes`), and the `align=1` workaround family (#145) papered over the
-misalignment. This file pins the authority's algebra so a drift is a red test.
-"""
+"""The enum payload layout has ONE authority, and it is naturally aligned (#300 phase 2)."""
 from __future__ import annotations
 
 from sushi_lang.backend.types.core.sizing import TypeSizing, align_up
@@ -89,16 +79,18 @@ def test_enum_size_is_the_llvm_sizeof():
 
 
 def test_enum_alignment_is_eight():
-    """A struct holding an enum field must agree with LLVM's stride (the [K x i64]
-    member makes the real alignment 8; answering 4 desynchronizes struct sizing)."""
+    """A struct holding an enum field must agree with LLVM's stride (the [K x i64] member makes the
+    real alignment 8; answering 4 desynchronizes struct sizing).
+    """
     sizing = _sizing()
     enum_type = _enum(EnumVariantInfo(name="A", associated_types=(BuiltinType.I32,)))
     assert sizing.get_type_alignment(enum_type) == 8
 
 
 def test_pack_unpack_walk_reproduces_the_authority():
-    """`pack/unpack_variant_field` thread a running offset and align on entry; the
-    sequence they produce must equal payload_field_offsets exactly."""
+    """`pack/unpack_variant_field` thread a running offset and align on entry; the sequence they
+    produce must equal payload_field_offsets exactly.
+    """
     sizing = _sizing()
     types = (BuiltinType.I8, BuiltinType.STRING, BuiltinType.I32, BuiltinType.F64)
     expected = sizing.payload_field_offsets(types)

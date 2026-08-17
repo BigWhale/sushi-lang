@@ -1,13 +1,4 @@
-"""
-Case Conversion String Operations
-
-Implements ASCII case conversion methods for fat pointer strings:
-- upper(): Convert all ASCII lowercase to uppercase
-- lower(): Convert all ASCII uppercase to lowercase
-- cap(): Capitalize first character, lowercase rest
-
-Note: These are ASCII-only operations (UTF-8 unaware for case conversion)
-"""
+"""Case Conversion String Operations"""
 
 import llvmlite.ir as ir
 from ..intrinsics.char_ops import emit_toupper_intrinsic, emit_tolower_intrinsic
@@ -17,17 +8,7 @@ from sushi_lang.sushi_stdlib.src.ir_builders import IRLoopBuilder, IRStructBuild
 
 
 def emit_string_upper(module: ir.Module) -> ir.Function:
-    """Emit the string.upper() method.
-
-    Converts all ASCII lowercase characters to uppercase.
-    Non-ASCII characters are copied unchanged.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_upper({ i8*, i32 } str)
-    """
+    """Emit `{i8*, i32} string_upper({i8*, i32} str)`."""
     func_name = "string_upper"
 
     # Check if already defined
@@ -62,17 +43,7 @@ def emit_string_upper(module: ir.Module) -> ir.Function:
 
 
 def emit_string_lower(module: ir.Module) -> ir.Function:
-    """Emit the string.lower() method.
-
-    Converts all ASCII uppercase characters to lowercase.
-    Non-ASCII characters are copied unchanged.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_lower({ i8*, i32 } str)
-    """
+    """Emit `{i8*, i32} string_lower({i8*, i32} str)`."""
     func_name = "string_lower"
 
     # Check if already defined
@@ -107,19 +78,7 @@ def emit_string_lower(module: ir.Module) -> ir.Function:
 
 
 def emit_string_cap(module: ir.Module) -> ir.Function:
-    """Emit the string.cap() method.
-
-    Capitalizes the first ASCII character and lowercases the rest.
-    Non-ASCII characters are handled as follows:
-    - First character: copied unchanged if not ASCII
-    - Rest: converted to lowercase if ASCII uppercase, otherwise copied unchanged
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_cap({ i8*, i32 } str)
-    """
+    """Emit `{i8*, i32} string_cap({i8*, i32} str)`."""
     func_name = "string_cap"
 
     # Check if already defined

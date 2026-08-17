@@ -1,15 +1,4 @@
-"""
-UTF-8 well-formedness validation for the checked byte-array -> string conversion.
-
-Emits a single cached, module-internal function
-
-    i1 sushi_utf8_validate(i8* data, i32 len)
-
-that returns 1 iff `data[0..len)` is well-formed UTF-8 per the Unicode standard's
-Table 3-7. It rejects overlong encodings, UTF-16 surrogate code points
-(U+D800..U+DFFF), and code points above U+10FFFF -- not merely continuation-byte
-shape. Used by u8[].to_string_checked() (see transforms.py).
-"""
+"""UTF-8 well-formedness validation for the checked byte-array -> string conversion."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -23,11 +12,7 @@ _VALIDATE_FN_NAME = "sushi_utf8_validate"
 
 
 def get_or_emit_utf8_validate(codegen: "LLVMCodegen") -> ir.Function:
-    """Get or emit the `i1 sushi_utf8_validate(i8* data, i32 len)` helper.
-
-    The function is emitted once per module (cached via module globals) and reused
-    by every to_string_checked() call site.
-    """
+    """Get or emit the `i1 sushi_utf8_validate(i8* data, i32 len)` helper."""
     module = codegen.module
     existing = module.globals.get(_VALIDATE_FN_NAME)
     if isinstance(existing, ir.Function):

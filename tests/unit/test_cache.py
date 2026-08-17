@@ -1,13 +1,4 @@
-"""Unit tests for the incremental-compilation cache (compiler/cache.py).
-
-These cover the staleness contract: a cached object is reused only when it was built
-from the same unit, by the same compiler, with the same settings. All three live in
-the object's *name* (see CacheManager.global_key), so staleness is a miss rather than
-an eviction -- which is what makes the cache safe to share between concurrent
-compilers (issue #196; the concurrency contract itself is in test_cache_concurrency.py).
-
-No AST is required; everything runs against a temporary project root.
-"""
+"""Unit tests for the incremental-compilation cache (compiler/cache.py)."""
 from __future__ import annotations
 
 import pytest
@@ -129,9 +120,10 @@ def test_wipe_tolerates_a_missing_cache(tmp_path):
 # --------------------------------------------------------------------------
 
 def test_global_key_differs_on_compiler_source_digest(tmp_path, monkeypatch):
-    """A compiler-source edit must change every cached object's name (a miss by
-    construction). compiler_version alone is the static pyproject string, so
-    without the digest a codegen fix was invisible to a warm cache (F9)."""
+    """A compiler-source edit must change every cached object's name (a miss by construction).
+    compiler_version alone is the static pyproject string, so without the digest a codegen fix
+    was invisible to a warm cache (F9).
+    """
     import sushi_lang.compiler.fingerprint as fp
 
     monkeypatch.setattr(fp, "_compiler_source_fingerprint", "digest-one")

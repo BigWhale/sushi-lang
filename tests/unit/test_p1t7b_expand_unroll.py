@@ -1,21 +1,4 @@
-"""P1-T7b: compile-time unrolling of ``expand(...)`` over parameter packs.
-
-Drives the dedicated unroll post-pass run during monomorphization. The contract:
-
-* ``expand(a in args): BODY`` is replaced, in place, by N independent deep copies
-  of BODY spliced in pack order, with every free reference to the binding var
-  renamed to the fan-out parameter ``args_i`` (0-based).
-* No ``Expand`` node survives.
-* Arity 0 -> zero copies (the Expand vanishes).
-* Each copy is an independent object (no shared AST nodes across copies).
-* Nesting and shadowing behave as documented.
-
-These mirror the synthetic-fixture style of test_p1t3_builder_pack /
-test_monomorphize_pack: a pack ``GenericFuncDef`` is driven end-to-end through
-the REAL ``monomorphize_function`` (so the wiring of fan-out-name derivation +
-unroll is exercised), plus a few direct calls to ``unroll_expands`` for the
-local properties (rename, nesting, shadowing).
-"""
+"""P1-T7b: compile-time unrolling of ``expand(...)`` over parameter packs."""
 import copy
 
 import pytest

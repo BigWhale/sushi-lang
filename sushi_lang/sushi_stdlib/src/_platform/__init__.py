@@ -1,16 +1,4 @@
-"""
-Internal platform-specific implementations for stdlib.
-
-This package contains platform-specific declarations and implementations
-that are used internally by stdlib modules. User code should not import
-from this package directly.
-
-Structure:
-    _platform/
-    ├── darwin/    # macOS platform-specific code
-    ├── linux/     # Linux platform-specific code (future)
-    └── windows/   # Windows platform-specific code (future)
-"""
+"""Internal platform-specific implementations for stdlib."""
 from __future__ import annotations
 import sys
 from pathlib import Path
@@ -22,19 +10,7 @@ from sushi_lang.backend.platform_detect import get_current_platform
 
 
 def get_platform_module(module_name: str):
-    """
-    Dynamically import the correct platform-specific module.
-
-    Args:
-        module_name: Name of the module (e.g., 'time')
-
-    Returns:
-        The platform-specific module
-
-    Example:
-        platform_time = get_platform_module('time')
-        declare_nanosleep = platform_time.declare_nanosleep
-    """
+    """Dynamically import the correct platform-specific module."""
     platform = get_current_platform()
 
     if platform.is_darwin:

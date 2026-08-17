@@ -1,17 +1,4 @@
-"""
-Pass 1.8: Hash Registration Pass
-
-Registers .hash() extension methods for all hashable struct, enum, and array types.
-
-This pass runs AFTER monomorphization (Pass 1.6) because:
-1. Generic structs/enums need to be monomorphized first (Pair<T, U> -> Pair<i32, string>)
-2. Nested struct/enum types need to be resolved (UnknownType -> StructType/EnumType)
-3. We need full type information to determine hashability
-
-This pass runs BEFORE type validation (Pass 2) because:
-1. Type validator needs hash methods registered to validate .hash() calls
-2. Method resolution happens during type checking
-"""
+"""Pass 1.8: Hash Registration Pass"""
 
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 from sushi_lang.semantics.generics.hashing import can_struct_be_hashed, register_struct_hash_method
@@ -26,14 +13,7 @@ from sushi_lang.internals.errors import raise_internal_error
 
 
 def register_all_struct_hashes(struct_table: StructTable) -> None:
-    """Register hash methods for all hashable structs in dependency order.
-
-    Uses topological sort to ensure nested structs get their hash registered
-    before parent structs that contain them.
-
-    Args:
-        struct_table: Table of all struct types (after monomorphization)
-    """
+    """Register hash methods for all hashable structs in dependency order."""
     # Get structs in dependency order (dependencies first)
     sorted_structs = topological_sort_structs(struct_table)
 
@@ -56,28 +36,7 @@ def register_all_struct_hashes(struct_table: StructTable) -> None:
 
 
 def topological_sort_structs(struct_table: StructTable) -> List[str]:
-    """Sort struct names in dependency order using Kahn's algorithm.
-
-    A struct A depends on struct B if:
-    - A has a field of type B (nested struct)
-
-    Returns structs with no dependencies first, then structs that depend on them.
-
-    Example:
-        Point: no dependencies
-        Rectangle: depends on Point
-
-    Returns: ["Point", "Rectangle"]
-
-    Args:
-        struct_table: Table of all struct types
-
-    Returns:
-        List of struct names in dependency order
-
-    Raises:
-        ValueError: If circular struct dependency detected
-    """
+    """Sort struct names in dependency order using Kahn's algorithm."""
     # Build dependency graph
     dependencies: Dict[str, Set[str]] = defaultdict(set)  # struct -> set of structs it depends on
     dependents: Dict[str, Set[str]] = defaultdict(set)    # struct -> set of structs that depend on it
@@ -124,15 +83,7 @@ def topological_sort_structs(struct_table: StructTable) -> List[str]:
 
 
 def register_all_enum_hashes(enum_table: EnumTable, reporter: Reporter) -> None:
-    """Register hash methods for all hashable enums in dependency order.
-
-    Uses topological sort to ensure nested enums get their hash registered
-    before parent enums that contain them.
-
-    Args:
-        enum_table: Table of all enum types (after monomorphization)
-        reporter: Error reporter for diagnostic messages
-    """
+    """Register hash methods for all hashable enums in dependency order."""
     # Get enums in dependency order (dependencies first)
     sorted_enums = topological_sort_enums(enum_table, reporter)
 
@@ -155,29 +106,7 @@ def register_all_enum_hashes(enum_table: EnumTable, reporter: Reporter) -> None:
 
 
 def topological_sort_enums(enum_table: EnumTable, reporter: Reporter) -> List[str]:
-    """Sort enum names in dependency order using Kahn's algorithm.
-
-    An enum A depends on enum B if:
-    - A has a variant with associated type B (nested enum)
-
-    An enum A depends on struct B if:
-    - A has a variant with associated type B (struct in variant data)
-
-    Returns enums with no dependencies first, then enums that depend on them.
-
-    Example:
-        Status: no dependencies
-        Response: depends on Status
-
-    Returns: ["Status", "Response"]
-
-    Args:
-        enum_table: Table of all enum types
-        reporter: Error reporter for diagnostic messages
-
-    Returns:
-        List of enum names in dependency order
-    """
+    """Sort enum names in dependency order using Kahn's algorithm."""
     # Build dependency graph (only for enum-to-enum dependencies)
     dependencies: Dict[str, Set[str]] = defaultdict(set)  # enum -> set of other enums it depends on
     dependents: Dict[str, Set[str]] = defaultdict(set)    # enum -> set of enums that depend on it
@@ -243,24 +172,7 @@ def topological_sort_enums(enum_table: EnumTable, reporter: Reporter) -> List[st
 
 
 def has_own_indirection(enum_type: EnumType, enum_name: str) -> bool:
-    """Check if recursive enum uses Own<T> for indirection.
-
-    Returns True if the enum references itself through Own<T> wrapper.
-
-    Example:
-        enum Expr:
-            IntLit(i32)
-            BinOp(Own<Expr>, Own<Expr>, string)
-
-        has_own_indirection(Expr, "Expr") -> True
-
-    Args:
-        enum_type: The enum type to check
-        enum_name: The name of the enum being checked
-
-    Returns:
-        True if the enum uses Own<T> to reference itself, False otherwise
-    """
+    """Check if recursive enum uses Own<T> for indirection."""
     for variant in enum_type.variants:
         for assoc_type in variant.associated_types:
             # Check if field is Own<T>
@@ -304,15 +216,7 @@ def _get_own_element_type(own_type: Type) -> Type:
 
 
 def _references_enum(ty: Type, enum_name: str) -> bool:
-    """Check if type references an enum (directly or in array).
-
-    Args:
-        ty: The type to check
-        enum_name: The name of the enum to look for
-
-    Returns:
-        True if ty references the enum with the given name
-    """
+    """Check if type references an enum (directly or in array)."""
     from sushi_lang.semantics.typesys import UnknownType
 
     if isinstance(ty, EnumType):
@@ -332,21 +236,7 @@ def _references_enum(ty: Type, enum_name: str) -> bool:
 
 
 def collect_array_types(struct_table: StructTable, enum_table: EnumTable) -> Set[Type]:
-    """Collect all array types used in structs, enums, and HashMap keys/values.
-
-    This finds array types in:
-    - Struct field types
-    - Enum variant associated types
-    - HashMap key types (inferred from HashMap struct field types)
-    - HashMap value types (inferred from HashMap struct field types)
-
-    Args:
-        struct_table: Table of all struct types
-        enum_table: Table of all enum types
-
-    Returns:
-        Set of unique array types (ArrayType and DynamicArrayType instances)
-    """
+    """Collect all array types used in structs, enums, and HashMap keys/values."""
     array_types: Set[Type] = set()
 
     def extract_arrays_from_type(ty: Type) -> None:
@@ -369,15 +259,7 @@ def collect_array_types(struct_table: StructTable, enum_table: EnumTable) -> Set
 
 
 def register_all_array_hashes(struct_table: StructTable, enum_table: EnumTable) -> None:
-    """Register hash methods for all hashable array types.
-
-    This must run AFTER struct and enum hashes are registered, because array
-    hashing depends on element type hashing.
-
-    Args:
-        struct_table: Table of all struct types
-        enum_table: Table of all enum types
-    """
+    """Register hash methods for all hashable array types."""
     # Collect all array types used in the program
     array_types = collect_array_types(struct_table, enum_table)
 

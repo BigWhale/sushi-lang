@@ -1,9 +1,4 @@
-"""
-Loop statement emission for the Sushi language compiler.
-
-This module handles the generation of LLVM IR for loop-related statements including
-foreach loops, break, and continue statements.
-"""
+"""Loop statement emission for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from sushi_lang.internals.errors import raise_internal_error
@@ -17,17 +12,7 @@ if TYPE_CHECKING:
 
 
 def emit_break(codegen: 'LLVMCodegen') -> None:
-    """Emit break statement (jump to loop end).
-
-    Creates an unconditional branch to the loop's end block and marks the
-    current block as unreachable for subsequent code.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-
-    Raises:
-        AssertionError: If not inside a loop context.
-    """
+    """Emit break statement (jump to loop end)."""
     assert codegen.loop_stack, "checker guarantees inside-loop"
     _, break_bb, scope_boundary = codegen.loop_stack[-1]
     # Free heap-owning locals of the loop's own scopes before abandoning them; the
@@ -39,17 +24,7 @@ def emit_break(codegen: 'LLVMCodegen') -> None:
 
 
 def emit_continue(codegen: 'LLVMCodegen') -> None:
-    """Emit continue statement (jump to loop condition).
-
-    Creates an unconditional branch to the loop's condition block and marks the
-    current block as unreachable for subsequent code.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-
-    Raises:
-        AssertionError: If not inside a loop context.
-    """
+    """Emit continue statement (jump to loop condition)."""
     assert codegen.loop_stack, "checker guarantees inside-loop"
     cont_bb, _, scope_boundary = codegen.loop_stack[-1]
     # Free heap-owning locals of the loop's own scopes before restarting the loop.
@@ -60,31 +35,7 @@ def emit_continue(codegen: 'LLVMCodegen') -> None:
 
 
 def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
-    """Emit foreach loop with iterator protocol.
-
-    Desugars foreach into a while loop with iterator has_next/next operations:
-
-    foreach(T item in iterable):
-        body
-
-    Becomes:
-
-    let Iterator<T> __iter = iterable
-    while (__iter.current_index < __iter.length):
-        let T item = __iter.data_ptr[__iter.current_index]
-        __iter.current_index = __iter.current_index + 1
-        body
-
-    For stdin.lines() iterators (length == -1), use special handling:
-    while (true):
-        let string line = stdin.readln()
-        if (line.is_empty()): break
-        body
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        node: The foreach statement node to emit.
-    """
+    """Emit foreach loop with iterator protocol."""
     from llvmlite import ir
     from sushi_lang.semantics.typesys import IteratorType, BuiltinType
 
@@ -151,14 +102,7 @@ def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
 
 
 def _emit_string_iterator_foreach(codegen: 'LLVMCodegen', node: 'Foreach', iterator_slot: 'ir.Value', zero: 'ir.Constant') -> None:
-    """Emit foreach for string iterators (handles both stdin.lines() and array iterators).
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        node: The foreach statement node.
-        iterator_slot: The iterator slot allocation.
-        zero: Constant zero for GEP operations.
-    """
+    """Emit foreach for string iterators (handles both stdin.lines() and array iterators)."""
     from llvmlite import ir
     from sushi_lang.backend import gep_utils
 
@@ -191,16 +135,7 @@ def _emit_stdin_lines_foreach(
     stdin_loop_bb: 'ir.Block',
     end_bb: 'ir.Block'
 ) -> None:
-    """Emit foreach for stdin.lines() or file.lines() iterators.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        node: The foreach statement node.
-        iterator_slot: The iterator slot allocation.
-        zero: Constant zero for GEP operations.
-        stdin_loop_bb: The stdin loop entry block.
-        end_bb: The loop end block.
-    """
+    """Emit foreach for stdin.lines() or file.lines() iterators."""
     from llvmlite import ir
     from sushi_lang.semantics.ast import MethodCall, Name
     from sushi_lang.sushi_stdlib.src.io.stdio.inline import _emit_readln as _emit_stdin_readln
@@ -288,14 +223,7 @@ def _emit_stdin_lines_foreach(
 
 
 def _emit_array_foreach(codegen: 'LLVMCodegen', node: 'Foreach', iterator_slot: 'ir.Value', zero: 'ir.Constant') -> None:
-    """Emit foreach for regular array iterators (non-string types).
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        node: The foreach statement node.
-        iterator_slot: The iterator slot allocation.
-        zero: Constant zero for GEP operations.
-    """
+    """Emit foreach for regular array iterators (non-string types)."""
     from sushi_lang.backend import gep_utils
 
     # For non-string iterators, skip stdin path entirely
@@ -312,16 +240,7 @@ def _emit_array_foreach_body(
     length_ptr: 'ir.Value',
     end_bb: 'ir.Block'
 ) -> None:
-    """Emit the array iteration loop body.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        node: The foreach statement node.
-        iterator_slot: The iterator slot allocation.
-        zero: Constant zero for GEP operations.
-        length_ptr: Pointer to the length field.
-        end_bb: The loop end block.
-    """
+    """Emit the array iteration loop body."""
     from llvmlite import ir
     from sushi_lang.backend import gep_utils
 
@@ -407,16 +326,7 @@ def _emit_hashmap_foreach(
     hashmap_type: 'StructType',
     method: str
 ) -> None:
-    """Emit foreach for HashMap.keys(), HashMap.values(), and HashMap.entries() iterators.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        node: The foreach statement node.
-        iterator_slot: The iterator slot allocation.
-        zero: Constant zero for GEP operations.
-        hashmap_type: The HashMap<K, V> struct type.
-        method: One of "keys", "values", or "entries".
-    """
+    """Emit foreach for HashMap.keys(), HashMap.values(), and HashMap.entries() iterators."""
     from llvmlite import ir
     from sushi_lang.backend import gep_utils
     from sushi_lang.backend.generics.hashmap.types import (
@@ -559,37 +469,7 @@ def _emit_hashmap_foreach(
 
 
 def _emit_range_foreach(codegen: 'LLVMCodegen', node: 'Foreach', range_expr: 'RangeExpr') -> None:
-    """Emit optimized foreach loop for range expressions.
-
-    Compiles range expressions directly to for-loops without iterator overhead:
-
-    foreach(i in 0..10):        # Exclusive
-        body
-
-    Becomes:
-        start = 0
-        end = 10
-        if (start < end):
-            # Ascending
-            i = start
-            while (i < end):
-                body
-                i = i + 1
-        else:
-            # Descending
-            i = start
-            while (i > end):
-                body
-                i = i - 1
-
-    For inclusive ranges (..=), the condition adjusts to <= or >=.
-    Empty ranges (start == end) produce zero iterations.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        node: The foreach statement node.
-        range_expr: The range expression from node.iterable.
-    """
+    """Emit optimized foreach loop for range expressions."""
 
     builder, func = require_both_initialized(codegen)
     codegen.utils.ensure_open_block()
@@ -642,17 +522,7 @@ def _emit_range_loop_path(
     ascending: bool,
     end_bb: 'ir.Block'
 ) -> None:
-    """Emit one direction of the range loop (ascending or descending).
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        node: The foreach statement node.
-        start_slot: Allocated slot for start value.
-        end_slot: Allocated slot for end value.
-        inclusive: True for ..=, False for ..
-        ascending: True for ascending loop, False for descending.
-        end_bb: The shared end block.
-    """
+    """Emit one direction of the range loop (ascending or descending)."""
     from llvmlite import ir
 
     # Adjust end value for inclusive ranges
@@ -729,18 +599,7 @@ _MISSING = object()
 
 def bind_element_reference(codegen: 'LLVMCodegen', name: str, borrow_mode: str,
                             element_type, element_ptr):
-    """Bind a foreach item as a REFERENCE to the container's element (#300 phase 1).
-
-    The slot mimics a `peek`/`poke` parameter's exactly: a pointer-typed alloca
-    (`T**`) holding the element pointer (`T*`), plus a `ReferenceType` entry in
-    `codegen.variable_types` -- the single fact `is_reference_parameter` keys on, so
-    every deref/write/method consumer treats the binding as the borrow it is. No
-    cleanup is registered (the container owns the element).
-
-    Returns the PREVIOUS `variable_types` entry (or the `_MISSING` sentinel) for
-    `unbind_element_reference`: the entry must not outlive the loop, or a later
-    same-named value binding in the same function is double-dereferenced.
-    """
+    """Bind a foreach item as a REFERENCE to the container's element (#300 phase 1)."""
     from sushi_lang.semantics.typesys import BorrowMode, ReferenceType
     mode = BorrowMode.POKE if borrow_mode == "poke" else BorrowMode.PEEK
     ref_type = ReferenceType(element_type, mode)
@@ -760,12 +619,7 @@ def unbind_element_reference(codegen: 'LLVMCodegen', name: str, previous) -> Non
 
 
 def _emit_block(codegen: 'LLVMCodegen', block) -> None:
-    """Helper to emit a block of statements.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        block: The block AST node containing statements.
-    """
+    """Helper to emit a block of statements."""
     # Import here to avoid circular dependency
     from sushi_lang.backend.statements import StatementEmitter
     emitter = StatementEmitter(codegen)

@@ -1,15 +1,5 @@
 # semantics/passes/types/control_flow.py
-"""
-Return-reachability analysis for type validation (Pass 2).
-
-Determines whether a block or statement returns on all code paths. This
-powers the CE0107 ("missing return") check for functions, extension
-methods, and perk implementation methods.
-
-The analysis is effectively pure: it inspects AST node shapes only and does
-not mutate the validator. Functions take the TypeValidator instance
-(``self``) for consistency with the package's delegation pattern.
-"""
+"""Return-reachability analysis for type validation (Pass 2)."""
 from __future__ import annotations
 
 from sushi_lang.semantics.ast import Block, Stmt, Return, If, Match

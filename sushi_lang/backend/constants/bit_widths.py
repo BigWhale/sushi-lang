@@ -1,8 +1,4 @@
-"""LLVM integer type bit widths.
-
-This module provides centralized constants for LLVM IR integer type bit widths.
-Used with ir.IntType(width) throughout the backend.
-"""
+"""LLVM integer type bit widths."""
 
 # Integer type bit widths
 INT8_BIT_WIDTH = 8      # i8 type (bytes, characters)

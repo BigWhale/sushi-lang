@@ -1,12 +1,4 @@
-"""
-Unified facade for LLVM function management.
-
-This module provides a clean interface to all function-related operations:
-declarations, definitions, extension methods, and main function wrapping.
-
-The facade pattern reduces coupling and provides a single entry point for
-all function management operations.
-"""
+"""Unified facade for LLVM function management."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -23,25 +15,10 @@ if TYPE_CHECKING:
 
 
 class LLVMFunctionManager:
-    """
-    Unified facade for LLVM function management.
-
-    Provides a single entry point for all function-related operations:
-    - Function declarations (prototypes)
-    - Function definitions (bodies)
-    - Extension methods
-    - Main function wrapping for C compatibility
-
-    This facade delegates to specialized components while maintaining
-    a simple external interface.
-    """
+    """Unified facade for LLVM function management."""
 
     def __init__(self, codegen: 'LLVMCodegen') -> None:
-        """Initialize function manager with all components.
-
-        Args:
-            codegen: The main LLVMCodegen instance.
-        """
+        """Initialize function manager with all components."""
         self.codegen = codegen
 
         # Initialize all components
@@ -55,14 +32,7 @@ class LLVMFunctionManager:
     # ========================================================================
 
     def emit_func_decl(self, fn: FuncDef) -> ir.Function:
-        """Create LLVM function prototype for regular function.
-
-        Args:
-            fn: The function definition AST node.
-
-        Returns:
-            The LLVM function with declared signature (no body).
-        """
+        """Create LLVM function prototype for regular function."""
         return self.declarations.emit_func_decl(
             fn,
             params_of_fn=self.helpers.params_of,
@@ -70,14 +40,7 @@ class LLVMFunctionManager:
         )
 
     def emit_func_def(self, fn: FuncDef) -> ir.Function:
-        """Define the body of a regular function.
-
-        Args:
-            fn: The function definition AST node.
-
-        Returns:
-            The LLVM function with body emitted.
-        """
+        """Define the body of a regular function."""
         return self.definitions.emit_func_def(
             fn,
             emit_func_decl_fn=self.emit_func_decl,
@@ -92,28 +55,14 @@ class LLVMFunctionManager:
     # ========================================================================
 
     def emit_extension_method_decl(self, ext: ExtendDef) -> ir.Function:
-        """Create LLVM function prototype for extension method.
-
-        Args:
-            ext: The extension method definition AST node.
-
-        Returns:
-            The LLVM function with declared signature (no body).
-        """
+        """Create LLVM function prototype for extension method."""
         return self.declarations.emit_extension_method_decl(
             ext,
             get_name_fn=self.helpers.get_extension_method_name
         )
 
     def emit_extension_method_def(self, ext: ExtendDef) -> ir.Function:
-        """Define the body of an extension method.
-
-        Args:
-            ext: The extension method definition AST node.
-
-        Returns:
-            The LLVM function with body emitted.
-        """
+        """Define the body of an extension method."""
         return self.definitions.emit_extension_method_def(
             ext,
             get_name_fn=self.helpers.get_extension_method_name,
@@ -127,27 +76,11 @@ class LLVMFunctionManager:
     # ========================================================================
 
     def _get_extension_method_name(self, ext: ExtendDef) -> str:
-        """Generate unique function name for extension method.
-
-        Args:
-            ext: The extension method definition.
-
-        Returns:
-            The mangled function name.
-        """
+        """Generate unique function name for extension method."""
         return self.helpers.get_extension_method_name(ext)
 
     def _extract_value_from_result_enum(self, result_enum, value_type, semantic_type):
-        """Extract the Ok value from a Result<T> enum.
-
-        Args:
-            result_enum: The Result<T> enum value
-            value_type: The LLVM type of T
-            semantic_type: The semantic type of T
-
-        Returns:
-            Tuple of (is_ok, value)
-        """
+        """Extract the Ok value from a Result<T> enum."""
         return self.main_wrapper.extract_value_from_result_enum(
             result_enum, value_type, semantic_type
         )

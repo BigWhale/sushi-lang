@@ -34,10 +34,7 @@ def store_package_dir(name: str, version: str) -> Path:
 
 
 def find_project_root(start: Path | None = None) -> Path | None:
-    """Walk up from start (default: cwd) looking for a nori.toml with [dependencies].
-
-    Returns the directory containing the manifest, or None if not found.
-    """
+    """Walk up from start (default: cwd) looking for a nori.toml with [dependencies]."""
     if start is None:
         start = Path.cwd()
     current = start.resolve()

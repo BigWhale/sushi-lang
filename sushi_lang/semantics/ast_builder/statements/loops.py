@@ -73,12 +73,7 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
 
 
 def parse_foreach_ref(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
-    """Parse foreach_ref: FOREACH "(" BORROW_MODE NAME "in" expr ")" ":" block
-
-    The reference-binding marker form (#300 phase 1): `foreach(poke r in rows.iter())`
-    binds `r` as a pointer into the container's element storage. The element type is
-    inferred from the iterable, exactly like the untyped plain form.
-    """
+    """Parse foreach_ref: FOREACH "(" BORROW_MODE NAME "in" expr ")" ":" block"""
     children = node.children
     idx = 0
 
@@ -122,12 +117,7 @@ def parse_foreach_ref(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
 
 
 def parse_expand_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Expand:
-    """Parse expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block
-
-    Compile-time analog of `foreach`: the body is unrolled once per element of a
-    value pack. Mirrors `parse_foreach_stmt`'s extraction of loop var, iterable,
-    and block.
-    """
+    """Parse expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block"""
     children = node.children
     idx = 0
 

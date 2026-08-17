@@ -31,11 +31,7 @@ def generate_ir(module: ir.Module) -> None:
 
 
 def generate_exists(module: ir.Module) -> None:
-    """Generate sushi_io_files_exists(string path) -> i8.
-
-    Uses POSIX access(path, F_OK) to check existence.
-    Returns: 1 if exists, 0 otherwise
-    """
+    """Generate sushi_io_files_exists(string path) -> i8."""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
 
@@ -80,11 +76,7 @@ def generate_exists(module: ir.Module) -> None:
 
 
 def _generate_stat_mode_check(module: ir.Module, sushi_name: str, s_iftype: int) -> None:
-    """Emit a `stat`-based predicate testing st_mode's file-type bits.
-
-    Shared by is_file (S_IFREG) and is_dir (S_IFDIR): stat the path, and on
-    success compare ``st_mode & S_IFMT`` against ``s_iftype``. Returns i8 (0/1).
-    """
+    """Emit a `stat`-based predicate testing st_mode's file-type bits."""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
 
@@ -167,14 +159,7 @@ def generate_is_dir(module: ir.Module) -> None:
 
 
 def generate_file_size(module: ir.Module) -> None:
-    """Generate sushi_io_files_file_size(string path) -> Result<i64>.
-
-    Uses POSIX stat() and returns st_size field.
-    Returns: Result.Ok(size) on success, Result.Err() on failure
-
-    Result<i64, FileError> layout (#300 phase 2): {i32 tag, [2 x i64] data}
-    (FileError is a unit enum {i32, [1 x i64]} = 16 bytes, so K = max(8, 16)/8 = 2)
-    """
+    """Generate sushi_io_files_file_size(string path) -> Result<i64>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
 
@@ -267,11 +252,7 @@ def generate_file_size(module: ir.Module) -> None:
 
 
 def generate_remove(module: ir.Module) -> None:
-    """Generate sushi_io_files_remove(string path) -> Result<i32>.
-
-    Uses POSIX unlink(path) to delete a file.
-    Returns: Result.Ok(0) on success, Result.Err() on failure
-    """
+    """Generate sushi_io_files_remove(string path) -> Result<i32>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
 
@@ -333,11 +314,7 @@ def generate_remove(module: ir.Module) -> None:
 
 
 def generate_rmdir(module: ir.Module) -> None:
-    """Generate sushi_io_files_rmdir(string path) -> Result<i32>.
-
-    Uses POSIX rmdir(path) to remove an empty directory.
-    Returns: Result.Ok(0) on success, Result.Err() on failure
-    """
+    """Generate sushi_io_files_rmdir(string path) -> Result<i32>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
 
@@ -399,11 +376,7 @@ def generate_rmdir(module: ir.Module) -> None:
 
 
 def generate_mkdir(module: ir.Module) -> None:
-    """Generate sushi_io_files_mkdir(string path, i32 mode) -> Result<i32>.
-
-    Uses POSIX mkdir(path, mode) to create a directory.
-    Returns: Result.Ok(0) on success, Result.Err() on failure
-    """
+    """Generate sushi_io_files_mkdir(string path, i32 mode) -> Result<i32>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
 
@@ -467,11 +440,7 @@ def generate_mkdir(module: ir.Module) -> None:
 
 
 def generate_rename(module: ir.Module) -> None:
-    """Generate sushi_io_files_rename(string old_path, string new_path) -> Result<i32>.
-
-    Uses POSIX rename(old, new) to rename/move a file.
-    Returns: Result.Ok(0) on success, Result.Err() on failure
-    """
+    """Generate sushi_io_files_rename(string old_path, string new_path) -> Result<i32>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
 
@@ -536,11 +505,7 @@ def generate_rename(module: ir.Module) -> None:
 
 
 def generate_copy(module: ir.Module) -> None:
-    """Generate sushi_io_files_copy(string src, string dst) -> Result<i32>.
-
-    Copies file using POSIX open/read/write/close.
-    Returns: Result.Ok(0) on success, Result.Err() on failure
-    """
+    """Generate sushi_io_files_copy(string src, string dst) -> Result<i32>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
 

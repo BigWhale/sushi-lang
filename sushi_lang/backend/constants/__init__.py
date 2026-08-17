@@ -1,16 +1,4 @@
-"""Backend constants facade.
-
-This module re-exports all constants from the backend/constants/ subdirectory,
-maintaining backward compatibility with the old backend/constants.py API.
-
-Organized by category:
-- bit_widths: LLVM integer type bit widths
-- llvm_values: Precomputed LLVM constant values and factory functions
-- sizes: Primitive and composite type sizes
-- indices: Struct field indices for composite types
-- error_codes: Result/Maybe tags and runtime error codes
-- hash_constants: FNV-1a hash algorithm constants
-"""
+"""Backend constants facade."""
 
 # Bit widths
 from sushi_lang.backend.constants.bit_widths import (

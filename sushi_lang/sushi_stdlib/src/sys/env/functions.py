@@ -1,13 +1,4 @@
-"""
-Environment variable function implementations for Sushi sys/env module.
-
-Implements:
-- getenv: Get environment variable (returns Maybe<string>)
-- setenv: Set environment variable (returns Result<i32>)
-
-All functions use POSIX getenv()/setenv() under the hood for consistency
-and portability across Unix-like systems.
-"""
+"""Environment variable function implementations for Sushi sys/env module."""
 from __future__ import annotations
 import typing
 from llvmlite import ir
@@ -24,35 +15,7 @@ if typing.TYPE_CHECKING:
 
 
 def generate_getenv(module: ir.Module) -> None:
-    """Generate getenv function: getenv(string key) -> Maybe<string>
-
-    Retrieves the value of an environment variable.
-
-    Args:
-        key: String fat pointer {i8* data, i32 size} - the environment variable name
-
-    Returns:
-        Maybe<string> enum:
-        - Maybe.Some(string): If variable exists
-        - Maybe.None(): If variable does not exist
-
-    Implementation:
-        1. Convert key fat pointer to null-terminated C string
-        2. Call libc getenv(key_cstr) -> i8* result
-        3. Check if result is NULL:
-           - If NULL: Return Maybe.None()
-           - If not NULL:
-             a. Call strlen(result) to get length
-             b. Allocate new buffer for Sushi string
-             c. Copy result to buffer using memcpy
-             d. Build string fat pointer {buffer, length}
-             e. Return Maybe.Some(string)
-
-    Maybe<string> Layout (#300 phase 2):
-        { i32 tag, [2 x i64] data }
-        - tag = 0: Some, data contains string fat pointer {i8* ptr, i32 size, i8 owned}
-        - tag = 1: None, data is unused
-    """
+    """Generate getenv function: getenv(string key) -> Maybe<string>"""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
 
@@ -145,26 +108,7 @@ def generate_getenv(module: ir.Module) -> None:
 
 
 def generate_setenv(module: ir.Module) -> None:
-    """Generate setenv function: setenv(string key, string value) -> i32
-
-    Sets an environment variable to a new value.
-
-    Args:
-        key: String fat pointer {i8* data, i32 size} - the environment variable name
-        value: String fat pointer {i8* data, i32 size} - the new value
-
-    Returns:
-        i32: 0 on success, -1 on failure (wrapped in Result<i32> at semantic level)
-
-    Implementation:
-        1. Convert key and value fat pointers to null-terminated C strings
-        2. Call libc setenv(key_cstr, value_cstr, 1) where 1 = overwrite existing
-        3. Return the result directly (0 = success, -1 = failure)
-
-    Error cases (setenv returns -1):
-        - EINVAL: name is NULL, empty, or contains '='
-        - ENOMEM: Insufficient memory
-    """
+    """Generate setenv function: setenv(string key, string value) -> i32"""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
 

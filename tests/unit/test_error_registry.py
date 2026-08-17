@@ -1,12 +1,4 @@
-"""The diagnostic registry must be complete, consistent, and renderable.
-
-Every code the compiler can emit has to be IN the registry, or the compiler
-crashes while reporting -- which is exactly how `r.is_ok(1)` used to produce an
-`AttributeError: CE2016` traceback instead of a diagnostic. These tests scan the
-source for referenced codes and check them against the registry, so a code that
-is referenced but never registered turns the suite red at CI time rather than at
-a user.
-"""
+"""The diagnostic registry must be complete, consistent, and renderable."""
 from __future__ import annotations
 
 import re
@@ -100,12 +92,7 @@ def test_unknown_code_degrades_instead_of_raising():
 
 
 def _category_of_range(code: str) -> set[Category]:
-    """The categories a code's numeric range is allowed to carry.
-
-    Mirrors the module each code lives in after the errors/ package split -- a code
-    can only be ADDED in the file that owns its range, and this pins the category
-    that file assigns.
-    """
+    """The categories a code's numeric range is allowed to carry."""
     if code.startswith("CW"):
         return set(Category)  # warnings span every category
     if code.startswith("RE"):
@@ -191,13 +178,7 @@ def test_unreferenced_codes_match_the_allowlist():
 
 
 def test_runtime_texts_use_printf_or_braces_but_never_both():
-    """An RE text is baked into the binary as a C string.
-
-    For emit_runtime_error_with_values the registry text IS the printf format, so
-    its % conversions must match the values the call site passes. For
-    emit_runtime_error it may carry {} placeholders, formatted at codegen time.
-    Mixing the two would either eat a conversion or print a literal brace.
-    """
+    """An RE text is baked into the binary as a C string."""
     for code, msg in REGISTRY.items():
         if not code.startswith("RE"):
             continue

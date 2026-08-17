@@ -1,8 +1,4 @@
-"""
-String Reverse Operations
-
-Implements the reverse() method for fat pointer strings.
-"""
+"""String Reverse Operations"""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
@@ -12,31 +8,7 @@ from ...common import build_string_struct, clone_string_to_owned
 
 
 def emit_string_reverse(module: ir.Module) -> ir.Function:
-    """Emit the string.reverse() method.
-
-    Reverses the string at UTF-8 character boundaries, preserving character integrity.
-    Works correctly for ASCII and multi-byte UTF-8 characters.
-
-    Algorithm:
-    1. Count UTF-8 characters in the string
-    2. Allocate buffer of same byte size
-    3. Walk backwards through characters:
-       - For each character from (count-1) down to 0:
-         - Get byte offset of character i and i+1
-         - Calculate character byte length
-         - Copy character bytes to output buffer
-    4. Return new string
-
-    Example:
-        "café" -> "éfac" (preserves the é as a 2-byte UTF-8 character)
-        "hello" -> "olleh"
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_reverse({ i8*, i32 } str)
-    """
+    """Emit `{i8*, i32} string_reverse({i8*, i32} str)`."""
     func_name = "string_reverse"
 
     # Check if already defined

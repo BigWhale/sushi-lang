@@ -1,23 +1,4 @@
-"""
-Built-in extension methods for file type.
-
-This module implements all built-in file operations for the Sushi language,
-providing methods for reading from and writing to files in both text and binary modes.
-
-file methods:
-- read(): Read entire file as string (returns string)
-- readln(): Read one line from file (returns string)
-- readch(): Read one character from file (returns string)
-- lines(): Get line iterator (returns Iterator<string>)
-- write(string): Write string to file without newline (returns ~)
-- writeln(string): Write string to file with newline (returns ~)
-- read_bytes(i32): Read n bytes from file (returns u8[])
-- write_bytes(u8[]): Write byte array to file (returns ~)
-- seek(i64, SeekFrom): Seek to position in file (returns ~)
-- tell(): Get current file position (returns i64)
-- close(): Close file and release resources (returns ~)
-- is_open(): Check if file is open (returns bool)
-"""
+"""Built-in extension methods for file type."""
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall
@@ -32,14 +13,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 # ===========================
 
 def generate_module_ir() -> ir.Module:
-    """Generate standalone LLVM IR module for file methods.
-
-    This function generates IR for all 12 file methods and returns
-    a complete LLVM module ready to be compiled to bitcode.
-
-    Returns:
-        ir.Module: LLVM IR module containing all file method implementations
-    """
+    """Generate standalone LLVM IR module for file methods."""
     from sushi_lang.sushi_stdlib.src.ir_common import create_stdlib_module
     from sushi_lang.sushi_stdlib.src.io.files.read import (
         generate_read, generate_readln, generate_readch, generate_lines

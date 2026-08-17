@@ -1,9 +1,4 @@
-"""
-File open() function implementation with error handling.
-
-This module contains the complex LLVM IR emission logic for the built-in
-open(path, mode) function, including FileMode mapping and FileResult construction.
-"""
+"""File open() function implementation with error handling."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -17,15 +12,7 @@ if TYPE_CHECKING:
 
 
 def construct_file_result_ok(codegen: 'LLVMCodegen', file_ptr: ir.Value) -> ir.Value:
-    """Construct FileResult.Ok(file) enum value.
-
-    Args:
-        codegen: The LLVM code generator.
-        file_ptr: The file pointer (FILE*) to wrap.
-
-    Returns:
-        FileResult.Ok enum value containing the file pointer.
-    """
+    """Construct FileResult.Ok(file) enum value."""
     # Get FileResult enum type
     file_result_enum = codegen.enum_table.by_name["FileResult"]
     file_result_llvm_type = codegen.types.get_enum_type(file_result_enum)
@@ -55,15 +42,7 @@ def construct_file_result_ok(codegen: 'LLVMCodegen', file_ptr: ir.Value) -> ir.V
 
 
 def construct_file_error_from_errno(codegen: 'LLVMCodegen', errno_value: ir.Value) -> ir.Value:
-    """Construct FileError enum value from errno.
-
-    Args:
-        codegen: The LLVM code generator.
-        errno_value: The errno value to map to FileError variant.
-
-    Returns:
-        FileError enum value with appropriate variant tag.
-    """
+    """Construct FileError enum value from errno."""
     # Map errno to FileError variant tag (0-8)
     file_error_tag = codegen.runtime.errors.map_errno_to_file_error(errno_value)
 
@@ -92,15 +71,7 @@ def construct_file_error_from_errno(codegen: 'LLVMCodegen', errno_value: ir.Valu
 
 
 def construct_file_result_err(codegen: 'LLVMCodegen', file_error: ir.Value) -> ir.Value:
-    """Construct FileResult.Err(FileError) enum value.
-
-    Args:
-        codegen: The LLVM code generator.
-        file_error: The FileError enum value to wrap.
-
-    Returns:
-        FileResult.Err enum value containing the FileError.
-    """
+    """Construct FileResult.Err(FileError) enum value."""
     # Get FileResult enum type
     file_result_enum = codegen.enum_table.by_name["FileResult"]
     file_result_llvm_type = codegen.types.get_enum_type(file_result_enum)
@@ -131,19 +102,7 @@ def construct_file_result_err(codegen: 'LLVMCodegen', file_error: ir.Value) -> i
 
 
 def emit_open_function(codegen: 'LLVMCodegen', expr: 'Call', to_i1: bool) -> ir.Value:
-    """Emit open() built-in function call with FileMode mapping and error handling.
-
-    Signature: open(string path, FileMode mode) FileResult
-    Returns: FileResult enum (Ok(file) or Err())
-
-    Args:
-        codegen: The LLVM code generator.
-        expr: The open() call expression.
-        to_i1: Whether to convert result to i1 (should be False for enum).
-
-    Returns:
-        FileResult enum value: {i32 tag, [N x i8] data}
-    """
+    """Emit open() built-in function call with FileMode mapping and error handling."""
     # Emit the path argument (first parameter) - this is a fat pointer {i8*, i32}
     path_fat_ptr = codegen.expressions.emit_expr(expr.args[0])
 

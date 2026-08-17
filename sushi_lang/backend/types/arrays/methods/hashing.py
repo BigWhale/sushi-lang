@@ -1,18 +1,4 @@
-"""
-LLVM emission for the auto-derived array hash() method.
-
-Hash is computed using FNV-1a by combining element hashes with the array length:
-    hash = FNV_OFFSET_BASIS
-    for each element in array:
-        hash = (hash XOR element.hash()) * FNV_PRIME
-    # Mix in array length for collision resistance
-    hash = (hash XOR length) * FNV_PRIME
-
-Whether an array *may* be hashed, and the registration of the method itself, are
-semantic concerns and live in semantics/generics/hashing.py. This module only
-supplies the emitter, which it deposits in the shared factory registry at import
-time.
-"""
+"""LLVM emission for the auto-derived array hash() method."""
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall, Name
@@ -27,17 +13,7 @@ from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_comb
 
 
 def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
-    """Create a hash() emitter function for fixed array types.
-
-    This generates code that combines all element hashes using FNV-1a,
-    then mixes in the array length.
-
-    Args:
-        array_type: The fixed array type (ArrayType)
-
-    Returns:
-        An emitter function that computes the array hash
-    """
+    """Create a hash() emitter function for fixed array types."""
     def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         """Emit LLVM IR for fixed_array.hash() method."""
@@ -86,17 +62,7 @@ def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
 
 
 def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
-    """Create a hash() emitter function for dynamic array types.
-
-    This generates code that combines all element hashes using FNV-1a,
-    then mixes in the array length.
-
-    Args:
-        array_type: The dynamic array type (DynamicArrayType)
-
-    Returns:
-        An emitter function that computes the array hash
-    """
+    """Create a hash() emitter function for dynamic array types."""
     def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         """Emit LLVM IR for dynamic_array.hash() method."""
@@ -186,18 +152,7 @@ def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
 
 
 def _emit_element_hash(codegen: Any, element_value: ir.Value, element_type: Type) -> ir.Value:
-    """Emit code to get the hash of an array element.
-
-    This recursively calls the appropriate .hash() method based on the element type.
-
-    Args:
-        codegen: The LLVM code generator
-        element_value: LLVM value of the element
-        element_type: Semantic type of the element
-
-    Returns:
-        Hash value as u64
-    """
+    """Emit code to get the hash of an array element."""
     require_builder(codegen)
 
     # For primitive types, call their hash() method inline
@@ -267,20 +222,7 @@ def _emit_element_hash(codegen: Any, element_value: ir.Value, element_type: Type
 
 def emit_fixed_array_hash_direct(codegen: Any, expr: Any, receiver_value: ir.Value,
                                  receiver_type: ir.Type, to_i1: bool) -> ir.Value:
-    """Direct emitter for fixed array hash (called from backend/expressions/calls.py).
-
-    This is a wrapper that adapts the signature to match the array method calling convention.
-
-    Args:
-        codegen: The LLVM code generator
-        expr: The method call expression (MethodCall)
-        receiver_value: LLVM value of the array
-        receiver_type: LLVM type of the array (ir.ArrayType)
-        to_i1: Whether to convert result to i1
-
-    Returns:
-        Hash value as u64
-    """
+    """Direct emitter for fixed array hash (called from backend/expressions/calls.py)."""
     from sushi_lang.semantics.ast import Name
 
     # Get the semantic type of the receiver -- a local or a global constant (#248).
@@ -302,20 +244,7 @@ def emit_fixed_array_hash_direct(codegen: Any, expr: Any, receiver_value: ir.Val
 
 def emit_dynamic_array_hash_direct(codegen: Any, expr: Any, receiver_value: ir.Value,
                                    receiver_type: ir.Type, to_i1: bool) -> ir.Value:
-    """Direct emitter for dynamic array hash (called from backend/expressions/calls.py).
-
-    This is a wrapper that adapts the signature to match the array method calling convention.
-
-    Args:
-        codegen: The LLVM code generator
-        expr: The method call expression (MethodCall)
-        receiver_value: LLVM value of the array struct
-        receiver_type: LLVM type of the array struct (ir.LiteralStructType)
-        to_i1: Whether to convert result to i1
-
-    Returns:
-        Hash value as u64
-    """
+    """Direct emitter for dynamic array hash (called from backend/expressions/calls.py)."""
     from sushi_lang.semantics.ast import Name
 
     # Get the semantic type from the variable table.

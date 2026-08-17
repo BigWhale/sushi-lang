@@ -1,40 +1,4 @@
-"""
-Environment variable module for Sushi standard library.
-
-Provides functions to read and modify environment variables.
-
-Available Functions:
-    getenv(string key) -> Maybe<string>
-        Get an environment variable by key.
-        Returns Maybe.Some(value) if found, Maybe.None() otherwise.
-
-    setenv(string key, string value) -> Result<i32>
-        Set an environment variable.
-        Returns Result.Ok(0) on success, Result.Err() on failure.
-
-Example Usage:
-    use <sys/env>
-
-    fn main() i32:
-        # Get an environment variable
-        let Maybe<string> home = getenv("HOME")
-        match home:
-            Maybe.Some(path) -> println("HOME is {path}")
-            Maybe.None() -> println("HOME not set")
-
-        # Set an environment variable
-        let i32 result = setenv("MY_VAR", "hello")??
-        println("Variable set successfully")
-
-        return Result.Ok(0)
-
-Implementation Notes:
-    - getenv() returns Maybe<string> (no error message needed for missing vars)
-    - setenv() returns Result<i32> (can fail due to ENOMEM or invalid name)
-    - Uses POSIX getenv() and setenv() from platform module
-    - Environment changes affect current process and child processes only
-    - Returned strings from getenv() are copied to Sushi strings (safe)
-"""
+"""Environment variable module for Sushi standard library."""
 from __future__ import annotations
 import typing
 from llvmlite import ir

@@ -1,11 +1,4 @@
-"""Smoke tests for the semantic-analysis passes via the public SemanticAnalyzer.
-
-These assert that representative programs produce the expected diagnostic codes,
-giving localized regression signal that the coarse-grained test_err_*.sushi corpus
-cannot. Intentionally small; deeper per-pass coverage is later work.
-
-Codes asserted here were confirmed against the analyzer, not assumed.
-"""
+"""Smoke tests for the semantic-analysis passes via the public SemanticAnalyzer."""
 from __future__ import annotations
 
 from sushi_lang.internals.report import Reporter

@@ -20,10 +20,7 @@ class StatementParser:
         self.ast_builder = ast_builder
 
     def parse_stmt(self, node: Tree) -> Stmt:
-        """Parse a statement node into a Stmt object.
-
-        Main dispatcher for all statement types.
-        """
+        """Parse a statement node into a Stmt object."""
         # Dispatch table for statement types
         stmt_handlers = {
             "return_stmt": returns.parse_return_stmt,

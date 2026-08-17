@@ -1,13 +1,4 @@
-"""
-Inline emission functions for stdin.lines() iterator.
-
-This module contains minimal inline emission code needed for foreach loops
-with stdin.lines(). This is a temporary solution until stdin.lines() is
-fully ported to standalone IR generation.
-
-NOTE: This is ONLY for stdin.lines() - all other stdio methods require
-`use <io/stdio>` and use the stdlib IR.
-"""
+"""Inline emission functions for stdin.lines() iterator."""
 
 from typing import Any
 import llvmlite.ir as ir
@@ -16,12 +7,7 @@ from sushi_lang.backend.memory.heap import emit_malloc
 
 
 def _emit_readln(codegen: Any, expr: MethodCall) -> ir.Value:
-    """Emit LLVM IR for stdin.readln() - read one line from stdin.
-
-    Uses POSIX getline() for dynamic buffer allocation.
-    This is only used by foreach loops with stdin.lines() iterator.
-    Regular stdin.readln() calls require `use <io/stdio>`.
-    """
+    """Emit LLVM IR for stdin.readln() - read one line from stdin."""
     assert codegen.builder is not None
     assert codegen.runtime.libc_stdio.getline is not None
     assert codegen.runtime.libc_stdio.stdin_handle is not None

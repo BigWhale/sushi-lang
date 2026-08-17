@@ -1,9 +1,4 @@
-"""
-Standard library random function call emission.
-
-This module handles external calls to precompiled stdlib random functions
-(rand, rand_range, srand, rand_f64).
-"""
+"""Standard library random function call emission."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -17,24 +12,7 @@ if TYPE_CHECKING:
 
 
 def emit_random_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool) -> ir.Value:
-    """Emit a call to a random module function.
-
-    This function emits an external call to a precompiled stdlib random function.
-    Maps user-facing function names (rand, rand_range, srand, rand_f64) to their
-    internal sushi_* prefixed names in the stdlib.
-
-    Args:
-        codegen: The LLVM code generator
-        func_name: The function name ('rand', 'rand_range', 'srand', or 'rand_f64')
-        expr: The function call expression
-        to_i1: Whether to convert result to i1 (for boolean conditions)
-
-    Returns:
-        The result of the stdlib function call
-
-    Raises:
-        ValueError: If the function is not a recognized random function
-    """
+    """Emit a call to a random module function."""
     require_builder(codegen)
 
     i32 = ir.IntType(INT32_BIT_WIDTH)

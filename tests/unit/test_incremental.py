@@ -1,18 +1,4 @@
-"""End-to-end tests for incremental-compilation cache (P0-5).
-
-Drives the real compiler (``sushic``) over a real multi-unit project written
-to a tmp_path directory and asserts cache behaviour via:
-  - stdout markers: ``[rebuilt]`` / ``[cached]`` printed per unit
-  - cache artefacts under ``<project>/__sushi_cache__/units/``
-  - executable output (for the correctness-under-caching guard)
-
-Constraints honoured:
-  - No compiler/language source is modified.
-  - All fixtures are stdlib-free (builtin println only; no ``use <...>``).
-  - All fixtures are enum-free (issue #26: compute_unit_fingerprint crashes on
-    enums in multi-unit builds).
-  - Local imports use quoted path syntax: ``use "helper"``.
-"""
+"""End-to-end tests for incremental-compilation cache (P0-5)."""
 from __future__ import annotations
 
 import subprocess
@@ -27,13 +13,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 def _compile(project_dir: Path, extra_args: list[str] | None = None) -> subprocess.CompletedProcess:
-    """Invoke ``sushic main.sushi -o out`` in *project_dir* and return the result.
-
-    The compiler is invoked via the ``sushic`` console-script entry point so
-    that it is on PATH under ``uv run pytest`` without requiring ``chmod +x``.
-    Stdout and stderr are captured; the CWD is set to the project directory so
-    that the default cache (``__sushi_cache__/``) lands there.
-    """
+    """Invoke ``sushic main.sushi -o out`` in *project_dir* and return the result."""
     cmd = ["sushic", "main.sushi", "-o", "out"]
     if extra_args:
         cmd.extend(extra_args)
@@ -67,8 +47,8 @@ def _cached(stdout: str) -> set[str]:
 
 
 def _write(path: Path, content: str) -> None:
-    """Write *content* to *path*, creating parent directories as needed.
-    Ensures a trailing newline (avoids Sushi compilation warning).
+    """Write *content* to *path*, creating parent directories as needed. Ensures a trailing newline
+    (avoids Sushi compilation warning).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     text = content if content.endswith("\n") else content + "\n"
@@ -76,16 +56,7 @@ def _write(path: Path, content: str) -> None:
 
 
 def _make_project(project_dir: Path) -> tuple[Path, Path]:
-    """Create a minimal two-unit project under *project_dir*.
-
-    Returns (main_path, helper_path).
-
-    helper.sushi exports:
-      - const BASE = 10
-      - public fn doubled(i32 x) i32 -> x * 2
-
-    main.sushi imports helper and prints doubled(21) == 42.
-    """
+    """Create a minimal two-unit project under *project_dir*."""
     helper = project_dir / "helpers" / "helper.sushi"
     main = project_dir / "main.sushi"
 
@@ -207,11 +178,7 @@ public fn tripled(i32 x) i32:
 # ---------------------------------------------------------------------------
 
 def test_whitespace_only_change_rebuilds_unit(tmp_path):
-    """Whitespace-only change rebuilds that unit (fingerprint hashes raw source bytes).
-
-    This documents current behaviour: the fingerprint includes raw source bytes,
-    so even a trailing-newline addition or comment change forces a rebuild.
-    """
+    """Whitespace-only change rebuilds that unit (fingerprint hashes raw source bytes)."""
     main, helper = _make_project(tmp_path)
     first = _compile(tmp_path)
     assert first.returncode == 0
@@ -253,11 +220,7 @@ def test_opt_level_change_invalidates_entire_cache(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_correctness_under_caching_no_stale_output(tmp_path):
-    """Critical false-hit guard: a rebuild after a leaf change must reflect new code.
-
-    If the cache ever incorrectly reuses stale object code, the output B would
-    still equal A even though the source was changed.
-    """
+    """Critical false-hit guard: a rebuild after a leaf change must reflect new code."""
     main, helper = _make_project(tmp_path)
 
     # Cold build — doubled(21) == 42

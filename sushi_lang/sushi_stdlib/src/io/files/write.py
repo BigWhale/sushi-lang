@@ -1,10 +1,4 @@
-"""
-File writing methods IR generation.
-
-Implements IR generation for:
-- write(string) - Write string without newline
-- writeln(string) - Write string with newline
-"""
+"""File writing methods IR generation."""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_fwrite
@@ -12,10 +6,7 @@ from sushi_lang.sushi_stdlib.src.string_helpers import create_string_constant
 
 
 def generate_write(module: ir.Module) -> None:
-    """Generate IR for file.write(string) -> ~
-
-    Writes string to file without newline.
-    """
+    """Generate IR for file.write(string) -> ~"""
     i32 = ir.IntType(32)
     i64 = ir.IntType(64)
     i8_ptr = ir.IntType(8).as_pointer()
@@ -52,10 +43,7 @@ def generate_write(module: ir.Module) -> None:
 
 
 def generate_writeln(module: ir.Module) -> None:
-    """Generate IR for file.writeln(string) -> ~
-
-    Writes string to file with newline.
-    """
+    """Generate IR for file.writeln(string) -> ~"""
     i32 = ir.IntType(32)
     i64 = ir.IntType(64)
     i8_ptr = ir.IntType(8).as_pointer()

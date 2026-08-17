@@ -1,8 +1,4 @@
-"""The diagnostic registry itself: the types, the store, and the lookup.
-
-The catalog lives in the sibling family modules, one per numeric range, each of
-which registers its own codes through `_add`. This module holds no codes.
-"""
+"""The diagnostic registry itself: the types, the store, and the lookup."""
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
@@ -48,12 +44,7 @@ def _add(msg: ErrorMessage) -> None:
 
 
 def _get(code: str) -> ErrorMessage:
-    """Look up a code, degrading rather than raising.
-
-    The error machinery must not crash *while reporting an error*. An unregistered
-    code is a compiler bug, so it renders as one -- it does not replace the user's
-    diagnostic with a traceback. test_error_registry.py is what keeps this honest.
-    """
+    """Look up a code, degrading rather than raising."""
     msg = REGISTRY.get(code)
     if msg is not None:
         return msg

@@ -1,16 +1,5 @@
 # semantics/passes/types/resolution.py
-"""
-Type resolution utilities for semantic analysis.
-
-This module provides utilities for resolving declared types (GenericTypeRef,
-UnknownType) to concrete types (EnumType, StructType, etc.).
-
-Resolution happens BEFORE type propagation and validation, establishing the
-expected types for expressions.
-
-Extracted from validate_return_statement() and validate_let_statement() to
-eliminate duplication and centralize type resolution logic.
-"""
+"""Type resolution utilities for semantic analysis."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
@@ -32,23 +21,7 @@ if TYPE_CHECKING:
 def resolve_return_type_to_result(validator: 'TypeValidator',
                                    declared_type: 'Type',
                                    err_type_node: Optional['Type']) -> 'Type':
-    """Convert a function's declared return type to its interned Result<T, E> enum.
-
-    Handles three cases:
-    1. Explicit Result<T, E> (GenericTypeRef) → resolve to the interned Result enum
-    2. Implicit T | E → wrap in Result<T, E> with custom error
-    3. Implicit T → wrap in Result<T, StdError>
-
-    Args:
-        validator: The type validator instance
-        declared_type: The declared return type from function signature
-        err_type_node: The error type node (for T | E syntax), or None
-
-    Returns:
-        The interned Result<T, E> enum representing the actual return type
-
-    Consolidates lines 144-173 from validate_return_statement().
-    """
+    """Convert a function's declared return type to its interned Result<T, E> enum."""
     resolved_type = declared_type
 
     # Case 1: Explicit Result<T, E> - resolve the GenericTypeRef to the interned enum
@@ -99,25 +72,7 @@ def resolve_return_type_to_result(validator: 'TypeValidator',
 def resolve_variable_type(validator: 'TypeValidator',
                           declared_type: 'Type',
                           type_span: 'Span') -> 'Type':
-    """Resolve variable type from declaration.
-
-    Handles:
-    - Builtin/Array/Struct/Enum types (already resolved)
-    - UnknownType → resolved EnumType/StructType
-    - GenericTypeRef for Result<T, E> → the interned Result enum
-    - GenericTypeRef for HashMap<K, V> → concrete StructType (with validation)
-    - GenericTypeRef for other generics → concrete EnumType/StructType
-
-    Args:
-        validator: The type validator instance
-        declared_type: The declared type from let statement
-        type_span: Source location for error reporting
-
-    Returns:
-        Resolved concrete type
-
-    Consolidates lines 41-101 from validate_let_statement().
-    """
+    """Resolve variable type from declaration."""
     # Already resolved types - return as-is
     if isinstance(declared_type, (BuiltinType, StructType, EnumType)):
         return declared_type

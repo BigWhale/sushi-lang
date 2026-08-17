@@ -1,9 +1,4 @@
-"""
-Linux platform-specific implementations.
-
-Contains platform-specific external declarations and implementations
-for Linux systems. Re-exports POSIX-compliant modules.
-"""
+"""Linux platform-specific implementations."""
 
 # Re-export POSIX modules that are identical across platforms
 from sushi_lang.sushi_stdlib.src._platform.posix import time

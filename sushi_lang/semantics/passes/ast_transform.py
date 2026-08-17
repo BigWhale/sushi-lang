@@ -1,17 +1,4 @@
-"""
-Pass 1.7: AST Transformation and Type Resolution
-
-This pass runs AFTER monomorphization (Pass 1.6) and performs:
-1. Struct field type resolution (UnknownType → concrete types)
-   - Resolves references to other structs, enums, and built-in types
-   - Handles both generic and non-generic structs
-2. EnumConstructor vs MethodCall ambiguity resolution (future)
-3. Special identifier handling (stdin, stdout, stderr) (future)
-
-This pass is critical for hash registration because:
-- Nested struct fields must be resolved before we can determine hashability
-- Generic structs need their type parameters substituted before resolution
-"""
+"""Pass 1.7: AST Transformation and Type Resolution"""
 
 from typing import Dict
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
@@ -22,19 +9,7 @@ def resolve_struct_field_types(
     struct_table: StructTable,
     enum_table: EnumTable
 ) -> None:
-    """Resolve UnknownType references in struct fields to concrete types.
-
-    After monomorphization, all struct types exist in the struct_table (including
-    monomorphized generics like Pair<i32, string>). However, their field types
-    may still be UnknownType references (e.g., Rectangle.top_left is UnknownType("Point")
-    instead of StructType(Point)).
-
-    This function resolves all such references by looking up types in the available tables.
-
-    Args:
-        struct_table: Table of all struct types (after monomorphization)
-        enum_table: Table of all enum types (after monomorphization)
-    """
+    """Resolve UnknownType references in struct fields to concrete types."""
     # Build a lookup table for all known types
     type_lookup: Dict[str, Type] = {}
 
@@ -79,16 +54,7 @@ def resolve_enum_variant_types(
     struct_table: StructTable,
     enum_table: EnumTable
 ) -> None:
-    """Resolve UnknownType references in enum variant associated types to concrete types.
-
-    Similar to resolve_struct_field_types, but for enum variants. After monomorphization,
-    enum variant associated types may still be UnknownType references that need to be
-    resolved to their concrete types.
-
-    Args:
-        struct_table: Table of all struct types (after monomorphization)
-        enum_table: Table of all enum types (after monomorphization)
-    """
+    """Resolve UnknownType references in enum variant associated types to concrete types."""
     # Build a lookup table for all known types
     type_lookup: Dict[str, Type] = {}
 
@@ -143,15 +109,7 @@ def resolve_enum_variant_types(
 
 
 def _resolve_type(ty: Type, type_lookup: Dict[str, Type]) -> Type:
-    """Resolve a single type, recursively handling compound types.
-
-    Args:
-        ty: The type to resolve (may be UnknownType, ArrayType, DynamicArrayType, etc.)
-        type_lookup: Dictionary mapping type names to concrete types
-
-    Returns:
-        Resolved type (UnknownType → StructType/EnumType/BuiltinType)
-    """
+    """Resolve a single type, recursively handling compound types."""
     from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
     from sushi_lang.semantics.generics.types import GenericTypeRef
 

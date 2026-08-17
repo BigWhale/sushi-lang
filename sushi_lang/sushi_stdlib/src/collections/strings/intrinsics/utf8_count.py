@@ -1,30 +1,10 @@
-"""
-UTF-8 Character Count Intrinsic
-
-Implements pure LLVM IR function to count UTF-8 characters in a bounded byte range.
-This works with fat pointer string representation.
-
-Algorithm:
-- Count bytes where (byte & 0xC0) != 0x80
-- UTF-8 continuation bytes have pattern 10xxxxxx (0x80-0xBF)
-- Start bytes and ASCII have different patterns
-"""
+"""UTF-8 Character Count Intrinsic"""
 
 import llvmlite.ir as ir
 
 
 def emit_utf8_count_intrinsic(module: ir.Module) -> ir.Function:
-    """Emit the UTF-8 character count intrinsic function.
-
-    This function counts UTF-8 characters by iterating through exactly 'size' bytes
-    and counting non-continuation bytes. Works with fat pointer representation.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: i32 llvm_utf8_count(i8* data, i32 size)
-    """
+    """Emit `i32 llvm_utf8_count(i8* data, i32 size)`."""
     func_name = "llvm_utf8_count"
 
     # Check if already defined

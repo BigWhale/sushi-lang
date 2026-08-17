@@ -1,8 +1,4 @@
-"""
-List<T> modification methods: push(), pop(), get(), clear(), insert(), remove().
-
-These methods modify the list contents or access elements.
-"""
+"""List<T> modification methods: push(), pop(), get(), clear(), insert(), remove()."""
 
 from typing import Any
 from sushi_lang.semantics.typesys import StructType
@@ -13,24 +9,7 @@ from sushi_lang.backend.constants.llvm_values import FALSE_I1
 
 
 def emit_list_push(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.push(element) - append element with auto-growth.
-
-    Implements 2x exponential growth strategy like T[]:
-    1. Check if len >= capacity
-    2. If true: realloc to 2x capacity (or 1 if currently 0)
-    3. Store element at data[len]
-    4. Increment len
-    5. Mutates list in-place
-
-    Args:
-        codegen: LLVM codegen instance.
-        expr: The method call expression.
-        list_ptr: Pointer to the List<T> struct.
-        list_type: The List<T> struct type from semantic analysis.
-
-    Returns:
-        Unit value (~).
-    """
+    """Emit LLVM IR for list.push(element) - append element with auto-growth."""
     from sushi_lang.backend.expressions import memory
     from sushi_lang.backend import gep_utils
 
@@ -115,20 +94,7 @@ def emit_list_push(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Struc
 
 
 def emit_list_pop(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.pop() - remove and return last element.
-
-    Returns Maybe<T>:
-    - Maybe.Some(element) if list not empty
-    - Maybe.None() if list is empty
-
-    Args:
-        codegen: LLVM codegen instance.
-        list_ptr: Pointer to the List<T> struct.
-        list_type: The List<T> struct type from semantic analysis.
-
-    Returns:
-        A Maybe<T> enum value.
-    """
+    """Emit LLVM IR for list.pop() - remove and return last element."""
     from sushi_lang.backend import gep_utils
 
     # Extract element type
@@ -191,21 +157,7 @@ def emit_list_pop(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir
 
 
 def emit_list_get(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.get(index) - safe element access.
-
-    Returns Maybe<T>:
-    - Maybe.Some(element) if index is in bounds
-    - Maybe.None() if index is out of bounds
-
-    Args:
-        codegen: LLVM codegen instance.
-        expr: The method call expression.
-        list_ptr: Pointer to the List<T> struct.
-        list_type: The List<T> struct type from semantic analysis.
-
-    Returns:
-        A Maybe<T> enum value.
-    """
+    """Emit LLVM IR for list.get(index) - safe element access."""
     from sushi_lang.backend import gep_utils
     from sushi_lang.backend.generics import maybe
 
@@ -273,19 +225,7 @@ def emit_list_get(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Struct
 
 
 def emit_list_clear(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.clear() - remove all elements but keep capacity.
-
-    Sets len to 0, keeps capacity and data pointer.
-    Destroys all elements using RAII cleanup.
-
-    Args:
-        codegen: LLVM codegen instance.
-        list_ptr: Pointer to the List<T> struct.
-        list_type: The List<T> struct type from semantic analysis.
-
-    Returns:
-        Updated List<T> struct value with len=0.
-    """
+    """Emit LLVM IR for list.clear() - remove all elements but keep capacity."""
     # Extract element type
     element_type = extract_element_type(list_type, codegen)
 
@@ -312,19 +252,7 @@ def emit_list_clear(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> 
 
 
 def _emit_destroy_elements_loop(codegen: Any, data_ptr: ir.Value, count: ir.Value, element_type: Any) -> None:
-    """Destroy every element in data[0..count) with the recursive destructor.
-
-    emit_value_destructor expects a POINTER to the element (it GEPs into
-    structs/enums/arrays); the loaded value made the enum destructor GEP an
-    IntType. Primitive/string elements no-op, which is why the loaded-value form
-    happened to work for them.
-
-    Args:
-        codegen: LLVM codegen instance.
-        data_ptr: Pointer to array data.
-        count: Number of elements to destroy.
-        element_type: The semantic element type.
-    """
+    """Destroy every element in data[0..count) with the recursive destructor."""
     from sushi_lang.backend.destructors import emit_value_destructor
     from sushi_lang.backend.generics.container_walk import emit_container_walk
 
@@ -335,28 +263,7 @@ def _emit_destroy_elements_loop(codegen: Any, data_ptr: ir.Value, count: ir.Valu
 
 
 def emit_list_insert(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.insert(index, element) - insert element at position.
-
-    Returns Result<~>:
-    - Result.Ok(~) if insertion successful
-    - Result.Err() if index out of bounds (index > len)
-
-    Algorithm:
-    1. Bounds check: index must be in range [0, len] (inclusive of len for append)
-    2. If len >= capacity, grow capacity (2x strategy)
-    3. Shift elements from [index, len) one position right using memmove
-    4. Store new element at index
-    5. Increment len
-
-    Args:
-        codegen: LLVM codegen instance.
-        expr: The method call expression with args[0]=index, args[1]=element.
-        list_ptr: Pointer to the List<T> struct.
-        list_type: The List<T> struct type from semantic analysis.
-
-    Returns:
-        A Result<~> enum value.
-    """
+    """Emit LLVM IR for list.insert(index, element) - insert element at position."""
     from sushi_lang.backend.expressions import memory
     from sushi_lang.backend import gep_utils
 
@@ -528,29 +435,7 @@ def emit_list_insert(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Str
 
 
 def emit_list_remove(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.remove(index) - remove element at position.
-
-    Returns Maybe<T>:
-    - Maybe.Some(element) if index is in bounds
-    - Maybe.None() if index is out of bounds
-
-    Algorithm:
-    1. Bounds check: index must be in range [0, len)
-    2. Load element at index (for return value)
-    3. Destroy the element at index (RAII cleanup before overwriting)
-    4. Shift elements from [index+1, len) one position left using memmove
-    5. Decrement len
-    6. Return Maybe.Some(element) or Maybe.None()
-
-    Args:
-        codegen: LLVM codegen instance.
-        expr: The method call expression with args[0]=index.
-        list_ptr: Pointer to the List<T> struct.
-        list_type: The List<T> struct type from semantic analysis.
-
-    Returns:
-        A Maybe<T> enum value.
-    """
+    """Emit LLVM IR for list.remove(index) - remove element at position."""
     from sushi_lang.backend.expressions import memory
     from sushi_lang.backend import gep_utils
     from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table

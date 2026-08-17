@@ -1,10 +1,4 @@
-"""
-Type casting operations for the Sushi language compiler.
-
-This module handles explicit type casting between numeric types following Rust-style
-explicit casting semantics. Supports integer-to-integer, integer-to-float, float-to-integer,
-and float-to-float conversions with appropriate extension, truncation, or precision changes.
-"""
+"""Type casting operations for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -17,14 +11,7 @@ if TYPE_CHECKING:
 
 
 def classify_type_for_cast(llvm_type: ir.Type) -> str:
-    """Classify LLVM type into category for cast operation dispatch.
-
-    Args:
-        llvm_type: The LLVM type to classify.
-
-    Returns:
-        Type category: 'int', 'float', or 'unknown'.
-    """
+    """Classify LLVM type into category for cast operation dispatch."""
     if isinstance(llvm_type, ir.IntType):
         return 'int'
     elif isinstance(llvm_type, (ir.FloatType, ir.DoubleType)):
@@ -35,20 +22,7 @@ def classify_type_for_cast(llvm_type: ir.Type) -> str:
 
 def cast_int_to_int(codegen: 'LLVMCodegen', source: ir.Value, target_type: ir.IntType,
                     source_unsigned: bool = False) -> ir.Value:
-    """Cast between integer types with appropriate extension or truncation.
-
-    Widening uses zero-extension for an unsigned source and sign-extension for a
-    signed source; narrowing always truncates.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        source: The source integer value.
-        target_type: The target integer type.
-        source_unsigned: Whether the source semantic type is unsigned.
-
-    Returns:
-        The casted value.
-    """
+    """Cast between integer types with appropriate extension or truncation."""
     source_width = source.type.width
     target_width = target_type.width
 
@@ -66,17 +40,7 @@ def cast_int_to_int(codegen: 'LLVMCodegen', source: ir.Value, target_type: ir.In
 
 def cast_int_to_float(codegen: 'LLVMCodegen', source: ir.Value, target_type: ir.Type,
                       source_unsigned: bool = False) -> ir.Value:
-    """Cast integer to floating-point type.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        source: The source integer value.
-        target_type: The target float/double type.
-        source_unsigned: Whether the source semantic type is unsigned.
-
-    Returns:
-        The casted value.
-    """
+    """Cast integer to floating-point type."""
     if source_unsigned:
         return codegen.builder.uitofp(source, target_type)
     return codegen.builder.sitofp(source, target_type)
@@ -84,33 +48,14 @@ def cast_int_to_float(codegen: 'LLVMCodegen', source: ir.Value, target_type: ir.
 
 def cast_float_to_int(codegen: 'LLVMCodegen', source: ir.Value, target_type: ir.IntType,
                       target_unsigned: bool = False) -> ir.Value:
-    """Cast floating-point to integer type (truncates toward zero).
-
-    Args:
-        codegen: The LLVM codegen instance.
-        source: The source float/double value.
-        target_type: The target integer type.
-        target_unsigned: Whether the target semantic type is unsigned.
-
-    Returns:
-        The casted value.
-    """
+    """Cast floating-point to integer type (truncates toward zero)."""
     if target_unsigned:
         return codegen.builder.fptoui(source, target_type)
     return codegen.builder.fptosi(source, target_type)
 
 
 def cast_float_to_float(codegen: 'LLVMCodegen', source: ir.Value, target_type: ir.Type) -> ir.Value:
-    """Cast between floating-point types (extend or truncate precision).
-
-    Args:
-        codegen: The LLVM codegen instance.
-        source: The source float/double value.
-        target_type: The target float/double type.
-
-    Returns:
-        The casted value.
-    """
+    """Cast between floating-point types (extend or truncate precision)."""
     # Determine operation based on type sizes
     if isinstance(source.type, ir.FloatType) and isinstance(target_type, ir.DoubleType):
         return codegen.builder.fpext(source, target_type)
@@ -122,21 +67,7 @@ def cast_float_to_float(codegen: 'LLVMCodegen', source: ir.Value, target_type: i
 
 
 def emit_cast_expression(codegen: 'LLVMCodegen', expr: CastExpr) -> ir.Value:
-    """Emit LLVM IR for type casting expressions.
-
-    Performs explicit type casting between numeric types following Rust-style
-    explicit casting semantics. Uses dispatch table for O(1) operation lookup.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The cast expression to emit.
-
-    Returns:
-        The LLVM value after casting to the target type.
-
-    Raises:
-        NotImplementedError: If the cast operation is not supported.
-    """
+    """Emit LLVM IR for type casting expressions."""
     require_builder(codegen)
 
     # An integer literal cast directly to an integer type materializes at the

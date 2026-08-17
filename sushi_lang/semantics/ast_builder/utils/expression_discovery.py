@@ -104,13 +104,10 @@ def token_count(n: Tree) -> int:
 
 
 def find_outer_expr_structural(container: Tree) -> Optional[Tree]:
-    """
-    Find the OUTERMOST expression subtree structurally, without relying on spans.
-    Preference order:
-      1) Not nested inside another expr (i.e., outermost).
-      2) Contains an operator token (+, -, *, /, and/or, ==, <, ...).
-      3) Largest subtree by token count.
-      4) Higher-level kind by priority (expr > or_expr > ... > atom).
+    """Find the OUTERMOST expression subtree structurally, without relying on spans. Preference
+    order: 1) Not nested inside another expr (i.e., outermost). 2) Contains an operator token
+    (+, -, *, /, and/or, ==, <, ...). 3) Largest subtree by token count. 4) Higher-level kind by
+    priority (expr > or_expr > ... > atom).
     """
     candidates: List[Tuple[Tree, List[Tree]]] = []
 

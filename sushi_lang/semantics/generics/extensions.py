@@ -1,19 +1,5 @@
 # semantics/generics/extensions.py
-"""
-Generic Extension Method Monomorphization
-
-This module handles the monomorphization of generic extension methods.
-For each generic type instantiation (e.g., Box<i32>), this generates
-concrete extension method definitions with type parameters substituted.
-
-Example:
-    Generic: extend Box<T> unwrap() T
-    + Instantiation Box<i32>
-    → Concrete: extend Box<i32> unwrap() i32
-
-This integrates with the existing monomorphization infrastructure
-(Pass 1.6) and generates ExtendDef AST nodes for the backend to compile.
-"""
+"""Generic Extension Method Monomorphization"""
 from __future__ import annotations
 from typing import Dict, Tuple, Set
 
@@ -28,19 +14,7 @@ def substitute_type_params(
     ty: Type,
     substitution: Dict[str, Type]
 ) -> Type:
-    """Recursively substitute type parameters in a type annotation.
-
-    Args:
-        ty: The type to substitute (may contain TypeParameter instances)
-        substitution: Mapping from parameter name to concrete type
-
-    Returns:
-        Type with all TypeParameter instances replaced
-
-    Example:
-        substitute_type_params(TypeParameter("T"), {"T": BuiltinType.I32})
-        → BuiltinType.I32
-    """
+    """Recursively substitute type parameters in a type annotation."""
     # Base case: TypeParameter - substitute it
     if isinstance(ty, TypeParameter):
         return substitution.get(ty.name, ty)
@@ -80,22 +54,7 @@ def monomorphize_extension_method(
     concrete_target_type: StructType,
     type_args: Tuple[Type, ...]
 ) -> ExtendDef:
-    """Monomorphize a generic extension method for a specific instantiation.
-
-    Args:
-        generic_method: The generic extension method definition
-        concrete_target_type: The concrete struct type (e.g., Box<i32>)
-        type_args: Concrete type arguments (e.g., (BuiltinType.I32,))
-
-    Returns:
-        Concrete ExtendDef AST node with type parameters substituted
-
-    Example:
-        Generic: extend Box<T> unwrap() T
-        Concrete target: Box<i32>
-        Type args: (BuiltinType.I32,)
-        → Result: extend Box<i32> unwrap() i32
-    """
+    """Monomorphize a generic extension method for a specific instantiation."""
     # Build substitution mapping: param_name -> concrete_type
     if len(type_args) != len(generic_method.type_params):
         raise_internal_error("CE0096", operation="Type argument count mismatch: expected {len(generic_method.type_params)}, "
@@ -149,24 +108,7 @@ def monomorphize_all_extension_methods(
     struct_instantiations: Set[Tuple[str, Tuple[Type, ...]]],
     monomorphized_structs: Dict[str, StructType]
 ) -> Dict[Tuple[str, str, Tuple[Type, ...]], ExtendDef]:
-    """Monomorphize all generic extension methods for all struct instantiations.
-
-    Args:
-        generic_extensions: Table of generic extension methods by base type name
-        struct_instantiations: Set of (base_name, type_args) for structs
-        monomorphized_structs: Already-monomorphized concrete struct types
-
-    Returns:
-        Dict mapping (target_type_name, method_name, type_args) → ExtendDef
-
-    Example:
-        Input:
-          - generic_extensions["Box"]["unwrap"] = extend Box<T> unwrap() T
-          - struct_instantiations = {("Box", (BuiltinType.I32,))}
-          - monomorphized_structs["Box<i32>"] = Box<i32>
-        Output:
-          - {("Box<i32>", "unwrap", (BuiltinType.I32,)): extend Box<i32> unwrap() i32}
-    """
+    """Monomorphize all generic extension methods for all struct instantiations."""
     result: Dict[Tuple[str, str, Tuple[Type, ...]], ExtendDef] = {}
 
     for base_name, type_args in struct_instantiations:

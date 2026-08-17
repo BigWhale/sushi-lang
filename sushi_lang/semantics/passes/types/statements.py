@@ -1,75 +1,5 @@
 # semantics/passes/types/statements.py
-"""
-Statement validation for type validation.
-
-This module contains validation functions for various statement types:
-- Let statements (variable declarations)
-- Return statements
-- Rebind statements (variable reassignment)
-- Control flow statements (if, while, foreach)
-
-Architecture Overview
---------------------
-
-Statement validation follows a three-phase pattern:
-
-1. **Type Resolution** (resolution.py)
-   - Converts declared types to concrete types
-   - Handles GenericTypeRef → EnumType/StructType
-   - Handles UnknownType → resolved enum/struct types
-   - Validates special cases (HashMap key types, Result<T, E>)
-
-2. **Type Propagation** (propagation.py)
-   - MUST happen BEFORE validation
-   - Propagates expected types to constructors for type inference
-   - Sets resolved_enum_type/resolved_struct_type on AST nodes
-   - Enables generic type inference (Result<T>, Maybe<T>, Own<T>, etc.)
-   - Handles nested generics (Result<Maybe<T>>, HashMap<K, List<V>>)
-
-3. **Validation** (result_validation.py, compatibility.py, expressions.py)
-   - Validates expressions after type information is propagated
-   - Checks type compatibility and Result patterns
-   - Emits appropriate error codes
-
-Critical Ordering Requirement
------------------------------
-
-Type propagation MUST occur BEFORE expression validation. This ordering enables:
-- Generic type inference without explicit type arguments
-- Nested generic type resolution
-- Proper monomorphization of generic constructors
-
-Example flow for `let Maybe<i32> x = Maybe.Some(42)`:
-1. Resolution: Maybe<i32> → Maybe<i32> (concrete enum type)
-2. Propagation: Set Maybe.Some.resolved_enum_type = Maybe<i32>
-3. Validation: Check compatibility of 42 with i32
-
-AST Annotation Mechanism
-------------------------
-
-The propagation phase annotates AST nodes with resolved types:
-- resolved_enum_type: Set on EnumConstructor/DotCall for generic enums
-- resolved_struct_type: Set on DotCall for generic structs
-- callee.id update: For Call nodes, updates to concrete type name
-
-These annotations are used by the backend for:
-- Code generation of monomorphized generic types
-- LLVM IR emission with correct type information
-- Runtime type dispatch for generic functions
-
-Error Codes
------------
-
-Statement validation can emit:
-- CE2007: Missing type annotation (let statement)
-- CE2030: Return must use Result.Ok() or Result.Err()
-- CE2031: Result.Ok() value type mismatch
-- CE2039: Result.Err() error type mismatch
-- CE2032: Blank type cannot be used for variables
-- CE2058: HashMap key type cannot be dynamic array
-- CE2505: Unused Result warning (assigning Result without handling)
-- CW2511: Warning for ?? operator in main() function
-"""
+"""Statement validation for type validation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -187,10 +117,7 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
 
 
 def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:
-    """Validate return statement type compatibility.
-
-    All return statements must now use Ok(value) or Err().
-    """
+    """Validate return statement type compatibility."""
     if not validator.current_function:
         # Extension and perk-implementation method bodies have no current_function
         # (they return a BARE value at the IR level, not a Result). The bare value
@@ -444,13 +371,7 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
 
 
 def _foreach_iterable_is_addressable(iterable) -> bool:
-    """True when the iterable's elements live in addressable container storage.
-
-    The #300 phase 1 allowlist: a direct `.iter()` on an array or a `List` (both walk a
-    `{index, length, T*}` view of the container's buffer) and HashMap `.keys()` /
-    `.values()` (both GEP into the entries buffer). Everything else -- ranges,
-    `.entries()`, stdin lines -- yields synthesized VALUES with no address to bind.
-    """
+    """True when the iterable's elements live in addressable container storage."""
     from sushi_lang.semantics.ast import DotCall, MethodCall
     if isinstance(iterable, (MethodCall, DotCall)):
         return iterable.method in ("iter", "keys", "values")

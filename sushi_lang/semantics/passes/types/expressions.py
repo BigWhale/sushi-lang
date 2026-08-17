@@ -1,15 +1,5 @@
 # semantics/passes/types/expressions.py
-"""
-Expression validation for type validation.
-
-This module contains validation functions for various expression types:
-- Array literals
-- Index access
-- Cast expressions
-- Try expressions (?? operator)
-- Bitwise operations
-- Boolean conditions
-"""
+"""Expression validation for type validation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
@@ -79,12 +69,7 @@ def validate_index_access(validator: 'TypeValidator', expr: IndexAccess) -> None
 
 
 def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None:
-    """Validate a cast expression and check if the cast is valid.
-
-    Args:
-        validator: The TypeValidator instance.
-        expr: The cast expression to validate.
-    """
+    """Validate a cast expression and check if the cast is valid."""
     # An integer literal (or negated literal) cast directly to an integer type
     # materializes at the TARGET width (Rust `as` semantics), so it is exempt
     # from the bare-literal i32 range check (CE2070). Mark it before recursing.
@@ -124,12 +109,7 @@ def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None
 
 
 def validate_range_expression(validator: 'TypeValidator', expr: 'RangeExpr') -> None:
-    """Validate range expression - start and end must be integer types.
-
-    Args:
-        validator: The TypeValidator instance.
-        expr: The range expression to validate.
-    """
+    """Validate range expression - start and end must be integer types."""
     # Validate start expression
     validator.validate_expression(expr.start)
     start_type = validator.infer_expression_type(expr.start)
@@ -154,32 +134,7 @@ def validate_range_expression(validator: 'TypeValidator', expr: 'RangeExpr') -> 
 
 
 def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None:
-    """Validate ?? operator usage and annotate AST with inferred types.
-
-    Validates that:
-    1. The inner expression is Result<T>, Maybe<T>, or another result-like enum (CE2507)
-    2. The enclosing function returns Result<T> or another result-like enum (CE2508)
-
-    Supported enum patterns:
-    - Result-like: Ok(value) and Err(...) variants (e.g., Result<T>, FileResult)
-    - Maybe-like: Some(value) and None() variants (e.g., Maybe<T>)
-
-    When ?? is applied to Maybe<T>:
-    - Some(value) unwraps to value
-    - None() propagates as Result.Err() to the enclosing function
-
-    After validation, annotates the TryExpr AST node with:
-    - inferred_inner_type: The EnumType of the inner expression
-    - inferred_unwrapped_type: The success type T
-    - inferred_success_tag: Variant index for Ok/Some
-    - inferred_error_type: The error type E (None for Maybe-like)
-    - inferred_error_tag: Variant index for Err (None for Maybe-like)
-    - inferred_func_return_type: The enclosing function's Result<T, E> enum
-
-    Args:
-        validator: The TypeValidator instance.
-        expr: The TryExpr node to validate and annotate.
-    """
+    """Validate ?? operator usage and annotate AST with inferred types."""
     # First validate the inner expression
     validator.validate_expression(expr.expr)
 
@@ -328,21 +283,7 @@ def _annotate_try_expr(
     error_tag: 'Optional[int]',
     func_return_type: 'Type'
 ) -> None:
-    """Annotate TryExpr AST node with inferred type information.
-
-    These annotations are used by the backend to emit code without
-    re-inferring types, following the principle of separating semantic
-    analysis from code generation.
-
-    Args:
-        expr: The TryExpr node to annotate.
-        inner_type: The EnumType of the inner expression.
-        unwrapped_type: The success type T.
-        success_tag: Variant index for Ok/Some.
-        error_type: The error type E (None for Maybe-like).
-        error_tag: Variant index for Err (None for Maybe-like).
-        func_return_type: The enclosing function's interned Result<T, E> enum.
-    """
+    """Annotate TryExpr AST node with inferred type information."""
     expr.inferred_inner_type = inner_type
     expr.inferred_unwrapped_type = unwrapped_type
     expr.inferred_success_tag = success_tag
@@ -377,12 +318,7 @@ def validate_bitwise_unary(validator: 'TypeValidator', expr: UnaryOp) -> None:
 
 
 def validate_boolean_condition(validator: 'TypeValidator', expr: Expr, context: str) -> None:
-    """Validate that an expression is boolean or Result<T, E> for control flow.
-
-    Allows:
-    - bool type (traditional boolean)
-    - Result<T, E> in either representation (the interned EnumType, or a GenericTypeRef)
-    """
+    """Validate that an expression is boolean or Result<T, E> for control flow."""
     # First, validate the expression itself (this triggers visitor validation)
     validator.validate_expression(expr)
 
@@ -408,17 +344,7 @@ def validate_boolean_condition(validator: 'TypeValidator', expr: Expr, context: 
 
 
 def check_propagation_in_expression(expr: Expr) -> bool:
-    """Check if expression contains ?? operator (TryExpr).
-
-    Recursively traverses the expression tree to detect TryExpr nodes.
-    Used for CW2511 warning in main() function.
-
-    Args:
-        expr: The expression to check
-
-    Returns:
-        True if expression contains ??, False otherwise
-    """
+    """Check if expression contains ?? operator (TryExpr)."""
     if isinstance(expr, TryExpr):
         return True
 

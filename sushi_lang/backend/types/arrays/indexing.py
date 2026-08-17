@@ -1,9 +1,4 @@
-"""
-Array indexing operations with bounds checking.
-
-This module handles LLVM IR emission for array element access (array[index]).
-Includes runtime bounds checking with error RE2020 for out-of-bounds access.
-"""
+"""Array indexing operations with bounds checking."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -17,22 +12,7 @@ if TYPE_CHECKING:
 
 
 def emit_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, to_i1: bool = False) -> ir.Value:
-    """Emit array indexing operation using GEP instruction.
-
-    Performs array element access with runtime bounds checking for fixed arrays.
-    Emits runtime error RE2020 if index is out of bounds.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The index access expression.
-        to_i1: Whether to convert result to i1 for boolean contexts.
-
-    Returns:
-        The value at the specified array index.
-
-    Note:
-        Emits runtime error RE2020 for out-of-bounds access on fixed arrays.
-    """
+    """Emit array indexing operation using GEP instruction."""
     element_ptr = emit_element_pointer(codegen, expr)
 
     # Load the value from the pointer
@@ -41,13 +21,7 @@ def emit_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, to_i1: bool = F
 
 
 def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
-    """Emit the bounds-checked POINTER to `expr`'s element, without loading it.
-
-    Split out of `emit_index_access` so a field read through an index (`a[i].field`) can GEP
-    straight into the element (#187) instead of loading it to a value first: a dynamic-array
-    field must be reached by pointer, because `.len()`/`.push()` dispatch on the field's
-    address, not on a copy of it.
-    """
+    """Emit the bounds-checked POINTER to `expr`'s element, without loading it."""
     from sushi_lang.backend.expressions import type_utils
 
     require_builder(codegen)
@@ -142,12 +116,5 @@ def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
 
 def _finish_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, result: ir.Value,
                          to_i1: bool) -> ir.Value:
-    """Coerce a loaded element for a boolean context. A read never detaches.
-
-    `arr[i]` READS. It does not detach (#242). The array keeps the element and still
-    frees it, so what this hands back is a BORROW: Pass 3 classifies it BORROWED, a `let`
-    of it binds without owning, and a position that takes ownership rejects it (CE2411)
-    with `.clone()` as the escape. The deep copy that used to happen here was the compiler
-    inserting one the user did not ask for.
-    """
+    """Coerce a loaded element for a boolean context. A read never detaches."""
     return codegen.utils.as_i1(result) if to_i1 else result

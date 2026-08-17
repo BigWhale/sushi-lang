@@ -1,13 +1,4 @@
-"""
-Unified generic enum method implementations for Result<T> and Maybe<T>.
-
-This module provides common patterns shared between Result and Maybe:
-- realise(default): Extract value with fallback
-- Tag checking: is_ok/is_some, is_err/is_none
-- Value extraction from enum data fields
-
-These patterns were previously duplicated across results.py and maybe.py.
-"""
+"""Unified generic enum method implementations for Result<T> and Maybe<T>."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -32,19 +23,7 @@ def emit_enum_tag_check(
     expected_tag: int,
     check_name: str
 ) -> ir.Value:
-    """Extract enum tag and compare to expected value.
-
-    Generic implementation for is_ok(), is_some(), is_err(), is_none(), etc.
-
-    Args:
-        codegen: The LLVM code generator instance
-        enum_value: The LLVM value of the enum (struct value, not pointer)
-        expected_tag: The tag value to check against (e.g., 0 for Ok/Some)
-        check_name: Name for the comparison result (e.g., "is_ok", "is_some")
-
-    Returns:
-        i1 value: true if tag matches expected_tag, false otherwise
-    """
+    """Extract enum tag and compare to expected value."""
     # Extract tag and compare to expected value
     return enum_utils.check_enum_variant(
         codegen, enum_value, expected_tag, signed=False, name=check_name
@@ -59,32 +38,7 @@ def emit_enum_realise(
     success_variant_name: str,
     enum_type_name: str
 ) -> ir.Value:
-    """Emit LLVM code for enum.realise(default) pattern.
-
-    Generic implementation that works for both Result<T>.realise() and Maybe<T>.realise().
-
-    Enum layout: {i32 tag, [N x i8] data}
-    - success_variant_name has tag = 0 (Ok for Result, Some for Maybe)
-    - failure variant has tag = 1 (Err for Result, None for Maybe)
-
-    Returns: tag == 0 ? unpacked_value : default
-
-    Args:
-        codegen: The LLVM code generator instance
-        call: The method call AST node
-        enum_value: The LLVM value of the enum
-        enum_type: The enum type (Result<T> or Maybe<T>)
-        success_variant_name: Name of the success variant ("Ok" or "Some")
-        enum_type_name: Name for error messages ("Result" or "Maybe")
-
-    Returns:
-        The extracted value if success variant, or default if failure variant
-
-    Raises:
-        ValueError: If argument count is not exactly 1
-        RuntimeError: If variant structure is invalid
-        TypeError: If type mismatch occurs
-    """
+    """Emit LLVM code for enum.realise(default) pattern."""
     if len(call.args) != 1:
         raise_internal_error("CE0023", method="realise", expected=1, got=len(call.args))
 
@@ -189,23 +143,7 @@ def emit_enum_expect(
     missing_variant_code: str,
     assoc_count_code: str,
 ) -> ir.Value:
-    """Emit LLVM code for enum.expect(message), for Result<T, E> and Maybe<T> alike.
-
-    Enum layout: {i32 tag, [N x i8] data}; the success variant has tag 0. On success the
-    payload is returned; on failure "ERROR: <message>" goes to stderr and the process
-    exits 1.
-
-    Ownership is decided the same way `realise` decides it: when the receiver is a
-    BORROW (a live binding that keeps owning its payload) an owning payload is CLONED,
-    so the binding and the extracted value each free once. A temporary receiver is
-    ADOPTED, since nothing else will ever free it. `expect` previously returned the
-    unpacked payload through a bare phi with no ownership reasoning at all, so
-    `m.expect(...)` on an owning payload double-freed where the identical program
-    written with `.realise(...)` exited cleanly.
-
-    Result and Maybe had a verbatim copy of this function each, differing only in
-    identifiers; they now differ only in the arguments below.
-    """
+    """Emit LLVM code for enum.expect(message), for Result<T, E> and Maybe<T> alike."""
     from sushi_lang.backend.constants.llvm_values import ONE_I64, ONE_I32
 
     if len(call.args) != 1:
@@ -267,12 +205,7 @@ def emit_enum_expect(
 
 
 def _expression_is_borrow(codegen: 'LLVMCodegen', expr) -> bool:
-    """Does `expr` name storage that keeps owning its heap after we read it?
-
-    The inverse of `expression_is_temporary`, which is the single definition -- `.realise()`
-    ADOPTS a temporary's payload while the non-extracting consumers DESTROY the temporary
-    outright (#159), so the two must agree on every AST node or a payload is adopted and freed.
-    """
+    """Does `expr` name storage that keeps owning its heap after we read it?"""
     from sushi_lang.backend.expressions.memory import expression_is_temporary
     return not expression_is_temporary(codegen, expr)
 
@@ -286,18 +219,7 @@ def _emit_owning_realise(
     value_llvm_type: ir.Type,
     owned_type: Type
 ) -> ir.Value:
-    """Emit `realise(default)` for a `T` that owns heap, keeping exactly one owner.
-
-    `realise` picks one of two candidate values and returns it. Both arrive as shallow
-    views, so each side is cloned when it belongs to a binding that stays live, and adopted
-    when it is a temporary; the losing candidate is then destroyed. Getting this wrong fails
-    in both directions: returning an alias of a live binding double-frees at scope exit,
-    while never destroying the loser strands its buffers.
-
-    The payload is only touched under `is_success`. On the failure path the enum's data
-    field holds the *other* variant's bytes (`Err`'s payload, `None`'s uninitialised slot)
-    reinterpreted as `T`, so cloning or destroying through it would walk a bogus pointer.
-    """
+    """Emit `realise(default)` for a `T` that owns heap, keeping exactly one owner."""
     borrowed_receiver = _expression_is_borrow(codegen, call.receiver)
     borrowed_default = _expression_is_borrow(codegen, call.args[0])
 

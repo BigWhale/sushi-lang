@@ -1,18 +1,4 @@
-"""Built-in clone() for the primitive types.
-
-`.clone()` is total over types, so every primitive carries one. A primitive owns no heap,
-so the deep copy IS the value: the emitter returns the receiver unchanged and costs
-nothing at runtime.
-
-The method must exist even though it does nothing, because one monomorphized body has to
-satisfy every instantiation of its type parameter. `fn first@(T)(T[] arr) T` needs
-`elem.clone()` to detach a borrowed element when `T = string`, and the same body is
-compiled for `T = i32`. Rust makes `Copy: Clone` for exactly this reason.
-
-`string` is NOT registered here. It carries its own clone in the string method table,
-which Pass 2 consults before the primitive path -- see
-`semantics/generics/primitives.py::_CLONE_PRIMITIVES`.
-"""
+"""Built-in clone() for the primitive types."""
 
 from typing import Any
 

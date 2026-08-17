@@ -1,12 +1,4 @@
-"""
-Statement emission module for the Sushi language compiler.
-
-This module provides a refactored, modular approach to LLVM IR generation
-for statements. The code is organized by statement category for better
-maintainability and clarity.
-
-Main entry point: StatementEmitter.emit_stmt()
-"""
+"""Statement emission module for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -23,13 +15,7 @@ _EXPR_TEMP_SEQ = itertools.count()
 
 
 def _register_discarded_owning_temp(codegen: 'LLVMCodegen', expr, value) -> None:
-    """Own a discarded expression-statement result that owns heap (#134).
-
-    A bare `a.clone()` (or any owning temporary used as a statement) produces a value NO
-    other owner will free -- register it as a scope temp so scope-exit RAII frees it exactly
-    once. A bound source (Name / field read) is not a temporary and is skipped (its declared
-    owner frees it), so this never double-frees.
-    """
+    """Own a discarded expression-statement result that owns heap (#134)."""
     if value is None:
         return
     from sushi_lang.backend.expressions.memory import expression_is_temporary
@@ -53,26 +39,11 @@ class StatementEmitter:
     """Main statement emitter that delegates to specialized submodules."""
 
     def __init__(self, codegen: 'LLVMCodegen') -> None:
-        """Initialize statement emitter with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance providing context and builders.
-        """
+        """Initialize statement emitter with reference to main codegen instance."""
         self.codegen = codegen
 
     def emit_stmt(self, stmt: Stmt) -> None:
-        """Emit LLVM IR for a statement.
-
-        Dispatches to the appropriate emission method based on statement type.
-        Ensures the current block is not terminated before emission.
-
-        Args:
-            stmt: The statement AST node to emit.
-
-        Raises:
-            NotImplementedError: If the statement type is not supported.
-            RuntimeError: If attempting to emit after a terminator.
-        """
+        """Emit LLVM IR for a statement."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
         self.codegen.utils.ensure_open_block()
@@ -143,14 +114,7 @@ class StatementEmitter:
                 raise NotImplementedError(f"statement not supported yet: {type(stmt).__name__}")
 
     def emit_block(self, block) -> None:
-        """Emit all statements in a block.
-
-        Iterates through statements and emits each one, stopping if a
-        terminator is encountered.
-
-        Args:
-            block: The block AST node containing statements.
-        """
+        """Emit all statements in a block."""
         for stmt in self.codegen.utils.block_statements(block):
             if self.codegen.builder.block.terminator is not None:
                 break

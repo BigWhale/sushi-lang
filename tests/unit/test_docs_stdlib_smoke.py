@@ -1,30 +1,4 @@
-"""R0.1 / W7: docs-vs-code stdlib smoke check.
-
-Enumerates the documented standard-library surface (``docs/stdlib/``) and asserts
-that each representative documented symbol still compiles in a minimal program.
-The point is to catch documentation drift automatically: a documented module or
-symbol that has been renamed, removed, or no longer type-checks fails here instead
-of silently rotting in the docs.
-
-Two layers are checked, per the R0 plan:
-
-  * ``sushic`` subprocess compile -- the authoritative end-to-end check. It runs
-    the whole pipeline (front-end + backend/``.bc`` linking), so it catches both a
-    renamed/removed symbol and backend drift (a missing precompiled unit). This is
-    the layer that satisfies W7's exit criterion.
-  * in-process ``analyze`` fixture -- a fast semantic-resolution check. When it and
-    the subprocess layer disagree, the failure is localized to the front-end vs. the
-    backend.
-
-Scope (v1, deliberately narrow): one representative documented symbol per documented
-stdlib module, plus the built-in ``List``/array/``Maybe``/``Result`` surface. A full
-grammar/method audit is out of scope. ``docs/stdlib/platform.md`` is excluded -- it is
-a compiler-internals doc, not a user-facing module.
-
-If a documented symbol legitimately stops compiling and the fix belongs to a later
-phase, mark that case ``xfail`` with the tracking issue in the reason (mirroring the
-R0.2 quarantine registry), so the suite stays green while the drift is tracked.
-"""
+"""R0.1 / W7: docs-vs-code stdlib smoke check."""
 from __future__ import annotations
 
 import shutil
@@ -211,16 +185,7 @@ SUSHIC = shutil.which("sushic")
 
 @pytest.fixture(scope="session")
 def platform_stdlib():
-    """Build the standard library for the current platform once per session.
-
-    The compile layer links per-platform stdlib bitcode (`sushi_stdlib/dist/<platform>/`).
-    Only the darwin bitcode is committed, and the CI pytest job does not run the stdlib
-    build (unlike the enhanced runner / test-linux job, which call run_tests.build_stdlib).
-    Without this, `sushic` on Linux falls back to the darwin io bitcode, whose stdio globals
-    (`__stderrp`/`__stdinp`/`__stdoutp`) are macOS-only symbols and fail to link. Building
-    here makes the end-to-end compile check correct on any platform. build.py is fast
-    (<1s) and deterministic (does not dirty committed bitcode).
-    """
+    """Build the standard library for the current platform once per session."""
     build = PROJECT_ROOT / "sushi_lang" / "sushi_stdlib" / "build.py"
     result = subprocess.run(
         [sys.executable, str(build)],
@@ -247,22 +212,14 @@ SEMANTIC_LAYER_SKIP = {"collections/hashmap", "collections/iter"}
 
 
 def test_docs_present():
-    """Every case is drawn from a docs/stdlib/ file that must exist.
-
-    A deleted/renamed doc means the documented surface this check guards has moved
-    -- surface it here rather than silently testing against nothing.
-    """
+    """Every case is drawn from a docs/stdlib/ file that must exist."""
     missing = [c.id for c in CASES if not (DOCS_ROOT / c.doc).is_file()]
     assert not missing, f"documented stdlib pages missing under {DOCS_ROOT}: {missing}"
 
 
 @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
 def test_documented_module_resolves(case, analyze):
-    """Semantic layer: the documented program resolves with no semantic errors.
-
-    Fast, in-process, front-end only (parser + passes). Localizes a failure to the
-    front-end when the subprocess layer also fails.
-    """
+    """Semantic layer: the documented program resolves with no semantic errors."""
     if case.id in SEMANTIC_LAYER_SKIP:
         pytest.skip(f"{case.id} resolves only in the full pipeline (covered by the compile layer)")
     reporter = analyze(case.source)
@@ -276,12 +233,7 @@ def test_documented_module_resolves(case, analyze):
 @pytest.mark.skipif(SUSHIC is None, reason="sushic not on PATH (run under `uv run pytest`)")
 @pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
 def test_documented_module_compiles(case, tmp_path, platform_stdlib):
-    """End-to-end layer: the documented program compiles and links (exit 0).
-
-    Authoritative docs-vs-code check -- exercises the full pipeline including
-    backend/``.bc`` linking, so a missing precompiled stdlib unit is caught here.
-    Depends on `platform_stdlib` so the correct per-platform bitcode is linked.
-    """
+    """End-to-end layer: the documented program compiles and links (exit 0)."""
     (tmp_path / "main.sushi").write_text(case.source, encoding="utf-8")
     result = subprocess.run(
         ["sushic", "main.sushi", "-o", "out"],

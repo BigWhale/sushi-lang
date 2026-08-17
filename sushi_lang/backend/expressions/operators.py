@@ -1,9 +1,4 @@
-"""
-Operator expression emission for the Sushi language compiler.
-
-Unary, binary, arithmetic, bitwise, comparison and logical operations (with
-short-circuiting), plus constant folding.
-"""
+"""Operator expression emission for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
@@ -19,19 +14,7 @@ if TYPE_CHECKING:
 
 
 def emit_operator(codegen: 'LLVMCodegen', expr: Expr, to_i1: bool) -> ir.Value:
-    """Dispatch operator emission to appropriate handler.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The operator expression.
-        to_i1: Whether to convert result to i1 for boolean contexts.
-
-    Returns:
-        The LLVM value representing the operator result.
-
-    Raises:
-        TypeError: If expression is not an operator type.
-    """
+    """Dispatch operator emission to appropriate handler."""
     match expr:
         case UnaryOp():
             return emit_unary_op(codegen, expr, to_i1)
@@ -42,32 +25,12 @@ def emit_operator(codegen: 'LLVMCodegen', expr: Expr, to_i1: bool) -> ir.Value:
 
 
 def emit_float_negation(codegen: 'LLVMCodegen', val: ir.Value) -> ir.Value:
-    """Emit floating-point negation using fsub.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        val: The float or double value to negate.
-
-    Returns:
-        The negated floating-point value.
-    """
+    """Emit floating-point negation using fsub."""
     return codegen.builder.fsub(ir.Constant(val.type, 0.0), val)
 
 
 def emit_unary_op(codegen: 'LLVMCodegen', expr: UnaryOp, to_i1: bool) -> ir.Value:
-    """Emit unary operation (negation, logical not).
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The unary operation expression.
-        to_i1: Whether to convert result to i1.
-
-    Returns:
-        The LLVM value representing the unary operation result.
-
-    Raises:
-        NotImplementedError: If the unary operator is not supported.
-    """
+    """Emit unary operation (negation, logical not)."""
     # Use codegen.expressions for recursive call
     val = codegen.expressions.emit_expr(expr.expr)
 
@@ -94,18 +57,7 @@ def emit_unary_op(codegen: 'LLVMCodegen', expr: UnaryOp, to_i1: bool) -> ir.Valu
 
 
 def _ensure_i32(codegen: 'LLVMCodegen', val: ir.Value) -> ir.Value:
-    """Efficiently convert value to i32, avoiding redundant conversions.
-
-    Checks if value is already i32 before calling conversion function,
-    avoiding unnecessary function call overhead.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        val: The value to convert.
-
-    Returns:
-        An i32 value (converted if needed, or original if already i32).
-    """
+    """Efficiently convert value to i32, avoiding redundant conversions."""
     # Fast path: already i32, return directly
     if isinstance(val.type, ir.IntType) and val.type.width == 32:
         return val
@@ -114,16 +66,7 @@ def _ensure_i32(codegen: 'LLVMCodegen', val: ir.Value) -> ir.Value:
 
 
 def emit_binary_op(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.Value:
-    """Emit binary operation with proper type handling.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The binary operation expression.
-        to_i1: Whether to convert comparison results to i1.
-
-    Returns:
-        The LLVM value representing the binary operation result.
-    """
+    """Emit binary operation with proper type handling."""
     op = expr.op
 
     if op in ("and", "or", "xor"):
@@ -153,19 +96,7 @@ def emit_binary_op(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.Va
 
 
 def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.Value:
-    """Emit comparison operations with string support.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The binary comparison expression.
-        to_i1: Whether to return i1 or i8 result.
-
-    Returns:
-        The comparison result as i1 or i8.
-
-    Raises:
-        NotImplementedError: If string comparison operator is not supported.
-    """
+    """Emit comparison operations with string support."""
     # Use codegen.expressions for recursive calls
     lhs = codegen.expressions.emit_expr(expr.left)
     rhs = codegen.expressions.emit_expr(expr.right)
@@ -209,30 +140,7 @@ def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.V
 
 
 def emit_arithmetic(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value, left_type: 'Optional[Type]' = None) -> ir.Value:
-    """Emit arithmetic operations on integer or floating-point values.
-
-    Performs compile-time constant folding when both operands are constants.
-
-    For integer division (/) and modulo (%), chooses between signed and unsigned
-    LLVM instructions based on operand type:
-    - Signed integers (i8, i16, i32, i64): sdiv / srem
-    - Unsigned integers (u8, u16, u32, u64): udiv / urem
-
-    The other operators (+, -, *) are sign-agnostic in two's-complement.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        op: The arithmetic operator (+, -, *, /, %).
-        left: Left operand (any numeric type).
-        right: Right operand (any numeric type, should match left's type).
-        left_type: The semantic type of the left operand (for / and % dispatch).
-
-    Returns:
-        The arithmetic result (same type as operands).
-
-    Raises:
-        NotImplementedError: If the arithmetic operator is not supported.
-    """
+    """Emit arithmetic operations on integer or floating-point values."""
     # Constant folding: if both operands are constants, compute at compile time
     if isinstance(left, ir.Constant) and isinstance(right, ir.Constant):
         folded = _fold_arithmetic_constants(op, left, right)
@@ -273,21 +181,7 @@ def emit_arithmetic(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.V
 
 
 def _fold_arithmetic_constants(op: str, left: ir.Constant, right: ir.Constant) -> 'Optional[ir.Constant]':
-    """Fold arithmetic operations on constant values at compile time.
-
-    Args:
-        op: The arithmetic operator (+, -, *, /, %).
-        left: Left constant operand.
-        right: Right constant operand.
-
-    Note:
-        Only sign-agnostic operators (+, -, *) are folded here. Division (/) and
-        modulo (%) are sign-dependent and are deferred to instruction selection in
-        emit_arithmetic (sdiv/udiv, srem/urem); LLVM constant-folds the result.
-
-    Returns:
-        Folded constant result, or None if folding not possible.
-    """
+    """Fold arithmetic operations on constant values at compile time."""
     # Only fold integer constants for now (float constant folding is more complex)
     if not isinstance(left.type, ir.IntType) or not isinstance(right.type, ir.IntType):
         return None
@@ -324,29 +218,7 @@ def _fold_arithmetic_constants(op: str, left: ir.Constant, right: ir.Constant) -
 
 
 def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value, left_type: 'Optional[Type]' = None) -> ir.Value:
-    """Emit bitwise operations on integer values.
-
-    Performs compile-time constant folding when both operands are constants.
-
-    For right shift (>>), chooses between arithmetic and logical shift based on operand type:
-    - Signed integers (i8, i16, i32, i64): Arithmetic right shift (ashr) - sign-extends
-    - Unsigned integers (u8, u16, u32, u64): Logical right shift (lshr) - zero-fills
-
-    This matches the behavior of Go and Rust.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        op: The bitwise operator (&, |, ^, <<, >>).
-        left: Left operand (preserves original type).
-        right: Right operand (preserves original type).
-        left_type: The semantic type of the left operand (for right shift dispatch).
-
-    Returns:
-        The bitwise operation result (same type as left operand).
-
-    Raises:
-        NotImplementedError: If the bitwise operator is not supported.
-    """
+    """Emit bitwise operations on integer values."""
     # Constant folding: if both operands are constants, compute at compile time
     if isinstance(left, ir.Constant) and isinstance(right, ir.Constant):
         folded = _fold_bitwise_constants(op, left, right)
@@ -400,21 +272,7 @@ def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Valu
 
 
 def _fold_bitwise_constants(op: str, left: ir.Constant, right: ir.Constant) -> 'Optional[ir.Constant]':
-    """Fold bitwise operations on constant values at compile time.
-
-    Note:
-        Only sign-agnostic operators (&, |, ^, <<) are folded here. Right shift (>>)
-        is sign-dependent (arithmetic vs logical) and is deferred to instruction
-        selection in emit_bitwise (ashr/lshr); LLVM constant-folds the result.
-
-    Args:
-        op: The bitwise operator (&, |, ^, <<).
-        left: Left constant operand.
-        right: Right constant operand.
-
-    Returns:
-        Folded constant result, or None if folding not possible.
-    """
+    """Fold bitwise operations on constant values at compile time."""
     if not isinstance(left.type, ir.IntType) or not isinstance(right.type, ir.IntType):
         return None
 
@@ -447,21 +305,7 @@ def _fold_bitwise_constants(op: str, left: ir.Constant, right: ir.Constant) -> '
 
 
 def emit_logic(codegen: 'LLVMCodegen', op: str, left_expr: Expr, right_expr: Expr, to_i1: bool = False) -> ir.Value:
-    """Emit short-circuit boolean logic for 'and', 'or', and 'xor' operations.
-
-    Creates proper basic block structure for short-circuiting with phi nodes
-    to merge the results from different execution paths.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        op: The logical operator ("and", "or", or "xor").
-        left_expr: Left side expression.
-        right_expr: Right side expression.
-        to_i1: Whether to produce i1 or i8 result.
-
-    Returns:
-        The logical operation result as i1 or i8.
-    """
+    """Emit short-circuit boolean logic for 'and', 'or', and 'xor' operations."""
     builder, func = require_both_initialized(codegen)
 
     # For xor, we need to evaluate both sides (no short-circuiting)

@@ -1,27 +1,7 @@
 """The seam: the only way a value may be given to a new owner.
 
-`semantics/ownership.py` holds the rule. This module applies it. Every position that
-takes ownership of a value calls `consume()`, which reads the `Provenance` Pass 3 stamped
-on the source expression, asks the shared `classify()` table what that means for the
-target type, and performs the answer.
-
-Why the split, restated here because this is the half people edit:
-
-    The backend does not know provenance and cannot work it out. It has LLVM values and
-    cleanup registries, and the question it can answer -- "is this name registered for
-    cleanup?" (`is_owned_local`) -- is not the question that matters. Those two coincide
-    for a `let` local and a fresh temporary and diverge for exactly one thing: a binding.
-    That divergence is the (BORROWED, MOVE) cell, and it is where every shipped bug in
-    this family lived.
-
-    So provenance arrives stamped from semantics, and this module supplies the resolved
-    target type, which semantics frequently does not have.
-
-**Nothing may bypass this module.** The ownership-transferring primitives -- the two move
-marks and the deep clone -- are reached only from here, and
-`tests/unit/test_consuming_use_coverage.py` fails the build when any other backend module
-references them. A shared helper that callers may decline to call is not an authority;
-that is the difference between this and the four point fixes that preceded it.
+`tests/unit/test_consuming_use_coverage.py` fails the build if any other backend module
+touches a move-mark primitive. See docs/design/ownership-conventions.md.
 """
 from __future__ import annotations
 
@@ -49,15 +29,7 @@ __all__ = ["ConsumingUse", "bind", "consume", "copy_out", "relinquish",
 
 
 def relinquish_temp(codegen: 'LLVMCodegen', name: str) -> None:
-    """Transfer a compiler-SYNTHESIZED temporary to a new owner, by name.
-
-    The collect path of a variadic call builds a caller-registered `__variadic_*`
-    array and then moves it into the callee, which owns and frees it. That temp has
-    no source expression and therefore no provenance, so `consume` cannot decide for
-    it -- this entry point states the transfer directly. It differs from
-    `relinquish` in what it asserts: `relinquish` states a binding never owned its
-    storage; this states a real transfer of a value only the compiler ever named.
-    """
+    """Transfer a compiler-SYNTHESIZED temporary to a new owner, by name."""
     da = getattr(codegen, "dynamic_arrays", None)
     if da is not None:
         da.mark_as_moved(name)
@@ -65,18 +37,7 @@ def relinquish_temp(codegen: 'LLVMCodegen', name: str) -> None:
 
 
 def relinquish(codegen: 'LLVMCodegen', name: str) -> None:
-    """State that a local NAMES storage it does not own, so no exit path frees it.
-
-    The counterpart of `bind()`'s REJECT answer for a caller that registered the local
-    before the seam could speak. `emit_let` does not need this -- it defers registration
-    until `bind()` answers -- but `initialize_dynamic_array` must create and register the
-    array descriptor before it can emit the initializer that decides.
-
-    Routed through the seam for the same reason as `copy_out`: the primitive it uses is a
-    transfer primitive, and the no-bypass gate is a grep. Calling `mark_as_moved` directly
-    would state that a MOVE happened, which is false here -- nothing was transferred,
-    because the binding never owned anything.
-    """
+    """State that a local NAMES storage it does not own, so no exit path frees it."""
     da = getattr(codegen, "dynamic_arrays", None)
     if da is not None:
         da.mark_as_moved(name)
@@ -85,24 +46,10 @@ def relinquish(codegen: 'LLVMCodegen', name: str) -> None:
 
 def bind(codegen: 'LLVMCodegen', source, value: ir.Value,
          target_type: Optional[Type]) -> tuple[ir.Value, bool]:
-    """Bind a `let` to its initializer, and say whether the binding OWNS the value.
+    """Bind a `let`; returns (value to store, whether the caller must register cleanup).
 
-    A `let` BINDS. It does not take ownership (#242). The binding inherits the source's
-    provenance, so this is `consume()` with ONE answer mapped differently:
-
-        MOVE   -> the source owned it; mark it moved. The binding owns.
-        COPY   -> the source keeps owning; store a deep copy. The binding owns.
-        ADOPT  -> nothing owned it. The binding owns.
-        REJECT -> the source is a BORROW of storage something else still owns. Store the
-                  value as-is, and the binding owns NOTHING. `consume()` cannot reach this
-                  answer -- there it is CE0129 -- because a position that takes ownership
-                  has no way to satisfy the requirement from a borrow.
-
-    The rule still has exactly one implementation: both functions ask `classify()`. What
-    differs is what the caller does with REJECT, not what the table says.
-
-    Returns:
-        (the value to store, whether the caller must register the local for cleanup).
+    `consume()` with one answer mapped differently: REJECT means the source is a borrow, so
+    the binding owns nothing rather than being CE0129 (#242).
     """
     provenance = _provenance_of(source, ConsumingUse.LET)
     decision = classify(provenance, type_class_of(target_type, resolver_for(codegen)))
@@ -119,22 +66,8 @@ def consume(codegen: 'LLVMCodegen', source, value: ir.Value,
             target_type: Optional[Type], use: ConsumingUse) -> ir.Value:
     """Give `value` to a new owner, and return what the caller should store.
 
-    Args:
-        codegen: The LLVM codegen instance.
-        source: The source AST expression. Carries the `Provenance` Pass 3 stamped on it.
-        value: The already-emitted SSA value.
-        target_type: The semantic type of the position receiving the value.
-        use: Which of the eleven positions this is.
-
-    Returns:
-        The value to store: the original, for both MOVE and ADOPT. Phase 9 deleted the COPY
-        decision -- the compiler no longer inserts a deep copy anywhere, so `.clone()` (which
-        reaches `_clone` through `copy_out`) is the only one in a Sushi program.
-
-    Raises:
-        CE0129 when the source carries no ownership decision. This is deliberately fatal
-        and deliberately has no fallback -- a fallback that guessed would be a twelfth
-        derivation of the rule, which is the thing this seam exists to make impossible.
+    An unstamped source is CE0129: deliberately fatal with no fallback, because a fallback
+    that guessed would be a second derivation of the rule this seam exists to centralize.
     """
     provenance = _provenance_of(source, use)
     decision = classify(provenance, type_class_of(target_type, resolver_for(codegen)))
@@ -153,34 +86,12 @@ def consume(codegen: 'LLVMCodegen', source, value: ir.Value,
 
 def copy_out(codegen: 'LLVMCodegen', value: ir.Value,
              value_type: Optional[Type]) -> ir.Value:
-    """Return an independent copy of a value read out of a container it still owns.
-
-    The reader-side counterpart of `consume`. An array / `List` / `HashMap` get-out, and
-    the auto-derived `.clone()`, all hand back a value the container keeps owning, so
-    each must detach with its own deep copy.
-
-    Deliberately takes no `ConsumingUse`-style enum: a read through a still-live owner
-    ALWAYS copies. There is no decision to record, so an enum here would carry no
-    information -- unlike `consume`, where the whole point is that the answer varies.
-
-    Routed through this module for one reason: it keeps the deep clone reachable from
-    exactly one place, so the no-bypass gate can be a simple grep rather than an
-    allowlist that drifts.
-    """
+    """Return an independent copy of a value read out of a container it still owns."""
     return _clone(codegen, value, value_type)
 
 
 def resolver_for(codegen: 'LLVMCodegen'):
-    """A `Type -> Type` resolver over the backend's struct and enum tables.
-
-    `type_class_of` needs it because `owns_heap` answers False for an
-    `UnknownType`: an owning struct still named by its declaration would otherwise
-    classify as owning nothing, and every consuming use of it would alias.
-
-    Public because the closure environment gates ask the same question about a captured
-    field that `consume` asks about the capture itself. A second resolver would be a
-    second answer.
-    """
+    """A `Type -> Type` resolver over the backend's struct and enum tables."""
     def resolve(ty):
         name = getattr(ty, "name", None)
         return (codegen.struct_table.by_name.get(name)
@@ -200,16 +111,7 @@ def _provenance_of(source, use: ConsumingUse) -> Provenance:
 
 
 def _mark_moved(codegen: 'LLVMCodegen', source) -> None:
-    """Record that the source no longer owns the value, so scope exit skips it.
-
-    Only a bare `Name` has an owner to mark. A `MemberAccess` never reaches here (it is
-    THROUGH_OWNER, which copies) and a temporary has no binding at all.
-
-    Both registries are told, because a name may be tracked in either: the dynamic-array
-    registry keys on its descriptor's alloca and the general one on the innermost local
-    slot. Both ultimately call `codegen.moves.mark(slot)`, so telling both is idempotent
-    and telling only one is how a kind of owning value gets missed.
-    """
+    """Record that the source no longer owns the value, so scope exit skips it."""
     if not isinstance(source, Name):
         return
     codegen.memory.mark_struct_as_moved(source.id)
@@ -220,15 +122,7 @@ def _mark_moved(codegen: 'LLVMCodegen', source) -> None:
 
 def _clone(codegen: 'LLVMCodegen', value: ir.Value,
            value_type: Optional[Type]) -> ir.Value:
-    """Deep-copy a value so it owns buffers independent of whatever it came from.
-
-    Accepts a value OR a pointer to one. An owning value does not reach every position in
-    the same shape: a `T[]` call argument is still the array-struct POINTER when the
-    decision is made (the dispatcher normalizes pointer arguments to values only after),
-    and an enum-constructor payload arrives the same way. `emit_value_clone` is strictly
-    value-in/value-out, so load first and hand back the cloned VALUE -- the later
-    normalization is a no-op on a value, and `cast_for_param` accepts it.
-    """
+    """Deep-copy a value so it owns buffers independent of whatever it came from."""
     if value_type is None:
         return value
     from sushi_lang.backend.expressions.memory import emit_value_clone

@@ -1,8 +1,4 @@
-"""Library manifest generation for .slib files.
-
-This module generates binary library files (.slib) for compiled Sushi libraries.
-The format combines LLVM bitcode with MessagePack-encoded metadata in a single file.
-"""
+"""Library manifest generation for .slib files."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -20,28 +16,14 @@ class LibraryManifestGenerator:
     """Generates .slib library files."""
 
     def __init__(self, analyzer: 'SemanticAnalyzer'):
-        """Initialize manifest generator.
-
-        Args:
-            analyzer: Semantic analyzer with type tables.
-        """
+        """Initialize manifest generator."""
         self.analyzer = analyzer
         self.structs = analyzer.structs
         self.enums = analyzer.enums
 
     def generate(self, units: list['Unit'], output_path: Path, bitcode: bytes,
                  templates: dict | None = None) -> None:
-        """Generate .slib library file.
-
-        Args:
-            units: Compilation units in library.
-            output_path: Path to .slib file (e.g., mylib.slib).
-            bitcode: LLVM bitcode bytes.
-            templates: Pre-computed ``_extract_templates`` result. The pipeline
-                computes it BEFORE bitcode compilation (the export closure
-                decides which private functions need external linkage in the
-                bitcode) and passes it here to avoid extracting twice.
-        """
+        """Generate .slib library file."""
         from sushi_lang.backend.platform_detect import current_platform_name
         from sushi_lang.internals.version import _get_versions
         from sushi_lang.backend.library_format import LibraryFormat
@@ -70,21 +52,12 @@ class LibraryManifestGenerator:
         LibraryFormat.write(output_path, manifest, bitcode)
 
     def _contains_foreign_ptr(self, ty) -> bool:
-        """Recursively check whether a type exposes a foreign `ptr` (ForeignPtrType).
-
-        Delegates to the shared semantic predicate (also used by the CE5008
-        unit fence in Pass 2); kept as a method for call-site brevity.
-        """
+        """Recursively check whether a type exposes a foreign `ptr` (ForeignPtrType)."""
         from sushi_lang.semantics.type_predicates import contains_foreign_ptr
         return contains_foreign_ptr(ty)
 
     def _extract_public_functions(self, units: list['Unit']) -> list[dict]:
-        """Extract public function signatures from units.
-
-        CE5002: a public function whose signature exposes a foreign `ptr` cannot
-        appear in a library public API - FFI is a private unit detail. Detecting
-        one aborts the .slib write (no partial artifact).
-        """
+        """Extract public function signatures from units."""
         import sushi_lang.internals.errors as er
 
         public_funcs = []
@@ -231,15 +204,7 @@ class LibraryManifestGenerator:
         return enums
 
     def _scan_referenced_symbols(self, node, acc: set[str]) -> None:
-        """Walk a body AST collecting referenced free symbol names.
-
-        Collects `Name.id`, `Call`/`DotCall`/`MethodCall`/`MemberAccess`
-        targets, and struct/enum constructor type names. This is a pragmatic,
-        conservative scan: it over-collects (it does not subtract local `let`
-        bindings or parameters), which is safe because the caller only rejects a
-        reference that matches a known library-private symbol. It does not need
-        to classify every reference - only to surface private-symbol uses.
-        """
+        """Walk a body AST collecting referenced free symbol names."""
         from sushi_lang.semantics import ast as A
 
         if node is None:
@@ -265,15 +230,7 @@ class LibraryManifestGenerator:
                 self._scan_referenced_symbols(getattr(node, f.name, None), acc)
 
     def _scan_referenced_type_names(self, node, acc: set[str]) -> None:
-        """Walk a declaration collecting referenced user-TYPE names.
-
-        Surfaces ``UnknownType.name`` and ``GenericTypeRef.base_name`` (the two
-        ways a struct field or enum variant payload names another type),
-        recursing through dataclass fields and sequences so nested generics
-        (``Own<Tree<T>>``, ``Inner<T>``) are reached. Like
-        ``_scan_referenced_symbols`` this over-collects; the caller only rejects
-        names matching a known library-private symbol.
-        """
+        """Walk a declaration collecting referenced user-TYPE names."""
         from sushi_lang.semantics.typesys import UnknownType
         from sushi_lang.semantics.generics.types import GenericTypeRef
 
@@ -295,45 +252,8 @@ class LibraryManifestGenerator:
                 self._scan_referenced_type_names(getattr(node, f.name, None), acc)
 
     def _compute_export_closure(self, units: list['Unit'], exported: list) -> dict:
-        """Walk every exported generic and collect the library-private symbols
-        its body (transitively) depends on - the EXPORT CLOSURE (C4b/C5).
-
-        Each private dependency ships so the consumer can monomorphize the
-        generic without visibility into the library source:
-
-        - **private generic function** -> ships as a source template (the
-          consumer monomorphizes it exactly like a public one);
-        - **private concrete function** -> ships as a signature record only
-          (its definition is already in the library bitcode; the consumer
-          declares and links);
-        - **constant** -> ships with its source (the consumer needs the VALUE
-          for compile-time evaluation; constant globals are emitted with
-          internal linkage per module, so re-emission cannot collide);
-        - **concrete struct/enum** -> already ships in the manifest type
-          sections; only walked for transitive references.
-
-        Only genuinely un-shippable references abort the export with CE5006,
-        attributed to the exported generic at the root of the dependency
-        chain: an ``unsafe external`` namespace (foreign bindings cannot be
-        re-declared at the consumer), a private function whose signature
-        exposes a foreign ``ptr`` (CE5002's rationale), and a private v1
-        native variadic ``...T`` function (no shippable template - CE0116's
-        rationale).
-
-        The walk is a visited-set worklist over a finite symbol table, so
-        recursive and mutually-recursive helpers terminate. The scans
-        over-collect (locals are not subtracted), which here means at worst
-        over-SHIPPING a same-named private symbol - safe, unlike the previous
-        scheme where over-collection caused spurious rejections.
-
-        Args:
-            units: All library units.
-            exported: The exported generic nodes seeding the walk.
-
-        Returns:
-            ``{"private_functions": [(FuncDef, source)],
-               "private_generic_functions": [(FuncDef, source)],
-               "constants": [(ConstDef, source)]}`` in first-seen order.
+        """Walk every exported generic and collect the library-private symbols its body
+        (transitively) depends on - the EXPORT CLOSURE (C4b/C5).
         """
         import sushi_lang.internals.errors as er
 
@@ -428,36 +348,7 @@ class LibraryManifestGenerator:
         }
 
     def _extract_templates(self, units: list['Unit']) -> dict:
-        """Extract instantiable public generic templates (re-parsable source).
-
-        Returns the manifest `templates` section. We ship:
-
-        - `generic_functions`: instantiable public generic function bodies.
-        - `generic_structs` / `generic_enums`: instantiable public generic
-          struct/enum templates. Unlike functions there is no `public` keyword
-          for types, so every generic struct/enum is exported (matching how
-          concrete structs/enums already all cross the boundary).
-        - `perks`: the DEFINITIONS (method-signature contracts) of every perk
-          named by an exported generic's type-parameter constraints. Shipping
-          the contract frees the consumer from redeclaring a perk it does not
-          author. Only the referenced (minimal, correct) set is shipped.
-        - `perk_impls` (C4a): the library's own concrete
-          `extend <Type> with <Perk>:` implementations of those shipped perks.
-          Their bodies are already compiled into the library bitcode (with weak
-          linkage, so a consumer's local impl overrides at link time); the
-          record carries signatures (re-parsable source) and symbol names so
-          the consumer can register the impl and declare-and-link. Impls of
-          unshipped perks stay library-internal; generic-target impls and impls
-          whose signatures expose a foreign `ptr` are skipped (the consumer
-          falls back to writing its own impl).
-        - the EXPORT CLOSURE (C4b/C5): the library-private symbols exported
-          generic bodies transitively reference. `private_functions` ships
-          signature records (definitions link from the bitcode);
-          private generic functions ship into `generic_functions` flagged
-          `"private": True`; `constants` ship with their source (values are
-          needed for compile-time evaluation). `closure_summary` records what
-          shipped, by kind, for observability. See _compute_export_closure.
-        """
+        """Extract instantiable public generic templates (re-parsable source)."""
         from sushi_lang.semantics.library_templates import (
             serialize_generic_function, serialize_generic_struct,
             serialize_generic_enum, serialize_perk, serialize_perk_impl,

@@ -1,13 +1,4 @@
-"""Every composite kind's lifecycle handler must carry BOTH halves.
-
-A composite type's deep clone duplicates exactly the heap its destructor frees:
-clone fewer buffers -> double free, more -> leak. The two halves register into
-`backend/lifecycle.py`'s handler table from their home modules
-(backend/destructors.py registers destroy; backend/expressions/memory.py registers
-clone). A kind registered on one side only used to be exactly how a missing clone
-arm shipped -- adding either alone trades a double free for a miscompile. This test
-makes it a red build instead.
-"""
+"""Every composite kind's lifecycle handler must carry BOTH halves."""
 from __future__ import annotations
 
 # Importing the two home modules is what performs the registration.

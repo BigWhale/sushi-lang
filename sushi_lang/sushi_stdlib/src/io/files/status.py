@@ -1,20 +1,11 @@
-"""
-File status methods IR generation.
-
-Implements IR generation for:
-- close() - Close file and release resources
-- is_open() - Check if file is open
-"""
+"""File status methods IR generation."""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_fclose
 
 
 def generate_close(module: ir.Module) -> None:
-    """Generate IR for file.close() -> ~
-
-    Closes file if not NULL.
-    """
+    """Generate IR for file.close() -> ~"""
     i32 = ir.IntType(32)
     i8_ptr = ir.IntType(8).as_pointer()
 
@@ -55,10 +46,7 @@ def generate_close(module: ir.Module) -> None:
 
 
 def generate_is_open(module: ir.Module) -> None:
-    """Generate IR for file.is_open() -> bool
-
-    Checks if file pointer is not NULL.
-    """
+    """Generate IR for file.is_open() -> bool"""
     i32 = ir.IntType(32)
     i8_ptr = ir.IntType(8).as_pointer()
 

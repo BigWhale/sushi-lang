@@ -1,15 +1,4 @@
-"""#236: `.debug()` headers render generic types through the display layer.
-
-`List.debug()` / `HashMap.debug()` build their header f-string in the backend. A
-monomorphized type's `str()` is its interned `<...>` identity name, so
-interpolating the element/key/value type directly renders a *nested* generic in
-the retired syntax (`List@(List<i32>)`). The header must go through
-`display_type`, which recurses on `generic_base`/`generic_args`.
-
-The source assertions are the guard: the rendering bug is invisible for a flat
-element type (`str(i32) == "i32"`), so a regression would slip past every
-existing debug test that does not nest.
-"""
+"""#236: `.debug()` headers render generic types through the display layer."""
 from __future__ import annotations
 
 import re

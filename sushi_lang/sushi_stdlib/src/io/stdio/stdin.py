@@ -1,11 +1,4 @@
-"""
-stdin module - Standard input stream methods.
-
-This module implements IR generation for stdin methods:
-- readln() -> string: Read one line from standard input
-- read() -> string: Read all input until EOF
-- read_bytes(i32) -> u8[]: Read n bytes from standard input
-"""
+"""stdin module - Standard input stream methods."""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.libc_declarations import (
@@ -18,15 +11,7 @@ from sushi_lang.sushi_stdlib.src.io.stdio.common import declare_stdin_handle
 
 
 def generate_stdin_readln(module: ir.Module) -> None:
-    """Generate IR for stdin.readln() -> string.
-
-    Uses POSIX getline() to read one line from stdin with dynamic buffer allocation.
-    Handles lines of any length, strips trailing \\n and \\r\\n.
-    Returns empty string on EOF.
-
-    Args:
-        module: The LLVM module to add the function to.
-    """
+    """Generate IR for stdin.readln() -> string."""
     # Declare external functions
     malloc_fn = declare_malloc(module)
     free_fn = declare_free(module)
@@ -151,14 +136,7 @@ def generate_stdin_readln(module: ir.Module) -> None:
 
 
 def generate_stdin_read(module: ir.Module) -> None:
-    """Generate IR for stdin.read() -> string.
-
-    Reads all input until EOF, dynamically growing the buffer as needed.
-    Returns fat pointer struct {i8*, i32}.
-
-    Args:
-        module: The LLVM module to add the function to.
-    """
+    """Generate IR for stdin.read() -> string."""
     # Declare external functions
     malloc_fn = declare_malloc(module)
     realloc_fn = declare_realloc(module)
@@ -267,13 +245,7 @@ def generate_stdin_read(module: ir.Module) -> None:
 
 
 def generate_stdin_read_bytes(module: ir.Module) -> None:
-    """Generate IR for stdin.read_bytes(i32 count) -> u8[].
-
-    Reads n bytes from stdin and returns a byte array.
-
-    Args:
-        module: The LLVM module to add the function to.
-    """
+    """Generate IR for stdin.read_bytes(i32 count) -> u8[]."""
     # Declare external functions
     malloc_fn = declare_malloc(module)
     fread_fn = declare_fread(module)

@@ -1,16 +1,4 @@
-"""
-String Library Main Coordinator
-
-This module coordinates the generation of all string operations as a single LLVM module.
-It orchestrates intrinsics and string methods, generating precompiled .bc files.
-
-Architecture:
-1. Intrinsics layer: Low-level LLVM IR building blocks
-2. Method layer: Higher-level string operations using intrinsics
-3. Module generation: Combines all into stdlib/dist/collections/strings.bc
-
-String representation: { i8* data, i32 size } (fat pointer)
-"""
+"""String Library Main Coordinator"""
 
 from typing import Any
 from dataclasses import dataclass
@@ -169,11 +157,7 @@ def _validate_method_signature(call: MethodCall, spec: MethodSpec, reporter: Any
 
 
 def is_builtin_string_method(method_name: str) -> bool:
-    """Check if a method name is a built-in string method.
-
-    Note: Includes both stdlib methods (in METHOD_SPECS) and the inline intrinsics
-    (`is_empty`, `clone`), which need no `use <collections/strings>`.
-    """
+    """Check if a method name is a built-in string method."""
     return method_name in METHOD_SPECS or method_name in ("is_empty", "clone")
 
 
@@ -195,11 +179,7 @@ def validate_builtin_string_method_with_validator(call: MethodCall, string_type:
 
 
 def get_builtin_string_method_return_type(method_name: str, string_type: BuiltinType) -> Type | None:
-    """Get the return type of a built-in string method.
-
-    Note: is_empty is included here even though it's an inline intrinsic,
-    because type checking happens before code generation.
-    """
+    """Get the return type of a built-in string method."""
     from sushi_lang.semantics.typesys import DynamicArrayType
     # Methods returning int
     if method_name in {"len", "size"}:
@@ -237,14 +217,7 @@ def get_builtin_string_method_return_type(method_name: str, string_type: Builtin
 
 
 def generate_module_ir() -> ir.Module:
-    """Generate complete strings module as LLVM IR module.
-
-    This function emits all intrinsics and string methods into a single module.
-    This is the interface called by stdlib/build.py.
-
-    Returns:
-        LLVM IR Module containing all string method implementations.
-    """
+    """Generate complete strings module as LLVM IR module."""
     # Create module
     from sushi_lang.sushi_stdlib.src.ir_common import create_stdlib_module
     module = create_stdlib_module("collections.strings")
@@ -310,22 +283,12 @@ def generate_module_ir() -> ir.Module:
 
 
 def generate_strings_module() -> str:
-    """Generate complete strings module as LLVM IR string.
-
-    Convenience wrapper for debugging and direct IR inspection.
-
-    Returns:
-        LLVM IR string for the complete strings module.
-    """
+    """Generate complete strings module as LLVM IR string."""
     return str(generate_module_ir())
 
 
 def compile_to_bitcode(output_path: str = "stdlib/dist/collections/strings.bc"):
-    """Compile the strings module to LLVM bitcode.
-
-    Args:
-        output_path: Path to write the .bc file (default: stdlib/dist/collections/strings.bc)
-    """
+    """Compile the strings module to LLVM bitcode."""
     # Generate IR
     ir_code = generate_strings_module()
 

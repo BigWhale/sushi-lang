@@ -1,9 +1,4 @@
-"""Module merger for two-phase linking.
-
-This module builds a new LLVM module containing only the resolved symbols.
-It reconstructs valid LLVM IR from the symbol definitions collected during
-the resolution phase.
-"""
+"""Module merger for two-phase linking."""
 from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
@@ -18,12 +13,7 @@ class ModuleMerger:
     """Builds a new LLVM module from resolved symbols."""
 
     def __init__(self, target_triple: str = "", data_layout: str = ""):
-        """Initialize merger.
-
-        Args:
-            target_triple: LLVM target triple (e.g., "x86_64-apple-darwin").
-            data_layout: LLVM data layout string.
-        """
+        """Initialize merger."""
         self.target_triple = target_triple
         self.data_layout = data_layout
 
@@ -33,25 +23,7 @@ class ModuleMerger:
         module_name: str = "merged",
         module_type_defs: set[str] | None = None
     ) -> llvm.ModuleRef:
-        """Build new module from resolved symbols.
-
-        Strategy: Concatenate IR text of all chosen symbols and parse as one module.
-
-        Args:
-            resolved_symbols: Map of symbol_name -> chosen SymbolInfo.
-            module_name: Name for the new module.
-            module_type_defs: Identified-type declarations gathered from the SOURCE
-                modules (`%Point = type {i32, i32}`). Required since #257 made user structs
-                identified types: the declaration is module-level state, so no per-symbol
-                `ir_text` carries it, and a merged module without it leaves the type opaque
-                and fails to parse at the first `insertvalue`/`alloca` through it.
-
-        Returns:
-            New LLVM module with deduplicated symbols.
-
-        Raises:
-            RuntimeError: If the merged IR fails to parse.
-        """
+        """Build new module from resolved symbols."""
         # Type definitions must come before uses. Union the source modules' declarations
         # with any that happen to be embedded in a symbol's own text.
         type_defs = self._extract_type_definitions(resolved_symbols)
@@ -120,18 +92,7 @@ class ModuleMerger:
         self,
         resolved_symbols: dict[str, 'SymbolInfo']
     ) -> set[str]:
-        """Extract all type definitions from symbol IR texts.
-
-        LLVM IR type definitions look like:
-            %struct.Point = type { i32, i32 }
-            %"HashMap<i32, string>" = type { ... }
-
-        Args:
-            resolved_symbols: Map of symbol_name -> SymbolInfo.
-
-        Returns:
-            Set of unique type definition lines.
-        """
+        """Extract all type definitions from symbol IR texts."""
         type_defs = set()
 
         # Regex to match type definitions
@@ -156,16 +117,7 @@ class ModuleMerger:
         return type_defs
 
     def _strip_type_definitions(self, ir_text: str) -> str:
-        """Remove type definition lines from IR text.
-
-        We extract type definitions separately to avoid duplicates.
-
-        Args:
-            ir_text: Original IR text.
-
-        Returns:
-            IR text with type definition lines removed.
-        """
+        """Remove type definition lines from IR text."""
         lines = ir_text.split('\n')
         filtered = []
 

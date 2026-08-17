@@ -1,8 +1,4 @@
-"""
-List<T> iterator method implementation.
-
-This module contains the iter() method for creating iterators from List<T>.
-"""
+"""List<T> iterator method implementation."""
 
 from typing import Any, TYPE_CHECKING
 import llvmlite.ir as ir
@@ -22,28 +18,7 @@ def emit_list_iter(
     list_value: ir.Value,
     list_type: StructType
 ) -> ir.Value:
-    """Emit List<T>.iter() -> Iterator<T>
-
-    Creates an iterator struct for use with foreach loops.
-
-    Iterator structure: {i32 current_index, i32 length, T* data_ptr}
-    - current_index: starts at 0
-    - length: current number of elements in the list
-    - data_ptr: pointer to the list's data array
-
-    Args:
-        codegen: LLVM codegen instance.
-        call: The method call AST node.
-        list_value: The List struct pointer.
-        list_type: The List<T> struct type.
-
-    Returns:
-        Iterator struct value.
-
-    Raises:
-        ValueError: If iter() is called with arguments.
-        TypeError: If semantic type resolution fails.
-    """
+    """Emit List<T>.iter() -> Iterator<T>"""
     if len(call.args) != 0:
         raise_internal_error("CE0071", got=len(call.args))
 

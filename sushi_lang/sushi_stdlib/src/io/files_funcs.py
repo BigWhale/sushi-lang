@@ -1,9 +1,4 @@
-"""
-File utility functions for io/files module.
-
-Provides the standard stdlib interface for function discovery and validation.
-This is separate from __init__.py which handles file type methods.
-"""
+"""File utility functions for io/files module."""
 from sushi_lang.semantics.typesys import Type, BuiltinType
 
 
@@ -41,14 +36,7 @@ def get_builtin_files_function_return_type(func_name: str) -> Type:
 
 
 def validate_files_function_call(func_name: str, args: list, reporter, loc) -> None:
-    """Validate a files utility function call.
-
-    Args:
-        func_name: Name of the function being called
-        args: List of argument expressions
-        reporter: Error reporter
-        loc: Source location for error reporting
-    """
+    """Validate a files utility function call."""
     from sushi_lang.internals import errors as er
 
     # Validate argument count

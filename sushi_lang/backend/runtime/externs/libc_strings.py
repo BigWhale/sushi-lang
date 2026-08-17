@@ -1,12 +1,4 @@
-"""
-External declarations for C standard library string functions.
-
-This module provides declarations for string manipulation functions:
-- strcmp: Pure LLVM intrinsic (llvm_strcmp)
-- strlen: Pure LLVM intrinsic (llvm_strlen)
-- sprintf: External libc function
-- memcmp: External libc function
-"""
+"""External declarations for C standard library string functions."""
 from __future__ import annotations
 
 import typing
@@ -21,11 +13,7 @@ class LibCStrings:
     """Manages external declarations for C string functions."""
 
     def __init__(self, codegen: LLVMCodegen) -> None:
-        """Initialize with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance providing context and module.
-        """
+        """Initialize with reference to main codegen instance."""
         self.codegen = codegen
 
         # Function references - declared immediately for type safety
@@ -49,18 +37,7 @@ class LibCStrings:
         arg_types: list[ir.Type],
         var_arg: bool = False
     ) -> ir.Function:
-        """Helper to declare external C function with reduced duplication.
-
-        Args:
-            attr_name: Name of attribute to store function (e.g., "strcmp")
-            func_name: Name of C function (usually same as attr_name)
-            return_type: LLVM return type
-            arg_types: List of LLVM argument types
-            var_arg: Whether function accepts variable arguments
-
-        Returns:
-            The declared or existing function (guaranteed non-None).
-        """
+        """Helper to declare external C function with reduced duplication."""
         # Check if function already exists in module
         existing_global = self.codegen.module.globals.get(func_name)
         if isinstance(existing_global, ir.Function):
@@ -83,10 +60,7 @@ class LibCStrings:
         )
 
     def _declare_strlen(self) -> None:
-        """Declare strlen: i32 llvm_strlen(i8* s)
-
-        Uses pure LLVM IR intrinsic instead of libc strlen.
-        """
+        """Declare strlen: i32 llvm_strlen(i8* s)"""
         from sushi_lang.sushi_stdlib.src.collections.strings_inline import emit_strlen_intrinsic_inline
         self.strlen = emit_strlen_intrinsic_inline(self.codegen.module)
 
@@ -101,14 +75,7 @@ class LibCStrings:
         )
 
     def _declare_memcmp(self) -> None:
-        """Declare memcmp: int memcmp(const void* s1, const void* s2, size_t n)
-
-        The length is size_t (i64 on LP64), NOT i32. Declaring it i32 makes the
-        caller write only edx and leave the upper 32 bits of rdx uninitialized on
-        x86-64 SysV; glibc reads the full 64-bit rdx as n, yielding a garbage huge
-        length and an out-of-bounds SIMD read (SIGSEGV). ARM64 is immune because a
-        w-register write zero-extends into the x-register. See issue #149.
-        """
+        """Declare memcmp: int memcmp(const void* s1, const void* s2, size_t n)"""
         self.memcmp = self._declare_extern(
             "memcmp",
             "memcmp",

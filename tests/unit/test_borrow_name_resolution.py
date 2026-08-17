@@ -1,19 +1,4 @@
-"""A name under a borrow is classified ONCE, by the pass that owns names.
-
-Borrowing an undeclared name used to report TWO diagnostics for one token: CE1001 from
-the scope pass and CE2400 from the borrow checker. Two passes answering one question --
-"does this name exist?" -- is the duplicated-predicate shape at the root of the whole
-bug family, and it also
-made the answer WRONG for a name that exists but is not a local: `peek SOME_CONST`
-reported CE1001 ("undeclared identifier") about a constant declared two lines above,
-because the borrow arm of the scope pass was a copy of the plain-use arm and had lost
-the constant/function/enum cases.
-
-The rule is now: the SCOPE pass classifies the name, because that is its job. A local is
-a use; a name that exists but is not local is CE2400 ("only a local can be borrowed");
-anything else is CE1001. The borrow checker asks about borrow CONFLICTS and says nothing
-about existence -- a name it cannot find has already been reported.
-"""
+"""A name under a borrow is classified ONCE, by the pass that owns names."""
 from __future__ import annotations
 
 import pytest

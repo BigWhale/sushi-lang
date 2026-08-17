@@ -1,15 +1,4 @@
-"""
-Safe array element access returning Maybe<T>.
-
-This module implements .get() methods for both fixed and dynamic arrays
-that return Maybe<T> instead of throwing runtime errors on out-of-bounds access.
-
-Functions:
-- emit_fixed_array_get_maybe: Fixed array .get() returning Maybe<T>
-- emit_dynamic_array_get_maybe: Dynamic array .get() returning Maybe<T>
-
-Note: Direct indexing arr[i] still throws RE2020 for out-of-bounds access.
-"""
+"""Safe array element access returning Maybe<T>."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -23,16 +12,7 @@ if TYPE_CHECKING:
 
 
 def _infer_semantic_type_from_ir(ir_type: ir.Type) -> 'Type':
-    """Infer semantic type from LLVM IR type.
-
-    This is used when semantic type information is not available (e.g., in string interpolation).
-
-    Args:
-        ir_type: The LLVM IR type.
-
-    Returns:
-        The inferred semantic type.
-    """
+    """Infer semantic type from LLVM IR type."""
     from sushi_lang.semantics.typesys import BuiltinType
 
     # Map LLVM IR types to semantic types
@@ -65,23 +45,7 @@ def emit_fixed_array_get_maybe(
     semantic_type: 'Type',
     to_i1: bool
 ) -> ir.Value:
-    """Emit code for fixed array .get() returning Maybe<T>.
-
-    Performs runtime bounds checking and returns:
-    - Maybe.Some(element) if index is in bounds
-    - Maybe.None() if index is out of bounds
-
-    Args:
-        codegen: The LLVM codegen instance.
-        array_value: The fixed array value (loaded value, not pointer).
-        array_type: The LLVM array type.
-        index_value: The index to access (i32).
-        semantic_type: The semantic type of the array (FixedArrayType).
-        to_i1: Whether to convert result to i1 (ignored for Maybe).
-
-    Returns:
-        Maybe<T> enum value.
-    """
+    """Emit code for fixed array .get() returning Maybe<T>."""
     from sushi_lang.backend.generics.maybe import emit_maybe_some, emit_maybe_none
     from sushi_lang.semantics.typesys import deref_type
 
@@ -155,23 +119,7 @@ def emit_dynamic_array_get_maybe(
     semantic_type: 'Type',
     to_i1: bool
 ) -> ir.Value:
-    """Emit code for dynamic array .get() returning Maybe<T>.
-
-    Performs runtime bounds checking and returns:
-    - Maybe.Some(element) if index is in bounds
-    - Maybe.None() if index is out of bounds
-
-    Args:
-        codegen: The LLVM codegen instance.
-        array_value: The dynamic array struct value.
-        array_type: The LLVM struct type.
-        index_value: The index to access (i32).
-        semantic_type: The semantic type of the array (DynamicArrayType).
-        to_i1: Whether to convert result to i1 (ignored for Maybe).
-
-    Returns:
-        Maybe<T> enum value.
-    """
+    """Emit code for dynamic array .get() returning Maybe<T>."""
     from sushi_lang.backend.generics.maybe import emit_maybe_some, emit_maybe_none
     from sushi_lang.semantics.typesys import deref_type
 

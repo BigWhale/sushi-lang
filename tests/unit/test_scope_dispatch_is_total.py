@@ -1,18 +1,4 @@
-"""The scope checker must have an arm for every AST node. No silent skips (#245).
-
-`ScopeAnalyzer` has two dispatch sites, and both used to fall through silently:
-
-  - `_check_statement` built a `_check_<typename>` handler name and routed misses to a
-    bare `pass` (`_check_unknown_statement`). The `expand(...)` statement lived in that
-    gap: its body got no scope analysis at all.
-  - `_check_expression` was a `match` with no `case _:` arm. `BlankLit` lived in that
-    gap (inert, by luck).
-
-Both sites now raise CE0130 on a miss -- the CE0125 pattern from the borrow checker,
-applied to Pass 1. This test is the CI gate; the raise is the runtime backstop. Adding
-a node to the AST without teaching the scope checker about it turns CI red instead of
-silently disabling scope analysis for it.
-"""
+"""The scope checker must have an arm for every AST node. No silent skips (#245)."""
 from __future__ import annotations
 
 import ast

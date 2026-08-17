@@ -1,20 +1,4 @@
-"""Pure logic for the performance-regression harness (P1-5).
-
-This module is deliberately free of subprocess / filesystem timing concerns so
-it can be unit-tested in isolation (see ``test_perf_harness.py``). The actual
-measurement (spawning ``sushic`` and timing it) lives in
-``test_perf_regression.py``; this module only handles:
-
-  - computing a median from a set of samples,
-  - comparing measured medians against a stored baseline (with tolerance),
-  - formatting a human-readable delta table,
-  - loading / saving the per-platform ``baseline.json``.
-
-Baselines are keyed by platform (e.g. ``darwin-arm64`` vs ``linux-x86_64``) so
-that arm64-macOS and x86_64-Linux timings never cross-contaminate. A metric with
-no baseline for the current platform is reported, never failed -- which is what
-keeps the harness in *report mode* until a baseline is deliberately captured.
-"""
+"""Pure logic for the performance-regression harness (P1-5)."""
 from __future__ import annotations
 
 import json
@@ -76,12 +60,7 @@ def compare(
     baseline_metrics: Dict[str, dict],
     default_tolerance_pct: float = DEFAULT_TOLERANCE_PCT,
 ) -> List[Delta]:
-    """Compare measured *results* against *baseline_metrics*.
-
-    *baseline_metrics* maps ``metric name -> {"median_ms": float,
-    "tolerance_pct": float, ...}`` (the per-platform ``metrics`` block). A metric
-    with no entry yields a baseline-less Delta (``regressed=False``).
-    """
+    """Compare measured *results* against *baseline_metrics*."""
     deltas: List[Delta] = []
     for r in results:
         entry = baseline_metrics.get(r.name)
@@ -125,11 +104,7 @@ def format_table(deltas: List[Delta], plat: str) -> str:
 
 
 def load_baseline(path: Path, plat: str) -> Dict[str, dict]:
-    """Return the ``metrics`` dict for *plat*, or ``{}`` if absent/missing.
-
-    An absent file or an absent platform section both mean "no baseline" -- the
-    caller treats every metric as baseline-less (report only).
-    """
+    """Return the ``metrics`` dict for *plat*, or ``{}`` if absent/missing."""
     if not path.exists():
         return {}
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -142,12 +117,7 @@ def save_baseline(
     results: List[MetricResult],
     tolerance_pct: float = DEFAULT_TOLERANCE_PCT,
 ) -> None:
-    """Write/update the *plat* section of ``baseline.json`` from *results*.
-
-    Other platforms' sections are preserved -- refreshing the macOS baseline
-    must not wipe the Linux one. Output is deterministic (sorted keys) so a
-    baseline refresh produces a clean, reviewable diff.
-    """
+    """Write/update the *plat* section of ``baseline.json`` from *results*."""
     data: dict = {"version": BASELINE_VERSION, "platforms": {}}
     if path.exists():
         data = json.loads(path.read_text(encoding="utf-8"))

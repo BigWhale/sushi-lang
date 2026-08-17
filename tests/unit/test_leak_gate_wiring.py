@@ -1,19 +1,4 @@
-"""Wiring tests for the leak gate (issue #241).
-
-`EXPECT_NO_LEAKS` is an assertion, not a hint: a test that carries it must be
-leak-checked by every run that executes it. Before #241 the assertion was gated on a
-separate `--leaks` flag, so a plain `--enhanced` run skipped all 96 of them without
-saying so -- no check, no skip notice, nothing in the summary. A leaking program
-sailed through the full suite.
-
-These tests pin the wiring rather than the checker itself (the checker is
-tests/leakcheck/leakcheck.c, exercised by the .sushi corpus):
-
-* a genuinely leaking program annotated `EXPECT_NO_LEAKS` fails plain `--enhanced`
-* `_check_leaks` is reached with no leak flag anywhere
-* `--leaks` is gone -- there is one enforcing mode, not two
-* a skipped check is recorded against the TEST name, so the notice is actionable
-"""
+"""Wiring tests for the leak gate (issue #241)."""
 from __future__ import annotations
 
 import os
@@ -50,13 +35,7 @@ def _run_harness(*args: str) -> subprocess.CompletedProcess:
 
 @pytest.fixture
 def leaking_test_in_suite():
-    """Drop the leaking fixture into the suite's discovery glob, under a unique dir.
-
-    The fixture deliberately does not live under tests/**/test_*.sushi -- the runner
-    would collect it and the suite would be permanently red. The runner only scans
-    tests/, so exercising it end to end means planting a copy there for the duration
-    of one assertion and taking it away again.
-    """
+    """Drop the leaking fixture into the suite's discovery glob, under a unique dir."""
     marker = f"leakgate_tmp_{os.getpid()}"
     staging = TESTS_DIR / marker
     staging.mkdir()
@@ -68,12 +47,7 @@ def leaking_test_in_suite():
 
 
 def test_leaking_program_fails_plain_enhanced(leaking_test_in_suite):
-    """A leaking `EXPECT_NO_LEAKS` test must fail `--enhanced` with no extra flags.
-
-    This is the whole issue in one assertion. The fixture leaks 4096 bytes through a
-    raw libc malloc, so the interposer has something unambiguous to find; if the run
-    is green, the check did not happen.
-    """
+    """A leaking `EXPECT_NO_LEAKS` test must fail `--enhanced` with no extra flags."""
     proc = _run_harness("--enhanced", "--filter", leaking_test_in_suite)
     output = proc.stdout + proc.stderr
 
@@ -87,12 +61,7 @@ def test_leaking_program_fails_plain_enhanced(leaking_test_in_suite):
 
 
 def test_enhanced_builds_the_interposer(leaking_test_in_suite, tmp_path):
-    """`--enhanced` builds the interposer, so a fresh clone checks rather than skips.
-
-    The built library is gitignored. If only `--leaks-only` builds it, every
-    `--enhanced` run on a fresh checkout degrades to 96 "interposer not built" skips,
-    which is the silent pass this issue is about wearing a different hat.
-    """
+    """`--enhanced` builds the interposer, so a fresh clone checks rather than skips."""
     shim = enhanced_test_runner.leakcheck_lib_path(PROJECT_ROOT)
     stashed = None
     if shim.exists():
@@ -110,11 +79,7 @@ def test_enhanced_builds_the_interposer(leaking_test_in_suite, tmp_path):
 
 
 def test_check_leaks_runs_without_any_leak_flag(tmp_path, monkeypatch):
-    """`run_single_test` reaches `_check_leaks` for a leak-annotated test by default.
-
-    Nothing about the runner's construction should decide whether an assertion the
-    test file declares is honoured.
-    """
+    """`run_single_test` reaches `_check_leaks` for a leak-annotated test by default."""
     source = tmp_path / "test_leak_annotated.sushi"
     source.write_text(
         "# EXPECT_NO_LEAKS: true\n"
@@ -144,24 +109,14 @@ def test_check_leaks_runs_without_any_leak_flag(tmp_path, monkeypatch):
 
 
 def test_leaks_flag_no_longer_exists():
-    """`--leaks` is gone: `--enhanced` enforces, `--leaks-only` selects.
-
-    Keeping it as a no-op alias would preserve the belief that enforcement is
-    something you opt into.
-    """
+    """`--leaks` is gone: `--enhanced` enforces, `--leaks-only` selects."""
     proc = _run_harness("--leaks", "--filter", "no_such_test_pattern")
     assert proc.returncode != 0, "--leaks was accepted; it should be an argparse error"
     assert "unrecognized arguments: --leaks" in proc.stderr, proc.stderr
 
 
 def test_warning_test_with_leak_assertion_is_executed():
-    """A `test_warn_*` test declaring `EXPECT_NO_LEAKS` is run, unconditionally.
-
-    Shadowing an owning binding is warned-but-legal, so executing the binary is the
-    only way to leak-check it. `should_run_runtime_test` used to gate that on a
-    `leaks_mode` argument, which meant the two shadow tests were never executed by
-    `--enhanced` at all.
-    """
+    """A `test_warn_*` test declaring `EXPECT_NO_LEAKS` is run, unconditionally."""
     warn_tests = sorted(TESTS_DIR.glob("memory/test_warn_shadow_owning_*.sushi"))
     assert warn_tests, "expected the shadow-owning warning tests to exist"
 
@@ -174,12 +129,7 @@ def test_warning_test_with_leak_assertion_is_executed():
 
 
 def test_skipped_leak_check_records_the_test_name(tmp_path, monkeypatch):
-    """A skipped check is recorded as (test name, reason), not as a temp binary name.
-
-    The recorded name used to be `test_<stem>_<pid>` -- the throwaway binary in the
-    run's temp dir, which maps back to nothing. A skip notice you cannot act on is
-    barely better than no notice.
-    """
+    """A skipped check is recorded as (test name, reason), not as a temp binary name."""
     missing = tmp_path / "leakcheck.dylib"
     monkeypatch.setattr(enhanced_test_runner, "leakcheck_lib_path", lambda root: missing)
 

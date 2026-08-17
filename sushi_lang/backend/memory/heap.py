@@ -1,8 +1,4 @@
-"""
-Heap allocation operations with error handling.
-
-Provides malloc/free wrappers with runtime error checking for allocation failures.
-"""
+"""Heap allocation operations with error handling."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -14,19 +10,7 @@ if TYPE_CHECKING:
 
 
 def emit_malloc(codegen: 'LLVMCodegen', builder: ir.IRBuilder, size_bytes: ir.Value) -> ir.Value:
-    """Emit malloc call with error checking.
-
-    Args:
-        codegen: The LLVM code generator instance.
-        builder: The IR builder for emitting instructions.
-        size_bytes: LLVM value (i32 or i64) representing allocation size.
-
-    Returns:
-        Pointer to allocated memory (void*).
-
-    Raises:
-        RuntimeError: Emits RE2021 runtime error if allocation fails.
-    """
+    """Emit malloc call with error checking."""
     # Get malloc function from centralized codegen
     malloc_func = codegen._get_malloc_func()
 
@@ -64,13 +48,7 @@ def emit_malloc(codegen: 'LLVMCodegen', builder: ir.IRBuilder, size_bytes: ir.Va
 
 
 def emit_free(builder: ir.IRBuilder, codegen: 'LLVMCodegen', ptr: ir.Value) -> None:
-    """Emit free call for the given pointer.
-
-    Args:
-        builder: The IR builder for emitting instructions.
-        codegen: The LLVM code generator instance.
-        ptr: The pointer to free (void*).
-    """
+    """Emit free call for the given pointer."""
     # Get free function from centralized codegen
     free_func = codegen.get_free_func()
     builder.call(free_func, [ptr])

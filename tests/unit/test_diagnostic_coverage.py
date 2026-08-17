@@ -1,41 +1,4 @@
-"""
-Coverage ratchet: error/warning .sushi tests that do not assert a diagnostic code.
-
-A `test_err_*` / `test_warn_*` test only proves the compiler *failed* (exit 2/1).
-It does not prove *which* diagnostic fired. The `EXPECT_ERROR_CODE` directive
-(enforced on the compilation path by enhanced_test_runner) pins the emitted code,
-so a diagnostic that regresses to the wrong code turns the suite red.
-
-This ratchet tracks the gap (error/warning tests with no EXPECT_ERROR_CODE) and
-only allows it to shrink, mirroring test_stdout_coverage.py.
-
-All error/warning directories are now backfilled (Batches A/B/C). The three
-semantic-validation-gap bugs (#46/#47/#48) have been fixed and their tests now
-assert codes (CE1003 / CE2006 / CE2505).
-
-The gap is now ZERO. The last three tests in it were parse errors, which had no
-CE#### to assert because Lark's raw dump bypassed the reporter entirely. Tier 4.7
-gave syntax errors their own family (CE6001-CE6005), so every error/warning test
-in the corpus now pins a code. BASELINE may only go DOWN.
-
-To lower BASELINE after a backfill pass:
-1. Run this file (it prints the current gap on failure), or recompute manually:
-       python3 -c "
-       from pathlib import Path
-       excluded = {'helpers', 'bin'}
-       gap = 0
-       for f in sorted(Path('tests').rglob('test_*.sushi')):
-           if any(x in excluded for x in f.parts):
-               continue
-           if not (f.name.startswith('test_err_') or f.name.startswith('test_warn_')):
-               continue
-           if 'EXPECT_ERROR_CODE' not in '\n'.join(f.read_text().split('\n')[:20]):
-               gap += 1
-       print(gap)
-       "
-2. Update BASELINE to the new gap count.
-3. Commit.
-"""
+"""Coverage ratchet: error/warning .sushi tests that do not assert a diagnostic code."""
 
 from pathlib import Path
 
@@ -67,16 +30,7 @@ def _compute_gap() -> list[str]:
 
 
 def test_diagnostic_coverage_ratchet():
-    """
-    Assert the diagnostic-code coverage gap does not exceed BASELINE.
-
-    A gap = an error/warning test (test_err_* / test_warn_*) with no
-    EXPECT_ERROR_CODE directive in its first 20 lines.
-
-    If this fails because you added a new error/warning test, add an
-    EXPECT_ERROR_CODE directive to it. If you backfilled more tests, lower
-    BASELINE to the printed gap count.
-    """
+    """Assert the diagnostic-code coverage gap does not exceed BASELINE."""
     gap_files = _compute_gap()
     gap = len(gap_files)
     assert gap <= BASELINE, (

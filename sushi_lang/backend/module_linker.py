@@ -1,9 +1,4 @@
-"""Two-phase linking with symbol deduplication.
-
-Despite where it used to live, this is NOT library-specific: the main module and the
-stdlib bitcode go through it too. It sits beside its four collaborators --
-symbol_table, dependency_graph, symbol_resolver, module_merger.
-"""
+"""Two-phase linking with symbol deduplication."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -15,69 +10,31 @@ if TYPE_CHECKING:
 
 
 class TwoPhaseLinker:
-    """Implements two-phase linking with symbol deduplication.
-
-    Two-phase linking resolves the "symbol multiply defined" error that occurs
-    when both the main program and libraries define the same symbols (e.g.,
-    runtime functions like utf8_char_count).
-
-    Phase 1: Extract symbol tables from all modules
-    Phase 2: Build dependency graph from entry points
-    Phase 3: Resolve symbol conflicts using priority rules
-    Phase 4: Merge resolved symbols into final module
-    """
+    """Implements two-phase linking with symbol deduplication."""
 
     def __init__(self, target_triple: str = "", data_layout: str = ""):
-        """Initialize two-phase linker.
-
-        Args:
-            target_triple: LLVM target triple for the platform.
-            data_layout: LLVM data layout string.
-        """
+        """Initialize two-phase linker."""
         self.target_triple = target_triple
         self.data_layout = data_layout
         self.modules: list[tuple[llvm.ModuleRef, str, 'SymbolSource']] = []
 
     def add_main_module(self, module: llvm.ModuleRef, name: str = "main") -> None:
-        """Add the main program module.
-
-        Args:
-            module: Parsed main program bitcode.
-            name: Module name for debugging.
-        """
+        """Add the main program module."""
         from sushi_lang.backend.symbol_table import SymbolSource
         self.modules.append((module, name, SymbolSource.MAIN))
 
     def add_library_module(self, module: llvm.ModuleRef, name: str) -> None:
-        """Add a user library module.
-
-        Args:
-            module: Parsed library bitcode.
-            name: Library name.
-        """
+        """Add a user library module."""
         from sushi_lang.backend.symbol_table import SymbolSource
         self.modules.append((module, name, SymbolSource.LIBRARY))
 
     def add_stdlib_module(self, module: llvm.ModuleRef, name: str) -> None:
-        """Add a standard library module.
-
-        Args:
-            module: Parsed stdlib bitcode.
-            name: Stdlib unit name (e.g., "io/stdio").
-        """
+        """Add a standard library module."""
         from sushi_lang.backend.symbol_table import SymbolSource
         self.modules.append((module, name, SymbolSource.STDLIB))
 
     def _find_global_constructors(self) -> set[str]:
-        """Find all global constructor functions in the modules.
-
-        LLVM uses @llvm.global_ctors to register initialization functions that
-        must run before main(). These are entry points that must be included
-        in the reachable set.
-
-        Returns:
-            Set of constructor function names.
-        """
+        """Find all global constructor functions in the modules."""
         import re
         constructors = set()
 
@@ -94,14 +51,7 @@ class TwoPhaseLinker:
         return constructors
 
     def link(self, entry_points: list[str] | None = None) -> llvm.ModuleRef:
-        """Perform two-phase linking and return merged module.
-
-        Args:
-            entry_points: List of entry point symbols (default: ["main"]).
-
-        Returns:
-            New LLVM module with deduplicated symbols.
-        """
+        """Perform two-phase linking and return merged module."""
         from sushi_lang.backend.symbol_table import extract_symbol_table
         from sushi_lang.backend.dependency_graph import build_dependency_graph
         from sushi_lang.backend.symbol_resolver import SymbolResolver

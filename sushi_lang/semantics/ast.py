@@ -63,12 +63,7 @@ class Param:
 
 @dataclass
 class BoundedTypeParam:
-    """Type parameter with optional perk constraints (e.g., T: Hashable).
-
-    When ``is_pack`` is True the parameter is a variadic type pack (``...Ts``)
-    that abstracts over zero or more concrete types; otherwise it is a regular
-    single type parameter.
-    """
+    """Type parameter with optional perk constraints (e.g., T: Hashable)."""
     name: str
     constraints: List[str] = None  # Perk names (e.g., ["Hashable", "Eq"])
     loc: Optional[Span] = None
@@ -193,15 +188,7 @@ class TypeConstraint:
 
 @dataclass
 class ExternalDecl(Node):
-    """A single foreign function declaration inside an unsafe external block.
-
-    Example: fn strlen(string s) i64 = "strlen"
-
-    The Sushi-visible name and the C link symbol are decoupled: 'name' is what
-    Sushi callers use (via the namespace, e.g. libc.strlen), 'link_name' is the
-    symbol the linker resolves. Externals have no body and bypass implicit-Result
-    wrapping - 'ret' is the literal, raw C return type.
-    """
+    """A single foreign function declaration inside an unsafe external block."""
     name: str                    # Sushi-visible name (e.g., "strlen")
     params: List[Param]          # Parameters (C-ABI representable types)
     ret: Optional[Type]          # Raw C return type (NOT wrapped in Result)
@@ -212,15 +199,7 @@ class ExternalDecl(Node):
 
 @dataclass
 class ExternalBlock(Node):
-    """An unsafe external block declaring foreign functions under a namespace.
-
-    Example:
-        unsafe external "C" as libc because "bootstrap":
-            fn strlen(string s) i64 = "strlen"
-
-    The optional 'reason' (from `because "..."`) silences the CW5001
-    four-guarantee warning when present.
-    """
+    """An unsafe external block declaring foreign functions under a namespace."""
     abi: str                          # ABI string (only "C" accepted in v1)
     namespace: str                    # Namespace binding (e.g., "libc")
     reason: Optional[str]             # because "..." reason (None silences nothing)
@@ -275,15 +254,7 @@ class While(Stmt):
 
 @dataclass
 class Foreach(Stmt):
-    """Foreach loop statement: foreach(type item in iterable):
-
-    `item_borrow` is the reference-binding marker (#300 phase 1):
-    `foreach(poke r in rows.iter())` binds `r` as a pointer INTO the container's
-    element storage, so a write through it reaches the owner. `"peek"` is the
-    read-only twin (no element copy). None is the classic value binding (a
-    read-only private copy). A reference-typed `item_type` is normalized to this
-    marker by the AST builder, so downstream passes see ONE spelling.
-    """
+    """Foreach loop statement: foreach(type item in iterable):"""
     item_name: str              # Loop variable name
     item_type: Optional[Type]   # Declared type (may be None for inference)
     iterable: "Expr"            # Expression yielding iterator
@@ -295,14 +266,7 @@ class Foreach(Stmt):
 
 @dataclass
 class Expand(Stmt):
-    """Compile-time pack-expansion statement: expand(a in args):
-
-    The compile-time analog of ``Foreach``. Unlike a runtime loop, the body is
-    UNROLLED once per element of a value pack at compile time, with the binding
-    variable rebound to each concrete element (lowered per-pack-element in the
-    backend, T7b). It is distinct from ``Foreach``, which iterates a runtime
-    iterable.
-    """
+    """Compile-time pack-expansion statement: expand(a in args):"""
     var: str                    # Loop/binding variable name (e.g., 'a')
     iterable: "Expr"            # Value-pack reference being expanded (typically a Name)
     body: Block                 # Body unrolled per pack element
@@ -318,14 +282,7 @@ class Continue(Stmt):
 
 @dataclass
 class Pattern(Node):
-    """Pattern for match arms: EnumName.VariantName(binding1, binding2, ...)
-
-    Supports nested patterns for matching nested enums:
-    - Simple binding: FileResult.Err(err) - binds error to variable 'err'
-    - Nested pattern: FileResult.Err(FileError.NotFound()) - matches specific error variant
-    - Wildcard: FileResult.Err(_) - matches any error
-    - Own pattern: Expr.BinOp(Own(left), Own(right), op) - auto-unwraps Own<T>
-    """
+    """Pattern for match arms: EnumName.VariantName(binding1, binding2, ...)"""
     enum_name: str                                      # Enum type name (e.g., "FileResult")
     variant_name: str                                   # Variant name (e.g., "Err")
     bindings: List[Union[str, 'Pattern', 'OwnPattern', 'RefBinding']] # Names, nested patterns, Own patterns, reference bindings, or '_'
@@ -339,37 +296,14 @@ class WildcardPattern(Node):
 
 @dataclass
 class RefBinding(Node):
-    """A reference binding in a match pattern: `Shape.Poly(poke p)` (#300 phase 3).
-
-    Binds `name` as a POINTER into the scrutinee's payload storage, so a write through
-    it reaches the owner in place; `"peek"` is the copy-free read-only twin. Legal only
-    in a TOP-LEVEL pattern with a named scrutinee: nested-pattern extraction walks
-    through temporary copies (a pointer into one is a silently lost write), and a
-    temporary scrutinee has no storage to point into (CE2404).
-    """
+    """A reference binding in a match pattern: `Shape.Poly(poke p)` (#300 phase 3)."""
     name: str
     mode: str                        # "peek" | "poke"
 
 
 @dataclass
 class OwnPattern(Node):
-    """Own(inner_pattern) - auto-unwrap Own<T> in pattern matching.
-
-    Syntax: Own(pattern)
-
-    Example:
-        match expr:
-            Expr.BinOp(Own(left), Own(right), op) ->
-                # left and right are auto-unwrapped to Expr
-
-    The compiler generates Own<T>.get() to unwrap the owned value
-    before matching the inner pattern.
-
-    `inner_borrow` (#300 phase 1): `Own(poke inner)` binds `inner` as a pointer
-    to the heap pointee instead of a private copy, so a write through it reaches
-    the owned value. Malloc'd storage is naturally aligned, so the enum-payload
-    alignment wall that defers plain `poke` pattern bindings does not apply.
-    """
+    """Own(inner_pattern) - auto-unwrap Own<T> in pattern matching."""
     inner_pattern: Union[str, 'Pattern']  # Variable name or nested pattern
     inner_borrow: Optional[str] = None    # None | "peek" | "poke"
     inner_borrow_span: Optional[Span] = None
@@ -428,13 +362,7 @@ class StringLit(Node):
 
 @dataclass
 class InterpolatedString(Node):
-    """Represents a string with interpolated expressions like "Hello, {name}!"
-
-    The parts list alternates between string literals and expressions:
-    - String: "Hello, " -> parts[0] = "Hello, "
-    - Expression: {name} -> parts[1] = Name("name")
-    - String: "!" -> parts[2] = "!"
-    """
+    """Represents a string with interpolated expressions like "Hello, {name}!" """
     parts: List[Union[str, "Expr"]]  # Alternating string literals and expressions
 
 @dataclass
@@ -470,25 +398,15 @@ class BinaryOp(Node):
 
 @dataclass
 class Spread(Node):
-    """A bloomed call argument: `arr...` fans an existing array's elements into a
-    variadic `...T` slot. Only valid as the sole, last trailing argument of a call
-    to a variadic function; the source array is moved (consumed) into the callee."""
+    """A bloomed call argument: `arr...` fans an existing array's elements into a variadic `...T`
+    slot. Only valid as the sole, last trailing argument of a call to a variadic function; the
+    source array is moved (consumed) into the callee.
+    """
     value: "Expr"   # the array expression being bloomed (e.g. Name("args"))
 
 @dataclass
 class Lambda(Node):
-    """A lambda literal (closure).
-
-    Two body forms, both new `atom` alternatives:
-      - expression body: `|params| expr`  (desugars to `return Result.Ok(expr)`)
-      - block body:      `|params|[ -> T [| E]]: <block>`  (a full fn body)
-
-    `params` reuses the `FuncDef` `Param` shape; a bare-name param (`|x|`) carries
-    `ty=None` until inference fills it from an expected `FunctionType`. The zero-param
-    form `|~|` yields an empty `params` list. `captures` is filled by the scope pass
-    (free names resolving to enclosing locals); `lifted_name` is filled by the
-    lambda-lifting pass (the synthesized top-level `__lambda_N`).
-    """
+    """A lambda literal (closure)."""
     params: List[Param]
     body: Union["Expr", "Block"]
     is_block_body: bool = False
@@ -539,16 +457,7 @@ class MethodCall(Node):
 
 @dataclass
 class DotCall(Node):
-    """Unified node for X.Y(args) - resolved during semantic analysis.
-
-    This node represents all dot-call syntax (receiver.method(args)) before semantic
-    analysis determines whether it's an enum constructor or method call:
-    - If receiver is an enum type name: EnumConstructor (e.g., Result.Ok(42))
-    - If receiver is a variable/expression: MethodCall (e.g., arr.push(5))
-
-    This eliminates the need for AST transformation passes and special cases.
-    The type checker resolves the actual meaning based on semantic information.
-    """
+    """Unified node for X.Y(args) - resolved during semantic analysis."""
     receiver: "Expr"    # The receiver expression (variable, type name, etc.)
     method: str         # Method/variant name
     args: List["Expr"]  # Arguments
@@ -590,40 +499,13 @@ class CastExpr(Node):
 
 @dataclass
 class Borrow(Node):
-    """Borrow expression: peek expr or poke expr
-
-    Creates a reference (borrow) to a variable without transferring ownership.
-    The borrowed variable cannot be moved, rebound, or destroyed while the borrow is active.
-
-    Borrow modes:
-    - peek: Read-only borrow (multiple allowed)
-    - poke: Read-write borrow (exclusive access)
-
-    Examples:
-        read_value(peek num)   # Read-only access
-        increment(poke num)    # Read-write access
-    """
+    """Borrow expression: peek expr or poke expr"""
     expr: "Expr"  # The expression being borrowed (typically a Name)
     mutability: Literal["peek", "poke"]  # Borrow mode
 
 @dataclass
 class TryExpr(Node):
-    """Try expression: expr??
-
-    Error propagation operator that unwraps Result<T> or propagates errors.
-    If the expression evaluates to Result.Ok(value), returns value.
-    If the expression evaluates to Result.Err(), immediately returns Result.Err() from the enclosing function.
-
-    Example: let file f = open("file.txt", FileMode.Read())??
-
-    AST Annotations (set during semantic analysis Pass 2):
-    - inferred_inner_type: The EnumType of the inner expression (Result<T,E>, Maybe<T>)
-    - inferred_unwrapped_type: The success type T (extracted from Ok(T) or Some(T))
-    - inferred_success_tag: Variant index for Ok/Some
-    - inferred_error_type: The error type E (for Result-like enums, None for Maybe)
-    - inferred_error_tag: Variant index for Err (for Result-like enums)
-    - inferred_func_return_type: The enclosing function's Result<T, E> enum
-    """
+    """Try expression: expr??"""
     expr: "Expr"  # The expression being unwrapped (must be Result<T>)
 
     # AST annotations set during semantic analysis (Pass 2)
@@ -636,25 +518,7 @@ class TryExpr(Node):
 
 @dataclass
 class RangeExpr(Node):
-    """Range expression: start..end or start..=end
-
-    Represents an integer range for iteration:
-    - start..end: Exclusive upper bound (start <= i < end)
-    - start..=end: Inclusive upper bound (start <= i <= end)
-
-    Both start and end are evaluated at runtime, allowing dynamic ranges.
-    Direction (ascending/descending) is determined automatically at runtime
-    by comparing start and end values.
-
-    Examples:
-        0..10       # Yields 0, 1, 2, ..., 9
-        0..=10      # Yields 0, 1, 2, ..., 10
-        10..0       # Yields 10, 9, 8, ..., 1 (descending)
-        5..5        # Empty range (zero iterations)
-
-    Type: Always evaluates to Iterator<i32> for consistency with array iterators.
-    Backend: Compiles to optimized for-loop (no iterator struct overhead).
-    """
+    """Range expression: start..end or start..=end"""
     start: "Expr"           # Start expression (must evaluate to integer)
     end: "Expr"             # End expression (must evaluate to integer)
     inclusive: bool         # True for ..=, False for ..
@@ -662,10 +526,9 @@ class RangeExpr(Node):
 Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread, Lambda]
 
 def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
-    """
-    Accepts either a Token (from the parser) or a str (already a lexeme).
-    Returns one of: "+","-","*","/","%","==","!=","<","<=",">",">=","and","or","&","|","^","<<",">>".
-    Raises if unknown (fail-fast so we don't emit invalid AST).
+    """Accepts either a Token (from the parser) or a str (already a lexeme). Returns one of:
+    "+","-","*","/","%","==","!=","<","<=",">",">=","and","or","&","|","^","<<",">>". Raises if
+    unknown (fail-fast so we don't emit invalid AST).
     """
     # Map both token TYPES and string LEXEMES to canonical op strings
     op_map = {

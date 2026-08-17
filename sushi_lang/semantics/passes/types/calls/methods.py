@@ -1,13 +1,5 @@
 # semantics/passes/types/calls/methods.py
-"""
-Method call validation.
-
-Handles validation for:
-- Extension methods
-- Built-in methods (arrays, strings, primitives)
-- Generic struct methods (Own<T>, HashMap<K,V>, List<T>)
-- Perk implementation methods
-"""
+"""Method call validation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -23,13 +15,7 @@ if TYPE_CHECKING:
 
 
 def _reject_immutable_poke_receiver(validator: 'TypeValidator', call: MethodCall) -> None:
-    """A `poke self` method call writes through its receiver's ADDRESS (#327).
-
-    So the receiver must HAVE an address the write can reach: a temporary would be
-    spilled to a copy nobody reads (a silently lost write, the #326 class) and is
-    CE2404; a constant lives in `.rodata` and is CE2400. A binding/`peek` receiver
-    is Pass 3's half -- the write gate treats a poke-self call as a write to the root.
-    """
+    """A `poke self` method call writes through its receiver's ADDRESS (#327)."""
     from sushi_lang.semantics.ast import DotCall, MemberAccess
 
     root = call.receiver
@@ -337,14 +323,7 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
 
 
 def _stamp_param_modes(call, method) -> None:
-    """Record the resolved method's declared parameter modes on the call node.
-
-    Pass 3 and the backend both need "what does this callee take?", and only Pass 2
-    resolves WHICH method a `receiver.name(...)` denotes -- through the perk table, the
-    extension table and the generic-extension table, with built-ins winning first. The
-    stamp is the same mechanism `callee_self_mode` already uses: resolve once, read
-    twice, rather than re-deriving the answer in two more places.
-    """
+    """Record the resolved method's declared parameter modes on the call node."""
     from sushi_lang.semantics.param_modes import CalleeKind, modes_for
     params = getattr(method, "params", None) or ()
     call.callee_param_modes = modes_for(params, CalleeKind.METHOD)

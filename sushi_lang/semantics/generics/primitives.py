@@ -1,20 +1,5 @@
 # semantics/generics/primitives.py
-"""Recognition and Pass-2 validation of the built-in primitive methods.
-
-Which methods a primitive has, and what a call to one must look like, are
-semantic facts. Pass 2 needs them *before* the backend is ever imported -- the
-compiler pipeline loads codegen lazily, after semantic analysis -- so they are
-decided here and not read out of the builtin-method registry.
-
-The registry still carries the same methods, registered by
-`backend/types/primitives/` with their LLVM emitters attached, and the backend
-dispatches emission through it. The two are kept in sync by
-`tests/unit/test_primitive_methods.py`.
-
-Every one of them takes no arguments, so validation is uniform; the only per-method
-distinction is which types carry them (`to_bits` is float-only, `clone` excludes
-`string`).
-"""
+"""Recognition and Pass-2 validation of the built-in primitive methods."""
 from __future__ import annotations
 
 from typing import Any
@@ -89,26 +74,13 @@ def is_builtin_primitive_method(method_name: str) -> bool:
 
 
 def has_primitive_method(target_type: Type, method_name: str) -> bool:
-    """Check if a primitive type carries the named builtin method.
-
-    A name can be a builtin primitive method in general and still be absent from
-    a given type -- `i32.to_bits()` is not a thing -- so callers must ask about
-    the receiver, not just the name.
-    """
+    """Check if a primitive type carries the named builtin method."""
     carriers = PRIMITIVE_METHOD_TYPES.get(method_name)
     return carriers is not None and target_type in carriers
 
 
 def primitive_method_return_type(target_type: Type, method_name: str) -> Type | None:
-    """Return type of a builtin primitive method call, or None if this pair has none.
-
-    Pass 2 must answer this WITHOUT the builtin-method registry. The registry carries the
-    same methods, but it is populated by `backend/types/primitives/` at import time and the
-    pipeline imports codegen lazily, AFTER semantic analysis -- so during Pass 2 it is empty.
-    Reading it from here is what left every primitive return type un-inferred (#239): a
-    missing inference is silent, because validate_assignment_compatibility treats an
-    unknown value type as "nothing to check".
-    """
+    """Return type of a builtin primitive method call, or None if this pair has none."""
     return PRIMITIVE_METHOD_RETURNS.get(method_name, {}).get(target_type)
 
 

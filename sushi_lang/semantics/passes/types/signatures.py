@@ -1,17 +1,5 @@
 # semantics/passes/types/signatures.py
-"""
-Declaration signature validation for type validation (Pass 2).
-
-Validates the signature and body of the three declaration kinds that share
-return-type / parameter / return-reachability machinery:
-- regular functions
-- extension methods
-- perk implementation methods
-
-Functions receive the TypeValidator instance (``self``) and mutate it in
-place (current_function, variable_types, destroyed_arrays), matching the
-delegation pattern used across this package.
-"""
+"""Declaration signature validation for type validation (Pass 2)."""
 from __future__ import annotations
 
 from sushi_lang.internals import errors as er
@@ -27,15 +15,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 
 
 def _check_public_fn_ptr_fence(self, func: FuncDef) -> None:
-    """CE5008: a `public fn` may not expose a foreign `ptr` in its signature.
-
-    FFI handles are a private unit detail. The fence fires whenever the
-    `public` keyword is present, even in single-file programs (where `public`
-    is otherwise a no-op) - simpler, and keeps the rule learnable before a
-    program grows a second unit. Struct fields may still carry `ptr` across
-    units (the wrapper-struct pattern); only the function signature itself
-    is checked. Extensions and perk methods cannot be `public` (grammar).
-    """
+    """CE5008: a `public fn` may not expose a foreign `ptr` in its signature."""
     from sushi_lang.semantics.type_predicates import contains_foreign_ptr
 
     if not func.is_public:

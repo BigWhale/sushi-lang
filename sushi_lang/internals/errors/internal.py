@@ -1,8 +1,4 @@
-"""Internal errors (CE0xxx) -- compiler bugs, not user errors.
-
-This module owns its numeric range: a code may only be added in the file that
-owns it, which is what makes the grouping structural rather than conventional.
-"""
+"""Internal errors (CE0xxx) -- compiler bugs, not user errors."""
 from __future__ import annotations
 
 from sushi_lang.internals.errors.registry import (

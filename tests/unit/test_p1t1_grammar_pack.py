@@ -1,14 +1,4 @@
-"""P1-T1 parse spike: grammar for variadic-generic type packs + ``expand(...)``.
-
-This task is a pure PARSE gate. It proves the two grammar additions
-
-  (a) ``type_param: ELLIPSIS? NAME [perk_constraints]``  -- ``<...Ts>`` packs
-  (b) ``expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block``
-
-parse unambiguously and without regressing any existing surface, BEFORE any
-AST builder / semantic support exists (those are P1-T2/T3). We therefore drive
-the raw Lark parser directly and never run the ASTBuilder over the new syntax.
-"""
+"""P1-T1 parse spike: grammar for variadic-generic type packs + ``expand(...)``."""
 from __future__ import annotations
 
 import pytest

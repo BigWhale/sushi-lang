@@ -1,11 +1,4 @@
-"""
-Type Conversion IR Generation
-
-Functions for generating LLVM IR to convert types to strings.
-These are high-level operations used by the runtime formatting system.
-
-Design: Single Responsibility - only type-to-string conversions.
-"""
+"""Type Conversion IR Generation"""
 
 import llvmlite.ir as ir
 from .libc_declarations import declare_sprintf, declare_malloc
@@ -47,20 +40,7 @@ def emit_integer_to_string(
     is_signed: bool,
     bit_width: int
 ) -> ir.Value:
-    """Generate LLVM IR to convert an integer to a string using sprintf.
-
-    This is a standalone version that doesn't depend on codegen infrastructure.
-
-    Args:
-        module: The LLVM module (for declaring functions).
-        builder: The IR builder for creating instructions.
-        int_value: The integer value to convert.
-        is_signed: True for signed integers, False for unsigned.
-        bit_width: Bit width of the integer type (8, 16, 32, or 64).
-
-    Returns:
-        Fat pointer struct {i8* data, i32 size} containing the string representation.
-    """
+    """Generate LLVM IR to convert an integer to a string using sprintf."""
     # Declare required functions
     sprintf_fn = declare_sprintf(module)
     malloc_fn = declare_malloc(module)
@@ -112,17 +92,7 @@ def emit_float_to_string(
     float_value: ir.Value,
     is_double: bool
 ) -> ir.Value:
-    """Generate LLVM IR to convert a float to a string using sprintf.
-
-    Args:
-        module: The LLVM module (for declaring functions).
-        builder: The IR builder for creating instructions.
-        float_value: The float value to convert.
-        is_double: True for f64, False for f32.
-
-    Returns:
-        Fat pointer struct {i8* data, i32 size} containing the string representation.
-    """
+    """Generate LLVM IR to convert a float to a string using sprintf."""
     # Declare required functions
     sprintf_fn = declare_sprintf(module)
     malloc_fn = declare_malloc(module)
@@ -155,16 +125,7 @@ def emit_bool_to_string(
     builder: ir.IRBuilder,
     bool_value: ir.Value
 ) -> ir.Value:
-    """Generate LLVM IR to convert a boolean to a string.
-
-    Args:
-        module: The LLVM module (for declaring functions).
-        builder: The IR builder for creating instructions.
-        bool_value: The boolean value to convert (i1 or i8).
-
-    Returns:
-        Fat pointer struct {i8* data, i32 size} containing "true" or "false".
-    """
+    """Generate LLVM IR to convert a boolean to a string."""
     # Create string constants for "true" and "false" as C strings
     true_cstr = create_string_constant(module, builder, "true", name="str_true")
     false_cstr = create_string_constant(module, builder, "false", name="str_false")

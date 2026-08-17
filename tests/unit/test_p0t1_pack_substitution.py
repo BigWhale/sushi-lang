@@ -1,14 +1,4 @@
-"""P0-T1: pack-capable monomorphization substitution model.
-
-Focused TDD-style checks for the frozen pack-representation contract:
-
-- a regular 1:1 generic still builds a 1:1 substitution (unchanged);
-- a synthetic generic whose last type_param has ``is_pack=True`` binds a
-  ``TypePack`` of the trailing types into the substitution;
-- ``substitute_type`` raises when a pack binding is hit in scalar position.
-
-A comprehensive suite is authored separately (P0-TA); these are minimal.
-"""
+"""P0-T1: pack-capable monomorphization substitution model."""
 import types as _pytypes
 
 import pytest
@@ -20,12 +10,7 @@ from sushi_lang.semantics.typesys import BuiltinType, UnknownType
 
 
 class _FakeMono:
-    """Minimal stand-in for Monomorphizer.
-
-    ``build_substitution`` only reaches back into the parent for
-    ``_validate_type_constraints``; record its calls so we can assert the
-    no-pack path is unchanged and the pack path only validates leading params.
-    """
+    """Minimal stand-in for Monomorphizer."""
 
     def __init__(self):
         self.constraint_calls = []

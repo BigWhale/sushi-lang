@@ -1,12 +1,5 @@
 # semantics/passes/types/calls/generics.py
-"""
-Generic function call validation.
-
-Handles validation for:
-- Generic function calls with type inference
-- Type parameter unification
-- Mangled name rewriting
-"""
+"""Generic function call validation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Dict
 
@@ -31,13 +24,7 @@ def validate_generic_function_call(
     call: Call,
     function_name: str
 ) -> None:
-    """Validate generic function call and rewrite to use mangled name.
-
-    Args:
-        validator: Type validator instance
-        call: Call AST node
-        function_name: Generic function name
-    """
+    """Validate generic function call and rewrite to use mangled name."""
 
     # Get generic function definition
     generic_func = validator.generic_func_table.by_name[function_name]
@@ -113,14 +100,7 @@ def validate_generic_function_call(
 
 
 def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected_ty):
-    """Resolve a bare generic-fn reference against an expected FunctionType (T2.3).
-
-    `let fn(i32) -> i32 g = identity` with `fn identity<T>(T x) T`: solve the type args
-    by unifying the generic signature `fn(T) -> T` against the expected type, mangle, and
-    return `(mangled_name, concrete_FunctionType)` when the monomorphized instance exists.
-    Returns None when not resolvable this way (no expected fn type, arity mismatch, a type
-    param unsolved by the expected type, a pack function, or no monomorphized instance).
-    """
+    """Resolve a bare generic-fn reference against an expected FunctionType (T2.3)."""
     from sushi_lang.semantics.typesys import FunctionType, UnknownType
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
     if not isinstance(expected_ty, FunctionType):
@@ -173,22 +153,7 @@ def _infer_type_args_from_call_site(
     call: Call,
     generic_func
 ) -> Optional[tuple]:
-    """Infer type arguments from call site arguments.
-
-    This is similar to InstantiationCollector but uses the full type checker.
-
-    Args:
-        validator: Type validator
-        call: Call AST node
-        generic_func: Generic function definition
-
-    Returns:
-        Tuple of concrete types or None if inference fails. For a function ending
-        in a type pack the flat tuple is ``(<leading inferred type-args>,
-        *<trailing pack element types>)`` -- the pack-tail handling is shared with
-        Pass 1.5 via ``pack_inference.infer_flat_type_args`` so both sites agree
-        on the symbol. A valid arity-0 pack returns ``()`` (SUCCESS, not failure).
-    """
+    """Infer type arguments from call site arguments."""
     from sushi_lang.semantics.generics.pack_inference import infer_flat_type_args
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
@@ -208,11 +173,7 @@ def _infer_type_args_from_call_site(
         arg_types.append(resolved)
 
     def _infer_leading(gfunc, leading_arg_types):
-        """Existing Pass-2 leading unification, restricted to the fixed prefix.
-
-        For a NON-pack function the helper passes ALL args here, reproducing the
-        legacy behavior byte-for-byte.
-        """
+        """Existing Pass-2 leading unification, restricted to the fixed prefix."""
         type_param_map: Dict[str, Type] = {}
 
         # Leading value-params are those that are NOT the pack value-param.
@@ -254,15 +215,7 @@ def _validate_pack_element_constraints(
     generic_func,
     flat_type_args: tuple
 ) -> None:
-    """Per-element perk-constraint check for a constrained type-pack (CE2090).
-
-    When the function's trailing type-param is a perk-constrained pack
-    (``...Ts: Perk``), each concrete element type bound to the pack must satisfy
-    every constraint perk. Emits CE2090 for each violating element, with the
-    0-based position WITHIN THE PACK as ``index``.
-
-    Non-pack and unconstrained-pack functions are no-ops.
-    """
+    """Per-element perk-constraint check for a constrained type-pack (CE2090)."""
     type_params = generic_func.type_params or []
     if not type_params:
         return
@@ -306,10 +259,7 @@ def _unify_types_for_inference(
     arg_type: Type,
     type_param_map: Dict[str, Type]
 ) -> bool:
-    """Unify parameter type with argument type for type inference (Pass 2).
-
-    Thin wrapper over the shared ``unify_types`` engine.
-    """
+    """Unify parameter type with argument type for type inference (Pass 2)."""
     from sushi_lang.semantics.generics.unify import unify_types
     return unify_types(param_type, arg_type, type_param_map)
 
@@ -319,15 +269,7 @@ def validate_call_arguments(
     call: Call,
     func_sig
 ) -> None:
-    """Validate call arguments against function signature.
-
-    This is the existing argument validation logic, extracted for reuse.
-
-    Args:
-        validator: Type validator
-        call: Call AST node
-        func_sig: Function signature
-    """
+    """Validate call arguments against function signature."""
     expected_params = func_sig.params
     actual_args = call.args
 

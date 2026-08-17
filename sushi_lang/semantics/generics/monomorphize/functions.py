@@ -1,13 +1,5 @@
 # semantics/generics/monomorphize/functions.py
-"""
-Generic function monomorphization.
-
-This module handles the monomorphization of generic functions, including:
-- Converting generic function definitions into concrete instantiations
-- Detecting nested generic function calls
-- Type argument inference from call sites
-- Managing worklists for multi-pass monomorphization
-"""
+"""Generic function monomorphization."""
 from __future__ import annotations
 from typing import Dict, Tuple, Set, Optional, TYPE_CHECKING
 import copy
@@ -22,22 +14,10 @@ if TYPE_CHECKING:
 
 
 class FunctionMonomorphizer:
-    """Handles monomorphization of generic functions.
-
-    This class is responsible for:
-    - Converting GenericFuncDef + type args → concrete FuncDef
-    - Detecting and recursively monomorphizing nested generic function calls
-    - Inferring type arguments from call sites
-    - Managing function caches and registration
-    """
+    """Handles monomorphization of generic functions."""
 
     def __init__(self, monomorphizer):
-        """Initialize function monomorphizer.
-
-        Args:
-            monomorphizer: Parent Monomorphizer instance (provides access to
-                           caches, generic tables, and substitutor)
-        """
+        """Initialize function monomorphizer."""
         self.monomorphizer = monomorphizer
 
     def build_substitution(
@@ -45,29 +25,7 @@ class FunctionMonomorphizer:
         generic: 'GenericFuncDef',
         type_args: Tuple[Type, ...]
     ) -> Dict[str, "Type | TypePack"]:
-        """Build the type-parameter -> binding substitution map for a generic.
-
-        Handles two cases:
-
-        - **No pack param** (the common, pre-existing case): requires an exact
-          1:1 arity match between ``generic.type_params`` and ``type_args``;
-          otherwise raises ``ValueError`` (same message as before). Each param
-          binds to a single ``Type``. Perk constraints are validated as before.
-        - **Trailing pack param** (``getattr(tp, 'is_pack', False)`` truthy):
-          the pack param must be the *last* type-param and there may be at most
-          one. The leading ``k = len(tps) - 1`` non-pack params bind 1:1 to
-          ``type_args[:k]``; the pack param binds to a ``TypePack`` absorbing
-          all trailing args ``type_args[k:]`` (zero or more). Requires
-          ``len(type_args) >= k``.
-
-        Args:
-            generic: Generic function definition (its ``type_params`` list).
-            type_args: Flat, ordered tuple of concrete type arguments.
-
-        Returns:
-            Mapping from type-parameter name to ``Type`` (regular binding) or
-            ``TypePack`` (pack binding).
-        """
+        """Build the type-parameter -> binding substitution map for a generic."""
         tps = list(generic.type_params)
 
         # Locate pack params (at most one, must be last).
@@ -132,18 +90,7 @@ class FunctionMonomorphizer:
         generic: 'GenericFuncDef',
         type_args: Tuple[Type, ...]
     ) -> 'FuncDef':
-        """Create concrete function from generic definition.
-
-        Performs type parameter substitution in signature and body.
-        Returns a complete FuncDef ready for validation and codegen.
-
-        Args:
-            generic: Generic function definition
-            type_args: Concrete type arguments
-
-        Returns:
-            Concrete function definition (FuncDef) with substituted body
-        """
+        """Create concrete function from generic definition."""
         # Check cache
         cache_key = (generic.name, type_args)
         if cache_key in self.monomorphizer.func_cache:
@@ -230,14 +177,7 @@ class FunctionMonomorphizer:
         function_instantiations: Set[Tuple[str, Tuple[Type, ...]]],
         program_or_units
     ) -> None:
-        """Monomorphize all detected function instantiations.
-
-        Generates concrete function definitions and adds them to FunctionTable and Program/Units.
-
-        Args:
-            function_instantiations: Set of (function_name, type_args) tuples
-            program_or_units: Either a Program AST (single-file) or list of Units (multi-file)
-        """
+        """Monomorphize all detected function instantiations."""
         from sushi_lang.semantics.ast import Program
 
         if not self.monomorphizer.func_table:
@@ -351,15 +291,8 @@ class FunctionMonomorphizer:
         substitution: Dict[str, "Type | TypePack"],
         generic_func: 'GenericFuncDef'
     ) -> None:
-        """Scan function body for calls to other generic functions and recursively monomorphize them.
-
-        This enables multi-pass monomorphization: when monomorphizing function A<T>, if it calls
-        function B<T>, we detect that and recursively monomorphize B<concrete_type>.
-
-        Args:
-            body: Function body to scan
-            substitution: Current type parameter substitution map (e.g., {"T": StructType("Point")})
-            generic_func: The generic function being monomorphized (for parameter type info)
+        """Scan function body for calls to other generic functions and recursively monomorphize
+        them.
         """
         from sushi_lang.semantics.ast import Let, ExprStmt, Return, If, While, Match, Foreach, Block
 
@@ -413,13 +346,7 @@ class FunctionMonomorphizer:
                         self._collect_nested_instantiations(arm.body, substitution, generic_func)
 
     def _collect_from_expr(self, expr, substitution: Dict[str, "Type | TypePack"], var_types: Dict[str, Type]) -> None:
-        """Recursively scan expression for generic function calls.
-
-        Args:
-            expr: Expression to scan
-            substitution: Type parameter substitution map
-            var_types: Map from variable names to their concrete types
-        """
+        """Recursively scan expression for generic function calls."""
         from sushi_lang.semantics.ast import (
             Call, Name, BinaryOp, UnaryOp, TryExpr, DotCall,
             IndexAccess, ArrayLiteral, EnumConstructor, CastExpr,
@@ -505,14 +432,7 @@ class FunctionMonomorphizer:
             pass
 
     def _get_arg_inferrer(self, var_types: Dict[str, Type]):
-        """Pass 2's TypeValidator over the whole program, seeded with this scope.
-
-        Cached per FunctionMonomorphizer and re-seeded with the current `var_types` on each
-        call (the scope changes per monomorphized function). Wired to discard diagnostics --
-        they belong to Pass 2, which runs later. Returns None when no SymbolTables was
-        supplied (unit-test paths), in which case the caller falls back to the var-type map.
-        Mirrors the shared inferrer Pass 1.5 builds in instantiate/__init__.py.
-        """
+        """Pass 2's TypeValidator over the whole program, seeded with this scope."""
         tables = getattr(self.monomorphizer, "tables", None)
         if tables is None:
             return None
@@ -532,16 +452,7 @@ class FunctionMonomorphizer:
         generic_func: 'GenericFuncDef',
         var_types: Dict[str, Type]
     ) -> Optional[Tuple[Type, ...]]:
-        """Infer type arguments for a generic function call inside another generic function.
-
-        Args:
-            call: Call AST node
-            generic_func: Generic function being called
-            var_types: Map from variable names to their concrete types
-
-        Returns:
-            Tuple of concrete types or None if inference fails
-        """
+        """Infer type arguments for a generic function call inside another generic function."""
         from sushi_lang.semantics.ast import Name
         from sushi_lang.semantics.generics.unify import unify_types
 
@@ -596,15 +507,7 @@ class FunctionMonomorphizer:
         ty: Type,
         instantiations: Set[Tuple[str, Tuple[Type, ...]]]
     ) -> None:
-        """Recursively extract all generic type instantiations from a Type.
-
-        This helper scans a type tree (e.g., Result<Maybe<i32>>) and collects all
-        generic enum/struct instantiations that need to be monomorphized.
-
-        Args:
-            ty: Type to scan for generic instantiations
-            instantiations: Set to add (base_name, type_args) tuples to
-        """
+        """Recursively extract all generic type instantiations from a Type."""
         from sushi_lang.semantics.typesys import EnumType, StructType
 
         if ty is None:

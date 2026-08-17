@@ -1,8 +1,4 @@
-"""LLVM IR constant value creation utilities.
-
-This module provides precomputed LLVM constants and factory functions
-to eliminate code duplication across the backend.
-"""
+"""LLVM IR constant value creation utilities."""
 
 from llvmlite import ir
 from sushi_lang.backend.constants.bit_widths import (

@@ -1,24 +1,5 @@
 # semantics/generics/hashing.py
-"""
-Hashability analysis and hash() method registration.
-
-Whether a type can be hashed is a *semantic* question -- it depends only on the
-type's shape (generic? unresolved fields? a foreign ptr? an unhashable element?),
-never on LLVM. Pass 1.8 (`semantics/passes/hash_registration.py`) answers it here
-and registers the auto-derived `hash() -> u64` method so Pass 2 can validate
-`.hash()` calls through the builtin-method registry.
-
-The three `can_*_be_hashed` predicates are mutually recursive: a struct is
-hashable iff its array/enum/struct fields are, and so on. Keeping them in one
-module makes that recursion intra-module instead of a three-way import cycle.
-
-The LLVM emitter for hash() is backend code, and semantics must not import the
-backend. The backend types modules therefore deposit their emitter *factories*
-into the registry in `sushi_stdlib/src/common.py` at import time, and
-`_lazy_hash_emitter` below resolves the factory at emission time -- inside
-codegen, where the backend is necessarily loaded. Registration is thus
-independent of module import order.
-"""
+"""Hashability analysis and hash() method registration."""
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -51,23 +32,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 # --------------------------------------------------------------------------
 
 def can_struct_be_hashed(struct_type: StructType, visited: Optional[set] = None, path: Optional[list] = None) -> tuple[bool, str]:
-    """Check if a struct type can have an auto-derived hash method.
-
-    A struct can be hashed if:
-    - It's not a generic struct (GenericStructType)
-    - It has no UnknownType fields (types not yet resolved)
-    - All array fields have hashable element types (recursive check)
-    - All enum fields are hashable (recursive check)
-    - All nested struct fields can also be hashed (recursive check)
-
-    Args:
-        struct_type: The struct type to check
-        visited: Set of struct names already visited (for cycle detection)
-        path: List of struct names in current path (for error messages)
-
-    Returns:
-        Tuple of (can_hash, reason) where reason explains why if False
-    """
+    """Check if a struct type can have an auto-derived hash method."""
     # Initialize tracking for recursive calls
     if visited is None:
         visited = set()
@@ -117,23 +82,7 @@ def can_struct_be_hashed(struct_type: StructType, visited: Optional[set] = None,
 
 
 def can_enum_be_hashed(enum_type: EnumType, visited: Optional[set] = None, path: Optional[list] = None) -> tuple[bool, str]:
-    """Check if an enum type can have an auto-derived hash method.
-
-    An enum can be hashed if:
-    - It's not a generic enum (GenericEnumType)
-    - All variant associated types are hashable
-    - It has no UnknownType fields (types not yet resolved)
-    - All array fields have hashable element types (recursive check)
-    - All nested enum/struct fields can also be hashed (recursive check)
-
-    Args:
-        enum_type: The enum type to check
-        visited: Set of enum names already visited (for cycle detection)
-        path: List of enum names in current path (for error messages)
-
-    Returns:
-        Tuple of (can_hash, reason) where reason explains why if False
-    """
+    """Check if an enum type can have an auto-derived hash method."""
     # Initialize tracking for recursive calls
     if visited is None:
         visited = set()
@@ -184,20 +133,7 @@ def can_enum_be_hashed(enum_type: EnumType, visited: Optional[set] = None, path:
 
 
 def can_array_be_hashed(array_type: Type, visited: Optional[set] = None, path: Optional[list] = None) -> tuple[bool, str]:
-    """Check if an array type can have an auto-derived hash method.
-
-    An array can be hashed if:
-    - It's not a nested array (array of arrays)
-    - Its element type is hashable (primitives, structs, enums with hash methods)
-
-    Args:
-        array_type: The array type to check (ArrayType or DynamicArrayType)
-        visited: Set of type names already visited (for cycle detection)
-        path: List of type names in current path (for error messages)
-
-    Returns:
-        Tuple of (can_hash, reason) where reason explains why if False
-    """
+    """Check if an array type can have an auto-derived hash method."""
     if not isinstance(array_type, (ArrayType, DynamicArrayType)):
         return False, f"not an array type: {type(array_type).__name__}"
 
@@ -240,33 +176,21 @@ def can_array_be_hashed(array_type: Type, visited: Optional[set] = None, path: O
 # --------------------------------------------------------------------------
 
 def _validate_struct_hash(call: MethodCall, target_type: Type, reporter: Any) -> None:
-    """Validate hash() method call on struct types.
-
-    Hashability itself is decided by can_struct_be_hashed() at registration time:
-    an unhashable struct never gets a hash() method to call.
-    """
+    """Validate hash() method call on struct types."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
                 name=f"{display_type(target_type)}.hash", expected=0, got=len(call.args))
 
 
 def _validate_enum_hash(call: MethodCall, target_type: Type, reporter: Any) -> None:
-    """Validate hash() method call on enum types.
-
-    Hashability itself is decided by can_enum_be_hashed() at registration time.
-    """
+    """Validate hash() method call on enum types."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
                 name=f"{display_type(target_type)}.hash", expected=0, got=len(call.args))
 
 
 def _validate_array_hash(call: MethodCall, target_type: Type, reporter: Any) -> None:
-    """Validate hash() method call on array types.
-
-    Checks:
-    - No arguments to hash()
-    - No nested arrays (arrays of arrays)
-    """
+    """Validate hash() method call on array types."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
                 name=f"{display_type(target_type)}.hash", expected=0, got=len(call.args))
@@ -283,11 +207,7 @@ def _validate_array_hash(call: MethodCall, target_type: Type, reporter: Any) -> 
 # --------------------------------------------------------------------------
 
 def _lazy_hash_emitter(kind: str, target_type: Type):
-    """Build a hash() emitter that resolves its backend factory on first emission.
-
-    Deferring the lookup keeps Pass 1.8 free of any backend import and any
-    dependency on when the backend's types modules happen to be imported.
-    """
+    """Build a hash() emitter that resolves its backend factory on first emission."""
     def emit(codegen, call, receiver_value, receiver_type, to_i1):
         factory = get_hash_emitter_factory(kind)
         if factory is None:
@@ -298,11 +218,7 @@ def _lazy_hash_emitter(kind: str, target_type: Type):
 
 
 def _register_hash_method(target_type: Type, kind: str, validator, description: str) -> None:
-    """Register the auto-derived hash() method for a type.
-
-    Called from Pass 1.8 only; a duplicate registration means the pass ran twice
-    for the same type, which is a compiler bug.
-    """
+    """Register the auto-derived hash() method for a type."""
     if get_builtin_method(target_type, "hash") is not None:
         return  # Already registered
 

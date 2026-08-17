@@ -1,8 +1,4 @@
-"""
-HashMap<K, V> debug method implementation.
-
-This module contains the debug method for printing HashMap internal state.
-"""
+"""HashMap<K, V> debug method implementation."""
 
 from typing import Any
 from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
@@ -20,27 +16,7 @@ def emit_hashmap_debug(
     hashmap_value: ir.Value,
     hashmap_type: StructType
 ) -> ir.Value:
-    """Emit HashMap<K, V>.debug() -> ~
-
-    Prints the internal state of the HashMap for debugging.
-
-    Output format:
-    HashMap<K, V> {
-      size: X, capacity: Y, tombstones: Z
-      [0] Empty
-      [1] Occupied: key -> value
-      [2] Tombstone
-      ...
-    }
-
-    Args:
-        codegen: LLVM codegen instance.
-        hashmap_value: The HashMap struct pointer.
-        hashmap_type: The HashMap<K, V> struct type.
-
-    Returns:
-        Unit value (~).
-    """
+    """Emit HashMap<K, V>.debug() -> ~"""
     builder = codegen.builder
 
     # Extract K and V types
@@ -147,13 +123,7 @@ def emit_hashmap_debug(
 
 
 def emit_printf_string(codegen: Any, builder: Any, text: str) -> None:
-    """Helper to print a string using printf.
-
-    Args:
-        codegen: LLVM codegen instance.
-        builder: LLVM builder.
-        text: The string to print (can be a Python string or IR value).
-    """
+    """Helper to print a string using printf."""
     # Create a global string constant
     str_bytes = (text + '\0').encode('utf-8')
     str_type = ir.ArrayType(ir.IntType(8), len(str_bytes))
@@ -180,13 +150,7 @@ def emit_printf_string(codegen: Any, builder: Any, text: str) -> None:
 
 
 def emit_printf_i32(codegen: Any, builder: Any, value: ir.Value) -> None:
-    """Helper to print an i32 using printf.
-
-    Args:
-        codegen: LLVM codegen instance.
-        builder: LLVM builder.
-        value: The i32 value to print.
-    """
+    """Helper to print an i32 using printf."""
     fmt_str = "%d"
     str_bytes = (fmt_str + '\0').encode('utf-8')
     str_type = ir.ArrayType(ir.IntType(8), len(str_bytes))
@@ -209,14 +173,7 @@ def emit_printf_i32(codegen: Any, builder: Any, value: ir.Value) -> None:
 
 
 def emit_debug_print_value(codegen: Any, builder: Any, value: ir.Value, value_type: Type) -> None:
-    """Helper to print a value for debug output.
-
-    Args:
-        codegen: LLVM codegen instance.
-        builder: LLVM builder.
-        value: The value to print.
-        value_type: The semantic type of the value.
-    """
+    """Helper to print a value for debug output."""
 
     # Print based on type
     if value_type == BuiltinType.I32:

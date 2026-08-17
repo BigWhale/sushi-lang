@@ -1,22 +1,4 @@
-"""Validation and pure helpers for the built-in methods on a function value.
-
-The ir-free half, matching `own.py` and `list.py`: method recognition and Pass-2 argument
-validation. LLVM emission stays in the backend, and there is nothing new to emit --
-`backend/expressions/memory.py::emit_value_clone` already routes a `FunctionType` to
-`_clone_function_value`, which duplicates the heap environment through the fat pointer's
-`clone_ptr` slot.
-
-**Why a function value needs a clone at all.** A closure read out of a struct field or out
-of a container is a BORROW (closures T1.5): the struct and the container keep the
-environment and still free it. Consuming that borrow is CE2411, whose help text says
-"clone it to take an independent value" -- so the method has to exist, or the compiler is
-naming a fix the language does not have. It did exactly that until this module: dispatch
-fell through to the user extension-method path, which mangled the name to
-`fn(i32) - i32_clone` and raised a bare `KeyError`.
-
-`clone` is currently the only entry. Bound-method values and a C-callback accessor are
-Tier 2 items and would live here.
-"""
+"""Validation and pure helpers for the built-in methods on a function value."""
 from __future__ import annotations
 
 from typing import Any
@@ -34,12 +16,7 @@ def is_builtin_function_method(method_name: str) -> bool:
 
 
 def function_method_return_type(method_name: str, fn_type: FunctionType) -> Type | None:
-    """Return type of a built-in function-value method, or None if there is no such pair.
-
-    `clone` returns the receiver's own type. Function types are invariant and
-    capture-agnostic, so the clone of a `fn(i32) -> i32` is a `fn(i32) -> i32` whether or
-    not it owns an environment.
-    """
+    """Return type of a built-in function-value method, or None if there is no such pair."""
     if method_name == "clone":
         return fn_type
     return None

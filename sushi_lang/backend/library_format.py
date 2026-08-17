@@ -1,40 +1,4 @@
-"""Binary library format (.slib) for Sushi libraries.
-
-This module handles reading and writing the unified .slib format that combines
-LLVM bitcode with MessagePack-encoded metadata in a single file.
-
-File format specification (version 2):
-
-The on-disk byte layout is unchanged from version 1; only the MessagePack
-metadata dict gained a `templates` section carrying instantiable public generic
-templates (re-parsable source text) for cross-library monomorphization. The
-version bump signals the new manifest schema.
-
-
-    ┌─────────────────────────────────────────────────────────────┐
-    │ MAGIC (16 bytes): 🍣SUSHILIB🍣 (UTF-8)                      │
-    ├─────────────────────────────────────────────────────────────┤
-    │ VERSION (4 bytes): uint32 LE                                │
-    ├─────────────────────────────────────────────────────────────┤
-    │ SPARE_1 (4 bytes): uint32 LE (reserved)                     │
-    ├─────────────────────────────────────────────────────────────┤
-    │ SPARE_2 (4 bytes): uint32 LE (reserved)                     │
-    ├─────────────────────────────────────────────────────────────┤
-    │ SPARE_3 (8 bytes): uint64 LE (reserved)                     │
-    ├─────────────────────────────────────────────────────────────┤
-    │ SPARE_4 (8 bytes): uint64 LE (reserved)                     │
-    ├─────────────────────────────────────────────────────────────┤
-    │ METADATA_LENGTH (8 bytes): uint64 LE                        │
-    ├─────────────────────────────────────────────────────────────┤
-    │ METADATA_BLOB (N bytes): MessagePack-encoded dict           │
-    ├─────────────────────────────────────────────────────────────┤
-    │ BITCODE_LENGTH (8 bytes): uint64 LE                         │
-    ├─────────────────────────────────────────────────────────────┤
-    │ BITCODE_BLOB (M bytes): Raw LLVM bitcode                    │
-    └─────────────────────────────────────────────────────────────┘
-
-Fixed header size: 52 bytes (magic + version + spares + metadata_length)
-"""
+"""Binary library format (.slib) for Sushi libraries."""
 from __future__ import annotations
 
 import struct
@@ -45,20 +9,7 @@ import msgpack
 
 
 def _read_bytes(f: BinaryIO, size: int, path: str, section: str) -> bytes:
-    """Read exact number of bytes with truncation detection.
-
-    Args:
-        f: File handle.
-        size: Expected number of bytes.
-        path: File path for error messages.
-        section: Section name for error messages ("metadata" or "bitcode").
-
-    Returns:
-        Bytes read.
-
-    Raises:
-        LibraryError: CE3510/CE3511 if truncated.
-    """
+    """Read exact number of bytes with truncation detection."""
     from sushi_lang.backend.library_errors import LibraryError
 
     data = f.read(size)
@@ -73,18 +24,7 @@ def _read_bytes(f: BinaryIO, size: int, path: str, section: str) -> bytes:
 
 
 def _read_header_and_metadata(f: BinaryIO, path: str) -> dict:
-    """Read and validate header, return deserialized metadata.
-
-    Args:
-        f: File handle positioned at start.
-        path: File path for error messages.
-
-    Returns:
-        Deserialized metadata dictionary.
-
-    Raises:
-        LibraryError: CE3508-CE3512 for format errors.
-    """
+    """Read and validate header, return deserialized metadata."""
     from sushi_lang.backend.library_errors import LibraryError
 
     # Read and validate magic (16 bytes)
@@ -126,13 +66,7 @@ class LibraryFormat:
 
     @staticmethod
     def write(output_path: Path, metadata: dict, bitcode: bytes) -> None:
-        """Write .slib file with metadata and bitcode.
-
-        Args:
-            output_path: Path to output .slib file.
-            metadata: Library metadata dictionary.
-            bitcode: Raw LLVM bitcode bytes.
-        """
+        """Write .slib file with metadata and bitcode."""
         metadata_blob = msgpack.packb(metadata, use_bin_type=True)
 
         with open(output_path, 'wb') as f:
@@ -156,17 +90,7 @@ class LibraryFormat:
 
     @staticmethod
     def read(library_path: Path) -> tuple[dict, bytes]:
-        """Read .slib file and return (metadata, bitcode).
-
-        Args:
-            library_path: Path to .slib file.
-
-        Returns:
-            Tuple of (metadata dict, bitcode bytes).
-
-        Raises:
-            LibraryError: CE3508-CE3513 for format errors.
-        """
+        """Read .slib file and return (metadata, bitcode)."""
         from sushi_lang.backend.library_errors import LibraryError
 
         path = str(library_path)
@@ -188,18 +112,6 @@ class LibraryFormat:
 
     @staticmethod
     def read_metadata_only(library_path: Path) -> dict:
-        """Read only metadata from .slib file (for introspection).
-
-        This is faster than read() when bitcode is not needed.
-
-        Args:
-            library_path: Path to .slib file.
-
-        Returns:
-            Metadata dictionary.
-
-        Raises:
-            LibraryError: CE3508-CE3512 for format errors.
-        """
+        """Read only metadata from .slib file (for introspection)."""
         with open(library_path, 'rb') as f:
             return _read_header_and_metadata(f, str(library_path))

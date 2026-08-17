@@ -13,14 +13,7 @@ from sushi_lang.semantics.units import UnitManager
 
 
 def get_effective_cwd() -> Path:
-    """Get the effective current working directory for file resolution.
-
-    Checks for the SUSHI_CWD environment variable set by the sushic script.
-    If present, uses that directory. Otherwise falls back to os.getcwd().
-
-    Returns:
-        Path where .sushi files should be resolved from.
-    """
+    """Get the effective current working directory for file resolution."""
     sushi_cwd = os.environ.get('SUSHI_CWD')
     if sushi_cwd:
         return Path(sushi_cwd)
@@ -44,17 +37,7 @@ def check_duplicate_uses(ast: Program, reporter: Reporter) -> None:
 
 def load_unit_recursively(unit_manager: UnitManager, unit_name: str,
                           loaded: set[str], reporter: Reporter) -> bool:
-    """Recursively load a unit and all its dependencies.
-
-    Args:
-        unit_manager: The unit manager instance.
-        unit_name: Name of the unit to load.
-        loaded: Set of already loaded unit names to prevent infinite recursion.
-        reporter: Reporter for error reporting.
-
-    Returns:
-        True if successful, False if there were errors.
-    """
+    """Recursively load a unit and all its dependencies."""
     if unit_name in loaded:
         return True
 

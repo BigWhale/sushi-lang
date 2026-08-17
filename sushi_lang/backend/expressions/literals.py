@@ -1,9 +1,4 @@
-"""
-Literal expression emission for the Sushi language compiler.
-
-This module handles emission of all literal types: integers, floats, booleans,
-strings, blanks, and interpolated strings.
-"""
+"""Literal expression emission for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -19,19 +14,7 @@ if TYPE_CHECKING:
 
 
 def emit_literal(codegen: 'LLVMCodegen', expr: Expr, to_i1: bool) -> ir.Value:
-    """Dispatch literal emission to appropriate handler.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The literal expression.
-        to_i1: Whether to convert result to i1 for boolean contexts.
-
-    Returns:
-        The LLVM value representing the literal.
-
-    Raises:
-        TypeError: If expression is not a literal type.
-    """
+    """Dispatch literal emission to appropriate handler."""
     match expr:
         case IntLit():
             return emit_int_literal(codegen, expr)
@@ -50,12 +33,7 @@ def emit_literal(codegen: 'LLVMCodegen', expr: Expr, to_i1: bool) -> ir.Value:
 
 
 def emit_int_literal(codegen: 'LLVMCodegen', expr: IntLit) -> ir.Value:
-    """Emit an integer literal at its context type's width (default i32).
-
-    A context-typed literal (`resolved_type` stamped by propagation) materializes at
-    the annotated width, masked to that width -- identical IR to the equivalent
-    `<lit> as T` cast path. An unstamped literal keeps the i32 default.
-    """
+    """Emit an integer literal at its context type's width (default i32)."""
     ty = expr.resolved_type or BuiltinType.I32
     ll = codegen.types.ll_type(ty)
     mask = (1 << ll.width) - 1
@@ -63,26 +41,13 @@ def emit_int_literal(codegen: 'LLVMCodegen', expr: IntLit) -> ir.Value:
 
 
 def emit_float_literal(codegen: 'LLVMCodegen', expr: FloatLit) -> ir.Value:
-    """Emit a float literal at its context type's width (default f64).
-
-    A context-typed literal (`resolved_type` stamped by propagation) materializes as
-    f32/f64 as annotated; an unstamped literal keeps the f64 default.
-    """
+    """Emit a float literal at its context type's width (default f64)."""
     ty = expr.resolved_type or BuiltinType.F64
     return ir.Constant(codegen.types.ll_type(ty), float(expr.value))
 
 
 def emit_bool_literal(codegen: 'LLVMCodegen', expr: BoolLit, to_i1: bool) -> ir.Value:
-    """Emit boolean literal with appropriate width.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The boolean literal expression.
-        to_i1: Whether to emit as i1 or i8.
-
-    Returns:
-        An i1 or i8 constant representing the boolean value.
-    """
+    """Emit boolean literal with appropriate width."""
     if to_i1:
         return ir.Constant(codegen.i1, 1 if expr.value else 0)
     else:
@@ -90,46 +55,17 @@ def emit_bool_literal(codegen: 'LLVMCodegen', expr: BoolLit, to_i1: bool) -> ir.
 
 
 def emit_blank_literal(codegen: 'LLVMCodegen', expr: BlankLit) -> ir.Value:
-    """Emit blank literal as i32 zero constant.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The blank literal expression.
-
-    Returns:
-        An i32 constant representing the blank value (always 0).
-    """
+    """Emit blank literal as i32 zero constant."""
     return ir.Constant(codegen.types.i32, 0)
 
 
 def emit_string_literal(codegen: 'LLVMCodegen', expr: StringLit) -> ir.Value:
-    """Emit string literal using runtime support.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The string literal expression.
-
-    Returns:
-        An i8* pointer to the string constant.
-    """
+    """Emit string literal using runtime support."""
     return codegen.runtime.strings.emit_string_literal(expr.value)
 
 
 def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -> ir.Value:
     """Emit LLVM IR for interpolated string by concatenating string parts and expression values.
-
-    For "Hello, {name}!" we emit:
-    1. string_literal("Hello, ")
-    2. emit_expression(name).to_str()
-    3. string_literal("!")
-    4. concatenate all parts
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The interpolated string expression.
-
-    Returns:
-        The concatenated string value.
     """
     if not expr.parts:
         # Empty interpolated string - return empty string literal

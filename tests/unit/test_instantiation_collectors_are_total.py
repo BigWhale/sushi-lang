@@ -1,18 +1,4 @@
-"""Both Pass 1.5 instantiation collectors must dispatch on every expression node.
-
-`ExpressionScanner.scan_expression` (the main Pass 1.5 collector) and
-`FunctionMonomorphizer._collect_from_expr` (the monomorphizer's nested-call collector)
-are `if/elif` chains with no `else`. A missing arm means an expression node is silently
-skipped -- its nested generic instantiations are never collected, so the backend gets no
-monomorphized symbol (CE2061 / CE0000). This is the same silent-skip soundness class as
-the borrow-checker gaps #174/#175 (see `test_borrow_dispatch_is_total.py`), pinned here
-for the two collectors (issue #214).
-
-`Expr` (semantics/ast.py) is an explicit Union, so "every expression node" is an
-enumerable set. Adding a member without teaching both collectors about it turns CI red
-instead of silently dropping instantiations for it. An arm may recurse or be an explicit
-leaf entry -- what it may NOT be is absent.
-"""
+"""Both Pass 1.5 instantiation collectors must dispatch on every expression node."""
 from __future__ import annotations
 
 import ast

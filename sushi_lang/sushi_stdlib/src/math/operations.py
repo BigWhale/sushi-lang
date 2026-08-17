@@ -1,33 +1,10 @@
-"""
-Math operation implementations for Sushi math module.
-
-Implements mathematical functions:
-- abs: Absolute value for signed numeric types
-- min/max: Minimum and maximum for all numeric types
-- sqrt: Square root using LLVM intrinsic
-- pow: Power function using LLVM intrinsic
-- floor/ceil/round/trunc: Rounding functions using LLVM intrinsics
-- sin/cos: Trigonometric using LLVM intrinsics
-- tan: Trigonometric using pure LLVM IR (sin/cos)
-- asin/acos/atan/atan2: Inverse trig using libc
-- sinh/cosh/tanh: Hyperbolic using pure LLVM IR (exp)
-- log/log2/log10: Logarithmic using LLVM intrinsics
-- exp/exp2: Exponential using LLVM intrinsics
-- hypot: Utility using pure LLVM IR (sqrt)
-
-All functions use LLVM intrinsics where available for optimal performance.
-"""
+"""Math operation implementations for Sushi math module."""
 from __future__ import annotations
 from llvmlite import ir
 
 
 def _generate_f64_intrinsic_wrapper(module: ir.Module, llvm_name: str, sushi_name: str, arg_names: tuple) -> None:
-    """Emit a `sushi_<name>` wrapper that forwards to an f64 LLVM intrinsic.
-
-    Covers the single-intrinsic float functions (sqrt, pow, trig, log, exp, ...).
-    The intrinsic is get-or-declared so wrappers that share one (e.g. llvm.exp.f64
-    used by exp and the hyperbolic helpers) do not redeclare it.
-    """
+    """Emit a `sushi_<name>` wrapper that forwards to an f64 LLVM intrinsic."""
     f64 = ir.DoubleType()
     sig = ir.FunctionType(f64, [f64] * len(arg_names))
     intrinsic = module.globals.get(llvm_name)
@@ -43,22 +20,7 @@ def _generate_f64_intrinsic_wrapper(module: ir.Module, llvm_name: str, sushi_nam
 
 
 def generate_abs_functions(module: ir.Module) -> None:
-    """Generate abs() functions for all signed numeric types.
-
-    Generates:
-        sushi_abs_i8(i8) -> i8
-        sushi_abs_i16(i16) -> i16
-        sushi_abs_i32(i32) -> i32
-        sushi_abs_i64(i64) -> i64
-        sushi_abs_f32(f32) -> f32
-        sushi_abs_f64(f64) -> f64
-
-    Implementation for integers:
-        result = (x < 0) ? -x : x
-
-    Implementation for floats:
-        Use LLVM's fabs intrinsic
-    """
+    """Generate abs() functions for all signed numeric types."""
     # Integer types
     int_types = [
         (ir.IntType(8), 'i8'),
@@ -124,18 +86,7 @@ def generate_abs_functions(module: ir.Module) -> None:
 
 
 def generate_min_max_functions(module: ir.Module) -> None:
-    """Generate min() and max() functions for all numeric types.
-
-    Generates:
-        sushi_min_{type}(T, T) -> T
-        sushi_max_{type}(T, T) -> T
-
-    For all types: i8, i16, i32, i64, u8, u16, u32, u64, f32, f64
-
-    Implementation:
-        min: (a < b) ? a : b
-        max: (a > b) ? a : b
-    """
+    """Generate min() and max() functions for all numeric types."""
     # Signed integer types
     signed_int_types = [
         (ir.IntType(8), 'i8', True),
@@ -285,10 +236,7 @@ def generate_cos(module: ir.Module) -> None:
 
 
 def generate_tan(module: ir.Module) -> None:
-    """Generate tan function: tan(f64) -> f64
-
-    Implemented as sin(x) / cos(x) in pure LLVM IR.
-    """
+    """Generate tan function: tan(f64) -> f64"""
     f64 = ir.DoubleType()
 
     # Get or declare sin and cos intrinsics
@@ -322,10 +270,7 @@ def generate_tan(module: ir.Module) -> None:
 # =============================================================================
 
 def generate_asin(module: ir.Module) -> None:
-    """Generate asin function: asin(f64) -> f64
-
-    Uses libc asin().
-    """
+    """Generate asin function: asin(f64) -> f64"""
     f64 = ir.DoubleType()
 
     # Declare libc asin
@@ -346,10 +291,7 @@ def generate_asin(module: ir.Module) -> None:
 
 
 def generate_acos(module: ir.Module) -> None:
-    """Generate acos function: acos(f64) -> f64
-
-    Uses libc acos().
-    """
+    """Generate acos function: acos(f64) -> f64"""
     f64 = ir.DoubleType()
 
     libc_acos_type = ir.FunctionType(f64, [f64])
@@ -369,10 +311,7 @@ def generate_acos(module: ir.Module) -> None:
 
 
 def generate_atan(module: ir.Module) -> None:
-    """Generate atan function: atan(f64) -> f64
-
-    Uses libc atan().
-    """
+    """Generate atan function: atan(f64) -> f64"""
     f64 = ir.DoubleType()
 
     libc_atan_type = ir.FunctionType(f64, [f64])
@@ -392,10 +331,7 @@ def generate_atan(module: ir.Module) -> None:
 
 
 def generate_atan2(module: ir.Module) -> None:
-    """Generate atan2 function: atan2(f64 y, f64 x) -> f64
-
-    Uses libc atan2().
-    """
+    """Generate atan2 function: atan2(f64 y, f64 x) -> f64"""
     f64 = ir.DoubleType()
 
     libc_atan2_type = ir.FunctionType(f64, [f64, f64])
@@ -421,10 +357,7 @@ def generate_atan2(module: ir.Module) -> None:
 # =============================================================================
 
 def generate_sinh(module: ir.Module) -> None:
-    """Generate sinh function: sinh(f64) -> f64
-
-    Implemented as (exp(x) - exp(-x)) / 2 in pure LLVM IR.
-    """
+    """Generate sinh function: sinh(f64) -> f64"""
     f64 = ir.DoubleType()
 
     # Get or declare exp intrinsic
@@ -461,10 +394,7 @@ def generate_sinh(module: ir.Module) -> None:
 
 
 def generate_cosh(module: ir.Module) -> None:
-    """Generate cosh function: cosh(f64) -> f64
-
-    Implemented as (exp(x) + exp(-x)) / 2 in pure LLVM IR.
-    """
+    """Generate cosh function: cosh(f64) -> f64"""
     f64 = ir.DoubleType()
 
     exp_intrinsic = module.globals.get("llvm.exp.f64")
@@ -494,10 +424,7 @@ def generate_cosh(module: ir.Module) -> None:
 
 
 def generate_tanh(module: ir.Module) -> None:
-    """Generate tanh function: tanh(f64) -> f64
-
-    Implemented as (exp(x) - exp(-x)) / (exp(x) + exp(-x)) in pure LLVM IR.
-    """
+    """Generate tanh function: tanh(f64) -> f64"""
     f64 = ir.DoubleType()
 
     exp_intrinsic = module.globals.get("llvm.exp.f64")
@@ -566,10 +493,7 @@ def generate_exp2(module: ir.Module) -> None:
 # =============================================================================
 
 def generate_hypot(module: ir.Module) -> None:
-    """Generate hypot function: hypot(f64 x, f64 y) -> f64
-
-    Implemented as sqrt(x*x + y*y) in pure LLVM IR.
-    """
+    """Generate hypot function: hypot(f64 x, f64 y) -> f64"""
     f64 = ir.DoubleType()
 
     # Get or declare sqrt intrinsic

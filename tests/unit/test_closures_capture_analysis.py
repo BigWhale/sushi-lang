@@ -1,11 +1,4 @@
-"""T1.2 gate: the scope pass records a lambda's captured free names.
-
-A capture is a name used in the lambda body that resolves to an ENCLOSING local
-(a variable of the surrounding function), not to the lambda's own params/locals,
-and not to a global (top-level fn, constant, enum). We drive the real parser +
-ScopeAnalyzer and inspect `Lambda.captures` (a list of `Param`, names only at
-this stage; types are filled by the type pass in T1.3).
-"""
+"""T1.2 gate: the scope pass records a lambda's captured free names."""
 from __future__ import annotations
 
 from sushi_lang.internals.parser import parse_to_ast

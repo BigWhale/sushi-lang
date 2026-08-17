@@ -1,9 +1,4 @@
-"""Unit tests for the pure perf-harness logic (P1-5).
-
-These are fast, deterministic tests of median/compare/format/baseline-IO -- no
-subprocess, no timing. They guard the comparison logic that decides whether a
-metric counts as a regression, independently of any actual measurement.
-"""
+"""Unit tests for the pure perf-harness logic (P1-5)."""
 from __future__ import annotations
 
 import json

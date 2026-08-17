@@ -1,9 +1,4 @@
-"""
-Main call dispatcher for function and method calls.
-
-This module orchestrates the dispatching of function and method calls to
-appropriate handlers based on receiver type and method name.
-"""
+"""Main call dispatcher for function and method calls."""
 from __future__ import annotations
 import itertools
 from typing import TYPE_CHECKING, Union
@@ -23,19 +18,7 @@ if TYPE_CHECKING:
 
 
 def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Value:
-    """Emit function call with argument type casting.
-
-    Args:
-        codegen: The LLVM code generator.
-        expr: The function call expression.
-        to_i1: Whether to convert result to i1.
-
-    Returns:
-        The function call result.
-
-    Raises:
-        TypeError: If callee is not a name or function not found.
-    """
+    """Emit function call with argument type casting."""
     # Call-through an arbitrary expression that evaluates to a function value:
     # `env.f(x)` (a captured closure in a lifted lambda body), `obj.handler()`,
     # `arr[0]()`, `(e)()`. The type checker annotated the resolved FunctionType on the
@@ -134,11 +117,7 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
 
 
 def emit_fn_field_call(codegen: 'LLVMCodegen', expr: DotCall, fn_type, to_i1: bool) -> ir.Value:
-    """Emit `obj.handler(args)` as an indirect call through the fn-typed field `handler`.
-
-    Reuses the fat-pointer indirect-call path: emit the field access to a fat value,
-    then call through it exactly like `env.f(x)` / `arr[0]()`.
-    """
+    """Emit `obj.handler(args)` as an indirect call through the fn-typed field `handler`."""
     from sushi_lang.semantics.ast import MemberAccess
     field_access = MemberAccess(receiver=expr.receiver, member=expr.method, loc=expr.loc)
     fat_value = codegen.expressions.emit_expr(field_access)
@@ -146,12 +125,7 @@ def emit_fn_field_call(codegen: 'LLVMCodegen', expr: DotCall, fn_type, to_i1: bo
 
 
 def _try_function_value_local(codegen: 'LLVMCodegen', name: str):
-    """If `name` is a function-valued local, return `(fat_value, FunctionType)`, else None.
-
-    Detection is by the local's SEMANTIC type, not its LLVM shape: a function value
-    now lowers to a `{i8*, i8*, i8*}` fat struct, which is byte-identical to any struct
-    of three pointer fields (e.g. three `ptr` fields), so shape sniffing would misfire.
-    """
+    """If `name` is a function-valued local, return `(fat_value, FunctionType)`, else None."""
     from sushi_lang.semantics.typesys import FunctionType
     slot = codegen.memory.try_find_local_slot(name)
     if slot is None:
@@ -165,12 +139,7 @@ def _try_function_value_local(codegen: 'LLVMCodegen', name: str):
 
 def _emit_indirect_call(codegen: 'LLVMCodegen', expr: Call, fat_value: 'ir.Value',
                         fn_type, to_i1: bool) -> ir.Value:
-    """Emit an indirect call through a function value (fat pointer).
-
-    Extracts `fn_ptr`/`env_ptr` from the fat struct and calls `fn_ptr(env_ptr, args...)`,
-    recovering the real callee signature from the semantic `FunctionType`. The returned
-    Result<T,E> struct flows downstream exactly like a direct call's.
-    """
+    """Emit an indirect call through a function value (fat pointer)."""
     from sushi_lang.backend.runtime import closures
     from sushi_lang.semantics.param_modes import CalleeKind, effective_modes
     args = [codegen.expressions.emit_expr(a) for a in expr.args]
@@ -183,12 +152,7 @@ def _emit_indirect_call(codegen: 'LLVMCodegen', expr: Call, fat_value: 'ir.Value
 
 
 def _resolve_param_type(codegen: 'LLVMCodegen', ty):
-    """Resolve an UnknownType param name to its concrete StructType/EnumType.
-
-    Function-signature param types can still be UnknownType(name) at codegen; the move
-    predicate must see the resolved struct/enum or it wrongly treats an owning composite as
-    a copy type (deep-copying a fresh temp orphans its buffer -> leak).
-    """
+    """Resolve an UnknownType param name to its concrete StructType/EnumType."""
     from sushi_lang.semantics.typesys import UnknownType
     if isinstance(ty, UnknownType):
         return (codegen.struct_table.by_name.get(ty.name)
@@ -201,17 +165,7 @@ _ARG_TEMP_SEQ = itertools.count()
 
 
 def _park_argument_temp(codegen: 'LLVMCodegen', value: ir.Value, resolved) -> None:
-    """Give a caller-kept argument temporary an owner, so scope exit frees it once.
-
-    The value has no binding, so nothing would free it: under callee-owns the CALLEE
-    did, and a borrow parameter has no such owner. This is the same answer
-    `_spill_receiver` gives an unbound owning receiver -- register it as a scope temp.
-
-    An owning argument reaches this point in one of two shapes. `make()??` hands back
-    the descriptor by VALUE; an inline `from([...])` hands back a POINTER to it. Load
-    the pointer first, or the temp slot holds an address where the destructor expects
-    the descriptor and every element GEP is off by one indirection.
-    """
+    """Give a caller-kept argument temporary an owner, so scope exit frees it once."""
     ll_type = codegen.types.ll_type(resolved)
     if isinstance(value.type, ir.PointerType) and value.type.pointee == ll_type:
         value = codegen.builder.load(value, name="arg_temp_val")
@@ -226,21 +180,7 @@ def _park_argument_temp(codegen: 'LLVMCodegen', value: ir.Value, resolved) -> No
 
 def settle_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
                           param_types: list, modes) -> None:
-    """THE call-argument seam: give every argument exactly one owner, in place.
-
-    Two answers, and the mode picks between them (docs/design/borrow-model.md S4):
-
-    - **`nom`** -- the callee becomes the owner, so the argument goes through the
-      ownership seam. A `Name` source is marked moved; a temporary adopts in.
-    - **every other mode** -- the CALLER stays the owner. That is free for a value some
-      binding already names, and it is not free for a TEMPORARY: `look(make()??)` and
-      `look(v.clone())` produce a value nobody names, and under callee-owns the callee
-      used to free it. Register it as a caller scope temp, which is the answer the
-      language already gives an unbound owning temporary everywhere else.
-
-    Pass 3 asked the same question of the same resolver before codegen ran, so the two
-    halves cannot disagree about who frees. Disagreeing is exactly what they used to do.
-    """
+    """THE call-argument seam: give every argument exactly one owner, in place."""
     from sushi_lang.backend.destructors import needs_cleanup
     from sushi_lang.backend.expressions.memory import expression_is_temporary
 
@@ -260,13 +200,7 @@ def settle_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
 
 
 def _settle_method_call_arguments(codegen: 'LLVMCodegen', expr, args: list) -> None:
-    """Settle a method call's arguments from the modes Pass 2 resolved.
-
-    Only Pass 2 knows WHICH method `receiver.name(...)` denotes, so it stamps the modes
-    and both later halves read the stamp (`callee_param_modes`). A built-in method
-    carries no stamp: its arguments are container inserts and the like, which have their
-    own rules and must not be settled here.
-    """
+    """Settle a method call's arguments from the modes Pass 2 resolved."""
     modes = getattr(expr, "callee_param_modes", None)
     if modes is None:
         return
@@ -289,59 +223,14 @@ def _settle_named_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: 
 
 
 def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool = False, is_dotcall: bool = False) -> ir.Value:
-    """Emit method call by rewriting as function call with receiver as first argument.
-
-    This function implements UFCS (Uniform Function Call Syntax) for extension methods.
-    Method calls are rewritten as function calls with the receiver as the first argument.
+    """Emit a method call as a function call with the receiver as first argument (UFCS).
 
     Every built-in is resolved BEFORE the user-extension fallback, which is why an extension
     method whose name collides with a built-in can never run -- Pass 2 rejects one as CE2097
     rather than letting it be emitted and never called. The same precedence is implemented in
     validation and inference; see docs/design/method-resolution.md.
-
-    The steps below mirror the numbered comments in the body -- keep them in step:
-    0. FFI foreign namespace calls (libc.strlen(...))
-    1. Enum constructors (e.g., Color.Red(), Result.Ok())
-    2. Struct constructors (e.g., Own.alloc())
-    3. stdio methods (stdin/stdout/stderr)
-    4. File methods
-    5. Result<T, E> and Maybe<T> methods (is_ok, is_some, realise, expect, ...)
-    7. Own<T> instance methods (get, destroy)
-    8. HashMap<K, V> methods (new, insert, get, etc.)
-    9. List<T> methods (new, push, pop, get, etc.)
-    9.5 Primitive static reinterpret (f64.from_bits / f32.from_bits)
-    10. Array methods (both fixed and dynamic)
-    11. String methods
-    12. Perk methods (extend Type with Perk) - BEFORE auto-derived, deliberately: a perk
-        implementation is the sanctioned way to replace a built-in
-    13. Auto-derived struct hash
-    14. Auto-derived enum hash
-    14a. Auto-derived struct clone (#134)
-    14b. Auto-derived enum clone (#134)
-    15. Primitive methods (to_str, hash, to_bits)
-    16. Extension methods (user-defined) -- the fallback
-
-    (There is no step 6: Result and Maybe were merged into step 5 and the numbering was left
-    alone rather than renumbering every comment.)
-
-    Args:
-        codegen: The LLVM code generator.
-        expr: The method call or DotCall expression.
-        to_i1: Whether to convert result to i1.
-        is_dotcall: If True, this is a DotCall node (fields are identical).
-
-    Returns:
-        The method call result.
-
-    Raises:
-        TypeError: If receiver type cannot be determined.
-        KeyError: If extension method function not found.
     """
-    # ========================================================================
-    # Priority-ordered dispatcher for method calls
-    # Each handler returns a value if it matches, or None to continue dispatch
-    # ========================================================================
-
+    # Priority-ordered: each handler returns a value if it matches, or None to continue.
     # 0. FFI: foreign namespace call (libc.strlen(...)) - resolved by the type
     #    checker via the external_ref annotation. Direct, raw C call.
     result = _try_emit_external_call(codegen, expr)
@@ -534,13 +423,7 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
 
 
 def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]) -> ir.Value | None:
-    """Emit a foreign (FFI) function call if `expr` is annotated with external_ref.
-
-    The call is direct and returns the RAW C value (never Result-wrapped). String
-    arguments are marshalled to char* and registered for scope-exit freeing
-    (no leak). A `string` return is converted back to a fat pointer. A `~` (void)
-    return yields an i32 blank value so the expression layer can discard it.
-    """
+    """Emit a foreign (FFI) function call if `expr` is annotated with external_ref."""
     from sushi_lang.semantics.typesys import BuiltinType
 
     external_ref = getattr(expr, 'external_ref', None)
@@ -597,15 +480,7 @@ def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
 
 
 def _promote_variadic_arg(codegen: 'LLVMCodegen', value: ir.Value, sushi_ty) -> ir.Value:
-    """Apply C default-argument promotion to one untyped variadic argument.
-
-    The C calling convention promotes integers narrower than `int` to `int`
-    (signedness-preserving) and `float` to `double`. Sushi `string` is marshalled
-    to a C `char*` (freed at scope exit like fixed string args). `ptr`, i32, i64
-    and f64 pass through unchanged. There is no declared target type for a
-    variadic slot, so promotion is decided from the value's LLVM type and the
-    inferred Sushi type (for signedness).
-    """
+    """Apply C default-argument promotion to one untyped variadic argument."""
     from sushi_lang.semantics.typesys import BuiltinType
 
     # string -> char* (registered for the per-scope free, no leak).
@@ -639,16 +514,7 @@ def _promote_variadic_arg(codegen: 'LLVMCodegen', value: ir.Value, sushi_ty) -> 
 
 
 def _check_stdlib_function_codegen(codegen: 'LLVMCodegen', function_name: str) -> tuple | None:
-    """
-    Check if a function is a stdlib function during code generation.
-
-    Args:
-        codegen: LLVM code generator
-        function_name: Name of the function to check
-
-    Returns:
-        Tuple of (module_path, StdlibFunction) if found, None otherwise
-    """
+    """Check if a function is a stdlib function during code generation."""
     # Access the function table from the codegen
     func_table = codegen.func_table
 
@@ -665,21 +531,7 @@ def _check_stdlib_function_codegen(codegen: 'LLVMCodegen', function_name: str) -
 
 def _emit_stdlib_function(codegen: 'LLVMCodegen', expr: Call, function_name: str,
                           module_and_func: tuple, to_i1: bool) -> ir.Value:
-    """
-    Emit code for a stdlib function call.
-
-    Dispatches to the appropriate emitter based on the module.
-
-    Args:
-        codegen: LLVM code generator
-        expr: Function call expression
-        function_name: Name of the function
-        module_and_func: Tuple of (module_path, StdlibFunction)
-        to_i1: Whether to convert result to i1
-
-    Returns:
-        LLVM IR value
-    """
+    """Emit code for a stdlib function call."""
     module_path, stdlib_func = module_and_func
 
     # Dispatch to module-specific emitters

@@ -1,8 +1,4 @@
-"""
-String Replace Operations
-
-Implements the replace() method for fat pointer strings.
-"""
+"""String Replace Operations"""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
@@ -11,24 +7,7 @@ from ...common import build_string_struct, clone_string_to_owned
 
 
 def emit_string_replace(module: ir.Module) -> ir.Function:
-    """Emit the string.replace() method.
-
-    Replaces all occurrences of a substring with another string.
-    Returns a new string with all replacements made.
-
-    Algorithm:
-    1. Count occurrences of 'old' in the string
-    2. Calculate result size: original_size - (old_len × count) + (new_len × count)
-    3. Allocate result buffer
-    4. Copy segments: for each match, copy prefix + new string, skip old string
-    5. Return new string struct
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_replace({ i8*, i32 } str, { i8*, i32 } old, { i8*, i32 } new)
-    """
+    """Emit `{i8*, i32} string_replace({i8*, i32} str, {i8*, i32} old, {i8*, i32} new)`."""
     func_name = "string_replace"
 
     # Check if already defined

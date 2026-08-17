@@ -1,15 +1,5 @@
 # semantics/generics/monomorphize/types.py
-"""
-Enum and struct type monomorphization.
-
-This module handles the monomorphization of generic enum and struct types,
-converting generic type definitions with type parameters into concrete types
-with specific type arguments.
-
-Example:
-    GenericEnumType("Result", ["T"]) + [i32] → EnumType("Result<i32>")
-    GenericStructType("Pair", ["T", "U"]) + [i32, string] → StructType("Pair<i32, string>")
-"""
+"""Enum and struct type monomorphization."""
 from __future__ import annotations
 from typing import Dict, Tuple, Set, TYPE_CHECKING
 
@@ -23,33 +13,14 @@ if TYPE_CHECKING:
 
 
 class MonomorphizationDepthExceeded(Exception):
-    """Raised when a generic type nests without bound during monomorphization.
-
-    Tie-the-knot (see monomorphize_enum/monomorphize_struct) terminates a *finite*
-    self-reference through an opaque pointer, but an ever-growing type argument
-    (each self-reference adds a level) has no fixpoint. This sentinel unwinds the
-    recursive substitution cleanly after CE0122 is reported, instead of surfacing a
-    raw Python RecursionError.
-    """
+    """Raised when a generic type nests without bound during monomorphization."""
 
 
 class TypeMonomorphizer:
-    """Handles monomorphization of generic enum and struct types.
-
-    This class is responsible for:
-    - Converting GenericEnumType + type args → concrete EnumType
-    - Converting GenericStructType + type args → concrete StructType
-    - Caching monomorphized types to avoid duplication
-    - Recursively monomorphizing nested generic types
-    """
+    """Handles monomorphization of generic enum and struct types."""
 
     def __init__(self, monomorphizer):
-        """Initialize type monomorphizer.
-
-        Args:
-            monomorphizer: Parent Monomorphizer instance (provides access to
-                           caches, generic tables, and substitutor)
-        """
+        """Initialize type monomorphizer."""
         self.monomorphizer = monomorphizer
 
     def monomorphize_all_enums(
@@ -57,15 +28,7 @@ class TypeMonomorphizer:
         generic_enums: Dict[str, GenericEnumType],
         instantiations: Set[Tuple[str, Tuple[Type, ...]]]
     ) -> Dict[str, EnumType]:
-        """Monomorphize all collected generic enum instantiations.
-
-        Args:
-            generic_enums: Table of GenericEnumType definitions (from CollectorPass)
-            instantiations: Set of (base_name, type_args) tuples (from InstantiationCollector)
-
-        Returns:
-            Dictionary mapping concrete type names (e.g., "Result<i32>") to EnumType instances
-        """
+        """Monomorphize all collected generic enum instantiations."""
         # Store generic enums for recursive monomorphization
         self.monomorphizer.generic_enums = generic_enums
 
@@ -110,15 +73,7 @@ class TypeMonomorphizer:
         generic: GenericEnumType,
         type_args: Tuple[Type, ...]
     ) -> EnumType:
-        """Create concrete enum by substituting type parameters.
-
-        Args:
-            generic: The generic enum definition (e.g., Result<T>)
-            type_args: Concrete type arguments (e.g., (BuiltinType.I32,))
-
-        Returns:
-            Concrete EnumType with substituted types
-        """
+        """Create concrete enum by substituting type parameters."""
         # Check cache first
         cache_key = (generic.name, type_args)
         if cache_key in self.monomorphizer.cache:
@@ -192,15 +147,7 @@ class TypeMonomorphizer:
         generic_structs: Dict[str, GenericStructType],
         instantiations: Set[Tuple[str, Tuple[Type, ...]]]
     ) -> Dict[str, StructType]:
-        """Monomorphize all collected generic struct instantiations.
-
-        Args:
-            generic_structs: Table of GenericStructType definitions (from CollectorPass)
-            instantiations: Set of (base_name, type_args) tuples (from InstantiationCollector)
-
-        Returns:
-            Dictionary mapping concrete type names (e.g., "Pair<i32, string>") to StructType instances
-        """
+        """Monomorphize all collected generic struct instantiations."""
         # Store generic structs for recursive monomorphization
         self.monomorphizer.generic_structs = generic_structs
 
@@ -231,15 +178,7 @@ class TypeMonomorphizer:
         generic: GenericStructType,
         type_args: Tuple[Type, ...]
     ) -> StructType:
-        """Create concrete struct by substituting type parameters.
-
-        Args:
-            generic: The generic struct definition (e.g., Pair<T, U>)
-            type_args: Concrete type arguments (e.g., (BuiltinType.I32, BuiltinType.STRING))
-
-        Returns:
-            Concrete StructType with substituted types
-        """
+        """Create concrete struct by substituting type parameters."""
         # Check cache first
         cache_key = (generic.name, type_args)
         if cache_key in self.monomorphizer.struct_cache:
@@ -294,15 +233,7 @@ class TypeMonomorphizer:
         return concrete
 
     def _generate_concrete_name(self, base_name: str, type_args: Tuple[Type, ...]) -> str:
-        """Generate a unique name for a concrete generic type.
-
-        Args:
-            base_name: Base generic name (e.g., "Result")
-            type_args: Concrete type arguments (e.g., (BuiltinType.I32,))
-
-        Returns:
-            Concrete type name (e.g., "Result<i32>")
-        """
+        """Generate a unique name for a concrete generic type."""
         if not type_args:
             return base_name
 
@@ -313,14 +244,7 @@ class TypeMonomorphizer:
         return f"{base_name}<{', '.join(arg_strs)}>"
 
     def _type_to_string(self, ty: Type) -> str:
-        """Convert a type to its string representation for name generation.
-
-        Args:
-            ty: The type to convert
-
-        Returns:
-            String representation of the type
-        """
+        """Convert a type to its string representation for name generation."""
         # Use the built-in str() which should work for all Type instances
         # BuiltinType, ArrayType, etc. all have __str__ implementations
         return str(ty)

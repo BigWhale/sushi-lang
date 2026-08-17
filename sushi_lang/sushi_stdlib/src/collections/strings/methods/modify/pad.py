@@ -1,8 +1,4 @@
-"""
-String Padding and Repeat Operations
-
-Implements padding and repeat methods for fat pointer strings.
-"""
+"""String Padding and Repeat Operations"""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
@@ -12,31 +8,7 @@ from ...common import build_string_struct
 
 
 def emit_string_repeat(module: ir.Module) -> ir.Function:
-    """Emit the string.repeat() method.
-
-    Repeats the string n times, returning a new concatenated string.
-    Returns empty string if n <= 0 or if original string is empty.
-
-    Algorithm:
-    1. Extract string data and size
-    2. Handle edge cases: n <= 0 or empty string
-    3. Calculate total_size = size * n
-    4. Allocate buffer
-    5. Loop n times copying the string
-    6. Return new string
-
-    Examples:
-        "abc".repeat(3) -> "abcabcabc"
-        "x".repeat(5) -> "xxxxx"
-        "test".repeat(0) -> ""
-        "".repeat(10) -> ""
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_repeat({ i8*, i32 } str, i32 n)
-    """
+    """Emit `{i8*, i32} string_repeat({i8*, i32} str, i32 n)`."""
     func_name = "string_repeat"
 
     # Check if already defined
@@ -132,18 +104,7 @@ def emit_string_repeat(module: ir.Module) -> ir.Function:
 
 
 def emit_string_pad_left(module: ir.Module) -> ir.Function:
-    """Emit the string.pad_left() method.
-
-    Pads string to specified width by prepending padding character(s).
-    Width is measured in UTF-8 characters. If the string is already >= width,
-    returns a copy of the original string.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_pad_left({ i8*, i32 } str, i32 width, { i8*, i32 } pad_char)
-    """
+    """Emit `{i8*, i32} string_pad_left({i8*, i32} str, i32 width, {i8*, i32} pad_char)`."""
     func_name = "string_pad_left"
 
     if func_name in module.globals:
@@ -236,18 +197,7 @@ def emit_string_pad_left(module: ir.Module) -> ir.Function:
 
 
 def emit_string_pad_right(module: ir.Module) -> ir.Function:
-    """Emit the string.pad_right() method.
-
-    Pads string to specified width by appending padding character(s).
-    Width is measured in UTF-8 characters. If the string is already >= width,
-    returns a copy of the original string.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_pad_right({ i8*, i32 } str, i32 width, { i8*, i32 } pad_char)
-    """
+    """Emit `{i8*, i32} string_pad_right({i8*, i32} str, i32 width, {i8*, i32} pad_char)`."""
     func_name = "string_pad_right"
 
     if func_name in module.globals:

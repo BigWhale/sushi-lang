@@ -29,27 +29,14 @@ class StructTable:
 
 @dataclass
 class GenericStructTable:
-    """Table of generic struct types collected in Phase 0.
-
-    Generic structs are struct definitions with type parameters (e.g., Pair<T, U>).
-    They are stored separately from concrete structs because they need to be
-    instantiated with concrete type arguments during monomorphization.
-    """
+    """Table of generic struct types collected in Phase 0."""
     by_name: Dict[str, GenericStructType] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
     spans: Dict[str, Optional[Span]] = field(default_factory=dict)
 
 
 class StructCollector:
-    """Collector for struct definitions.
-
-    Collects both regular and generic struct definitions during Phase 0, validating:
-    - No duplicate names (across regular and generic namespaces)
-    - No duplicate field names within a struct
-    - All fields have explicit type annotations
-
-    Generic structs are stored separately for later monomorphization.
-    """
+    """Collector for struct definitions."""
 
     def __init__(
         self,
@@ -58,25 +45,14 @@ class StructCollector:
         generic_structs: GenericStructTable,
         known_types: Set[Type]
     ) -> None:
-        """Initialize struct collector.
-
-        Args:
-            reporter: Error reporter
-            structs: Shared regular struct table to populate
-            generic_structs: Shared generic struct table to populate
-            known_types: Set of known types for registration
-        """
+        """Initialize struct collector."""
         self.r = reporter
         self.structs = structs
         self.generic_structs = generic_structs
         self.known_types = known_types
 
     def collect(self, root: Program) -> None:
-        """Collect all struct definitions from program AST.
-
-        Args:
-            root: Program AST node
-        """
+        """Collect all struct definitions from program AST."""
         structs = getattr(root, "structs", None)
         if isinstance(structs, list):
             for struct in structs:
@@ -84,16 +60,7 @@ class StructCollector:
                     self._collect_struct_def(struct)
 
     def register_predefined_structs(self) -> None:
-        """Register stdlib-provided structs that are built into the language.
-
-        These are visible to user code globally, independent of any `use` statement
-        (mirroring how EnumCollector.register_predefined_enums registers ProcessError,
-        FileError, etc.). Only stdlib *functions* are gated by `use <...>`.
-
-        Currently:
-            - ProcessOutput { i32 exit_code, string stdout, string stderr }
-              (the success payload of sys/process `run()`).
-        """
+        """Register stdlib-provided structs that are built into the language."""
         from sushi_lang.semantics.typesys import BuiltinType
 
         # Note: fields are named *_text (not stdout/stderr) because `stdin`/`stdout`/
@@ -112,11 +79,7 @@ class StructCollector:
             self.known_types.add(process_output)
 
     def _collect_struct_def(self, struct: StructDef) -> None:
-        """Collect struct definition and create StructType or GenericStructType.
-
-        Args:
-            struct: Struct definition AST node
-        """
+        """Collect struct definition and create StructType or GenericStructType."""
         name = getattr(struct, "name", None)
         if not isinstance(name, str):
             return

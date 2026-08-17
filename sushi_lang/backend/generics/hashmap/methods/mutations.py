@@ -1,13 +1,4 @@
-"""
-HashMap<K, V> mutation method implementations.
-
-This module contains HashMap methods that modify the map:
-- insert (add/update key-value pairs with auto-resize)
-- remove (delete entries, mark tombstones)
-- rehash (rebuild without tombstones)
-- free (destroy all entries, reset to initial capacity)
-- destroy (destroy all entries, set to unusable state)
-"""
+"""HashMap<K, V> mutation method implementations."""
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall, Name
@@ -39,30 +30,7 @@ def emit_hashmap_insert(
     hashmap_value: ir.Value,
     hashmap_type: StructType
 ) -> ir.Value:
-    """Emit HashMap<K, V>.insert(K key, V value) -> ~
-
-    Inserts or updates a key-value pair in the HashMap.
-    Automatically resizes when load factor exceeds 0.75.
-
-    Algorithm:
-    1. Check load factor: (size + tombstones) / capacity > 0.75
-    2. If exceeded, resize to next power-of-two capacity (doubles current)
-    3. Hash the key to get hash value
-    4. Linear probe to find slot:
-       - If Occupied with same key: update value
-       - If Empty: insert new entry, size++
-       - If Tombstone: reuse slot, insert entry, size++, tombstones--
-    5. Return unit (~)
-
-    Args:
-        codegen: LLVM codegen instance.
-        expr: The method call expression with arguments.
-        hashmap_value: The HashMap struct value (pass by value, not pointer).
-        hashmap_type: The HashMap<K, V> struct type.
-
-    Returns:
-        Unit value (~).
-    """
+    """Emit HashMap<K, V>.insert(K key, V value) -> ~"""
     import sushi_lang.backend.types.primitives.hashing  # noqa: F401 - Ensure hash methods are registered
 
     builder = codegen.builder
@@ -243,31 +211,7 @@ def emit_hashmap_remove(
     hashmap_value: ir.Value,
     hashmap_type: StructType
 ) -> ir.Value:
-    """Emit HashMap<K, V>.remove(K key) -> Maybe<V>
-
-    Removes a key-value pair from the HashMap.
-
-    Algorithm:
-    1. Hash the key to get hash value
-    2. Linear probe to find slot:
-       - If Occupied with matching key:
-         * Save the value
-         * Mark entry as Tombstone
-         * Decrement size, increment tombstones
-         * Return Maybe.Some(saved_value)
-       - If Empty: return Maybe.None() (not found)
-       - If Tombstone or occupied with different key: continue probing
-    3. Return Maybe<V>
-
-    Args:
-        codegen: LLVM codegen instance.
-        expr: The method call expression with key argument.
-        hashmap_value: The HashMap struct pointer.
-        hashmap_type: The HashMap<K, V> struct type.
-
-    Returns:
-        Maybe<V> enum value.
-    """
+    """Emit HashMap<K, V>.remove(K key) -> Maybe<V>"""
     from sushi_lang.semantics.ast import MethodCall, Name
     import sushi_lang.backend.types.primitives.hashing  # noqa: F401
 
@@ -435,31 +379,7 @@ def emit_hashmap_resize_to_capacity(
     hashmap_type: StructType,
     new_capacity: ir.Value
 ) -> None:
-    """Internal helper: resize HashMap to a specific capacity.
-
-    Rebuilds the HashMap with a new capacity, rehashing all occupied entries.
-    This is used by both rehash() (same capacity) and automatic resize (larger capacity).
-
-    Note: This function handles on-demand hash registration for array key types,
-    since array types used as HashMap keys may not be registered in Pass 1.8 if they
-    only appear as HashMap type parameters (not in struct/enum fields).
-
-    Algorithm:
-    1. Allocate new buckets array with new_capacity
-    2. Initialize all entries to Empty
-    3. Iterate through old buckets
-    4. For each Occupied entry, rehash and insert into new buckets
-    5. Replace old buckets with new buckets
-    6. Update capacity field
-    7. Reset tombstones to 0
-    8. Free old buckets
-
-    Args:
-        codegen: LLVM codegen instance.
-        hashmap_value: The HashMap struct pointer.
-        hashmap_type: The HashMap<K, V> struct type.
-        new_capacity: The new capacity (must be power-of-two).
-    """
+    """Internal helper: resize HashMap to a specific capacity."""
     from sushi_lang.semantics.ast import MethodCall, Name
     import sushi_lang.backend.types.primitives.hashing  # noqa: F401
 
@@ -612,20 +532,7 @@ def emit_hashmap_rehash(
     hashmap_value: ir.Value,
     hashmap_type: StructType
 ) -> ir.Value:
-    """Emit HashMap<K, V>.rehash() -> ~
-
-    Rebuilds the HashMap without tombstones, using the same capacity.
-
-    This delegates to the internal resize helper with the current capacity.
-
-    Args:
-        codegen: LLVM codegen instance.
-        hashmap_value: The HashMap struct pointer.
-        hashmap_type: The HashMap<K, V> struct type.
-
-    Returns:
-        Unit value (~).
-    """
+    """Emit HashMap<K, V>.rehash() -> ~"""
     builder = codegen.builder
 
     # Load current capacity
@@ -646,38 +553,7 @@ def emit_hashmap_free(
     hashmap_value: ir.Value,
     hashmap_type: StructType
 ) -> ir.Value:
-    """Emit HashMap<K, V>.free() -> ~
-
-    Deallocates all keys and values recursively, frees the buckets array,
-    and resets the HashMap to its initial empty state (capacity 16).
-
-    This method prevents memory leaks by:
-    1. Iterating through all buckets
-    2. For each occupied entry, recursively destroying key and value
-    3. Freeing the buckets array
-    4. Allocating new empty buckets with initial capacity (16)
-    5. Resetting size, capacity, and tombstones
-
-    Algorithm:
-    1. Load old buckets and capacity
-    2. Iterate through all buckets [0..capacity-1]
-    3. For each bucket:
-       - Check if state == ENTRY_OCCUPIED
-       - If occupied, recursively destroy key and value using emit_value_destructor
-    4. Free old buckets array
-    5. Allocate new buckets array (capacity 16)
-    6. Initialize all entries to Empty
-    7. Update HashMap fields: size=0, capacity=16, tombstones=0
-    8. Return unit (~)
-
-    Args:
-        codegen: LLVM codegen instance.
-        hashmap_value: The HashMap struct pointer.
-        hashmap_type: The HashMap<K, V> struct type.
-
-    Returns:
-        Unit value (~).
-    """
+    """Emit HashMap<K, V>.free() -> ~"""
     builder = codegen.builder
 
     # Extract K and V types
@@ -738,35 +614,7 @@ def emit_hashmap_destroy(
     hashmap_value: ir.Value,
     hashmap_type: StructType
 ) -> ir.Value:
-    """Emit HashMap<K, V>.destroy() -> ~
-
-    Deallocates all keys and values recursively, frees the buckets array,
-    and sets buckets to null (makes HashMap unusable).
-
-    This method prevents memory leaks by:
-    1. Iterating through all buckets
-    2. For each occupied entry, recursively destroying key and value
-    3. Freeing the buckets array
-    4. Setting all fields to 0/null (HashMap is unusable after this)
-
-    Algorithm:
-    1. Load old buckets and capacity
-    2. Iterate through all buckets [0..capacity-1]
-    3. For each bucket:
-       - Check if state == ENTRY_OCCUPIED
-       - If occupied, recursively destroy key and value using emit_value_destructor
-    4. Free old buckets array
-    5. Reset HashMap fields: size=0, capacity=0, tombstones=0, buckets=null
-    6. Return unit (~)
-
-    Args:
-        codegen: LLVM codegen instance.
-        hashmap_value: The HashMap struct pointer.
-        hashmap_type: The HashMap<K, V> struct type.
-
-    Returns:
-        Unit value (~).
-    """
+    """Emit HashMap<K, V>.destroy() -> ~"""
     builder = codegen.builder
 
     # Extract K and V types

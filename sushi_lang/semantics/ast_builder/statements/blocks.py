@@ -11,15 +11,7 @@ if TYPE_CHECKING:
 
 
 def parse_block(t: Tree, ast_builder: 'ASTBuilder') -> Block:
-    """Parse a block by routing every child through the statement dispatcher.
-
-    This used to carry its own 14-entry tuple of statement kinds and SILENTLY SKIP
-    any child not in it -- a second copy of parse_stmt's dispatch table, kept in
-    sync by hand. They agreed, so nothing was dropped in practice, but adding a
-    15th grammar alternative would have made a statement vanish here while
-    parse_stmt would have reported it. parse_stmt is a total dispatcher: an
-    unhandled node is CE0003, not silence.
-    """
+    """Parse a block by routing every child through the statement dispatcher."""
     t = expect(t, "block")
     statements: List[Stmt] = []
 

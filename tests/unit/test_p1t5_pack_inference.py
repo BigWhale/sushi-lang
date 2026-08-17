@@ -1,17 +1,4 @@
-"""P1-T5: pack-aware type-argument inference (Pass 1.5 shared helper).
-
-Exercises ``pack_inference.infer_flat_type_args`` directly with synthetic generic
-functions + concrete argument types, asserting the FLAT instantiation key:
-
-  - arity 0 / 1 / 2 packs (no leading type-params)
-  - a leading-param + pack case
-  - a NON-pack generic delegates and returns the legacy result unchanged
-
-The leading-inference callback is a tiny stand-in that mirrors the real Pass 1.5
-unification just enough for the shared helper's contract (it never sees the pack
-value-param). Real `Type`s (BuiltinType i32/string/bool) are used, matching the
-existing pack unit tests.
-"""
+"""P1-T5: pack-aware type-argument inference (Pass 1.5 shared helper)."""
 import pytest
 
 from sushi_lang.semantics.generics.types import TypeParameter, TypePack
@@ -51,10 +38,7 @@ def _generic(type_params, params):
 
 
 def _leading(generic_func, leading_arg_types):
-    """Minimal leading inference: unify non-pack params (UnknownType refs) 1:1.
-
-    Returns leading type-args in non-pack type_param order, or None.
-    """
+    """Minimal leading inference: unify non-pack params (UnknownType refs) 1:1."""
     non_pack_params = [p for p in generic_func.params if not p.is_pack]
     if len(leading_arg_types) != len(non_pack_params):
         return None

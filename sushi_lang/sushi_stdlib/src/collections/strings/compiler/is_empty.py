@@ -1,30 +1,11 @@
-"""
-Inline emission for string.is_empty() method.
-
-This function is emitted directly into the compiled module during compilation,
-allowing is_empty() to work without requiring `use <collections/strings>`.
-
-Used by:
-- Direct .is_empty() calls in user code
-- foreach loops with .lines() iterators
-"""
+"""Inline emission for string.is_empty() method."""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 
 
 def emit_string_is_empty_intrinsic(module: ir.Module) -> ir.Function:
-    """Emit string.is_empty() intrinsic as inline LLVM IR.
-
-    Returns true if the string has 0 bytes.
-    This is an O(1) operation - just checks size field.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: i8 llvm_string_is_empty({ i8*, i32 } str)
-    """
+    """Emit `i8 llvm_string_is_empty({i8*, i32} str)`."""
     func_name = "llvm_string_is_empty"
 
     # Check if already defined

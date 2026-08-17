@@ -1,31 +1,4 @@
-"""Every read-only receiver rejects every write shape, through ONE gate.
-
-The language has five receivers a write cannot reach through, each found as its own bug
-and each given its own code, because each carries its own escape:
-
-  a match/foreach binding    -> CE2414 (#253) -- compiled as a private deep copy
-  a `peek` reference        -> CE2408 (#302, R1) -- a read-only borrow of the caller
-  the method receiver        -> CE2421 (#326) -- a borrow, per the #298 ruling
-  a by-value method PARAM    -> CE2422 -- the same borrow, one line over
-  a `let`-borrow binding     -> CE2426 (#344) -- shares the OWNER's data, so the write is
-                                not merely lost: a reallocating one is a double free
-
-and three shapes the write comes in, each of which had to be found separately for the
-first two kinds:
-
-  a mutating method under the receiver   `x.items.push(9)`
-  a field assignment under the receiver  `x.n := 42`
-  a `poke` borrow of the receiver       `f(poke x)`
-
-Fifteen cells. The gate is one dispatcher (`_reject_readonly_write`) over a table of
-kinds, called from the four write sites, so a new kind is one table entry and a new write
-shape is one call -- never a fifth copy of the same walk. This test is what makes the
-table load-bearing: a kind wired into the table but missing from a call site, or a call
-site that forgets the dispatcher, turns a cell red instead of shipping a silent write.
-
-`test_peek_write_gate_is_total.py` covers the other axis for the `peek` kind: every
-member of `_MUTATING_METHODS`, not every shape.
-"""
+"""Every read-only receiver rejects every write shape, through ONE gate."""
 from __future__ import annotations
 
 import pytest
@@ -96,11 +69,7 @@ def _self_program(write: str) -> str:
 
 
 def _method_param_program(write: str) -> str:
-    """A by-value parameter of a method: the receiver's rule, one line over.
-
-    The extended type is deliberately NOT `Holder`, so nothing here can be satisfied by
-    the receiver arm -- the write is on `r`, an ordinary parameter.
-    """
+    """A by-value parameter of a method: the receiver's rule, one line over."""
     return (
         _STRUCT + _GROW +
         "struct Box:\n"
@@ -116,12 +85,7 @@ def _method_param_program(write: str) -> str:
 
 
 def _let_borrow_program(write: str) -> str:
-    """A `let` bound from a read THROUGH a live owner (#344).
-
-    The kind the table was missing. Unlike the pattern binding above, the binding shares
-    the owner's heap rather than copying it, so the same write that is merely lost there
-    frees the owner's buffer here as soon as it reallocates.
-    """
+    """A `let` bound from a read THROUGH a live owner (#344)."""
     return (
         _STRUCT + _GROW +
         "struct Outer:\n"
@@ -136,15 +100,7 @@ def _let_borrow_program(write: str) -> str:
 
 
 def _function_param_program(write: str) -> str:
-    """An unmarked parameter of a PLAIN function -- CE2422's kind, generalized.
-
-    Until borrow by default, a plain function OWNED its by-value parameters, so a write
-    through one was legal and only a method's was rejected. Now every mode but `nom`
-    borrows in every callable, so the same write lands on the callee's private shallow
-    copy here too: a plain field is silently lost, and an owning one is a double free
-    plus a leak. Declaring the parameter `poke Holder r` is the escape, exactly as the
-    code says (docs/design/borrow-model.md S1).
-    """
+    """An unmarked parameter of a PLAIN function -- CE2422's kind, generalized."""
     return (
         _STRUCT + _GROW +
         "fn touch(Holder r) ~:\n"
@@ -221,13 +177,7 @@ def test_poke_borrow_of_a_whole_method_parameter_is_rejected(analyze):
 
 
 def test_a_nom_parameter_stays_writable(analyze):
-    """The other escape, and the line that keeps the gate off `nom`.
-
-    A `nom` parameter is OWNED by the callee -- the caller transferred the value and its
-    binding is moved -- so the callee may do what it likes with its own value, writes
-    included. The gate must therefore key on the declared MODE and not on "is this a
-    parameter?" (docs/design/borrow-model.md S2).
-    """
+    """The other escape, and the line that keeps the gate off `nom`."""
     src = (
         _STRUCT + _GROW +
         "fn touch(nom Holder r) ~:\n"
@@ -243,12 +193,7 @@ def test_a_nom_parameter_stays_writable(analyze):
 
 
 def test_a_poke_method_parameter_stays_writable(analyze):
-    """The escape CE2422 names, and the line that keeps the gate off `poke`.
-
-    A `poke` parameter is the supported way to write through a method's argument, so the
-    method-parameter kind must exclude reference parameters entirely -- a `peek` one is
-    already CE2408, and a `poke` one is the answer.
-    """
+    """The escape CE2422 names, and the line that keeps the gate off `poke`."""
     src = (
         _STRUCT +
         "struct Box:\n"
@@ -293,12 +238,7 @@ def test_destroy_through_a_let_borrow_binding_is_rejected(analyze):
 
 
 def test_a_let_borrow_out_of_a_temporary_keeps_its_own_code(analyze):
-    """An owner with no BorrowState is still an owner, and its buffer is still real.
-
-    The reason the row keys on `is_let_borrow` rather than on `borrows_from is not None`:
-    a temporary records no owner NAME, and the `borrows_from` spelling would hand this
-    case to the CE2414 row, which tells the user their `let` is a match binding.
-    """
+    """An owner with no BorrowState is still an owner, and its buffer is still real."""
     src = (
         _STRUCT +
         "fn make() Holder:\n"
@@ -317,11 +257,7 @@ def test_a_let_borrow_out_of_a_temporary_keeps_its_own_code(analyze):
 
 
 def test_a_rebound_let_borrow_becomes_writable(analyze):
-    """A rebind RE-INITIALIZES: the new value is the binding's own, so writes are legal.
-
-    The `is_let_borrow` twin of `test_rebind_of_a_borrowed_binding_makes_it_an_owner`.
-    Without the clear in `_reinitialize`, this is a false CE2426.
-    """
+    """A rebind RE-INITIALIZES: the new value is the binding's own, so writes are legal."""
     src = (
         _STRUCT +
         "fn main() i32:\n"

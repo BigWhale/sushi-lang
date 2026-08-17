@@ -1,17 +1,4 @@
-"""
-String Search Operations
-
-Implements string search methods for fat pointer strings:
-- starts_with(): Check if string starts with prefix
-- ends_with(): Check if string ends with suffix
-- contains(): Check if string contains substring
-- find(): Find first occurrence of substring (returns Maybe<i32>)
-- find_last(): Find last occurrence of substring (returns Maybe<i32>)
-- count(): Count non-overlapping occurrences of substring
-
-All methods are byte-based (UTF-8 safe but unaware).
-find() and find_last() return UTF-8 character indices.
-"""
+"""String Search Operations"""
 
 import llvmlite.ir as ir
 from ..intrinsics import declare_utf8_count_intrinsic
@@ -19,17 +6,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types, get_m
 
 
 def emit_string_starts_with(module: ir.Module) -> ir.Function:
-    """Emit the string.starts_with() method.
-
-    Checks if a string starts with a given prefix.
-    Returns true if the prefix matches the beginning of the string.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: i8 string_starts_with({ i8*, i32 } str, { i8*, i32 } prefix)
-    """
+    """Emit `i8 string_starts_with({i8*, i32} str, {i8*, i32} prefix)`."""
     func_name = "string_starts_with"
 
     # Check if already defined
@@ -101,17 +78,7 @@ def emit_string_starts_with(module: ir.Module) -> ir.Function:
 
 
 def emit_string_ends_with(module: ir.Module) -> ir.Function:
-    """Emit the string.ends_with() method.
-
-    Checks if a string ends with a given suffix.
-    Returns true if the suffix matches the end of the string.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: i8 string_ends_with({ i8*, i32 } str, { i8*, i32 } suffix)
-    """
+    """Emit `i8 string_ends_with({i8*, i32} str, {i8*, i32} suffix)`."""
     func_name = "string_ends_with"
 
     # Check if already defined
@@ -186,17 +153,7 @@ def emit_string_ends_with(module: ir.Module) -> ir.Function:
 
 
 def emit_string_contains(module: ir.Module) -> ir.Function:
-    """Emit the string.contains() method.
-
-    Checks if a string contains a given substring.
-    Returns true if the substring is found anywhere in the string.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: i8 string_contains({ i8*, i32 } str, { i8*, i32 } needle)
-    """
+    """Emit `i8 string_contains({i8*, i32} str, {i8*, i32} needle)`."""
     func_name = "string_contains"
 
     # Check if already defined
@@ -297,20 +254,7 @@ def emit_string_contains(module: ir.Module) -> ir.Function:
 
 
 def emit_string_find(module: ir.Module) -> ir.Function:
-    """Emit the string.find() method.
-
-    Finds the first occurrence of a substring and returns its UTF-8 character index.
-    Returns Maybe.Some(index) if found, Maybe.None() if not found.
-
-    Note: The index is in UTF-8 characters, not bytes!
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8, i32 } string_find({ i8*, i32 } str, { i8*, i32 } needle)
-        Returns Maybe<i32> represented as { i8 tag, i32 value }
-    """
+    """Emit `{i8, i32} string_find({i8*, i32} str, {i8*, i32} needle)`."""
     func_name = "string_find"
 
     # Check if already defined
@@ -443,29 +387,7 @@ def emit_string_find(module: ir.Module) -> ir.Function:
 
 
 def emit_string_count(module: ir.Module) -> ir.Function:
-    """Emit the string.count() method.
-
-    Counts non-overlapping occurrences of a substring in a string.
-    Returns 0 if needle is empty or not found.
-
-    Algorithm:
-    - Similar to contains() but accumulates count instead of returning on first match
-    - On match: increment count, skip past match (pos += needle_size)
-    - On mismatch: try next position (pos++)
-
-    Examples:
-        "hello".count("l") -> 2
-        "aaa".count("aa") -> 1 (non-overlapping)
-        "test".count("x") -> 0
-        "".count("x") -> 0
-        "test".count("") -> 0
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: i32 string_count({ i8*, i32 } str, { i8*, i32 } needle)
-    """
+    """Emit `i32 string_count({i8*, i32} str, {i8*, i32} needle)`."""
     func_name = "string_count"
 
     # Check if already defined
@@ -577,27 +499,7 @@ def emit_string_count(module: ir.Module) -> ir.Function:
 
 
 def emit_string_find_last(module: ir.Module) -> ir.Function:
-    """Emit the string.find_last() method.
-
-    Finds the last occurrence of a substring and returns its UTF-8 character index.
-    Returns Maybe.Some(index) if found, Maybe.None() if not found.
-
-    Searches backwards from the end of the string for efficiency.
-
-    Note: The index is in UTF-8 characters, not bytes!
-
-    Examples:
-        "hello world".find_last("o") -> Some(7)
-        "test".find_last("x") -> None()
-        "".find_last("x") -> None()
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i32, [1 x i64] } string_find_last({ i8*, i32 } str, { i8*, i32 } needle)
-        Returns Maybe<i32> represented as { i32 tag, [1 x i64] data }
-    """
+    """Emit `{i32, [1 x i64]} string_find_last({i8*, i32} str, {i8*, i32} needle)`."""
     func_name = "string_find_last"
 
     # Check if already defined

@@ -13,10 +13,7 @@ if TYPE_CHECKING:
 
 
 def expr_from_token(tok: Token, ast_builder: 'ASTBuilder') -> Expr:
-    """Map a single token to an Expr (literals and names).
-
-    Handles: INT, HEX_INT, BIN_INT, OCT_INT, FLOAT, TRUE, FALSE, STRING, NAME
-    """
+    """Map a single token to an Expr (literals and names)."""
     t = tok.type
 
     if t == "INT":

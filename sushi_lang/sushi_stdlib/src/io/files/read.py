@@ -1,12 +1,4 @@
-"""
-File reading methods IR generation.
-
-Implements IR generation for:
-- read() - Read entire file as string
-- readln() - Read one line
-- readch() - Read one character
-- lines() - Create line iterator
-"""
+"""File reading methods IR generation."""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.io.files.common import (
@@ -18,10 +10,7 @@ from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc
 
 
 def generate_read(module: ir.Module) -> None:
-    """Generate IR for file.read() -> string
-
-    Reads entire file contents as a string.
-    """
+    """Generate IR for file.read() -> string"""
     i8 = ir.IntType(8)
     i32 = ir.IntType(32)
     i8_ptr = i8.as_pointer()
@@ -46,10 +35,7 @@ def generate_read(module: ir.Module) -> None:
 
 
 def generate_readln(module: ir.Module) -> None:
-    """Generate IR for file.readln() -> string
-
-    Reads one line from file (removes trailing newline).
-    """
+    """Generate IR for file.readln() -> string"""
     i8 = ir.IntType(8)
     i32 = ir.IntType(32)
     i8_ptr = i8.as_pointer()
@@ -74,10 +60,7 @@ def generate_readln(module: ir.Module) -> None:
 
 
 def generate_readch(module: ir.Module) -> None:
-    """Generate IR for file.readch() -> string
-
-    Reads one character from file (returns empty string on EOF).
-    """
+    """Generate IR for file.readch() -> string"""
     i8 = ir.IntType(8)
     i32 = ir.IntType(32)
     i8_ptr = i8.as_pointer()
@@ -102,22 +85,7 @@ def generate_readch(module: ir.Module) -> None:
 
 
 def generate_lines(module: ir.Module) -> None:
-    """Generate IR for file.lines() -> Iterator<string>
-
-    Returns an iterator that reads lines from the file.
-    Iterator struct: {i32 index, i32 length, {i8*,i32}** data_ptr}
-    - index: always 0 (not used for file iteration)
-    - length: -1 (sentinel value indicating streaming iterator)
-    - data_ptr: pointer to FILE* pointer (heap-allocated to outlive function call)
-
-    Note: Strings are fat pointers {i8*, i32}, so the iterator's data_ptr field
-    is typed as a pointer to pointers to fat pointer structs. However, we actually
-    store the FILE* pointer here (as i8**), which works because the foreach loop
-    uses the sentinel length value to determine this is a streaming iterator.
-
-    The FILE* pointer must be stored on the heap because the iterator struct is
-    used across multiple loop iterations in foreach loops.
-    """
+    """Generate IR for file.lines() -> Iterator<string>"""
     # Declare external functions
     malloc_fn = declare_malloc(module)
 

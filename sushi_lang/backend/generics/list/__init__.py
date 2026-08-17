@@ -1,37 +1,4 @@
-"""
-Built-in extension methods for List<T> generic struct.
-
-INLINE EMISSION ONLY. List<T> methods work on-demand for all types.
-
-Implemented methods:
-- new() -> List<T>: Create empty list (0 capacity, lazy allocation)
-- with_capacity(i32) -> List<T>: Pre-allocate list with specified capacity
-- len() -> i32: Get current number of elements
-- capacity() -> i32: Get allocated capacity
-- is_empty() -> bool: Check if length is zero
-- push(T) -> ~: Append element (auto-grows 2x when needed)
-- pop() -> Maybe<T>: Remove and return last element
-- get(i32) -> Maybe<T>: Safe element access by index
-- clear() -> ~: Remove all elements (keep capacity, destroy elements)
-- reserve(i32) -> ~: Ensure capacity for additional elements
-- shrink_to_fit() -> ~: Reduce capacity to exact length
-- destroy() -> ~: Recursively destroy elements, free memory (unusable after)
-- free() -> ~: Recursively destroy elements, reset to empty (still usable)
-- debug() -> ~: Print internal state for debugging
-- iter() -> Iterator<T>: Create iterator for foreach loops
-
-The List<T> type is a generic struct with automatic growth:
-- struct List<T>:
-  - i32 len       # Current number of elements
-  - i32 capacity  # Allocated capacity
-  - T* data       # Pointer to heap-allocated array
-- Uses 2x exponential growth on push (amortized O(1))
-- Initial capacity: 0 (lazy allocation on first push)
-- Methods returning Maybe<T>: pop(), get()
-- RAII cleanup on scope exit (automatic destroy())
-
-This module provides list methods that work with List<T> after monomorphization.
-"""
+"""Built-in extension methods for List<T> generic struct."""
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall
@@ -80,24 +47,7 @@ def emit_list_method(
     receiver_type: StructType,
     to_i1: bool
 ) -> ir.Value:
-    """Emit LLVM IR for List<T> method calls.
-
-    List<T> is a CORE language feature that uses inline emission.
-    This function dispatches to specialized emitters based on method name.
-
-    Args:
-        codegen: The LLVM code generator.
-        expr: The method call expression.
-        receiver_value: The LLVM value of the List (None for new()/with_capacity()).
-        receiver_type: The List<T> struct type.
-        to_i1: Whether to convert result to i1.
-
-    Returns:
-        The result of the List method call.
-
-    Raises:
-        ValueError: If method name is not recognized.
-    """
+    """Emit LLVM IR for List<T> method calls."""
     method = expr.method
 
     # Dispatch to method-specific emitters

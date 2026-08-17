@@ -1,10 +1,4 @@
-"""
-Struct operations for the Sushi language compiler.
-
-This module handles struct constructor calls, member access, and type inference
-for struct expressions. Includes GEP-based field access for dynamic array fields
-to enable Rust-style method call syntax on struct fields.
-"""
+"""Struct operations for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
@@ -25,23 +19,7 @@ if TYPE_CHECKING:
 
 
 def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = False) -> ir.Value:
-    """Emit struct constructor call.
-
-    Creates a struct value by constructing it with the provided field values.
-    Handles dynamic array fields with special initialization logic and performs
-    deep-copy for nested structs containing dynamic arrays to prevent double-free.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The constructor call expression (treated as Call).
-        to_i1: Whether to convert result to i1 (should be False for structs).
-
-    Returns:
-        The constructed struct value.
-
-    Raises:
-        TypeError: If field count doesn't match or unsupported array constructor type.
-    """
+    """Emit struct constructor call."""
 
     struct_name = expr.callee.id
     struct_type = codegen.struct_table.by_name[struct_name]
@@ -139,24 +117,7 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
 
 
 def emit_member_access(codegen: 'LLVMCodegen', expr: MemberAccess, to_i1: bool = False) -> ir.Value:
-    """Emit member access expression for struct fields.
-
-    For dynamic array fields, returns a pointer to the field (GEP-based access).
-    For other fields, extracts the field value using extractvalue.
-
-    This enables method calls on dynamic array fields within structs (Rust-style).
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The member access expression.
-        to_i1: Whether to convert result to i1 (usually False for struct fields).
-
-    Returns:
-        The field value, or pointer to field for dynamic array fields.
-
-    Raises:
-        TypeError: If receiver is not a struct or field doesn't exist.
-    """
+    """Emit member access expression for struct fields."""
     # Infer the receiver's struct type
     struct_type = infer_struct_type(codegen, expr.receiver)
 
@@ -205,18 +166,7 @@ def emit_member_access(codegen: 'LLVMCodegen', expr: MemberAccess, to_i1: bool =
 
 
 def try_get_struct_alloca(codegen: 'LLVMCodegen', receiver_expr: Expr) -> Optional[ir.Value]:
-    """Try to get the alloca instruction or pointer for a struct variable.
-
-    This is used for GEP-based field access for dynamic array fields.
-    For reference parameters, returns the pointer (not the alloca containing the pointer).
-
-    Args:
-        codegen: The LLVM codegen instance.
-        receiver_expr: The receiver expression (typically a Name or MemberAccess).
-
-    Returns:
-        The alloca instruction or pointer if receiver is accessible, None otherwise.
-    """
+    """Try to get the alloca instruction or pointer for a struct variable."""
     if isinstance(receiver_expr, Name):
         # Simple variable access: look up alloca. "Not a local" is a real answer here --
         # this function's contract is to return None for an inaccessible receiver.
@@ -280,40 +230,13 @@ def _resolve_to_struct(codegen: 'LLVMCodegen', ty) -> Optional[StructType]:
 
 
 def _infer_call_struct(codegen: 'LLVMCodegen', expr: Expr) -> Optional[StructType]:
-    """The struct a call receiver produces, or None.
-
-    Stamp FIRST, `.get()` knowledge second. `_infer_get_element_struct` knows exactly one
-    method name, so every other call receiver fell past it to CE0068 / CE0069 -- an
-    internal-error code for ordinary user code, on the grounds that the method was not
-    called `get`. That is why `m.realise(Row(0)).n` crashed (#285). Pass 2 had already
-    stamped the return type on that very node, so the answer was there the whole time and
-    the backend was reading the wrong place -- the same shape as #286, one node type over.
-
-    The `.get()` derivation stays as the fallback rather than being deleted: it answers for
-    a node Pass 2 left unstamped, and removing it would change the failure mode of cases
-    that pass today.
-
-    The two callers keep their own `raise_internal_error` with a LITERAL code, which is
-    what `test_error_registry.py` scans for. Folding them into one raise with a computed
-    code made CE0069 read as dead.
-    """
+    """The struct a call receiver produces, or None."""
     return (_stamped_struct_type(codegen, expr)
             or _infer_get_element_struct(codegen, expr))
 
 
 def _stamped_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional[StructType]:
-    """The struct Pass 2 stamped as this call's return type, or None.
-
-    The backend does not re-derive a receiver's type; it reads what Pass 2 recorded. This
-    is the same seam `backend/expressions/calls/utils.py::_stamped_semantic_type` reads --
-    duplicated here only because that one answers "any semantic type" while
-    `infer_struct_type` must answer "a StructType or an internal error", and returning a
-    non-struct from here would turn a reported CE0068/CE0069 into a wrong GEP.
-
-    None whenever the stamp is missing or is not a struct, which reproduces the previous
-    behaviour exactly: the caller then tries `_infer_get_element_struct` and reports its
-    own code.
-    """
+    """The struct Pass 2 stamped as this call's return type, or None."""
     stamped = getattr(expr, "inferred_return_type", None)
     if stamped is None:
         return None
@@ -328,21 +251,7 @@ def _stamped_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional[StructT
 
 def _infer_get_element_struct(codegen: 'LLVMCodegen',
                               expr: Expr) -> Optional[StructType]:
-    """Struct type produced by a `.get()` call, or None if this is not one.
-
-    Two receivers yield a struct out of `.get()`:
-
-    - a dynamic array `T[]`, whose element is T
-    - an `Own@(T)`, whose pointee is T
-
-    Only the array case existed, and only for a bare `Name` receiver, so
-    `o.get().x` on an `Own@(T)` reported CE0069 ("cannot infer struct type from
-    DotCall: get") -- an internal-error code for ordinary user code. Binding the
-    value first already worked, so the gap was purely in the chained spelling.
-
-    Mirrors what Pass 2 already infers rather than inventing a second rule, the
-    same way the IndexAccess arm below mirrors infer_index_access_type.
-    """
+    """Struct type produced by a `.get()` call, or None if this is not one."""
     if getattr(expr, "method", None) != "get":
         return None
 
@@ -382,18 +291,7 @@ def _infer_get_element_struct(codegen: 'LLVMCodegen',
 
 
 def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
-    """Infer the struct type of an expression.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The expression to infer the type of.
-
-    Returns:
-        The StructType of the expression.
-
-    Raises:
-        TypeError: If the type cannot be inferred or is not a struct.
-    """
+    """Infer the struct type of an expression."""
     if isinstance(expr, Name):
         # Scope-aware lookup. `codegen.variable_types` is a FLAT map, so a `match` arm
         # binding that shadows an outer variable overwrites the outer entry and never

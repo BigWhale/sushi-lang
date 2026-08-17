@@ -1,10 +1,4 @@
-"""
-Shared utilities for statement emission in the Sushi language compiler.
-
-This module provides helper functions for common patterns used across statement
-emitters, including RAII cleanup, basic block management, scope handling, and
-GEP operations.
-"""
+"""Shared utilities for statement emission in the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from sushi_lang.internals.errors import raise_internal_error
@@ -16,20 +10,7 @@ if TYPE_CHECKING:
 
 
 def emit_condition(codegen: 'LLVMCodegen', expr) -> 'ir.Value':
-    """Emit a boolean condition, freeing an unowned Result/Maybe temporary behind it (#159).
-
-    `if (mk())` / `while (mk())` read ONLY the discriminant tag -- `as_i1` compares it against the
-    success variant and the payload is never extracted. So a temporary condition owned its heap and
-    nobody ever freed it.
-
-    The destroy is emitted inline, in the same block as the value, immediately after the tag is
-    read and before the branch. That is deliberate: it is straight-line code, so no early exit can
-    escape it and the value trivially dominates its own destructor. For a `while` it lands in the
-    condition block, which is re-entered every iteration -- exactly right, since the condition
-    builds a FRESH temporary each time round.
-
-    A bound condition (`if (r)`) is a Name, so `destroy_enum_temp` leaves it to its owner.
-    """
+    """Emit a boolean condition, freeing an unowned Result/Maybe temporary behind it (#159)."""
     from sushi_lang.backend.expressions.memory import destroy_enum_temp, expression_is_temporary
     from sushi_lang.backend.expressions.calls.utils import infer_generic_enum_type
 
@@ -50,16 +31,7 @@ def emit_condition(codegen: 'LLVMCodegen', expr) -> 'ir.Value':
 # ============================================================================
 
 def emit_struct_cleanup(codegen: 'LLVMCodegen') -> None:
-    """Emit cleanup code for struct fields with dynamic arrays.
-
-    Iterates through all scopes from innermost to outermost and emits cleanup
-    for struct variables that have dynamic array fields.
-
-    Move semantics: Skips cleanup for variables marked as moved.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-    """
+    """Emit cleanup code for struct fields with dynamic arrays."""
     if not hasattr(codegen, 'dynamic_arrays') or codegen.dynamic_arrays is None:
         return
 
@@ -77,15 +49,7 @@ def emit_struct_cleanup(codegen: 'LLVMCodegen') -> None:
 
 
 def emit_closure_cleanup(codegen: 'LLVMCodegen') -> None:
-    """Emit runtime-guarded env frees for all live function-value locals (closures).
-
-    Runs on an early-exit path (return / ?? / default return); the block terminates
-    immediately after. Emit the guarded `if drop: drop(env)` for every live, non-moved
-    closure local WITHOUT draining the tracking: each exit path is a separate,
-    mutually-exclusive basic block, so every path frees on its own block and the
-    structural pop_scope drains the fall-through path (#59/#60). Moved (escaped)
-    closures are skipped -- their new owner frees the env.
-    """
+    """Emit runtime-guarded env frees for all live function-value locals (closures)."""
     mem = getattr(codegen, 'memory', None)
     if mem is None or not getattr(mem, '_closure_cleanup', None):
         return
@@ -96,14 +60,7 @@ def emit_closure_cleanup(codegen: 'LLVMCodegen') -> None:
 
 
 def emit_dynamic_array_cleanup(codegen: 'LLVMCodegen') -> None:
-    """Emit cleanup code for top-level dynamic arrays.
-
-    Iterates through all dynamic array scopes and emits destructors for
-    arrays that haven't been destroyed yet.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-    """
+    """Emit cleanup code for top-level dynamic arrays."""
     if not hasattr(codegen, 'dynamic_arrays') or codegen.dynamic_arrays is None:
         return
 
@@ -124,17 +81,7 @@ def emit_dynamic_array_cleanup(codegen: 'LLVMCodegen') -> None:
 
 
 def emit_list_cleanup(codegen: 'LLVMCodegen') -> None:
-    """Emit cleanup code for local List<T> variables (#61).
-
-    Iterates all List<T> scopes from innermost to outermost and emits destructors for
-    lists that have not been moved / explicitly destroyed. Runs on an early-exit path
-    (return / ?? / default return); the block terminates immediately after, so each
-    mutually-exclusive exit path frees on its own block WITHOUT marking the list
-    destroyed -- the structural pop_scope drains the tracking on the fall-through path.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-    """
+    """Emit cleanup code for local List<T> variables (#61)."""
     if not hasattr(codegen, 'dynamic_arrays') or codegen.dynamic_arrays is None:
         return
 
@@ -144,13 +91,7 @@ def emit_list_cleanup(codegen: 'LLVMCodegen') -> None:
 
 
 def emit_own_cleanup(codegen: 'LLVMCodegen') -> None:
-    """Emit cleanup code for Own<T> variables.
-
-    Generates Own<T>.destroy() calls for all registered Own<T> variables.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-    """
+    """Emit cleanup code for Own<T> variables."""
     if not hasattr(codegen, 'dynamic_arrays') or codegen.dynamic_arrays is None:
         return
 
@@ -159,20 +100,7 @@ def emit_own_cleanup(codegen: 'LLVMCodegen') -> None:
 
 
 def emit_loop_exit_cleanup(codegen: 'LLVMCodegen', min_scope_index: int) -> None:
-    """Emit RAII destructors for the loop's own scopes on a break/continue path.
-
-    Frees heap-owning locals -- dynamic arrays, List<T>, struct dynamic-array fields,
-    Own<T>, and marshalled C strings -- declared at scope index >= min_scope_index, i.e.
-    the loop-body scope captured at loop entry plus any nested if/match scopes inside it.
-    Enclosing (post-loop) scopes are deliberately left intact, so a local that outlives
-    the loop is not double-freed.
-
-    Like emit_scope_cleanup, this emits WITHOUT draining the tracking: each break/continue
-    block terminates immediately after and is mutually exclusive at runtime with the other
-    exit paths (return / ?? / fall-through), so every path frees exactly once and the
-    structural pop_scope drains the fall-through path (#59/#60). It differs only in being
-    bounded to the loop's scopes rather than the whole function.
-    """
+    """Emit RAII destructors for the loop's own scopes on a break/continue path."""
     da = getattr(codegen, 'dynamic_arrays', None)
     if da is None:
         return
@@ -228,22 +156,7 @@ def emit_loop_exit_cleanup(codegen: 'LLVMCodegen', min_scope_index: int) -> None
 
 
 def emit_scope_cleanup(codegen: 'LLVMCodegen', cleanup_type: str = 'all') -> None:
-    """Emit cleanup code for resources in all scopes.
-
-    This is the main entry point for RAII cleanup, used by return statements
-    and other locations that need to clean up before exiting.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        cleanup_type: Type of cleanup to perform:
-            - 'all': Clean structs, dynamic arrays, and Own<T> (default)
-            - 'structs': Clean only struct fields
-            - 'arrays': Clean only top-level dynamic arrays
-            - 'owned': Clean only Own<T> variables
-
-    Raises:
-        ValueError: If cleanup_type is not recognized.
-    """
+    """Emit cleanup code for resources in all scopes."""
     if cleanup_type not in ('all', 'structs', 'arrays', 'owned'):
         raise_internal_error("CE0062", type=cleanup_type)
 
@@ -289,15 +202,7 @@ def emit_scope_cleanup(codegen: 'LLVMCodegen', cleanup_type: str = 'all') -> Non
 # ============================================================================
 
 def create_loop_blocks(codegen: 'LLVMCodegen', prefix: str = "loop") -> tuple['ir.Block', 'ir.Block', 'ir.Block']:
-    """Create standard loop basic blocks (condition, body, end).
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        prefix: Prefix for block names (default: "loop").
-
-    Returns:
-        Tuple of (cond_block, body_block, end_block).
-    """
+    """Create standard loop basic blocks (condition, body, end)."""
     require_function(codegen)
     cond_bb = codegen.func.append_basic_block(name=f"{prefix}.cond")
     body_bb = codegen.func.append_basic_block(name=f"{prefix}.body")
@@ -311,20 +216,7 @@ def create_conditional_blocks(
     num_arms: int,
     has_else: bool = False
 ) -> tuple[list['ir.Block'], 'ir.Block', 'ir.Block | None']:
-    """Create basic blocks for conditional statements (if/match).
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        prefix: Prefix for block names (e.g., "if", "match").
-        num_arms: Number of conditional arms.
-        has_else: Whether there's an else block.
-
-    Returns:
-        Tuple of (arm_blocks, end_block, else_block).
-        - arm_blocks: List of blocks for each arm
-        - end_block: The merge block after the conditional
-        - else_block: The else block (None if has_else=False)
-    """
+    """Create basic blocks for conditional statements (if/match)."""
     require_function(codegen)
     arm_blocks = [codegen.func.append_basic_block(name=f"{prefix}.arm{i}") for i in range(num_arms)]
     end_block = codegen.func.append_basic_block(name=f"{prefix}.end")
@@ -337,16 +229,7 @@ def create_conditional_blocks(
 # ============================================================================
 
 def emit_block_with_scope(codegen: 'LLVMCodegen', block, emit_func=None) -> None:
-    """Emit a block with automatic scope management.
-
-    Pushes a new scope, emits the block statements, and pops the scope.
-    This is a common pattern used throughout statement emission.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        block: The block AST node to emit.
-        emit_func: Optional custom emit function. If None, uses emit_block.
-    """
+    """Emit a block with automatic scope management."""
     codegen.memory.push_scope()
     if emit_func:
         emit_func(block)
@@ -370,30 +253,7 @@ def emit_copy_loop(
     element_type: 'ir.Type',
     name_prefix: str = "copy"
 ) -> None:
-    """Generate a simple loop to copy elements from src to dst.
-
-    This helper eliminates duplication for the common pattern of copying
-    elements from one array to another using a simple index-based loop.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        count: Number of elements to copy (i32).
-        src_ptr: Source pointer (T*).
-        dst_ptr: Destination pointer (T*).
-        element_type: LLVM element type (used for type checking, not GEP).
-        name_prefix: Prefix for generated block names (default: "copy").
-
-    Example usage:
-        # Copy elements from source array to destination array
-        emit_copy_loop(
-            codegen=codegen,
-            count=array_length,
-            src_ptr=source_data_ptr,
-            dst_ptr=dest_data_ptr,
-            element_type=codegen.i32,
-            name_prefix="clone"
-        )
-    """
+    """Generate a simple loop to copy elements from src to dst."""
     from llvmlite import ir
 
     zero = ir.Constant(codegen.i32, 0)

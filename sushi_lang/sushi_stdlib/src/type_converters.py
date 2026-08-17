@@ -1,10 +1,4 @@
-"""
-Type Converters
-
-Utilities for converting between semantic types and LLVM IR types.
-
-Design: Single Responsibility - only type conversion logic.
-"""
+"""Type Converters"""
 
 import llvmlite.ir as ir
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType, ArrayType, DynamicArrayType
@@ -15,21 +9,7 @@ from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
 # ==============================================================================
 
 def semantic_type_to_llvm(sem_type: Type) -> ir.Type:
-    """Convert a semantic type to an LLVM IR type (standalone version).
-
-    This is a simplified version that handles basic types needed for stdlib.
-    Does NOT handle complex types (structs, enums, generics) - those require
-    the full compiler infrastructure.
-
-    Args:
-        sem_type: The semantic type to convert.
-
-    Returns:
-        The corresponding LLVM IR type.
-
-    Raises:
-        TypeError: If the type is not supported in standalone mode.
-    """
+    """Convert a semantic type to an LLVM IR type (standalone version)."""
     # Basic integer types
     if sem_type == BuiltinType.I8:
         return ir.IntType(8)
@@ -72,20 +52,7 @@ def semantic_type_to_llvm(sem_type: Type) -> ir.Type:
 # ==============================================================================
 
 def mangle_generic_name(base_name: str, type_params: list[Type]) -> str:
-    """Generate a mangled name for a generic type instantiation.
-
-    Examples:
-        Result<i32> -> "result_i32"
-        Maybe<string> -> "maybe_string"
-        Pair<i32, f64> -> "pair_i32_f64"
-
-    Args:
-        base_name: The base name of the generic type (e.g., "Result", "Maybe").
-        type_params: List of type parameters.
-
-    Returns:
-        The mangled name suitable for use in LLVM function names.
-    """
+    """Generate a mangled name for a generic type instantiation."""
     mangled = base_name.lower()
     for param in type_params:
         mangled += "_" + _type_to_mangled_string(param)
@@ -93,14 +60,7 @@ def mangle_generic_name(base_name: str, type_params: list[Type]) -> str:
 
 
 def _type_to_mangled_string(t: Type) -> str:
-    """Convert a type to a string suitable for name mangling.
-
-    Args:
-        t: The type to convert.
-
-    Returns:
-        A mangled string representation of the type.
-    """
+    """Convert a type to a string suitable for name mangling."""
     # Basic types
     if t == BuiltinType.I8:
         return "i8"

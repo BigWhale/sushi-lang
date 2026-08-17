@@ -1,10 +1,4 @@
-"""
-LLVM optimization pipeline and verification for the Sushi language compiler.
-
-This module handles LLVM IR optimization passes, module verification,
-target machine setup, and the complete optimization pipeline from
-basic mem2reg to full O1/O2/O3 optimizations.
-"""
+"""LLVM optimization pipeline and verification for the Sushi language compiler."""
 from __future__ import annotations
 
 import typing
@@ -20,28 +14,13 @@ class LLVMOptimizer:
     """Handles LLVM optimization pipeline, verification, and target setup."""
 
     def __init__(self, codegen: 'LLVMCodegen') -> None:
-        """Initialize optimizer with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance providing context.
-        """
+        """Initialize optimizer with reference to main codegen instance."""
         self.codegen = codegen
         self._llvm_init = False
         self._tm_cache: Dict[str, llvm.TargetMachine] = {}
 
     def optimize(self, llmod: llvm.ModuleRef, mode: str = "mem2reg") -> None:
-        """Apply optimization passes to LLVM module.
-
-        Supports different optimization levels from basic mem2reg promotion
-        to full O1/O2/O3 optimization pipelines using the New Pass Manager.
-
-        Args:
-            llmod: The LLVM module to optimize.
-            mode: Optimization mode - "none"/"o0", "mem2reg", "o1", "o2", "o3".
-
-        Note:
-            Requires llvmlite 0.45+ for New Pass Manager support.
-        """
+        """Apply optimization passes to LLVM module."""
         m = (mode or "none").lower()
         if m in ("none", "o0"):
             return
@@ -55,12 +34,7 @@ class LLVMOptimizer:
 
     @staticmethod
     def _apply_mem2reg_optimization(llmod: llvm.ModuleRef, tm: llvm.TargetMachine) -> None:
-        """Apply minimal SROA (mem2reg-equivalent) optimization.
-
-        Args:
-            llmod: The LLVM module to optimize.
-            tm: Target machine for optimization context.
-        """
+        """Apply minimal SROA (mem2reg-equivalent) optimization."""
         pto = llvm.PipelineTuningOptions(speed_level=0, size_level=0)
         pb = llvm.PassBuilder(tm, pto)
 
@@ -73,13 +47,7 @@ class LLVMOptimizer:
 
     @staticmethod
     def _apply_standard_optimization(llmod: llvm.ModuleRef, tm: llvm.TargetMachine, mode: str) -> None:
-        """Apply standard O1/O2/O3 optimization pipelines.
-
-        Args:
-            llmod: The LLVM module to optimize.
-            tm: Target machine for optimization context.
-            mode: Optimization level ("o1", "o2", or "o3").
-        """
+        """Apply standard O1/O2/O3 optimization pipelines."""
         levels = {"o1": 1, "o2": 2, "o3": 3}
         level = levels.get(mode, 1)
 
@@ -108,18 +76,7 @@ class LLVMOptimizer:
 
     @staticmethod
     def _build_o1_pipeline(fpm: Any, mpm: Any) -> None:
-        """Build O1 optimization pipeline with basic optimizations.
-
-        O1 focuses on quick compile times with essential optimizations:
-        - Basic memory optimizations (SROA, mem2reg-equivalent)
-        - Simple peephole optimizations
-        - Dead code elimination
-        - CFG simplification
-
-        Args:
-            fpm: Function pass manager to populate.
-            mpm: Module pass manager to populate.
-        """
+        """Build O1 optimization pipeline with basic optimizations."""
         # Basic SROA and memory optimizations
         fpm.add_sroa_pass()
 
@@ -136,20 +93,7 @@ class LLVMOptimizer:
 
     @staticmethod
     def _build_o2_pipeline(fpm: Any, mpm: Any) -> None:
-        """Build O2 optimization pipeline with moderate optimizations.
-
-        O2 balances compile time with good performance improvements:
-        - All O1 optimizations
-        - Loop optimizations (rotation, simplification, deletion)
-        - Memory optimization (memcpy, DSE)
-        - Scalar optimizations (SCCP, reassociate, GVN)
-        - Inlining and interprocedural optimizations
-        - CFG improvements (jump threading, tail call elimination)
-
-        Args:
-            fpm: Function pass manager to populate.
-            mpm: Module pass manager to populate.
-        """
+        """Build O2 optimization pipeline with moderate optimizations."""
         # Early optimizations (O1 base)
         fpm.add_sroa_pass()
         fpm.add_simplify_cfg_pass()
@@ -194,19 +138,7 @@ class LLVMOptimizer:
 
     @staticmethod
     def _build_o3_pipeline(fpm: Any, mpm: Any) -> None:
-        """Build O3 optimization pipeline with aggressive optimizations.
-
-        O3 prioritizes performance over compile time:
-        - All O2 optimizations
-        - Aggressive loop optimizations (unrolling, strength reduction)
-        - Aggressive inlining and function merging
-        - Additional scalar optimizations
-        - Instruction sinking for better register allocation
-
-        Args:
-            fpm: Function pass manager to populate.
-            mpm: Module pass manager to populate.
-        """
+        """Build O3 optimization pipeline with aggressive optimizations."""
         # Early optimizations (O2 base + more aggressive settings)
         fpm.add_sroa_pass()
         fpm.add_simplify_cfg_pass()
@@ -266,29 +198,14 @@ class LLVMOptimizer:
 
     @staticmethod
     def verify(llmod: llvm.ModuleRef, when: str = "unspecified") -> None:
-        """Verify LLVM IR correctness and structure.
-
-        Performs comprehensive verification of the LLVM module including
-        type consistency, control flow validity, and instruction correctness.
-
-        Args:
-            llmod: The LLVM module to verify.
-            when: Description of when verification is happening (for error messages).
-
-        Raises:
-            RuntimeError: If verification fails, includes full IR dump for debugging.
-        """
+        """Verify LLVM IR correctness and structure."""
         try:
             llmod.verify()
         except Exception as e:
             raise_internal_error("CE0015", message=f"LLVM IR verification failed ({when}): {e}")
 
     def ensure_llvm(self) -> None:
-        """Initialize LLVM native target and assembly printer.
-
-        Performs one-time initialization of LLVM's native target support
-        and assembly printing capabilities. Safe to call multiple times.
-        """
+        """Initialize LLVM native target and assembly printer."""
         if self._llvm_init:
             return
         llvm.initialize_native_target()
@@ -296,18 +213,7 @@ class LLVMOptimizer:
         self._llvm_init = True
 
     def _create_target_machine_with_reloc(self, target_triple: str | None = None) -> llvm.TargetMachine:
-        """Create target machine with appropriate relocation model for the platform.
-
-        Configures relocation model based on target triple:
-        - Linux (ARM64/x86_64): PIC relocation model (required for modern Linux)
-        - macOS: Default relocation model (already position-independent)
-
-        Args:
-            target_triple: Target triple string, or None for default.
-
-        Returns:
-            Configured TargetMachine instance.
-        """
+        """Create target machine with appropriate relocation model for the platform."""
         self.ensure_llvm()
         triple = target_triple or llvm.get_default_triple()
         target = llvm.Target.from_triple(triple)
@@ -321,18 +227,7 @@ class LLVMOptimizer:
         return target.create_target_machine(reloc=reloc)
 
     def ensure_target(self, mod: Optional[Any] = None, target_triple: str | None = None) -> llvm.TargetMachine:
-        """Ensure module has target triple and data layout, return TargetMachine.
-
-        Sets up proper target information for the module and creates or retrieves
-        a cached target machine for the specified triple.
-
-        Args:
-            mod: The module to configure (ir.Module or ModuleRef, or None).
-            target_triple: Specific target triple, or None for default.
-
-        Returns:
-            Configured TargetMachine for the target triple.
-        """
+        """Ensure module has target triple and data layout, return TargetMachine."""
         self.ensure_llvm()
 
         triple = target_triple or llvm.get_default_triple()
@@ -349,60 +244,31 @@ class LLVMOptimizer:
         return tm
 
     def create_target_machine(self, target_triple: str | None = None) -> llvm.TargetMachine:
-        """Create a new target machine for the specified triple.
-
-        Args:
-            target_triple: Target triple string, or None for default.
-
-        Returns:
-            New TargetMachine instance.
-        """
+        """Create a new target machine for the specified triple."""
         self.ensure_llvm()
         triple = target_triple or llvm.get_default_triple()
         return self._create_target_machine_with_reloc(triple)
 
     @staticmethod
     def get_default_triple() -> str:
-        """Get the default target triple for this platform.
-
-        Returns:
-            The default LLVM target triple string.
-        """
+        """Get the default target triple for this platform."""
         return llvm.get_default_triple()
 
     def clear_cache(self) -> None:
-        """Clear the target machine cache.
-
-        Useful for testing or when target requirements change.
-        """
+        """Clear the target machine cache."""
         self._tm_cache.clear()
 
     def get_cached_targets(self) -> list[str]:
-        """Get list of cached target triples.
-
-        Returns:
-            List of target triple strings that have cached TargetMachines.
-        """
+        """Get list of cached target triples."""
         return list(self._tm_cache.keys())
 
     def is_llvm_initialized(self) -> bool:
-        """Check if LLVM native support has been initialized.
-
-        Returns:
-            True if LLVM initialization has been completed.
-        """
+        """Check if LLVM native support has been initialized."""
         return self._llvm_init
 
     @staticmethod
     def get_optimization_level_description(level: str) -> str:
-        """Get a human-readable description of an optimization level.
-
-        Args:
-            level: Optimization level string (none/o0/mem2reg/o1/o2/o3).
-
-        Returns:
-            Description of what optimizations are applied at this level.
-        """
+        """Get a human-readable description of an optimization level."""
         descriptions = {
             "none": "No optimizations - fastest compilation",
             "o0": "No optimizations - fastest compilation",
@@ -415,9 +281,5 @@ class LLVMOptimizer:
 
     @staticmethod
     def list_available_levels() -> list[str]:
-        """Get list of available optimization levels.
-
-        Returns:
-            List of valid optimization level strings.
-        """
+        """Get list of available optimization levels."""
         return ["none", "o0", "mem2reg", "o1", "o2", "o3"]

@@ -1,9 +1,4 @@
-"""
-Enum constructor operations for the Sushi language compiler.
-
-This module handles enum variant construction, including generic enums like Result<T>.
-Creates tagged union structs with discriminant tags and associated data packing.
-"""
+"""Enum constructor operations for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Union
 
@@ -18,22 +13,7 @@ if TYPE_CHECKING:
 
 
 def emit_enum_constructor(codegen: 'LLVMCodegen', expr: Union[EnumConstructor, DotCall], is_dotcall: bool = False) -> ir.Value:
-    """Emit enum variant constructor (e.g., Result.Ok(42) or Color.Red()).
-
-    For generic enums like Result<T> and Maybe<T>, the concrete type MUST be resolved by the type checker
-    and stored in expr.resolved_enum_type. For non-generic enums, we look up by name directly.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The EnumConstructor or DotCall expression.
-        is_dotcall: If True, extract fields from DotCall node.
-
-    Returns:
-        The constructed enum value.
-
-    Raises:
-        ValueError: If enum type not found or resolved_enum_type not set for generic enums.
-    """
+    """Emit enum variant constructor (e.g., Result.Ok(42) or Color.Red())."""
     # Extract fields based on node type
     if is_dotcall:
         # DotCall: extract enum_name, variant_name, args from DotCall fields
@@ -71,22 +51,7 @@ def emit_enum_constructor_from_method_call(
     variant_name: str,
     args: list
 ) -> ir.Value:
-    """Emit enum constructor for method call syntax (e.g., Color.Red()).
-
-    Creates a tagged union struct: {i32 tag, [N x i8] data}
-
-    Args:
-        codegen: The LLVM codegen instance.
-        enum_type: The enum type being constructed.
-        variant_name: The variant name (e.g., "Red").
-        args: List of argument expressions for the variant.
-
-    Returns:
-        The constructed enum value.
-
-    Raises:
-        ValueError: If variant not found or argument count mismatch.
-    """
+    """Emit enum constructor for method call syntax (e.g., Color.Red())."""
 
     # Find the variant and get its index (discriminant/tag)
     variant_index = enum_type.get_variant_index(variant_name)

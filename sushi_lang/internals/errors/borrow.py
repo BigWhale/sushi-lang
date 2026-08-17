@@ -1,8 +1,4 @@
-"""Borrow and reference errors (CE24xx).
-
-This module owns its numeric range: a code may only be added in the file that
-owns it, which is what makes the grouping structural rather than conventional.
-"""
+"""Borrow and reference errors (CE24xx)."""
 from __future__ import annotations
 
 from sushi_lang.internals.errors.registry import (

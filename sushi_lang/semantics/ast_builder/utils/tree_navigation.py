@@ -17,19 +17,12 @@ def _kind_of(node: object) -> str:
 
 
 def ice(node: object, detail: str) -> NoReturn:
-    """The grammar handed us a node whose children are not what we expect (CE0002).
-
-    No source the grammar accepts can reach this, so it is a compiler bug -- but it
-    is a *reported* one, with the offending node's span, not a traceback.
-    """
+    """The grammar handed us a node whose children are not what we expect (CE0002)."""
     raise AstBuilderICE("CE0002", span=span_of(node), node=_kind_of(node), detail=detail)
 
 
 def expect(t: object, *kinds: str) -> Tree:
-    """Return `t` if it is a Tree of one of `kinds`; otherwise CE0003.
-
-    Replaces the bare `assert t.data == "..."` guards, which vanish under python -O.
-    """
+    """Return `t` if it is a Tree of one of `kinds`; otherwise CE0003."""
     if not isinstance(t, Tree) or t.data not in kinds:
         unhandled(t)
     return t

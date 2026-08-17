@@ -1,9 +1,4 @@
-"""
-Common utilities for file I/O IR generation.
-
-This module provides shared utilities used by all file method implementations,
-including helper functions for string operations and file pointer management.
-"""
+"""Common utilities for file I/O IR generation."""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.libc_declarations import (
@@ -18,11 +13,7 @@ def allocate_and_read_line(
     builder: ir.IRBuilder,
     file_ptr: ir.Value
 ) -> ir.Value:
-    """
-    Allocate buffer and read one line from file using fgets.
-
-    Returns fat pointer struct {i8*, i32} (with newline removed if present).
-    """
+    """Allocate buffer and read one line from file using fgets."""
     i8 = ir.IntType(8)
     i32 = ir.IntType(32)
     i64 = ir.IntType(64)
@@ -80,11 +71,7 @@ def allocate_and_read_char(
     builder: ir.IRBuilder,
     file_ptr: ir.Value
 ) -> ir.Value:
-    """
-    Allocate buffer and read one character from file using fgetc.
-
-    Returns fat pointer struct {i8*, i32} (empty if EOF).
-    """
+    """Allocate buffer and read one character from file using fgetc."""
     i8 = ir.IntType(8)
     i32 = ir.IntType(32)
     i64 = ir.IntType(64)
@@ -138,11 +125,7 @@ def allocate_and_read_full_file(
     builder: ir.IRBuilder,
     file_ptr: ir.Value
 ) -> ir.Value:
-    """
-    Allocate buffer and read entire file contents character by character.
-
-    Uses dynamic growth with realloc. Returns fat pointer struct {i8*, i32}.
-    """
+    """Allocate buffer and read entire file contents character by character."""
     i8 = ir.IntType(8)
     i32 = ir.IntType(32)
     i64 = ir.IntType(64)

@@ -1,7 +1,4 @@
-"""HashMap<K, V> method implementations.
-
-This package contains the LLVM IR emission code for all HashMap methods.
-"""
+"""HashMap<K, V> method implementations."""
 
 from .core import (
     emit_hashmap_new,

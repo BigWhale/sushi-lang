@@ -1,18 +1,4 @@
-"""
-Platform-specific environment variable function declarations.
-
-This module declares external environment variable functions from the system's C library.
-These declarations work across all POSIX-compliant systems (macOS, Linux, BSD).
-
-Functions:
-    - getenv: Get environment variable value
-    - setenv: Set environment variable value
-
-Implementation notes:
-    - Uses external linkage (resolved by system linker)
-    - Compatible with libSystem (macOS), glibc (Linux), musl (Alpine)
-    - POSIX guarantees compatibility across platforms
-"""
+"""Platform-specific environment variable function declarations."""
 from __future__ import annotations
 import typing
 from llvmlite import ir
@@ -22,22 +8,7 @@ if typing.TYPE_CHECKING:
 
 
 def declare_getenv(module: ir.Module) -> ir.Function:
-    """Declare getenv: char* getenv(const char* name)
-
-    Searches the environment list for a string that matches the name.
-
-    POSIX Signature:
-        char *getenv(const char *name);
-
-    Returns:
-        Pointer to the value in the environment, or NULL if not found.
-
-    Notes:
-        - The returned string should not be modified
-        - The pointer becomes invalid after subsequent calls to setenv/putenv/unsetenv
-        - Thread-safety varies by platform (generally safe for read-only access)
-
-    """
+    """Declare getenv: char* getenv(const char* name)"""
     # Check if already declared
     if "getenv" in module.globals:
         return module.globals["getenv"]
@@ -55,33 +26,7 @@ def declare_getenv(module: ir.Module) -> ir.Function:
 
 
 def declare_setenv(module: ir.Module) -> ir.Function:
-    """Declare setenv: int setenv(const char* name, const char* value, int overwrite)
-
-    Adds or changes the value of an environment variable.
-
-    POSIX Signature:
-        int setenv(const char *name, const char *value, int overwrite);
-
-    Args:
-        name: Environment variable name
-        value: New value for the variable
-        overwrite: If non-zero, overwrite existing value; if zero, do nothing if exists
-
-    Returns:
-        0 on success
-        -1 on error (sets errno: EINVAL if name is NULL, empty, or contains '='; ENOMEM if insufficient memory)
-
-    Notes:
-        - name must not contain '=' character
-        - The environment list is modified in-place
-        - Changes affect child processes but not the parent process
-
-    Portability:
-        ✅ macOS (via libSystem)
-        ✅ Linux (via glibc, musl)
-        ✅ FreeBSD, OpenBSD, NetBSD
-        ✅ Any POSIX.1-2001 compliant system
-    """
+    """Declare setenv: int setenv(const char* name, const char* value, int overwrite)"""
     # Check if already declared
     if "setenv" in module.globals:
         return module.globals["setenv"]
@@ -100,12 +45,7 @@ def declare_setenv(module: ir.Module) -> ir.Function:
 
 
 def generate_module_ir() -> ir.Module:
-    """
-    Generate LLVM IR module for platform-specific environment functions.
-
-    This module only contains external declarations, not implementations.
-    The actual implementations are provided by the system's C library.
-    """
+    """Generate LLVM IR module for platform-specific environment functions."""
     module = ir.Module(name="platform_env")
     module.triple = ""  # Use default target triple
 

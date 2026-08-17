@@ -35,14 +35,7 @@ def parse_error_hint(e: UnexpectedInput) -> Optional[str]:
 
 
 def parse_to_ast(src: str, dump_parse: bool = False):
-    """Parse source code into an AST.
-
-    Returns:
-        Tuple of (ast, parse_tree).
-
-    Raises:
-        SushiError: any parse failure, as a spanned diagnostic.
-    """
+    """Parse source code into an AST."""
     kwargs: dict[str, Any] = dict(
         parser="lalr",
         propagate_positions=True,

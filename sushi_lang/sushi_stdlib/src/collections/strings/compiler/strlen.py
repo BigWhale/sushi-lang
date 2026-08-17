@@ -1,28 +1,11 @@
-"""
-String Length Intrinsic
-
-Pure LLVM IR implementation of strlen for null-terminated strings.
-Calculates the length of a C string by scanning for the null terminator.
-
-This replaces the C standard library strlen() function.
-"""
+"""String Length Intrinsic"""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types
 
 
 def emit_strlen_intrinsic(module: ir.Module) -> ir.Function:
-    """Emit the string length intrinsic function.
-
-    Calculates the length of a null-terminated string by scanning for '\0'.
-    Returns the number of bytes before the null terminator.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: i32 llvm_strlen(i8* str)
-    """
+    """Emit `i32 llvm_strlen(i8* str)`."""
     func_name = "llvm_strlen"
 
     # Check if already defined

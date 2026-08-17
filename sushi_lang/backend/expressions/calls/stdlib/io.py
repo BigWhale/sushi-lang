@@ -1,10 +1,4 @@
-"""
-Standard library I/O call emission (stdio, file, files).
-
-This module handles external calls to precompiled stdlib functions for
-stdin/stdout/stderr streams, FILE* operations, and io/files utilities.
-These emitters are grouped together since they share C-runtime helpers.
-"""
+"""Standard library I/O call emission (stdio, file, files)."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -25,24 +19,7 @@ def emit_stdlib_stdio_call(
     args: list,
     to_i1: bool
 ) -> ir.Value:
-    """Emit a call to a stdlib stdio method.
-
-    This function emits an external call to a precompiled stdlib function
-    for stdio operations (stdin, stdout, stderr).
-
-    Args:
-        codegen: The LLVM code generator
-        stream_name: The stream name ('stdin', 'stdout', or 'stderr')
-        method: The method name (e.g., "readln", "write", "read_bytes", "write_bytes")
-        args: The method arguments
-        to_i1: Whether to convert result to i1 (for boolean conditions)
-
-    Returns:
-        The result of the stdlib function call
-
-    Raises:
-        ValueError: If the method is not implemented in stdlib
-    """
+    """Emit a call to a stdlib stdio method."""
     require_builder(codegen)
     # Map method names to stdlib function names
     i8 = ir.IntType(INT8_BIT_WIDTH)
@@ -122,24 +99,7 @@ def emit_stdlib_file_call(
     args: list,
     to_i1: bool
 ) -> ir.Value:
-    """Emit a call to a stdlib file method.
-
-    This function emits an external call to a precompiled stdlib function
-    for file operations.
-
-    Args:
-        codegen: The LLVM code generator
-        file_ptr: The FILE* pointer value
-        method: The method name (e.g., "read", "write", "seek")
-        args: The method arguments
-        to_i1: Whether to convert result to i1 (for boolean conditions)
-
-    Returns:
-        The result of the stdlib function call
-
-    Raises:
-        ValueError: If the method is not implemented in stdlib
-    """
+    """Emit a call to a stdlib file method."""
     require_builder(codegen)
     i8 = ir.IntType(INT8_BIT_WIDTH)
     i32 = ir.IntType(INT32_BIT_WIDTH)
@@ -245,23 +205,7 @@ def emit_stdlib_file_call(
 
 
 def emit_files_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool) -> ir.Value:
-    """Emit a call to an io/files module function.
-
-    This function emits an external call to a precompiled stdlib file utility function.
-    Maps user-facing function names to their internal sushi_io_files_* prefixed names in the stdlib.
-
-    Args:
-        codegen: The LLVM code generator
-        func_name: The function name
-        expr: The function call expression
-        to_i1: Whether to convert result to i1 (for boolean conditions)
-
-    Returns:
-        The result of the stdlib function call
-
-    Raises:
-        ValueError: If the function is not a recognized files function
-    """
+    """Emit a call to an io/files module function."""
     require_builder(codegen)
 
     i8 = ir.IntType(INT8_BIT_WIDTH)

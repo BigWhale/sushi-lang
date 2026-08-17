@@ -1,28 +1,4 @@
-"""
-Built-in extension methods for Maybe<T> generic enum type.
-
-INLINE EMISSION ONLY. Maybe<T> methods work on-demand for all types.
-
-There is no stdlib IR generation because monomorphizing for all possible user
-types is impractical. Unlike Result<T> which only needs to handle a fixed set
-of types, Maybe<T> must support any type T that users define (custom structs,
-nested generics, etc.). Pre-generating all possible instantiations is not
-feasible.
-
-
-Implemented methods:
-- is_some() -> bool: Check if value is present (Some variant)
-- is_none() -> bool: Check if value is absent (None variant)
-- realise(default: T) -> T: Extract Some value or return default if None
-- expect(message: string) -> T: Extract Some value or panic with message if None
-
-The Maybe<T> type is a generic enum with two variants:
-- Some(T): Contains a value of type T
-- None(): Represents absence of value
-
-This module provides ergonomic optional value handling methods that work with
-the Maybe<T> type after monomorphization.
-"""
+"""Built-in extension methods for Maybe<T> generic enum type."""
 
 from typing import Any, Optional, TYPE_CHECKING
 
@@ -47,21 +23,7 @@ def emit_builtin_maybe_method(
     maybe_type: EnumType,
     to_i1: bool
 ) -> ir.Value:
-    """Emit LLVM code for Maybe<T> built-in methods.
-
-    Args:
-        codegen: The LLVM code generator instance.
-        call: The method call AST node.
-        maybe_value: The LLVM value of the Maybe<T> receiver.
-        maybe_type: The Maybe<T> enum type (after monomorphization).
-        to_i1: Whether to convert result to i1 (for is_some/is_none).
-
-    Returns:
-        The LLVM value representing the method call result.
-
-    Raises:
-        ValueError: If the method is not recognized or has invalid arguments.
-    """
+    """Emit LLVM code for Maybe<T> built-in methods."""
     from sushi_lang.backend.generics.enum_methods_base import emit_enum_tag_check, emit_enum_realise
 
     if call.method == "is_some":
@@ -82,10 +44,7 @@ def _emit_maybe_expect(
     maybe_value: ir.Value,
     maybe_type: EnumType
 ) -> ir.Value:
-    """Emit `maybe.expect(message)` -- Some payload, or "ERROR: msg" to stderr and exit(1).
-
-    Thin adapter over the shared `emit_enum_expect`; the Result spelling is its twin.
-    """
+    """Emit `maybe.expect(message)` -- Some payload, or "ERROR: msg" to stderr and exit(1)."""
     from sushi_lang.backend.generics.enum_methods_base import emit_enum_expect
     return emit_enum_expect(codegen, call, maybe_value, maybe_type,
                             success_variant_name="Some", label="maybe",
@@ -98,30 +57,12 @@ def _emit_maybe_expect(
 
 
 def ensure_maybe_type_exists(codegen: 'LLVMCodegen', value_type: Type) -> Optional[EnumType]:
-    """Ensure that Maybe<T> exists in the enum table, creating it if necessary.
-
-    Convenience wrapper for code generation phase that extracts enum_table from codegen.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        value_type: The T type parameter for Maybe<T>.
-
-    Returns:
-        The EnumType for Maybe<T>, or None if it couldn't be created.
-    """
+    """Ensure that Maybe<T> exists in the enum table, creating it if necessary."""
     return ensure_maybe_type_in_table(codegen.enum_table, value_type, struct_table=codegen.struct_table.by_name)
 
 
 def get_maybe_enum_type(codegen: 'LLVMCodegen', value_type: Type) -> ir.Type:
-    """Get the LLVM type for Maybe<T> enum.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        value_type: The T type parameter for Maybe<T>.
-
-    Returns:
-        The LLVM struct type for Maybe<T>.
-    """
+    """Get the LLVM type for Maybe<T> enum."""
     maybe_enum = ensure_maybe_type_exists(codegen, value_type)
     if maybe_enum is None:
         raise_internal_error("CE0047", type=str(value_type))
@@ -130,16 +71,7 @@ def get_maybe_enum_type(codegen: 'LLVMCodegen', value_type: Type) -> ir.Type:
 
 
 def emit_maybe_some(codegen: 'LLVMCodegen', value_type: Type, value: ir.Value) -> ir.Value:
-    """Emit Maybe.Some(value) constructor.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        value_type: The T type parameter for Maybe<T>.
-        value: The LLVM value to wrap in Some.
-
-    Returns:
-        The constructed Maybe<T> enum value with Some variant.
-    """
+    """Emit Maybe.Some(value) constructor."""
 
     # Ensure Maybe<T> type exists
     maybe_enum = ensure_maybe_type_exists(codegen, value_type)
@@ -181,15 +113,7 @@ def emit_maybe_some(codegen: 'LLVMCodegen', value_type: Type, value: ir.Value) -
 
 
 def emit_maybe_none(codegen: 'LLVMCodegen', value_type: Type) -> ir.Value:
-    """Emit Maybe.None() constructor.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        value_type: The T type parameter for Maybe<T>.
-
-    Returns:
-        The constructed Maybe<T> enum value with None variant.
-    """
+    """Emit Maybe.None() constructor."""
     # Ensure Maybe<T> type exists
     maybe_enum = ensure_maybe_type_exists(codegen, value_type)
     if maybe_enum is None:

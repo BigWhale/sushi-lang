@@ -1,9 +1,4 @@
-"""
-Standard library primitive method call emission.
-
-This module handles external calls to precompiled stdlib functions for
-primitive type conversions (e.g. to_str()).
-"""
+"""Standard library primitive method call emission."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -22,25 +17,7 @@ def emit_stdlib_primitive_call(
     receiver_type: ir.Type,
     semantic_type_str: str
 ) -> ir.Value:
-    """Emit a call to a stdlib primitive method.
-
-    This function emits an external call to a precompiled stdlib function
-    instead of emitting inline IR. Used when the appropriate stdlib module
-    is imported via use <module> syntax.
-
-    Args:
-        codegen: The LLVM code generator
-        method: The method name (e.g., "to_str")
-        receiver_value: The LLVM value of the receiver
-        receiver_type: The LLVM type of the receiver
-        semantic_type_str: String representation of semantic type (e.g., "i32")
-
-    Returns:
-        The result of the stdlib function call
-
-    Raises:
-        ValueError: If the method is not implemented in stdlib
-    """
+    """Emit a call to a stdlib primitive method."""
     require_builder(codegen)
     # For now, only handle to_str()
     if method != "to_str":

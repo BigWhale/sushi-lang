@@ -1,18 +1,4 @@
-"""
-Variable scope management with O(1) lookup and RAII cleanup.
-
-This module handles:
-- Lexical scope stack for nested blocks
-- Local variable allocation and tracking
-- O(1) variable lookup via flat cache (primary storage)
-- Struct variable tracking for automatic cleanup
-- Move semantics tracking for ownership transfer
-
-Architecture:
-The flat caches are the primary storage for variable lookups.
-Scope tracking uses lightweight sets of variable names per scope level,
-avoiding duplicate storage of alloca/type information.
-"""
+"""Variable scope management with O(1) lookup and RAII cleanup."""
 from __future__ import annotations
 from typing import Dict, List, Optional, Set, TYPE_CHECKING
 
@@ -25,18 +11,10 @@ if TYPE_CHECKING:
 
 
 class ScopeManager:
-    """Manages variable scoping and alloca tracking for LLVM code generation.
-
-    Uses flat caches as primary storage for O(1) lookups while maintaining
-    lightweight scope tracking for cleanup and shadowing support.
-    """
+    """Manages variable scoping and alloca tracking for LLVM code generation."""
 
     def __init__(self, codegen: 'LLVMCodegen') -> None:
-        """Initialize scope manager with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance providing context and builders.
-        """
+        """Initialize scope manager with reference to main codegen instance."""
         self.codegen = codegen
 
         # Current scope depth (starts at 0 when first scope is pushed)
@@ -106,11 +84,7 @@ class ScopeManager:
 
     @staticmethod
     def _stack_peek_slot(reg: Dict[str, List], name: str) -> Optional[ir.AllocaInstr]:
-        """Return the innermost registered slot for `name` in a stacked cleanup registry.
-
-        The slot is the LAST element of each entry tuple ((depth, slot) or
-        (depth, type, slot)). Returns None if the name has no live registration.
-        """
+        """Return the innermost registered slot for `name` in a stacked cleanup registry."""
         entries = reg.get(name)
         if entries:
             return entries[-1][-1]
@@ -127,13 +101,7 @@ class ScopeManager:
 
     def _drain_registry_at_depth(self, registry: Dict[str, List], current_vars,
                                  emit_free) -> None:
-        """Drain each current-scope binding's top registry entry on the fall-through exit.
-
-        The one shape shared by the struct/enum/fixed-array, closure and string
-        registries: emit the binding's guarded free when the block is live and the
-        binding was not moved, then pop its entry at this depth. `emit_free` receives
-        `(var_name, entry)`; the entry's LAST element is always the slot.
-        """
+        """Drain each current-scope binding's top registry entry on the fall-through exit."""
         if not registry:
             return
         block = self.codegen.builder.block if self.codegen.builder is not None else None
@@ -147,12 +115,7 @@ class ScopeManager:
                 self._stack_pop_at_depth(registry, var_name, self._scope_depth)
 
     def push_scope(self) -> None:
-        """Push a new lexical scope onto the scope stack.
-
-        Creates a new scope level for variables declared in nested contexts
-        like if statements, while loops, and function bodies. Also pushes
-        a corresponding scope for dynamic array tracking.
-        """
+        """Push a new lexical scope onto the scope stack."""
         self._scope_depth += 1
         self._scope_vars.append(set())
         self._cstr_cleanup.append([])
@@ -163,17 +126,7 @@ class ScopeManager:
             self.codegen.dynamic_arrays.push_scope()
 
     def pop_scope(self) -> None:
-        """Pop the current lexical scope from the scope stack.
-
-        Removes the innermost scope, making variables declared in that
-        scope no longer accessible. Also triggers cleanup of dynamic
-        arrays and struct fields with dynamic arrays declared in this scope.
-
-        Move semantics: Skips cleanup for variables marked as moved.
-
-        Raises:
-            IndexError: If there are no scopes to pop.
-        """
+        """Pop the current lexical scope from the scope stack."""
         if self._scope_depth < 0:
             raise IndexError("No scopes to pop")
 
@@ -259,19 +212,7 @@ class ScopeManager:
             builder.call(free_fn, [ptr])
 
     def emit_cstr_cleanup_all(self) -> None:
-        """Emit a free for every live C string across all open scopes.
-
-        Used on early-exit paths (return, ?? propagation): every still-open scope
-        is abandoned on this path, so every live marshalled pointer must be freed
-        here. The frees are emitted into the CURRENT block, which terminates
-        immediately after (with a `ret`) and is therefore mutually exclusive with
-        every other exit block at runtime.
-
-        Crucially this does NOT mutate the registry: the lists stay intact so the
-        structural pop_scope() calls on the fall-through path still emit their own
-        frees into their own (mutually exclusive) blocks. Because at runtime
-        exactly one of these blocks executes, each pointer is freed exactly once.
-        """
+        """Emit a free for every live C string across all open scopes."""
         for scope_list in self._cstr_cleanup:
             self._free_cstr_list(scope_list)
 
@@ -293,95 +234,40 @@ class ScopeManager:
 
     def emit_closure_temp_cleanup_all(self) -> None:
         """Emit the guarded env free for every live inline-closure temp across all open scopes.
-
-        Used on early-exit paths (return, ?? propagation), mirroring
-        emit_cstr_cleanup_all: the frees go into the CURRENT (terminating) block and the
-        registry is NOT mutated, so the fall-through pop_scope still frees on its own
-        mutually-exclusive block. Exactly one runs per runtime path -- no leak, no double free.
         """
         for scope_list in self._closure_temp_cleanup:
             self._free_closure_temp_list(scope_list)
 
     def try_find_local_slot(self, name: str) -> Optional[ir.AllocaInstr]:
-        """Local variable slot for `name`, or None if it is not a local at all.
-
-        The interrogative form of find_local_slot, for callers that have a real answer
-        for "not a local": a global constant, a top-level function reference, a struct
-        field. Those callers used to wrap find_local_slot in `except KeyError`, which
-        made "this name is a global" and "the scope stack is corrupt" the same event.
-
-        Args:
-            name: The variable name to search for.
-
-        Returns:
-            The alloca instruction for the variable, or None if it is not a local.
-        """
+        """Local variable slot for `name`, or None if it is not a local at all."""
         if name in self._locals and self._locals[name]:
             return self._locals[name][-1][1]
         return None
 
     def find_local_slot(self, name: str) -> ir.AllocaInstr:
-        """Find local variable slot by name in scope stack (O(1) lookup).
-
-        Uses flat cache for O(1) lookup time instead of O(n) scope traversal.
-        Correctly handles variable shadowing by returning the most recent
-        (innermost scope) declaration.
-
-        This is the ASSERTIVE form: the caller believes `name` IS a local, and a miss is
-        an internal-invariant violation (the semantic passes already accepted the name).
-        Callers that legitimately need to ask -- because a global constant or a top-level
-        function is an acceptable answer -- use try_find_local_slot instead.
-
-        Args:
-            name: The variable name to search for.
-
-        Returns:
-            The alloca instruction for the variable.
-
-        Raises:
-            InternalCompilerError: CE0055, if the variable is not found in any scope.
-                This used to be a bare `KeyError`, which the top-level guard rendered as
-                an anonymous CE0000 -- so #248's five missed address sites all reported
-                as "internal compiler error: KeyError" with nothing naming the gap.
-        """
+        """Find local variable slot by name in scope stack (O(1) lookup)."""
         slot = self.try_find_local_slot(name)
         if slot is not None:
             return slot
         raise_internal_error("CE0055", name=name)
 
     def find_semantic_type(self, name: str) -> Optional['Type']:
-        """Find semantic type for a variable by name in scope stack (O(1) lookup).
-
-        Uses flat cache for O(1) lookup time instead of O(n) scope traversal.
-        Correctly handles variable shadowing by returning the most recent type.
-
-        Args:
-            name: The variable name to search for.
-
-        Returns:
-            The semantic type of the variable, or None if not found.
-        """
+        """Find semantic type for a variable by name in scope stack (O(1) lookup)."""
         if name in self._types and self._types[name]:
             return self._types[name][-1][1]
         return None
 
     def set_semantic_type(self, name: str, semantic_ty: 'Type') -> None:
-        """Register the semantic type of an already-declared local at the current scope.
-
-        Only touches the semantic-type cache -- it deliberately does NOT register the
-        name for RAII cleanup (unlike create_local). Used to attach `self`/parameter
-        types in extension-method bodies, whose slots are created directly (fn_def=None)
-        so begin_function never records their semantic types. A by-value `self` must
-        NOT be freed by the callee, so the no-cleanup behaviour here is required.
-        """
+        """Register the semantic type of an already-declared local at the current scope."""
         if name not in self._types:
             self._types[name] = []
         self._types[name].append((self._scope_depth, semantic_ty))
 
     def _enter_local(self, name: str, ty: ir.Type, semantic_ty: Optional['Type'],
                      register_cleanup: bool) -> ir.AllocaInstr:
-        """Allocate and track a local: the shared body of create_local and
-        create_local_nostore (they used to hold 38 verbatim-duplicated lines; 11b)."""
+        """Allocate and track a local: the shared body of create_local and create_local_nostore
+        (they used to hold 38 verbatim-duplicated lines; 11b).
+        """
         slot = self.entry_alloca(ty, name)
 
         # Track variable in current scope
@@ -401,26 +287,7 @@ class ScopeManager:
         return slot
 
     def create_local(self, name: str, ty: ir.Type, init: Optional[ir.Value] = None, semantic_ty: Optional['Type'] = None, register_cleanup: bool = True) -> ir.AllocaInstr:
-        """Create local variable with optional initialization.
-
-        Allocates space for a local variable in the function entry block
-        and optionally initializes it with a value. Tracks struct variables
-        with dynamic array fields for RAII cleanup.
-
-        Args:
-            name: The variable name.
-            ty: The LLVM type for the variable.
-            init: Optional initial value to store.
-            semantic_ty: Optional semantic type for the variable.
-            register_cleanup: When False, the local is NOT registered for scope-exit RAII
-                (the semantic type is still recorded for method dispatch). Used for a
-                borrow-like binding that aliases memory owned elsewhere -- e.g. a match
-                variant-payload binding, which borrows the enum's payload; the enum (its
-                owner) frees it, so registering the binding too would double-free (#139).
-
-        Returns:
-            The alloca instruction for the variable.
-        """
+        """Create local variable with optional initialization."""
         slot = self._enter_local(name, ty, semantic_ty, register_cleanup)
         if init is not None:
             if self.codegen.builder is None:
@@ -430,18 +297,7 @@ class ScopeManager:
 
     def register_local_cleanup(self, name: str, semantic_ty: 'Type',
                                slot: ir.AllocaInstr) -> None:
-        """Register a local in the cleanup registry its type belongs to.
-
-        The one place that decides WHICH registry frees a local. `create_local` and
-        `create_local_nostore` both call it, and `emit_let` calls it directly once the
-        ownership seam has said the binding owns its value -- a `let` bound from a borrow
-        names storage something else frees, so it is registered nowhere (#242).
-
-        Resolve a named / generic reference first -- UnknownType('Box'),
-        GenericTypeRef('List', (i32,)), GenericTypeRef('Result', (T, E)) -- to the concrete
-        struct/enum it names. The branches below dispatch on the resolved class, so an
-        unresolved local is registered in NO cleanup registry and its payload leaks (#179).
-        """
+        """Register a local in the cleanup registry its type belongs to."""
         from sushi_lang.semantics.typesys import StructType, EnumType, ArrayType, FunctionType, BuiltinType
         from sushi_lang.backend.destructors import resolve_named_type
         semantic_ty = resolve_named_type(self.codegen, semantic_ty)
@@ -473,18 +329,7 @@ class ScopeManager:
 
     def register_owning_value(self, name: str, semantic_ty: 'Type',
                               slot: ir.AllocaInstr) -> None:
-        """Give a slot that OWNS its value the registry that will free it, for any type.
-
-        `register_local_cleanup` decides which registry a type belongs to, but it does not
-        reach the three that carry an element type of their own -- a dynamic `T[]`,
-        `Own@(T)` and `List@(T)`. Every caller that owns a value therefore had to remember
-        those three by hand, and there were three such callers with three different
-        subsets: a `let` binding, a callee parameter, and (missing entirely) a call
-        argument the caller keeps. The third is what leaked `look(make()??)` under borrow
-        by default.
-
-        One entry point, so a new owning kind is wired once.
-        """
+        """Give a slot that OWNS its value the registry that will free it, for any type."""
         from sushi_lang.semantics.typesys import DynamicArrayType, StructType
         from sushi_lang.backend.destructors import resolve_named_type
 
@@ -505,28 +350,7 @@ class ScopeManager:
 
     def create_local_nostore(self, name: str, ty: ir.Type, semantic_ty: Optional['Type'] = None,
                              register_cleanup: bool = True) -> ir.AllocaInstr:
-        """Create local variable without initialization.
-
-        Allocates space for a local variable but does not store any
-        initial value. Used when the initialization will be done separately.
-        Tracks struct variables with dynamic array fields for RAII cleanup.
-
-        Args:
-            name: The variable name.
-            ty: The LLVM type for the variable.
-            semantic_ty: Optional semantic type for the variable.
-            register_cleanup: When False, the local is NOT registered for scope-exit RAII
-                (the semantic type is still recorded for method dispatch). `emit_let` passes
-                False and registers afterwards, because whether a `let` OWNS its value is
-                the ownership seam's answer and the seam cannot run until the initializer
-                is emitted (#242).
-
-        Returns:
-            The alloca instruction for the variable.
-
-        Raises:
-            KeyError: If a variable with the same name already exists in current scope.
-        """
+        """Create local variable without initialization."""
         # Check for duplicate in current scope
         if name in self._scope_vars[self._scope_depth]:
             raise KeyError(f"duplicate local in same scope: {name}")
@@ -534,22 +358,7 @@ class ScopeManager:
         return self._enter_local(name, ty, semantic_ty, register_cleanup)
 
     def entry_alloca(self, ty: ir.Type, name: str) -> ir.AllocaInstr:
-        """Create alloca instruction in function entry block.
-
-        Places the allocation instruction at the beginning of the function's
-        entry block, before any other instructions, following LLVM best
-        practices for SSA form and optimization.
-
-        Args:
-            ty: The LLVM type to allocate.
-            name: The variable name for debugging.
-
-        Returns:
-            The alloca instruction.
-
-        Raises:
-            AssertionError: If entry block or alloca builder is not available.
-        """
+        """Create alloca instruction in function entry block."""
         if self.codegen.entry_block is None:
             raise_internal_error("CE0011")
         if self.codegen.alloca_builder is None:
@@ -561,17 +370,7 @@ class ScopeManager:
         return self.codegen.alloca_builder.alloca(ty, name=name)
 
     def register_struct_cleanup(self, name: str, struct_type: 'StructType', slot: ir.AllocaInstr) -> None:
-        """Register a struct variable for RAII cleanup of its dynamic-array fields.
-
-        Used for by-value struct parameters that own heap memory: the callee owns its
-        (deep-copied) copy and must free it at scope exit, exactly like a `let` local.
-        The caller passes a resolved StructType so scope-exit cleanup can reach the fields.
-
-        Args:
-            name: The variable name (already entered into the current scope).
-            struct_type: The resolved struct type whose array fields need freeing.
-            slot: The alloca holding the struct value.
-        """
+        """Register a struct variable for RAII cleanup of its dynamic-array fields."""
         self._struct_cleanup.setdefault(name, []).append((self._scope_depth, struct_type, slot))
 
     def _emit_closure_free(self, slot: ir.AllocaInstr) -> None:
@@ -585,14 +384,7 @@ class ScopeManager:
         emit_string_destructor(self.codegen, slot)
 
     def emit_string_cleanup_all(self) -> None:
-        """Emit the guarded free for every live string local across all open scopes.
-
-        Used on early-exit paths (return / ?? propagation), mirroring the struct/closure
-        early-exit emitters: the frees go into the CURRENT (terminating) block and the
-        registry is NOT mutated, so the fall-through pop_scope still frees on its own
-        mutually-exclusive block. A moved (returned/aliased) string is skipped so its new
-        owner frees it; exactly one free runs per runtime path -- no leak, no double free.
-        """
+        """Emit the guarded free for every live string local across all open scopes."""
         builder = self.codegen.builder
         if builder is None or builder.block is None or builder.block.is_terminated:
             return
@@ -602,47 +394,30 @@ class ScopeManager:
                     self._emit_string_free(slot)
 
     def is_closure_registered(self, name: str) -> bool:
-        """True if `name` is a registered function-value RAII owner in the current scope.
-
-        Used to distinguish a rebind that MOVES from an owning closure local (source is
-        registered) from one that borrows an env owned elsewhere (a param / container
-        get-out / struct-field read, which is not registered).
-        """
+        """True if `name` is a registered function-value RAII owner in the current scope."""
         return name in self._closure_cleanup
 
     def unregister_closure_cleanup(self, name: str) -> None:
         """Drop the innermost `name` entry from function-value RAII tracking (no-op if absent).
-
-        Used when a function-value local is a NON-owning alias -- bound from a container
-        get-out (`fns.get(i)??`) or a struct-field read (`s.handler`) whose env the
-        container/struct still owns. Registering it as a second owner would double-free
-        the shared environment (mirrors the Own<T>.get() non-owning-borrow guard). Only the
-        just-registered (innermost) binding is removed, so an outer shadowed owner survives."""
+        """
         self._stack_pop_at_depth(self._closure_cleanup, name, self._scope_depth)
 
     def is_string_registered(self, name: str) -> bool:
-        """True if `name` is a registered owning string local in the current scope (#145).
-
-        Used to distinguish a rebind that MOVES from an owning string local (source is
-        registered) from one that borrows a buffer owned elsewhere (a param / struct-field
-        read / container get-out, which is not registered)."""
+        """True if `name` is a registered owning string local in the current scope (#145)."""
         return name in self._string_cleanup
 
     def is_struct_registered(self, name: str) -> bool:
-        """True if `name` is a registered owning-struct local (a struct with heap-owning
-        fields tracked for RAII cleanup). Used to decide whether handing the local to a
-        container that stores it shallowly must MOVE it, so scope exit does not double-free
-        the shared buffer (#140)."""
+        """True if `name` is a registered owning-struct local (a struct with heap-owning fields
+        tracked for RAII cleanup). Used to decide whether handing the local to a container that
+        stores it shallowly must MOVE it, so scope exit does not double-free the shared buffer
+        (#140).
+        """
         return name in self._struct_cleanup
 
     def is_owned_local(self, name: str) -> bool:
         """True if `name` is a registered RAII owner in some current scope -- an owning
         struct/enum/fixed-array, string, closure, dynamic array, List, or Own.
-
-        A move-type value that is NOT owned here is a BORROW: a match / pattern binding (e.g.
-        the `Own(x)` pointee, an enum-payload binding) that aliases memory owned elsewhere,
-        which the pattern's real owner still frees. Such a value must be COPIED, never moved,
-        when handed to a by-value sink (#134) -- moving it would double-free with the owner."""
+        """
         if (name in self._struct_cleanup or name in self._string_cleanup
                 or name in self._closure_cleanup):
             return True
@@ -653,22 +428,11 @@ class ScopeManager:
 
     def unregister_string_cleanup(self, name: str) -> None:
         """Drop the innermost `name` entry from string RAII tracking (no-op if absent) (#145).
-
-        Used when a string local is a NON-owning alias -- bound from a struct-field read or
-        a container get-out whose buffer the struct/container still owns. Registering it as a
-        second owner would double-free (mirrors the closure/Own<T> non-owning-borrow guard).
-        Only the just-registered (innermost) binding is removed, so an outer shadow survives."""
+        """
         self._stack_pop_at_depth(self._string_cleanup, name, self._scope_depth)
 
     def mark_struct_as_moved(self, var_name: str) -> None:
-        """Mark a struct variable as moved (ownership transferred).
-
-        Delegates to the unified MoveTracker. Moved structs are excluded from RAII
-        cleanup, implementing move semantics for return values.
-
-        Args:
-            var_name: The variable name to mark as moved.
-        """
+        """Mark a struct variable as moved (ownership transferred)."""
         slot = self._slot_for_name(var_name)
         if slot is not None:
             self.codegen.moves.mark(slot)
@@ -680,28 +444,12 @@ class ScopeManager:
         return None
 
     def is_struct_moved(self, var_name: str) -> bool:
-        """Check if the innermost binding named `var_name` has been moved.
-
-        Convenience for call sites that hold only a name and whose lookup is
-        unambiguous (the innermost binding is the intended one). Cleanup walkers that
-        hold the exact slot check `codegen.moves.is_moved(slot)` directly instead, so a
-        shadowed outer binding is never confused with its inner namesake.
-
-        Args:
-            var_name: The variable name to check.
-
-        Returns:
-            True if the variable's innermost binding has been moved, False otherwise.
-        """
+        """Check if the innermost binding named `var_name` has been moved."""
         slot = self._slot_for_name(var_name)
         return slot is not None and self.codegen.moves.is_moved(slot)
 
     def reset_scope_stack(self) -> None:
-        """Reset the scope stack to empty state.
-
-        Pops all remaining scopes to trigger cleanup, then clears all state.
-        Typically used when ending function processing or resetting the memory manager state.
-        """
+        """Reset the scope stack to empty state."""
         # Pop all scopes to trigger cleanup
         while self._scope_depth >= 0:
             self.pop_scope()
@@ -721,23 +469,11 @@ class ScopeManager:
         self.codegen.moves.reset()
 
     def current_scope_size(self) -> int:
-        """Get the current scope stack depth.
-
-        Returns:
-            The number of nested scopes currently active.
-        """
+        """Get the current scope stack depth."""
         return self._scope_depth + 1
 
     def get_current_scope_vars(self) -> Dict[str, ir.AllocaInstr]:
-        """Get variables in the current (innermost) scope.
-
-        Returns:
-            Dictionary mapping variable names to their alloca instructions
-            in the current scope.
-
-        Raises:
-            IndexError: If no scopes are active.
-        """
+        """Get variables in the current (innermost) scope."""
         if self._scope_depth < 0:
             raise IndexError("No active scopes")
         result = {}
@@ -747,18 +483,7 @@ class ScopeManager:
         return result
 
     def has_variable_in_scope(self, name: str, scope_level: int = -1) -> bool:
-        """Check if a variable exists in a specific scope level.
-
-        Args:
-            name: The variable name to check.
-            scope_level: The scope level to check (-1 for current scope).
-
-        Returns:
-            True if the variable exists in the specified scope.
-
-        Raises:
-            IndexError: If the scope level is invalid.
-        """
+        """Check if a variable exists in a specific scope level."""
         if scope_level < 0:
             scope_level = self._scope_depth + 1 + scope_level
         if scope_level < 0 or scope_level > self._scope_depth:
@@ -799,13 +524,7 @@ class ScopeManager:
 
     @property
     def struct_variables(self) -> List[Dict[str, tuple['StructType', ir.AllocaInstr]]]:
-        """Per-scope-level view of owning-struct locals (name -> (type, slot)).
-
-        Rebuilt from the stacked _struct_cleanup so the early-exit cleanup walker
-        (statements/utils.py) sees every live binding at its own scope level with its own
-        slot -- an outer struct and its inner shadow land in different levels and are
-        freed independently.
-        """
+        """Per-scope-level view of owning-struct locals (name -> (type, slot))."""
         result: List[Dict[str, tuple['StructType', ir.AllocaInstr]]] = [
             {} for _ in range(self._scope_depth + 1)
         ]

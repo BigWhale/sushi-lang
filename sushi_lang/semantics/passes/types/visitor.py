@@ -1,10 +1,4 @@
-"""
-Visitor-based type validation and inference for the Sushi language compiler.
-
-This module implements the Visitor Pattern to replace large match/isinstance
-chains in type validation and inference, providing a cleaner, more maintainable
-approach to AST type analysis.
-"""
+"""Visitor-based type validation and inference for the Sushi language compiler."""
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
@@ -34,15 +28,7 @@ _REGISTRY_TYPED_STDLIB_MODULES = ("time", "sys/env", "sys/process", "random", "i
 
 
 def function_value_type_of(type_validator, name: str) -> Optional[Type]:
-    """Build the FunctionType for a bare reference to a plain top-level function.
-
-    Returns None when `name` is not a referenceable plain function value:
-    - not a known top-level function, or
-    - a variadic / parameter-pack function (their call ABI differs; deferred).
-
-    The error type defaults to UnknownType("StdError") to mirror fn declarations; it is
-    resolved alongside the other members by the normal type-resolution pass.
-    """
+    """Build the FunctionType for a bare reference to a plain top-level function."""
     from sushi_lang.semantics.typesys import FunctionType, UnknownType
     sig = type_validator.func_table.by_name.get(name)
     if sig is None:
@@ -59,23 +45,7 @@ def function_value_type_of(type_validator, name: str) -> Optional[Type]:
 
 
 def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
-    """Compute (and, by default, cache on the node) the FunctionType of a lambda literal.
-
-    Idempotent and diagnostic-free (the validator emits CE2094 separately). Resolves
-    each param's type — declared for a typed param `|i32 x|`, or, for a bare param
-    `|x|`, from an expected FunctionType propagated onto the node (`lam.expected_type`)
-    — and fills the types of the captured free names from the enclosing scope. The
-    result's `captures` descriptor marks the value as owning iff it captures anything.
-
-    `stamp` is the annotate seam (issue #214). Pass 2 calls it with `stamp=True`: the
-    result and the resolved param/capture types are persisted on the node for the lift
-    pass and backend. Pass 1.5 calls it with `stamp=False` to type a lambda *argument*
-    for instantiation collection WITHOUT mutating the node — Pass 1.5 runs before
-    expected-type propagation, so stamping there would freeze an under-resolved
-    `resolved_type` that Pass 2 (and lambda-lift) would then read back. The scope table
-    is snapshotted and restored either way, so the read-only call has no side effect at
-    all.
-    """
+    """Compute (and, by default, cache on the node) the FunctionType of a lambda literal."""
     from sushi_lang.semantics.typesys import FunctionType, UnknownType
     if stamp and getattr(lam, "resolved_type", None) is not None:
         return lam.resolved_type
@@ -129,14 +99,7 @@ def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
 
 
 def resolve_fn_field_call(type_validator, node) -> Optional["Type"]:
-    """Field-vs-method rule for `obj.handler(args)` (a DotCall).
-
-    Returns the field's FunctionType when `node.receiver` has a struct type carrying a
-    fn-typed field named `node.method` AND no method of that name exists for that struct
-    (a same-named extension/perk/auto-derived method always WINS over the field). In that
-    case `obj.handler(args)` is an indirect call through the field value,
-    `(obj.handler)(args)`. Returns None otherwise (normal method-call dispatch).
-    """
+    """Field-vs-method rule for `obj.handler(args)` (a DotCall)."""
     from sushi_lang.semantics.typesys import StructType, FunctionType, ReferenceType
     recv_ty = type_validator.infer_expression_type(node.receiver)
     if isinstance(recv_ty, ReferenceType):
@@ -160,11 +123,7 @@ def resolve_fn_field_call(type_validator, node) -> Optional["Type"]:
 
 
 def validate_fn_field_call_args(type_validator, node, fn_ty) -> None:
-    """Validate `obj.handler(args)` against the field's FunctionType.
-
-    The same check as a call through a fn-typed local, so it IS that check: two copies of
-    the loop is how the missing-borrow help came to exist in only one of them.
-    """
+    """Validate `obj.handler(args)` against the field's FunctionType."""
     from sushi_lang.semantics.passes.types.calls.user_defined import (
         validate_fn_value_call_args,
     )
@@ -172,12 +131,7 @@ def validate_fn_field_call_args(type_validator, node, fn_ty) -> None:
 
 
 class StatementValidator(RecursiveVisitor):
-    """
-    Visitor for validating statements using the Visitor Pattern.
-
-    Replaces the large match statement in TypeValidator._validate_statement()
-    with clean, focused methods for each statement type.
-    """
+    """Visitor for validating statements using the Visitor Pattern."""
 
     def __init__(self, type_validator: 'TypeValidator'):
         """Initialize with reference to the main type validator."""
@@ -210,14 +164,7 @@ class StatementValidator(RecursiveVisitor):
         self.type_validator._validate_foreach_statement(node)
 
     def visit_expand(self, node) -> None:
-        """Reject an Expand that survived to Pass 2 (CE0119).
-
-        A well-formed expand lives only inside a ...Ts pack function and is
-        unrolled into ordinary statements during monomorphization (Pass 1.6),
-        so Pass 2 never sees one. An Expand reaching here is in a function
-        with no pack parameter; it used to flow untouched into the backend
-        and die as a CE0000 NotImplementedError.
-        """
+        """Reject an Expand that survived to Pass 2 (CE0119)."""
         er.emit(self.type_validator.reporter, er.ERR.CE0119, node.loc,
                 message="expand(...) is only valid inside a function with a ...Ts type-pack parameter")
 
@@ -293,12 +240,7 @@ class StatementValidator(RecursiveVisitor):
 
 
 class ExpressionValidator(RecursiveVisitor):
-    """
-    Visitor for validating expressions using the Visitor Pattern.
-
-    Replaces the large match statement in TypeValidator._validate_expression()
-    with clean, focused methods for each expression type.
-    """
+    """Visitor for validating expressions using the Visitor Pattern."""
 
     def __init__(self, type_validator: 'TypeValidator'):
         """Initialize with reference to the main type validator."""
@@ -381,12 +323,7 @@ class ExpressionValidator(RecursiveVisitor):
             self.type_validator._validate_bitwise_operation(node)
 
     def _context_type_operand_from_sibling(self, node: BinaryOp) -> None:
-        """Stamp a bare numeric-literal operand with its concrete sibling's type.
-
-        Applies only when exactly one operand is an unstamped IntLit/FloatLit and
-        the other resolves to a concrete BuiltinType. Both-bare (`1 + 2`) keeps the
-        i32/f64 default; both-concrete-and-different stays a CE2510 mixed-type error.
-        """
+        """Stamp a bare numeric-literal operand with its concrete sibling's type."""
         left, right = node.left, node.right
         left_bare = isinstance(left, (IntLit, FloatLit)) and left.resolved_type is None
         right_bare = isinstance(right, (IntLit, FloatLit)) and right.resolved_type is None
@@ -627,12 +564,7 @@ class ExpressionValidator(RecursiveVisitor):
 
     # Terminal expressions don't need recursive validation
     def visit_name(self, node: Name) -> None:
-        """Name expressions are terminal.
-
-        The one check here is the first-class-function v1 boundary: referencing a
-        *generic* function as a value is not supported yet (CE2093). A local of the
-        same name shadows the function and is a plain variable read.
-        """
+        """Name expressions are terminal."""
         tv = self.type_validator
         if node.id in tv.variable_types or node.id in tv.const_table.by_name:
             return
@@ -650,15 +582,7 @@ class ExpressionValidator(RecursiveVisitor):
                     name=node.id, reason="generic function references are deferred (v1)")
 
     def visit_intlit(self, node: IntLit) -> None:
-        """Range-check a bare integer literal (CE2070).
-
-        Literals default to i32, so outside a direct integer `as` cast a
-        decimal literal must fit the signed i32 range and a radix literal
-        (hex/binary/octal) must fit the 32-bit pattern. Inside a direct cast
-        the literal materializes at the target width instead (Rust `as`
-        semantics) and is exempt. Negated literals are pre-checked (and
-        marked) by visit_unaryop as a single signed value.
-        """
+        """Range-check a bare integer literal (CE2070)."""
         if getattr(node, 'in_cast_context', False) or getattr(node, 'range_checked', False):
             return
         # A context-typed literal was already range-checked against its stamped type
@@ -701,12 +625,7 @@ class ExpressionValidator(RecursiveVisitor):
 
 
 class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
-    """
-    Visitor for type inference using the Visitor Pattern.
-
-    Replaces the large match statement in TypeValidator._infer_expression_type()
-    with clean, focused methods for each expression type.
-    """
+    """Visitor for type inference using the Visitor Pattern."""
 
     def __init__(self, type_validator: 'TypeValidator'):
         """Initialize with reference to the main type validator."""
@@ -715,21 +634,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
     # === Utility methods ===
 
     def _resolve_generic_to_semantic_type(self, generic_type: 'Type') -> 'Type':
-        """Resolve a GenericTypeRef to its concrete semantic type where applicable.
-
-        This centralizes the conversion logic for special generic types that have
-        semantic representations beyond simple monomorphization.
-
-        Args:
-            generic_type: The type to potentially resolve (may be GenericTypeRef or other)
-
-        Returns:
-            Resolved semantic type, or the original type if no resolution is needed
-
-        Examples:
-            GenericTypeRef("Result", [i32, MyError]) → EnumType("Result<i32, MyError>")
-            GenericTypeRef("Maybe", [i32]) → GenericTypeRef("Maybe", [i32])  # no change
-        """
+        """Resolve a GenericTypeRef to its concrete semantic type where applicable."""
         from sushi_lang.semantics.generics.types import GenericTypeRef
 
         # Only process GenericTypeRef types
@@ -765,11 +670,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return BuiltinType.BLANK
 
     def visit_spread(self, node: Spread) -> Optional[Type]:
-        """A bloomed argument `arr...` infers as the whole array type of its source.
-
-        Position/target validity (must be a variadic slot, sole last trailing arg)
-        is enforced by the call validators, not here.
-        """
+        """A bloomed argument `arr...` infers as the whole array type of its source."""
         return self.type_validator.infer_expression_type(node.value)
 
     def visit_stringlit(self, node: StringLit) -> Optional[Type]:
@@ -802,12 +703,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return self.type_validator._infer_index_access_type(node)
 
     def visit_memberaccess(self, node: MemberAccess) -> Optional[Type]:
-        """Infer member access type (struct field access).
-
-        For fields with generic types like Result<T, E>, this resolves them to their
-        semantic type representations for compatibility with pattern matching
-        and other type operations.
-        """
+        """Infer member access type (struct field access)."""
         # Get the type of the receiver (the struct)
         receiver_type = self.type_validator.infer_expression_type(node.receiver)
 
@@ -937,11 +833,6 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def _intern_result(self, ok_type: Type, err_type: Type) -> Optional[Type]:
         """The interned ``Result<ok, err>`` EnumType -- what a call's return type IS at runtime.
-
-        A call used to infer as a `ResultType`, which is not an `EnumType`, so it compared unequal
-        to the `Result<...>` enum a declared field/annotation resolves to -- that is #184's
-        "expects Result<string, StdError>, got Result<string, StdError>". Interning both sides
-        through here makes them the same object.
         """
         from sushi_lang.semantics.generics.results import ensure_result_type_in_table
         return ensure_result_type_in_table(
@@ -950,14 +841,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         )
 
     def _materialize_stdlib_return_type(self, ret_type: Optional[Type]) -> Optional[Type]:
-        """Resolve a registry-declared stdlib return type into a concrete type.
-
-        The registry declares return types as type-REFS, because it has no access to the enum
-        table: a Result comes back as GenericTypeRef("Result", (i64, UnknownType("FileError")))
-        and getenv's Maybe as GenericTypeRef("Maybe", (string,)). Materialize both into real
-        enums here, so `??` and `match` see a concrete EnumType rather than a forward reference.
-        Non-generic returns (i32, bool, ~) pass through.
-        """
+        """Resolve a registry-declared stdlib return type into a concrete type."""
         from sushi_lang.semantics.generics.types import GenericTypeRef
         from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
         from sushi_lang.semantics.generics.results import ensure_result_type_in_table
@@ -1237,12 +1121,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return None
 
     def visit_tryexpr(self, node: TryExpr) -> Optional[Type]:
-        """Try expression (?? operator) - unwrap result-like enum to Ok type.
-
-        Supports any enum with Ok(T) and Err(...) variants, including:
-        - Result<T> (generic)
-        - FileResult (concrete enum with Ok(file) variant)
-        """
+        """Try expression (?? operator) - unwrap result-like enum to Ok type."""
         # Infer the type of the inner expression
         inner_type = self.type_validator.infer_expression_type(node.expr)
 
@@ -1269,11 +1148,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return infer_range_expression_type(self.type_validator, node)
 
     def visit_borrow(self, node: Borrow) -> Optional[Type]:
-        """Infer type of borrow expression (peek expr or poke expr).
-
-        Returns ReferenceType with the correct mutability based on the
-        borrow mode (peek or poke) specified in the node.
-        """
+        """Infer type of borrow expression (peek expr or poke expr)."""
         from sushi_lang.semantics.typesys import ReferenceType, BorrowMode
 
         # Get the type of the borrowed expression

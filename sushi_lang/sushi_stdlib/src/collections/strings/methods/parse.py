@@ -1,17 +1,4 @@
-"""
-String Parsing Operations
-
-Implements parsing methods that convert strings to numeric types:
-- to_i32(): Parse string to Maybe<i32>
-- to_i64(): Parse string to Maybe<i64>
-- to_f64(): Parse string to Maybe<f64>
-
-All methods return Maybe<T> to handle parse failures gracefully:
-- Maybe.Some(value) on successful parse
-- Maybe.None() on failure (invalid format, overflow, etc.)
-
-Uses C standard library functions (strtol, strtoll, strtod) for robust parsing.
-"""
+"""String Parsing Operations"""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_strtol, declare_strtoll, declare_strtod, declare_malloc
@@ -19,23 +6,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types, get_m
 
 
 def emit_string_to_i32(module: ir.Module) -> ir.Function:
-    """Emit the string.to_i32() method.
-
-    Parses a string to Maybe<i32> using C strtol() function.
-
-    Algorithm:
-    1. Null-terminate the string (strtol requires null-terminated C string)
-    2. Call strtol(str, &endptr, 10) to parse as base-10 integer
-    3. Check if parse was successful (endptr != str && *endptr == '\\0')
-    4. Check if value fits in i32 range
-    5. Return Maybe.Some(i32_value) on success, Maybe.None() on failure
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: Maybe<i32> string_to_i32({ i8*, i32 } str)
-    """
+    """Emit `Maybe<i32> string_to_i32({i8*, i32} str)`."""
     func_name = "string_to_i32"
 
     # Check if already defined
@@ -172,18 +143,7 @@ def emit_string_to_i32(module: ir.Module) -> ir.Function:
 
 
 def emit_string_to_i64(module: ir.Module) -> ir.Function:
-    """Emit the string.to_i64() method.
-
-    Parses a string to Maybe<i64> using C strtoll() function.
-
-    Algorithm: Similar to to_i32() but uses strtoll and returns i64.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: Maybe<i64> string_to_i64({ i8*, i32 } str)
-    """
+    """Emit `Maybe<i64> string_to_i64({i8*, i32} str)`."""
     func_name = "string_to_i64"
 
     # Check if already defined
@@ -301,18 +261,7 @@ def emit_string_to_i64(module: ir.Module) -> ir.Function:
 
 
 def emit_string_to_f64(module: ir.Module) -> ir.Function:
-    """Emit the string.to_f64() method.
-
-    Parses a string to Maybe<f64> using C strtod() function.
-
-    Algorithm: Similar to to_i32() but uses strtod and returns f64.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: Maybe<f64> string_to_f64({ i8*, i32 } str)
-    """
+    """Emit `Maybe<f64> string_to_f64({i8*, i32} str)`."""
     func_name = "string_to_f64"
 
     # Check if already defined

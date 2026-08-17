@@ -10,16 +10,7 @@ from sushi_lang.semantics.typesys import Type
 
 
 def extract_type_param_names(type_params_raw: Optional[List]) -> Optional[List[str]]:
-    """Extract type parameter names from AST type_params.
-
-    Handles both legacy List[str] and new List[BoundedTypeParam] formats.
-
-    Args:
-        type_params_raw: Raw type_params from AST (may be None, List[str], or List[BoundedTypeParam])
-
-    Returns:
-        List of parameter names as strings, or None if no parameters
-    """
+    """Extract type parameter names from AST type_params."""
     if type_params_raw is None:
         return None
 
@@ -42,15 +33,7 @@ def extract_type_param_names(type_params_raw: Optional[List]) -> Optional[List[s
 
 
 def param_from_node(p: Any, idx: int) -> 'Param':
-    """Convert AST parameter node to Param dataclass.
-
-    Args:
-        p: AST parameter node
-        idx: Parameter index (for fallback naming)
-
-    Returns:
-        Param dataclass instance
-    """
+    """Convert AST parameter node to Param dataclass."""
     from .functions import Param  # Import here to avoid circular dependency
 
     # Expect object-style params with .name/.ty and optional spans
@@ -77,12 +60,7 @@ def param_from_node(p: Any, idx: int) -> 'Param':
 
 def note_first_declaration(builder: Any, spans: dict, name: str,
                            what: str = "first defined here") -> Any:
-    """Attach the ORIGINAL declaration's location to a duplicate-declaration error.
-
-    A redeclaration is relational: it is only an error because of the first one, and
-    the first one is the half the user cannot see. If the name was predefined by the
-    compiler there is no span to point at, so say that instead.
-    """
+    """Attach the ORIGINAL declaration's location to a duplicate-declaration error."""
     prev = spans.get(name)
     if prev is not None:
         return builder.note(what, prev)
@@ -90,15 +68,7 @@ def note_first_declaration(builder: Any, spans: dict, name: str,
 
 
 def get_span(node: Any, *attrs: str) -> Optional[Span]:
-    """Get first non-None span from node attributes.
-
-    Args:
-        node: AST node
-        *attrs: Attribute names to check in order
-
-    Returns:
-        First non-None span, or None if all are None
-    """
+    """Get first non-None span from node attributes."""
     for attr in attrs:
         span = getattr(node, attr, None)
         if span is not None:
@@ -108,20 +78,7 @@ def get_span(node: Any, *attrs: str) -> Optional[Span]:
 
 def reject_reference_in(reporter, ty: Optional[Type], span: Optional[Span],
                         code) -> bool:
-    """Reject a reference type in a position that has no semantics for one (R4).
-
-    The one emit helper behind CE2415-CE2420. It asks `contains_reference` (the one walk)
-    and renders the type with `display_type`, so the diagnostic shows `peek i32`, never
-    the interned spelling.
-
-    Returns True when it reported, so a caller can skip work that a rejected type would
-    only make worse -- a struct field the backend cannot lay out, an extension nothing can
-    call.
-
-    The predicate lives in `semantics/type_predicates.py` and the emit lives here, which is
-    the convention the `ptr` gates already follow: the predicate module stays free of the
-    reporter.
-    """
+    """Reject a reference type in a position that has no semantics for one (R4)."""
     from sushi_lang.internals import errors as er
     from sushi_lang.semantics.generics.type_display import display_type
     from sushi_lang.semantics.type_predicates import contains_reference

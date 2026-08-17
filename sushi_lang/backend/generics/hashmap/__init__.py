@@ -1,38 +1,4 @@
-"""HashMap<K, V> LLVM emission.
-
-Implements all HashMap methods using inline LLVM IR emission. The ir-free half
-(method validation, K/V resolution, the generic struct definition) lives in
-`semantics/generics/hashmap.py`.
-
-HashMap is a hash table with open addressing using linear probing.
-Requires `use <collections/hashmap>` to be available.
-
-Type Parameters:
-    K: Key type (must support .hash() and equality comparison)
-    V: Value type (any type)
-
-Methods:
-    Static:
-        new() -> HashMap<K, V>
-
-    Instance (read-only):
-        len() -> i32
-        is_empty() -> bool
-        tombstone_count() -> i32
-        get(K) -> Maybe<V>
-        contains_key(K) -> bool
-        keys() -> Iterator<K>
-        values() -> Iterator<V>
-        entries() -> Iterator<Entry<K, V>>
-        debug() -> ~
-
-    Instance (mutating):
-        insert(K, V) -> ~
-        remove(K) -> Maybe<V>
-        rehash() -> ~
-        free() -> ~
-        destroy() -> ~
-"""
+"""HashMap<K, V> LLVM emission."""
 
 from __future__ import annotations
 from typing import TYPE_CHECKING, Union
@@ -77,24 +43,7 @@ def emit_hashmap_method(
     receiver_type: 'StructType',
     to_i1: bool
 ) -> 'ir.Value':
-    """Emit LLVM IR for HashMap<K, V> method calls.
-
-    HashMap<K, V> is a CORE language feature that uses inline emission.
-    This function dispatches to specialized emitters based on method name.
-
-    Args:
-        codegen: The LLVM code generator.
-        expr: The method call expression.
-        receiver_value: The LLVM value of the HashMap (None for new()).
-        receiver_type: The HashMap<K, V> struct type.
-        to_i1: Whether to convert result to i1.
-
-    Returns:
-        The result of the HashMap method call.
-
-    Raises:
-        ValueError: If method name is not recognized.
-    """
+    """Emit LLVM IR for HashMap<K, V> method calls."""
     from sushi_lang.internals.errors import raise_internal_error
 
     method = expr.method

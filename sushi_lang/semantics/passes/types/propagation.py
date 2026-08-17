@@ -1,26 +1,5 @@
 # semantics/passes/types/propagation.py
-"""
-Type propagation utilities for generic types.
-
-This module provides utilities for propagating expected types to enum and struct
-constructors, enabling type inference for generic types (Result<T, E>, Maybe<T>,
-Own<T>, user-defined generics, etc.).
-
-Type propagation MUST happen BEFORE validation to enable proper type resolution.
-
-PUBLIC API:
-    propagate_types_to_value() - Unified entry point for all type propagation
-
-All other functions are private (prefixed with _) and should not be called
-directly. The public entry point handles all propagation cases:
-- Result<T, E> propagation to Result.Ok/Err
-- Generic enum propagation (Maybe<T>, Either<T, U>, user-defined)
-- Generic struct propagation (Own<T>, Box<T>, Pair<T, U>, user-defined)
-- Nested generic propagation (Result.Ok(Maybe.Some(x)))
-
-Extracted from validate_return_statement() and validate_let_statement() to
-eliminate duplication across statement validators.
-"""
+"""Type propagation utilities for generic types."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -48,13 +27,7 @@ _SHIFT_OPS = {"<<", ">>"}
 
 def _propagate_numeric_type(validator: 'TypeValidator', expr: 'Expr',
                             expected: BuiltinType) -> None:
-    """Push an expected numeric type into a value's literal leaves.
-
-    Recurses through arithmetic/bitwise binary ops (both operands) and shifts
-    (left operand only) so `const u32 FLAGS = 0x01 | 0x02 | 0x04` stamps every leaf
-    u32. Comparison/logical ops are not recursed (their result is bool). Non-binary
-    leaves are handed to `_stamp_numeric_literal`.
-    """
+    """Push an expected numeric type into a value's literal leaves."""
     if isinstance(expr, BinaryOp):
         if expr.op in _ARITH_BITWISE_OPS:
             _propagate_numeric_type(validator, expr.left, expected)
@@ -67,13 +40,7 @@ def _propagate_numeric_type(validator: 'TypeValidator', expr: 'Expr',
 
 def _stamp_numeric_literal(validator: 'TypeValidator', node: 'Expr',
                            expected: BuiltinType) -> None:
-    """Stamp a bare numeric literal (optionally negated) with its context type.
-
-    Range-checks the literal against the expected type; out-of-range emits CE2073.
-    Sets `resolved_type` (read by inference and the backend) and `range_checked`
-    (so the default-i32 CE2070 check in the validator skips it). A non-literal leaf
-    (a Name, a call result) is left untouched so a typed value still requires `as`.
-    """
+    """Stamp a bare numeric literal (optionally negated) with its context type."""
     sign = 1
     lit = node
     if (isinstance(lit, UnaryOp) and lit.op == "neg"
@@ -108,13 +75,7 @@ def _stamp_numeric_literal(validator: 'TypeValidator', node: 'Expr',
 
 def _propagate_to_enum_args(validator: 'TypeValidator', node: Expr,
                             enum_type: EnumType) -> None:
-    """Recursively propagate types to enum constructor arguments.
-
-    Args:
-        validator: The type validator instance
-        node: The enum constructor node (EnumConstructor or DotCall)
-        enum_type: The concrete EnumType with variant field types
-    """
+    """Recursively propagate types to enum constructor arguments."""
     if not node.args:
         return
 
@@ -149,13 +110,7 @@ def _propagate_to_enum_args(validator: 'TypeValidator', node: Expr,
 
 def _propagate_to_struct_args(validator: 'TypeValidator', node: Expr,
                               struct_type: StructType) -> None:
-    """Recursively propagate types to struct constructor arguments.
-
-    Args:
-        validator: The type validator instance
-        node: The struct constructor node (Call or DotCall)
-        struct_type: The concrete StructType with field types
-    """
+    """Recursively propagate types to struct constructor arguments."""
     if not node.args:
         return
 
@@ -182,17 +137,7 @@ def _propagate_to_struct_args(validator: 'TypeValidator', node: Expr,
 
 def _propagate_generic_enum_type(validator: 'TypeValidator', node: Expr,
                                  enum_type: EnumType) -> None:
-    """Propagate generic enum type (Maybe, Either, user-defined) to constructor.
-
-    Sets resolved_enum_type on EnumConstructor or DotCall nodes.
-
-    Args:
-        validator: The type validator instance
-        node: The enum constructor node (Maybe.Some, Either.Left, etc.)
-        enum_type: The expected concrete EnumType
-
-    Consolidates lines 122-126 (let), 369-382 (rebind) from statements.py.
-    """
+    """Propagate generic enum type (Maybe, Either, user-defined) to constructor."""
     if not isinstance(node, (EnumConstructor, DotCall)):
         return
 
@@ -235,17 +180,7 @@ def _propagate_generic_enum_type(validator: 'TypeValidator', node: Expr,
 
 def _propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
                                    struct_type: StructType) -> None:
-    """Propagate generic struct type (Own, Box, Pair, user-defined) to constructor.
-
-    Handles both DotCall constructors (Own.alloc) and Call constructors (Box).
-
-    Args:
-        validator: The type validator instance
-        node: The struct constructor node
-        struct_type: The expected concrete StructType
-
-    Consolidates lines 128-151 (let), 291-308 (return) from statements.py.
-    """
+    """Propagate generic struct type (Own, Box, Pair, user-defined) to constructor."""
     # Handle DotCall constructors (e.g., Own.alloc(42))
     if isinstance(node, DotCall) and isinstance(node.receiver, Name):
         struct_name = node.receiver.id
@@ -299,27 +234,7 @@ def _propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
 
 def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
                             expected_type: 'Type') -> None:
-    """Unified entry point for all type propagation.
-
-    Propagates expected types to constructors in the value expression,
-    enabling type inference for generic types. This MUST be called BEFORE
-    expression validation.
-
-    Handles:
-    - Result<T, E> propagation to Result.Ok/Err
-    - Generic enum propagation (Maybe<T>, Either<T, U>, user-defined)
-    - Generic struct propagation (Own<T>, Box<T>, Pair<T, U>, user-defined)
-    - Nested generic propagation (Result.Ok(Maybe.Some(x)))
-
-    Args:
-        validator: The type validator instance
-        value_expr: The expression to propagate types to
-        expected_type: The expected type from context (variable type, return type, etc.)
-
-    This orchestrator replaces duplicated propagation logic across
-    validate_return_statement(), validate_let_statement(), and
-    validate_rebind_statement().
-    """
+    """Unified entry point for all type propagation."""
     # Context-typed numeric literals: stamp bare literal leaves with the expected
     # type, recursing through arithmetic/bitwise/shift operands.
     if isinstance(expected_type, BuiltinType) and (

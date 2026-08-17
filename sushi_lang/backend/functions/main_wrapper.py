@@ -1,11 +1,4 @@
-"""
-Main function wrapper handling for C compatibility.
-
-This module handles the special case of the main() function, which needs
-a C-compatible signature (int main() or int main(int argc, char** argv))
-but internally calls a user_main() function that follows Sushi's Result<T>
-conventions.
-"""
+"""Main function wrapper handling for C compatibility."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Tuple
 
@@ -23,11 +16,7 @@ class MainFunctionWrapper:
     """Handles main function wrapping for C interoperability."""
 
     def __init__(self, codegen: 'LLVMCodegen') -> None:
-        """Initialize wrapper with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance.
-        """
+        """Initialize wrapper with reference to main codegen instance."""
         self.codegen = codegen
 
     def extract_value_from_result_enum(
@@ -36,24 +25,7 @@ class MainFunctionWrapper:
         value_type: ir.Type,
         semantic_type: Ty
     ) -> Tuple[ir.Value, ir.Value]:
-        """Extract the Ok value from a Result<T> enum.
-
-        Result<T> enum layout: {i32 tag, [N x i8] data}
-        - tag = 0 for Ok variant, 1 for Err variant
-        - data contains the packed value bytes
-
-        Args:
-            result_enum: The Result<T> enum value
-            value_type: The LLVM type of T (e.g., i32 for Result<i32>)
-            semantic_type: The semantic type of T (accepted for a stable call
-                signature; the typed load reads exactly value_type from the
-                variant buffer, so no separate size calculation is needed)
-
-        Returns:
-            A tuple (is_ok, value) where:
-            - is_ok: i1 flag (true if Ok, false if Err)
-            - value: The extracted value of type T (undefined if Err)
-        """
+        """Extract the Ok value from a Result<T> enum."""
         # Extract tag and check if Ok variant (tag == 0)
         is_ok = enum_utils.check_enum_variant(
             self.codegen, result_enum, variant_index=0, signed=True, name="is_ok"
@@ -79,21 +51,7 @@ class MainFunctionWrapper:
         return (is_ok, value)
 
     def emit_main_with_args(self, fn: FuncDef, begin_function_fn, end_function_fn, create_user_main_fn) -> ir.Function:
-        """
-        Emit the main function when command line arguments are expected.
-
-        Creates a C-style main(int argc, char** argv) that converts arguments
-        to a Sushi string[] and calls the user's main function.
-
-        Args:
-            fn: The user's main function definition.
-            begin_function_fn: Function to begin function emission.
-            end_function_fn: Function to end function emission.
-            create_user_main_fn: Function to create user_main.
-
-        Returns:
-            The generated C-style main function.
-        """
+        """Emit the main function when command line arguments are expected."""
         # Get the C-style main function that was already declared
         c_main = self.codegen.funcs.get('main')
         if c_main is None:
@@ -190,21 +148,7 @@ class MainFunctionWrapper:
         return c_main
 
     def emit_main_without_args(self, fn: FuncDef, begin_function_fn, end_function_fn, create_user_main_fn) -> ir.Function:
-        """
-        Emit the main function without command line arguments.
-
-        Creates a C-style main() that calls user_main and extracts the value
-        from the Result struct.
-
-        Args:
-            fn: The user's main function definition.
-            begin_function_fn: Function to begin function emission.
-            end_function_fn: Function to end function emission.
-            create_user_main_fn: Function to create user_main.
-
-        Returns:
-            The generated C-style main function.
-        """
+        """Emit the main function without command line arguments."""
         # Get the C-style main function that was already declared
         c_main = self.codegen.funcs.get('main')
         if c_main is None:
@@ -264,19 +208,7 @@ class MainFunctionWrapper:
         return c_main
 
     def create_user_main_function(self, fn: FuncDef, params_of_fn, begin_function_fn, end_function_fn, emit_default_return_fn) -> ir.Function:
-        """
-        Create a separate function for the user's main function body.
-
-        Args:
-            fn: The user's main function definition.
-            params_of_fn: Function to extract parameters.
-            begin_function_fn: Function to begin function emission.
-            end_function_fn: Function to end function emission.
-            emit_default_return_fn: Function to emit default return.
-
-        Returns:
-            The user_main LLVM function.
-        """
+        """Create a separate function for the user's main function body."""
         # Create function signature matching the user's main function
         params = params_of_fn(fn)
         ll_param_tys = [self.codegen.types.ll_type(ty) for _, ty in params]

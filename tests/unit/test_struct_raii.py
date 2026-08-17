@@ -1,15 +1,4 @@
-"""Regression tests for #60: struct value-semantics for heap-owning structs.
-
-A struct that owns heap memory (a dynamic-array `T[]` field) must get an *independent*
-buffer whenever it is copied -- taken out of an array via `.get()`/indexing, or passed
-by value to a function -- so that exactly one owner frees each allocation. Before the
-fix the copy shallow-shared the element's buffer (double-ownership), and by-value struct
-parameters were never freed by the callee at all.
-
-These assert behaviour by counting `malloc`/`free` in the generated IR (the bug is a
-silent leak / latent double-free at runtime, mirroring the #59 approach in
-test_raii_multi_exit.py).
-"""
+"""Regression tests for #60: struct value-semantics for heap-owning structs."""
 from __future__ import annotations
 
 from tests.unit.test_ffi import _emit_ir, _count_in_function
@@ -24,16 +13,7 @@ _STRUCT = (
 
 
 def test_struct_get_borrows_and_does_not_copy(tmp_path):
-    """`let b = arr.get(i)??` BORROWS the element. It does not copy it (#242).
-
-    The array keeps the element and still frees it, so `b` names the same buffer and owns
-    nothing. `extract` therefore allocates NOTHING: it only reads a length through the
-    borrow.
-
-    This asserted the opposite until #242. `.get()` used to deep-copy at the read, which
-    was the compiler inserting a copy the user did not ask for -- and the copy was the
-    only thing that made a second owner safe. Now there is no second owner.
-    """
+    """`let b = arr.get(i)??` BORROWS the element. It does not copy it (#242)."""
     src = _STRUCT + (
         "fn extract(DataBuffer[] bufs) i32:\n"
         "    let DataBuffer b = bufs.get(0)??\n"
@@ -67,11 +47,7 @@ def test_struct_index_borrows_and_does_not_copy(tmp_path):
 
 
 def test_nom_struct_param_freed_by_callee(tmp_path):
-    """A `nom` struct param with a `T[]` field is freed by the callee at scope exit.
-
-    The callee is the one owner, so it must free it. Before the fix struct parameters
-    were never registered for cleanup and the callee emitted zero frees.
-    """
+    """A `nom` struct param with a `T[]` field is freed by the callee at scope exit."""
     src = _STRUCT + (
         "fn consume(nom DataBuffer d) i32:\n"
         "    return Result.Ok(d.data.len())\n"
@@ -87,11 +63,7 @@ def test_nom_struct_param_freed_by_callee(tmp_path):
 
 
 def test_borrow_struct_param_not_freed_by_callee(tmp_path):
-    """The twin, and the flip itself: an UNMARKED struct param is a borrow.
-
-    The caller keeps the value and frees it, so the callee must emit no free at all. The
-    two functions differ by one word (docs/design/borrow-model.md S4).
-    """
+    """The twin, and the flip itself: an UNMARKED struct param is a borrow."""
     src = _STRUCT + (
         "fn look(DataBuffer d) i32:\n"
         "    return Result.Ok(d.data.len())\n"
@@ -107,15 +79,7 @@ def test_borrow_struct_param_not_freed_by_callee(tmp_path):
 
 
 def test_byvalue_struct_arg_moved_at_call_site(tmp_path):
-    """The call site MOVES a bare owning struct arg into a `nom` slot (#134).
-
-    Pairs with test_nom_struct_param_freed_by_callee: the callee frees the moved-in
-    value, and the caller marks the source moved so it does not free it too. Asserted
-    relatively: passing the bare Name `consume(x)` (a move) emits FEWER mallocs in `main`
-    than passing an explicit `consume(x.clone())` (a copy) -- the move elides the call-site
-    deep copy of the struct's `u8[]` buffer. Before #134 the bare-Name form also copied, so
-    the two counts were equal.
-    """
+    """The call site MOVES a bare owning struct arg into a `nom` slot (#134)."""
     body = (
         "fn consume(nom DataBuffer d) i32:\n"
         "    return Result.Ok(d.data.len())\n"
@@ -134,12 +98,7 @@ def test_byvalue_struct_arg_moved_at_call_site(tmp_path):
 
 
 def test_struct_rebind_moves_not_clones(tmp_path):
-    """`let b = a` MOVES an owning struct (#134): no implicit clone of its buffer.
-
-    Compared to the explicit `let b = a.clone()`, the plain rebind emits fewer mallocs in
-    `main` -- the deep copy of the struct's `u8[]` buffer is elided (`a` is consumed
-    instead). Before #134 the plain rebind also cloned, so the two counts were equal.
-    """
+    """`let b = a` MOVES an owning struct (#134): no implicit clone of its buffer."""
     body = (
         "fn main() i32:\n"
         "    let DataBuffer a = DataBuffer(from([1 as u8, 2 as u8, 3 as u8]), 3)\n"
@@ -152,12 +111,7 @@ def test_struct_rebind_moves_not_clones(tmp_path):
 
 
 def test_struct_local_freed_on_every_branch_return(tmp_path):
-    """if/else, each branch returns: a struct-with-array-field local is freed on every path.
-
-    Completes the #59 every-path RAII for struct-with-array-field locals (was blocked by
-    the #60 aliasing). Before the fix the global-once gate emitted the struct cleanup on
-    only one path.
-    """
+    """if/else, each branch returns: a struct-with-array-field local is freed on every path."""
     src = _STRUCT + (
         "fn f(i32 t) i32:\n"
         "    let DataBuffer d = DataBuffer(from([1 as u8, 2 as u8]), 2)\n"

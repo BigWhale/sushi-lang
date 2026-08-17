@@ -1,11 +1,5 @@
 # semantics/units.py
-"""
-Unit management system for multi-file compilation.
-
-This module provides classes and utilities for managing compilation units,
-dependency resolution, and topological sorting for the Sushi language
-multi-file system.
-"""
+"""Unit management system for multi-file compilation."""
 
 from __future__ import annotations
 from dataclasses import dataclass
@@ -110,13 +104,7 @@ class UnitManager:
     """Manages compilation units, dependency resolution, and compilation ordering."""
 
     def __init__(self, root_path: Path = None, reporter: Reporter = None):
-        """
-        Initialize the unit manager.
-
-        Args:
-            root_path: Root directory for resolving unit paths. Defaults to current directory.
-            reporter: Reporter for error/warning collection. Must be provided for error reporting.
-        """
+        """Initialize the unit manager."""
         self.root_path = root_path or Path.cwd()
         self.units: Dict[str, Unit] = {}
         self.global_symbols: Dict[str, Symbol] = {}
@@ -124,37 +112,13 @@ class UnitManager:
         self.err = PassErrorReporter(reporter) if reporter else None
 
     def resolve_unit_path(self, unit_name: str) -> Path:
-        """
-        Resolve a unit name to its file path.
-
-        Args:
-            unit_name: Unit name like "math/integer" or "string/helpers"
-
-        Returns:
-            Absolute path to the .sushi file
-
-        Example:
-            "math/integer" -> ./math/integer.sushi
-            "utils" -> ./utils.sushi
-        """
+        """Resolve a unit name to its file path."""
         # Convert unit name to file path with .sushi extension
         relative_path = Path(unit_name + ".sushi")
         return self.root_path / relative_path
 
     def load_unit(self, unit_name: str, ast: Program) -> Optional[Unit]:
-        """
-        Load a unit with its parsed AST.
-
-        Args:
-            unit_name: Name of the unit (e.g., "math/integer")
-            ast: Parsed AST for the unit
-
-        Returns:
-            The loaded Unit object if successful, None if failed
-
-        Reports:
-            CE3002: If the unit's file doesn't exist
-        """
+        """Load a unit with its parsed AST."""
         file_path = self.resolve_unit_path(unit_name)
 
         if not file_path.exists():
@@ -177,24 +141,11 @@ class UnitManager:
         return unit
 
     def build_dependency_graph(self) -> Dict[str, List[str]]:
-        """
-        Build a dependency graph from all loaded units.
-
-        Returns:
-            Dictionary mapping unit names to their dependencies
-        """
+        """Build a dependency graph from all loaded units."""
         return {unit.name: unit.dependencies for unit in self.units.values()}
 
     def topological_sort(self) -> Optional[List[str]]:
-        """
-        Perform topological sorting to determine compilation order.
-
-        Returns:
-            List of unit names in compilation order (dependencies first), or None if failed
-
-        Reports:
-            CE3001: If circular dependencies are detected
-        """
+        """Perform topological sorting to determine compilation order."""
         # Kahn's algorithm for topological sorting with cycle detection
         dependency_graph = self.build_dependency_graph()
 
@@ -263,15 +214,7 @@ class UnitManager:
         return []  # No cycle found
 
     def build_global_symbol_table(self) -> bool:
-        """
-        Build the global symbol table from all loaded units.
-
-        Returns:
-            True if successful, False if there were duplicate symbols
-
-        Reports:
-            CE3003: If the same symbol is defined in multiple units
-        """
+        """Build the global symbol table from all loaded units."""
         symbol_units: Dict[str, List[str]] = {}
         success = True
 
@@ -296,30 +239,14 @@ class UnitManager:
         return success
 
     def get_compilation_order(self) -> Optional[List[Unit]]:
-        """
-        Get units in compilation order, with dependencies compiled first.
-
-        Returns:
-            List of Unit objects in compilation order, or None if failed
-
-        Reports:
-            CE3001: If circular dependencies are detected
-        """
+        """Get units in compilation order, with dependencies compiled first."""
         sorted_names = self.topological_sort()
         if sorted_names is None:
             return None
         return [self.units[name] for name in sorted_names]
 
     def find_symbol(self, symbol_name: str) -> Optional[Symbol]:
-        """
-        Find a symbol in the global symbol table.
-
-        Args:
-            symbol_name: Name of the symbol to find
-
-        Returns:
-            Symbol object if found, None otherwise
-        """
+        """Find a symbol in the global symbol table."""
         return self.global_symbols.get(symbol_name)
 
 

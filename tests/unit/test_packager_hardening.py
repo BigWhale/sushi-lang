@@ -1,8 +1,4 @@
-"""Unit tests for the Tier 5.4 packager hardening.
-
-Covers the hand-written TOML writers (stdlib has a reader but no writer), the
-login command's argv surface, and the entry-point shape.
-"""
+"""Unit tests for the Tier 5.4 packager hardening."""
 from __future__ import annotations
 
 import tomllib
@@ -20,9 +16,10 @@ HOSTILE = 'quote " backslash \\ newline \n tab \t control \x01 end'
 # --------------------------------------------------------------------------
 
 def test_credentials_round_trip_hostile_values(tmp_path, monkeypatch):
-    """A token containing quotes/backslashes/newlines must survive the write ->
-    read cycle byte-for-byte. Unescaped, it corrupted the whole file (and the
-    corrupted read used to be silently swallowed)."""
+    """A token containing quotes/backslashes/newlines must survive the write -> read cycle
+    byte-for-byte. Unescaped, it corrupted the whole file (and the corrupted read used to be
+    silently swallowed).
+    """
     monkeypatch.setattr(creds, "CREDENTIALS_FILE", tmp_path / "credentials.toml")
 
     creds.save_token("omakase.example.net", HOSTILE)
@@ -56,8 +53,9 @@ def test_toml_escape_is_tomllib_valid():
 # --------------------------------------------------------------------------
 
 def test_login_parser_takes_no_api_key_argv():
-    """An argv key leaks into shell history and ps output; the parser must
-    reject one so the only paths are the getpass prompt and stdin."""
+    """An argv key leaks into shell history and ps output; the parser must reject one so the only
+    paths are the getpass prompt and stdin.
+    """
     from sushi_lang.packager.cli import build_parser
 
     parser = build_parser()
@@ -94,9 +92,10 @@ def test_dunder_main_module_exists():
 
 
 def test_dunder_main_propagates_exit_code(tmp_path):
-    """python -m sushi_lang.packager must exit with main()'s return code, and
-    honor NORI_CWD. The old nori wrapper's inline `python -c "... main()"`
-    snippet discarded the return value, so ./nori exited 0 on failure."""
+    """python -m sushi_lang.packager must exit with main()'s return code, and honor NORI_CWD. The
+    old nori wrapper's inline `python -c "... main()"` snippet discarded the return value, so
+    ./nori exited 0 on failure.
+    """
     import os
     import subprocess
     import sys

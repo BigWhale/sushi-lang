@@ -1,12 +1,5 @@
 # semantics/passes/types/utils.py
-"""
-Shared utilities for type validation.
-
-This module contains helper functions used across multiple validation modules:
-- Type name validation
-- Parameter validation and registration
-- Array destruction tracking
-"""
+"""Shared utilities for type validation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, Optional
 
@@ -119,32 +112,7 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
 
 
 def resolve_declared_type(validator: 'TypeValidator', ty: Optional[Type]) -> Optional[Type]:
-    """The concrete type that a DECLARED type names.
-
-    A declaration writes a type in source spelling. Three of those spellings name a type
-    that the tables already hold in concrete form, and the tables are the sole authority
-    for its contents:
-
-      - `UnknownType('Point')`            -- a named struct or enum
-      - `GenericTypeRef('List', (i32,))`  -- a monomorphized generic, interned under the
-        mangled name `str()` spells for it ("List<i32>")
-      - `FunctionType`                    -- resolved member by member
-      - `P[]` / `P[3]`                    -- the same, through the ELEMENT
-
-    Every other spelling already IS concrete and comes back unchanged.
-
-    ONE implementation, because a reference parameter used to get a private and shorter
-    one: it resolved a named referent but left a generic referent in its source spelling,
-    so `poke List@(i32)` registered a type that compared unequal to the interned
-    `List<i32>` every value of that type infers. That is #305 -- a rebind through such a
-    parameter reported `CE2002: cannot assign List@(i32) to List@(i32)`.
-
-    An array was the same defect one container over (#284). The WRAPPER is concrete, so
-    it read as needing no resolution -- but `P[]` parses as
-    `DynamicArrayType(UnknownType('P'))`, and the element stayed unresolved all the way
-    into the variable table. Every later compare against the interned `StructType('P')`
-    failed, and because both spell themselves "P" the message read `expected P, got P`.
-    """
+    """The concrete type that a DECLARED type names."""
     from sushi_lang.semantics.generics.types import GenericTypeRef
     from sushi_lang.semantics.typesys import FunctionType
 
@@ -164,16 +132,7 @@ def resolve_declared_type(validator: 'TypeValidator', ty: Optional[Type]) -> Opt
 
 
 def validate_and_register_parameters(validator: 'TypeValidator', params: List['Param']) -> None:
-    """Validate parameter types and register them in the variable_types table.
-
-    This helper method eliminates duplication between _validate_function() and
-    _validate_extension_method(). It validates each parameter's type annotation
-    and registers valid parameters in the variable_types table.
-
-    Args:
-        validator: The TypeValidator instance.
-        params: List of parameter definitions to validate and register.
-    """
+    """Validate parameter types and register them in the variable_types table."""
     for param in params:
         validate_type_name(validator, param.ty, param.type_span)
 
@@ -237,14 +196,7 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
 
 
 def reject_spread_args(validator: 'TypeValidator', args: List) -> bool:
-    """Reject any bloom spread `arr...` argument in a context that is never variadic.
-
-    A bloom is only valid as the last trailing argument of a variadic function call
-    (a native `...T` function or the variadic `run` builtin). It is never valid in a
-    method call (methods cannot be variadic, CE0115), an enum constructor, or a struct
-    constructor. Emits CE0120 for each spread found and returns True if any were rejected,
-    so callers can short-circuit before type/backend handling that has no Spread support.
-    """
+    """Reject any bloom spread `arr...` argument in a context that is never variadic."""
     from sushi_lang.semantics.ast import Spread
     found = False
     for arg in args:
@@ -287,32 +239,7 @@ def propagate_enum_type_to_dotcall(
     arg: 'Expr',
     expected_type: Optional[Type]
 ) -> None:
-    """Propagate expected enum type to DotCall nodes for generic enums.
-
-    This allows enum constructors like Maybe.None(), Result.Ok(), Either.Left(), etc.
-    to be used directly as function/method arguments without requiring
-    intermediate variables.
-
-    The function sets the `resolved_enum_type` attribute on DotCall nodes
-    when all conditions are met:
-    1. arg is a DotCall node with a Name receiver
-    2. The receiver is a generic enum name (built-in or user-defined)
-    3. The expected_type can be resolved to a concrete EnumType
-
-    Args:
-        validator: The TypeValidator instance (provides enum tables)
-        arg: The argument expression (checked for DotCall pattern)
-        expected_type: The expected type for this argument (may be None)
-
-    Example:
-        # Before validation:
-        propagate_enum_type_to_dotcall(validator, call.args[0], param.ty)
-        validator.validate_expression(call.args[0])
-
-    Note:
-        This function should be called BEFORE validate_expression() to ensure
-        type propagation happens before enum constructor validation.
-    """
+    """Propagate expected enum type to DotCall nodes for generic enums."""
     # Early exit if no expected type
     if expected_type is None:
         return
@@ -327,32 +254,7 @@ def propagate_struct_type_to_dotcall(
     arg: 'Expr',
     expected_type: Optional[Type]
 ) -> None:
-    """Propagate expected struct type to DotCall nodes for generic structs.
-
-    This allows struct constructors like Own.alloc() to be used directly
-    as function/method arguments or in let statements without requiring
-    intermediate variables.
-
-    The function sets the `resolved_struct_type` attribute on DotCall nodes
-    when all conditions are met:
-    1. arg is a DotCall node with a Name receiver
-    2. The receiver is a known generic struct name (like Own)
-    3. The expected_type can be resolved to a concrete StructType
-
-    Args:
-        validator: The TypeValidator instance (provides struct tables)
-        arg: The argument expression (checked for DotCall pattern)
-        expected_type: The expected type for this argument (may be None)
-
-    Example:
-        # Before validation:
-        propagate_struct_type_to_dotcall(validator, call.args[0], param.ty)
-        validator.validate_expression(call.args[0])
-
-    Note:
-        This function should be called BEFORE validate_expression() to ensure
-        type propagation happens before struct constructor validation.
-    """
+    """Propagate expected struct type to DotCall nodes for generic structs."""
     # Early exit if no expected type
     if expected_type is None:
         return

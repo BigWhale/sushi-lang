@@ -1,13 +1,5 @@
 # semantics/passes/types/matching.py
-"""
-Pattern matching validation for type validation.
-
-This module contains validation functions for match statements:
-- Match statement validation
-- Pattern validation (including nested patterns)
-- Exhaustiveness checking
-- Pattern binding validation and registration
-"""
+"""Pattern matching validation for type validation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Set, Tuple
 
@@ -43,15 +35,7 @@ def validate_match_statement(validator: 'TypeValidator', stmt: Match) -> None:
 
 
 def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optional[EnumType]:
-    """Validate match scrutinee is an enum type.
-
-    Args:
-        validator: The TypeValidator instance.
-        stmt: The match statement to validate.
-
-    Returns:
-        The scrutinee's EnumType if valid, None otherwise.
-    """
+    """Validate match scrutinee is an enum type."""
     validator.validate_expression(stmt.scrutinee)
     scrutinee_type = validator.infer_expression_type(stmt.scrutinee)
 
@@ -82,16 +66,7 @@ def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optiona
 def collect_and_validate_patterns(
     validator: 'TypeValidator', stmt: Match, scrutinee_type: EnumType
 ) -> Tuple[Set[str], bool]:
-    """Collect and validate all match arms, checking pattern validity.
-
-    Args:
-        validator: The TypeValidator instance.
-        stmt: The match statement to validate.
-        scrutinee_type: The validated enum type of the scrutinee.
-
-    Returns:
-        Tuple of (covered_variants set, has_wildcard flag).
-    """
+    """Collect and validate all match arms, checking pattern validity."""
     covered_variants: Set[str] = set()
     has_wildcard = False
 
@@ -176,15 +151,7 @@ def collect_and_validate_patterns(
 def check_match_exhaustiveness(
     validator: 'TypeValidator', stmt: Match, scrutinee_type: EnumType, covered_variants: Set[str], has_wildcard: bool
 ) -> None:
-    """Check if match statement covers all enum variants.
-
-    Args:
-        validator: The TypeValidator instance.
-        stmt: The match statement to check.
-        scrutinee_type: The enum type being matched on.
-        covered_variants: Set of covered pattern signatures.
-        has_wildcard: Whether a wildcard pattern is present.
-    """
+    """Check if match statement covers all enum variants."""
     # Check exhaustiveness: ensure all variants are covered (or wildcard is present)
     # For nested patterns, we need to extract the outer variant name from the signature
     if not has_wildcard:
@@ -206,17 +173,7 @@ def check_match_exhaustiveness(
 
 
 def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', variant: 'EnumVariant', parent_enum_type: 'EnumType') -> bool:
-    """Validate pattern bindings match variant's associated types (supports nested patterns).
-
-    Args:
-        validator: The TypeValidator instance.
-        pattern: The pattern with bindings to validate.
-        variant: The enum variant being matched.
-        parent_enum_type: The enum type of the scrutinee (for error messages).
-
-    Returns:
-        True if bindings are valid, False otherwise.
-    """
+    """Validate pattern bindings match variant's associated types (supports nested patterns)."""
     expected_bindings = len(variant.associated_types)
     actual_bindings = len(pattern.bindings)
 
@@ -331,11 +288,6 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
 
 def register_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', variant: 'EnumVariant') -> None:
     """Register pattern bindings in variable_types table (recursive for nested and Own patterns).
-
-    Args:
-        validator: The TypeValidator instance.
-        pattern: The pattern with bindings to register.
-        variant: The enum variant being matched.
     """
     from sushi_lang.semantics.ast import RefBinding
     for binding, binding_type in zip(pattern.bindings, variant.associated_types, strict=False):
@@ -426,23 +378,7 @@ def register_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
 
 
 def get_pattern_signature(pattern: 'Pattern') -> str:
-    """Generate a unique signature for a pattern including nested and Own patterns.
-
-    This signature is used for duplicate checking in match statements.
-    For nested patterns, the signature includes the full nested structure.
-
-    Args:
-        pattern: The pattern to generate a signature for.
-
-    Returns:
-        A unique string signature for the pattern.
-
-    Examples:
-        Simple pattern: "Value" -> "Value"
-        Nested pattern: "Value(Some(x))" -> "Value(Some)"
-        Nested wildcard: "Value(None)" -> "Value(None)"
-        Own pattern: "BinOp(Own(left), Own(right), op)" -> "BinOp(Own,Own,_)"
-    """
+    """Generate a unique signature for a pattern including nested and Own patterns."""
     # Start with the variant name
     signature = pattern.variant_name
 

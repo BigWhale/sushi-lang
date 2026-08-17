@@ -1,11 +1,4 @@
-"""
-Conversion Operations for Strings
-
-Implements conversion methods that transform strings into other data types:
-- to_bytes(): Converts string to u8[] dynamic array
-- split(): Splits string into string[] array
-- join(): Joins array of strings with separator
-"""
+"""Conversion Operations for Strings"""
 
 import llvmlite.ir as ir
 from ..common import declare_malloc, declare_memcpy, build_string_struct
@@ -13,16 +6,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 
 
 def emit_string_to_bytes(module: ir.Module) -> ir.Function:
-    """Emit the string.to_bytes() method.
-
-    Converts a string to a dynamic u8 array by copying the byte data.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i32 len, i32 cap, u8* data } string_to_bytes({ i8*, i32 } str)
-    """
+    """Emit `{i32 len, i32 cap, u8* data} string_to_bytes({i8*, i32} str)`."""
     func_name = "string_to_bytes"
 
     # Check if already defined
@@ -73,22 +57,7 @@ def emit_string_to_bytes(module: ir.Module) -> ir.Function:
 
 
 def emit_string_split(module: ir.Module) -> ir.Function:
-    """Emit the string.split() method.
-
-    Splits a string into an array of strings by a delimiter.
-
-    Algorithm:
-    1. Handle edge case: empty delimiter -> return array with original string
-    2. Count occurrences of delimiter in string
-    3. Allocate string[] array with (count + 1) elements
-    4. Find each delimiter occurrence and extract substrings between them
-    5. Store each substring in the array
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i32 len, i32 cap, {i8*,i32}* data } string_split({ i8*, i32 } str, { i8*, i32 } delim)
+    """Emit `{i32 len, i32 cap, {i8*,i32}* data} string_split({i8*, i32} str, {i8*, i32} delim)`.
     """
     func_name = "string_split"
 
@@ -367,17 +336,7 @@ def emit_string_split(module: ir.Module) -> ir.Function:
 
 
 def emit_string_join(module: ir.Module) -> ir.Function:
-    """Emit the string.join() method.
-
-    Joins an array of strings with a separator string between elements.
-    Example: ",".join(["a", "b", "c"]) -> "a,b,c"
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_join({ i8*, i32 } sep, { i32, i32, {i8*,i32}* } parts)
-    """
+    """Emit `{i8*, i32} string_join({i8*, i32} sep, {i32, i32, {i8*,i32}*} parts)`."""
     func_name = "string_join"
 
     if func_name in module.globals:

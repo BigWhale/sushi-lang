@@ -1,9 +1,5 @@
 # semantics/symbol_merger.py
-"""Symbol table merger for multi-file compilation.
-
-Handles merging of symbol tables from multiple compilation units into global tables,
-respecting visibility rules.
-"""
+"""Symbol table merger for multi-file compilation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -17,11 +13,7 @@ if TYPE_CHECKING:
 
 
 class SymbolTableMerger:
-    """Handles merging of symbol tables from multiple compilation units.
-
-    Each merge method handles one symbol type, respecting visibility rules
-    and detecting conflicts. All symbols are currently global (visible across units).
-    """
+    """Handles merging of symbol tables from multiple compilation units."""
 
     def merge_all(
         self,
@@ -29,11 +21,7 @@ class SymbolTableMerger:
         unit_tables: 'SymbolTables',
         global_tables: 'SymbolTables',
     ) -> None:
-        """Merge all symbols from a unit into the global tables.
-
-        Externals are not merged here: they accumulate in the shared collector
-        table rather than per unit.
-        """
+        """Merge all symbols from a unit into the global tables."""
         self._merge_by_name(unit_tables.constants, global_tables.constants)
         self._merge_by_name(unit_tables.structs, global_tables.structs)
         self._merge_by_name(unit_tables.enums, global_tables.enums)
@@ -48,17 +36,7 @@ class SymbolTableMerger:
 
     @staticmethod
     def _merge_by_name(unit_table, global_table) -> None:
-        """Merge a name-keyed table into the global one (all symbols global).
-
-        Covers constants, structs, enums, perks, and their generic counterparts:
-        first-writer-wins on a name, preserving insertion order.
-
-        Declaration spans travel with the name. A StructType/EnumType is frozen and
-        carries no source position, so the TABLE is where a declaration's location
-        lives -- dropping it here silently demoted every diagnostic reported against
-        the global table to tier 1 (text only). Not every name-keyed table has spans,
-        hence the getattr.
-        """
+        """Merge a name-keyed table into the global one (all symbols global)."""
         unit_spans = getattr(unit_table, "spans", None)
         global_spans = getattr(global_table, "spans", None)
 
@@ -71,10 +49,7 @@ class SymbolTableMerger:
 
     @staticmethod
     def _merge_by_type(unit_table, global_table) -> None:
-        """Merge a type-keyed table of per-method dicts (extension methods).
-
-        First-writer-wins on each (target type, method name).
-        """
+        """Merge a type-keyed table of per-method dicts (extension methods)."""
         for type_name, methods in unit_table.by_type.items():
             target = global_table.by_type.setdefault(type_name, {})
             for method_name, method in methods.items():
@@ -104,11 +79,7 @@ class SymbolTableMerger:
         unit_funcs: 'FunctionTable',
         global_funcs: 'FunctionTable',
     ) -> None:
-        """Merge functions (both public and private are tracked).
-
-        Note: Visibility checking is done during type validation, not during merge.
-        All functions need to be in the global table so that we can check visibility.
-        """
+        """Merge functions (both public and private are tracked)."""
         self._merge_by_name(unit_funcs, global_funcs)
 
         # Merge stdlib functions (registered from use <module> statements)

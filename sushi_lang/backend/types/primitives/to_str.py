@@ -1,15 +1,5 @@
-"""
-Built-in extension methods for primitive types (i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, bool).
-
-Implemented methods:
-- to_str() -> string: Convert primitive values to string representation
-
-Future possibilities:
-- i32.abs() -> i32
-- i32.min(other) -> i32
-- i32.max(other) -> i32
-- f64.abs() -> f64
-- bool.not() -> bool (alias for unary not)
+"""Built-in extension methods for primitive types (i8, i16, i32, i64, u8, u16, u32, u64, f32, f64,
+bool).
 """
 
 from typing import Any
@@ -50,17 +40,7 @@ _TYPE_CONVERSION_SPECS = {
 
 
 def _emit_generic_to_str(prim_type: BuiltinType) -> Any:
-    """Create a to_str() emitter function for the given primitive type.
-
-    This factory function eliminates the need for 12 nearly identical emitter functions
-    by creating them dynamically based on type specifications.
-
-    Args:
-        prim_type: The primitive type to create an emitter for.
-
-    Returns:
-        An emitter function that converts the primitive type to string.
-    """
+    """Create a to_str() emitter function for the given primitive type."""
     spec = _TYPE_CONVERSION_SPECS.get(prim_type)
     if not spec:
         raise_internal_error("CE0073", type=prim_type)
@@ -117,15 +97,7 @@ for prim_type in primitive_types:
 # ==============================================================================
 
 def generate_module_ir() -> ir.Module:
-    """Generate standalone LLVM IR module for primitive type extension methods.
-
-    This function generates IR for all primitive type .to_str() methods without
-    depending on the compiler's codegen infrastructure. It uses the ir_common
-    utilities for external function declarations and string operations.
-
-    Returns:
-        An LLVM IR module containing all primitive to_str() implementations.
-    """
+    """Generate standalone LLVM IR module for primitive type extension methods."""
     module = ir_common.create_stdlib_module("core.primitives")
 
     # Generate to_str() for all primitive types
@@ -243,15 +215,7 @@ def _generate_integer_to_str(
     is_signed: bool,
     bit_width: int
 ) -> None:
-    """Generate integer to_str() method implementation.
-
-    Args:
-        module: The LLVM module to add the function to.
-        int_type: The LLVM integer type.
-        type_name: The name of the type (for function naming).
-        is_signed: True for signed integers, False for unsigned.
-        bit_width: Bit width of the integer type.
-    """
+    """Generate integer to_str() method implementation."""
     i8_ptr = ir.IntType(INT8_BIT_WIDTH).as_pointer()
     i32 = ir.IntType(INT32_BIT_WIDTH)
     string_struct = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
@@ -278,14 +242,7 @@ def _generate_float_to_str(
     type_name: str,
     is_double: bool
 ) -> None:
-    """Generate float to_str() method implementation.
-
-    Args:
-        module: The LLVM module to add the function to.
-        float_type: The LLVM float type.
-        type_name: The name of the type (for function naming).
-        is_double: True for f64, False for f32.
-    """
+    """Generate float to_str() method implementation."""
     i8_ptr = ir.IntType(INT8_BIT_WIDTH).as_pointer()
     i32 = ir.IntType(INT32_BIT_WIDTH)
     string_struct = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)

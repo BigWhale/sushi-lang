@@ -1,9 +1,4 @@
-"""
-Variable lifecycle statement emission for the Sushi language compiler.
-
-This module handles the generation of LLVM IR for variable declarations (let)
-and variable rebinding (:=) with proper RAII cleanup and move semantics.
-"""
+"""Variable lifecycle statement emission for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from sushi_lang.backend.ownership import ConsumingUse, bind, consume
@@ -16,19 +11,7 @@ if TYPE_CHECKING:
 
 
 def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
-    """Emit variable declaration with initialization.
-
-    Creates a local variable slot and initializes it with the provided expression.
-    Handles type casting to match the declared type and special array initialization.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        stmt: The let statement to emit.
-
-    Raises:
-        RuntimeError: If emitting after a terminator.
-        TypeError: If the statement is missing type information.
-    """
+    """Emit variable declaration with initialization."""
     from sushi_lang.semantics.typesys import DynamicArrayType, ArrayType, StructType, UnknownType
     from sushi_lang.semantics.ast import ArrayLiteral
 
@@ -119,29 +102,7 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
 
 
 def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
-    """Emit variable or field rebinding (assignment to existing variable or struct field).
-
-    Supports two forms:
-    - Variable rebinding: x := value
-    - Field rebinding: obj.field := value
-
-    Implements Rust-style move semantics for dynamic array rebinding:
-    - Variable-to-variable rebinding (arr1 := arr2) transfers ownership
-    - Method call rebinding (arr := method()) works normally
-
-    For structs with dynamic array fields, emits cleanup code for the
-    old struct value before storing the new value to prevent memory leaks.
-
-    For reference parameters, stores through the reference pointer to modify
-    the caller's variable (implementing mutable reference semantics).
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        stmt: The rebind statement to emit.
-
-    Raises:
-        TypeError: If the rebind target type is not supported.
-    """
+    """Emit variable or field rebinding (assignment to existing variable or struct field)."""
     from llvmlite import ir
     from sushi_lang.semantics.ast import Name, MemberAccess
     from sushi_lang.semantics.typesys import ReferenceType
@@ -217,27 +178,7 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
 
 
 def _destroy_old_value(codegen: 'LLVMCodegen', value_ptr: 'ir.Value', value_type) -> None:
-    """Free the value that a rebind is about to overwrite.
-
-    The ONE implementation of destroy-before-overwrite. Both rebind arms that store a
-    whole value call it: the local arm (`_emit_struct_rebind`) and the reference arm.
-    Two copies of this step is how #303 happened -- the reference arm simply did not
-    have one.
-
-    It carries no per-kind ladder. `emit_value_destructor` resolves a named type,
-    dispatches a composite through the lifecycle handler table, guards a string on its
-    runtime `owned` bit and a closure on its `drop_ptr`, so a literal-backed or
-    non-capturing old value destroys to a runtime no-op.
-
-    The CALLER decides whether the old value is still there to free, because the two
-    arms answer that differently: a local can have moved its value away (the move mark),
-    while a reference's pointee always belongs to the caller.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        value_ptr: Pointer to the value being overwritten.
-        value_type: The semantic type of that value.
-    """
+    """Free the value that a rebind is about to overwrite."""
     from sushi_lang.backend.destructors import (
         emit_value_destructor, needs_cleanup, resolve_named_type,
     )
@@ -254,15 +195,7 @@ def _emit_dynamic_array_rebind(
     val: 'ir.Value',
     dst: 'ir.LiteralStructType'
 ) -> None:
-    """Emit rebinding for dynamic arrays with move semantics.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        stmt: The rebind statement.
-        slot: The destination slot.
-        val: The new value to store.
-        dst: The destination type.
-    """
+    """Emit rebinding for dynamic arrays with move semantics."""
     from llvmlite import ir
     from sushi_lang.semantics.ast import Name
 
@@ -321,14 +254,7 @@ def _emit_dynamic_array_rebind(
 
 
 def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value', val: 'ir.Value') -> None:
-    """Emit rebinding for user-defined structs with cleanup.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        stmt: The rebind statement.
-        slot: The destination slot.
-        val: The new value to store.
-    """
+    """Emit rebinding for user-defined structs with cleanup."""
     from sushi_lang.backend.destructors import resolve_named_type
     from sushi_lang.semantics.ast import Name
 
@@ -375,14 +301,7 @@ def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value'
 
 
 def _emit_field_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
-    """Emit field rebinding (obj.field := value).
-
-    Gets a pointer to the struct field and stores the new value directly.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        stmt: The rebind statement with MemberAccess target.
-    """
+    """Emit field rebinding (obj.field := value)."""
     from llvmlite import ir
     from sushi_lang.semantics.ast import MemberAccess
 

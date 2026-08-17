@@ -20,27 +20,12 @@ _PE_SIGNAL_RECEIVED = 2
 
 
 def get_process_error_type() -> ir.LiteralStructType:
-    """Get the ProcessError enum LLVM type.
-
-    ProcessError has 3 unit variants (no associated data):
-    - SpawnFailed
-    - ExitFailure
-    - SignalReceived
-
-    Uses the standard unit enum type helper.
-    """
+    """Get the ProcessError enum LLVM type."""
     return get_unit_enum_type()
 
 
 def generate_getcwd(module: ir.Module) -> None:
-    """Generate getcwd() -> Result<string, ProcessError>
-
-    Implementation:
-        1. Allocate PATH_MAX (4096) byte buffer
-        2. Call POSIX getcwd(buf, size)
-        3. On NULL: free buffer, return Result.Err()
-        4. On success: convert C string to Sushi string, return Result.Ok(string)
-    """
+    """Generate getcwd() -> Result<string, ProcessError>"""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
     process_error_type = get_process_error_type()
@@ -112,13 +97,7 @@ def generate_getcwd(module: ir.Module) -> None:
 
 
 def generate_chdir(module: ir.Module) -> None:
-    """Generate chdir(string path) -> Result<i32, ProcessError>
-
-    Implementation:
-        1. Convert Sushi string to C string
-        2. Call POSIX chdir(path)
-        3. Return result wrapped in Result (0 on success, -1 on error)
-    """
+    """Generate chdir(string path) -> Result<i32, ProcessError>"""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
     process_error_type = get_process_error_type()
@@ -157,11 +136,7 @@ def generate_chdir(module: ir.Module) -> None:
 
 
 def generate_exit(module: ir.Module) -> None:
-    """Generate exit(i32 code) -> ~
-
-    Implementation:
-        Calls libc exit() directly. Never returns.
-    """
+    """Generate exit(i32 code) -> ~"""
     i8, i8_ptr, i32, i64 = get_basic_types()
     void = ir.VoidType()
 
@@ -184,11 +159,7 @@ def generate_exit(module: ir.Module) -> None:
 
 
 def generate_getpid(module: ir.Module) -> None:
-    """Generate getpid() -> i32
-
-    Implementation:
-        Simple wrapper to POSIX getpid(). Always succeeds.
-    """
+    """Generate getpid() -> i32"""
     i8, i8_ptr, i32, i64 = get_basic_types()
 
     # Declare platform-specific getpid
@@ -208,11 +179,7 @@ def generate_getpid(module: ir.Module) -> None:
 
 
 def generate_getuid(module: ir.Module) -> None:
-    """Generate getuid() -> i32
-
-    Implementation:
-        Simple wrapper to POSIX getuid(). Always succeeds.
-    """
+    """Generate getuid() -> i32"""
     i8, i8_ptr, i32, i64 = get_basic_types()
 
     # Declare platform-specific getuid
@@ -232,18 +199,7 @@ def generate_getuid(module: ir.Module) -> None:
 
 
 def generate_run(module: ir.Module) -> None:
-    """Generate run(string cmd, string[] args) -> Result<ProcessOutput, ProcessError>.
-
-    Spawns `cmd` with `args` as a real argv vector (PATH-searched via posix_spawnp,
-    no shell), capturing the child's stdout and stderr into two tmpfile() handles and
-    returning its exit code. A non-zero exit is Result.Ok (the exit code lives in
-    ProcessOutput); Result.Err is only for failure to run:
-        - posix_spawnp failed (e.g. command not found) -> SpawnFailed
-        - the child was killed by a signal               -> SignalReceived
-
-    tmpfile() redirection (rather than pipes) avoids the classic parent-waitpid /
-    child-write pipe deadlock on large output.
-    """
+    """Generate run(string cmd, string[] args) -> Result<ProcessOutput, ProcessError>."""
     i8, i8_ptr, i32, i64 = get_basic_types()
     string_type = get_string_type()
     out_type = get_process_output_type()                 # {i32, string, string}

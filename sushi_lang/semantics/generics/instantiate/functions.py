@@ -1,10 +1,5 @@
 # semantics/generics/instantiate/functions.py
-"""
-Function-level instantiation collection.
-
-Handles collecting generic type instantiations from function signatures,
-extension methods, perk implementations, and statement-level type annotations.
-"""
+"""Function-level instantiation collection."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Set, Tuple
 
@@ -16,14 +11,7 @@ from sushi_lang.semantics.generics.types import GenericTypeRef
 
 
 class FunctionCollector:
-    """Collects generic instantiations from function-level constructs.
-
-    Handles:
-    - Function signatures (parameters, return types)
-    - Extension method signatures
-    - Perk implementation methods
-    - Statement blocks
-    """
+    """Collects generic instantiations from function-level constructs."""
 
     def __init__(
         self,
@@ -32,36 +20,18 @@ class FunctionCollector:
         variable_types: dict[str, "Type"],
         visited_types: Set[str],
     ):
-        """Initialize function collector.
-
-        Args:
-            expression_scanner: Expression scanner for nested expressions
-            instantiations: Set to accumulate type instantiations
-            variable_types: Map of variable names to their types (for tracking)
-            visited_types: Set of visited type keys (for cycle detection)
-        """
+        """Initialize function collector."""
         self.expression_scanner = expression_scanner
         self.instantiations = instantiations
         self.variable_types = variable_types
         self.visited_types = visited_types
 
     def _reset_scope(self) -> None:
-        """Clear the per-function variable scope in place.
-
-        The scope dict is shared by reference with the expression scanner and the
-        shared inferrer, so it must be cleared, never rebound -- a rebind would leave
-        those holding the previous function's scope, and types would leak across
-        function (and unit) boundaries.
-        """
+        """Clear the per-function variable scope in place."""
         self.variable_types.clear()
 
     def _resolve_local_type(self, ty):
-        """Resolve a bare struct/enum name (UnknownType) to its concrete type.
-
-        A `let P p = ...` stores the annotation `UnknownType("P")`; the shared inferrer
-        needs the StructType to reach `p`'s fields and methods. Non-Unknown types (and
-        names that resolve to nothing) pass through unchanged.
-        """
+        """Resolve a bare struct/enum name (UnknownType) to its concrete type."""
         from sushi_lang.semantics.typesys import UnknownType
         if not isinstance(ty, UnknownType):
             return ty
@@ -72,12 +42,7 @@ class FunctionCollector:
         return resolved if resolved is not None else ty
 
     def _bind_self(self, target_type) -> None:
-        """Bind `self` to the receiver type, mirroring Pass 2 (signatures.py).
-
-        Without this, `identity(self)` in an extension or perk-impl body infers nothing
-        at Pass 1.5, the instantiation is never recorded, and Pass 2 -- which does bind
-        self -- fails to find the monomorphized symbol (CE2061; issue #171).
-        """
+        """Bind `self` to the receiver type, mirroring Pass 2 (signatures.py)."""
         from sushi_lang.semantics.typesys import (
             BuiltinType, ArrayType, DynamicArrayType, StructType, UnknownType,
         )
@@ -144,11 +109,7 @@ class FunctionCollector:
         self._collect_from_block(ext.body)
 
     def collect_from_perk_impl(self, perk_impl) -> None:
-        """Collect generic instantiations from perk implementation methods.
-
-        Perk methods behave like extension methods - they return bare types (not Result<T>).
-        This method collects generic instantiations from parameters and method bodies.
-        """
+        """Collect generic instantiations from perk implementation methods."""
         # Process each method in the perk implementation
         for method in perk_impl.methods:
             self._reset_scope()
@@ -171,31 +132,13 @@ class FunctionCollector:
             self._collect_from_type(const.ty)
 
     def collect_from_struct(self, struct) -> None:
-        """Collect generic instantiations from struct field types.
-
-        This ensures that generic types used as struct fields (e.g., Maybe<i32>)
-        are properly monomorphized before codegen.
-
-        Example:
-            struct Point:
-                Maybe<i32> x  # Collects Maybe<i32> instantiation
-                Maybe<i32> y
-        """
+        """Collect generic instantiations from struct field types."""
         for field in struct.fields:
             if field.ty is not None:
                 self._collect_from_type(field.ty)
 
     def collect_from_enum(self, enum) -> None:
-        """Collect generic instantiations from enum variant associated types.
-
-        This ensures that generic types used in enum variants (e.g., Own<Expr>)
-        are properly monomorphized before codegen.
-
-        Example:
-            enum Expr:
-                IntLit(i32)
-                BinOp(Own<Expr>, Own<Expr>, string)  # Collects Own<Expr> instantiation
-        """
+        """Collect generic instantiations from enum variant associated types."""
         for variant in enum.variants:
             for assoc_type in variant.associated_types:
                 self._collect_from_type(assoc_type)
@@ -296,11 +239,7 @@ class FunctionCollector:
             pass
 
     def _collect_from_type(self, ty: "Type") -> None:
-        """Collect generic instantiations from a type annotation.
-
-        This is the core method that detects GenericTypeRef instances and
-        records them in the instantiations set.
-        """
+        """Collect generic instantiations from a type annotation."""
         # Use TypeResolver from expression_scanner for centralized resolution
         resolver = self.expression_scanner._resolver
 

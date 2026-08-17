@@ -12,13 +12,7 @@ if TYPE_CHECKING:
 
 
 def extract_call_args(call_node: Tree, ast_builder: 'ASTBuilder') -> Tuple[List[Expr], Optional[List[str]]]:
-    """Extract arguments from a call node.
-
-    Returns:
-        Tuple of (argument expressions, field names or None)
-        - field_names is None for positional arguments
-        - field_names is List[str] for named arguments
-    """
+    """Extract arguments from a call node."""
     args: List[Expr] = []
     field_names: Optional[List[str]] = None
 
@@ -86,12 +80,7 @@ def extract_call_args(call_node: Tree, ast_builder: 'ASTBuilder') -> Tuple[List[
 
 
 def extract_call_type_args(call_node: Tree, ast_builder: 'ASTBuilder'):
-    """Extract explicit call-site type arguments from a `call` node.
-
-    Present only when the call was written `foo@(T, U)(...)`; the grammar puts a
-    `type_list` child directly under `call` in that case. Returns
-    (type_args, type_args_loc), or (None, None) for a plain call.
-    """
+    """Extract explicit call-site type arguments from a `call` node."""
     if not (call_node and call_node.children):
         return None, None
     type_list_node = first_tree(call_node.children, "type_list")

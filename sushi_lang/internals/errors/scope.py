@@ -1,8 +1,4 @@
-"""Scope and variable errors (CE1xxx).
-
-This module owns its numeric range: a code may only be added in the file that
-owns it, which is what makes the grouping structural rather than conventional.
-"""
+"""Scope and variable errors (CE1xxx)."""
 from __future__ import annotations
 
 from sushi_lang.internals.errors.registry import (

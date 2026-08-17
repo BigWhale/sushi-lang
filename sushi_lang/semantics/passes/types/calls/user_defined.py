@@ -1,13 +1,5 @@
 # semantics/passes/types/calls/user_defined.py
-"""
-User-defined and stdlib function call validation.
-
-Handles validation for:
-- User-defined function calls
-- Stdlib function calls (time, io, etc.)
-- Built-in global functions (open)
-- Cross-unit function visibility
-"""
+"""User-defined and stdlib function call validation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
@@ -24,18 +16,7 @@ if TYPE_CHECKING:
 
 def emit_argument_mismatch(validator: 'TypeValidator', arg, index: int,
                            expected_ty, actual_ty) -> None:
-    """Report CE2006, and say how to borrow when the parameter wants a borrow.
-
-    A borrow reads exactly like the value it refers to, so `infer_expression_type`
-    dereferences one: `v + 1` must see `i32`, not `peek i32`. At an argument position
-    that dereference makes the message read `expected peek string, got string`, which
-    describes two types the user never wrote and names no fix.
-
-    A borrow is always created AT the call site in Sushi, whether the place is owned or
-    already borrowed, so the fix is the same `peek x` the caller writes everywhere else.
-    Say so. This matters most where a function forwards its own borrowed parameter to
-    another function, which is the shape every `peek string` signature produces.
-    """
+    """Report CE2006, and say how to borrow when the parameter wants a borrow."""
     from sushi_lang.semantics.ast import MemberAccess
     from sushi_lang.semantics.typesys import ReferenceType
 
@@ -49,9 +30,9 @@ def emit_argument_mismatch(validator: 'TypeValidator', arg, index: int,
 
 
 def _reject_misplaced_spread(validator: 'TypeValidator', arg) -> bool:
-    """Emit CE0120 if `arg` is a bloom spread `arr...` in a position where one is not
-    allowed (a non-variadic call, or a fixed/non-last argument). Still validates the
-    inner expression so downstream inference does not crash. Returns True if rejected.
+    """Emit CE0120 if `arg` is a bloom spread `arr...` in a position where one is not allowed (a
+    non-variadic call, or a fixed/non-last argument). Still validates the inner expression so
+    downstream inference does not crash. Returns True if rejected.
     """
     if isinstance(arg, Spread):
         er.emit(validator.reporter, er.ERR.CE0120, arg.loc,
@@ -64,14 +45,7 @@ def _reject_misplaced_spread(validator: 'TypeValidator', arg) -> bool:
 
 def validate_variadic_trailing_args(validator: 'TypeValidator', trailing: list,
                                     fixed_count: int, array_ty, element_ty) -> None:
-    """Validate the trailing arguments of a variadic call (native '...T' or stdlib).
-
-    Two accepted forms:
-      - individual values, each checked against the element type T;
-      - a single bloom spread `arr...`, checked against the whole array type T[].
-    A spread that is not the sole trailing argument is CE0120; a type mismatch is CE2006.
-    Shared by user-function and stdlib (run) variadic validation.
-    """
+    """Validate the trailing arguments of a variadic call (native '...T' or stdlib)."""
     for offset, arg in enumerate(trailing):
         index = fixed_count + offset + 1
         if isinstance(arg, Spread):
@@ -105,17 +79,7 @@ def validate_variadic_trailing_args(validator: 'TypeValidator', trailing: list,
 
 def validate_fn_value_call_args(validator: 'TypeValidator', args, fn_ty,
                                 span) -> None:
-    """Arity and per-argument check for a call through a function VALUE (CE2092).
-
-    Function types are invariant, so each argument must match its parameter type exactly.
-
-    One implementation for both spellings of the call: through a local of `FunctionType`
-    (`g(x)`) and through a fn-typed struct field (`obj.handler(x)`). They were two copies
-    of this loop, which is how the missing help below stayed missing in one of them.
-
-    `span` is the fallback location -- the callee for an indirect call, the call node for
-    a field call -- used for the arity error and for any argument that carries none.
-    """
+    """Arity and per-argument check for a call through a function VALUE (CE2092)."""
     expected = fn_ty.param_types
     if len(args) != len(expected):
         er.emit(validator.reporter, er.ERR.CE2092, span,
@@ -136,18 +100,7 @@ def validate_fn_value_call_args(validator: 'TypeValidator', args, fn_ty,
 
 
 def _explain_missing_borrow(diag, arg, arg_ty, param_ty) -> None:
-    """Add the "you meant `peek x`" help where the mismatch is a missing borrow.
-
-    A `fn(peek i32) -> i32` parameter reports "expected 'peek i32', got 'i32'" for an
-    argument the user declared `peek i32` -- naming a type they DID write. Pass 2 unwraps
-    a reference-typed name at every mention, deliberately: a borrow is created at the USE
-    site, not carried by the name. The rule is right; only the message was unhelpful.
-
-    Keyed on the shape of the mismatch (the expected type is a reference to exactly the
-    type the argument has), so it also fires for a plain local, where the answer is the
-    same spelling. Only for a bare NAME: a borrow needs a place, and anything else is
-    CE2404 rather than a missing `&`.
-    """
+    """Add the "you meant `peek x`" help where the mismatch is a missing borrow."""
     from sushi_lang.semantics.typesys import ReferenceType
     if not isinstance(arg, Name) or isinstance(arg_ty, ReferenceType):
         return
@@ -338,11 +291,7 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
 
 
 def validate_open_function(validator: 'TypeValidator', call: Call) -> None:
-    """Validate open() built-in function call.
-
-    Signature: open(string path, FileMode mode) FileResult
-    Returns: FileResult enum (Ok(file) or Err())
-    """
+    """Validate open() built-in function call."""
     actual_args = call.args
 
     # Check argument count (must be exactly 2)
@@ -374,18 +323,7 @@ def validate_open_function(validator: 'TypeValidator', call: Call) -> None:
 
 
 def check_stdlib_function(validator: 'TypeValidator', call: Call) -> Optional[any]:
-    """
-    Check if a function call is to a stdlib function.
-
-    Looks up the function in the FunctionTable's stdlib function registry.
-
-    Args:
-        validator: Type validator instance
-        call: Function call AST node
-
-    Returns:
-        Tuple of (module_path, StdlibFunction) if found, None otherwise
-    """
+    """Check if a function call is to a stdlib function."""
     function_name = call.callee.id
 
     # Try common module paths to find the function

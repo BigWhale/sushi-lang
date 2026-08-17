@@ -1,7 +1,4 @@
-"""Shared type resolution helpers for mapping and sizing modules.
-
-Consolidates duplicated type resolution logic to follow DRY principles.
-"""
+"""Shared type resolution helpers for mapping and sizing modules."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -22,19 +19,7 @@ def resolve_unknown_type(
     struct_table: dict[str, StructType],
     enum_table: dict[str, EnumType],
 ) -> StructType | EnumType:
-    """Resolve UnknownType to its actual struct or enum type.
-
-    Args:
-        semantic_type: The UnknownType to resolve.
-        struct_table: Dictionary of struct types by name.
-        enum_table: Dictionary of enum types by name.
-
-    Returns:
-        The resolved StructType or EnumType.
-
-    Raises:
-        InternalError: CE0020 if type cannot be resolved.
-    """
+    """Resolve UnknownType to its actual struct or enum type."""
     if semantic_type.name in struct_table:
         return struct_table[semantic_type.name]
     if semantic_type.name in enum_table:
@@ -47,19 +32,7 @@ def resolve_generic_type_ref(
     struct_table: dict[str, StructType],
     enum_table: dict[str, EnumType],
 ) -> StructType | EnumType | None:
-    """Resolve GenericTypeRef to its monomorphized type.
-
-    Args:
-        semantic_type: The GenericTypeRef to resolve.
-        struct_table: Dictionary of struct types by name.
-        enum_table: Dictionary of enum types by name.
-
-    Returns:
-        The resolved type, or None if not a GenericTypeRef.
-
-    Raises:
-        InternalError: CE0045 if generic type cannot be resolved.
-    """
+    """Resolve GenericTypeRef to its monomorphized type."""
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
     if not isinstance(semantic_type, GenericTypeRef):

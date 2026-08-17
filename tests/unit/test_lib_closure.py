@@ -1,15 +1,4 @@
-"""Export-closure shipping across .slib boundaries (P2-5 Phase 2 / C4b+C5).
-
-Producer: private symbols referenced by exported generics ship automatically
-(generic helpers as templates, concrete helpers as signature records,
-constants with source); only genuinely un-shippable references keep CE5006.
-Consumer: shipped privates register with clash (CE5007), not local-wins,
-semantics; definitions link from the library bitcode.
-
-These tests cover what the single-file golden harness cannot: producer-side
-CE5006 rejection (a failing library build), the incremental two-unit link
-path, and object-level symbol placement.
-"""
+"""Export-closure shipping across .slib boundaries (P2-5 Phase 2 / C4b+C5)."""
 from __future__ import annotations
 
 import os
@@ -95,13 +84,7 @@ def _build_lib(tmp_path: Path, source: str, name: str = "closurelib"):
 # ---------------------------------------------------------------------------
 
 def test_ptr_exposing_private_helper_still_rejected(tmp_path):
-    """A private helper whose signature exposes a foreign ptr cannot ship.
-
-    Exercised at the manifest level (parse-only AST + _extract_templates):
-    the full-compiler route cannot reach this check because a generic body
-    has no way to produce a `ptr` value without referencing an external
-    namespace, which trips the namespace rejection first.
-    """
+    """A private helper whose signature exposes a foreign ptr cannot ship."""
     from sushi_lang.internals.parser import parse_to_ast
     from sushi_lang.internals.report import Reporter
     from sushi_lang.semantics.units import Unit
@@ -162,8 +145,9 @@ def _build_consumer(tmp_path: Path, env: dict[str, str]) -> Path:
 
 @pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
 def test_closure_links_and_runs_multi_unit(tmp_path):
-    """Two consumer units instantiate compute@(T); the private helper, private
-    generic, and constant all resolve across the incremental link."""
+    """Two consumer units instantiate compute@(T); the private helper, private generic, and
+    constant all resolve across the incremental link.
+    """
     build, env = _build_lib(tmp_path, CLOSURE_LIB)
     assert build.returncode == 0, f"Library build failed:\n{build.stderr}"
     project = _build_consumer(tmp_path, env)
@@ -176,9 +160,9 @@ def test_closure_links_and_runs_multi_unit(tmp_path):
 @pytest.mark.skipif(shutil.which("nm") is None, reason="nm not available")
 @pytest.mark.skipif(shutil.which("sushic") is None, reason="sushic not on PATH")
 def test_private_helper_defined_in_lib_object_only(tmp_path):
-    """scale_up must be DEFINED in the library-derived .o and at most
-    referenced (undefined) in consumer unit .o files - the consumer declares
-    and links, never re-emits."""
+    """scale_up must be DEFINED in the library-derived .o and at most referenced (undefined) in
+    consumer unit .o files - the consumer declares and links, never re-emits.
+    """
     build, env = _build_lib(tmp_path, CLOSURE_LIB)
     assert build.returncode == 0, f"Library build failed:\n{build.stderr}"
     project = _build_consumer(tmp_path, env)

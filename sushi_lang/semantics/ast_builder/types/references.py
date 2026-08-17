@@ -11,11 +11,7 @@ if TYPE_CHECKING:
 
 
 def parse_reference_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]:
-    """Parse reference type (reference_t).
-
-    Syntax: ("peek" | "poke") type
-    Example: peek i32, poke string
-    """
+    """Parse reference type (reference_t)."""
     # Extract borrow mode (peek or poke)
     mutability = None
     referenced_type_node = None

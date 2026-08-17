@@ -1,17 +1,5 @@
 # semantics/generics/instantiate/__init__.py
-"""
-Pass 1.5: Generic Type Instantiation Collector
-
-This pass scans the entire AST and collects all generic type instantiations
-(e.g., Result<i32>, Result<MyStruct>) that are used in the program.
-
-This enables monomorphization - generating concrete types only for
-instantiations that are actually used, avoiding unnecessary code bloat.
-
-This module provides a facade that maintains the original API while delegating
-to specialized submodules for type inference, expression scanning, and function-level
-collection.
-"""
+"""Pass 1.5: Generic Type Instantiation Collector"""
 from __future__ import annotations
 from typing import Set, Tuple, TYPE_CHECKING
 from dataclasses import dataclass, field
@@ -27,19 +15,7 @@ from sushi_lang.semantics.generics.instantiate.functions import FunctionCollecto
 
 @dataclass
 class InstantiationCollector:
-    """Collects all generic type instantiations used in a program.
-
-    Scans function signatures, variable declarations, constants, and all type
-    annotations to find generic type references like Result<i32> and Pair<i32, string>.
-
-    The collected instantiations are used by the Monomorphizer to generate
-    concrete EnumType and StructType instances for each unique instantiation.
-
-    This is a facade that delegates to specialized submodules:
-    - TypeInferrer: Simple type inference for literals and expressions
-    - ExpressionScanner: Recursive expression traversal
-    - FunctionCollector: Function-level instantiation collection
-    """
+    """Collects all generic type instantiations used in a program."""
 
     # Set of (base_name, type_args) tuples representing unique instantiations
     # Examples:
@@ -85,16 +61,7 @@ class InstantiationCollector:
     visited_types: Set[str] = field(default_factory=set)
 
     def run(self, program: "Program") -> Tuple[Set[Tuple[str, Tuple["Type", ...]]], Set[Tuple[str, Tuple["Type", ...]]]]:
-        """Entry point for instantiation collection.
-
-        Args:
-            program: The program AST to scan
-
-        Returns:
-            Tuple of (type instantiations, function instantiations)
-            - type instantiations: Set of (base_name, type_args) for generic types
-            - function instantiations: Set of (function_name, type_args) for generic functions
-        """
+        """Entry point for instantiation collection."""
         # Initialize specialized helpers
         type_inferrer = TypeInferrer(
             variable_types=self.variable_types,
@@ -162,12 +129,7 @@ class InstantiationCollector:
         return self.instantiations, self.function_instantiations
 
     def _build_shared_inferrer(self):
-        """Pass 2's TypeValidator over the same tables, wired to discard diagnostics.
-
-        Returns None when the full SymbolTables was not supplied (some unit tests
-        construct the collector from loose dicts), in which case the scanner falls back
-        to the thin inferrer.
-        """
+        """Pass 2's TypeValidator over the same tables, wired to discard diagnostics."""
         if self.tables is None:
             return None
         from sushi_lang.internals.report import Reporter

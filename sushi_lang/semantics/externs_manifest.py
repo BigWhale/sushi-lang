@@ -1,13 +1,5 @@
 # semantics/externs_manifest.py
-"""
-Reserved built-in extern symbols.
-
-Pass 0 needs this manifest to emit CE5001 when a user `unsafe external` block
-binds a link-name the compiler already reserves under a different signature.
-The declarations themselves are emitted by the backend
-(`backend/runtime/core.py::LLVMRuntime.declare_externs`); the two are kept in
-sync by `tests/unit/test_ffi.py::test_reserved_externs_are_declared`.
-"""
+"""Reserved built-in extern symbols."""
 from __future__ import annotations
 
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType

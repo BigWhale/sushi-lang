@@ -1,18 +1,4 @@
-"""
-LLVM emission for the auto-derived enum hash() method.
-
-Hash is computed using FNV-1a by combining the variant tag with the hashes of
-its associated values:
-    hash = FNV_OFFSET_BASIS
-    hash = (hash XOR tag) * FNV_PRIME
-    for each associated value in variant:
-        hash = (hash XOR value.hash()) * FNV_PRIME
-
-Whether an enum *may* be hashed, and the registration of the method itself, are
-semantic concerns and live in semantics/generics/hashing.py. This module only
-supplies the emitter, which it deposits in the shared factory registry at import
-time.
-"""
+"""LLVM emission for the auto-derived enum hash() method."""
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall
@@ -28,16 +14,7 @@ from sushi_lang.backend import enum_utils
 
 
 def _emit_enum_hash(enum_type: Type) -> Any:
-    """Create a hash() emitter function for enum types.
-
-    This generates code that combines the tag with variant data hashes using FNV-1a.
-
-    Args:
-        enum_type: The enum type (must be EnumType)
-
-    Returns:
-        An emitter function that computes the enum hash
-    """
+    """Create a hash() emitter function for enum types."""
     if not isinstance(enum_type, EnumType):
         raise_internal_error("CE0032", type=type(enum_type).__name__)
 
@@ -127,19 +104,7 @@ def _emit_enum_hash(enum_type: Type) -> Any:
 
 
 def _emit_variant_data_hash(codegen: Any, enum_value: ir.Value, variant: Any, initial_hash: ir.Value) -> ir.Value:
-    """Emit code to hash the associated data for a specific enum variant.
-
-    This unpacks the variant data from the enum's data field and hashes each value.
-
-    Args:
-        codegen: The LLVM code generator
-        enum_value: LLVM value of the enum
-        variant: EnumVariantInfo with associated_types
-        initial_hash: Starting hash value (already includes tag)
-
-    Returns:
-        Combined hash value as u64
-    """
+    """Emit code to hash the associated data for a specific enum variant."""
 
     builder = require_builder(codegen)
     builder = codegen.builder
@@ -183,18 +148,7 @@ def _emit_variant_data_hash(codegen: Any, enum_value: ir.Value, variant: Any, in
 
 
 def _emit_associated_value_hash(codegen: Any, value: ir.Value, value_type: Type) -> ir.Value:
-    """Emit code to get the hash of an associated value.
-
-    This recursively calls the appropriate .hash() method based on the value type.
-
-    Args:
-        codegen: The LLVM code generator
-        value: LLVM value to hash
-        value_type: Semantic type of the value
-
-    Returns:
-        Hash value as u64
-    """
+    """Emit code to get the hash of an associated value."""
     from sushi_lang.semantics.ast import MethodCall, Name
 
     require_builder(codegen)
@@ -296,11 +250,7 @@ register_hash_emitter_factory("enum", _emit_enum_hash)
 
 
 def _emit_enum_clone(target_type: Type) -> Any:
-    """Create a clone() emitter for an enum type (#134).
-
-    A thin wrapper over the existing deep-copy `emit_value_clone` (the structural
-    inverse of the destructor), returning the clone as a bare value.
-    """
+    """Create a clone() emitter for an enum type (#134)."""
     def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
                 receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         from sushi_lang.backend.expressions.memory import emit_value_clone

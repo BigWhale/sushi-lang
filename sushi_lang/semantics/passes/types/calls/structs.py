@@ -1,12 +1,5 @@
 # semantics/passes/types/calls/structs.py
-"""
-Struct constructor validation.
-
-Handles validation for:
-- Positional struct construction: Point(10, 20)
-- Named struct construction: Point(x: 10, y: 20)
-- Generic struct construction: Box<i32>(value: 42)
-"""
+"""Struct constructor validation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, Tuple
 
@@ -22,13 +15,7 @@ if TYPE_CHECKING:
 
 
 def validate_struct_constructor(validator: 'TypeValidator', call: Call) -> None:
-    """Validate struct constructor call - field count, field names, and types.
-
-    Handles:
-    - Positional construction: Point(10, 20)
-    - Named construction: Point(x: 10, y: 20)
-    - Generic structs: Box<i32>(value: 42)
-    """
+    """Validate struct constructor call - field count, field names, and types."""
     # A bloom spread `arr...` is not a struct-construction argument (CE0120).
     if reject_spread_args(validator, call.args):
         return
@@ -66,15 +53,7 @@ def _validate_named_struct_constructor(
     expected_fields: List[Tuple[str, Type]],
     field_names: List[str]
 ) -> None:
-    """Validate named struct constructor and reorder arguments.
-
-    Args:
-        validator: Type validator instance
-        call: Call AST node
-        struct_type: Struct type being constructed
-        expected_fields: List of (field_name, field_type) from struct definition
-        field_names: Field names from call site (in source order)
-    """
+    """Validate named struct constructor and reorder arguments."""
     from ..field_matcher import validate_and_reorder_named_args
 
     actual_args = call.args
@@ -170,14 +149,7 @@ def _validate_positional_struct_constructor(
     struct_type: StructType,
     expected_fields: List[Tuple[str, Type]]
 ) -> None:
-    """Validate positional struct constructor (existing logic).
-
-    Args:
-        validator: Type validator instance
-        call: Call AST node
-        struct_type: Struct type being constructed
-        expected_fields: List of (field_name, field_type) from struct definition
-    """
+    """Validate positional struct constructor (existing logic)."""
     actual_args = call.args
 
     # Check field count

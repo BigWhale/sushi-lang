@@ -1,9 +1,4 @@
-"""
-Helper utilities for dynamic array operations.
-
-This module provides shared utility functions for creating and initializing
-dynamic array structures, used by both constructors and struct field initialization.
-"""
+"""Helper utilities for dynamic array operations."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -14,28 +9,7 @@ if TYPE_CHECKING:
 
 
 def emit_array_literal_elements(codegen: 'LLVMCodegen', element_exprs, element_type) -> list[ir.Value]:
-    """Emit array-literal element values, deep-copying heap-owning aliases.
-
-    A bare-``Name`` / member-access element aliases a live owner (a registered local or a
-    struct field that stays live and is itself RAII-freed). Storing the shallow value into
-    the array would make the array and the source share the same heap buffer, so both free
-    it at scope exit (double-free). Deep-copy such aliases so each side owns independent
-    buffers and frees exactly once -- mirrors ``_clone_owning_struct_alias`` for
-    let-bindings (#60/#147). A fresh temp (constructor / call return) is the sole owner and
-    is moved into the array unchanged (cloning it would orphan the original buffer).
-
-    ``emit_value_clone`` is a no-op for a non-owning element type, so this only allocates
-    when there is a heap buffer to duplicate.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        element_exprs: The element AST expressions.
-        element_type: The semantic element type (used to drive the deep copy); when None,
-            no cloning is attempted (values are emitted verbatim).
-
-    Returns:
-        The list of emitted (and alias-cloned) element SSA values.
-    """
+    """Emit array-literal element values, deep-copying heap-owning aliases."""
     from sushi_lang.backend.ownership import ConsumingUse, consume
 
     values = []
@@ -51,13 +25,7 @@ def emit_array_literal_elements(codegen: 'LLVMCodegen', element_exprs, element_t
 
 
 def _alias_element_type(codegen: 'LLVMCodegen', elem):
-    """Best-effort semantic type of a bare-Name array-literal element (for alias cloning).
-
-    Used by callers (e.g. the plain `from([...])` path) that do not know the declared
-    element type. A bare local resolves through the scope's semantic-type table; anything
-    else returns None (no clone attempted -- ``emit_value_clone`` is only skipped, never
-    wrong, so a missed alias is a leak-free no-op here at worst).
-    """
+    """Best-effort semantic type of a bare-Name array-literal element (for alias cloning)."""
     from sushi_lang.semantics.ast import Name
     if isinstance(elem, Name):
         return codegen.memory.get_semantic_type(elem.id)
@@ -66,23 +34,7 @@ def _alias_element_type(codegen: 'LLVMCodegen', elem):
 
 def create_dynamic_array_from_elements(codegen: 'LLVMCodegen', element_type, element_llvm_type: ir.Type,
                                        elements: list[ir.Value]) -> ir.Value:
-    """Create a dynamic array struct value from a list of elements.
-
-    Allocates memory with power-of-2 capacity and initializes with provided elements.
-    Used by struct constructors and from() constructor.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        element_type: The Sushi language type of elements.
-        element_llvm_type: The LLVM type of elements.
-        elements: List of LLVM values for the array elements.
-
-    Returns:
-        An LLVM struct value representing the dynamic array.
-
-    Note:
-        May emit runtime error RE2021 if realloc fails.
-    """
+    """Create a dynamic array struct value from a list of elements."""
     from sushi_lang.backend.expressions import memory
 
     # Calculate capacity (next power of 2)

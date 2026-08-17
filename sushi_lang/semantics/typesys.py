@@ -8,11 +8,7 @@ from sushi_lang.semantics.generics.types import TypeParameter, GenericTypeRef
 
 
 class BorrowMode(Enum):
-    """Borrow mode for reference types.
-
-    PEEK: Read-only borrow (multiple allowed)
-    POKE: Read-write borrow (exclusive access)
-    """
+    """Borrow mode for reference types."""
     PEEK = "peek"  # Read-only
     POKE = "poke"  # Read-write
 
@@ -78,11 +74,7 @@ class DynamicArrayType:
 
 @dataclass(frozen=True)
 class StructType:
-    """Represents a user-defined struct type.
-
-    The fields dictionary maps field names to their types.
-    Field order is preserved through insertion order in the dict (Python 3.7+).
-    """
+    """Represents a user-defined struct type."""
     name: str                          # Struct name (e.g., "Point")
     fields: tuple[tuple[str, "Type"], ...]  # Immutable sequence of (field_name, field_type) tuples
     # Generic metadata for monomorphized types
@@ -130,11 +122,7 @@ class StructType:
 
 @dataclass(frozen=True)
 class IteratorType:
-    """Represents an Iterator<T> type for iteration over sequences.
-
-    Iterators are created by calling .iter() on arrays and other iterable types.
-    They cannot be directly constructed by users - they are opaque values.
-    """
+    """Represents an Iterator<T> type for iteration over sequences."""
     element_type: "Type"  # The type of elements yielded by this iterator
 
     def __str__(self) -> str:
@@ -148,29 +136,7 @@ class IteratorType:
 
 @dataclass(frozen=True)
 class ReferenceType:
-    """Represents a borrowed reference to a value (peek T or poke T).
-
-    References allow temporary access to data without transferring ownership.
-    Two borrow modes:
-    - peek T: Read-only borrow (multiple allowed)
-    - poke T: Read-write borrow (exclusive access)
-
-    Borrow Rules (enforced at compile time):
-    - Multiple peek borrows allowed (read-only)
-    - Only one poke borrow at a time (exclusive)
-    - Cannot have peek and poke borrows simultaneously
-    - Can't move, rebind, or destroy a variable while it's borrowed
-    - Borrows are function-scoped (end at function return)
-
-    Type Coercion:
-    - poke T can be passed where peek T is expected (safe downgrade)
-    - peek T cannot be passed where poke T is expected
-
-    Usage:
-    - Read-only params: fn read(peek i32[] arr) i32
-    - Mutable params: fn modify(poke i32 x) ~
-    - Zero-cost: compiles to LLVM pointers
-    """
+    """Represents a borrowed reference to a value (peek T or poke T)."""
     referenced_type: "Type"  # The type being borrowed (e.g., i32[], MyStruct)
     mutability: BorrowMode = BorrowMode.POKE  # Default to poke for backward compat during migration
 
@@ -195,33 +161,12 @@ class ReferenceType:
 
 
 def deref_type(t: Optional["Type"]) -> Optional["Type"]:
-    """The type a borrow refers to, or `t` unchanged when it is not a borrow.
-
-    "The methods on `&T` are the methods on `T`", and the same holds for fields, indexing
-    and iteration: a borrow is transparent to everything except ownership. Roughly twenty
-    sites spell this unwrap by hand, and each one that forgets it silently loses a whole
-    receiver family -- `peek i32` and `peek string` reached no built-in method at all,
-    fell through to the user extension path, and died there as a CE0000 rather than a
-    diagnostic.
-    """
+    """The type a borrow refers to, or `t` unchanged when it is not a borrow."""
     return t.referenced_type if isinstance(t, ReferenceType) else t
 
 @dataclass(frozen=True)
 class PointerType:
-    """Represents a pointer to heap-allocated data (T*).
-
-    Pointers are used for:
-    - Own<T> implementation (owned heap allocation)
-    - Breaking recursive type cycles
-    - Future features (raw pointers, custom allocators)
-
-    Unlike ReferenceType (&T) which is zero-cost borrowing,
-    PointerType represents actual heap-allocated memory that
-    must be explicitly freed.
-
-    Syntax: T* (e.g., i32*, Expr*)
-    Note: Pointers are internal to Own<T> and not directly exposed to users.
-    """
+    """Represents a pointer to heap-allocated data (T*)."""
     pointee_type: "Type"  # The type being pointed to
 
     def __str__(self) -> str:
@@ -235,16 +180,7 @@ class PointerType:
 
 @dataclass(frozen=True)
 class ForeignPtrType:
-    """Opaque, unmanaged foreign pointer type (`ptr`) for the FFI boundary.
-
-    Maps to LLVM `i8*`. Unlike PointerType (which carries Own<T> RAII semantics)
-    or ReferenceType (zero-cost borrowing), a ForeignPtrType is:
-    - Exempt from borrow checking (aliasing is not tracked).
-    - Exempt from RAII (no destructor; the matching C free must be called by hand).
-    - Without null/bounds guarantees (may be null; dereferencing is unchecked).
-
-    It is the single C-traffic handle type introduced by `unsafe external` blocks.
-    """
+    """Opaque, unmanaged foreign pointer type (`ptr`) for the FFI boundary."""
 
     def __str__(self) -> str:
         return "ptr"
@@ -257,31 +193,7 @@ class ForeignPtrType:
 
 @dataclass(frozen=True)
 class FunctionType:
-    """Represents a first-class function type (a bare function pointer).
-
-    Syntax: fn(P0, P1, ...) -> T [| E]
-    - param_types: the declared parameter types (no `self`, no variadics in v1).
-    - ok_type:     the declared return type T (the value wrapped in Result.Ok).
-    - err_type:    the error type E. When the surface syntax omits `| E` this is
-                   UnknownType("StdError") at parse time and is resolved to the StdError
-                   enum by the normal type-resolution pass.
-
-    A function value lowers to a 3-word fat pointer {fn_ptr, env_ptr, drop_ptr}. Calling
-    through it yields the same Result<ok_type, err_type> a direct call would.
-
-    `captures` is an OPTIONAL descriptor of a capturing lambda's environment (list of
-    (name, Type) captured from the enclosing scope). It is metadata only: it is deliberately
-    EXCLUDED from __eq__/__hash__ so type identity stays capture-agnostic — `fn(i32) -> i32`
-    names both a plain fn and any closure of that arity/ok/err (compatibility is invariant on
-    arity + each param + ok + err, never on capture).
-
-    `param_modes` carries the PARAMETER MODE of each parameter and IS part of identity:
-    `fn(nom string) -> i32` and `fn(string) -> i32` are different types in both directions.
-    Without that, one indirection defeats the mode rule — which is what #335 showed for
-    `peek`/`poke` (docs/design/borrow-model.md §7). It is normalized on read through
-    `param_modes.normalize_modes`, so a type built with no modes and one built with all
-    default modes are the same type, and `peek`/`poke` always agree with the type.
-    """
+    """Represents a first-class function type (a bare function pointer)."""
     param_types: tuple["Type", ...]
     ok_type: "Type"
     err_type: "Type"
@@ -319,52 +231,7 @@ class FunctionType:
 
 def owns_heap(t: Optional["Type"], _visited: Optional[set] = None,
               resolve=None) -> bool:
-    """True if a value of this type owns heap that RAII must free and a sink must transfer.
-
-    **THE single ownership predicate**, for semantics and the backend both. Phase 9 merged
-    this with the backend's `needs_cleanup`, which is now a thin alias
-    (`backend/destructors.py`). Before the merge there were two predicates that differed on
-    exactly one type -- `string` -- and keeping both in step by hand is the defect class this
-    branch is named after.
-
-    Base cases: `string`, `T[]`, `List<T>`, `Own<T>`, `HashMap<K, V>`, and a function value.
-    Composites -- struct, enum, fixed array -- inherit from their contents.
-
-    **`string` is a TYPE-level yes.** Option B's exception -- a string bound directly from a
-    literal owns nothing, because it points into `.rodata` with `owned = 0` -- is a
-    BINDING-level fact and lives on `BorrowState.owns_no_heap`, read by the borrow checker.
-    It cannot be expressed here: `BuiltinType.STRING` is an enum member with no room for a
-    flag, unlike `FunctionType`, which is a dataclass and carries `captures`. That asymmetry
-    is structural -- do not "fix" it by inventing a string subtype.
-
-    **`FunctionType.captures` is TRI-STATE and the merged predicate keeps all three answers**
-    (this is the one place the two old predicates disagreed other than `string`, and the
-    semantics side is the one that is right):
-
-      ``()``        known empty -- a plain fn reference. Owns NOTHING, so it stays copyable
-                    and a second use of it is not CE2405. Only a binding's initializer can
-                    make this statement.
-      non-empty     known capturing -- owns a heap environment.
-      ``None``      NOT STATED. Assume it owns one.
-
-    `None` is the common case at a position, because `FunctionType.__eq__` excludes
-    `captures` from type identity: a value arriving through a DECLARED type -- a
-    `List@(fn(i32) -> i32)` element, a struct field, a parameter -- has already lost it.
-    Reading `None` as "no captures" answered False for a closure that
-    does own an environment, and the position then aliased it (#123's double frees).
-
-    The backend's old `needs_cleanup` answered True for all three. That was a safety
-    over-approximation, not a fact: a `captures == ()` value carries a null `drop_ptr`, so
-    the free it registered was a guaranteed no-op. Dropping it changes nothing at runtime.
-
-    `resolve` (a `Type -> Type` mapping over the struct/enum tables) is optional but matters
-    wherever a name can still be unresolved AT ANY DEPTH. Without it an `UnknownType` answers
-    False, so a `Buffer[2]` whose element is still named rather than resolved reports "owns
-    nothing" and every consuming use of it aliases -- a double free, not a leak. The top level
-    is not enough: the unresolved name is typically the array's ELEMENT.
-
-    `_visited` breaks self-referential types (`Own<Tree>`, `enum MsgValue: Arr(MsgValue[])`).
-    """
+    """True if a value of this type owns heap that RAII must free and a sink must transfer."""
     if t is None:
         return False
     if resolve is not None and isinstance(t, UnknownType):
@@ -431,11 +298,7 @@ class EnumVariantInfo:
 
 @dataclass(frozen=True)
 class EnumType:
-    """Represents a user-defined enum type.
-
-    The variants tuple contains all valid variants for this enum.
-    Variant order is preserved for exhaustiveness checking.
-    """
+    """Represents a user-defined enum type."""
     name: str                                   # Enum name (e.g., "Option", "Color")
     variants: tuple[EnumVariantInfo, ...]       # Immutable sequence of variants
     # Generic metadata for monomorphized types
@@ -513,9 +376,8 @@ def type_from_rule_name(name: str) -> Optional[Type]:
     return NODE_TO_TYPE.get(name)
 
 def type_string_from_rule_name(name: str) -> str:
-    """
-    Human-readable type name for diagnostics. Returns enum .value for known types,
-    otherwise a reasonable fallback (strip trailing '_t' if present).
+    """Human-readable type name for diagnostics. Returns enum .value for known types, otherwise a
+    reasonable fallback (strip trailing '_t' if present).
     """
     t = NODE_TO_TYPE.get(name)
     if t is not None:

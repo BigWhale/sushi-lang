@@ -1,15 +1,4 @@
-"""
-External declarations for C standard library I/O functions.
-
-This module provides declarations for file and stream I/O functions from <stdio.h>:
-- printf, fprintf: Formatted output
-- fopen, fclose: File open/close
-- fgets, fputs, fgetc, fputc: Text I/O
-- fread, fwrite: Binary I/O
-- fseek, ftell, rewind: File positioning
-- feof, ferror: Status checking
-- stdin, stdout, stderr: Standard stream handles (platform-specific names)
-"""
+"""External declarations for C standard library I/O functions."""
 from __future__ import annotations
 
 import typing
@@ -26,11 +15,7 @@ class LibCStdio:
     """Manages external declarations for C stdio functions."""
 
     def __init__(self, codegen: LLVMCodegen) -> None:
-        """Initialize with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance providing context and module.
-        """
+        """Initialize with reference to main codegen instance."""
         self.codegen = codegen
 
         # Function references - declared immediately for type safety
@@ -274,13 +259,7 @@ class LibCStdio:
             self.ferror = ir.Function(self.codegen.module, fn_ty, name="ferror")
 
     def _declare_stdio_handles(self) -> None:
-        """Declare global variables for stdin, stdout, stderr FILE* handles.
-
-        These are external globals provided by the C standard library.
-        Names are platform-specific:
-        - macOS/Darwin: __stdinp, __stdoutp, __stderrp
-        - Linux: stdin, stdout, stderr
-        """
+        """Declare global variables for stdin, stdout, stderr FILE* handles."""
         # Detect platform and get correct handle names
         platform = get_current_platform()
 

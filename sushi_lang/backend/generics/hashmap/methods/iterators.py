@@ -1,8 +1,4 @@
-"""
-HashMap<K, V> iterator method implementations.
-
-This module contains the keys() and values() methods for creating iterators from HashMap<K, V>.
-"""
+"""HashMap<K, V> iterator method implementations."""
 
 from typing import Any, TYPE_CHECKING
 import llvmlite.ir as ir
@@ -23,29 +19,7 @@ def emit_hashmap_keys(
     hashmap_value: ir.Value,
     hashmap_type: StructType
 ) -> ir.Value:
-    """Emit HashMap<K, V>.keys() -> Iterator<K>
-
-    Creates an iterator that yields keys from the hashmap.
-
-    Iterator structure: {i32 current_index, i32 capacity, Entry<K,V>* buckets_ptr}
-    - current_index: starts at 0
-    - capacity: number of buckets in the hashmap
-    - buckets_ptr: pointer to the buckets array
-
-    The iterator skips Empty and Tombstone entries, only yielding Occupied keys.
-
-    Args:
-        codegen: LLVM codegen instance.
-        call: The method call AST node.
-        hashmap_value: The HashMap struct pointer.
-        hashmap_type: The HashMap<K, V> struct type.
-
-    Returns:
-        Iterator<K> struct value.
-
-    Raises:
-        ValueError: If keys() is called with arguments.
-    """
+    """Emit HashMap<K, V>.keys() -> Iterator<K>"""
     if len(call.args) != 0:
         raise_internal_error("CE0023", method="keys", expected=0, got=len(call.args))
 
@@ -110,29 +84,7 @@ def emit_hashmap_values(
     hashmap_value: ir.Value,
     hashmap_type: StructType
 ) -> ir.Value:
-    """Emit HashMap<K, V>.values() -> Iterator<V>
-
-    Creates an iterator that yields values from the hashmap.
-
-    Iterator structure: {i32 current_index, i32 capacity, Entry<K,V>* buckets_ptr}
-    - current_index: starts at 0
-    - capacity: number of buckets in the hashmap
-    - buckets_ptr: pointer to the buckets array
-
-    The iterator skips Empty and Tombstone entries, only yielding Occupied values.
-
-    Args:
-        codegen: LLVM codegen instance.
-        call: The method call AST node.
-        hashmap_value: The HashMap struct pointer.
-        hashmap_type: The HashMap<K, V> struct type.
-
-    Returns:
-        Iterator<V> struct value.
-
-    Raises:
-        ValueError: If values() is called with arguments.
-    """
+    """Emit HashMap<K, V>.values() -> Iterator<V>"""
     if len(call.args) != 0:
         raise_internal_error("CE0023", method="values", expected=0, got=len(call.args))
 
@@ -184,25 +136,7 @@ def emit_hashmap_entries(
     hashmap_value: ir.Value,
     hashmap_type: StructType
 ) -> ir.Value:
-    """Emit HashMap<K, V>.entries() -> Iterator<Entry<K, V>>
-
-    Creates an iterator that yields Entry<K, V> structs (key + value) from the hashmap.
-
-    The iterator uses the same high-bit marker encoding as keys()/values():
-    - capacity | 0xE0000000 (bits 31+30+29 set = HashMap entries iterator)
-
-    The data pointer stores Entry<K,V>* (internal 3-field) cast to user Entry<K,V>*
-    (2-field). The foreach loop reconstructs the 2-field entry from the 3-field one.
-
-    Args:
-        codegen: LLVM codegen instance.
-        call: The method call AST node.
-        hashmap_value: The HashMap struct pointer.
-        hashmap_type: The HashMap<K, V> struct type.
-
-    Returns:
-        Iterator<Entry<K, V>> struct value.
-    """
+    """Emit HashMap<K, V>.entries() -> Iterator<Entry<K, V>>"""
     if len(call.args) != 0:
         raise_internal_error("CE0023", method="entries", expected=0, got=len(call.args))
 

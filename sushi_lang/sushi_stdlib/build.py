@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""
-Sushi Standard Library Build Script
-
-Generates LLVM bitcode (.bc) files from Python stdlib implementations.
-Organizes output by target platform for multiplatform support.
-"""
+"""Sushi Standard Library Build Script"""
 
 import argparse
 import sys
@@ -73,10 +68,7 @@ def build_core_primitives(platform_dir: Path, quiet: bool = False):
 
 
 def build_io_stdio(platform_dir: Path, platform: TargetPlatform, quiet: bool = False):
-    """Build io/stdio unit (platform-specific).
-
-    This module uses platform-specific stdio handles (darwin vs linux).
-    """
+    """Build io/stdio unit (platform-specific)."""
     if not quiet:
         print(f"Building io/stdio (platform: {platform.os})...")
 
@@ -167,17 +159,7 @@ def build_sys_process(platform_dir: Path, quiet: bool = False):
 
 
 def build_all(platform_name: str, quiet: bool = False) -> None:
-    """Build every stdlib unit for the given platform into dist/{platform_name}/.
-
-    The generated IR reflects the *current* host platform (via common.py); the
-    platform_name selects only the output directory. This is the single build
-    path shared by the CLI (--build-stdlib) and the compiler's on-the-fly
-    auto-builder.
-
-    Args:
-        platform_name: Output platform directory name ("darwin" or "linux").
-        quiet: Suppress the per-unit progress banner (used by auto-build).
-    """
+    """Build every stdlib unit for the given platform into dist/{platform_name}/."""
     init_llvm()
 
     script_dir = Path(__file__).parent.resolve()  # sushi_stdlib/

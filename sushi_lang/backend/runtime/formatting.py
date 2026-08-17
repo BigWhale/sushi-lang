@@ -1,9 +1,4 @@
-"""
-Formatting operations for LLVM code generation.
-
-This module provides functions for type-to-string conversions, format string
-management, and printf-style output operations.
-"""
+"""Formatting operations for LLVM code generation."""
 from __future__ import annotations
 
 import typing
@@ -23,11 +18,7 @@ class FormattingOperations:
     """Manages formatting operations and type conversions."""
 
     def __init__(self, codegen: LLVMCodegen) -> None:
-        """Initialize with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance providing context and module.
-        """
+        """Initialize with reference to main codegen instance."""
         self.codegen = codegen
 
         # Global format string constants (cached)
@@ -42,11 +33,7 @@ class FormattingOperations:
         self.fmt_bool_false: ir.GlobalVariable | None = None
 
     def declare_format_strings(self) -> None:
-        """Declare global format string constants for printf operations.
-
-        Creates read-only global constants for integer, float, and string formatting.
-        Uses the FORMAT_STRINGS dictionary from constants module for configuration.
-        """
+        """Declare global format string constants for printf operations."""
         # Pre-create format strings (without GEP, just the globals)
         for name in ["i32", "str", "f32", "f64"]:
             attr_name = f"fmt_{name}"
@@ -56,22 +43,7 @@ class FormattingOperations:
 
     def emit_print_value(self, v: ir.Value, is_line: bool = False,
                          semantic_type=None) -> None:
-        """Generate printf call with appropriate format for value type.
-
-        Determines the value type and calls printf with the corresponding
-        format string. Supports integer, float, and string value printing.
-        If is_line is True, appends a newline after the value.
-
-        Args:
-            v: The LLVM value to print.
-            is_line: Whether to append a newline after printing (println behavior).
-            semantic_type: Optional Sushi semantic type of the value, used to
-                pick signedness for integer formatting (defaults to signed when
-                unknown, matching string interpolation).
-
-        Raises:
-            AssertionError: If required runtime functions are not declared.
-        """
+        """Generate printf call with appropriate format for value type."""
         assert (
             self.codegen.builder is not None
             and self.codegen.runtime.libc_stdio.printf is not None
@@ -107,16 +79,7 @@ class FormattingOperations:
             self.codegen.builder.call(self.codegen.runtime.libc_stdio.printf, [newline_fmt])
 
     def _emit_print_integer(self, v: ir.Value, semantic_type=None) -> None:
-        """Print an integer at its own width with signedness-aware formatting.
-
-        Width comes from the LLVM type; signedness from the semantic type when
-        provided (signed by default, matching string interpolation). bool (i1,
-        or BOOL semantic type) keeps the historical numeric `%d` output.
-
-        Args:
-            v: The integer LLVM value to print.
-            semantic_type: Optional Sushi semantic type for signedness dispatch.
-        """
+        """Print an integer at its own width with signedness-aware formatting."""
         from sushi_lang.semantics.typesys import BuiltinType
         from sushi_lang.backend.expressions.type_utils import is_unsigned_type
 
@@ -147,19 +110,7 @@ class FormattingOperations:
         builder.call(printf, [fmt_ptr, value])
 
     def emit_integer_to_string(self, int_value: ir.Value, is_signed: bool, bit_width: int) -> ir.Value:
-        """Generate integer to string conversion using sprintf.
-
-        Args:
-            int_value: Integer value to convert.
-            is_signed: True for signed integers, False for unsigned.
-            bit_width: Bit width of the integer type.
-
-        Returns:
-            Pointer to newly allocated string containing the integer representation.
-
-        Raises:
-            AssertionError: If required runtime functions are not declared.
-        """
+        """Generate integer to string conversion using sprintf."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
         if self.codegen.runtime.libc_strings.sprintf is None:
@@ -189,18 +140,7 @@ class FormattingOperations:
         return self.codegen.runtime.strings.emit_cstr_to_fat_pointer(buffer, owned=1)
 
     def emit_float_to_string(self, float_value: ir.Value, is_double: bool) -> ir.Value:
-        """Generate float to string conversion using sprintf.
-
-        Args:
-            float_value: Float value to convert.
-            is_double: True for f64, False for f32.
-
-        Returns:
-            Pointer to newly allocated string containing the float representation.
-
-        Raises:
-            AssertionError: If required runtime functions are not declared.
-        """
+        """Generate float to string conversion using sprintf."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
         if self.codegen.runtime.libc_strings.sprintf is None:
@@ -223,14 +163,7 @@ class FormattingOperations:
         return self.codegen.runtime.strings.emit_cstr_to_fat_pointer(buffer, owned=1)
 
     def emit_bool_to_string(self, bool_value: ir.Value) -> ir.Value:
-        """Generate bool to string conversion.
-
-        Args:
-            bool_value: Bool value to convert (i1 or i8).
-
-        Returns:
-            Fat pointer struct to "true" or "false".
-        """
+        """Generate bool to string conversion."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
 
@@ -247,18 +180,7 @@ class FormattingOperations:
         return self.codegen.builder.select(bool_value, true_str, false_str)
 
     def emit_character_case_conversion(self, char_value: ir.Value, to_upper: bool) -> ir.Value:
-        """Generate toupper/tolower call for character case conversion.
-
-        Args:
-            char_value: Character value (as i32).
-            to_upper: True for uppercase, False for lowercase.
-
-        Returns:
-            Converted character value (as i32).
-
-        Raises:
-            AssertionError: If required runtime functions are not declared.
-        """
+        """Generate toupper/tolower call for character case conversion."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
         if to_upper:
@@ -271,19 +193,7 @@ class FormattingOperations:
             return self.codegen.builder.call(self.codegen.runtime.libc_ctype.tolower, [char_value])
 
     def emit_character_classification(self, char_value: ir.Value, classification: str) -> ir.Value:
-        """Generate character classification call (isspace, isdigit, isalpha, isalnum).
-
-        Args:
-            char_value: Character value (as i32).
-            classification: Type of classification ("space", "digit", "alpha", "alnum").
-
-        Returns:
-            Non-zero if character matches classification, zero otherwise.
-
-        Raises:
-            AssertionError: If required runtime functions are not declared.
-            ValueError: If classification type is not supported.
-        """
+        """Generate character classification call (isspace, isdigit, isalpha, isalnum)."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
         classification_funcs = {
@@ -302,18 +212,7 @@ class FormattingOperations:
         return self.codegen.builder.call(func, [char_value])
 
     def _create_format_string(self, name: str, format_str: str) -> ir.GlobalVariable:
-        """Generic method to create a global format string constant.
-
-        Creates a private, read-only global variable containing the
-        null-terminated format string.
-
-        Args:
-            name: The format string name (e.g., "i32", "f64").
-            format_str: The actual format string (e.g., "%d", "%.6f").
-
-        Returns:
-            The created global variable.
-        """
+        """Generic method to create a global format string constant."""
         data = format_str.encode('utf-8') + b'\0'
         arr_ty = ir.ArrayType(self.codegen.i8, len(data))
         gv = ir.GlobalVariable(self.codegen.module, arr_ty, name=f".fmt.{name}")
@@ -324,18 +223,7 @@ class FormattingOperations:
         return gv
 
     def _get_format_string(self, name: str, format_str: str) -> ir.Value:
-        """Get or create a global format string constant.
-
-        Uses the centralized _create_format_string() method to eliminate
-        code duplication. Caches the result in an instance attribute.
-
-        Args:
-            name: Name of the format string (e.g., "i32", "f64").
-            format_str: The actual format string (e.g., "%d", "%.6f").
-
-        Returns:
-            Pointer to the global format string constant.
-        """
+        """Get or create a global format string constant."""
         attr_name = f"fmt_{name}"
         existing = getattr(self, attr_name, None)
 
@@ -350,14 +238,7 @@ class FormattingOperations:
         return self.codegen.builder.gep(existing, [zero, zero])
 
     def _allocate_conversion_buffer(self, size: int) -> ir.Value:
-        """Allocate a buffer for type-to-string conversion.
-
-        Args:
-            size: Buffer size in bytes.
-
-        Returns:
-            Pointer to allocated buffer.
-        """
+        """Allocate a buffer for type-to-string conversion."""
         buffer_size = make_i64_const(size)
         buffer = emit_malloc(self.codegen, self.codegen.builder, buffer_size)
         # If emitted inside a print/println argument, this to-string buffer is a temporary
@@ -368,16 +249,7 @@ class FormattingOperations:
     def _prepare_integer_for_sprintf(
         self, int_value: ir.Value, is_signed: bool, bit_width: int
     ) -> ir.Value:
-        """Prepare integer value for sprintf by converting to appropriate type.
-
-        Args:
-            int_value: Integer value to convert.
-            is_signed: True for signed integers, False for unsigned.
-            bit_width: Bit width of the integer type.
-
-        Returns:
-            Converted integer value suitable for sprintf.
-        """
+        """Prepare integer value for sprintf by converting to appropriate type."""
         if bit_width < 32:
             # Extend smaller integers to 32-bit for sprintf
             if is_signed:

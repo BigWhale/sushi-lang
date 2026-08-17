@@ -1,43 +1,4 @@
-"""
-Coverage ratchet: success-category .sushi tests that print but lack stdout assertions.
-
-The R0 test-correctness baseline drove this gap to 0: every
-success-category test that calls print/println either asserts its stdout (EXPECT_STDOUT_EXACT /
-EXPECT_STDOUT_CONTAINS) or is recorded in QUARANTINE below. BASELINE is therefore 0 — the ratchet
-now only ever admits a new printing test that asserts its output.
-
-Two exclusion paths, and only two:
-  1. The test asserts its stdout (has an EXPECT_STDOUT_* directive).
-  2. The test is listed in QUARANTINE (a known compiler bug it repros, an intentionally silent
-     test, or output that can't be asserted deterministically). Each such .sushi file is left
-     UNCHANGED; QUARANTINE is the single external record. See test_quarantine_registry_valid.
-
-To add a new printing test: give it an EXPECT_STDOUT_* assertion (do not raise BASELINE).
-When a quarantined bug is fixed: add the assertion to that test and delete its QUARANTINE entry.
-
-How to compute the gap manually (from the repo root) — must print 0:
-    python3 -c "
-    import re
-    from pathlib import Path
-    import sys; sys.path.insert(0, 'tests/unit')
-    from test_stdout_coverage import QUARANTINE
-    excluded = {'helpers', 'bin'}
-    gap = 0
-    for f in sorted(Path('tests').rglob('test_*.sushi')):
-        rel = str(f.relative_to('tests'))
-        if any(x in excluded for x in f.parts):
-            continue
-        if f.name.startswith('test_err_') or f.name.startswith('test_warn_'):
-            continue
-        if rel in QUARANTINE:
-            continue
-        c = f.read_text()
-        if re.search(r'\bprint\b|\bprintln\b', c) and \
-           'EXPECT_STDOUT_CONTAINS' not in c and 'EXPECT_STDOUT_EXACT' not in c:
-            gap += 1
-    print(gap)
-    "
-"""
+"""Coverage ratchet: success-category .sushi tests that print but lack stdout assertions."""
 
 import re
 from pathlib import Path
@@ -120,17 +81,7 @@ def _compute_gap() -> list[str]:
 
 
 def test_stdout_coverage_ratchet():
-    """
-    Assert the coverage gap does not exceed BASELINE.
-
-    A gap = a success-category test that calls print/println but has no
-    EXPECT_STDOUT_CONTAINS or EXPECT_STDOUT_EXACT in its first 20 lines (the
-    parser only inspects the first 20 lines, but the simplest check is the
-    whole file since directives are always at the top).
-
-    If this test fails because you added a new test that prints but has no
-    assertion, add the assertion. If you backfilled more tests, lower BASELINE.
-    """
+    """Assert the coverage gap does not exceed BASELINE."""
     gap_files = _compute_gap()
     gap = len(gap_files)
     assert gap <= BASELINE, (
@@ -144,16 +95,7 @@ def test_stdout_coverage_ratchet():
 
 
 def test_quarantine_registry_valid():
-    """Keep the QUARANTINE registry honest.
-
-    Every entry must:
-      - point at a file that still exists (a moved/deleted test must be de-listed),
-      - carry a recognized reason,
-      - still lack an EXPECT_STDOUT_* directive (once a test is fixed and asserted,
-        it must be removed from QUARANTINE — otherwise it is silently double-counted
-        as both asserted and exempt), and
-      - carry a tracking issue URL unless the reason is "no-stdout".
-    """
+    """Keep the QUARANTINE registry honest."""
     problems = []
     for rel, meta in QUARANTINE.items():
         path = TESTS_ROOT / rel

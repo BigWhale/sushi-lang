@@ -1,9 +1,4 @@
-"""
-Function definition (body emission) for LLVM code generation.
-
-This module handles emitting the actual function bodies for both regular
-Sushi functions and extension methods, including special handling for main().
-"""
+"""Function definition (body emission) for LLVM code generation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -19,11 +14,7 @@ class FunctionDefinitions:
     """Handles LLVM function body emission."""
 
     def __init__(self, codegen: 'LLVMCodegen') -> None:
-        """Initialize definitions handler with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance.
-        """
+        """Initialize definitions handler with reference to main codegen instance."""
         self.codegen = codegen
 
     def emit_func_def(
@@ -35,22 +26,7 @@ class FunctionDefinitions:
         emit_default_return_fn,
         main_wrapper
     ) -> ir.Function:
-        """Define the body of a regular function.
-
-        Args:
-            fn: The function definition AST node.
-            emit_func_decl_fn: Function to emit declaration.
-            begin_function_fn: Function to begin function emission.
-            end_function_fn: Function to end function emission.
-            emit_default_return_fn: Function to emit default return.
-            main_wrapper: MainFunctionWrapper instance.
-
-        Returns:
-            The LLVM function with body emitted.
-
-        Raises:
-            TypeError: If the return type is not supported.
-        """
+        """Define the body of a regular function."""
         # Special handling for main function - needs wrapper for C compatibility
         # Skip wrapper in library mode (no main() entry point)
         if fn.name == 'main' and not getattr(self.codegen, 'is_library_mode', False):
@@ -104,22 +80,7 @@ class FunctionDefinitions:
         end_function_fn,
         emit_default_return_for_extension_fn
     ) -> ir.Function:
-        """Define the body of an extension method.
-
-        Args:
-            ext: The extension method definition AST node.
-            get_name_fn: Function to get extension method name.
-            begin_function_fn: Function to begin function emission.
-            end_function_fn: Function to end function emission.
-            emit_default_return_for_extension_fn: Function to emit default return for extension.
-
-        Returns:
-            The LLVM function with body emitted.
-
-        Raises:
-            RuntimeError: If the extension method was not declared.
-            TypeError: If the return type is not supported.
-        """
+        """Define the body of an extension method."""
         func_name = get_name_fn(ext)
         llvm_fn = self.codegen.funcs.get(func_name)
         if not llvm_fn:

@@ -1,17 +1,4 @@
-"""Regression tests: break/continue free heap-owning loop-body locals (RAII).
-
-`emit_break`/`emit_continue` branch straight to the loop end/condition block. Because
-that terminates the current block, the loop-body `pop_scope` skips its destructor
-emission, so a heap-owning local declared in the loop body (a `List@(T)`, a `T[]`)
-abandoned via `break`/`continue` was never freed -- a silent leak on that path only.
-
-These count `free` calls in the generated IR (the leak is invisible at runtime),
-mirroring test_list_raii.py. A `while` loop is used rather than a range `foreach`
-because a literal range compiles to both an ascending and a descending loop, which
-would double the free count and mask the missing break-path free. They also guard the
-inverse: a local that lives *past* the loop must NOT be freed on the break path (that
-would be a double free).
-"""
+"""Regression tests: break/continue free heap-owning loop-body locals (RAII)."""
 from __future__ import annotations
 
 from tests.unit.test_ffi import _emit_ir, _count_in_function

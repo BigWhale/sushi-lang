@@ -1,9 +1,4 @@
-"""
-Shared utilities for hash function implementation.
-
-This module provides common constants and helper functions used across
-different hash implementations (primitives, structs, etc.).
-"""
+"""Shared utilities for hash function implementation."""
 
 import llvmlite.ir as ir
 from sushi_lang.backend.constants import INT64_BIT_WIDTH
@@ -21,22 +16,7 @@ FNV1A_PRIME = 1099511628211  # FNV-1a prime (64-bit)
 
 
 def emit_fnv1a_combine(codegen: 'LLVMCodegen', current_hash: ir.Value, value_hash: ir.Value) -> ir.Value:
-    """Emit LLVM IR to combine a hash value using FNV-1a algorithm.
-
-    FNV-1a combination:
-        hash = (hash XOR value_hash) * FNV_PRIME
-
-    This is the core operation for combining multiple hash values together,
-    used for both string hashing and struct field hashing.
-
-    Args:
-        codegen: The LLVM code generator
-        current_hash: Current accumulated hash value (u64)
-        value_hash: New hash value to combine (u64)
-
-    Returns:
-        Combined hash value (u64)
-    """
+    """Emit LLVM IR to combine a hash value using FNV-1a algorithm."""
     builder = require_builder(codegen)
     builder = codegen.builder
     u64 = ir.IntType(INT64_BIT_WIDTH)
@@ -52,10 +32,6 @@ def emit_fnv1a_combine(codegen: 'LLVMCodegen', current_hash: ir.Value, value_has
 
 
 def emit_fnv1a_init(codegen: 'LLVMCodegen') -> ir.Value:
-    """Emit LLVM IR to initialize FNV-1a hash with offset basis.
-
-    Returns:
-        Initial hash value (u64) set to FNV_OFFSET_BASIS
-    """
+    """Emit LLVM IR to initialize FNV-1a hash with offset basis."""
     u64 = ir.IntType(INT64_BIT_WIDTH)
     return ir.Constant(u64, FNV1A_OFFSET_BASIS)

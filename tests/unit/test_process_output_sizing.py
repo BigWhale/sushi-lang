@@ -1,12 +1,4 @@
-"""Guard: the stdlib's ProcessOutput Result layout must match the compiler's sizing.
-
-`run()` returns Result<ProcessOutput, ProcessError>. The stdlib IR-gen and the backend
-call-site declaration derive the {i32, [N x i8]} data size from
-type_definitions._process_output_size_bytes(), while the compiler sizes the same enum via
-backend.types.core.sizing.TypeSizing. If these two ever disagree, the returned struct type
-mismatches the caller's variable type (CE0017). This test pins them together so a future
-change to ProcessOutput's fields (or the ABI sizing rules) can't silently drift.
-"""
+"""Guard: the stdlib's ProcessOutput Result layout must match the compiler's sizing."""
 from sushi_lang.sushi_stdlib.src.type_definitions import (
     _process_output_size_bytes,
     get_process_output_result_type,

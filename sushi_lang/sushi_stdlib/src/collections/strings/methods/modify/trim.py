@@ -1,8 +1,4 @@
-"""
-String Strip/Trim Operations
-
-Implements the strip_prefix() and strip_suffix() methods for fat pointer strings.
-"""
+"""String Strip/Trim Operations"""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
@@ -11,28 +7,7 @@ from ...common import build_string_struct, clone_string_to_owned
 
 
 def emit_string_strip_prefix(module: ir.Module) -> ir.Function:
-    """Emit the string.strip_prefix() method.
-
-    Removes prefix if present at the beginning of the string.
-    If the string doesn't start with the prefix, returns the original string.
-
-    Algorithm:
-    1. Check if string starts with prefix (compare bytes)
-    2. If matches: return substring from prefix.size to end
-    3. If no match: return original string unchanged
-
-    Examples:
-        "hello".strip_prefix("he") -> "llo"
-        "hello".strip_prefix("x") -> "hello"
-        "test".strip_prefix("testing") -> "test"
-        "".strip_prefix("x") -> ""
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_strip_prefix({ i8*, i32 } str, { i8*, i32 } prefix)
-    """
+    """Emit `{i8*, i32} string_strip_prefix({i8*, i32} str, {i8*, i32} prefix)`."""
     func_name = "string_strip_prefix"
 
     if func_name in module.globals:
@@ -111,28 +86,7 @@ def emit_string_strip_prefix(module: ir.Module) -> ir.Function:
 
 
 def emit_string_strip_suffix(module: ir.Module) -> ir.Function:
-    """Emit the string.strip_suffix() method.
-
-    Removes suffix if present at the end of the string.
-    If the string doesn't end with the suffix, returns the original string.
-
-    Algorithm:
-    1. Check if string ends with suffix (compare bytes from end)
-    2. If matches: return substring from 0 to (str_size - suffix_size)
-    3. If no match: return original string unchanged
-
-    Examples:
-        "hello".strip_suffix("lo") -> "hel"
-        "hello".strip_suffix("x") -> "hello"
-        "test".strip_suffix("testing") -> "test"
-        "".strip_suffix("x") -> ""
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_strip_suffix({ i8*, i32 } str, { i8*, i32 } suffix)
-    """
+    """Emit `{i8*, i32} string_strip_suffix({i8*, i32} str, {i8*, i32} suffix)`."""
     func_name = "string_strip_suffix"
 
     if func_name in module.globals:

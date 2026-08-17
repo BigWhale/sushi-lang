@@ -22,14 +22,7 @@ class VariableInfo:
 
 
 class ScopeAnalyzer:
-    """
-    Pass 1: Scope and variable usage analysis.
-
-    Tracks:
-    - Variable declarations (let statements)
-    - Variable usage (in expressions, rebinds)
-    - Emits warnings for unused variables
-    """
+    """Pass 1: Scope and variable usage analysis."""
 
     def __init__(self, reporter: Reporter, constants: Optional[ConstantTable] = None, structs: Optional[StructTable] = None, enums: Optional[EnumTable] = None, generic_enums: Optional[GenericEnumTable] = None, generic_structs: Optional['GenericStructTable'] = None, external_table: Optional['ExternalTable'] = None) -> None:
         self.reporter = reporter
@@ -138,25 +131,7 @@ class ScopeAnalyzer:
         return self.external_table.is_namespace(name) and not self._is_bound_local(name)
 
     def _names_a_non_local(self, name: str) -> bool:
-        """True if `name` resolves to something that is not a variable at all.
-
-        A constant, a math constant, an enum type name, a top-level function referenced
-        as a value, and the built-in I/O identifiers. None of them has a frame slot, so
-        none is tracked as a variable -- and none is undeclared either. An FFI namespace
-        is deliberately NOT here: it is only ever the receiver of a `DotCall`, which its
-        own arm handles, so a bare mention of one stays the CE1001 it has always been.
-
-        This is the ONE place that answers "what kind of name is this", because this pass
-        is the one that owns names. `_borrow_variable` used to be a copy of `_use_variable`
-        that had lost every case here, which is why `peek SOME_CONST` reported CE1001
-        about a constant declared two lines above.
-
-        A local of the same name SHADOWS a constant, a function name or an FFI namespace,
-        and then it is a plain variable read. Without that guard the local was never marked
-        used (a bogus CW1001) and the backend read the CONSTANT, so a shadowing local of a
-        different length was `CE0017: cannot convert '[3 x i32]' to '[4 x i32]'` (found
-        while fixing #248).
-        """
+        """True if `name` resolves to something that is not a variable at all."""
         if name in ('stdin', 'stdout', 'stderr', 'open'):
             return True
         if self._is_math_constant(name):
@@ -182,28 +157,7 @@ class ScopeAnalyzer:
             self.err.emit(er.ERR.CE1001, usage_span, name=name)
 
     def _borrow_variable(self, name: str, usage_span: Optional[Span] = None) -> None:
-        """A borrow needs a LOCAL. Mark it used, or say which way it is not one.
-
-        A BORROW IS A USE. This used to set a separate `borrowed` flag and deliberately
-        leave `used` false, so a variable only ever passed by `peek`/`poke` was reported
-        as CW1003 ("only used through borrows ... may indicate unnecessary indirection").
-
-        That advice became wrong when a `match`/`foreach` binding of an owning type stopped
-        being consumable (CE2411): borrowing is now the REQUIRED form for a recursive
-        traversal, not an avoidable indirection, and a pattern binding has no declaration
-        to turn into a reference anyway. No mainstream language warns here -- Rust, Go and
-        C# have no equivalent, and Clippy's `needless_borrow` warns the opposite way.
-        A variable that is genuinely never touched is still CW1001.
-
-        The failure half is what this function is FOR, and it was missing. A borrow takes
-        the address of storage a frame owns, so a name that resolves to something else --
-        a constant, a top-level function, an enum type, an FFI namespace -- cannot be
-        borrowed even though it exists. That is CE2400, and this is the only pass that can
-        tell it from a name that is declared nowhere (CE1001). The borrow checker used to
-        ask the same question from `borrow_state`, which cannot distinguish the two, so it
-        answered CE2400 for BOTH -- and the scope pass answered CE1001 for both, giving one
-        token two diagnostics, one of them wrong.
-        """
+        """A borrow needs a LOCAL. Mark it used, or say which way it is not one."""
         for i in range(len(self.scopes) - 1, -1, -1):
             if name in self.scopes[i]:
                 self.scopes[i][name].used = True
@@ -216,25 +170,13 @@ class ScopeAnalyzer:
             self.err.emit(er.ERR.CE1001, usage_span, name=name)
 
     def _record_capture(self, name: str, resolved_index: int, span: Optional[Span]) -> None:
-        """Record `name` as a capture for every enclosing lambda it is free in.
-
-        `resolved_index` is the absolute scope-stack index where `name` was found.
-        A lambda captures it iff the variable lives BELOW that lambda's scope
-        boundary (i.e. it is an enclosing local, not a lambda param or lambda-local).
-        Deep captures propagate through every enclosing lambda so an outer closure
-        also carries the value an inner closure needs.
-        """
+        """Record `name` as a capture for every enclosing lambda it is free in."""
         for col in self._capture_collectors:
             if resolved_index < col['boundary'] and name not in col['names']:
                 col['names'][name] = Param(name=name, ty=None, name_span=span, loc=span)
 
     def _check_lambda(self, lam: Lambda) -> None:
-        """Scope-check a lambda body and record its captured free names.
-
-        The lambda's params open a fresh scope; free names in the body that resolve
-        to enclosing locals are recorded into `lam.captures` (types are None here and
-        filled by the type pass, T1.3).
-        """
+        """Scope-check a lambda body and record its captured free names."""
         boundary = len(self.scopes)
         collector = {'boundary': boundary, 'names': {}}
         self._capture_collectors.append(collector)
@@ -301,11 +243,7 @@ class ScopeAnalyzer:
         self._pop_scope()
 
     def _check_perk_implementation(self, perk_impl: ExtendWithDef) -> None:
-        """Check all methods in a perk implementation.
-
-        Each method in a perk implementation gets an implicit 'self' parameter,
-        just like extension methods.
-        """
+        """Check all methods in a perk implementation."""
         for method in perk_impl.methods:
             self._push_scope()
 
@@ -435,14 +373,7 @@ class ScopeAnalyzer:
         self._pop_scope()
 
     def _check_expand(self, stmt: Expand) -> None:
-        """Check an expand statement (compile-time pack expansion).
-
-        The compile-time analog of `_check_foreach`, found unhandled by the #245 totality
-        gate: `expand` bodies got no scope analysis at all before it. The binding variable
-        lives in its own scope, like a foreach item. `_loop_depth` is NOT bumped: the body
-        is unrolled statements, not a runtime loop, so a bare `break` inside one is still
-        CE1003.
-        """
+        """Check an expand statement (compile-time pack expansion)."""
         self._check_expression(stmt.iterable)
         self._push_scope()
         self._declare_variable(stmt.var, stmt.var_span)

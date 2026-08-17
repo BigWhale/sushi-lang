@@ -17,16 +17,7 @@ class TypeParser:
         self.ast_builder = ast_builder
 
     def parse_type(self, type_node: Tree) -> Optional[Type]:
-        """Parse a type node into a Type object, handling all type syntax.
-
-        Dispatches to specialized parsers based on the type syntax.
-
-        Args:
-            type_node: Tree node representing a type
-
-        Returns:
-            Type object or None if parsing fails
-        """
+        """Parse a type node into a Type object, handling all type syntax."""
         tag = type_node.data
 
         # Dispatch to type-specific parser

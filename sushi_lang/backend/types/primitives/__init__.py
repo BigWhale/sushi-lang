@@ -1,20 +1,5 @@
-"""
-Extension methods for primitive types (i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, bool, string).
-
-Implemented methods:
-- to_str() -> string: Convert primitive values to string representation
-- hash() -> u64: Compute hash value for use in hash tables/collections
-- to_bits() -> u32/u64: Raw IEEE-754 encoding (f32/f64 only)
-- clone() -> Self: An independent copy, which for a primitive is the value itself
-  (every type except `string`, which carries its own clone)
-
-All methods are implemented as LLVM IR for optimal performance.
-
-Importing this package registers those methods -- validator and emitter both --
-into the shared builtin-method registry (sushi_stdlib/src/common.py). Pass 2
-dispatches primitive-method validation through that registry, so the registration
-must have happened before semantic analysis runs; backend/types/__init__.py
-imports this package to guarantee it.
+"""Extension methods for primitive types (i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, bool,
+string).
 """
 
 # Import to_str methods to register them

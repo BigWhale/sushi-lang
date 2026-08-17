@@ -1,13 +1,4 @@
-"""
-Trim String Operations
-
-Implements string trimming methods that remove ASCII whitespace:
-- trim(): Remove whitespace from both ends
-- tleft(): Remove whitespace from left end
-- tright(): Remove whitespace from right end
-
-ASCII whitespace: space (32), tab (9), newline (10), carriage return (13)
-"""
+"""Trim String Operations"""
 
 import llvmlite.ir as ir
 from ..intrinsics import declare_isspace_intrinsic
@@ -16,17 +7,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 
 
 def emit_string_tleft(module: ir.Module) -> ir.Function:
-    """Emit the string.tleft() method.
-
-    Removes ASCII whitespace from the left end of the string.
-    Returns a new string with leading whitespace removed.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_tleft({ i8*, i32 } str)
-    """
+    """Emit `{i8*, i32} string_tleft({i8*, i32} str)`."""
     func_name = "string_tleft"
 
     # Check if already defined
@@ -99,17 +80,7 @@ def emit_string_tleft(module: ir.Module) -> ir.Function:
 
 
 def emit_string_tright(module: ir.Module) -> ir.Function:
-    """Emit the string.tright() method.
-
-    Removes ASCII whitespace from the right end of the string.
-    Returns a new string with trailing whitespace removed.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_tright({ i8*, i32 } str)
-    """
+    """Emit `{i8*, i32} string_tright({i8*, i32} str)`."""
     func_name = "string_tright"
 
     # Check if already defined
@@ -183,17 +154,7 @@ def emit_string_tright(module: ir.Module) -> ir.Function:
 
 
 def emit_string_trim(module: ir.Module) -> ir.Function:
-    """Emit the string.trim() method.
-
-    Removes ASCII whitespace from both ends of the string.
-    Returns a new string with leading and trailing whitespace removed.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_trim({ i8*, i32 } str)
-    """
+    """Emit `{i8*, i32} string_trim({i8*, i32} str)`."""
     func_name = "string_trim"
 
     # Check if already defined

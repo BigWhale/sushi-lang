@@ -1,11 +1,4 @@
-"""T1.3 gate: lambda type-checking, capture legality (CE2094), invariance.
-
-Uses the `analyze` fixture (full semantic pipeline, no backend). A lambda infers a
-FunctionType from its params (declared, or bare params inferred from the binding's
-expected FunctionType) and body; capture is excluded from type identity, so a
-capturing lambda still matches `fn(i32) -> i32`. Capturing a borrow is CE2094; a
-shape mismatch is CE2002 on assignment.
-"""
+"""T1.3 gate: lambda type-checking, capture legality (CE2094), invariance."""
 from __future__ import annotations
 
 

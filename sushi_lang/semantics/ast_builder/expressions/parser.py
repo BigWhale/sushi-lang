@@ -18,10 +18,7 @@ class ExpressionParser:
         self.ast_builder = ast_builder
 
     def parse_expr(self, t: Tree | Token) -> Expr:
-        """Parse an expression node into an Expr object.
-
-        Main dispatcher for all expression types.
-        """
+        """Parse an expression node into an Expr object."""
         # Tokens: delegate to literals parser
         if isinstance(t, Token):
             return literals.expr_from_token(t, self.ast_builder)

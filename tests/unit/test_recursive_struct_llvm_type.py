@@ -1,24 +1,4 @@
-"""A user-declared struct is an LLVM *identified* type, not a literal one (#257).
-
-`_get_struct_type` used to tie the recursive knot by caching an empty
-`ir.LiteralStructType([])` placeholder, walking the fields, and then caching a NEW
-`LiteralStructType` built from them. That cannot work: a literal struct type is a
-structural *value*, so there is nothing to fill in. Re-caching replaces the cache entry,
-but the `{}` the field walk already embedded into `{i32, i32, {}*}` stays empty forever --
-which is why `struct Tree: List@(Tree) kids` came out as `{i32, {i32, i32, {}*}}` and every
-element GEP through it had stride ZERO.
-
-LLVM's identified struct types exist for exactly this: `set_body` fills the type IN PLACE,
-so a pointer taken to it mid-walk stays valid. That makes the knot self-tying and lets the
-declaration emit as `%Tree = type {i32, {i32, i32, %Tree*}}`.
-
-These tests pin the DECISION rather than either defect's symptom -- specifically that it is
-uniform (every user struct, not just self-referential ones), because a future reader looking
-at a non-recursive struct is the one most likely to conclude the identified type is
-unnecessary and revert it. Uniformity is also what removes the shape-collision class:
-`is_dynamic_array_type` sniffs for a literal `{i32, i32, T*}`, so while user structs were
-literal, a user struct of that exact shape false-positived as a dynamic array.
-"""
+"""A user-declared struct is an LLVM *identified* type, not a literal one (#257)."""
 from __future__ import annotations
 
 from llvmlite import ir
@@ -94,13 +74,7 @@ def test_recursive_dyn_array_struct_has_self_pointer(tmp_path):
 
 
 def test_generic_struct_instantiations_do_not_collide(tmp_path):
-    """Each monomorphization gets its OWN identified type.
-
-    Identified types are keyed by name, and the interned name already encodes the type
-    arguments (`Pair<i32, i32>`). Sanitising or truncating that name would make two
-    instantiations share one identified type -- silently giving one of them the other's
-    layout.
-    """
+    """Each monomorphization gets its OWN identified type."""
     src = (
         "struct Pair@(T, U):\n"
         "    T first\n"
@@ -120,14 +94,7 @@ def test_generic_struct_instantiations_do_not_collide(tmp_path):
 
 
 def test_anonymous_fat_pointers_stay_literal(tmp_path):
-    """Strings, dynamic arrays and enums are NOT promoted to identified types.
-
-    They are anonymous layout descriptors, not nominal types, and several backend checks
-    identify them by structural shape (`is_string_type`, `is_dynamic_array_type`). Naming
-    them would break those, and would also serve no purpose: an enum's payload is a
-    `[K x i64]` word blob (#300 phase 2), so it never embeds an element type and never
-    had the back-fill problem in the first place.
-    """
+    """Strings, dynamic arrays and enums are NOT promoted to identified types."""
     src = (
         "enum Colour:\n"
         "    Red\n"
@@ -151,12 +118,7 @@ def test_anonymous_fat_pointers_stay_literal(tmp_path):
 
 
 def test_identified_type_is_set_body_not_recached():
-    """The mechanism itself: set_body fills IN PLACE, so a mid-walk pointer stays valid.
-
-    This is the property the old placeholder approach lacked, and the reason the fix is a
-    different LLVM construct rather than a reordering. Asserted directly against llvmlite
-    so the guarantee is pinned even if the compiler's use of it is refactored.
-    """
+    """The mechanism itself: set_body fills IN PLACE, so a mid-walk pointer stays valid."""
     module = ir.Module(name="pin")
     handle = module.context.get_identified_type("Tree")
     ptr_taken_before_body = ir.PointerType(handle)  # what a field walk would capture

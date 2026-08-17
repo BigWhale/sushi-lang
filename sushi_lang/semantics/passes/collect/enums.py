@@ -35,27 +35,14 @@ class EnumTable:
 
 @dataclass
 class GenericEnumTable:
-    """Table of generic enum types collected in Phase 0.
-
-    Generic enums are enum definitions with type parameters (e.g., Result<T>).
-    They are stored separately from concrete enums because they need to be
-    instantiated with concrete type arguments during monomorphization.
-    """
+    """Table of generic enum types collected in Phase 0."""
     by_name: Dict[str, GenericEnumType] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
     spans: Dict[str, Optional[Span]] = field(default_factory=dict)
 
 
 class EnumCollector:
-    """Collector for enum definitions.
-
-    Collects both regular and generic enum definitions during Phase 0, validating:
-    - No duplicate names (across regular, generic, and struct namespaces)
-    - No duplicate variant names within an enum
-    - No dynamic array fields in enum variants (unsupported)
-
-    Also registers predefined enums (FileMode, FileResult, FileError, SeekFrom).
-    """
+    """Collector for enum definitions."""
 
     def __init__(
         self,
@@ -66,16 +53,7 @@ class EnumCollector:
         generic_structs: 'GenericStructTable',
         known_types: Set[Type]
     ) -> None:
-        """Initialize enum collector.
-
-        Args:
-            reporter: Error reporter
-            enums: Shared regular enum table to populate
-            generic_enums: Shared generic enum table to populate
-            structs: Regular struct table for duplicate checking
-            generic_structs: Generic struct table for duplicate checking
-            known_types: Set of known types for registration
-        """
+        """Initialize enum collector."""
         self.r = reporter
         self.enums = enums
         self.generic_enums = generic_enums
@@ -84,11 +62,7 @@ class EnumCollector:
         self.known_types = known_types
 
     def collect(self, root: Program) -> None:
-        """Collect all enum definitions from program AST.
-
-        Args:
-            root: Program AST node
-        """
+        """Collect all enum definitions from program AST."""
         enums = getattr(root, "enums", None)
         if isinstance(enums, list):
             for enum in enums:
@@ -96,23 +70,7 @@ class EnumCollector:
                     self._collect_enum_def(enum)
 
     def register_predefined_enums(self) -> None:
-        """Register predefined enums for file operations and error handling.
-
-        These enums are built into the language and available globally:
-        - FileMode: File open modes (Read, Write, Append, ReadB, WriteB, AppendB)
-        - SeekFrom: Seek origins (Start, Current, End)
-        - FileError: File error types (NotFound, PermissionDenied, etc.)
-        - FileResult: Result type for open() with Ok(file) and Err() variants
-        - StdError: Generic standard library errors
-        - IoError: I/O operation errors
-        - ProcessError: Process control errors
-        - EnvError: Environment variable errors
-        - MathError: Mathematical operation errors
-
-        Note: FileResult uses Ok/Err variant names (not Success/Error) which is
-        consistent with Result<T, E> naming. There is no token conflict because
-        variants are always qualified with the enum name (FileResult.Ok vs Result.Ok).
-        """
+        """Register predefined enums for file operations and error handling."""
         # FileMode enum - file open modes
         file_mode_enum = EnumType(
             name="FileMode",
@@ -243,19 +201,7 @@ class EnumCollector:
         self.known_types.add(math_error_enum)
 
     def _collect_enum_def(self, enum: EnumDef) -> None:
-        """Collect enum definition and create EnumType or GenericEnumType.
-
-        If the enum has type_params (e.g., enum Result<T>:), it is stored as a
-        GenericEnumType in the generic_enums table. Otherwise, it is stored as
-        a regular EnumType in the enums table.
-
-        Note: For Phase 0, the grammar does not support user-defined generic enums yet.
-        This code is defensive and prepares for future phases when the grammar will
-        support enum Result<T>: syntax.
-
-        Args:
-            enum: Enum definition AST node
-        """
+        """Collect enum definition and create EnumType or GenericEnumType."""
         name = getattr(enum, "name", None)
         if not isinstance(name, str):
             return

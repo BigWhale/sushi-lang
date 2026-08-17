@@ -1,11 +1,4 @@
-"""
-Standard library function call emission package.
-
-This package handles external calls to precompiled stdlib functions for
-I/O operations, string methods, primitive conversions, math, time, env,
-random, and process functions. It re-exports every public emit_* symbol
-from its submodules so the original flat import surface is preserved.
-"""
+"""Standard library function call emission package."""
 from __future__ import annotations
 
 from sushi_lang.backend.expressions.calls.stdlib.io import (

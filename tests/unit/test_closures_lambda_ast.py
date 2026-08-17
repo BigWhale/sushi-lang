@@ -1,11 +1,4 @@
-"""T1.1 AST-builder gate: lambda literals build a `Lambda` node.
-
-Drives the real parser + ASTBuilder via ``parse_to_ast`` and asserts the built
-node shape for both body forms (expression + block), typed and bare params, and
-the zero-param ``|~|`` form. This is a front-end gate: it does NOT assert the
-lambda compiles end to end (capture analysis, lifting, and codegen land in later
-T1 phases).
-"""
+"""T1.1 AST-builder gate: lambda literals build a `Lambda` node."""
 from __future__ import annotations
 
 from sushi_lang.internals.parser import parse_to_ast

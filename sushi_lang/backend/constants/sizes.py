@@ -1,8 +1,4 @@
-"""Type and struct size constants.
-
-This module provides constants for primitive type sizes and composite structure sizes.
-All sizes are in bytes for 64-bit x86-64 architecture.
-"""
+"""Type and struct size constants."""
 
 # ============================================================================
 # Primitive Type Sizes (bytes)

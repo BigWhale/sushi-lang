@@ -1,10 +1,4 @@
-"""
-HashMap<K, V> core method implementations.
-
-This module contains the core HashMap methods for basic operations and lookups:
-- new, len, is_empty, tombstone_count (simple operations)
-- get, contains_key (lookup operations)
-"""
+"""HashMap<K, V> core method implementations."""
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall, Name
@@ -29,22 +23,7 @@ from sushi_lang.backend.expressions.memory import get_element_size_constant
 
 
 def emit_hashmap_new(codegen: Any, hashmap_type: StructType) -> ir.Value:
-    """Emit HashMap<K, V>.new() -> HashMap<K, V>
-
-    Creates an empty HashMap with initial capacity of 16 buckets.
-
-    Implementation:
-    1. Allocate Entry<K, V>[] array with 16 elements
-    2. Initialize all entries to Empty state (state = 0)
-    3. Create HashMap struct: {buckets, size=0, capacity=16, tombstones=0}
-
-    Args:
-        codegen: LLVM codegen instance.
-        hashmap_type: The HashMap<K, V> struct type.
-
-    Returns:
-        HashMap<K, V> struct value.
-    """
+    """Emit HashMap<K, V>.new() -> HashMap<K, V>"""
     # Extract K and V types
     key_type, value_type = extract_key_value_types(hashmap_type, codegen)
 
@@ -88,20 +67,7 @@ def emit_hashmap_new(codegen: Any, hashmap_type: StructType) -> ir.Value:
 
 
 def emit_hashmap_len(codegen: Any, hashmap_value: ir.Value) -> ir.Value:
-    """Emit HashMap<K, V>.len() -> i32
-
-    Returns the number of occupied entries (excludes tombstones).
-
-    Implementation:
-    1. Load size field from HashMap struct
-
-    Args:
-        codegen: LLVM codegen instance.
-        hashmap_value: The HashMap struct pointer.
-
-    Returns:
-        i32 size value.
-    """
+    """Emit HashMap<K, V>.len() -> i32"""
     # Get pointer to size field (index 1: buckets at 0, size at 1)
     builder = codegen.builder
     size_ptr = builder.gep(hashmap_value, HASHMAP_SIZE_INDICES, name="size_ptr")
@@ -109,41 +75,14 @@ def emit_hashmap_len(codegen: Any, hashmap_value: ir.Value) -> ir.Value:
 
 
 def emit_hashmap_is_empty(codegen: Any, hashmap_value: ir.Value) -> ir.Value:
-    """Emit HashMap<K, V>.is_empty() -> bool
-
-    Returns true if size == 0.
-
-    Implementation:
-    1. Extract size field
-    2. Compare size == 0
-
-    Args:
-        codegen: LLVM codegen instance.
-        hashmap_value: The HashMap struct value.
-
-    Returns:
-        bool value (i1 or i32 depending on context).
-    """
+    """Emit HashMap<K, V>.is_empty() -> bool"""
     size = emit_hashmap_len(codegen, hashmap_value)
     zero = ir.Constant(codegen.types.i32, 0)
     return codegen.builder.icmp_signed("==", size, zero, name="is_empty")
 
 
 def emit_hashmap_tombstone_count(codegen: Any, hashmap_value: ir.Value) -> ir.Value:
-    """Emit HashMap<K, V>.tombstone_count() -> i32
-
-    Returns the number of deleted entries.
-
-    Implementation:
-    1. Load tombstones field from HashMap struct
-
-    Args:
-        codegen: LLVM codegen instance.
-        hashmap_value: The HashMap struct pointer.
-
-    Returns:
-        i32 tombstones value.
-    """
+    """Emit HashMap<K, V>.tombstone_count() -> i32"""
     # Get pointer to tombstones field (index 3: buckets at 0, size at 1, capacity at 2, tombstones at 3)
     builder = codegen.builder
     tombstones_ptr = builder.gep(hashmap_value, HASHMAP_TOMBSTONES_INDICES, name="tombstones_ptr")
@@ -156,27 +95,7 @@ def emit_hashmap_get(
     hashmap_value: ir.Value,
     hashmap_type: StructType
 ) -> ir.Value:
-    """Emit HashMap<K, V>.get(K key) -> Maybe<V>
-
-    Retrieves a value from the HashMap by key.
-
-    Algorithm:
-    1. Hash the key to get hash value
-    2. Linear probe to find slot:
-       - If Occupied with matching key: return Maybe.Some(value)
-       - If Empty: return Maybe.None() (not found)
-       - If Tombstone or occupied with different key: continue probing
-    3. Return Maybe<V>
-
-    Args:
-        codegen: LLVM codegen instance.
-        expr: The method call expression with key argument.
-        hashmap_value: The HashMap struct pointer.
-        hashmap_type: The HashMap<K, V> struct type.
-
-    Returns:
-        Maybe<V> struct value.
-    """
+    """Emit HashMap<K, V>.get(K key) -> Maybe<V>"""
     from sushi_lang.semantics.ast import MethodCall
     import sushi_lang.backend.types.primitives.hashing  # noqa: F401
 
@@ -329,27 +248,7 @@ def emit_hashmap_contains_key(
     hashmap_value: ir.Value,
     hashmap_type: StructType
 ) -> ir.Value:
-    """Emit HashMap<K, V>.contains_key(K key) -> bool
-
-    Checks if a key exists in the HashMap.
-
-    Algorithm:
-    1. Hash the key to get hash value
-    2. Linear probe to find slot:
-       - If Occupied with matching key: return true
-       - If Empty: return false (not found)
-       - If Tombstone or occupied with different key: continue probing
-    3. Return bool
-
-    Args:
-        codegen: LLVM codegen instance.
-        expr: The method call expression with key argument.
-        hashmap_value: The HashMap struct pointer.
-        hashmap_type: The HashMap<K, V> struct type.
-
-    Returns:
-        bool value (i32 0 or 1).
-    """
+    """Emit HashMap<K, V>.contains_key(K key) -> bool"""
     from sushi_lang.semantics.ast import MethodCall
     import sushi_lang.backend.types.primitives.hashing  # noqa: F401
 

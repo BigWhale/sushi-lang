@@ -1,32 +1,10 @@
-"""
-UTF-8 Byte Offset Intrinsic
-
-Implements pure LLVM IR function to find the byte offset of the nth UTF-8 character
-in a bounded byte range. This works with fat pointer string representation.
-
-Algorithm:
-- Iterate through bytes until we've seen 'char_index' characters
-- Count characters by detecting non-continuation bytes
-- UTF-8 continuation bytes have pattern 10xxxxxx (0x80-0xBF)
-- Returns byte offset where the character starts, or -1 if out of bounds
-"""
+"""UTF-8 Byte Offset Intrinsic"""
 
 import llvmlite.ir as ir
 
 
 def emit_utf8_byte_offset_intrinsic(module: ir.Module) -> ir.Function:
-    """Emit the UTF-8 byte offset intrinsic function.
-
-    This function finds the byte offset of the nth UTF-8 character by iterating
-    through exactly 'size' bytes and counting non-continuation bytes until
-    reaching the target character index.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: i32 llvm_utf8_byte_offset(i8* data, i32 size, i32 char_index)
-    """
+    """Emit `i32 llvm_utf8_byte_offset(i8* data, i32 size, i32 char_index)`."""
     func_name = "llvm_utf8_byte_offset"
 
     # Check if already defined

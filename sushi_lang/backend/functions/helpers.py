@@ -1,9 +1,4 @@
-"""
-Helper functions for LLVM function management.
-
-This module contains utility functions used across function declaration
-and definition: parameter validation, scope management, default returns, etc.
-"""
+"""Helper functions for LLVM function management."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, Tuple
 
@@ -19,17 +14,7 @@ if TYPE_CHECKING:
 
 
 def callee_owns_param(param) -> bool:
-    """Does the CALLEE own this parameter, and therefore free it at scope exit?
-
-    One question, asked of the DECLARATION and of nothing else. It deliberately takes
-    no callee, no `fn_def` and no flag: the convention used to be derived from the
-    callee's implementation ("is this body a method?"), which is how one language
-    feature came to free its parameters in a `.slib` build and not in a generated
-    stdlib one (docs/design/borrow-model.md S1).
-
-    `tests/unit/test_callee_mode_matrix.py` pins the answer for all four modes, and
-    pins that the signature stays this narrow.
-    """
+    """Does the CALLEE own this parameter, and therefore free it at scope exit?"""
     from sushi_lang.semantics.param_modes import param_mode
     return param_mode(param).consumes
 
@@ -38,25 +23,14 @@ class FunctionHelpers:
     """Utility functions for function emission."""
 
     def __init__(self, codegen: 'LLVMCodegen') -> None:
-        """Initialize helpers with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance.
-        """
+        """Initialize helpers with reference to main codegen instance."""
         self.codegen = codegen
         # One entry per open `begin_function`, holding the name -> semantic-type map that
         # was live when it started. See `begin_function` for why the map is per-function.
         self._variable_types_stack: list[dict] = []
 
     def is_valid_param_type(self, param_type: Ty) -> bool:
-        """Check if a type is valid for function parameters.
-
-        Args:
-            param_type: The type to validate.
-
-        Returns:
-            True if the type can be used as a function parameter.
-        """
+        """Check if a type is valid for function parameters."""
         # Check for builtin types
         if param_type in (
             BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
@@ -108,17 +82,7 @@ class FunctionHelpers:
         return False
 
     def params_of(self, fn: FuncDef) -> List[Tuple[str, Ty]]:
-        """Extract parameter information from function definition.
-
-        Args:
-            fn: The function definition AST node.
-
-        Returns:
-            List of (name, type) tuples for function parameters.
-
-        Raises:
-            TypeError: If parameter format is invalid or type is missing.
-        """
+        """Extract parameter information from function definition."""
         out: List[Tuple[str, Ty]] = []
         for idx, p in enumerate(getattr(fn, "params", ())):
             if not isinstance(p, Param):
@@ -137,22 +101,7 @@ class FunctionHelpers:
         return out
 
     def get_extension_method_name(self, ext: ExtendDef) -> str:
-        """Generate unique function name for extension method.
-
-        Args:
-            ext: The extension method definition.
-
-        Returns:
-            The mangled function name.
-
-        Examples:
-            - extend i32 add() → "i32_add"
-            - extend Box<i32> unwrap() → "Box__i32_unwrap"
-            - extend HashMap<string, i32> get() → "HashMap__string_i32_get"
-
-        Mirrored by ``semantics/library_templates.py:impl_method_symbol`` for
-        the symbols recorded in shipped perk-impl manifest records (C4a).
-        """
+        """Generate unique function name for extension method."""
         if ext.target_type and isinstance(ext.target_type, BuiltinType):
             target_type_name = ext.target_type.value
         else:
@@ -165,17 +114,7 @@ class FunctionHelpers:
         return f"{target_type_name}_{ext.name}"
 
     def emit_default_return(self, ret_type: Ty | None) -> None:
-        """Emit default return value for function without explicit return.
-
-        With Result<T>, all functions now return Result structs. The default
-        return is Err() which is {0, zero_value}.
-
-        Args:
-            ret_type: The function's return type.
-
-        Raises:
-            TypeError: If the return type is not supported.
-        """
+        """Emit default return value for function without explicit return."""
         if ret_type is None:
             return
 
@@ -217,17 +156,7 @@ class FunctionHelpers:
             self.codegen.builder.ret(err_result)
 
     def emit_default_return_for_extension(self, ret_type: Ty | None) -> None:
-        """Emit default return value for extension method without explicit return.
-
-        Extension methods return bare types (not Result<T>), so we return
-        a zero/default value directly.
-
-        Args:
-            ret_type: The extension method's return type.
-
-        Raises:
-            TypeError: If the return type is not supported.
-        """
+        """Emit default return value for extension method without explicit return."""
         if ret_type is None:
             return
 
@@ -241,15 +170,7 @@ class FunctionHelpers:
         self.codegen.builder.ret(zero_value)
 
     def begin_function(self, llvm_fn: ir.Function, fn_def: FuncDef | None = None) -> None:
-        """Initialize function emission context.
-
-        Sets up entry and start blocks, alloca builder, fresh scope,
-        and parameter handling for the function.
-
-        Args:
-            llvm_fn: The LLVM function to begin emitting.
-            fn_def: Optional function definition for parameter semantic type registration.
-        """
+        """Initialize function emission context."""
         self.codegen.func = llvm_fn
         self.codegen.entry_branch = None
 
@@ -370,11 +291,7 @@ class FunctionHelpers:
                 relinquish(self.codegen, param.name)
 
     def end_function(self) -> None:
-        """Clean up function emission context.
-
-        Clears per-function state including builders, scopes, references, and the
-        name -> semantic-type map `begin_function` saved.
-        """
+        """Clean up function emission context."""
         self.codegen.func = None
         self.codegen.builder = None
         self.codegen.alloca_builder = None
@@ -392,20 +309,7 @@ def declare_stdlib_function(
     return_type: ir.Type,
     param_types: list[ir.Type]
 ) -> ir.Function:
-    """Declare an external stdlib function.
-
-    This declares a function that will be linked from a stdlib .bc file.
-    If the function already exists in the module, returns the existing declaration.
-
-    Args:
-        module: The LLVM module to declare the function in.
-        func_name: Name of the stdlib function (e.g., "sushi_i32_to_str")
-        return_type: LLVM return type
-        param_types: List of LLVM parameter types
-
-    Returns:
-        The declared function (or existing if already declared)
-    """
+    """Declare an external stdlib function."""
     # Check if already declared
     if func_name in module.globals:
         existing = module.globals[func_name]

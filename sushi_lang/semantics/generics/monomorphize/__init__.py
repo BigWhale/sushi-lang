@@ -1,28 +1,5 @@
 # semantics/generics/monomorphize/__init__.py
-"""
-Pass 1.6: Monomorphization
-
-Generates concrete EnumType, StructType, and FuncDef instances for each generic instantiation.
-Takes GenericEnumType + type arguments → produces concrete EnumType.
-Takes GenericStructType + type arguments → produces concrete StructType.
-Takes GenericFuncDef + type arguments → produces concrete FuncDef.
-
-Example:
-    GenericEnumType("Result", ["T"]) + [i32] → EnumType("Result<i32>")
-    GenericStructType("Pair", ["T", "U"]) + [i32, string] → StructType("Pair<i32, string>")
-    GenericFuncDef("identity", ["T"]) + [i32] → FuncDef("identity__i32")
-
-This module provides a facade that maintains the original Monomorphizer API
-while delegating to specialized sub-modules.
-
-Nested Generics Support:
-The type substitution recursively handles nested generic types like
-Result<Maybe<i32>> by:
-1. Recursively substituting type arguments in GenericTypeRef nodes
-2. Checking the cache for already-monomorphized nested generics
-3. Recursively monomorphizing nested generics on-demand
-This ensures zero-overhead monomorphization for arbitrarily nested generics.
-"""
+"""Pass 1.6: Monomorphization"""
 from __future__ import annotations
 from contextlib import contextmanager
 from typing import Dict, Iterator, Tuple, Set, TYPE_CHECKING
@@ -56,28 +33,8 @@ __all__ = ["Monomorphizer", "MonomorphizationDepthExceeded"]
 
 @dataclass
 class Monomorphizer:
-    """Generates concrete enum types, struct types, and function definitions from generic definitions.
-
-    This facade class maintains the original Monomorphizer API while delegating
-    to specialized sub-modules:
-    - TypeSubstitutor: Type parameter substitution and AST transformation
-    - TypeMonomorphizer: Enum and struct monomorphization
-    - FunctionMonomorphizer: Function monomorphization and nested instantiation detection
-
-    For each generic type instantiation (e.g., Result<i32>), this class:
-    1. Takes the GenericEnumType definition (Result<T>)
-    2. Creates a substitution map (T → i32)
-    3. Substitutes T with i32 in all variant associated types
-    4. Produces a concrete EnumType with a unique name (Result<i32>)
-
-    For each generic function instantiation (e.g., identity<i32>), this class:
-    1. Takes the GenericFuncDef definition (identity<T>)
-    2. Creates a substitution map (T → i32)
-    3. Substitutes T with i32 in parameters and return type
-    4. Produces a concrete FuncSig with a mangled name (identity__i32)
-
-    The resulting EnumType, StructType, and FuncDef instances can be used by the rest
-    of the compiler as if they were regular (non-generic) types and functions.
+    """Generates concrete enum types, struct types, and function definitions from generic
+    definitions.
     """
 
     reporter: Reporter
@@ -147,14 +104,7 @@ class Monomorphizer:
         type_params: Tuple,
         type_args: Tuple[Type, ...]
     ) -> None:
-        """Validate perk constraints on type arguments (DRY helper).
-
-        Args:
-            type_params: Type parameters (may contain BoundedTypeParam with constraints)
-            type_args: Concrete type arguments to validate
-
-        Emits CE4006 errors for constraint violations.
-        """
+        """Validate perk constraints on type arguments (DRY helper)."""
         if self.constraint_validator is None:
             return
 
@@ -171,13 +121,7 @@ class Monomorphizer:
 
     @contextmanager
     def _monomorphize_depth_guard(self, type_name: str) -> Iterator[None]:
-        """Bound recursive type monomorphization.
-
-        Enter once per nested monomorphize_enum/struct call while its fields are
-        being substituted. If the chain grows past MONOMORPHIZE_MAX_DEPTH the type
-        is infinitely recursive: report CE0122 and raise MonomorphizationDepthExceeded
-        so the substitution unwinds cleanly instead of overflowing the Python stack.
-        """
+        """Bound recursive type monomorphization."""
         self._monomorphize_depth += 1
         try:
             if self._monomorphize_depth > self.MONOMORPHIZE_MAX_DEPTH:
@@ -194,17 +138,7 @@ class Monomorphizer:
         generic_enums: Dict[str, GenericEnumType],
         instantiations: Set[Tuple[str, Tuple[Type, ...]]]
     ) -> Dict[str, EnumType]:
-        """Monomorphize all collected generic enum instantiations.
-
-        Delegates to TypeMonomorphizer.
-
-        Args:
-            generic_enums: Table of GenericEnumType definitions (from CollectorPass)
-            instantiations: Set of (base_name, type_args) tuples (from InstantiationCollector)
-
-        Returns:
-            Dictionary mapping concrete type names (e.g., "Result<i32>") to EnumType instances
-        """
+        """Monomorphize all collected generic enum instantiations."""
         return self.type_monomorphizer.monomorphize_all_enums(generic_enums, instantiations)
 
     def monomorphize_enum(
@@ -212,17 +146,7 @@ class Monomorphizer:
         generic: GenericEnumType,
         type_args: Tuple[Type, ...]
     ) -> EnumType:
-        """Create concrete enum by substituting type parameters.
-
-        Delegates to TypeMonomorphizer.
-
-        Args:
-            generic: The generic enum definition (e.g., Result<T>)
-            type_args: Concrete type arguments (e.g., (BuiltinType.I32,))
-
-        Returns:
-            Concrete EnumType with substituted types
-        """
+        """Create concrete enum by substituting type parameters."""
         return self.type_monomorphizer.monomorphize_enum(generic, type_args)
 
     # ===== STRUCT MONOMORPHIZATION API =====
@@ -232,17 +156,7 @@ class Monomorphizer:
         generic_structs: Dict[str, GenericStructType],
         instantiations: Set[Tuple[str, Tuple[Type, ...]]]
     ) -> Dict[str, StructType]:
-        """Monomorphize all collected generic struct instantiations.
-
-        Delegates to TypeMonomorphizer.
-
-        Args:
-            generic_structs: Table of GenericStructType definitions (from CollectorPass)
-            instantiations: Set of (base_name, type_args) tuples (from InstantiationCollector)
-
-        Returns:
-            Dictionary mapping concrete type names (e.g., "Pair<i32, string>") to StructType instances
-        """
+        """Monomorphize all collected generic struct instantiations."""
         return self.type_monomorphizer.monomorphize_all_structs(generic_structs, instantiations)
 
     def monomorphize_struct(
@@ -250,17 +164,7 @@ class Monomorphizer:
         generic: GenericStructType,
         type_args: Tuple[Type, ...]
     ) -> StructType:
-        """Create concrete struct by substituting type parameters.
-
-        Delegates to TypeMonomorphizer.
-
-        Args:
-            generic: The generic struct definition (e.g., Pair<T, U>)
-            type_args: Concrete type arguments (e.g., (BuiltinType.I32, BuiltinType.STRING))
-
-        Returns:
-            Concrete StructType with substituted types
-        """
+        """Create concrete struct by substituting type parameters."""
         return self.type_monomorphizer.monomorphize_struct(generic, type_args)
 
     # ===== FUNCTION MONOMORPHIZATION API =====
@@ -270,17 +174,7 @@ class Monomorphizer:
         generic: 'GenericFuncDef',
         type_args: Tuple[Type, ...]
     ) -> 'FuncDef':
-        """Create concrete function from generic definition.
-
-        Delegates to FunctionMonomorphizer.
-
-        Args:
-            generic: Generic function definition
-            type_args: Concrete type arguments
-
-        Returns:
-            Concrete function definition (FuncDef) with substituted body
-        """
+        """Create concrete function from generic definition."""
         return self.function_monomorphizer.monomorphize_function(generic, type_args)
 
     def monomorphize_all_functions(
@@ -288,14 +182,7 @@ class Monomorphizer:
         function_instantiations: Set[Tuple[str, Tuple[Type, ...]]],
         program_or_units
     ) -> None:
-        """Monomorphize all detected function instantiations.
-
-        Delegates to FunctionMonomorphizer.
-
-        Args:
-            function_instantiations: Set of (function_name, type_args) tuples
-            program_or_units: Either a Program AST (single-file) or list of Units (multi-file)
-        """
+        """Monomorphize all detected function instantiations."""
         self.function_monomorphizer.monomorphize_all_functions(
             function_instantiations, program_or_units
         )

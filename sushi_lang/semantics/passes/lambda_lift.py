@@ -1,26 +1,4 @@
-"""Lambda-lifting pass: turn each lambda literal into a top-level function + env.
-
-Runs between the type pass (which resolved each lambda's param/capture types and
-its FunctionType onto the node) and the borrow pass (which then checks the
-synthesized functions). For each lambda:
-
-  1. Synthesize an environment struct `__closure_env_N { <captured fields> }` and
-     register it in the struct table.
-  2. Synthesize the lifted function
-        fn __lambda_N(peek __closure_env_N __closure_env, <lambda params>) -> ok | err
-     whose body is the lambda body with every captured-name read rewritten to a
-     field read `__closure_env.<name>`.
-  3. Register the lifted function through the shared synthesis helper, then annotate
-     it with the type validator (it was added after the main type pass, so it needs
-     its own resolution for the backend — e.g. Result.Ok concrete types).
-
-The Lambda node stays in place as an expression; the backend (emit_lambda) builds
-the runtime value {&__lambda_N, env_ptr, drop} at that site using `lifted_name`,
-`env_struct`, and `captures`.
-
-Nested closures (a lambda inside another lambda's body) are lifted best-effort in
-T1; the deep capture data-flow is a known limitation.
-"""
+"""Lambda-lifting pass: turn each lambda literal into a top-level function + env."""
 from __future__ import annotations
 import dataclasses
 from typing import Callable, List, Optional
@@ -128,11 +106,7 @@ class LambdaLifter:
 
 
 def _rewrite_captures(node, cap_names: set) -> None:
-    """Replace `Name(cap)` reads with `MemberAccess(Name(env), cap)` in-place.
-
-    Does not descend into nested Lambda nodes (each lambda's captures are rewritten
-    against its own env when that lambda is lifted).
-    """
+    """Replace `Name(cap)` reads with `MemberAccess(Name(env), cap)` in-place."""
     if isinstance(node, Lambda):
         return
     if isinstance(node, list):

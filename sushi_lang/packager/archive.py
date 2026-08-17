@@ -16,16 +16,7 @@ class PackageArchive:
 
     @staticmethod
     def create(manifest: NoriManifest, base_dir: Path, output_dir: Path) -> Path:
-        """Create a .nori archive from a manifest and its files.
-
-        Args:
-            manifest: Validated manifest.
-            base_dir: Directory containing nori.toml and referenced files.
-            output_dir: Directory to write the archive to.
-
-        Returns:
-            Path to the created .nori file.
-        """
+        """Create a .nori archive from a manifest and its files."""
         output_dir.mkdir(parents=True, exist_ok=True)
         archive_path = output_dir / f"{manifest.archive_name}.nori"
         prefix = manifest.archive_name
@@ -51,15 +42,7 @@ class PackageArchive:
 
     @staticmethod
     def extract(archive_path: Path, dest_dir: Path) -> Path:
-        """Extract a .nori archive.
-
-        Args:
-            archive_path: Path to the .nori file.
-            dest_dir: Directory to extract into.
-
-        Returns:
-            Path to the extracted package directory.
-        """
+        """Extract a .nori archive."""
         with tarfile.open(archive_path, "r:gz") as tar:
             # Find the top-level directory name
             members = tar.getnames()

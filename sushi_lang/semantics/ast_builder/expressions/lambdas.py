@@ -1,15 +1,4 @@
-"""Lambda literal (closure) AST building.
-
-A lambda is an expression (an `atom` alternative), so this parser lives beside the
-other expression builders (`literals.py`, `calls.py`), not under `declarations/`.
-It reuses the shared type/expr/block builders on `ASTBuilder`.
-
-Grammar (see grammar.lark):
-    lambda_expr:  "|" <params> "|" <expr>
-    lambda_block: "|" <params> "|" [lambda_ret] <block>
-    <params>    = lambda_no_params (`~`) | lambda_params(lambda_typed_param|lambda_bare_param ...)
-    lambda_ret  = "->" type ["|" type]
-"""
+"""Lambda literal (closure) AST building."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, Optional, Union
 from lark import Token, Tree

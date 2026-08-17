@@ -1,34 +1,5 @@
 # semantics/passes/const_eval.py
-"""Compile-time constant expression evaluator.
-
-This module provides compile-time evaluation of constant expressions during
-semantic analysis. Constants are folded to Python values (int, float, bool, str)
-during Pass 2, enabling error detection before code generation.
-
-Design:
-- Stateless evaluation (no builder, no runtime context)
-- Returns Python values or None for non-evaluable expressions
-- Tracks constant dependencies for cycle detection
-- Produces clear error messages for invalid expressions
-
-Allowed Operations:
-- Literals: IntLit, FloatLit, BoolLit, StringLit
-- Arithmetic: +, -, *, /, % (for numeric types)
-- Bitwise: &, |, ^, ~, <<, >> (for integer types only)
-- Logical: and, or, xor, not (for bool type only)
-- Comparison: ==, !=, <, <=, >, >= (for compatible types)
-- Type Casts: as (between compatible types)
-- Array Literals: Fixed-size arrays with constant elements
-- Name References: References to other constants (with cycle detection)
-
-Forbidden Operations:
-- Function calls (including constructors)
-- Method calls
-- Variable references (only constants allowed)
-- Dynamic arrays
-- Struct/Enum construction
-- Borrow/TryExpr (runtime-only)
-"""
+"""Compile-time constant expression evaluator."""
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional, Union
@@ -53,14 +24,7 @@ class ConstantValue:
     semantic_type: Type  # Sushi type (i32, f64, bool, string, etc.)
 
     def to_llvm_constant(self, types) -> ir.Constant:
-        """Convert to LLVM constant for backend emission.
-
-        Args:
-            types: LLVMTypeSystem instance for type lookups
-
-        Returns:
-            LLVM constant value
-        """
+        """Convert to LLVM constant for backend emission."""
         if self.semantic_type == BuiltinType.BOOL:
             return ir.Constant(types.i8, 1 if self.value else 0)
         elif self.semantic_type == BuiltinType.I8:
@@ -99,47 +63,17 @@ class ConstantValue:
 
 
 class ConstantEvaluator:
-    """Compile-time constant expression evaluator.
-
-    Evaluates constant expressions to concrete values during compilation.
-    Used in Pass 2 for constant definitions and during type checking.
-
-    Design:
-    - Stateless evaluation (no builder, no runtime context)
-    - Returns Python values (int, float, bool, str) or None for non-evaluable expressions
-    - Tracks constant dependencies for cycle detection
-    - Produces clear error messages for invalid expressions
-    """
+    """Compile-time constant expression evaluator."""
 
     def __init__(self, reporter: Reporter, const_table: ConstantTable, ast_constants: dict):
-        """Initialize the evaluator.
-
-        Args:
-            reporter: Error reporter for diagnostics
-            const_table: Table of constant signatures
-            ast_constants: Dict mapping constant names to ConstDef AST nodes
-        """
+        """Initialize the evaluator."""
         self.reporter = reporter
         self.const_table = const_table
         self.ast_constants = ast_constants
         self.evaluation_stack: List[str] = []  # For cycle detection
 
     def evaluate(self, expr: Expr, expected_type: Type, span: Optional[Span]) -> Optional[ConstantValue]:
-        """Evaluate an expression to a compile-time constant.
-
-        Args:
-            expr: Expression to evaluate
-            expected_type: Expected type of the constant
-            span: Source span for error reporting
-
-        Returns:
-            ConstantValue with Python value and type, or None if not evaluable
-
-        Emits:
-            CE0108: Expression is not a compile-time constant
-            CE0109: Circular constant dependency detected
-            CE0110: Unsupported operation in constant expression
-        """
+        """Evaluate an expression to a compile-time constant."""
         # Literals
         if isinstance(expr, IntLit):
             return self._evaluate_int_lit(expr, expected_type)

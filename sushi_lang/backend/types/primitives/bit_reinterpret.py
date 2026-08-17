@@ -1,18 +1,4 @@
-"""
-Built-in bit-reinterpret methods for float primitive types.
-
-Implemented methods:
-- f32.to_bits() -> u32: Reinterpret the IEEE-754 bit pattern of an f32 as a u32
-- f64.to_bits() -> u64: Reinterpret the IEEE-754 bit pattern of an f64 as a u64
-
-These are the value-method half of the float<->bits reinterpret pair; the static
-constructors f32.from_bits(u32) / f64.from_bits(u64) are handled separately in the
-call dispatcher (they take a type-name receiver rather than a value).
-
-Unlike the `as` cast (which is value-preserving and emits sitofp/fptosi), these emit a
-single LLVM `bitcast` between equal-width types, exposing the raw IEEE-754 encoding. This
-is the primitive needed to decode/encode MessagePack float32/float64 tags.
-"""
+"""Built-in bit-reinterpret methods for float primitive types."""
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall
@@ -35,14 +21,7 @@ def _validate_to_bits(call: MethodCall, target_type: Type, reporter: Any) -> Non
 
 
 def _emit_to_bits(prim_type: BuiltinType) -> Any:
-    """Create a to_bits() emitter for the given float primitive type.
-
-    Args:
-        prim_type: F32 or F64.
-
-    Returns:
-        An emitter function that bitcasts the float value to its integer bit pattern.
-    """
+    """Create a to_bits() emitter for the given float primitive type."""
     int_width = INT32_BIT_WIDTH if prim_type == BuiltinType.F32 else INT64_BIT_WIDTH
 
     def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,

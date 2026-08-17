@@ -1,9 +1,4 @@
-"""
-Pattern matching statement emission for the Sushi language compiler.
-
-This module handles the generation of LLVM IR for match statements with
-exhaustive pattern matching on enum types.
-"""
+"""Pattern matching statement emission for the Sushi language compiler."""
 from __future__ import annotations
 import itertools
 from typing import TYPE_CHECKING
@@ -19,19 +14,7 @@ if TYPE_CHECKING:
 
 
 def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
-    """Emit match statement with exhaustive pattern matching.
-
-    Compiles a match statement by:
-    1. Evaluating the scrutinee
-    2. Extracting the tag (discriminant)
-    3. Comparing tag against each variant
-    4. Extracting associated data and binding to pattern variables
-    5. Executing the matching arm's body
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        stmt: The match statement node to emit.
-    """
+    """Emit match statement with exhaustive pattern matching."""
 
     builder, func = require_both_initialized(codegen)
     codegen.utils.ensure_open_block()
@@ -105,10 +88,8 @@ _TEMP_SCRUTINEE_SEQ = itertools.count()
 
 def _register_temp_scrutinee(codegen: 'LLVMCodegen', scrutinee: 'Expr', scrutinee_value: 'ir.Value',
                              scrutinee_type: 'EnumType | None') -> bool:
-    """Own an unbound match scrutinee for the duration of the match. Returns True if a scope was pushed.
-
-    A bound scrutinee (a Name / field read) is already owned by whoever declared it -- taking a
-    second owner here would double-free at scope exit.
+    """Own an unbound match scrutinee for the duration of the match. Returns True if a scope was
+    pushed.
     """
     from sushi_lang.backend.expressions.memory import expression_is_temporary
     from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
@@ -130,19 +111,7 @@ def _register_temp_scrutinee(codegen: 'LLVMCodegen', scrutinee: 'Expr', scrutine
 
 
 def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType | None':
-    """Get the EnumType of the scrutinee expression.
-
-    For match expressions, this function determines the concrete enum type of the
-    scrutinee, which is crucial for proper pattern variable extraction. This is
-    especially important for generic enums like Maybe<T> and Result<T>.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        scrutinee: The scrutinee expression.
-
-    Returns:
-        The monomorphized EnumType of the scrutinee, or None if not found.
-    """
+    """Get the EnumType of the scrutinee expression."""
     from sushi_lang.semantics.ast import Name, DotCall, MethodCall, MemberAccess
     from sushi_lang.semantics.typesys import EnumType, StructType
 
@@ -251,15 +220,7 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
 
 
 def _find_wildcard_block(stmt: 'Match', arm_blocks: list['ir.Block']) -> 'ir.Block | None':
-    """Find the block corresponding to a wildcard pattern, if any.
-
-    Args:
-        stmt: The match statement.
-        arm_blocks: List of basic blocks for each arm.
-
-    Returns:
-        The wildcard block, or None if no wildcard pattern exists.
-    """
+    """Find the block corresponding to a wildcard pattern, if any."""
     from sushi_lang.semantics.ast import WildcardPattern
 
     for i, arm in enumerate(stmt.arms):
@@ -269,21 +230,7 @@ def _find_wildcard_block(stmt: 'Match', arm_blocks: list['ir.Block']) -> 'ir.Blo
 
 
 def _find_next_arm_with_same_tag(codegen: 'LLVMCodegen', stmt: 'Match', arm_blocks: list['ir.Block'], scrutinee_type: 'EnumType | None', current_arm_index: int) -> 'ir.Block | None':
-    """Find the next arm that has the same outer tag as the current arm.
-
-    This is used for nested pattern fallthrough. When a nested pattern doesn't match,
-    we want to fallthrough to the next arm that matches the same outer variant.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        stmt: The match statement.
-        arm_blocks: List of basic blocks for each arm.
-        scrutinee_type: The EnumType of the scrutinee.
-        current_arm_index: Index of the current arm.
-
-    Returns:
-        The block of the next arm with the same tag, or None if no such arm exists.
-    """
+    """Find the next arm that has the same outer tag as the current arm."""
     from sushi_lang.semantics.ast import Pattern, WildcardPattern
 
     # Get the current arm's pattern
@@ -326,16 +273,7 @@ def _find_next_arm_with_same_tag(codegen: 'LLVMCodegen', stmt: 'Match', arm_bloc
 
 
 def _create_switch_instruction(codegen: 'LLVMCodegen', tag: 'ir.Value', wildcard_bb: 'ir.Block | None') -> tuple['ir.Instruction', 'ir.Block | None']:
-    """Create the switch instruction for pattern matching.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        tag: The discriminant tag value.
-        wildcard_bb: The wildcard block (default case), or None.
-
-    Returns:
-        Tuple of (switch instruction, unreachable block or None).
-    """
+    """Create the switch instruction for pattern matching."""
     # Default case: wildcard if present, otherwise unreachable
     if wildcard_bb is None:
         unreachable_bb = codegen.func.append_basic_block(name="match.unreachable")
@@ -345,19 +283,7 @@ def _create_switch_instruction(codegen: 'LLVMCodegen', tag: 'ir.Value', wildcard
 
 
 def _add_switch_cases(codegen: 'LLVMCodegen', stmt: 'Match', arm_blocks: list['ir.Block'], switch: 'ir.Instruction', scrutinee_type: 'EnumType | None') -> None:
-    """Add switch cases for each match arm.
-
-    For nested patterns, multiple arms may have the same outer variant tag.
-    In this case, we only add the first arm with that tag to the switch,
-    and the nested pattern checking happens inside the arm via runtime checks.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        stmt: The match statement.
-        arm_blocks: List of basic blocks for each arm.
-        switch: The switch instruction.
-        scrutinee_type: The EnumType of the scrutinee (monomorphized for generics).
-    """
+    """Add switch cases for each match arm."""
     from llvmlite import ir
     from sushi_lang.semantics.ast import Pattern, WildcardPattern
 
@@ -393,16 +319,7 @@ def _emit_match_arms(
     scrutinee_type: 'EnumType | None',
     end_bb: 'ir.Block'
 ) -> None:
-    """Emit all match arms.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        stmt: The match statement.
-        arm_blocks: List of basic blocks for each arm.
-        scrutinee_value: The scrutinee enum value.
-        scrutinee_type: The EnumType of the scrutinee (monomorphized for generics).
-        end_bb: The end block to branch to.
-    """
+    """Emit all match arms."""
     from sushi_lang.semantics.ast import Pattern, Block
 
     for i, (arm, arm_bb) in enumerate(zip(stmt.arms, arm_blocks, strict=True)):
@@ -446,17 +363,7 @@ def _emit_match_arms(
 
 
 def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scrutinee_value: 'ir.Value', scrutinee_type: 'EnumType | None', next_arm_bb: 'ir.Block | None' = None, scrutinee_expr: 'Expr | None' = None) -> None:
-    """Extract and bind pattern variables from enum data.
-
-    Supports nested patterns by recursively extracting and matching nested enum values.
-    Supports Own<T> patterns by auto-unwrapping via Own<T>.get().
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        pattern: The pattern with bindings.
-        scrutinee_value: The scrutinee enum value.
-        scrutinee_type: The EnumType of the scrutinee (monomorphized for generics).
-    """
+    """Extract and bind pattern variables from enum data."""
     from llvmlite import ir
     from sushi_lang.semantics.ast import Pattern as PatternNode, OwnPattern
     from sushi_lang.semantics.ast import RefBinding as RefBindingNode
@@ -553,21 +460,7 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
 
 
 def _extract_nested_pattern(codegen: 'LLVMCodegen', nested_pattern: 'Pattern', enum_value: 'ir.Value', enum_type: 'Type', next_arm_bb: 'ir.Block | None' = None) -> None:
-    """Extract and validate a nested pattern from an enum value.
-
-    This function:
-    1. Extracts the tag from the nested enum
-    2. Validates it matches the expected variant
-    3. Recursively extracts bindings from the nested pattern
-    4. If the tag doesn't match and next_arm_bb is provided, branches to next arm (fallthrough)
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        nested_pattern: The nested pattern to match.
-        enum_value: The enum value to extract from.
-        enum_type: The semantic type of the enum.
-        next_arm_bb: The next arm block to branch to on mismatch (for fallthrough support).
-    """
+    """Extract and validate a nested pattern from an enum value."""
     from sushi_lang.semantics.typesys import EnumType
 
     # Resolve the enum type (handle generics)
@@ -621,24 +514,7 @@ def _extract_nested_pattern(codegen: 'LLVMCodegen', nested_pattern: 'Pattern', e
 
 
 def _extract_own_pattern(codegen: 'LLVMCodegen', own_pattern: 'OwnPattern', own_value: 'ir.Value', own_type: 'Type', next_arm_bb: 'ir.Block | None' = None) -> None:
-    """Extract and bind an Own<T> pattern by auto-unwrapping.
-
-    This function:
-    1. Unwraps Own<T> via Own<T>.get() to get the owned value
-    2. Binds the inner pattern to the unwrapped value
-
-    Syntax example:
-        match expr:
-            Expr.BinOp(Own(left), Own(right), op) ->
-                # left and right are auto-unwrapped to Expr
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        own_pattern: The Own pattern node.
-        own_value: The Own<T> struct value to unwrap.
-        own_type: The semantic type Own<T>.
-        next_arm_bb: The next arm block to branch to on mismatch (for fallthrough support).
-    """
+    """Extract and bind an Own<T> pattern by auto-unwrapping."""
     from sushi_lang.semantics.ast import Pattern as PatternNode
     from sushi_lang.semantics.typesys import StructType
     from sushi_lang.backend.generics import own as own_module
@@ -693,12 +569,7 @@ def _extract_own_pattern(codegen: 'LLVMCodegen', own_pattern: 'OwnPattern', own_
 
 
 def _emit_block(codegen: 'LLVMCodegen', block) -> None:
-    """Helper to emit a block of statements.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        block: The block AST node containing statements.
-    """
+    """Helper to emit a block of statements."""
     # Import here to avoid circular dependency
     from sushi_lang.backend.statements import StatementEmitter
     emitter = StatementEmitter(codegen)

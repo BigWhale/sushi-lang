@@ -1,10 +1,4 @@
-"""
-Array method dispatcher.
-
-This module handles dispatching of built-in array method calls for both
-fixed and dynamic arrays. It serves as the central entry point for all
-array method calls from the expression emission layer.
-"""
+"""Array method dispatcher."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -20,16 +14,7 @@ from .methods import core, iterators, hashing
 
 
 def is_builtin_array_method(method_name: str) -> bool:
-    """Check if a method name is a built-in array method.
-
-    Arrays are a CORE language feature, not stdlib.
-
-    Args:
-        method_name: The method name to check.
-
-    Returns:
-        True if the method is a built-in array method.
-    """
+    """Check if a method name is a built-in array method."""
     # Fixed array methods: len, get, iter, hash, fill, reverse
     # Dynamic array methods: len, get, push, pop, capacity, destroy, free, iter, clone, hash, fill, reverse
     # u8[] specific methods: to_string
@@ -47,26 +32,7 @@ def emit_array_method(
     semantic_type: 'Type',
     to_i1: bool
 ) -> ir.Value:
-    """Emit LLVM IR for built-in array method calls.
-
-    Arrays are a CORE language feature that use inline emission.
-    This function dispatches to specialized emitters based on method name
-    and array type (fixed vs dynamic).
-
-    Args:
-        codegen: The LLVM code generator.
-        expr: The method call expression.
-        receiver_value: The LLVM value of the array.
-        receiver_type: The LLVM type of the array.
-        semantic_type: The semantic type of the array (DynamicArrayType or FixedArrayType).
-        to_i1: Whether to convert result to i1.
-
-    Returns:
-        The result of the array method call.
-
-    Raises:
-        NotImplementedError: If the method is not implemented for the array type.
-    """
+    """Emit LLVM IR for built-in array method calls."""
     method_name = expr.method
 
     # Fixed array methods

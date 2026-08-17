@@ -1,9 +1,4 @@
-"""
-Core type method call handlers (arrays, enums, structs, primitives, strings).
-
-This module contains dispatcher helpers for built-in language features like
-arrays, strings, and primitive types.
-"""
+"""Core type method call handlers (arrays, enums, structs, primitives, strings)."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Union
 
@@ -224,15 +219,7 @@ def _try_emit_auto_derived(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCa
                            receiver_value: ir.Value, receiver_type: ir.Type,
                            semantic_type, to_i1: bool, *, method: str, kind: type,
                            exclude_containers: bool = False) -> Optional[ir.Value]:
-    """The ONE shape behind the four auto-derived hash/clone dispatchers (11b).
-
-    Checks the method name and the receiver's semantic kind, looks the auto-derived
-    method up in the builtin registry, and calls its registered LLVM emitter. For the
-    enum kind a `Result@(T, E)` still spelled as a GenericTypeRef is interned first
-    (every Result must go through `ensure_result_type_in_table` -- see CE0126).
-    `exclude_containers` keeps Own/List/HashMap on their own method paths, keyed on the
-    SAME prefix tuple their registration exclusion uses (semantics/generics/cloning.py).
-    """
+    """The ONE shape behind the four auto-derived hash/clone dispatchers (11b)."""
     if semantic_type is None or expr.method != method:
         return None
 
@@ -313,18 +300,7 @@ def try_emit_struct_clone(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
 def try_emit_function_clone(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                             receiver_value: ir.Value, receiver_type: ir.Type,
                             semantic_type, to_i1: bool) -> Optional[ir.Value]:
-    """Try to emit clone() on a function value. None if not applicable.
-
-    No new IR: `emit_value_clone` already routes a `FunctionType` to
-    `_clone_function_value`, which duplicates the heap environment through the fat
-    pointer's `clone_ptr` slot and is the structural inverse of
-    `emit_function_value_destructor`. A hand-written duplicate here would be free to break
-    that pairing -- clone fewer buffers is a double free, clone more is a leak -- which is
-    why the fixed-array arm delegates for the same reason.
-
-    A non-capturing value carries a null `clone_ptr` and passes through unchanged, so this
-    is free for a plain fn reference.
-    """
+    """Try to emit clone() on a function value. None if not applicable."""
     from sushi_lang.semantics.typesys import FunctionType, deref_type
 
     if expr.method != "clone":
@@ -349,13 +325,7 @@ def try_emit_enum_clone(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]
 
 def try_emit_primitive_static(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                               to_i1: bool) -> Optional[ir.Value]:
-    """Try to emit f64.from_bits(u64) / f32.from_bits(u32) static reinterpret.
-
-    The receiver is a primitive float type NAME (not a value), so this MUST run before
-    emit_receiver_value in the dispatcher (which would try to evaluate `f64` as a value).
-    Emits a single LLVM bitcast from the integer bit pattern to the float type. Returns
-    None if this is not a from_bits static call.
-    """
+    """Try to emit f64.from_bits(u64) / f32.from_bits(u32) static reinterpret."""
     receiver = expr.receiver
     if not (isinstance(receiver, Name) and receiver.id in ("f64", "f32")
             and expr.method == "from_bits"):
@@ -421,22 +391,7 @@ def try_emit_primitive_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, Do
 def try_emit_perk_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                          receiver_value: ir.Value, receiver_type: ir.Type,
                          semantic_type: Optional['Type'], to_i1: bool) -> Optional[ir.Value]:
-    """Try to emit as perk method. Returns None if not a perk method.
-
-    Perk methods are extension methods defined via 'extend Type with Perk'.
-    They take precedence over auto-derived methods like hash().
-
-    Args:
-        codegen: The LLVM code generator.
-        expr: The method call expression.
-        receiver_value: Already-emitted receiver LLVM value.
-        receiver_type: LLVM type of receiver.
-        semantic_type: Semantic type of receiver (if available).
-        to_i1: Whether to convert result to i1.
-
-    Returns:
-        LLVM value if perk method found, None otherwise.
-    """
+    """Try to emit as perk method. Returns None if not a perk method."""
     if semantic_type is None:
         return None
 

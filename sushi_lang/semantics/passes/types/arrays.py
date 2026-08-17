@@ -1,36 +1,4 @@
-"""
-Built-in extension methods for array types (fixed and dynamic arrays).
-
-This module implements all built-in array operations for the Sushi language,
-including both fixed-size stack arrays and dynamic heap-allocated arrays.
-
-Fixed Array Methods (ArrayType):
-- len(): Returns compile-time array length (i32)
-- get(index): Safe array access with bounds checking
-- iter(): Create iterator for foreach loops
-- hash(): Compute hash value (u64)
-- fill(value): Fill all elements with a value
-- reverse(): Reverse array in-place
-
-Dynamic Array Methods (DynamicArrayType):
-- len(): Returns current length (i32)
-- capacity(): Returns current capacity (i32)
-- get(index): Safe array access with bounds checking
-- push(element): Append element, growing capacity if needed
-- pop(): Remove and return last element
-- fill(value): Fill all elements with a value
-- reverse(): Reverse array in-place
-- destroy(): Explicitly free memory and make unusable (sets data to null)
-- free(): Recursively destroy elements and reset to empty state (still usable)
-- iter(): Create iterator for foreach loops
-- clone(): Deep copy with independent memory
-- hash(): Compute hash value (u64)
-
-u8[] Specific Methods:
-- to_string(): Zero-cost conversion to string (assumes valid UTF-8)
-  WARNING: No validation performed. Invalid UTF-8 = undefined behavior.
-  Future: Use bytes_to_string_checked() from stdlib for validated conversion.
-"""
+"""Built-in extension methods for array types (fixed and dynamic arrays)."""
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall, IntLit, Name
@@ -46,21 +14,7 @@ _MUTATING_ARRAY_METHODS = frozenset({"fill", "reverse"})
 
 def _validate_element_argument(call: MethodCall, element_type: Type, reporter: Any,
                                validator: Any) -> None:
-    """The one check for "is this argument an element of this array?" (CE2006).
-
-    `push(x)` and both spellings of `fill(x)` ask it, and each used to answer with its
-    own bare `arg_type != element_type`. A bare compare makes "how far resolved is it?"
-    part of type identity, which is the #240 defect: `P[]` parses as
-    `DynamicArrayType(UnknownType("P"))`, so the element compared unequal to the interned
-    `StructType("P")` every value of that type infers, and since both spell themselves
-    "P" the diagnostic read `expected P, got P` (issue #284).
-
-    `types_compatible` is the shared, resolving compare -- the same one the function-call
-    argument check uses. The declaration sites now resolve their element type too
-    (`resolve_declared_type`), so this is the second half of a belt-and-braces pair: the
-    root is fixed, and a future path that reintroduces an unresolved element reports the
-    real mismatch rather than a type against itself.
-    """
+    """The one check for "is this argument an element of this array?" (CE2006)."""
     if validator is None:
         return
     validator.validate_expression(call.args[0])
@@ -74,17 +28,7 @@ def _validate_element_argument(call: MethodCall, element_type: Type, reporter: A
 
 
 def _reject_mutation_of_constant(call: MethodCall, reporter: Any, validator: Any) -> bool:
-    """Reject an in-place array method whose receiver is a global constant.
-
-    Returns True if the call was rejected. Without this the backend would GEP into a
-    `global_constant = true` global and store through it -- undefined behaviour in
-    .rodata, not a diagnostic (found while fixing #248, where every one of these shapes
-    was a CE0000 ICE instead).
-
-    A local of the same name shadows the constant and is freely mutable, so
-    `variable_types` is checked first -- the same local-wins rule the backend's
-    resolve_name_slot follows.
-    """
+    """Reject an in-place array method whose receiver is a global constant."""
     if call.method not in _MUTATING_ARRAY_METHODS or validator is None:
         return False
     if not isinstance(call.receiver, Name):
@@ -215,13 +159,7 @@ def _validate_array_iter(call: MethodCall, array_type: ArrayType | DynamicArrayT
 
 
 def _validate_byte_array_to_string(call: MethodCall, array_type: DynamicArrayType, reporter: Any) -> None:
-    """Validate to_string() method call on u8[] byte arrays.
-
-    This is a zero-cost conversion that assumes valid UTF-8 bytes.
-    No UTF-8 validation is performed. Invalid UTF-8 results in undefined behavior.
-
-    Future: A stdlib bytes_to_string_checked() function will provide validation.
-    """
+    """Validate to_string() method call on u8[] byte arrays."""
     # Only available on u8[] (byte arrays)
     if array_type.base_type != BuiltinType.U8:
         er.emit(reporter, er.ERR.CE2023, call.loc,
@@ -234,10 +172,7 @@ def _validate_byte_array_to_string(call: MethodCall, array_type: DynamicArrayTyp
 
 
 def _validate_byte_array_to_string_checked(call: MethodCall, array_type: DynamicArrayType, reporter: Any) -> None:
-    """Validate to_string_checked() method call on u8[] byte arrays.
-
-    Like to_string() but validates UTF-8 and returns Result<string, StdError>.
-    """
+    """Validate to_string_checked() method call on u8[] byte arrays."""
     if array_type.base_type != BuiltinType.U8:
         er.emit(reporter, er.ERR.CE2023, call.loc,
                method="to_string_checked", expected="u8[]", got=display_type(array_type))
@@ -302,14 +237,7 @@ def is_builtin_array_method(method_name: str) -> bool:
 
 
 def validate_builtin_array_method(call: MethodCall, array_type: ArrayType | DynamicArrayType, reporter: Any, validator: Any = None) -> None:
-    """Validate built-in array method calls with optional validator for type checking.
-
-    Args:
-        call: The method call to validate.
-        array_type: The array type (fixed or dynamic).
-        reporter: The error reporter for emitting validation errors.
-        validator: Optional type validator for checking argument types.
-    """
+    """Validate built-in array method calls with optional validator for type checking."""
     method_name = call.method
 
     if _reject_mutation_of_constant(call, reporter, validator):

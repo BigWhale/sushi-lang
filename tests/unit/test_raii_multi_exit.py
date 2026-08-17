@@ -1,28 +1,11 @@
-"""Regression tests for #59: RAII cleanup on every exit path.
-
-A heap-owning local (a dynamic array, or a struct with a dynamic-array field) must
-be freed on *every* mutually-exclusive exit path, not just the first one emitted.
-The historical bug marked the resource cleaned via a function-global flag during the
-first early-exit's cleanup, so every later return / `??`-success path skipped the
-free and leaked.
-
-These assert the destructor is emitted once per exit path by counting `free` calls
-in the generated IR (the leak is silent at runtime, so exit-code tests cannot catch
-it). The analogous List<T> case shares the struct mechanism and is covered by the
-.sushi corpus + a runtime `leaks` check.
-"""
+"""Regression tests for #59: RAII cleanup on every exit path."""
 from __future__ import annotations
 
 from tests.unit.test_ffi import _emit_ir, _count_in_function
 
 
 def test_array_freed_on_both_branch_returns(tmp_path):
-    """if/else, each branch returns: the local array is freed on every path.
-
-    There are at least two frees (the two branch returns). The compiler also emits
-    an unreachable default-return at the merge block, which carries its own (dead)
-    free -- so assert >= 2 rather than an exact count. The bug produced exactly one.
-    """
+    """if/else, each branch returns: the local array is freed on every path."""
     src = (
         "fn f(i32 t) i32:\n"
         "    let i32[] data = from([1, 2, 3])\n"

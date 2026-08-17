@@ -1,37 +1,9 @@
-"""One authority for every consuming use.
+"""One authority for every consuming use: `classify()` is the only place the rule lives.
 
-`docs/design/move-semantics.md` section 3 states a rule -- at a position that takes
-ownership, a bare owned value moves, a value read through a still-live owner is copied,
-and a fresh temporary is stored as-is -- and until this module existed there was no
-function implementing it. Eleven backend positions each re-derived it inline and no two
-derivations agreed, which is why the same bug was fixed four times at four different
-positions (#238, #250, #256, #277) and stayed live at eight more.
-
-The vocabulary is Swift's, because it is the decomposition that survives the case which
-breaks the others (see `docs/design/ownership-conventions.md` section 2):
-
-    A CONSUMING USE is a position that requires ownership of a value.
-    The OWNERSHIP CONVENTION at that use is how a given source satisfies it.
-
-At an `ADOPT` the source is not consumed -- but the use is still a consuming use, because
-the position requires ownership and adopting is how it is satisfied. "Transfer", "handoff"
-and "move" are all false in that case; "consuming use" is not.
-
-Split of responsibilities, and why it is not a second derivation of the rule:
-
-- **Semantics** computes `Provenance` and stamps it on the source AST node. Only semantics
-  can: it takes scopes, binding kinds and `borrow_state` to tell an owned local from a
-  match binding, and the backend has none of those (it has been approximating with
-  `is_owned_local`, which answers a different question -- "is this registered for
-  cleanup?").
-- **The backend** supplies the resolved target type at the position, which semantics
-  frequently does not have.
-- **`classify()` below is the only place the rule itself lives.** Both sides call it. The
-  inputs differ because each side holds a different half of them; the decision cannot
-  disagree with itself, because there is one table.
-
-This module is ir-free and must stay that way: `semantics` never imports `backend`
-(Tier 4.1).
+Semantics stamps `Provenance` on the source node (only it has scopes and `borrow_state`);
+the backend supplies the resolved target type. Both then call `classify()`, so the two
+sides cannot disagree. Must stay ir-free -- `semantics` never imports `backend`.
+See docs/design/ownership-conventions.md sections 1 and 2.
 """
 from __future__ import annotations
 
@@ -50,15 +22,7 @@ from sushi_lang.semantics.typesys import (
 
 
 class ConsumingUse(Enum):
-    """Every position that takes ownership of a value. A CLOSED set.
-
-    Closedness is the property that fixes the recurring bug, not the naming. Before this
-    enum nobody could answer "what are all the positions?": #250's triage said two, its
-    own fix found five, #277 says one, the 2026-07-30 audit found eleven. The set was
-    rediscovered empirically every time. An enum makes it impossible to add a twelfth
-    without declaring it, and makes coverage assertable
-    (`tests/unit/test_consuming_use_coverage.py`).
-    """
+    """Every position that takes ownership of a value. A CLOSED set."""
 
     CALL_ARG = "call_arg"                # f(x), constructor calls, indirect calls, bloom
     LET = "let"                          # let T x = <source>
@@ -74,10 +38,7 @@ class ConsumingUse(Enum):
 
 
 class Provenance(Enum):
-    """Where the value at a consuming use came from.
-
-    The half only semantics can compute.
-    """
+    """Where the value at a consuming use came from."""
 
     OWNED = "owned"        # a registered owner in this scope: a `let` local or a
                            # by-value parameter
@@ -141,13 +102,7 @@ _TABLE: dict[tuple[Provenance, TypeClass], Ownership] = {
 
 
 def classify(provenance: Provenance, type_class: TypeClass) -> Ownership:
-    """The rule. Total over the grid, pure, and the only implementation of it.
-
-    Every consuming use in the compiler reaches its decision through this function --
-    that is what makes it one authority rather than eleven. Unit-tested cell by cell in
-    `tests/unit/test_ownership_table.py`, which is possible only because the decision is
-    now a value instead of being fused into eleven emitters.
-    """
+    """The rule. Total over the grid, pure, and the only implementation of it."""
     return _TABLE[(provenance, type_class)]
 
 
@@ -159,19 +114,7 @@ def _IDENTITY(t: Type) -> Type:
 
 
 def type_class_of(ty: Optional[Type], resolve: Callable[[Type], Type] = _IDENTITY) -> TypeClass:
-    """Classify `T` as PLAIN or MOVE.
-
-    `resolve` maps a named `UnknownType` to its concrete struct/enum. It is a parameter
-    rather than a table lookup so this module stays free of both the backend's tables and
-    the analyzer's: the borrow checker passes a resolver built from `self.tables`, the
-    backend passes its own. Resolving matters -- `owns_heap` answers False for an
-    `UnknownType`, so an unresolved owning struct would classify as PLAIN and be aliased.
-
-    Only PLAIN and MOVE exist since Phase 9. `TypeClass.COPY` -- the tier that made a
-    string-only composite duplicate rather than transfer -- is gone, and with it the last
-    deep copy the compiler inserted on its own. Every deep copy in a Sushi program is now one
-    the user wrote as `.clone()`.
-    """
+    """Classify `T` as PLAIN or MOVE."""
     if ty is None:
         return TypeClass.PLAIN
 
@@ -206,15 +149,7 @@ def type_class_of(ty: Optional[Type], resolve: Callable[[Type], Type] = _IDENTIT
 
 
 def is_own_type(ty: Optional[Type]) -> bool:
-    """Is `ty` an `Own@(T)`?
-
-    The ir-free twin of the backend's `is_own_get_call` receiver test. `Own` is a smart
-    pointer, not a collection: `get()` is a dereference that hands back a bare `T` without
-    copying. That made it the one container whose get-out was a view while every other
-    one deep-copied at the read, which is what #256 was. Since #242 every container reads
-    the same way, so this is now one arm of `is_get_out_container` rather than a rule of
-    its own.
-    """
+    """Is `ty` an `Own@(T)`?"""
     if ty is None:
         return False
     if isinstance(ty, ReferenceType):
@@ -236,17 +171,7 @@ from sushi_lang.semantics.generics.cloning import (  # noqa: E402
 
 
 def is_get_out_container(ty: Optional[Type]) -> bool:
-    """Does `.get()` on a receiver of this type return a VIEW of what the receiver owns?
-
-    True for an array, a `List@(T)`, a `HashMap@(K, V)` and an `Own@(T)`. Each keeps the
-    element and still frees it, so what `get()` hands back is a borrow.
-
-    Until #242 every container except `Own` deep-copied at the read, so the answer was
-    "only `Own`" and this predicate was `is_own_type`. Deleting the reader-side copies
-    made all four the same, and this is the one place that says so. Keyed on the TYPE, not
-    on the method name: a user extension method that happens to be called `get` is not a
-    container read, and classifying it as one would report a false CE2411.
-    """
+    """Does `.get()` on a receiver of this type return a VIEW of what the receiver owns?"""
     if ty is None:
         return False
     if isinstance(ty, ReferenceType):

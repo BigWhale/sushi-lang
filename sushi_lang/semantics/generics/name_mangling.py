@@ -1,8 +1,4 @@
-"""Name mangling utilities for generic functions.
-
-This module provides canonical name mangling for monomorphized generic functions,
-ensuring consistency between the monomorphizer and call validator.
-"""
+"""Name mangling utilities for generic functions."""
 
 from typing import TYPE_CHECKING, Optional, Tuple
 
@@ -32,57 +28,7 @@ def mangle_function_name(
     *,
     pack_arity: Optional[int] = None,
 ) -> str:
-    """Generate mangled name for monomorphized generic function.
-
-    Format (no pack): base_name + "__" + sanitized_type_args
-    Format (pack):    <no-pack form> + ".pack{N}"   (N == pack_arity)
-
-    Both the monomorphizer and the call validator MUST pass the same
-    ``pack_arity`` for a given instantiation so the symbols agree (Phase 1 will
-    wire the call-validator side; today only the monomorphizer passes it).
-
-    The ``pack_arity`` keyword is the number of concrete types absorbed by a
-    trailing type-pack (``len(TypePack.types)``), and must be ``>= 0``. It
-    carries four invariants:
-
-      (A) ``pack_arity is None`` -> output is byte-for-byte identical to the
-          historical no-pack implementation for ALL inputs (hard regression
-          gate for every pre-existing regular generic).
-      (B) distinct per arity: arities 0, 1, 3 of the same base yield three
-          different symbols; an arity-0 pack does NOT collapse to ``base_name``.
-      (C) deterministic & stable: a pure function of the inputs.
-      (D) collision-free vs regular generics, STRUCTURALLY guaranteed: the pack
-          marker is introduced by a "." separator, and "." lies outside the
-          alphabet of every no-pack symbol component. Sushi identifiers are
-          Lark CNAME = [A-Za-z0-9_] only, and _join_sanitized's output is also
-          [A-Za-z0-9_] only (it strips/replaces < > , [ ] & * and space). Hence
-          neither ``base_name`` nor any sanitized type-arg segment can contain a
-          ".", so a ".pack{N}" marker can never appear in a no-pack symbol --
-          a pack symbol can NEVER equal a non-pack symbol. (This is no longer
-          merely probabilistic: even a user type literally named ``pack2`` only
-          produces the no-pack symbol ``f__pack2`` -- with "__", not ".pack2".)
-
-    Examples:
-        identity<i32>            -> identity__i32
-        swap<i32, string>        -> swap__i32_string
-        process<List<i32>>       -> process__List_i32
-        f(i32,str,bool), arity=2 -> f__i32_str_bool.pack2
-        f(i32), arity=0          -> f__i32.pack0
-        f(), arity=0             -> f.pack0   (NOT "f")
-
-    Args:
-        base_name: Original function name
-        type_args: Concrete (flat) type arguments; for a pack instantiation this
-            is the leading types followed by the pack element types.
-        pack_arity: ``None`` if no pack is involved; otherwise the (>= 0) number
-            of trailing args absorbed by the pack.
-
-    Returns:
-        Mangled function name (guaranteed unique)
-
-    Raises:
-        ValueError: if ``pack_arity`` is negative.
-    """
+    """Generate mangled name for monomorphized generic function."""
     if pack_arity is not None and pack_arity < 0:
         raise ValueError(f"pack_arity must be >= 0, got {pack_arity}")
 

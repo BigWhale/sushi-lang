@@ -1,19 +1,4 @@
-"""Regression tests for #123 under borrow by default (2026-08-16).
-
-A capturing closure created directly as a call argument heap-allocates an environment
-(`{...}` captured fields) via `malloc` in the CALLER. Exactly one side then frees it,
-and the parameter's declared MODE says which:
-
-- an unmarked (borrow) parameter leaves the caller as the owner, so the guarded
-  type-erased drop (`call void %"closure_drop_fn"`) is emitted in the CALLER, one per
-  mutually-exclusive exit path;
-- a `nom` parameter transfers, so the drop is emitted in the CALLEE instead and the
-  caller emits none -- a caller-side drop there would double-free.
-
-The pair is what makes the assertion meaningful: each file below asserts BOTH counts,
-so an under-free (leak) and a double registration (double free) are each a red test.
-The leak is silent at runtime, so exit-code tests cannot catch either one.
-"""
+"""Regression tests for #123 under borrow by default (2026-08-16)."""
 from __future__ import annotations
 
 import pytest

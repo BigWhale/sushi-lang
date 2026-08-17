@@ -1,8 +1,4 @@
-"""Caching for struct and enum LLVM types.
-
-This module manages caches for complex types to avoid recreating them
-during code generation.
-"""
+"""Caching for struct and enum LLVM types."""
 from __future__ import annotations
 
 from llvmlite import ir
@@ -17,43 +13,19 @@ class TypeCache:
         self._enum_cache: dict[str, ir.LiteralStructType] = {}
 
     def get_struct(self, struct_name: str) -> ir.LiteralStructType | None:
-        """Get cached struct type.
-
-        Args:
-            struct_name: Name of the struct type.
-
-        Returns:
-            Cached LLVM struct type or None if not cached.
-        """
+        """Get cached struct type."""
         return self._struct_cache.get(struct_name)
 
     def cache_struct(self, struct_name: str, llvm_type: ir.LiteralStructType):
-        """Cache a struct type.
-
-        Args:
-            struct_name: Name of the struct type.
-            llvm_type: LLVM struct type to cache.
-        """
+        """Cache a struct type."""
         self._struct_cache[struct_name] = llvm_type
 
     def get_enum(self, enum_name: str) -> ir.LiteralStructType | None:
-        """Get cached enum type.
-
-        Args:
-            enum_name: Name of the enum type.
-
-        Returns:
-            Cached LLVM enum type or None if not cached.
-        """
+        """Get cached enum type."""
         return self._enum_cache.get(enum_name)
 
     def cache_enum(self, enum_name: str, llvm_type: ir.LiteralStructType):
-        """Cache an enum type.
-
-        Args:
-            enum_name: Name of the enum type.
-            llvm_type: LLVM enum type to cache.
-        """
+        """Cache an enum type."""
         self._enum_cache[enum_name] = llvm_type
 
     def clear(self):

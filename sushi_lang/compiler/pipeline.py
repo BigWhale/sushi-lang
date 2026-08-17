@@ -17,13 +17,7 @@ from sushi_lang.semantics.units import Unit, UnitManager
 
 
 def _check_library_platform(metadata: dict, lib_path: str) -> None:
-    """Reject a `.slib` built for a different platform (CE3504).
-
-    The `.slib` bitcode is platform-specific; linking a darwin library on Linux
-    otherwise fails much later as an incomprehensible `cc`/LLVM error. Compare the
-    platform the manifest recorded against the host and fail early with a clear code.
-    Raises LibraryError so it renders through the existing library-error path.
-    """
+    """Reject a `.slib` built for a different platform (CE3504)."""
     from sushi_lang.backend.library_errors import LibraryError
     from sushi_lang.backend.platform_detect import current_platform_name
 
@@ -35,16 +29,7 @@ def _check_library_platform(metadata: dict, lib_path: str) -> None:
 
 
 def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -> bool:
-    """Merge bundled Sushi-source stdlib modules (e.g. <collections/iter>) as units.
-
-    A `use <path>` whose path is a SOURCE_STDLIB_MODULES entry is parsed from its
-    bundled .sushi and inserted into the unit manager, so its generic free functions
-    are collected + monomorphized whole-program exactly like a user unit (no .bc).
-    The worklist follows a source module's own source-stdlib imports transitively.
-
-    Returns True on success, False if a bundled module is missing. A parse failure
-    inside a bundled module is a compiler bug, and propagates as one.
-    """
+    """Merge bundled Sushi-source stdlib modules (e.g. <collections/iter>) as units."""
     from sushi_lang.internals.parser import parse_to_ast
     from sushi_lang.semantics.stdlib_registry import (
         SOURCE_STDLIB_MODULES, resolve_source_stdlib_path,
@@ -86,18 +71,7 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -
 
 def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
                        args, is_library: bool = False) -> int:
-    """Handle multi-file compilation when use statements are present.
-
-    Args:
-        main_ast: Parsed AST of the main file.
-        src_path: Path to the main source file.
-        reporter: Reporter for error/warning collection.
-        args: Command line arguments.
-        is_library: If True, compile to library bitcode.
-
-    Returns:
-        Exit code (0=success, 1=warnings, 2=errors).
-    """
+    """Handle multi-file compilation when use statements are present."""
     # `use <collections/hashmap>` is what makes HashMap<K, V> exist; start clean.
     from sushi_lang.semantics.generics.active_generics import (
         activate_generic_unit,

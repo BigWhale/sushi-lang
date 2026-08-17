@@ -1,11 +1,4 @@
-"""
-The ir-free half of HashMap<K, V>: method validation and type-table plumbing.
-
-Pass 2 validates HashMap method calls (argument counts, key/value types) and
-resolves the K and V of a monomorphized `HashMap<K, V>`; neither needs LLVM.
-The emission half lives in `backend/generics/hashmap/`, mirroring the split
-between `semantics/generics/list.py` and `backend/generics/list/`.
-"""
+"""The ir-free half of HashMap<K, V>: method validation and type-table plumbing."""
 
 from typing import Any, Optional, TYPE_CHECKING
 from sushi_lang.semantics.ast import MethodCall, Call
@@ -23,14 +16,7 @@ if TYPE_CHECKING:
 
 
 def is_builtin_hashmap_method(method_name: str) -> bool:
-    """Check if a method name is a builtin HashMap<K, V> method.
-
-    Args:
-        method_name: The name of the method to check.
-
-    Returns:
-        True if this is a recognized HashMap<K, V> method, False otherwise.
-    """
+    """Check if a method name is a builtin HashMap<K, V> method."""
     return method_name in (
         "new", "insert", "get", "contains_key", "remove",
         "len", "is_empty", "tombstone_count", "rehash", "free", "destroy", "debug",
@@ -44,16 +30,7 @@ def validate_hashmap_method_with_validator(
     reporter: Any,
     validator: Any
 ) -> None:
-    """Validate HashMap<K, V> method calls.
-
-    Routes to specific validation functions based on method name.
-
-    Args:
-        call: The method call AST node.
-        hashmap_type: The HashMap<K, V> struct type (after monomorphization).
-        reporter: Error reporter for emitting validation errors.
-        validator: Type validator for inferring expression types.
-    """
+    """Validate HashMap<K, V> method calls."""
     method = call.method
 
     if method == "new":
@@ -99,15 +76,7 @@ def validate_hashmap_method_with_validator(
 
 
 def parse_hashmap_types(hashmap_type: StructType, validator: Any) -> tuple[Optional[Type], Optional[Type]]:
-    """Parse K and V types from HashMap<K, V> type name.
-
-    Args:
-        hashmap_type: The HashMap<K, V> struct type.
-        validator: Type validator for looking up types.
-
-    Returns:
-        Tuple of (key_type, value_type) or (None, None) if parsing fails.
-    """
+    """Parse K and V types from HashMap<K, V> type name."""
 
     # Extract K and V types from HashMap<K, V>
     if not hashmap_type.name.startswith("HashMap<"):
@@ -143,13 +112,6 @@ def parse_hashmap_types(hashmap_type: StructType, validator: Any) -> tuple[Optio
 
 def _resolve_type_string(type_str: str, validator: Any) -> Optional[Type]:
     """Resolve a type string (e.g., "i32", "Maybe<i32>", "Pair<i32, string>") to a Type object.
-
-    Args:
-        type_str: The type string to resolve.
-        validator: Type validator with access to struct/enum tables.
-
-    Returns:
-        The resolved Type object or None if not found.
     """
     from sushi_lang.semantics.typesys import BuiltinType
 
@@ -186,17 +148,7 @@ def _validate_hashmap_new(
     reporter: Any,
     validator: Any
 ) -> None:
-    """Validate HashMap<K, V>.new() method call.
-
-    Validates that no arguments are provided and that the key type K supports
-    hashing and equality comparison.
-
-    Args:
-        call: The method call AST node.
-        hashmap_type: The HashMap<K, V> struct type.
-        reporter: Error reporter for emitting validation errors.
-        validator: Type validator for inferring expression types.
-    """
+    """Validate HashMap<K, V>.new() method call."""
     from sushi_lang.sushi_stdlib.src.common import get_builtin_method
 
     # Validate argument count
@@ -279,17 +231,7 @@ def _validate_hashmap_insert(
     reporter: Any,
     validator: Any
 ) -> None:
-    """Validate HashMap<K, V>.insert(key, value) method call.
-
-    Validates argument count, types, and expressions using the standard
-    validation utilities from sushi_lang.semantics.passes.types.
-
-    Args:
-        call: The method call AST node.
-        hashmap_type: The HashMap<K, V> struct type.
-        reporter: Error reporter for emitting validation errors.
-        validator: Type validator for inferring expression types.
-    """
+    """Validate HashMap<K, V>.insert(key, value) method call."""
     from sushi_lang.semantics.passes.types.utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
     from sushi_lang.semantics.passes.types.compatibility import types_compatible
 
@@ -343,16 +285,7 @@ def _validate_hashmap_get(
     reporter: Any,
     validator: Any
 ) -> None:
-    """Validate HashMap<K, V>.get(key) method call.
-
-    Validates argument count and key type.
-
-    Args:
-        call: The method call AST node.
-        hashmap_type: The HashMap<K, V> struct type.
-        reporter: Error reporter for emitting validation errors.
-        validator: Type validator for inferring expression types.
-    """
+    """Validate HashMap<K, V>.get(key) method call."""
     _validate_hashmap_key_method(call, hashmap_type, reporter, validator, method_name="get")
 
 
@@ -362,16 +295,7 @@ def _validate_hashmap_contains_key(
     reporter: Any,
     validator: Any
 ) -> None:
-    """Validate HashMap<K, V>.contains_key(key) method call.
-
-    Validates argument count and key type.
-
-    Args:
-        call: The method call AST node.
-        hashmap_type: The HashMap<K, V> struct type.
-        reporter: Error reporter for emitting validation errors.
-        validator: Type validator for inferring expression types.
-    """
+    """Validate HashMap<K, V>.contains_key(key) method call."""
     _validate_hashmap_key_method(call, hashmap_type, reporter, validator, method_name="contains_key")
 
 
@@ -381,16 +305,7 @@ def _validate_hashmap_remove(
     reporter: Any,
     validator: Any
 ) -> None:
-    """Validate HashMap<K, V>.remove(key) method call.
-
-    Validates argument count and key type.
-
-    Args:
-        call: The method call AST node.
-        hashmap_type: The HashMap<K, V> struct type.
-        reporter: Error reporter for emitting validation errors.
-        validator: Type validator for inferring expression types.
-    """
+    """Validate HashMap<K, V>.remove(key) method call."""
     _validate_hashmap_key_method(call, hashmap_type, reporter, validator, method_name="remove")
 
 
@@ -401,15 +316,7 @@ def _validate_hashmap_key_method(
     validator: Any,
     method_name: str
 ) -> None:
-    """Validate HashMap<K, V> methods that take a key argument (get, contains_key, remove).
-
-    Args:
-        call: The method call AST node.
-        hashmap_type: The HashMap<K, V> struct type.
-        reporter: Error reporter for emitting validation errors.
-        validator: Type validator for inferring expression types.
-        method_name: The name of the method being validated.
-    """
+    """Validate HashMap<K, V> methods that take a key argument (get, contains_key, remove)."""
     from sushi_lang.semantics.passes.types.utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
     from sushi_lang.semantics.passes.types.compatibility import types_compatible
 
@@ -456,15 +363,7 @@ def _validate_hashmap_len(
     hashmap_type: StructType,
     reporter: Any
 ) -> None:
-    """Validate HashMap<K, V>.len() method call.
-
-    Validates that no arguments are provided.
-
-    Args:
-        call: The method call AST node.
-        hashmap_type: The HashMap<K, V> struct type.
-        reporter: Error reporter for emitting validation errors.
-    """
+    """Validate HashMap<K, V>.len() method call."""
     # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="len", expected=0, got=len(call.args))
@@ -475,20 +374,7 @@ def _validate_hashmap_clone(
     hashmap_type: StructType,
     reporter: Any
 ) -> None:
-    """Validate HashMap<K, V>.clone() method call.
-
-    Validates that no arguments are provided.
-
-    `.clone()` is the explicit escape from CE2411: a read of a HashMap borrows, so a position
-    that takes ownership rejects it and the diagnostic tells the user to write this. The deep
-    copy itself is `_clone_hashmap_value` (issue #181), which has been the destructor's
-    symmetric partner since long before this method existed -- only the method was missing.
-
-    Args:
-        call: The method call AST node.
-        hashmap_type: The HashMap<K, V> struct type.
-        reporter: Error reporter for emitting validation errors.
-    """
+    """Validate HashMap<K, V>.clone() method call."""
     # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="clone", expected=0, got=len(call.args))
@@ -499,15 +385,7 @@ def _validate_hashmap_is_empty(
     hashmap_type: StructType,
     reporter: Any
 ) -> None:
-    """Validate HashMap<K, V>.is_empty() method call.
-
-    Validates that no arguments are provided.
-
-    Args:
-        call: The method call AST node.
-        hashmap_type: The HashMap<K, V> struct type.
-        reporter: Error reporter for emitting validation errors.
-    """
+    """Validate HashMap<K, V>.is_empty() method call."""
     # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="is_empty", expected=0, got=len(call.args))
@@ -518,15 +396,7 @@ def _validate_hashmap_tombstone_count(
     hashmap_type: StructType,
     reporter: Any
 ) -> None:
-    """Validate HashMap<K, V>.tombstone_count() method call.
-
-    Validates that no arguments are provided.
-
-    Args:
-        call: The method call AST node.
-        hashmap_type: The HashMap<K, V> struct type.
-        reporter: Error reporter for emitting validation errors.
-    """
+    """Validate HashMap<K, V>.tombstone_count() method call."""
     # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="tombstone_count", expected=0, got=len(call.args))
@@ -537,15 +407,7 @@ def _validate_hashmap_rehash(
     hashmap_type: StructType,
     reporter: Any
 ) -> None:
-    """Validate HashMap<K, V>.rehash() method call.
-
-    Validates that no arguments are provided.
-
-    Args:
-        call: The method call AST node.
-        hashmap_type: The HashMap<K, V> struct type.
-        reporter: Error reporter for emitting validation errors.
-    """
+    """Validate HashMap<K, V>.rehash() method call."""
     # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="rehash", expected=0, got=len(call.args))
@@ -556,15 +418,7 @@ def _validate_hashmap_free(
     hashmap_type: StructType,
     reporter: Any
 ) -> None:
-    """Validate HashMap<K, V>.free() method call.
-
-    Validates that no arguments are provided.
-
-    Args:
-        call: The method call AST node.
-        hashmap_type: The HashMap<K, V> struct type.
-        reporter: Error reporter for emitting validation errors.
-    """
+    """Validate HashMap<K, V>.free() method call."""
     # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="free", expected=0, got=len(call.args))
@@ -575,15 +429,7 @@ def _validate_hashmap_destroy(
     hashmap_type: StructType,
     reporter: Any
 ) -> None:
-    """Validate HashMap<K, V>.destroy() method call.
-
-    Validates that no arguments are provided.
-
-    Args:
-        call: The method call AST node.
-        hashmap_type: The HashMap<K, V> struct type.
-        reporter: Error reporter for emitting validation errors.
-    """
+    """Validate HashMap<K, V>.destroy() method call."""
     # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="destroy", expected=0, got=len(call.args))
@@ -594,15 +440,7 @@ def _validate_hashmap_debug(
     hashmap_type: StructType,
     reporter: Any
 ) -> None:
-    """Validate HashMap<K, V>.debug() method call.
-
-    Validates that no arguments are provided.
-
-    Args:
-        call: The method call AST node.
-        hashmap_type: The HashMap<K, V> struct type.
-        reporter: Error reporter for emitting validation errors.
-    """
+    """Validate HashMap<K, V>.debug() method call."""
     # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="debug", expected=0, got=len(call.args))
@@ -613,15 +451,7 @@ def _validate_hashmap_keys(
     hashmap_type: StructType,
     reporter: Any
 ) -> None:
-    """Validate HashMap<K, V>.keys() method call.
-
-    Validates that no arguments are provided.
-
-    Args:
-        call: The method call AST node.
-        hashmap_type: The HashMap<K, V> struct type.
-        reporter: Error reporter for emitting validation errors.
-    """
+    """Validate HashMap<K, V>.keys() method call."""
     # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="keys", expected=0, got=len(call.args))
@@ -632,15 +462,7 @@ def _validate_hashmap_values(
     hashmap_type: StructType,
     reporter: Any
 ) -> None:
-    """Validate HashMap<K, V>.values() method call.
-
-    Validates that no arguments are provided.
-
-    Args:
-        call: The method call AST node.
-        hashmap_type: The HashMap<K, V> struct type.
-        reporter: Error reporter for emitting validation errors.
-    """
+    """Validate HashMap<K, V>.values() method call."""
     # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="values", expected=0, got=len(call.args))
@@ -651,15 +473,7 @@ def _validate_hashmap_entries(
     hashmap_type: StructType,
     reporter: Any
 ) -> None:
-    """Validate HashMap<K, V>.entries() method call.
-
-    Validates that no arguments are provided.
-
-    Args:
-        call: The method call AST node.
-        hashmap_type: The HashMap<K, V> struct type.
-        reporter: Error reporter for emitting validation errors.
-    """
+    """Validate HashMap<K, V>.entries() method call."""
     # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="entries", expected=0, got=len(call.args))
@@ -671,15 +485,7 @@ def _validate_hashmap_entries(
 
 
 def hashmap_generic_struct() -> 'GenericStructType':
-    """The HashMap<K, V> generic struct, as Pass 0 registers it.
-
-    Only registered when `use <collections/hashmap>` activated it -- see
-    `semantics/generics/active_generics.py`.
-
-    `buckets` is declared as i32[] purely as a placeholder: the real element is the
-    internal 3-field Entry<K, V> (key, value, state), which has no semantic type and
-    is built directly in LLVM by `backend/generics/hashmap/types.py`.
-    """
+    """The HashMap<K, V> generic struct, as Pass 0 registers it."""
     from sushi_lang.semantics.generics.types import GenericStructType, TypeParameter
     from sushi_lang.semantics.typesys import DynamicArrayType
 
@@ -696,20 +502,7 @@ def hashmap_generic_struct() -> 'GenericStructType':
 
 
 def extract_key_value_types(hashmap_type: StructType, tables: Any) -> tuple[Type, Type]:
-    """Extract K and V types from HashMap<K, V>.
-
-    Parses the struct name "HashMap<K, V>" to extract the concrete key and value
-    types. This works because monomorphized generic structs have names like
-    "HashMap<string, i32>". Handles builtins, user structs/enums, and nested
-    generics (HashMap<Maybe<i32>, Box<string>>).
-
-    Args:
-        hashmap_type: The HashMap<K, V> struct type (after monomorphization).
-        tables: Anything exposing `struct_table.by_name` and `enum_table.by_name`.
-
-    Returns:
-        Tuple of (key_type, value_type).
-    """
+    """Extract K and V types from HashMap<K, V>."""
     name = hashmap_type.name
 
     if not name.startswith("HashMap<") or not name.endswith(">"):
@@ -738,20 +531,7 @@ def get_entry_type_name(key_type: Type, value_type: Type) -> str:
 
 
 def ensure_entry_type_in_struct_table(struct_table: Any, key_type: Type, value_type: Type) -> StructType:
-    """Ensure that a user-facing Entry<K, V> struct exists in the struct table.
-
-    The user-facing Entry<K, V> has two fields: key (K) and value (V). This is
-    distinct from the internal 3-field Entry (key, value, state) used by the
-    HashMap buckets -- see `backend/generics/hashmap/types.py`.
-
-    Args:
-        struct_table: The struct table with by_name dict.
-        key_type: The key type K.
-        value_type: The value type V.
-
-    Returns:
-        The StructType for Entry<K, V>.
-    """
+    """Ensure that a user-facing Entry<K, V> struct exists in the struct table."""
     entry_name = get_entry_type_name(key_type, value_type)
 
     if entry_name in struct_table.by_name:

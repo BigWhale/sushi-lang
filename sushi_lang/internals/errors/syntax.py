@@ -1,8 +1,4 @@
-"""Syntax errors (CE6xxx) -- the parser's own diagnostics.
-
-This module owns its numeric range: a code may only be added in the file that
-owns it, which is what makes the grouping structural rather than conventional.
-"""
+"""Syntax errors (CE6xxx) -- the parser's own diagnostics."""
 from __future__ import annotations
 
 from sushi_lang.internals.errors.registry import (

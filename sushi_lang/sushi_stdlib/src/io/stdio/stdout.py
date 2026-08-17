@@ -1,10 +1,4 @@
-"""
-stdout module - Standard output stream methods.
-
-This module implements IR generation for stdout methods:
-- write(string) -> ~: Write string to stdout without newline
-- write_bytes(u8[]) -> ~: Write byte array to stdout
-"""
+"""stdout module - Standard output stream methods."""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_fwrite
@@ -12,14 +6,7 @@ from sushi_lang.sushi_stdlib.src.io.stdio.common import declare_stdout_handle
 
 
 def generate_stdout_write(module: ir.Module) -> None:
-    """Generate IR for stdout.write(string) -> ~.
-
-    Writes a string to stdout without adding a newline.
-    Uses fwrite with fat pointer length instead of fputs for proper handling.
-
-    Args:
-        module: The LLVM module to add the function to.
-    """
+    """Generate IR for stdout.write(string) -> ~."""
     # Declare external functions
     fwrite_fn = declare_fwrite(module)
     stdout_handle = declare_stdout_handle(module)
@@ -56,13 +43,7 @@ def generate_stdout_write(module: ir.Module) -> None:
 
 
 def generate_stdout_write_bytes(module: ir.Module) -> None:
-    """Generate IR for stdout.write_bytes(u8[]) -> ~.
-
-    Writes a byte array to stdout.
-
-    Args:
-        module: The LLVM module to add the function to.
-    """
+    """Generate IR for stdout.write_bytes(u8[]) -> ~."""
     # Declare external functions
     fwrite_fn = declare_fwrite(module)
     stdout_handle = declare_stdout_handle(module)

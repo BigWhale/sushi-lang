@@ -1,8 +1,4 @@
-"""Unified LLVM type system facade for the Sushi compiler.
-
-This module provides a clean interface to the type system components,
-hiding the internal organization and providing a single entry point.
-"""
+"""Unified LLVM type system facade for the Sushi compiler."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -20,14 +16,7 @@ from sushi_lang.backend.types.core.inference import TypeInference
 
 
 class LLVMTypeSystem:
-    """Unified interface to LLVM type system.
-
-    This facade provides access to all type system operations:
-    - Type mapping (Sushi -> LLVM)
-    - Type inference (LLVM -> Sushi)
-    - Type sizing and alignment
-    - Struct/enum type caching
-    """
+    """Unified interface to LLVM type system."""
 
     def __init__(
         self,
@@ -35,16 +24,7 @@ class LLVMTypeSystem:
         enum_table: EnumTable | None = None,
         context: 'ir.Context | None' = None,
     ):
-        """Initialize the unified type system.
-
-        Args:
-            struct_table: Optional struct table for resolving struct types
-            enum_table: Optional enum table for resolving enum types
-            context: LLVM context that owns the identified struct types (#257). Should be
-                the context of every module this compilation emits. Defaults to a fresh
-                one rather than llvmlite's process-wide global_context, so two compilations
-                in one process cannot see each other's struct layouts.
-        """
+        """Initialize the unified type system."""
         from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 
         self.struct_table = struct_table or StructTable()
@@ -80,37 +60,16 @@ class LLVMTypeSystem:
 
     # Type mapping interface
     def ll_type(self, semantic_type: Ty) -> ir.Type:
-        """Convert Sushi type to LLVM type.
-
-        Args:
-            semantic_type: The Sushi language type
-
-        Returns:
-            Corresponding LLVM IR type
-        """
+        """Convert Sushi type to LLVM type."""
         return self.mapper.ll_type(semantic_type)
 
     # Type inference interface
     def infer_llvm_type_from_value(self, value: ir.Value) -> ir.Type:
-        """Infer LLVM type from runtime value.
-
-        Args:
-            value: LLVM value to analyze
-
-        Returns:
-            LLVM type of the value
-        """
+        """Infer LLVM type from runtime value."""
         return self.inference.infer_llvm_type_from_value(value)
 
     def map_llvm_to_language_type(self, llvm_type: ir.Type) -> str:
-        """Map LLVM type back to language type name.
-
-        Args:
-            llvm_type: LLVM IR type
-
-        Returns:
-            Sushi language type name
-        """
+        """Map LLVM type back to language type name."""
         return self.inference.map_llvm_to_language_type(llvm_type)
 
     # Type checking utilities
@@ -128,25 +87,11 @@ class LLVMTypeSystem:
 
     # Type sizing interface
     def get_type_size_bytes(self, semantic_type: Ty) -> int:
-        """Get size in bytes of a Sushi type.
-
-        Args:
-            semantic_type: The Sushi language type
-
-        Returns:
-            Size in bytes
-        """
+        """Get size in bytes of a Sushi type."""
         return self.sizing.get_type_size_bytes(semantic_type)
 
     def get_type_size_constant(self, semantic_type: Ty) -> ir.Value:
-        """Get size in bytes as an LLVM i32 constant.
-
-        Args:
-            semantic_type: The Sushi language type
-
-        Returns:
-            LLVM i32 constant with size in bytes
-        """
+        """Get size in bytes as an LLVM i32 constant."""
         from llvmlite import ir
         size_bytes = self.sizing.get_type_size_bytes(semantic_type)
         return ir.Constant(self.i32, size_bytes)
@@ -156,19 +101,13 @@ class LLVMTypeSystem:
         return self.sizing.get_type_alignment(semantic_type)
 
     def payload_field_offsets(self, associated_types) -> list[int]:
-        """Naturally aligned enum payload field offsets -- the ONE layout authority
-        (#300 phase 2, see TypeSizing.payload_field_offsets)."""
+        """Naturally aligned enum payload field offsets -- the ONE layout authority (#300 phase 2,
+        see TypeSizing.payload_field_offsets).
+        """
         return self.sizing.payload_field_offsets(associated_types)
 
     def _get_type_alignment(self, semantic_type: Ty) -> int:
-        """Get alignment requirement for a Sushi type.
-
-        Args:
-            semantic_type: The Sushi language type
-
-        Returns:
-            Alignment in bytes
-        """
+        """Get alignment requirement for a Sushi type."""
         return self.sizing.get_type_alignment(semantic_type)
 
     # Struct/enum type helpers (delegated to mapper)

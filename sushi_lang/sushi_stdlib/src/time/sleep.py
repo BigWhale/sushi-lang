@@ -1,15 +1,4 @@
-"""
-Sleep function implementations for Sushi time module.
-
-Implements sleep functions with varying time granularities:
-- nanosleep: Core implementation with nanosecond precision
-- sleep: Convenience wrapper (seconds)
-- msleep: Convenience wrapper (milliseconds)
-- usleep: Convenience wrapper (microseconds)
-
-All functions use POSIX nanosleep() under the hood for consistency
-and portability across Unix-like systems.
-"""
+"""Sleep function implementations for Sushi time module."""
 from __future__ import annotations
 import typing
 from llvmlite import ir
@@ -24,21 +13,7 @@ if typing.TYPE_CHECKING:
 
 
 def generate_nanosleep(module: ir.Module) -> None:
-    """Generate nanosleep function: nanosleep(i64 seconds, i64 nanoseconds) -> i32
-
-    Sleeps for the specified duration. If interrupted by a signal, returns the
-    remaining time in microseconds. Returns 0 on successful completion.
-
-    Implementation:
-        1. Declare external nanosleep from platform layer
-        2. Allocate timespec struct on stack
-        3. Fill in tv_sec and tv_nsec fields
-        4. Call nanosleep(&req, &rem)
-        5. Check return value:
-           - If 0: Return 0 (success)
-           - If -1: Calculate remaining microseconds, return remaining time
-        6. Return bare i32 (wrapping in Result<T> happens at semantic level)
-    """
+    """Generate nanosleep function: nanosleep(i64 seconds, i64 nanoseconds) -> i32"""
     # Get common types
     _, _, i32, i64 = get_basic_types()
     timespec_type = get_timespec_type()
@@ -117,11 +92,7 @@ def generate_nanosleep(module: ir.Module) -> None:
 
 
 def generate_sleep(module: ir.Module) -> None:
-    """
-    Generate sleep function: sleep(i64 seconds) -> Result<i32>
-
-    Convenience wrapper that converts seconds to nanosleep call.
-    """
+    """Generate sleep function: sleep(i64 seconds) -> Result<i32>"""
     i32 = ir.IntType(32)
     i64 = ir.IntType(64)
 
@@ -148,12 +119,7 @@ def generate_sleep(module: ir.Module) -> None:
 
 
 def generate_msleep(module: ir.Module) -> None:
-    """
-    Generate msleep function: msleep(i64 milliseconds) -> Result<i32>
-
-    Convenience wrapper that converts milliseconds to nanosleep call.
-    Conversion: 1 ms = 1_000_000 ns
-    """
+    """Generate msleep function: msleep(i64 milliseconds) -> Result<i32>"""
     i32 = ir.IntType(32)
     i64 = ir.IntType(64)
 
@@ -190,12 +156,7 @@ def generate_msleep(module: ir.Module) -> None:
 
 
 def generate_usleep(module: ir.Module) -> None:
-    """
-    Generate usleep function: usleep(i64 microseconds) -> Result<i32>
-
-    Convenience wrapper that converts microseconds to nanosleep call.
-    Conversion: 1 μs = 1_000 ns
-    """
+    """Generate usleep function: usleep(i64 microseconds) -> Result<i32>"""
     i32 = ir.IntType(32)
     i64 = ir.IntType(64)
 

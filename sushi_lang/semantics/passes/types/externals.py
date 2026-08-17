@@ -1,14 +1,4 @@
-"""Semantic validation for FFI `unsafe external` blocks.
-
-Performs two things over `program.externals`:
-
-1. ABI-subset enforcement (CE5003): every parameter and return type in a foreign
-   declaration must be C-representable. Strict allowlist - everything outside it,
-   including named user types (UnknownType), is rejected. A non-"C" ABI string is
-   also reported via CE5003 (keeps the four-code budget).
-2. The four-guarantee block warning (CW5001), emitted once per block that has no
-   `because "<reason>"` clause, carrying signature-driven per-declaration notes.
-"""
+"""Semantic validation for FFI `unsafe external` blocks."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
@@ -52,17 +42,7 @@ def validate_external_signatures(reporter: Reporter, program: 'Program') -> None
 
 
 def validate_ptr_unit_gate(reporter: Reporter, program: 'Program') -> None:
-    """CE5009: `ptr` may only be NAMED in a unit that declares an `unsafe external` block.
-
-    "No danger zone, no ptr." A unit with no external block has no way to ever
-    produce a `ptr` value (no null literal, no casts, no uninitialized lets),
-    so a spelled `ptr` type there is dead plumbing at best and confusion at
-    worst. Walks every declared type in the unit AST: function signatures,
-    struct fields, enum variants, extension/perk-method signatures, constants,
-    and `let`/`foreach` annotations inside bodies. Resolved types from OTHER
-    units (e.g. holding a wrapper struct whose field is `ptr`) are untouched -
-    the gate is purely about what this unit's source spells out.
-    """
+    """CE5009: `ptr` may only be NAMED in a unit that declares an `unsafe external` block."""
     if getattr(program, "externals", None):
         return  # The unit declares a danger zone; ptr is legal here.
 

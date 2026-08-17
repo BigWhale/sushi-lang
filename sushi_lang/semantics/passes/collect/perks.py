@@ -78,11 +78,7 @@ class PerkImplementationTable:
         return self.implementations.get((type_name, perk_name))
 
     def get_method(self, target_type: 'Type', method_name: str) -> Optional['FuncDef']:
-        """Get a specific perk method for a type.
-
-        Searches all perks implemented by the type to find the method.
-        Returns the method definition if found, None otherwise.
-        """
+        """Get a specific perk method for a type."""
         # Convert Type to string name for lookup
         type_name = _get_type_name(target_type)
         if type_name is None:
@@ -101,22 +97,7 @@ class PerkImplementationTable:
         return None
 
     def register_synthetic(self, type_name: str, perk_name: str) -> bool:
-        """Register a synthetic perk implementation for primitives.
-
-        Synthetic implementations are used when a primitive type has auto-derived
-        methods that satisfy a perk's requirements, but no explicit 'extend...with'
-        declaration exists.
-
-        This allows primitives (i32, string, bool, etc.) to work seamlessly with
-        generic constraints like T: Hashable.
-
-        Args:
-            type_name: Name of the primitive type (e.g., "i32", "string")
-            perk_name: Name of the perk being implemented (e.g., "Hashable")
-
-        Returns:
-            True if registered successfully, False if already exists
-        """
+        """Register a synthetic perk implementation for primitives."""
         key = (type_name, perk_name)
         if key in self.implementations:
             return False  # Already registered (explicit or synthetic)
@@ -137,14 +118,7 @@ class PerkImplementationTable:
 
 
 def _get_type_name(ty: Optional[Type]) -> Optional[str]:
-    """Extract a string name from a Type for use in perk implementation tables.
-
-    Args:
-        ty: Type to extract name from
-
-    Returns:
-        String name or None if type cannot be named
-    """
+    """Extract a string name from a Type for use in perk implementation tables."""
     if ty is None:
         return None
 
@@ -170,18 +144,7 @@ def _get_type_name(ty: Optional[Type]) -> Optional[str]:
 
 
 class PerkCollector:
-    """Collector for perk definitions and implementations.
-
-    Collects:
-    - Perk definitions (interfaces)
-    - Perk implementations (extend...with)
-    - Synthetic perk implementations (auto-registered for primitives)
-
-    Validates:
-    - No duplicate perk names
-    - No duplicate implementations for same type+perk pair
-    - Referenced perks exist
-    """
+    """Collector for perk definitions and implementations."""
 
     def __init__(
         self,
@@ -189,23 +152,13 @@ class PerkCollector:
         perks: PerkTable,
         perk_impls: PerkImplementationTable
     ) -> None:
-        """Initialize perk collector.
-
-        Args:
-            reporter: Error reporter
-            perks: Shared perk table
-            perk_impls: Shared perk implementation table
-        """
+        """Initialize perk collector."""
         self.r = reporter
         self.perks = perks
         self.perk_impls = perk_impls
 
     def collect_definitions(self, root: Program) -> None:
-        """Collect all perk definitions from program AST.
-
-        Args:
-            root: Program AST node
-        """
+        """Collect all perk definitions from program AST."""
         perks = getattr(root, "perks", None)
         if isinstance(perks, list):
             for perk in perks:
@@ -213,11 +166,7 @@ class PerkCollector:
                     self._collect_perk_def(perk)
 
     def collect_implementations(self, root: Program) -> None:
-        """Collect all perk implementations from program AST.
-
-        Args:
-            root: Program AST node
-        """
+        """Collect all perk implementations from program AST."""
         perk_impls = getattr(root, "perk_impls", None)
         if isinstance(perk_impls, list):
             for impl in perk_impls:
@@ -225,19 +174,7 @@ class PerkCollector:
                     self._collect_perk_impl(impl)
 
     def register_synthetic_impls(self) -> None:
-        """Auto-register synthetic perk implementations for primitive types.
-
-        This method checks which perks are defined and automatically registers
-        primitives that have the required auto-derived methods.
-
-        Currently supports:
-        - Hashable perk: Registers all primitives with auto-derived hash() methods
-          (i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, bool, string)
-
-        This allows primitives to work seamlessly with generic constraints
-        (e.g., fn compute_hash<T: Hashable>(T value)) without requiring
-        explicit 'extend i32 with Hashable' declarations.
-        """
+        """Auto-register synthetic perk implementations for primitive types."""
         # Primitives with auto-derived hash() methods
         # See: backend/types/primitives/hashing.py
         hashable_primitives = [
@@ -261,11 +198,7 @@ class PerkCollector:
                     self.perk_impls.register_synthetic(prim_type, "Hashable")
 
     def _collect_perk_def(self, perk: PerkDef) -> None:
-        """Collect perk definition and register in perk table.
-
-        Args:
-            perk: Perk definition AST node
-        """
+        """Collect perk definition and register in perk table."""
         name = getattr(perk, "name", None)
         if not isinstance(name, str):
             return
@@ -309,11 +242,7 @@ class PerkCollector:
             return
 
     def _collect_perk_impl(self, impl: ExtendWithDef) -> None:
-        """Collect perk implementation and register in implementation table.
-
-        Args:
-            impl: Perk implementation AST node
-        """
+        """Collect perk implementation and register in implementation table."""
         perk_name = getattr(impl, "perk_name", None)
         if not isinstance(perk_name, str):
             return

@@ -1,12 +1,4 @@
-"""
-Error-propagation (`??`) emission for the Sushi language compiler.
-
-Unwraps a Result-like or Maybe-like enum: the success variant continues, and the error
-variant returns early from the enclosing function, running RAII cleanup on the way out.
-
-Reads the type annotations Pass 2 stamps on the TryExpr. The backend does not infer
-types -- an unannotated node is a Pass 2 gap and raises CE0124.
-"""
+"""Error-propagation (`??`) emission for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -21,37 +13,7 @@ if TYPE_CHECKING:
 
 
 def emit_try_expr(codegen: 'LLVMCodegen', expr: 'TryExpr') -> ir.Value:
-    """Emit try operator (??) for error propagation with Result<T> or Maybe<T>.
-
-    Reads the AST annotations set during semantic analysis (Pass 2). An unannotated
-    TryExpr is a Pass 2 gap, not a user error, and raises CE0124.
-
-    The ?? operator unwraps result-like or maybe-like enums and propagates errors:
-    - Result<T>: Ok(value) -> value, Err(...) -> propagate Err
-    - Maybe<T>: Some(value) -> value, None() -> propagate as Err
-
-    LLVM IR Structure:
-        %result = <evaluate inner expression>
-        %tag = extractvalue %result, 0
-        %is_success = icmp eq %tag, <success_tag>
-        br %is_success, label %continue, label %propagate_err
-
-    propagate_err:
-        <RAII cleanup>
-        %err_result = <construct Err value>
-        ret %err_result
-
-    continue:
-        %value = <extract value from success variant>
-        <continue execution with %value>
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The TryExpr containing the enum expression to unwrap.
-
-    Returns:
-        The unwrapped value of type T from Ok(value) or Some(value).
-    """
+    """Emit try operator (??) for error propagation with Result<T> or Maybe<T>."""
     # Pass 2 annotates every TryExpr it validates; the backend does not re-infer types.
     inner_type = expr.inferred_inner_type
     unwrapped_type = expr.inferred_unwrapped_type
@@ -100,16 +62,7 @@ def emit_try_expr(codegen: 'LLVMCodegen', expr: 'TryExpr') -> ir.Value:
 
 
 def _extract_variant_from_result(codegen: 'LLVMCodegen', result_value: ir.Value, variant_type: 'Type') -> ir.Value:
-    """Extract variant data from Result/Maybe enum value.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        result_value: The Result/Maybe enum LLVM value.
-        variant_type: The semantic type of the variant data to extract.
-
-    Returns:
-        The extracted value with the specified type.
-    """
+    """Extract variant data from Result/Maybe enum value."""
     variant_llvm_type = codegen.types.ll_type(variant_type)
     _, extracted_value = codegen.functions._extract_value_from_result_enum(
         result_value,
@@ -120,16 +73,7 @@ def _extract_variant_from_result(codegen: 'LLVMCodegen', result_value: ir.Value,
 
 
 def _construct_result_err_variant(codegen: 'LLVMCodegen', return_type, error_value: ir.Value) -> ir.Value:
-    """Construct an Err variant enum value for Result<T, E> with actual error data.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        return_type: The enclosing function's Result<T, E> (the interned enum, or a GenericTypeRef).
-        error_value: The LLVM value containing the error data to pack into Err variant.
-
-    Returns:
-        An LLVM value representing the Err variant with error data packed.
-    """
+    """Construct an Err variant enum value for Result<T, E> with actual error data."""
     from sushi_lang.backend.generics.result_builder import build_err_from_return_type
     return build_err_from_return_type(codegen, return_type, error_value)
 

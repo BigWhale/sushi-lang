@@ -1,15 +1,4 @@
-"""The built-in-method seam and Pass 2 validation must recognise the same families.
-
-`builtin_method_exists` (semantics/generics/builtin_methods.py) decides whether a user
-extension method would be shadowed by a built-in -- that is what CE2097 keys on. Pass 2's
-`validate_method_call` (passes/types/calls/methods.py) decides which built-in family
-actually handles a call. If the seam learns about a family that validation does not, CE2097
-rejects an extension that would in fact have worked; if validation gains a family the seam
-never hears about, a user extension goes silently dead again, which is the whole of #239.
-
-Two places answering one question drift, so this is the gate. Same spirit as
-tests/unit/test_borrow_dispatch_is_total.py.
-"""
+"""The built-in-method seam and Pass 2 validation must recognise the same families."""
 from __future__ import annotations
 
 import re

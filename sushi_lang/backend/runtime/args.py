@@ -1,9 +1,4 @@
-"""
-Command-line argument handling for main() wrapper generation.
-
-This module provides helper functions for converting C-style argc/argv
-to Sushi's string[] dynamic array in the main() wrapper.
-"""
+"""Command-line argument handling for main() wrapper generation."""
 from typing import TYPE_CHECKING
 import llvmlite.ir as ir
 from sushi_lang.semantics.typesys import DynamicArrayType, BuiltinType
@@ -14,19 +9,7 @@ if TYPE_CHECKING:
 
 
 def allocate_string_array_data(codegen: 'LLVMCodegen', count: ir.Value) -> ir.Value:
-    """Allocate memory for a string[] dynamic array data buffer.
-
-    This handles the complex alignment calculation for fat pointer strings.
-    Strings are {i8*, i32} with size 12 bytes but alignment 8 bytes,
-    resulting in stride of 16 bytes.
-
-    Args:
-        codegen: LLVM code generator instance
-        count: Number of string elements (i32)
-
-    Returns:
-        Typed pointer to allocated string struct array
-    """
+    """Allocate memory for a string[] dynamic array data buffer."""
     # Strings are fat pointers: {i8*, i32}
     string_struct_type = codegen.types.ll_type(BuiltinType.STRING)
 
@@ -57,17 +40,7 @@ def populate_string_array_from_argv(
     argv: ir.Value,
     target_array_data: ir.Value
 ) -> None:
-    """Convert C argv array to fat pointer strings in target array.
-
-    Iterates through argv[0..argc-1], converting each char* to a fat pointer
-    {i8*, i32} using strlen, and storing in the target array.
-
-    Args:
-        codegen: LLVM code generator instance
-        argc: Argument count (i32)
-        argv: C-style argument vector (char**)
-        target_array_data: Pointer to string struct array to populate
-    """
+    """Convert C argv array to fat pointer strings in target array."""
     builder = codegen.builder
     zero_i32 = ir.Constant(codegen.i32, 0)
     one_i32 = ir.Constant(codegen.i32, 1)
@@ -126,20 +99,7 @@ def populate_string_array_from_argv(
 
 
 def generate_argc_argv_conversion(codegen: 'LLVMCodegen', argc: ir.Value, argv: ir.Value) -> ir.Value:
-    """Convert C-style argc/argv to Sushi string[] dynamic array.
-
-    This is the main entry point for command-line argument conversion in the
-    main() wrapper. It creates a string[] with the same length and capacity,
-    populated with fat pointers converted from C strings.
-
-    Args:
-        codegen: LLVM code generator instance
-        argc: Argument count (i32)
-        argv: Argument vector (char**)
-
-    Returns:
-        Pointer to string[] dynamic array struct (alloca)
-    """
+    """Convert C-style argc/argv to Sushi string[] dynamic array."""
     builder = codegen.builder
     zero_i32 = ir.Constant(codegen.i32, 0)
     one_i32 = ir.Constant(codegen.i32, 1)

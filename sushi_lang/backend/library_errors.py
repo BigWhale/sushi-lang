@@ -1,14 +1,4 @@
-"""The exception raised by everything that reads, resolves, or links a .slib.
-
-It lives on its own because library_format.py used to reach into the *linker* for
-it -- a reader importing from a linker, which is backwards. Nothing here knows what
-a linker is.
-
-It is a `SushiError`, so a `LibraryError` that escapes to the top-level guard renders
-through the reporter with its own code (via `except SushiError`), exactly like any
-other coded diagnostic -- rather than being wrapped into a CE0000 ICE. Sites that
-already catch `LibraryError` explicitly still do.
-"""
+"""The exception raised by everything that reads, resolves, or links a .slib."""
 from __future__ import annotations
 
 from typing import Optional

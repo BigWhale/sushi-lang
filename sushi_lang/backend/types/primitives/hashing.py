@@ -1,17 +1,4 @@
-"""
-Built-in hash extension methods for primitive types.
-
-Implemented methods:
-- hash() -> u64: Compute hash value for use in hash tables/collections
-
-All hash functions are optimized for general-purpose hash table usage (not cryptographic):
-- Integer types: FxHash mixing for 32/64-bit, identity hash for 8/16-bit
-- Float types: Bitcast to integer representation + normalize zero + FxHash mixing
-- Boolean: Simple cast to u64 (0 or 1)
-- String: FNV-1a algorithm (excellent distribution, single-pass, widely used)
-
-All implementations are pure LLVM IR for optimal performance with full inlining.
-"""
+"""Built-in hash extension methods for primitive types."""
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall
@@ -39,16 +26,7 @@ def _validate_hash(call: MethodCall, target_type: Type, reporter: Any) -> None:
 
 
 def _emit_generic_hash(prim_type: BuiltinType) -> Any:
-    """Create a hash() emitter function for the given primitive type.
-
-    This factory function generates hash emitters dynamically based on type.
-
-    Args:
-        prim_type: The primitive type to create an emitter for.
-
-    Returns:
-        An emitter function that computes hash value as u64.
-    """
+    """Create a hash() emitter function for the given primitive type."""
     def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         """Generic hash() emitter created by factory."""
@@ -123,23 +101,7 @@ def _emit_generic_hash(prim_type: BuiltinType) -> Any:
 
 
 def _emit_string_hash_fnv1a(codegen: Any, string_value: ir.Value) -> ir.Value:
-    """Emit LLVM IR for FNV-1a string hashing algorithm.
-
-    FNV-1a is a simple, fast, and effective hash function with excellent
-    distribution properties for hash tables.
-
-    Algorithm:
-        hash = FNV_OFFSET_BASIS
-        for each byte in string:
-            hash = (hash XOR byte) * FNV_PRIME
-
-    Args:
-        codegen: The LLVM code generator
-        string_value: Fat pointer string struct {i8*, i32}
-
-    Returns:
-        Hash value as u64
-    """
+    """Emit LLVM IR for FNV-1a string hashing algorithm."""
     builder = require_builder(codegen)
     builder = codegen.builder
     u64 = ir.IntType(INT64_BIT_WIDTH)

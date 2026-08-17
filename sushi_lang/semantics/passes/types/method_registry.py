@@ -1,18 +1,4 @@
-"""
-Method type inference registry for built-in types.
-
-This module provides a pluggable registry for method return type inference.
-Each built-in type (arrays, strings, HashMap, List, etc.) can register
-its own inference logic instead of hardcoding it in the type visitor.
-
-Usage:
-    # In a type module (e.g., backend/generics/list/type_inference.py)
-    @METHOD_TYPE_REGISTRY.register_checker
-    def check_list_methods(receiver_type, method_name, validator):
-        if isinstance(receiver_type, StructType) and receiver_type.name.startswith("List<"):
-            return ListMethodTypeInferrer(receiver_type, method_name, validator)
-        return None
-"""
+"""Method type inference registry for built-in types."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Protocol, Callable
 from dataclasses import dataclass
@@ -27,11 +13,7 @@ class MethodTypeInferrer(Protocol):
     """Protocol for method type inference handlers."""
 
     def infer_return_type(self) -> Optional['Type']:
-        """Infer the return type of a method call.
-
-        Returns:
-            The inferred return type, or None if inference failed.
-        """
+        """Infer the return type of a method call."""
         ...
 
 
@@ -40,25 +22,13 @@ TypeChecker = Callable[['Type', str, 'TypeValidator'], Optional[MethodTypeInferr
 
 
 class MethodTypeRegistry:
-    """Registry for method type inference handlers.
-
-    This registry allows type-specific modules to register their own
-    method type inference logic without modifying the core type visitor.
-    """
+    """Registry for method type inference handlers."""
 
     def __init__(self):
         self._checkers: list[TypeChecker] = []
 
     def register_checker(self, checker: TypeChecker) -> TypeChecker:
-        """Register a type checker function.
-
-        Args:
-            checker: Function that checks if it can handle a receiver type
-                    and returns an inferrer if so.
-
-        Returns:
-            The checker function (for decorator usage).
-        """
+        """Register a type checker function."""
         self._checkers.append(checker)
         return checker
 
@@ -68,16 +38,7 @@ class MethodTypeRegistry:
         method_name: str,
         validator: 'TypeValidator'
     ) -> Optional['Type']:
-        """Infer the return type of a method call.
-
-        Args:
-            receiver_type: The type of the receiver object.
-            method_name: The name of the method being called.
-            validator: The type validator instance.
-
-        Returns:
-            The inferred return type, or None if no handler could infer it.
-        """
+        """Infer the return type of a method call."""
         # Try each registered checker in order
         for checker in self._checkers:
             inferrer = checker(receiver_type, method_name, validator)
@@ -167,16 +128,7 @@ class StringMethodInferrer:
 
 @dataclass
 class PrimitiveMethodInferrer:
-    """Type inferrer for built-in primitive methods (to_str, hash, to_bits).
-
-    Reads the semantics-side table in `generics/primitives.py`, NOT the builtin-method
-    registry. The registry is populated by the backend at import time and the pipeline
-    imports codegen lazily, after semantic analysis -- so during Pass 2 it is empty, and
-    this inferrer silently returned None for every primitive method call (#239). Every
-    other family here already reads a semantics-side table; this one was the exception.
-
-    Covers `string` too, which used to be excluded -- see check_string_methods.
-    """
+    """Type inferrer for built-in primitive methods (to_str, hash, to_bits)."""
     receiver_type: 'Type'
     method_name: str
     validator: 'TypeValidator'
@@ -188,19 +140,7 @@ class PrimitiveMethodInferrer:
 
 @dataclass
 class StructEnumBuiltinInferrer:
-    """Type inferrer for the auto-derived struct/enum builtins (hash, clone).
-
-    Pass 1.8 auto-derives `.hash()` and `.clone()` for every struct and enum and
-    deposits them in the builtin-method registry, but no checker here claimed a plain
-    StructType/EnumType -- so `p.hash()` inferred None, validate_assignment_compatibility
-    took its `value_type is None: return` early exit, and a wrong annotation reached
-    codegen and crashed it with CE0017 rather than reporting CE2002 (#239).
-
-    Same shape as PrimitiveMethodInferrer: read the return type straight off the
-    registered BuiltinMethod. It emits NO diagnostics -- infer_expression_type runs many
-    times per node, so a diagnostic here would duplicate. Arity is the BuiltinMethod's
-    own semantic_validator's job, invoked once from passes/types/calls/methods.py.
-    """
+    """Type inferrer for the auto-derived struct/enum builtins (hash, clone)."""
     receiver_type: 'Type'
     method_name: str
     validator: 'TypeValidator'
@@ -393,13 +333,7 @@ class ListMethodInferrer:
 
 @dataclass
 class OwnMethodInferrer:
-    """Type inferrer for Own<T> methods called on an Own value (.get(), .destroy()).
-
-    Without this, infer_expression_type(own_val.get()) returned None, so an inline
-    `match own_val.get()` on a generic-enum payload never resolved its concrete enum type
-    and the backend raised CE0121 (#222). `.alloc()` is a constructor-style call on the
-    type name, not on an Own value, so it is typed elsewhere and not handled here.
-    """
+    """Type inferrer for Own<T> methods called on an Own value (.get(), .destroy())."""
     receiver_type: StructType
     method_name: str
     validator: 'TypeValidator'
@@ -422,11 +356,7 @@ class OwnMethodInferrer:
 
 @dataclass
 class FunctionMethodInferrer:
-    """Type inferrer for the built-in methods on a function value (.clone()).
-
-    Function types are invariant and capture-agnostic, so the clone of a `fn(i32) -> i32`
-    is a `fn(i32) -> i32` whether or not it owns an environment.
-    """
+    """Type inferrer for the built-in methods on a function value (.clone())."""
     receiver_type: 'Type'
     method_name: str
     validator: 'TypeValidator'

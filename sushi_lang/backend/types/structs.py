@@ -1,16 +1,4 @@
-"""
-LLVM emission for the auto-derived struct hash() method.
-
-Hash is computed using FNV-1a by combining field hashes:
-    hash = FNV_OFFSET_BASIS
-    for each field:
-        hash = (hash XOR field.hash()) * FNV_PRIME
-
-Whether a struct *may* be hashed, and the registration of the method itself,
-are semantic concerns and live in semantics/generics/hashing.py. This module
-only supplies the emitter, which it deposits in the shared factory registry at
-import time.
-"""
+"""LLVM emission for the auto-derived struct hash() method."""
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall
@@ -23,16 +11,7 @@ from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_comb
 
 
 def _emit_struct_hash(prim_type: Type) -> Any:
-    """Create a hash() emitter function for struct types.
-
-    This generates code that combines all field hashes using FNV-1a.
-
-    Args:
-        prim_type: The struct type (must be StructType)
-
-    Returns:
-        An emitter function that computes the struct hash
-    """
+    """Create a hash() emitter function for struct types."""
     if not isinstance(prim_type, StructType):
         raise_internal_error("CE0032", type=type(prim_type).__name__)
 
@@ -76,18 +55,7 @@ def _emit_struct_hash(prim_type: Type) -> Any:
 
 
 def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> ir.Value:
-    """Emit code to get the hash of a field value.
-
-    This recursively calls the appropriate .hash() method based on the field type.
-
-    Args:
-        codegen: The LLVM code generator
-        field_value: LLVM value of the field
-        field_type: Semantic type of the field
-
-    Returns:
-        Hash value as u64
-    """
+    """Emit code to get the hash of a field value."""
     from sushi_lang.semantics.ast import MethodCall, Name
     from sushi_lang.semantics.typesys import BuiltinType
 
@@ -208,12 +176,7 @@ register_hash_emitter_factory("struct", _emit_struct_hash)
 
 
 def _emit_struct_clone(target_type: Type) -> Any:
-    """Create a clone() emitter for a struct type (#134).
-
-    A thin wrapper over the existing deep-copy `emit_value_clone` (the structural
-    inverse of the destructor), returning the clone as a bare value -- the
-    extension-ABI shape, no Result wrapper, matching hash().
-    """
+    """Create a clone() emitter for a struct type (#134)."""
     def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
                 receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         from sushi_lang.backend.expressions.memory import emit_value_clone

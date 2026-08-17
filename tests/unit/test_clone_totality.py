@@ -1,21 +1,4 @@
-"""`.clone()` must exist on every type that can need it.
-
-`.clone()` is the ONLY escape from CE2411. `classify(BORROWED, MOVE)` is `REJECT`
-(semantics/ownership.py) and the diagnostic's own help text is "clone it to take an
-independent value". So a type that can be MOVE and carries no `.clone()` is a rejection
-with no way out: the compiler tells the user to do something the language does not offer.
-
-**That hole has been found twice by a sweep and never by a test.** Phase 7 found it for
-`List<T>`, `Own<T>` and `string`. Phase 8 found it again for the
-primitives and for fixed arrays. Both times a phase stopped mid-flight and the
-phase order had to change. This file is the gate that makes the next one a red CI run.
-
-Same spirit as tests/unit/test_builtin_method_seam.py and
-tests/unit/test_borrow_dispatch_is_total.py: assert the property, not an instance of it.
-Both clauses read the REAL predicates -- `type_class_of` from the ownership table and
-`builtin_method_exists` from the method seam -- so neither can drift from what the compiler
-actually does.
-"""
+"""`.clone()` must exist on every type that can need it."""
 from __future__ import annotations
 
 import pytest
@@ -35,12 +18,7 @@ from sushi_lang.semantics.typesys import (
 
 
 def _fn(captures=None) -> FunctionType:
-    """A `fn(i32) -> i32`. `captures=None` is the common case AND the owning one.
-
-    `FunctionType.__eq__` excludes captures from type identity, so a value arriving
-    through a declared type -- a struct field, a `List` element, a parameter -- has already
-    lost it. `is_owning_type` reads `None` as owning for exactly that reason.
-    """
+    """A `fn(i32) -> i32`. `captures=None` is the common case AND the owning one."""
     return FunctionType(
         param_types=(BuiltinType.I32,),
         ok_type=BuiltinType.I32,
@@ -104,11 +82,7 @@ EXEMPT_REASONS: dict[str, str] = {
 
 @pytest.mark.parametrize("name,ty", REPRESENTATIVE_TYPES, ids=[n for n, _ in REPRESENTATIVE_TYPES])
 def test_a_move_type_has_a_clone(name, ty):
-    """If consuming a borrow of `T` is CE2411, `T.clone()` must exist.
-
-    This is the ownership table's own invariant restated: `(BORROWED, MOVE) -> REJECT`, and
-    the only sanctioned way out of REJECT is the explicit copy.
-    """
+    """If consuming a borrow of `T` is CE2411, `T.clone()` must exist."""
     if type_class_of(ty) is not TypeClass.MOVE:
         pytest.skip(f"{name} is not a MOVE type, so it never reaches REJECT")
     assert builtin_method_exists(ty, "clone"), (
@@ -196,13 +170,7 @@ fn main() i32:
 
 
 def test_hashmap_carries_a_clone():
-    """The closed hole, asserted from the other side.
-
-    A HashMap owns a heap bucket buffer, so once it MOVES a borrowed one at a consuming use is
-    CE2411 -- and `.clone()` is the only escape. Clause 1 covers this generically, but a
-    direct assertion is what fails loudly if the method is ever dropped from
-    `is_builtin_hashmap_method`.
-    """
+    """The closed hole, asserted from the other side."""
     hashmap = StructType(name="HashMap<i32, i32>", fields=())
     assert builtin_method_exists(hashmap, "clone"), (
         "HashMap.clone() is the only escape from CE2411 for a borrowed HashMap; it must exist"

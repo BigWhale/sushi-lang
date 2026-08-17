@@ -1,8 +1,4 @@
-"""Type mapping from Sushi semantic types to LLVM IR types.
-
-This module handles the conversion from Sushi language types to their
-LLVM IR representations used in code generation.
-"""
+"""Type mapping from Sushi semantic types to LLVM IR types."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -41,15 +37,7 @@ class TypeMapper:
         enum_table: EnumTable,
         context: 'ir.Context | None' = None,
     ):
-        """Initialize type mapper with caching and type tables.
-
-        Args:
-            cache: TypeCache for struct/enum caching
-            struct_table: Struct table for resolving struct types
-            enum_table: Enum table for resolving enum types
-            context: LLVM context owning the identified struct types (#257). Must be the
-                context of the modules this compilation emits.
-        """
+        """Initialize type mapper with caching and type tables."""
         self.cache = cache
         self.struct_table = struct_table
         self.enum_table = enum_table
@@ -128,21 +116,7 @@ class TypeMapper:
         ])
 
     def ll_type(self, t: Ty) -> ir.Type:
-        """Map language type to corresponding LLVM IR type.
-
-        Provides the mapping from Sushi language types to their LLVM IR
-        representations used in code generation. Uses dictionary lookup for
-        builtin types (O(1)) and match for complex types.
-
-        Args:
-            t: The language type to convert.
-
-        Returns:
-            The corresponding LLVM IR type.
-
-        Raises:
-            TypeError: If the language type is not supported.
-        """
+        """Map language type to corresponding LLVM IR type."""
         # Fast path: O(1) lookup for builtin types
         if isinstance(t, BuiltinType):
             llvm_type = self._builtin_type_map.get(t)
@@ -224,10 +198,7 @@ class TypeMapper:
         ])
 
     def _create_iterator_struct_type(self, iterator_type: IteratorType) -> ir.LiteralStructType:
-        """Create LLVM struct type for Iterator<T>.
-
-        The structure: {i32 current_index, i32 length, T* data_ptr}
-        """
+        """Create LLVM struct type for Iterator<T>."""
         element_type = self.ll_type(iterator_type.element_type)
         return ir.LiteralStructType([
             self.i32,
@@ -328,19 +299,7 @@ class TypeMapper:
         return llvm_struct
 
     def _create_builtin_literal_struct_type(self, struct_type: StructType) -> ir.LiteralStructType:
-        """Map a generic BUILTIN container's declared fields to a literal LLVM struct.
-
-        Used for `Own<T>` (`{T*}` -- its single field is already a semantic PointerType) and
-        the user-facing `Entry<K, V>` (`{K, V}`). Both have a hand-written LLVM shape that
-        other backend code constructs directly -- generics/own.py's emit_own_alloc and
-        generics/hashmap/types.py's get_user_entry_type -- so they must stay LITERAL and
-        keep matching it. Promoting them to identified types (#257) made every
-        `Own<T>` construction a CE0017: `{i32*}` is not `%"Own<i32>"`.
-
-        This is the pre-#257 behaviour of the generic path, minus the placeholder dance:
-        these types are never self-referential (`Own<T>` names its pointee only through the
-        pointer), so they never needed a tie-the-knot handle in the first place.
-        """
+        """Map a generic BUILTIN container's declared fields to a literal LLVM struct."""
         field_types = [self.ll_type(field_type) for _name, field_type in struct_type.fields]
         llvm_struct = ir.LiteralStructType(field_types)
 
@@ -348,17 +307,7 @@ class TypeMapper:
         return llvm_struct
 
     def _get_enum_type(self, enum_type: EnumType) -> ir.LiteralStructType:
-        """Create LLVM struct type for enum (tagged union) with caching.
-
-        The shape is `{i32 tag, [K x i64] data}` (#300 phase 2). The data member is an
-        i64 array ON PURPOSE: it gives the struct 8-alignment, so the payload starts at
-        offset 8 from an 8-aligned base and every naturally aligned field offset inside
-        it is naturally aligned absolutely. A byte-array data member has alignment 1,
-        which left the whole struct 4-aligned and every wide payload field under-aligned
-        -- the #145/#149 crash class the `align=1` workaround family papered over.
-        Payload accesses still go through an `i8*` bitcast of the data pointer; only the
-        member's TYPE carries the alignment.
-        """
+        """Create LLVM struct type for enum (tagged union) with caching."""
         # Check cache first
         cached = self.cache.get_enum(enum_type.name)
         if cached is not None:

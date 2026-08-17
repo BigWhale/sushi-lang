@@ -1,34 +1,11 @@
-"""
-String Comparison Intrinsic
-
-Pure LLVM IR implementation of strcmp for fat pointer strings.
-Compares two strings lexicographically, handling variable lengths.
-
-This replaces the C standard library strcmp() function.
-"""
+"""String Comparison Intrinsic"""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 
 
 def emit_strcmp_intrinsic(module: ir.Module) -> ir.Function:
-    """Emit the string comparison intrinsic function.
-
-    Compares two fat pointer strings {i8* data, i32 size} lexicographically.
-    Returns:
-    - negative value if str1 < str2
-    - 0 if str1 == str2
-    - positive value if str1 > str2
-
-    This works with Sushi's fat pointer representation, comparing bounded strings
-    rather than null-terminated strings.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: i32 llvm_strcmp({ i8*, i32 } str1, { i8*, i32 } str2)
-    """
+    """Emit `i32 llvm_strcmp({i8*, i32} str1, {i8*, i32} str2)`."""
     func_name = "llvm_strcmp"
 
     # Check if already defined

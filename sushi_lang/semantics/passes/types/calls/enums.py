@@ -1,12 +1,5 @@
 # semantics/passes/types/calls/enums.py
-"""
-Enum constructor validation.
-
-Handles validation for:
-- Enum variant constructors
-- Generic enum constructors (Result<T>, Maybe<T>)
-- Nested enum constructors
-"""
+"""Enum constructor validation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
@@ -22,10 +15,7 @@ if TYPE_CHECKING:
 
 
 def validate_enum_constructor(validator: 'TypeValidator', constructor: EnumConstructor) -> None:
-    """Validate enum variant constructor - variant exists, argument count and types.
-
-    This is the main orchestrator method that delegates to focused helper methods.
-    """
+    """Validate enum variant constructor - variant exists, argument count and types."""
     # Step 1: Resolve enum type (handles concrete and generic enums)
     enum_type = resolve_enum_type(validator, constructor)
     if enum_type is None:
@@ -44,15 +34,7 @@ def validate_enum_constructor(validator: 'TypeValidator', constructor: EnumConst
 
 
 def resolve_enum_type(validator: 'TypeValidator', constructor: EnumConstructor) -> Optional[EnumType]:
-    """Resolve constructor to concrete or generic enum type.
-
-    Args:
-        validator: The TypeValidator instance.
-        constructor: The enum constructor to resolve.
-
-    Returns:
-        The resolved EnumType if found, None otherwise.
-    """
+    """Resolve constructor to concrete or generic enum type."""
     # Priority 1: Check if resolved_enum_type is already set (for generic enums like Result<T>)
     # This is set by _validate_return_statement or _validate_let_statement
     if hasattr(constructor, 'resolved_enum_type') and constructor.resolved_enum_type is not None:
@@ -88,16 +70,7 @@ def resolve_enum_type(validator: 'TypeValidator', constructor: EnumConstructor) 
 def validate_variant_exists(
     validator: 'TypeValidator', enum_type: EnumType, constructor: EnumConstructor
 ) -> Optional['EnumVariant']:
-    """Check variant exists in enum and return it.
-
-    Args:
-        validator: The TypeValidator instance.
-        enum_type: The enum type to check.
-        constructor: The constructor with the variant name.
-
-    Returns:
-        The EnumVariant if found, None otherwise.
-    """
+    """Check variant exists in enum and return it."""
     variant_name = constructor.variant_name
     variant = enum_type.get_variant(variant_name)
 
@@ -112,16 +85,7 @@ def validate_variant_exists(
 def propagate_generic_types_to_nested_constructors(
     validator: 'TypeValidator', constructor: EnumConstructor, variant: 'EnumVariant'
 ) -> None:
-    """Set resolved_enum_type for nested generic enum constructors.
-
-    This propagates type information from outer constructors to nested ones,
-    enabling proper type checking for cases like Maybe.Some(Result.Ok(42)).
-
-    Args:
-        validator: The TypeValidator instance.
-        constructor: The outer enum constructor.
-        variant: The variant being constructed.
-    """
+    """Set resolved_enum_type for nested generic enum constructors."""
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
     expected_types = list(variant.associated_types)
@@ -164,14 +128,7 @@ def propagate_generic_types_to_nested_constructors(
 def validate_constructor_arguments(
     validator: 'TypeValidator', constructor: EnumConstructor, variant: 'EnumVariant', enum_type: EnumType
 ) -> None:
-    """Validate argument count and types for enum constructor.
-
-    Args:
-        validator: The TypeValidator instance.
-        constructor: The enum constructor to validate.
-        variant: The variant being constructed.
-        enum_type: The resolved enum type.
-    """
+    """Validate argument count and types for enum constructor."""
     variant_name = constructor.variant_name
     expected_types = list(variant.associated_types)
     actual_args = constructor.args

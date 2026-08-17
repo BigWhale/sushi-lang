@@ -1,47 +1,4 @@
-"""
-Time module for Sushi standard library.
-
-Provides time-related functions for delays, timestamps, and timing operations.
-
-Available Functions:
-    nanosleep(i64 seconds, i64 nanoseconds) -> Result<i32>
-        Sleep for specified duration with nanosecond precision.
-        Returns 0 on success, remaining microseconds if interrupted.
-
-    sleep(i64 seconds) -> Result<i32>
-        Sleep for specified number of seconds.
-        Convenience wrapper around nanosleep.
-
-    msleep(i64 milliseconds) -> Result<i32>
-        Sleep for specified number of milliseconds.
-        Convenience wrapper around nanosleep.
-
-    usleep(i64 microseconds) -> Result<i32>
-        Sleep for specified number of microseconds.
-        Convenience wrapper around nanosleep.
-
-Example Usage:
-    use <time>
-
-    fn main() i32:
-        # Sleep for 2 seconds
-        let i32 result = sleep(2)??
-
-        # Sleep for 500 milliseconds
-        let i32 result = msleep(500)??
-
-        # Sleep for 1.5 seconds precisely
-        let i32 result = nanosleep(1, 500000000)??
-
-        return Result.Ok(0)
-
-Implementation Notes:
-    - All functions return Result<i32> for error propagation
-    - Return value is 0 on success, remaining microseconds if interrupted
-    - Uses POSIX nanosleep() from platform module
-    - Handles EINTR (signal interruption) correctly
-    - Precision limited by OS scheduler (typically ~1ms minimum)
-"""
+"""Time module for Sushi standard library."""
 from __future__ import annotations
 import typing
 from llvmlite import ir

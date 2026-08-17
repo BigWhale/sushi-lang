@@ -1,28 +1,5 @@
 # semantics/passes/types/__init__.py
-"""
-Pass 2: Type validation and inference.
-
-Validates:
-- Unknown type names (CE2001)
-- Type compatibility in assignments (CE2002)
-- Return type matching (CE2003)
-- Boolean conditions in control flow (CE2005)
-- Extension method calls and resolution
-
-Depends on:
-- Pass 0: Function signatures, extension methods, and known types
-- Pass 1: Scope information (if needed)
-
-Architecture:
-The TypeValidator class coordinates type validation by delegating to specialized modules:
-- utils: Shared utilities (type name validation, parameter validation, array destruction tracking)
-- inference: Type inference helpers
-- compatibility: Type compatibility checking
-- expressions: Expression validation
-- matching: Pattern matching validation
-- calls: Function and method call validation
-- statements: Statement validation
-"""
+"""Pass 2: Type validation and inference."""
 from __future__ import annotations
 from typing import Dict, List, Optional, Set, TYPE_CHECKING
 
@@ -81,11 +58,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 
 
 class TypeValidator:
-    """
-    Pass 2: Type validation and inference.
-
-    This is the main coordinator class that delegates validation logic to specialized modules.
-    """
+    """Pass 2: Type validation and inference."""
 
     def __init__(self, reporter: Reporter, tables: 'SymbolTables', current_unit_name: Optional[str] = None, monomorphized_functions: Optional[Dict[str, tuple]] = None) -> None:
         self.reporter = reporter
@@ -163,13 +136,7 @@ class TypeValidator:
         return self.type_inference_visitor.visit(expr)
 
     def _resolve_external_call(self, node) -> Optional['ExternalSig']:
-        """Resolve a DotCall to a foreign function signature, if applicable.
-
-        Returns the ExternalSig when `node` is `<ns>.<name>(args)` where <ns> is a
-        registered external namespace AND not a bound local (shadowing guard).
-        Annotates the node with `external_ref = (ns, name)` for the backend.
-        Returns None otherwise (the call falls through to normal handling).
-        """
+        """Resolve a DotCall to a foreign function signature, if applicable."""
         from sushi_lang.semantics.ast import Name
         receiver = node.receiver
         if not isinstance(receiver, Name):

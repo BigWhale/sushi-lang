@@ -1,9 +1,4 @@
-"""
-Array and struct initialization helpers for the Sushi language compiler.
-
-This module provides helper functions for initializing arrays (both fixed and dynamic)
-with proper element-by-element initialization and memory management.
-"""
+"""Array and struct initialization helpers for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from sushi_lang.internals.errors import raise_internal_error
@@ -23,28 +18,7 @@ def initialize_array_literal(
     array_type: 'ir.ArrayType',
     element_semantic_type=None
 ) -> None:
-    """Initialize array variable with array literal elements.
-
-    Creates GEP instructions for each array element and stores the
-    evaluated expression value at that location.
-
-    The array takes ownership of each element, so every element is an ARRAY_ELEMENT
-    consuming use and goes through the seam (`backend/ownership.py`). A bare owned name
-    moves in, a fresh temporary is adopted, and a read through a live owner is a borrow the
-    array may not take -- CE2411, which Pass 3 reports before this runs.
-
-    This position used to derive the answer itself, from `expression_is_temporary`. It was
-    the last `let` path that did, and it disagreed with the seam about a borrowed binding:
-    a `match` binding was "not temporary", so it was cloned rather than rejected.
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        slot: The alloca instruction for the array variable.
-        array_literal: The array literal AST node.
-        array_type: The LLVM array type.
-        element_semantic_type: The element's Sushi type (None classifies as PLAIN, i.e.
-            store as-is).
-    """
+    """Initialize array variable with array literal elements."""
     from llvmlite import ir
     from sushi_lang.backend.destructors import resolve_named_type
     from sushi_lang.backend.ownership import ConsumingUse, consume
@@ -79,22 +53,7 @@ def initialize_dynamic_array(
     array_type: 'DynamicArrayType',
     constructor_expr
 ) -> None:
-    """Initialize dynamic array variable with constructor or expression.
-
-    Handles three cases:
-    1. `new()` constructors (empty arrays) - optimized path
-    2. `from([...])` constructors (arrays with initial elements) - optimized path
-    3. General expressions returning arrays (function calls, ??, etc.) - direct initialization
-
-    Args:
-        codegen: The main LLVMCodegen instance.
-        name: The variable name.
-        array_type: The DynamicArrayType.
-        constructor_expr: The initialization expression (DynamicArrayNew, DynamicArrayFrom, or any Expr).
-
-    Raises:
-        TypeError: If the constructor expression type is not supported.
-    """
+    """Initialize dynamic array variable with constructor or expression."""
     from sushi_lang.semantics.ast import DynamicArrayNew, DynamicArrayFrom
     from llvmlite import ir
     if codegen.dynamic_arrays is None:

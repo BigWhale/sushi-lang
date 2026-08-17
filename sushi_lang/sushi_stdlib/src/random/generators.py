@@ -1,14 +1,4 @@
-"""
-Random number generator implementations for Sushi stdlib.
-
-Implements RNG functions with varying types and ranges:
-- rand: Core implementation returning u64
-- rand_range: Convenience wrapper for bounded i32 range
-- srand: Seed the generator
-- rand_f64: Floating-point random in [0.0, 1.0)
-
-All functions use POSIX random() and srandom() under the hood.
-"""
+"""Random number generator implementations for Sushi stdlib."""
 from __future__ import annotations
 import typing
 from llvmlite import ir
@@ -23,21 +13,7 @@ if typing.TYPE_CHECKING:
 
 
 def generate_rand(module: ir.Module) -> None:
-    """Generate rand function: rand() -> u64
-
-    Returns a random unsigned 64-bit integer using libc random().
-
-    Implementation Strategy:
-        libc random() returns 31-bit values [0, 2^31-1]
-        To get 64 bits, we call random() twice and combine:
-        1. Call random() to get low 31 bits
-        2. Call random() to get high 31 bits
-        3. Combine: (high << 31) | low
-        4. This gives us 62 bits of randomness (good enough for u64)
-
-    Note: We could call random() three times for full 64 bits, but
-    62 bits provides adequate randomness for non-crypto use cases.
-    """
+    """Generate rand function: rand() -> u64"""
     # Get common types
     _, _, i32, i64 = get_basic_types()
 
@@ -70,23 +46,7 @@ def generate_rand(module: ir.Module) -> None:
 
 
 def generate_rand_range(module: ir.Module) -> None:
-    """Generate rand_range function: rand_range(i32 min, i32 max) -> i32
-
-    Returns a random integer in the range [min, max).
-
-    Implementation:
-        result = min + (rand() % (max - min))
-
-    Algorithm Limitations:
-        - Uses modulo bias (slightly non-uniform distribution)
-        - For small ranges, bias is negligible
-        - For large ranges approaching 2^32, bias becomes noticeable
-        - Future enhancement: Use rejection sampling for unbiased results
-
-    Validation:
-        - Compile-time check: min < max (enforced by validator)
-        - Runtime: Assumes valid range (no bounds checks for performance)
-    """
+    """Generate rand_range function: rand_range(i32 min, i32 max) -> i32"""
     _, _, i32, i64 = get_basic_types()
 
     # Get sushi_rand function (should already be defined)
@@ -126,17 +86,7 @@ def generate_rand_range(module: ir.Module) -> None:
 
 
 def generate_srand(module: ir.Module) -> None:
-    """Generate srand function: srand(u64 seed) -> ~
-
-    Seeds the random number generator with the given value.
-    Calling this function with the same seed produces the same sequence.
-
-    Implementation:
-        Truncate u64 seed to u32 (unsigned int) and pass to libc srandom()
-
-    Note: libc srandom() takes unsigned int (32 bits), but Sushi uses
-    u64 for consistency. We truncate the high bits.
-    """
+    """Generate srand function: srand(u64 seed) -> ~"""
     _, _, i32, i64 = get_basic_types()
     void = ir.VoidType()
 
@@ -163,23 +113,7 @@ def generate_srand(module: ir.Module) -> None:
 
 
 def generate_rand_f64(module: ir.Module) -> None:
-    """Generate rand_f64 function: rand_f64() -> f64
-
-    Returns a random floating-point value in the range [0.0, 1.0).
-
-    Implementation:
-        1. Get random u64
-        2. Convert to f64
-        3. Divide by 2^64 to normalize to [0.0, 1.0)
-
-    Precision:
-        - f64 has 53-bit mantissa (IEEE 754 double precision)
-        - u64 has 64 bits, so we lose 11 bits of precision
-        - Resulting distribution has 2^53 distinct values in [0.0, 1.0)
-        - This is adequate for most applications
-
-    Note: For cryptographic applications, use a dedicated crypto library.
-    """
+    """Generate rand_f64 function: rand_f64() -> f64"""
     _, _, _, i64 = get_basic_types()
     f64 = ir.DoubleType()
 

@@ -1,13 +1,5 @@
 # semantics/passes/types/constants.py
-"""
-Constant definition validation for type validation (Pass 2).
-
-Validates constant declarations: type annotation, blank/dynamic-array
-restrictions, compile-time evaluation, and value/type compatibility.
-
-Functions receive the TypeValidator instance (``self``) and mutate it in
-place, matching the delegation pattern used across this package.
-"""
+"""Constant definition validation for type validation (Pass 2)."""
 from __future__ import annotations
 
 from sushi_lang.internals import errors as er

@@ -1,8 +1,4 @@
-"""
-List<T> capacity management methods: reserve(), shrink_to_fit().
-
-These methods manage memory allocation without changing the logical size.
-"""
+"""List<T> capacity management methods: reserve(), shrink_to_fit()."""
 
 from typing import Any
 from sushi_lang.semantics.typesys import StructType
@@ -13,20 +9,7 @@ from .types import get_list_len_ptr, get_list_capacity_ptr, get_list_element_typ
 
 
 def emit_list_reserve(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.reserve(additional) - ensure capacity for more elements.
-
-    Ensures list has capacity for at least (len + additional) elements.
-    Only grows, never shrinks.
-
-    Args:
-        codegen: LLVM codegen instance.
-        expr: The method call expression.
-        list_ptr: Pointer to the List<T> struct.
-        list_type: The List<T> struct type from semantic analysis.
-
-    Returns:
-        Updated List<T> struct value.
-    """
+    """Emit LLVM IR for list.reserve(additional) - ensure capacity for more elements."""
     from sushi_lang.backend.expressions import memory
 
     list_llvm_type = list_ptr.type.pointee
@@ -83,19 +66,7 @@ def emit_list_reserve(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: St
 
 
 def emit_list_shrink_to_fit(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.shrink_to_fit() - reduce capacity to exact length.
-
-    Reallocates to capacity == len to save memory.
-    If len == 0, frees data and sets capacity to 0.
-
-    Args:
-        codegen: LLVM codegen instance.
-        list_ptr: Pointer to the List<T> struct.
-        list_type: The List<T> struct type from semantic analysis.
-
-    Returns:
-        Updated List<T> struct value.
-    """
+    """Emit LLVM IR for list.shrink_to_fit() - reduce capacity to exact length."""
     from sushi_lang.backend.expressions import memory
 
     list_llvm_type = list_ptr.type.pointee

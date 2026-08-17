@@ -1,10 +1,5 @@
 # semantics/generics/instantiate/expressions.py
-"""
-Expression scanning for instantiation collection.
-
-Recursively traverses expression AST nodes to detect generic type instantiations
-from method calls, function calls, and nested expressions.
-"""
+"""Expression scanning for instantiation collection."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Set, Tuple
 
@@ -17,13 +12,7 @@ from sushi_lang.semantics.type_resolution import TypeResolver
 
 
 class ExpressionScanner:
-    """Scans expressions to collect generic type instantiations.
-
-    Handles:
-    - Function calls (including generic functions)
-    - Method calls (DotCall nodes)
-    - Nested expressions
-    """
+    """Scans expressions to collect generic type instantiations."""
 
     def __init__(
         self,
@@ -33,17 +22,7 @@ class ExpressionScanner:
         generic_funcs: dict,
         type_validator=None,
     ):
-        """Initialize expression scanner.
-
-        Args:
-            type_inferrer: Thin fallback type inference helper (used when no validator)
-            instantiations: Set to accumulate type instantiations
-            function_instantiations: Set to accumulate function instantiations
-            generic_funcs: Table of generic function definitions
-            type_validator: Pass 2's TypeValidator over the same tables, with a discard
-                reporter. When present, argument and receiver types are inferred through
-                it so Pass 1.5 agrees with Pass 2 (issues #171/#191).
-        """
+        """Initialize expression scanner."""
         self.type_inferrer = type_inferrer
         self.instantiations = instantiations
         self.function_instantiations = function_instantiations
@@ -61,18 +40,7 @@ class ExpressionScanner:
         )
 
     def scan_expression(self, expr) -> None:
-        """Recursively collect generic instantiations from expressions.
-
-        This method scans all expression types to find DotCall nodes (receiver.method(args))
-        on built-in types that return generic types (e.g., string.find() returning Maybe<i32>).
-
-        Note: The parser creates DotCall nodes for all receiver.method(args) syntax.
-        MethodCall nodes are only created internally in the backend, not in the parsed AST.
-
-        We need to scan:
-        1. DotCall expressions - the primary target for detecting generic returns
-        2. All other expression types recursively to find nested DotCalls
-        """
+        """Recursively collect generic instantiations from expressions."""
         # Import here to avoid circular dependency
         from sushi_lang.semantics.ast import (
             Call, BinaryOp, UnaryOp, IndexAccess, ArrayLiteral,
@@ -184,19 +152,7 @@ class ExpressionScanner:
             pass
 
     def _scan_dot_call(self, call) -> None:
-        """Detect built-in method calls (via DotCall) with generic return types.
-
-        DotCall is used for all receiver.method(args) syntax before semantic analysis.
-        It can be either an enum constructor (Result.Ok(42)) or a method call (arr.push(5)).
-
-        For instantiation collection, we treat all DotCalls as potential method calls
-        and check if they have generic return types.
-
-        Strategy:
-        1. Infer the receiver type (simple cases only - literals, known names)
-        2. Look up the built-in method's return type
-        3. If the return type is generic, record it for monomorphization
-        """
+        """Detect built-in method calls (via DotCall) with generic return types."""
         from sushi_lang.semantics.ast import DotCall
 
         if not isinstance(call, DotCall):
@@ -214,11 +170,7 @@ class ExpressionScanner:
                 self._collect_from_type(return_type)
 
     def _scan_call(self, call) -> None:
-        """Detect generic function calls and infer type arguments.
-
-        Args:
-            call: Call AST node
-        """
+        """Detect generic function calls and infer type arguments."""
         from sushi_lang.semantics.ast import Name
         from sushi_lang.semantics.typesys import BuiltinType
 
@@ -308,23 +260,7 @@ class ExpressionScanner:
             # Type validation will catch that in Pass 2
 
     def _infer_arg_type(self, arg_expr):
-        """Infer a generic call argument's type through Pass 2's real inferrer.
-
-        The thin inferrer had no arm for a method call, field access, index, unary op,
-        or nested call argument (#191), and could not see `self` (#171). Pass 2's
-        TypeValidator handles all of them, so argument inference routes through it.
-
-        A lambda argument goes through the annotate seam `infer_lambda_type(..., stamp=False)`
-        (issue #214): Pass 2's inferrer would otherwise *cache* the lambda's type onto the
-        node before expected-type propagation, freezing an under-resolved type that Pass 2
-        and lambda-lift then read back. The read-only form computes the same FunctionType
-        with no node mutation.
-
-        Production always supplies a SymbolTables, so this always routes through Pass 2.
-        A collector built without one (`type_validator is None`) simply collects nothing
-        from argument positions -- the thin parallel inferrer that used to fill that gap is
-        gone (issue #214).
-        """
+        """Infer a generic call argument's type through Pass 2's real inferrer."""
         from sushi_lang.semantics.ast import Lambda
         if self.type_validator is None:
             return None
@@ -344,24 +280,7 @@ class ExpressionScanner:
         return arg_type
 
     def _infer_type_args_from_call(self, call, generic_func) -> tuple["Type", ...] | None:
-        """Infer type arguments for generic function call.
-
-        Uses simple unification to match argument types to parameter types.
-
-        For a function ending in a type pack (``fn f<...Ts>(...Ts args)``) the
-        flat instantiation key is ``(<leading inferred type-args>, *<trailing
-        arg types>)`` -- the pack-tail handling is shared with Pass 2 via
-        ``pack_inference.infer_flat_type_args`` while the leading (non-pack)
-        unification below is reused unchanged. For a non-pack function the result
-        is byte-for-byte the legacy behavior.
-
-        Args:
-            call: Call AST node
-            generic_func: Generic function definition
-
-        Returns:
-            Tuple of concrete types for type parameters, or None if inference fails
-        """
+        """Infer type arguments for generic function call."""
         from sushi_lang.semantics.generics.pack_inference import infer_flat_type_args
 
         # Infer argument types up front (the shared helper operates on types, so
@@ -384,14 +303,7 @@ class ExpressionScanner:
     def _infer_leading_type_args(
         self, generic_func, leading_arg_types
     ) -> tuple["Type", ...] | None:
-        """Infer the leading (non-pack) type-args from already-inferred arg types.
-
-        This is the EXISTING unification logic, unchanged in substance: it matches
-        leading argument types to leading value-parameter types and extracts the
-        non-pack type-params in declaration order. The shared pack helper calls
-        this for the fixed prefix; for a non-pack function it is called with all
-        arg types and produces the full, legacy result.
-        """
+        """Infer the leading (non-pack) type-args from already-inferred arg types."""
         from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
         # Build type parameter -> concrete type mapping
@@ -447,14 +359,7 @@ class ExpressionScanner:
         return tuple(type_args)
 
     def scan_generic_fn_reference(self, name: str, expected_ty) -> None:
-        """Record an instantiation for a bare generic-fn reference (T2.3).
-
-        For `let fn(i32) -> i32 g = identity` with `fn identity<T>(T x) T`, solve the
-        generic's type args by unifying its signature `fn(T) -> T` against the expected
-        `FunctionType`, then add `(name, type_args)` so the monomorphize pass emits the
-        concrete instance. No-ops unless `expected_ty` is a FunctionType and `name` is a
-        known generic function whose arity matches and whose type params are all solved.
-        """
+        """Record an instantiation for a bare generic-fn reference (T2.3)."""
         from sushi_lang.semantics.typesys import FunctionType
         from sushi_lang.semantics.type_resolution import resolve_unknown_type
         if not isinstance(expected_ty, FunctionType):
@@ -495,10 +400,7 @@ class ExpressionScanner:
         self.function_instantiations.add((name, tuple(type_args)))
 
     def _collect_from_type(self, ty: "Type") -> None:
-        """Collect generic instantiations from a type annotation.
-
-        This is a helper that delegates to the main collector's type collection logic.
-        """
+        """Collect generic instantiations from a type annotation."""
         if isinstance(ty, GenericTypeRef):
             # Found a generic type instantiation!
             # Use TypeResolver for centralized resolution

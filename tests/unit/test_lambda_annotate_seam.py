@@ -1,13 +1,4 @@
-"""The Pass 1.5 lambda annotate seam must not mutate the node (issue #214).
-
-Pass 1.5 types a lambda *argument* to infer a generic call's type parameters, but it runs
-BEFORE Pass 2's expected-type propagation. `infer_lambda_type(..., stamp=True)` (Pass 2's
-form) memoizes `resolved_type` and persists param/capture types on the node; doing that at
-Pass 1.5 would freeze an under-resolved type that Pass 2 and lambda-lift then read back --
-the regression that broke every higher-order test the last time this was attempted. The
-`stamp=False` seam computes the same FunctionType with no node mutation and restores the
-scope table. This test pins exactly that.
-"""
+"""The Pass 1.5 lambda annotate seam must not mutate the node (issue #214)."""
 from __future__ import annotations
 
 from sushi_lang.semantics.passes.types.visitor import infer_lambda_type

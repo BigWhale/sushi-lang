@@ -1,12 +1,5 @@
 # semantics/generics/monomorphize/transformer.py
-"""
-Type parameter substitution and AST transformation.
-
-This module handles the core substitution logic for monomorphization:
-- Recursively substituting type parameters with concrete types
-- Deep copying function bodies for each monomorphized instance
-- Type-aware substitution with copy-on-write for immutable types
-"""
+"""Type parameter substitution and AST transformation."""
 from __future__ import annotations
 from typing import Dict, List, TYPE_CHECKING
 import copy
@@ -22,41 +15,14 @@ if TYPE_CHECKING:
 
 
 class TypeSubstitutor:
-    """Handles type parameter substitution in types and AST nodes.
-
-    This class provides methods for recursively substituting type parameters
-    with concrete types throughout the AST. It handles:
-    - Simple type substitution (T → i32)
-    - Nested generic types (Result<Maybe<T>> → Result<Maybe<i32>>)
-    - Array and pointer types
-    - Function bodies (statements and expressions)
-
-    Type objects use copy-on-write (types are immutable after substitution).
-    AST nodes (blocks, statements, expressions) are always copied because
-    they may be annotated with resolved types during later compiler passes.
-    """
+    """Handles type parameter substitution in types and AST nodes."""
 
     def __init__(self, monomorphizer):
-        """Initialize substitutor with reference to parent monomorphizer.
-
-        Args:
-            monomorphizer: Parent Monomorphizer instance (needed for recursive
-                           monomorphization of nested generics)
-        """
+        """Initialize substitutor with reference to parent monomorphizer."""
         self.monomorphizer = monomorphizer
 
     def substitute_type(self, ty: Type, substitution: Dict[str, "Type | TypePack"]) -> Type:
-        """Recursively substitute type parameters in a type.
-
-        Args:
-            ty: The type to substitute in (may contain TypeParameter or UnknownType
-                instances representing type parameters)
-            substitution: Map from type parameter names to concrete types (or a
-                ``TypePack`` for pack bindings; see the scalar-position guard below)
-
-        Returns:
-            Type with all TypeParameters replaced by concrete types
-        """
+        """Recursively substitute type parameters in a type."""
         # If this is a type parameter, substitute it
         if isinstance(ty, TypeParameter):
             if ty.name in substitution:
@@ -200,14 +166,7 @@ class TypeSubstitutor:
     def _pack_binding_for(
         self, param: 'Param', substitution: Dict[str, "Type | TypePack"]
     ) -> 'TypePack | None':
-        """The TypePack a value-parameter fans out to, or None if it is not pack-typed.
-
-        A value-parameter is pack-typed iff its declared type is a bare type-parameter
-        reference (TypeParameter/UnknownType) whose name is bound to a TypePack in the
-        substitution map. Shared by expand_pack_param (signature fan-out) and the
-        monomorphizer's nested-instantiation scan (which must skip pack-typed params so
-        they never reach the scalar-position guard in substitute_type).
-        """
+        """The TypePack a value-parameter fans out to, or None if it is not pack-typed."""
         if isinstance(param.ty, (TypeParameter, UnknownType)):
             binding = substitution.get(param.ty.name)
             if isinstance(binding, TypePack):
@@ -217,39 +176,7 @@ class TypeSubstitutor:
     def expand_pack_param(
         self, param: 'Param', substitution: Dict[str, "Type | TypePack"]
     ) -> List['Param']:
-        """Fan a single value-parameter out into its concrete instantiation(s).
-
-        A value-parameter is *pack-typed* iff its declared type is a bare
-        type-parameter reference (``TypeParameter`` or ``UnknownType``) whose
-        name is bound to a ``TypePack`` in ``substitution``. Such a parameter
-        conceptually stands for ``Ts... args`` and expands, position-wise, into
-        one concrete parameter per pack element.
-
-        Naming convention (STABLE CONTRACT for later phases): the i-th expanded
-        parameter (0-based) is named ``f"{param.name}_{i}"``. An arity-0 pack
-        therefore produces NO parameters at all (the position vanishes), and an
-        arity-N pack produces ``args_0 .. args_{N-1}``. Phase 1's ``expand(...)``
-        body lowering relies on this deterministic per-index naming to bind the
-        expanded parameters back to elements of the pack.
-
-        Each expanded parameter carries the original's ``name_span``,
-        ``type_span`` and ``loc``, uses the already-concrete element type
-        directly (it is NOT routed back through ``substitute_type``), and is an
-        ordinary param (``is_variadic=False``).
-
-        Non-pack parameters (the overwhelmingly common case) are returned as a
-        single-element list whose one ``Param`` is byte-identical to what the
-        legacy param loop produced: ``ty`` substituted via ``substitute_type``,
-        every span/loc copied, and ``is_variadic`` preserved.
-
-        Args:
-            param: The original generic value-parameter.
-            substitution: Type-parameter binding map (may contain ``TypePack``).
-
-        Returns:
-            A list of concrete ``Param`` nodes (length 0..N for a pack-typed
-            param; exactly 1 otherwise).
-        """
+        """Fan a single value-parameter out into its concrete instantiation(s)."""
         from sushi_lang.semantics.ast import Param
 
         # Detect a pack-typed parameter: a bare type-param reference bound to a
@@ -296,19 +223,7 @@ class TypeSubstitutor:
         ]
 
     def substitute_body(self, body: 'Block', substitution: Dict[str, "Type | TypePack"]) -> 'Block':
-        """Substitute type parameters in a function body.
-
-        Always creates a new Block for each monomorphized function.
-        This is necessary because each concrete function needs its own AST
-        structure that may be annotated differently during later passes.
-
-        Args:
-            body: Original function body
-            substitution: Map from type parameter names to concrete types
-
-        Returns:
-            New Block with substituted types
-        """
+        """Substitute type parameters in a function body."""
         # Process all statements
         new_statements = []
         for stmt in body.statements:
@@ -321,19 +236,7 @@ class TypeSubstitutor:
         return result
 
     def substitute_statement(self, stmt, substitution: Dict[str, "Type | TypePack"]):
-        """Recursively substitute types in a statement.
-
-        Always creates a new statement for each monomorphized function.
-        This is necessary because expressions within statements may be
-        annotated with resolved types during later passes.
-
-        Args:
-            stmt: Statement AST node
-            substitution: Type substitution map
-
-        Returns:
-            New statement with substituted types
-        """
+        """Recursively substitute types in a statement."""
         from sushi_lang.semantics.ast import (
             Let, Rebind, If, While, Foreach, Expand, Return, Match,
             ExprStmt, Block, Break, Continue, Print, PrintLn
@@ -435,22 +338,7 @@ class TypeSubstitutor:
         return copy.deepcopy(stmt)
 
     def substitute_expr(self, expr, substitution: Dict[str, "Type | TypePack"]):
-        """Recursively substitute types in an expression.
-
-        Always creates new expression nodes because expressions may be annotated
-        with resolved types during later passes (e.g., resolved_enum_type).
-        Uses copy.copy for composite expressions and copy.deepcopy as fallback.
-
-        Type substitution only affects CastExpr nodes which have explicit type
-        annotations; other expressions are copied without modification.
-
-        Args:
-            expr: Expression AST node
-            substitution: Type substitution map
-
-        Returns:
-            New expression with substituted types
-        """
+        """Recursively substitute types in an expression."""
         from sushi_lang.semantics.ast import CastExpr, TryExpr
 
         # Cast expression - IMPORTANT: substitute target type

@@ -1,14 +1,4 @@
-"""
-Dynamic array core methods.
-
-This module handles LLVM IR emission for dynamic array construction and operations:
-- Constructors: new(), from(literal)
-- Core operations: len(), capacity(), get(index), push(element), pop()
-- Mutators: fill(value), reverse()
-- Memory management: free(), destroy()
-
-All methods include appropriate bounds checking and memory safety guarantees.
-"""
+"""Dynamic array core methods."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -23,16 +13,7 @@ if TYPE_CHECKING:
 
 
 def _infer_builtin_type_from_llvm(llvm_type: ir.Type) -> BuiltinType:
-    """Infer BuiltinType from LLVM type using dispatch table.
-
-    Centralized mapping from LLVM integer types to Sushi BuiltinTypes.
-
-    Args:
-        llvm_type: The LLVM type to infer from.
-
-    Returns:
-        The corresponding BuiltinType (defaults to I32 for unknown types).
-    """
+    """Infer BuiltinType from LLVM type using dispatch table."""
     # Dispatch table for integer width to BuiltinType
     if isinstance(llvm_type, ir.IntType):
         width_to_builtin = {
@@ -49,19 +30,7 @@ def _infer_builtin_type_from_llvm(llvm_type: ir.Type) -> BuiltinType:
 
 
 def emit_dynamic_array_new(codegen: 'LLVMCodegen', expr: DynamicArrayNew) -> ir.Value:
-    """Emit new() constructor for dynamic arrays.
-
-    This is essentially a no-op since the array struct is already
-    initialized to empty in the variable declaration.
-    Returns a placeholder value indicating successful construction.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The DynamicArrayNew AST node.
-
-    Returns:
-        LLVM value representing the constructed array (placeholder i32 0).
-    """
+    """Emit new() constructor for dynamic arrays."""
     # For new() constructor, the array is already initialized by declaration
     # We just need to return a null value to indicate success
     # In a full implementation, this might return the array struct itself
@@ -69,18 +38,7 @@ def emit_dynamic_array_new(codegen: 'LLVMCodegen', expr: DynamicArrayNew) -> ir.
 
 
 def emit_dynamic_array_from(codegen: 'LLVMCodegen', expr: DynamicArrayFrom) -> ir.Value:
-    """Emit from(array_literal) constructor for dynamic arrays.
-
-    Creates a dynamic array struct on the stack and initializes it with the
-    provided elements. Returns a pointer to the stack-allocated struct.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The DynamicArrayFrom AST node containing the array literal.
-
-    Returns:
-        Pointer to stack-allocated dynamic array struct.
-    """
+    """Emit from(array_literal) constructor for dynamic arrays."""
     from ..utils import create_dynamic_array_from_elements, emit_array_literal_elements
 
     # Evaluate all element expressions, deep-copying heap-owning aliases so the new array
@@ -110,18 +68,7 @@ def emit_dynamic_array_from(codegen: 'LLVMCodegen', expr: DynamicArrayFrom) -> i
 
 
 def emit_dynamic_array_len(codegen: 'LLVMCodegen', array_value: ir.Value, to_i1: bool) -> ir.Value:
-    """Emit code to get the length of a dynamic array.
-
-    Accesses the first field of the dynamic array struct (len: i32).
-
-    Args:
-        codegen: The LLVM codegen instance.
-        array_value: The dynamic array struct value.
-        to_i1: Whether to convert result to i1.
-
-    Returns:
-        The length as i32 (or i1 if to_i1 is True).
-    """
+    """Emit code to get the length of a dynamic array."""
     # Get pointer to len field (first field, index 0)
     len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
     len_value = codegen.builder.load(len_ptr, name="array_len")
@@ -130,18 +77,7 @@ def emit_dynamic_array_len(codegen: 'LLVMCodegen', array_value: ir.Value, to_i1:
 
 
 def emit_dynamic_array_capacity(codegen: 'LLVMCodegen', array_value: ir.Value, to_i1: bool) -> ir.Value:
-    """Emit code to get the capacity of a dynamic array.
-
-    Accesses the second field of the dynamic array struct (cap: i32).
-
-    Args:
-        codegen: The LLVM codegen instance.
-        array_value: The dynamic array struct value.
-        to_i1: Whether to convert result to i1.
-
-    Returns:
-        The capacity as i32 (or i1 if to_i1 is True).
-    """
+    """Emit code to get the capacity of a dynamic array."""
     # Get pointer to cap field (second field, index 1)
     cap_ptr = codegen.types.get_dynamic_array_cap_ptr(codegen.builder, array_value)
     cap_value = codegen.builder.load(cap_ptr, name="array_capacity")
@@ -151,28 +87,7 @@ def emit_dynamic_array_capacity(codegen: 'LLVMCodegen', array_value: ir.Value, t
 
 def emit_dynamic_array_push(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
                             element_value: ir.Value) -> ir.Value:
-    """Emit code to append an element to a dynamic array.
-
-    Implements full push logic with exponential growth strategy:
-    1. Load current len and cap
-    2. Check if len >= cap (growth needed)
-    3. If growth needed: realloc to 2x capacity and copy elements
-    4. Store element at data[len]
-    5. Increment len
-
-    Args:
-        codegen: The LLVM codegen instance.
-        array_value: The dynamic array struct value.
-        array_type: The LLVM struct type.
-        element_value: The element to append.
-
-    Returns:
-        Void value (represented as i32 constant 0).
-
-    Note:
-        Uses exponential growth (2x) for amortized O(1) push operations.
-        May emit runtime error RE2021 if realloc fails.
-    """
+    """Emit code to append an element to a dynamic array."""
     from sushi_lang.backend.expressions import memory
 
     # Get pointers to struct fields
@@ -239,24 +154,7 @@ def emit_dynamic_array_push(codegen: 'LLVMCodegen', array_value: ir.Value, array
 
 def emit_dynamic_array_pop(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
                            to_i1: bool) -> ir.Value:
-    """Emit code to remove and return the last element from a dynamic array.
-
-    Implements full pop logic with bounds checking:
-    1. Load current length
-    2. Check if len > 0 (array not empty)
-    3. Load element at data[len-1]
-    4. Decrement len
-    5. Return loaded element
-
-    Args:
-        codegen: The LLVM codegen instance.
-        array_value: The dynamic array struct value.
-        array_type: The LLVM struct type.
-        to_i1: Whether to convert result to i1.
-
-    Returns:
-        The popped element value, or zero if array is empty.
-    """
+    """Emit code to remove and return the last element from a dynamic array."""
     # Get pointers to struct fields
     len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
     data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
@@ -311,23 +209,7 @@ def emit_dynamic_array_pop(codegen: 'LLVMCodegen', array_value: ir.Value, array_
 
 def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
                            element_semantic_type: 'Type') -> ir.Value:
-    """Emit code to free all elements of a dynamic array and reset to empty state.
-
-    Similar to HashMap.free(), this clears the array but keeps it usable:
-    1. Recursively destroy all elements using emit_value_destructor
-    2. Free the old data buffer
-    3. Allocate new empty buffer with initial capacity (8)
-    4. Reset len=0, cap=8
-
-    Args:
-        codegen: The LLVM codegen instance.
-        array_value: The dynamic array struct value.
-        array_type: The LLVM struct type.
-        element_semantic_type: The semantic type of array elements (for destructor).
-
-    Returns:
-        Void value (represented as i32 constant 0).
-    """
+    """Emit code to free all elements of a dynamic array and reset to empty state."""
     from sushi_lang.backend.expressions import memory
     from sushi_lang.backend.memory.heap import emit_malloc
 
@@ -410,23 +292,7 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
 
 def emit_dynamic_array_destroy(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
                               array_semantic_type: 'Type') -> ir.Value:
-    """Emit code to explicitly destroy a dynamic array (makes it unusable).
-
-    Full destruction that makes the array unusable:
-    1. Recursively destroy all elements using emit_value_destructor
-    2. Free the data buffer
-    3. Reset len=0, cap=0, data=null
-    4. Array is unusable after this
-
-    Args:
-        codegen: The LLVM codegen instance.
-        array_value: The dynamic array struct value.
-        array_type: The LLVM struct type.
-        array_semantic_type: The semantic DynamicArrayType (for recursive destructor).
-
-    Returns:
-        Void value (represented as i32 constant 0).
-    """
+    """Emit code to explicitly destroy a dynamic array (makes it unusable)."""
     # Get pointers to struct fields
     len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
     cap_ptr = codegen.types.get_dynamic_array_cap_ptr(codegen.builder, array_value)
@@ -458,19 +324,7 @@ def emit_dynamic_array_destroy(codegen: 'LLVMCodegen', array_value: ir.Value, ar
 
 def emit_dynamic_array_fill(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
                             fill_value: ir.Value) -> ir.Value:
-    """Emit code to fill all elements of a dynamic array with a value.
-
-    Fills the entire array [0..len) with the specified value in-place.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        array_value: The dynamic array struct value.
-        array_type: The LLVM struct type.
-        fill_value: The value to fill the array with.
-
-    Returns:
-        Void value (represented as i32 constant 0).
-    """
+    """Emit code to fill all elements of a dynamic array with a value."""
     # Get pointers to struct fields
     len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
     data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
@@ -520,18 +374,7 @@ def emit_dynamic_array_fill(codegen: 'LLVMCodegen', array_value: ir.Value, array
 
 
 def emit_dynamic_array_reverse(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType) -> ir.Value:
-    """Emit code to reverse a dynamic array in-place.
-
-    Uses two-pointer swap algorithm: swap arr[i] with arr[len-1-i] for i in [0..len/2).
-
-    Args:
-        codegen: The LLVM codegen instance.
-        array_value: The dynamic array struct value.
-        array_type: The LLVM struct type.
-
-    Returns:
-        Void value (represented as i32 constant 0).
-    """
+    """Emit code to reverse a dynamic array in-place."""
     # Get pointers to struct fields
     len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
     data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
@@ -607,19 +450,7 @@ def emit_dynamic_array_reverse(codegen: 'LLVMCodegen', array_value: ir.Value, ar
 
 def emit_fixed_array_fill(codegen: 'LLVMCodegen', array_ptr: ir.Value, array_type: ir.ArrayType,
                           fill_value: ir.Value) -> ir.Value:
-    """Emit code to fill all elements of a fixed array with a value.
-
-    Fills the entire array with the specified value in-place.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        array_ptr: Pointer to the fixed array.
-        array_type: The LLVM array type.
-        fill_value: The value to fill the array with.
-
-    Returns:
-        Void value (represented as i32 constant 0).
-    """
+    """Emit code to fill all elements of a fixed array with a value."""
     # Constants
     zero = ir.Constant(codegen.types.i32, 0)
     one = ir.Constant(codegen.types.i32, 1)
@@ -659,18 +490,7 @@ def emit_fixed_array_fill(codegen: 'LLVMCodegen', array_ptr: ir.Value, array_typ
 
 
 def emit_fixed_array_reverse(codegen: 'LLVMCodegen', array_ptr: ir.Value, array_type: ir.ArrayType) -> ir.Value:
-    """Emit code to reverse a fixed array in-place.
-
-    Uses two-pointer swap algorithm: swap arr[i] with arr[len-1-i] for i in [0..len/2).
-
-    Args:
-        codegen: The LLVM codegen instance.
-        array_ptr: Pointer to the fixed array.
-        array_type: The LLVM array type.
-
-    Returns:
-        Void value (represented as i32 constant 0).
-    """
+    """Emit code to reverse a fixed array in-place."""
     # Constants
     zero = ir.Constant(codegen.types.i32, 0)
     one = ir.Constant(codegen.types.i32, 1)

@@ -1,10 +1,4 @@
-"""Unit tests for FFI internals that the .sushi corpus cannot reach directly.
-
-Covers:
-- CE5002: a public function exposing a foreign `ptr` aborts the .slib manifest.
-- The no-leak property: a marshalled char* is freed in the scope-cleanup path.
-- RESERVED_EXTERNS stays in sync with the symbols declare_externs actually declares.
-"""
+"""Unit tests for FFI internals that the .sushi corpus cannot reach directly."""
 from __future__ import annotations
 
 import pytest
@@ -36,11 +30,7 @@ class _StubAnalyzer:
 
 
 def test_ce5002_public_foreign_ptr_aborts_manifest(tmp_path):
-    """A public function returning `ptr` must abort the .slib write with CE5002.
-
-    Exercised at the manifest level to test the .slib backstop in isolation;
-    in a full compilation the CE5008 unit fence (Pass 2) fires first.
-    """
+    """A public function returning `ptr` must abort the .slib write with CE5002."""
     from sushi_lang.backend.library_manifest import LibraryManifestGenerator
     from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 
@@ -108,11 +98,7 @@ def test_string_marshalling_frees_cstr_in_ir(tmp_path):
 
 
 def _function_body(ir_text: str, fn_name: str) -> str:
-    """Return the IR text of the body of `define ... @fn_name(...)`.
-
-    The body brace is the `{` that opens the block (spelled `{\\n` by llvmlite),
-    NOT an earlier `{` belonging to a struct return/parameter type.
-    """
+    """Return the IR text of the body of `define ... @fn_name(...)`."""
     start = ir_text.index(f'define ')
     while True:
         # Find a `define` whose name matches `@"fn_name"(`.
@@ -142,14 +128,7 @@ def _count_in_function(ir_text: str, fn_name: str, needle: str) -> int:
 
 
 def test_string_marshalling_no_leak_multi_return(tmp_path):
-    """Multi-exit function: every return path frees the marshalled char* exactly once.
-
-    Regression for the bug where the first emitted exit block drained-and-cleared
-    the shared cstr registry, so every later mutually-exclusive exit path emitted
-    NO free and leaked. The fix emits a free in EVERY exit block (basic blocks are
-    mutually exclusive at runtime), so malloc-count == free-count in the function
-    and BOTH the early-return block and the fall-through block carry a free.
-    """
+    """Multi-exit function: every return path frees the marshalled char* exactly once."""
     src = (
         'unsafe external "C" as libc because "len":\n'
         '    fn strlen(string s) i64 = "strlen"\n'
@@ -190,8 +169,8 @@ def test_string_marshalling_no_leak_multi_return(tmp_path):
 
 
 def test_string_marshalling_no_leak_try_success_path(tmp_path):
-    """A `??` after a marshalled call: BOTH the propagate block and the success
-    continuation free the marshalled char* (the common success path must not leak).
+    """A `??` after a marshalled call: BOTH the propagate block and the success continuation free
+    the marshalled char* (the common success path must not leak).
     """
     src = (
         'enum MyErr:\n'
@@ -256,8 +235,8 @@ def test_variadic_extern_declared_var_arg(tmp_path):
 
 
 def test_variadic_string_arg_freed_no_leak(tmp_path):
-    """A `string` passed as a VARIADIC argument is marshalled to char* and freed
-    on every exit path (no leak), exactly like a fixed string argument.
+    """A `string` passed as a VARIADIC argument is marshalled to char* and freed on every exit path
+    (no leak), exactly like a fixed string argument.
     """
     src = (
         'unsafe external "C" as libc because "printf":\n'

@@ -1,9 +1,4 @@
-"""PR3b: diagnostic-shaped prints routed through the Reporter.
-
-These were `print()`s masquerading as diagnostics -- no code, no snippet, sometimes
-hand-indented to fake a note under a real diagnostic. Routing them through the reporter
-gives them the same shape (code, location, help) as every other diagnostic.
-"""
+"""PR3b: diagnostic-shaped prints routed through the Reporter."""
 from __future__ import annotations
 
 import os
@@ -19,11 +14,7 @@ _HAS_SUSHIC = shutil.which("sushic") is not None
 
 @pytest.mark.skipif(not _HAS_SUSHIC, reason="sushic not on PATH")
 def test_generic_struct_constructor_hint_is_a_help_line(tmp_path):
-    """The CE2008 generic-struct hint is a real `help:` line, not a hand-indented print.
-
-    It used to be `print("      Generic struct constructors ...")` faking a note under
-    the CE2008 it followed. It is now attached to the diagnostic as help.
-    """
+    """The CE2008 generic-struct hint is a real `help:` line, not a hand-indented print."""
     src = tmp_path / "main.sushi"
     src.write_text(
         "struct Pair@(T, U):\n"

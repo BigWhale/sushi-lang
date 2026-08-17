@@ -1,20 +1,4 @@
-"""Main ASTBuilder orchestrator for Sushi language compiler.
-
-This module contains the core ASTBuilder class that coordinates parsing of Lark
-parse trees into typed AST nodes. The builder delegates to specialized parsers:
-
-- Type parsing: semantics.ast_builder.types
-- Expression parsing: semantics.ast_builder.expressions
-- Statement parsing: semantics.ast_builder.statements
-- Declaration parsing: semantics.ast_builder.declarations
-- Utilities: semantics.ast_builder.utils
-
-Architecture:
-    - Strategy pattern for type/expression/statement parsing
-    - Direct delegation for declaration parsing
-    - Lazy initialization of parser instances
-    - Zero runtime overhead through static dispatch
-"""
+"""Main ASTBuilder orchestrator for Sushi language compiler."""
 from __future__ import annotations
 from typing import List, Optional
 
@@ -84,10 +68,7 @@ class ASTBuilder:
         return self._stmt_parser
 
     def build(self, tree: Tree) -> Program:
-        """Build Program AST from parse tree.
-
-        Orchestrates parsing of all top-level declarations using specialized parsers.
-        """
+        """Build Program AST from parse tree."""
         from sushi_lang.semantics.ast_builder.declarations import imports, functions, constants, structs, enums, perks, extensions, externals
 
         tree = expect(tree, "program")
@@ -232,20 +213,14 @@ class ASTBuilder:
     # --- type parsing ---
 
     def _parse_type(self, type_node: Tree) -> Optional[Type]:
-        """Parse a type node into a Type object.
-
-        Delegates to TypeParser for all type parsing logic.
-        """
+        """Parse a type node into a Type object."""
         return self.type_parser.parse_type(type_node)
 
 
     # --- blocks & statements ---
 
     def _block(self, t: Tree) -> Block:
-        """Parse block with dispatch to statement handlers.
-
-        Delegates to blocks.parse_block for all block parsing logic.
-        """
+        """Parse block with dispatch to statement handlers."""
         from sushi_lang.semantics.ast_builder.statements.blocks import parse_block
         return parse_block(t, self)
 
@@ -253,9 +228,6 @@ class ASTBuilder:
     # --- expressions ---
 
     def _expr(self, t: Tree | Token) -> Expr:
-        """Parse an expression node into an Expr object.
-
-        Delegates to ExpressionParser for all expression parsing logic.
-        """
+        """Parse an expression node into an Expr object."""
         return self.expr_parser.parse_expr(t)
 

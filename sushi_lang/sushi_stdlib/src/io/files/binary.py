@@ -1,10 +1,4 @@
-"""
-File binary I/O methods IR generation.
-
-Implements IR generation for:
-- read_bytes(i32) - Read N bytes into u8[]
-- write_bytes(u8[]) - Write byte array to file
-"""
+"""File binary I/O methods IR generation."""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_fread, declare_fwrite, declare_malloc
@@ -12,11 +6,7 @@ from sushi_lang.sushi_stdlib.src.error_emission import emit_runtime_error
 
 
 def generate_read_bytes(module: ir.Module) -> None:
-    """Generate IR for file.read_bytes(i32) -> u8[]
-
-    Reads N bytes from file and returns u8[] byte array.
-    Array struct: {i32 len, i32 cap, ptr data}
-    """
+    """Generate IR for file.read_bytes(i32) -> u8[]"""
     i32 = ir.IntType(32)
     i64 = ir.IntType(64)
     i8_ptr = ir.IntType(8).as_pointer()
@@ -93,11 +83,7 @@ def generate_read_bytes(module: ir.Module) -> None:
 
 
 def generate_write_bytes(module: ir.Module) -> None:
-    """Generate IR for file.write_bytes(u8[]) -> ~
-
-    Writes byte array to file.
-    Array struct: {i32 len, i32 cap, ptr data}
-    """
+    """Generate IR for file.write_bytes(u8[]) -> ~"""
     i32 = ir.IntType(32)
     i64 = ir.IntType(64)
     i8_ptr = ir.IntType(8).as_pointer()

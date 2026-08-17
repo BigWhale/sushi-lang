@@ -1,8 +1,5 @@
 # semantics/passes/collect/__init__.py
-"""Phase 0 collection pass - orchestrates all collectors via facade pattern.
-
-This module maintains backward compatibility while delegating to specialized collectors.
-"""
+"""Phase 0 collection pass - orchestrates all collectors via facade pattern."""
 
 from __future__ import annotations
 from typing import Optional, Set, TYPE_CHECKING
@@ -75,26 +72,10 @@ __all__ = [
 
 
 class CollectorPass:
-    """Phase 0: Collect constants, structs, enums, functions, and perks from the AST.
-
-    This facade orchestrates specialized collectors while maintaining backward-compatible API.
-    Collects:
-    - Constants
-    - Struct definitions (regular and generic)
-    - Enum definitions (regular and generic)
-    - Function signatures (concrete and generic)
-    - Extension methods (regular and generic)
-    - Perk definitions and implementations
-
-    All collectors run independently but share table references for cross-validation.
-    """
+    """Phase 0: Collect constants, structs, enums, functions, and perks from the AST."""
 
     def __init__(self, reporter: Reporter) -> None:
-        """Initialize collector pass with all sub-collectors.
-
-        Args:
-            reporter: Error reporter for diagnostics
-        """
+        """Initialize collector pass with all sub-collectors."""
         self.r = reporter
 
         # Initialize shared tables (these will be populated by collectors)
@@ -170,17 +151,7 @@ class CollectorPass:
 
     def run(self, root: Program, unit_name: Optional[str] = None,
             unit_file: Optional[str] = None) -> 'SymbolTables':
-        """Run all collection passes in dependency order.
-
-        Args:
-            root: Program AST node
-            unit_name: Optional unit name for multi-file compilation
-            unit_file: Path of the unit's source file, so a cross-unit duplicate
-                can name the file it collides with
-
-        Returns:
-            The collected symbol tables for this unit.
-        """
+        """Run all collection passes in dependency order."""
         # Collect in dependency order
         self.constant_collector.collect(root)
         self.struct_collector.collect(root)
@@ -210,55 +181,15 @@ class CollectorPass:
         )
 
     def _register_predefined_structs(self) -> None:
-        """Register predefined structs (ProcessOutput, etc.).
-
-        Delegates to struct collector for actual registration. Must run before
-        enum registration so predefined enums/generics can reference these structs.
-        """
+        """Register predefined structs (ProcessOutput, etc.)."""
         self.struct_collector.register_predefined_structs()
 
     def _register_predefined_enums(self) -> None:
-        """Register predefined enums (FileMode, FileResult, etc.).
-
-        Delegates to enum collector for actual registration.
-        """
+        """Register predefined enums (FileMode, FileResult, etc.)."""
         self.enum_collector.register_predefined_enums()
 
     def _register_predefined_generics(self) -> None:
-        """Register predefined generic enums and structs.
-
-        These generic types are built into the language and available globally:
-
-        Generic Enums:
-        - Result<T>: Generic error handling type with Ok(T) and Err() variants
-        - Maybe<T>: Optional values with Some(T) and None() variants
-
-        Generic Structs:
-        - Own<T>: Unique ownership of heap-allocated data (for recursive types)
-        - HashMap<K, V>: Hash table with open addressing
-        - List<T>: Dynamic array with automatic growth
-
-        Implementation Status:
-        ✅ Result<T> is fully implemented and working (Phase 6.1)
-        - All functions implicitly return Result<T> where T is the declared return type
-        - Supports .realise(default) method for safe unwrapping
-        - Supports if (result) conditional syntax
-        - Comprehensive compiler enforcement (CE2502-CE2505 errors)
-
-        ✅ Maybe<T> is fully implemented and working (Phase 1)
-        - Optional values with Some(T) and None() variants
-        - Supports .is_some(), .is_none(), .realise(default), .expect(message) methods
-        - Pattern matching for safe value extraction
-
-        ✅ Own<T> is being implemented (Phase 2 - Recursive Types)
-        - Unique ownership of heap-allocated data
-        - Supports .new(value), .get(), .destroy() methods
-        - Enables recursive enum types
-
-        Future Generic Types (Not Yet Implemented):
-        - Pair<T, U>: Tuple-like pairing
-        - User-defined generic enums beyond built-ins (grammar support exists)
-        """
+        """Register predefined generic enums and structs."""
         # Result<T, E> generic enum - error handling with typed errors
         # Type parameters: T (success value type), E (error type)
         # Variants:

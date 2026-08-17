@@ -1,9 +1,4 @@
-"""
-Utility functions for HashMap<K, V> implementation.
-
-This module provides helper functions for key equality checking and entry insertion,
-which are shared across multiple HashMap methods.
-"""
+"""Utility functions for HashMap<K, V> implementation."""
 
 from typing import Any
 from sushi_lang.semantics.typesys import Type, StructType, EnumType, BuiltinType, ArrayType, DynamicArrayType
@@ -15,25 +10,7 @@ from sushi_lang.backend.constants import ENTRY_KEY_INDICES, ENTRY_VALUE_INDICES,
 
 
 def emit_key_equality_check(codegen: Any, key_type: Type, key1: ir.Value, key2: ir.Value) -> ir.Value:
-    """Emit LLVM IR to check if two keys are equal.
-
-    Supports:
-    - Primitive types (i32, bool, f64, etc.)
-    - Strings (strcmp)
-    - Structs (field-by-field comparison)
-    - Enums (tag comparison, then data comparison if tags match)
-    - Fixed arrays (element-by-element comparison)
-    - Dynamic arrays (length check, then element comparison)
-
-    Args:
-        codegen: LLVM codegen instance.
-        key_type: The type of the keys.
-        key1: First key value.
-        key2: Second key value.
-
-    Returns:
-        i1 boolean result of key1 == key2.
-    """
+    """Emit LLVM IR to check if two keys are equal."""
     builder = codegen.builder
     zero_i32 = ZERO_I32
 
@@ -91,17 +68,7 @@ def emit_key_equality_check(codegen: Any, key_type: Type, key1: ir.Value, key2: 
 
 
 def emit_struct_equality(codegen: Any, struct_type: StructType, struct1: ir.Value, struct2: ir.Value) -> ir.Value:
-    """Emit field-by-field equality check for structs.
-
-    Args:
-        codegen: LLVM codegen instance.
-        struct_type: The struct type.
-        struct1: First struct value (by value).
-        struct2: Second struct value (by value).
-
-    Returns:
-        i1 boolean result (true if all fields are equal).
-    """
+    """Emit field-by-field equality check for structs."""
     builder = codegen.builder
     true_i1 = TRUE_I1
 
@@ -124,17 +91,7 @@ def emit_struct_equality(codegen: Any, struct_type: StructType, struct1: ir.Valu
 
 
 def emit_enum_equality(codegen: Any, enum_type: EnumType, enum1: ir.Value, enum2: ir.Value) -> ir.Value:
-    """Emit equality check for enums (tag comparison, then data if tags match).
-
-    Args:
-        codegen: LLVM codegen instance.
-        enum_type: The enum type.
-        enum1: First enum value (by value).
-        enum2: Second enum value (by value).
-
-    Returns:
-        i1 boolean result (true if tags and data are equal).
-    """
+    """Emit equality check for enums (tag comparison, then data if tags match)."""
     builder = codegen.builder
 
     # Enum layout: {i32 tag, <data union>}
@@ -195,15 +152,7 @@ def emit_enum_equality(codegen: Any, enum_type: EnumType, enum1: ir.Value, enum2
 
 
 def emit_insert_entry(codegen: Any, entry_ptr: ir.Value, key: ir.Value, value: ir.Value, entry_type: ir.Type) -> None:
-    """Emit LLVM IR to insert a key-value pair into an entry slot.
-
-    Args:
-        codegen: LLVM codegen instance.
-        entry_ptr: Pointer to the entry slot.
-        key: Key value to insert.
-        value: Value to insert.
-        entry_type: LLVM type of the Entry struct.
-    """
+    """Emit LLVM IR to insert a key-value pair into an entry slot."""
     builder = codegen.builder
 
     # Set key
@@ -220,19 +169,7 @@ def emit_insert_entry(codegen: Any, entry_ptr: ir.Value, key: ir.Value, value: i
 
 
 def emit_fixed_array_equality(codegen: Any, array_type: ArrayType, arr1: ir.Value, arr2: ir.Value) -> ir.Value:
-    """Emit element-by-element equality check for fixed arrays.
-
-    Uses gep_fixed_array_element() utility for correct LLVM GEP construction.
-
-    Args:
-        codegen: LLVM codegen instance.
-        array_type: The fixed array type.
-        arr1: First array value.
-        arr2: Second array value.
-
-    Returns:
-        i1 boolean result of arr1 == arr2.
-    """
+    """Emit element-by-element equality check for fixed arrays."""
     from sushi_lang.backend import gep_utils
 
     builder = codegen.builder
@@ -292,20 +229,7 @@ def emit_fixed_array_equality(codegen: Any, array_type: ArrayType, arr1: ir.Valu
 
 
 def emit_dynamic_array_equality(codegen: Any, array_type: DynamicArrayType, arr1: ir.Value, arr2: ir.Value) -> ir.Value:
-    """Emit length check + element-by-element equality for dynamic arrays.
-
-    Dynamic arrays are passed as struct VALUES: {i32 len, i32 cap, T* data}.
-    Uses extractvalue to access struct fields directly (no GEP needed).
-
-    Args:
-        codegen: LLVM codegen instance.
-        array_type: The dynamic array type.
-        arr1: First array value (struct {i32, i32, T*}).
-        arr2: Second array value (struct {i32, i32, T*}).
-
-    Returns:
-        i1 boolean result of arr1 == arr2.
-    """
+    """Emit length check + element-by-element equality for dynamic arrays."""
     from sushi_lang.backend import gep_utils
 
     builder = codegen.builder
@@ -394,16 +318,7 @@ def emit_destroy_all_entries(
     *,
     null_guard: bool = False,
 ) -> None:
-    """Recursively destroy the key and value of every occupied bucket.
-
-    Args:
-        codegen: LLVM codegen instance.
-        buckets_data: Pointer to the bucket storage (Entry<K, V>*).
-        capacity: Number of buckets to walk.
-        key_type: The key type K.
-        value_type: The value type V.
-        null_guard: Skip the walk entirely if the bucket storage is null.
-    """
+    """Recursively destroy the key and value of every occupied bucket."""
     from sushi_lang.backend.destructors import emit_value_destructor
     from sushi_lang.backend.generics.container_walk import emit_container_walk
 

@@ -1,9 +1,4 @@
-"""
-Array iterator emission for foreach loops.
-
-This module handles LLVM IR emission for creating iterators from arrays.
-Iterators are used in foreach loops to traverse array elements.
-"""
+"""Array iterator emission for foreach loops."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -18,10 +13,7 @@ if TYPE_CHECKING:
 
 def emit_fixed_array_iter(codegen: 'LLVMCodegen', call: MethodCall, receiver_value: ir.Value,
                            receiver_type: ir.ArrayType, to_i1: bool) -> ir.Value:
-    """Emit LLVM IR for fixed array iter() method.
-
-    Creates an iterator struct: {i32 current_index, i32 length, T* data_ptr}
-    """
+    """Emit LLVM IR for fixed array iter() method."""
     if len(call.args) != 0:
         raise_internal_error("CE0071", got=len(call.args))
 
@@ -86,10 +78,7 @@ def emit_fixed_array_iter(codegen: 'LLVMCodegen', call: MethodCall, receiver_val
 
 def emit_dynamic_array_iter(codegen: 'LLVMCodegen', call: MethodCall, receiver_value: ir.Value,
                              receiver_type: ir.LiteralStructType, to_i1: bool) -> ir.Value:
-    """Emit LLVM IR for dynamic array iter() method.
-
-    Creates an iterator struct: {i32 current_index, i32 length, T* data_ptr}
-    """
+    """Emit LLVM IR for dynamic array iter() method."""
     if len(call.args) != 0:
         raise_internal_error("CE0071", got=len(call.args))
 

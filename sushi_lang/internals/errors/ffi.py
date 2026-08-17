@@ -1,8 +1,4 @@
-"""FFI / foreign function interface errors (CE5xxx).
-
-This module owns its numeric range: a code may only be added in the file that
-owns it, which is what makes the grouping structural rather than conventional.
-"""
+"""FFI / foreign function interface errors (CE5xxx)."""
 from __future__ import annotations
 
 from sushi_lang.internals.errors.registry import (

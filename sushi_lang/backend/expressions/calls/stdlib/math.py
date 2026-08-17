@@ -1,9 +1,4 @@
-"""
-Standard library math function call emission.
-
-This module handles external calls to precompiled stdlib math functions
-(abs, min, max, sqrt, pow, trigonometric, logarithmic, etc.).
-"""
+"""Standard library math function call emission."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -15,24 +10,7 @@ if TYPE_CHECKING:
 
 
 def emit_math_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool) -> ir.Value:
-    """Emit a call to a math module function.
-
-    This function emits an external call to a precompiled stdlib math function.
-    Maps user-facing function names (abs, min, max, sqrt, etc.) to their internal
-    sushi_* prefixed names in the stdlib.
-
-    Args:
-        codegen: The LLVM code generator
-        func_name: The function name ('abs', 'min', 'max', 'sqrt', 'pow', etc.)
-        expr: The function call expression
-        to_i1: Whether to convert result to i1 (for boolean conditions)
-
-    Returns:
-        The result of the stdlib function call
-
-    Raises:
-        ValueError: If the function is not a recognized math function
-    """
+    """Emit a call to a math module function."""
     require_builder(codegen)
 
     from sushi_lang.backend.functions import declare_stdlib_function
@@ -90,20 +68,7 @@ def emit_math_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
 
 
 def _get_math_type_suffix(llvm_type) -> str:
-    """Get the type suffix for polymorphic math functions.
-
-    Args:
-        llvm_type: The LLVM IR type
-
-    Returns:
-        Type suffix string (e.g., 'i32', 'f64', 'u8')
-
-    Note:
-        We cannot distinguish between signed and unsigned integers in LLVM IR alone.
-        Both i32 and u32 are represented as ir.IntType(32).
-        For now, we default to signed types. If we need unsigned support for min/max,
-        we would need to pass semantic type information through.
-    """
+    """Get the type suffix for polymorphic math functions."""
     from llvmlite import ir
 
     if isinstance(llvm_type, ir.IntType):

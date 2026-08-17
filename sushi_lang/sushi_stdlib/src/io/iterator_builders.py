@@ -1,9 +1,4 @@
-"""
-I/O Iterator Builders
-
-Builds the streaming iterator for stdin.lines(). file.lines() has its own
-emitter (io/files/read.py, sushi_file_lines) and does not route through here.
-"""
+"""I/O Iterator Builders"""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_iterator_type, get_string_type
@@ -14,18 +9,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import get_iterator_type, get_
 # ==============================================================================
 
 def build_stdin_lines_iterator(module: ir.Module) -> ir.Function:
-    """Build stdin.lines() -> Iterator<string> function.
-
-    Creates an iterator that reads lines from stdin on-demand.
-    Uses sentinel length=-1 to indicate streaming mode.
-    data_ptr is NULL (stdin is accessed via global handle).
-
-    Args:
-        module: LLVM module to add function to
-
-    Returns:
-        The generated function
-    """
+    """Build stdin.lines() -> Iterator<string> function."""
     # Types
     i32 = ir.IntType(32)
     string_fat_ptr = get_string_type()

@@ -1,15 +1,4 @@
-"""A parameter MODE survives a `.slib` boundary.
-
-Before the mode became a declared field, a library could not state a borrow. The
-manifest serialized `peek string` into the type string correctly, but the consumer's
-`parse_type_string` had no reference arm, so it read back `UnknownType("peek string")`
-and the mode was lost. A `nom` had nowhere to be written at all.
-
-The format version is 3 because of this field. A v2 library states no mode, so its
-parameters cannot be told apart from unmarked ones; CE3509 rejects it rather than guess.
-
-See docs/design/borrow-model.md sections 5 and 10.
-"""
+"""A parameter MODE survives a `.slib` boundary."""
 from __future__ import annotations
 
 import struct

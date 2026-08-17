@@ -1,9 +1,4 @@
-"""Symbol table management for two-phase linking.
-
-This module provides data structures for extracting and managing symbol information
-from LLVM modules. It's the first phase of the two-phase linking process that
-resolves symbol conflicts between the main program, user libraries, and stdlib.
-"""
+"""Symbol table management for two-phase linking."""
 from __future__ import annotations
 import re
 from dataclasses import dataclass
@@ -19,11 +14,7 @@ class SymbolType(Enum):
 
 
 class SymbolSource(Enum):
-    """Source priority for symbol deduplication.
-
-    Lower value = higher priority. Main program definitions take precedence
-    over library definitions, which take precedence over stdlib.
-    """
+    """Source priority for symbol deduplication."""
     MAIN = 1      # Highest priority - main program
     LIBRARY = 2   # Medium priority - user libraries
     STDLIB = 3    # Lower priority - standard library
@@ -88,12 +79,7 @@ class SymbolTable:
     """Symbol table for a single LLVM module."""
 
     def __init__(self, module_name: str, source: SymbolSource):
-        """Initialize symbol table.
-
-        Args:
-            module_name: Name of the module (e.g., "main", "mylib", "io/stdio").
-            source: Priority classification for this module.
-        """
+        """Initialize symbol table."""
         self.module_name = module_name
         self.source = source
         self.symbols: dict[str, SymbolInfo] = {}  # symbol_name -> SymbolInfo
@@ -132,27 +118,7 @@ class SymbolTable:
 
 
 def _get_linkage_name(linkage_value: int) -> str:
-    """Convert LLVM linkage enum value to string name.
-
-    LLVM linkage values (from llvm-c/Core.h):
-        0 = external
-        1 = available_externally
-        2 = linkonce_any
-        3 = linkonce_odr
-        4 = linkonce_odr_auto_hide (deprecated)
-        5 = weak_any
-        6 = weak_odr
-        7 = appending
-        8 = internal
-        9 = private
-        10 = dllimport
-        11 = dllexport
-        12 = external_weak
-        13 = ghost (deprecated)
-        14 = common
-        15 = linker_private (deprecated)
-        16 = linker_private_weak (deprecated)
-    """
+    """Convert LLVM linkage enum value to string name."""
     linkage_names = {
         0: "external",
         1: "available_externally",
@@ -182,15 +148,7 @@ _TYPE_DEF_RE = re.compile(r'^(%[A-Za-z_$.][\w$.]*|%"[^"]*") = type .+$', re.MULT
 
 
 def _extract_module_type_defs(module: llvm.ModuleRef) -> set[str]:
-    """Collect a module's identified-type declarations from its printed IR.
-
-    Needed since #257 made every user struct an LLVM identified type: the declaration is
-    module-level state that no per-symbol `str(func)` includes, so without re-emitting it
-    the merged module has `%Point` opaque and `insertvalue %Point ...` will not parse.
-
-    Read from the printed text rather than an API call because llvmlite's ModuleRef exposes
-    no identified-type iterator.
-    """
+    """Collect a module's identified-type declarations from its printed IR."""
     return {m.group(0).strip() for m in _TYPE_DEF_RE.finditer(str(module))}
 
 
@@ -199,16 +157,7 @@ def extract_symbol_table(
     module_name: str,
     source: SymbolSource
 ) -> SymbolTable:
-    """Extract symbol table from an LLVM module.
-
-    Args:
-        module: Parsed LLVM bitcode module.
-        module_name: Name for this module (e.g., "main", "mylib").
-        source: Priority classification.
-
-    Returns:
-        SymbolTable with all symbols from the module.
-    """
+    """Extract symbol table from an LLVM module."""
     table = SymbolTable(module_name, source)
     table.type_defs = _extract_module_type_defs(module)
 

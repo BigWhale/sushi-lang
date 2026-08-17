@@ -1,15 +1,4 @@
-"""Phase 2 of borrow-by-default: the surface syntax of the four parameter modes.
-
-A pure PARSE gate. It proves three grammar changes accept the new surface and
-reject the old one, before any change of meaning lands (phases 3 and 4):
-
-  (a) `peek` / `poke` lose the `&` in every position that carries a borrow mode;
-  (b) `nom` is a new parameter-mode marker on a parameter, inside a function type,
-      on a lambda parameter, and at a call site;
-  (c) `nom` is legal nowhere else.
-
-See docs/design/borrow-model.md sections 2 and 3.
-"""
+"""Phase 2 of borrow-by-default: the surface syntax of the four parameter modes."""
 from __future__ import annotations
 
 import pytest

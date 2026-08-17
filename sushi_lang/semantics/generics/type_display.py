@@ -1,26 +1,4 @@
-"""Human-facing type rendering: the `@(...)` display form.
-
-Types are stored and interned under their `<...>` identity name (`StructType.name
-== "List<i32>"`), which name-mangling, the ~60 `startswith("List<")` match sites,
-and the `type_strings` name->Type parser all depend on. Those `__str__`/identity
-strings MUST stay `<...>`.
-
-But the *language* now spells generics `List@(i32)`, so showing `List<i32>` in a
-diagnostic (or `.debug()` header) displays a syntax that no longer exists. This
-module is the separate DISPLAY layer: `display_type(ty)` renders the `@(...)` form
-for user-facing messages, reconstructing from the structured `generic_base` /
-`generic_args` metadata rather than the identity string. It never feeds identity,
-mangling, or table keys.
-
-Invariant: for any type that carries no generic `<...>`, `display_type(ty) == str(ty)`,
-so routing a non-generic site through it is always safe.
-
-`display_type_name(name)` is the string-level counterpart, for the few diagnostic
-sites that hold an already-interned name and no `Type` object.
-
-`tests/unit/test_diagnostics_use_display_type.py` is the CI gate: it fails if a
-diagnostic interpolates a type without going through one of these two.
-"""
+"""Human-facing type rendering: the `@(...)` display form."""
 from __future__ import annotations
 
 from sushi_lang.semantics.typesys import (
@@ -99,19 +77,7 @@ def display_type(ty) -> str:
 
 
 def display_type_name(name: str) -> str:
-    """Best-effort `@(...)` for a bare identity name lacking structured metadata.
-
-    The string-level counterpart to `display_type`, for the diagnostic sites that
-    only ever hold an already-interned *name* (`CE0122`'s recursion chain, the
-    duplicate-function and perk-target codes) and have no `Type` object to render.
-
-    Also covers the narrow gap where `monomorphize/transformer.py` rebuilds a
-    Struct/Enum dropping `generic_base`/`generic_args`, or a `<...>`-bearing
-    `UnknownType`. A well-formed identity name has balanced brackets and no `->`,
-    so a straight bracket swap is correct (and nests: `Result<List<i32>>` ->
-    `Result@(List@(i32))`). Anything else is left untouched rather than risk
-    corrupting it.
-    """
+    """Best-effort `@(...)` for a bare identity name lacking structured metadata."""
     if "<" not in name:
         return name
     if "->" in name:

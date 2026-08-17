@@ -1,15 +1,4 @@
-"""
-String Slice Operations
-
-Implements string slicing methods that work with fat pointer representation:
-- ss(start, length): Substring from character index with character length (UTF-8 aware)
-- sleft(n): First n UTF-8 characters (UTF-8 aware)
-- sright(n): Last n UTF-8 characters (UTF-8 aware)
-- char_at(index): Single UTF-8 character at index (UTF-8 aware)
-- s(start, end): Slice from character index start to end (UTF-8 aware)
-
-All methods now properly handle UTF-8 multi-byte characters at code point boundaries.
-"""
+"""String Slice Operations"""
 
 import llvmlite.ir as ir
 from ..intrinsics import declare_utf8_count_intrinsic, declare_utf8_byte_offset_intrinsic
@@ -18,17 +7,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 
 
 def emit_string_ss(module: ir.Module) -> ir.Function:
-    """Emit the string.ss() method.
-
-    Returns substring of 'length' UTF-8 characters starting from character index 'start'.
-    UTF-8 aware - uses utf8_count and utf8_byte_offset to find character boundaries.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_ss({ i8*, i32 } str, i32 start, i32 length)
-    """
+    """Emit `{i8*, i32} string_ss({i8*, i32} str, i32 start, i32 length)`."""
     func_name = "string_ss"
 
     # Check if already defined
@@ -137,17 +116,7 @@ def emit_string_ss(module: ir.Module) -> ir.Function:
 
 
 def emit_string_sleft(module: ir.Module) -> ir.Function:
-    """Emit the string.sleft() method.
-
-    Returns first n UTF-8 characters.
-    UTF-8 aware - uses utf8_byte_offset to find the byte boundary.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_sleft({ i8*, i32 } str, i32 n)
-    """
+    """Emit `{i8*, i32} string_sleft({i8*, i32} str, i32 n)`."""
     func_name = "string_sleft"
 
     # Check if already defined
@@ -216,17 +185,7 @@ def emit_string_sleft(module: ir.Module) -> ir.Function:
 
 
 def emit_string_sright(module: ir.Module) -> ir.Function:
-    """Emit the string.sright() method.
-
-    Returns last n UTF-8 characters.
-    UTF-8 aware - uses utf8_count and utf8_byte_offset.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_sright({ i8*, i32 } str, i32 n)
-    """
+    """Emit `{i8*, i32} string_sright({i8*, i32} str, i32 n)`."""
     func_name = "string_sright"
 
     # Check if already defined
@@ -300,17 +259,7 @@ def emit_string_sright(module: ir.Module) -> ir.Function:
 
 
 def emit_string_char_at(module: ir.Module) -> ir.Function:
-    """Emit the string.char_at() method.
-
-    Returns single UTF-8 character at the given character index.
-    UTF-8 aware - uses utf8_byte_offset to find character boundaries.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_char_at({ i8*, i32 } str, i32 index)
-    """
+    """Emit `{i8*, i32} string_char_at({i8*, i32} str, i32 index)`."""
     func_name = "string_char_at"
 
     # Check if already defined
@@ -390,17 +339,7 @@ def emit_string_char_at(module: ir.Module) -> ir.Function:
 
 
 def emit_string_s(module: ir.Module) -> ir.Function:
-    """Emit the string.s() method.
-
-    Returns string slice from character index 'start' to character index 'end'.
-    UTF-8 aware - uses utf8_byte_offset for character boundaries.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_s({ i8*, i32 } str, i32 start, i32 end)
-    """
+    """Emit `{i8*, i32} string_s({i8*, i32} str, i32 start, i32 end)`."""
     func_name = "string_s"
 
     # Check if already defined

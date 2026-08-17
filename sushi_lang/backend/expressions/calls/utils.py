@@ -1,9 +1,4 @@
-"""
-Utility functions for method call emission.
-
-This module contains helper functions for type inference, receiver emission,
-and generic type resolution used by the method call dispatcher.
-"""
+"""Utility functions for method call emission."""
 from __future__ import annotations
 import itertools
 from typing import TYPE_CHECKING, Optional, Tuple, Union
@@ -20,38 +15,7 @@ if TYPE_CHECKING:
 
 
 def _stamped_semantic_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional['Type']:
-    """The type Pass 2 recorded for a method call, or None.
-
-    The backend does not re-infer types; it reads what Pass 2 stamped (the rule CE0124
-    states). `visit_methodcall` / `visit_dotcall`
-    (`semantics/passes/types/visitor.py`) write the inferred return type onto every
-    `MethodCall` and `DotCall`, and Pass 1.6 deep-copies expression nodes precisely so
-    that later-pass annotations survive to codegen
-    (`semantics/generics/monomorphize/transformer.py`). This is the third backend reader
-    of that stamp, after `expressions/literals.py` and `statements/matching.py`;
-    `tests/unit/test_chained_call_receiver_type.py` pins the premise.
-
-    It answers the question a CHAINED receiver asks -- what type does `o.get()` have, in
-    `o.get().clone()` -- which no other strategy here can answer: they key on a `Name` or
-    a `MemberAccess`, and a chained receiver is neither. Without it the receiver reaches
-    the extension-method fallback with no semantic type and dies as CE0019.
-
-    A `??` receiver (`parse_row(7)??.hash()`, `get_map()??.keys()`) is the same question
-    asked of a different node, and Pass 2 answers it there too -- on a `TryExpr` the
-    success type is `inferred_unwrapped_type` (`passes/types/expressions.py`), which
-    `backend/expressions/try_expr.py` already reads for the value itself.
-
-    An INDEXED receiver (`rows[0].hash()`) is the third node asking it. It carried no
-    stamp at all, so a struct or enum element fell through to the LLVM-layout mapping and
-    died as CE0019 (#286) -- a dynamic array of a user type could be built but not read
-    through methods. A primitive element was unaffected, because its LLVM type maps back
-    to exactly one language type. `infer_index_access_type` stamps
-    `inferred_element_type` at the one place the element type is decided.
-
-    Returns None rather than a half-resolved type when the name is in neither table.
-    Handing a `GenericTypeRef` to `try_emit_struct_clone` would change the failure mode
-    of a case that fails today; None reproduces today's behaviour exactly.
-    """
+    """The type Pass 2 recorded for a method call, or None."""
     from sushi_lang.semantics.ast import IndexAccess, TryExpr
     from sushi_lang.semantics.generics.types import GenericTypeRef
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
@@ -146,13 +110,7 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
 
 
 def _stdlib_call_return_enum(codegen: 'LLVMCodegen', func_name: str) -> Optional[EnumType]:
-    """The Result/Maybe enum a direct stdlib-module call returns, or None.
-
-    Mirrors the return-type facts Pass 1.5 registers for these functions
-    (semantics/generics/instantiate/expressions.py). Keep the two in step: a
-    function listed there and missed here falls back to LLVM-layout matching,
-    which cannot tell same-shaped enums apart (#300 phase 2).
-    """
+    """The Result/Maybe enum a direct stdlib-module call returns, or None."""
     from sushi_lang.semantics.typesys import BuiltinType
     from sushi_lang.backend.generics.result_builder import intern_result
 
@@ -280,21 +238,7 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
 def _deref_borrowed_receiver(codegen: 'LLVMCodegen', value: ir.Value, ll_type: ir.Type,
                              semantic_type: Optional['Type'],
                              name: str) -> Tuple[ir.Value, ir.Type]:
-    """Load through a borrow whose referent is not itself pointer-shaped.
-
-    "The methods on `&T` are the methods on `T`." Semantics already says so
-    (`semantics/generics/builtin_methods.py` unwraps `ReferenceType` before it decides),
-    which is why a borrowed receiver produces no diagnostic at all. This dispatcher keys
-    on the LLVM receiver instead, so it has to agree.
-
-    A borrow is always a POINTER to `T`. For a dynamic array or a struct that is what the
-    handlers already want, because this backend passes those by pointer anyway. For a
-    `BuiltinType` -- a primitive, or a `string` fat pointer -- the by-value form is not a
-    pointer, so the pointer misses every built-in test: `is_string_type` answers False and
-    dispatch falls through to the user extension-method path. That path mangled the name
-    to `string_len` or `i32_hash` and then either declared a symbol nobody defines (a
-    link failure surfacing as CE0000) or raised a bare `KeyError`.
-    """
+    """Load through a borrow whose referent is not itself pointer-shaped."""
     from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, deref_type
 
     if not isinstance(semantic_type, ReferenceType):
@@ -308,10 +252,7 @@ def _deref_borrowed_receiver(codegen: 'LLVMCodegen', value: ir.Value, ll_type: i
 
 
 def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Value, ir.Type, Optional['Type']]:
-    """Emit receiver value with special handling for dynamic arrays and references.
-
-    Returns tuple of (receiver_value, receiver_type, semantic_type).
-    """
+    """Emit receiver value with special handling for dynamic arrays and references."""
     from sushi_lang.backend.expressions import type_utils
 
     semantic_type = None
@@ -381,22 +322,7 @@ def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Valu
 
 def _own_receiver_temp(codegen: 'LLVMCodegen', receiver: Expr, value: ir.Value,
                        semantic_type: Optional['Type']) -> None:
-    """Give a receiver that nobody owns an owner, so it is freed exactly once.
-
-    `make()??.clone()` produces a `Bag` no binding names. The clone is a deep copy, so
-    the original's buffers are nobody's afterwards: 16 bytes, leaked, exit code 0. The
-    shape did not compile before the chained-receiver fix, so this is its cost and it is
-    paid here.
-
-    Same rule and same mechanism as the spill in `_spill_receiver` and as a discarded
-    `a.clone()` statement (`backend/statements/__init__.py`): register the value as a
-    scope temp and let scope-exit RAII free it. The value itself is still returned to the
-    dispatcher unchanged -- this only adds an owner, it does not change what is emitted.
-
-    `expression_is_temporary` is the safety gate. A receiver that reads through a live
-    owner is not a temporary, so a get-out and a field read register nothing and the
-    owner keeps its single free.
-    """
+    """Give a receiver that nobody owns an owner, so it is freed exactly once."""
     from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
     from sushi_lang.backend.expressions.memory import expression_is_temporary
 
@@ -412,24 +338,7 @@ def _own_receiver_temp(codegen: 'LLVMCodegen', receiver: Expr, value: ir.Value,
 
 
 def _infer_enum_construction_type(codegen: 'LLVMCodegen', receiver: Expr) -> Optional['Type']:
-    """Recover the EnumType for a receiver that CONSTRUCTS an enum variant.
-
-    Handles inline constructions like ``Suit.Hearts()`` (a DotCall whose receiver is the
-    enum name) and EnumConstructor nodes. Returns None when the receiver is not a
-    recognised enum construction -- and "not a construction" is the answer it gives for
-    every other `X.Y(args)`, which is the point (#293).
-
-    It used to claim any node carrying `resolved_enum_type`. Pass 2 stamps that on a
-    Result/Maybe METHOD call too, where it names the enum the method was called ON rather
-    than what the call RETURNS. So `go().realise("err")` -- whose value is a `string` --
-    came back typed as `Result<string, StdError>`, and the caller, seeing a non-None
-    answer, skipped the temp registration that would have freed the string.
-
-    The test is now the one the name implies: is the method a VARIANT of that enum? `Ok`
-    and `Err` are variants of Result; `realise` is not. That also narrows the shadowing
-    edge the caller used to record: a local named after an enum has to be called with one
-    of that enum's variant names to be mistaken for a construction now.
-    """
+    """Recover the EnumType for a receiver that CONSTRUCTS an enum variant."""
     from sushi_lang.semantics.ast import EnumConstructor
 
     # An EnumConstructor node IS a construction by definition -- there is nothing else it
@@ -467,15 +376,7 @@ def _infer_enum_construction_type(codegen: 'LLVMCodegen', receiver: Expr) -> Opt
 
 
 def get_resolved_type(expr: Union[MethodCall, DotCall], type_attr: str) -> Optional['Type']:
-    """Extract resolved type from expr if present.
-
-    Args:
-        expr: Method call or DotCall expression
-        type_attr: Attribute name ('resolved_enum_type' or 'resolved_struct_type')
-
-    Returns:
-        Resolved type if present, None otherwise
-    """
+    """Extract resolved type from expr if present."""
     if hasattr(expr, type_attr):
         resolved_type = getattr(expr, type_attr)
         if resolved_type is not None:
@@ -486,23 +387,7 @@ def get_resolved_type(expr: Union[MethodCall, DotCall], type_attr: str) -> Optio
 def infer_semantic_type(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                         receiver_value: Optional[ir.Value], expected_prefix: str,
                         expected_type_class) -> Optional['Type']:
-    """Unified type inference for generic types.
-
-    This function unifies the type inference pattern repeated across all generic type handlers.
-    It tries multiple strategies in priority order:
-    1. Check for resolved type annotation (resolved_enum_type or resolved_struct_type)
-    2. Call appropriate inference function based on type class
-
-    Args:
-        codegen: The LLVM code generator
-        expr: Method call or DotCall expression
-        receiver_value: Emitted receiver value (None if not yet emitted)
-        expected_prefix: Type name prefix (e.g., "Result<", "Maybe<", "Own<", "HashMap<", "List<")
-        expected_type_class: Expected type class (EnumType or StructType)
-
-    Returns:
-        Inferred type if successful, None otherwise
-    """
+    """Unified type inference for generic types."""
     receiver = expr.receiver
 
     # Priority 1: Check for resolved type annotation
@@ -529,30 +414,7 @@ def infer_semantic_type(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]
 
 def emit_receiver_as_pointer(codegen: 'LLVMCodegen', receiver: Expr,
                              semantic_type: Optional['Type'] = None) -> Optional[ir.Value]:
-    """Emit receiver as pointer (alloca) for mutation methods.
-
-    This is used by HashMap and List methods that need to mutate the receiver.
-
-    For reference parameters (peek T or poke T), the slot contains a pointer
-    to the actual variable, so we need to load that pointer first.
-
-    A receiver that is a whole expression -- `get_map()??`, a call result -- has no
-    address, so it is SPILLED: emitted once, parked in an entry-block slot, and that slot
-    handed back. The HashMap and List emitters GEP their receiver, so handing them a value
-    instead miscompiles; before the spill they got a value and the caller had no way to
-    know. The alloca is hoisted to the entry block because a receiver inside a loop would
-    otherwise allocate once per iteration and grow the stack without bound.
-
-    Args:
-        codegen: The LLVM code generator
-        receiver: Receiver expression
-        semantic_type: The receiver's resolved type, which the caller already knows. Only
-            a spill needs it, and only to decide whether the spilled value owns heap.
-
-    Returns:
-        A pointer to the receiver, or None when the receiver names no storage and could
-        not be spilled either.
-    """
+    """Emit receiver as pointer (alloca) for mutation methods."""
     from sushi_lang.backend.expressions import type_utils
 
     if isinstance(receiver, Name):
@@ -587,23 +449,7 @@ _SPILL_SEQ = itertools.count()
 
 def _spill_receiver(codegen: 'LLVMCodegen', receiver: Expr,
                     semantic_type: Optional['Type']) -> Optional[ir.Value]:
-    """Park a receiver that names no storage in a slot, and give it an owner if it needs one.
-
-    A value produced by an expression is owned by nobody. Spilling it creates the first
-    thing that could free it, so the spill has to answer the ownership question at the same
-    time or it trades a miscompile for a leak.
-
-    The answer is the one the language already gives an unbound owning temporary: register
-    it as a scope temp and let scope-exit RAII free it exactly once -- the same rule as a
-    discarded `a.clone()` statement (`backend/statements/__init__.py`). Rust and C++ drop a
-    temporary at the end of the enclosing STATEMENT, which is tighter; scope exit is later,
-    never earlier, so it is safe, and it needs no machinery that does not exist. The
-    difference is visible only as memory held for longer.
-
-    `expression_is_temporary` is the gate, and it is the whole safety argument: a receiver
-    that reads through a live owner -- a get-out, a field read -- must NOT be registered,
-    because its owner frees it. Registering one there is a double free.
-    """
+    """Park a receiver that names no storage in a slot, and give it an owner if it needs one."""
     from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
     from sushi_lang.backend.expressions.memory import expression_is_temporary
 

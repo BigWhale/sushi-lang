@@ -1,12 +1,4 @@
-"""The two invariants that hold `semantics/param_modes.py` together.
-
-1. The mode is PEEK or POKE **if and only if** the parameter's type is a `ReferenceType`
-   with that mutability. One derivation, so the mode and the type can never disagree.
-2. `CalleeKind` is CLOSED: every member has a stated answer here, so a new kind cannot
-   be added without deciding what it does with an unmarked parameter.
-
-See docs/design/borrow-model.md section 6.
-"""
+"""The two invariants that hold `semantics/param_modes.py` together."""
 from __future__ import annotations
 
 import pytest

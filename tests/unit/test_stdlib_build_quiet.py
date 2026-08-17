@@ -1,10 +1,4 @@
-"""The auto-rebuild path must be silent (PR4).
-
-`ensure_stdlib_built()` calls `build_all(platform, quiet=True)` during an ordinary
-`sushic foo.sushi` when the stdlib is stale. Before PR4 only 3 of build_all's prints
-were gated, so a normal compile emitted ~11 lines of "Building collections/strings..."
-banners. This pins that `quiet=True` produces no stdout.
-"""
+"""The auto-rebuild path must be silent (PR4)."""
 from __future__ import annotations
 
 import contextlib

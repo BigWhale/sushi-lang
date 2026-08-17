@@ -1,26 +1,4 @@
-"""Cache management for incremental compilation.
-
-Manages the ``__sushi_cache__/`` directory and staleness detection for per-unit
-object-file caching.
-
-**The cache is shared, so it is never destroyed on the compile path.** It is rooted
-at the source file's parent directory (see ``pipeline.py``), so two ``sushic``
-processes compiling two files in one directory -- an ordinary parallel build, and
-what the test harness does with four jobs -- share it. The cache used to answer "this
-entry was built with different settings" by deleting the whole directory, which raced
-peers that were reading or writing inside it (issue #196: ``shutil.rmtree`` walking a
-tree another process was still creating files in, surfaced as CE0000).
-
-Instead, **an object is keyed by everything that produced it** -- the global
-parameters (compiler version, target triple, opt level) and the unit's semantic
-fingerprint -- so a stale entry can never be a false hit and nothing has to be
-evicted to stay correct. Different settings simply name different files. Publishing
-is atomic (``os.replace``), so a peer reading the path sees complete bytes or no file
-at all, never a truncated object.
-
-Entries for settings you no longer use are dead weight, not a correctness problem;
-``sushic --clean-cache`` prunes them.
-"""
+"""Cache management for incremental compilation."""
 from __future__ import annotations
 
 import hashlib
@@ -47,23 +25,7 @@ _KEY_LEN = 12
 
 
 class CacheManager:
-    """Manages the incremental compilation cache directory.
-
-    Directory layout::
-
-        __sushi_cache__/
-            units/
-                main.<global>.<fingerprint>.o          -- mirrors the source tree
-                helpers/math.<global>.<fingerprint>.o
-            stdlib/
-                io_stdio.<global>.<fingerprint>.o
-            libs/
-                mylib.<global>.<fingerprint>.o
-
-    ``<global>`` digests the compiler version, target triple and opt level;
-    ``<fingerprint>`` digests the unit itself. Both are in the name, so a hit is
-    exactly "an object built from this input, by this compiler, with these settings".
-    """
+    """Manages the incremental compilation cache directory."""
 
     def __init__(self, project_root: Path, opt_level: str = "mem2reg",
                  cache_dir: Optional[Path] = None) -> None:
@@ -77,17 +39,7 @@ class CacheManager:
 
     @property
     def global_key(self) -> str:
-        """Digest of the settings every cached object depends on.
-
-        This is what the manifest used to check (and wipe the cache over). Folding it
-        into the object name turns "the cache is stale" from an eviction into a miss.
-
-        The compiler-source digest is part of the key: ``compiler_version`` is the
-        static pyproject string, so without it a codegen fix was invisible to a warm
-        cache (the F9 experiment: a warm rebuild after the T1.1 ``sext``->``zext``
-        fix kept printing the stale answer until ``--clean-cache``). With the digest
-        in the name, editing any compiler ``.py`` makes every cached object a miss.
-        """
+        """Digest of the settings every cached object depends on."""
         from sushi_lang.compiler.fingerprint import compute_compiler_source_fingerprint
         material = (
             f"{compiler_version}|{self._target_triple}|{self.opt_level}"
@@ -100,11 +52,7 @@ class CacheManager:
     # ------------------------------------------------------------------
 
     def prepare(self) -> None:
-        """Ready the cache directory for a compile.
-
-        The single entry point a compiler driver needs. Creating the directories is
-        all it takes -- and it is idempotent and safe to race, which is the point.
-        """
+        """Ready the cache directory for a compile."""
         self.ensure_dirs()
 
     def ensure_dirs(self) -> None:
@@ -113,13 +61,7 @@ class CacheManager:
             path.mkdir(parents=True, exist_ok=True)
 
     def wipe(self) -> None:
-        """Remove the entire cache directory.
-
-        Only for the explicit, single-process ``--clean-cache``. **Never call this on
-        the compile path** -- a peer may be reading the tree (#196). ``ignore_errors``
-        because even here a concurrent compile may be creating files underneath us,
-        and failing to prune is not worth an error.
-        """
+        """Remove the entire cache directory."""
         shutil.rmtree(self.cache_path, ignore_errors=True)
 
     # ------------------------------------------------------------------
@@ -164,13 +106,7 @@ class CacheManager:
         return section / f"{name}.{self.global_key}.{fingerprint[:_KEY_LEN]}.o"
 
     def _store(self, obj_path: Path, obj_bytes: bytes) -> Path:
-        """Publish an object atomically.
-
-        A plain ``write_bytes`` truncates first, so for the length of the write the
-        path names a short file -- and a peer linking at that instant hands ``cc`` a
-        truncated object. Write to a private temp beside the target, then rename:
-        ``os.replace`` is atomic, so the path only ever names complete bytes.
-        """
+        """Publish an object atomically."""
         obj_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = obj_path.with_name(
             f"{obj_path.name}.{os.getpid()}.{threading.get_ident()}.tmp"

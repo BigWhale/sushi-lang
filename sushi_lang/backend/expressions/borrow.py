@@ -1,9 +1,4 @@
-"""
-Borrow (peek / poke) emission for the Sushi language compiler.
-
-A borrow lowers to the address of the borrowed value: a reference is a pointer, and
-borrow checking is entirely a compile-time affair (see semantics/passes/borrow.py).
-"""
+"""Borrow (peek / poke) emission for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -16,36 +11,7 @@ if TYPE_CHECKING:
 
 
 def emit_borrow(codegen: 'LLVMCodegen', expr: Borrow) -> ir.Value:
-    """Emit borrow expression (peek expr or poke expr) as pointer to expression.
-
-    Supports:
-    - Variables: peek x, poke x -> slot pointer
-    - Member access: peek obj.field, poke obj.field -> GEP to field
-    - Nested member access: peek obj.a.b, poke obj.a.b -> nested GEP
-
-    References are zero-cost abstractions in Sushi. Both peek (read-only) and
-    poke (read-write) borrows emit identical LLVM IR - they simply return the
-    pointer to the memory location. The semantic differences are enforced at
-    compile time by the borrow checker.
-
-    The borrow checker (Pass 3 in semantic analysis) has already verified:
-    - The borrowed expression is borrowable (variable or member access)
-    - poke borrows are exclusive (only one at a time)
-    - peek borrows allow multiple simultaneous reads
-    - Cannot mix peek and poke borrows of the same variable
-    - Cannot move/rebind/destroy while borrowed
-    - Cannot borrow moved variables
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The Borrow expression containing the expression to borrow.
-
-    Returns:
-        Pointer to the expression (LLVM alloca instruction, loaded reference, or GEP).
-
-    Raises:
-        RuntimeError: If borrowing an unsupported expression (should be caught by semantic analysis).
-    """
+    """Emit borrow expression (peek expr or poke expr) as pointer to expression."""
     from sushi_lang.semantics.ast import Name, MemberAccess
     from sushi_lang.semantics.typesys import ReferenceType
 
@@ -77,30 +43,7 @@ def emit_borrow(codegen: 'LLVMCodegen', expr: Borrow) -> ir.Value:
 
 
 def emit_member_access_borrow(codegen: 'LLVMCodegen', expr) -> ir.Value:
-    """Emit borrow of struct field access using GEP.
-
-    Returns a pointer to the field within the struct.
-
-    Example:
-        &cfg.port -> GEP(cfg_alloca, [0, port_field_index])
-
-    This function leverages the existing `try_get_struct_alloca()` infrastructure
-    which already handles:
-    - Regular variables
-    - Reference parameters (loads pointer from slot)
-    - Nested member access (recursive GEP)
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The MemberAccess expression.
-
-    Returns:
-        Pointer to the field (GEP instruction).
-
-    Raises:
-        TypeError: If struct type or field cannot be resolved.
-        RuntimeError: If cannot get address of struct.
-    """
+    """Emit borrow of struct field access using GEP."""
     from sushi_lang.backend.expressions.structs import infer_struct_type, try_get_struct_alloca
 
     # Get the struct type and field information

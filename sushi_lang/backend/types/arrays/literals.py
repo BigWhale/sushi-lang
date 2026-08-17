@@ -1,10 +1,4 @@
-"""
-Array literal emission for fixed-size arrays.
-
-This module handles LLVM IR emission for array literals like [1, 2, 3, 4, 5].
-Supports both constant and non-constant element values, creating stack-allocated
-arrays as needed.
-"""
+"""Array literal emission for fixed-size arrays."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -16,21 +10,7 @@ if TYPE_CHECKING:
 
 
 def emit_array_literal(codegen: 'LLVMCodegen', expr: ArrayLiteral) -> ir.Value:
-    """Emit array literal as LLVM array constant or initialization.
-
-    Creates fixed-size arrays from literal expressions. Supports both constant
-    and non-constant element values.
-
-    Args:
-        codegen: The LLVM codegen instance.
-        expr: The array literal expression.
-
-    Returns:
-        An LLVM array value with the literal elements.
-
-    Raises:
-        NotImplementedError: If array literal is empty.
-    """
+    """Emit array literal as LLVM array constant or initialization."""
     if not expr.elements:
         raise NotImplementedError("empty array literals not supported yet")
 

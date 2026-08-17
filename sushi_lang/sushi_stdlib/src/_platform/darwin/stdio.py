@@ -1,14 +1,4 @@
-"""
-Darwin/macOS-specific stdio handle declarations.
-
-On macOS, the C standard library exposes stdin/stdout/stderr through
-special global pointers with double-underscore names:
-- __stdinp  (stdin)
-- __stdoutp (stdout)
-- __stderrp (stderr)
-
-This is different from Linux which uses the names directly (stdin, stdout, stderr).
-"""
+"""Darwin/macOS-specific stdio handle declarations."""
 
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src._platform.posix import stdio as posix_stdio

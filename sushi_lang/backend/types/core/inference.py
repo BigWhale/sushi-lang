@@ -1,8 +1,4 @@
-"""Type inference from LLVM IR types back to Sushi language types.
-
-This module provides reverse mapping for introspection, method resolution,
-and debugging purposes.
-"""
+"""Type inference from LLVM IR types back to Sushi language types."""
 from __future__ import annotations
 
 from llvmlite import ir
@@ -13,13 +9,7 @@ class TypeInference:
     """Infers Sushi semantic types from LLVM IR types."""
 
     def __init__(self, i8: ir.IntType, i32: ir.IntType, string_struct: ir.LiteralStructType):
-        """Initialize type inference with LLVM type references.
-
-        Args:
-            i8: LLVM i8 type reference
-            i32: LLVM i32 type reference
-            string_struct: LLVM string struct type reference
-        """
+        """Initialize type inference with LLVM type references."""
         self.i8 = i8
         self.i32 = i32
         self.string_struct = string_struct
@@ -39,35 +29,11 @@ class TypeInference:
         self._llvm_to_lang_type_cache: dict[ir.Type, str] = {}
 
     def infer_llvm_type_from_value(self, value: ir.Value) -> ir.Type:
-        """Infer LLVM type from a runtime value for method dispatch.
-
-        Used primarily for extension method resolution where we need to
-        determine the receiver type from an LLVM value.
-
-        Args:
-            value: The LLVM value to analyze.
-
-        Returns:
-            The LLVM type of the value.
-        """
+        """Infer LLVM type from a runtime value for method dispatch."""
         return value.type
 
     def map_llvm_to_language_type(self, llvm_type: ir.Type) -> str:
-        """Map LLVM type back to language type name for method resolution.
-
-        Converts LLVM IR types back to language type names, primarily used
-        for generating extension method function names. Uses a pre-built
-        dictionary for O(1) lookup on simple types and caches complex types.
-
-        Args:
-            llvm_type: The LLVM IR type to map.
-
-        Returns:
-            The corresponding language type name.
-
-        Raises:
-            TypeError: If the LLVM type cannot be mapped to a language type.
-        """
+        """Map LLVM type back to language type name for method resolution."""
         # Check cache first (covers both simple types and previously computed complex types)
         if llvm_type in self._llvm_to_lang_type_cache:
             return self._llvm_to_lang_type_cache[llvm_type]
@@ -111,14 +77,7 @@ class TypeInference:
         raise_internal_error("CE0019", llvm_type=str(llvm_type))
 
     def is_string_type(self, llvm_type: ir.Type) -> bool:
-        """Check if LLVM type represents a string (fat pointer struct).
-
-        Args:
-            llvm_type: The LLVM type to check.
-
-        Returns:
-            True if the type is a string fat pointer struct, False otherwise.
-        """
+        """Check if LLVM type represents a string (fat pointer struct)."""
         # LiteralStructType on purpose (#257): a string is an ANONYMOUS fat pointer, never a
         # named type. Widening this to BaseStructType would make a user struct shaped
         # {i8*, i32, i8} answer True and be treated as a string -- the shape-collision class
@@ -142,14 +101,7 @@ class TypeInference:
         )
 
     def is_dynamic_array_type(self, llvm_type: ir.Type) -> bool:
-        """Check if an LLVM type represents a dynamic array struct.
-
-        Args:
-            llvm_type: The LLVM type to check.
-
-        Returns:
-            True if the type is a dynamic array struct, False otherwise.
-        """
+        """Check if an LLVM type represents a dynamic array struct."""
         # LiteralStructType on purpose (#257): a dynamic array is an ANONYMOUS descriptor.
         # This is the sharpest case of the shape collision -- `struct S: i32 a; i32 b; ptr p`
         # is exactly {i32, i32, T*}, and while user structs were literal it answered True
@@ -170,15 +122,7 @@ class TypeInference:
         )
 
     def is_integer_type(self, llvm_type: ir.Type, width: int | None = None) -> bool:
-        """Check if LLVM type is an integer with optional width constraint.
-
-        Args:
-            llvm_type: The LLVM type to check.
-            width: Optional specific bit width to match.
-
-        Returns:
-            True if the type is an integer of the specified width, False otherwise.
-        """
+        """Check if LLVM type is an integer with optional width constraint."""
         if not isinstance(llvm_type, ir.IntType):
             return False
         if width is not None:

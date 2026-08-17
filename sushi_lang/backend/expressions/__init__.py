@@ -1,12 +1,4 @@
-"""
-Expression emission module for the Sushi language compiler.
-
-This module provides a refactored, modular approach to LLVM IR generation
-for expressions. The code is organized by expression category for better
-maintainability and clarity.
-
-Main entry point: ExpressionEmitter.emit_expr()
-"""
+"""Expression emission module for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -22,29 +14,11 @@ class ExpressionEmitter:
     """Main expression emitter that delegates to specialized submodules."""
 
     def __init__(self, codegen: 'LLVMCodegen') -> None:
-        """Initialize expression emitter with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance providing context and builders.
-        """
+        """Initialize expression emitter with reference to main codegen instance."""
         self.codegen = codegen
 
     def emit_expr(self, expr: Expr, to_i1: bool = False) -> 'ir.Value':
-        """Emit LLVM IR for an expression and return its SSA value.
-
-        This is the main entry point for expression emission. It delegates
-        to specialized emitters based on the expression type.
-
-        Args:
-            expr: The expression AST node to emit.
-            to_i1: Whether to convert the result to i1 for boolean contexts.
-
-        Returns:
-            The LLVM value representing the expression result.
-
-        Raises:
-            NotImplementedError: If the expression type is not supported.
-        """
+        """Emit LLVM IR for an expression and return its SSA value."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
         self.codegen.utils.ensure_open_block()

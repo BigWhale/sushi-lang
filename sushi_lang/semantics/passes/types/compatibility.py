@@ -1,13 +1,5 @@
 # semantics/passes/types/compatibility.py
-"""
-Type compatibility checking for type validation.
-
-This module contains functions for checking type compatibility:
-- Assignment compatibility validation
-- Return type compatibility validation
-- Generic type compatibility checking
-- Cast validity checking
-"""
+"""Type compatibility checking for type validation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
@@ -95,36 +87,13 @@ def validate_return_compatibility(validator: 'TypeValidator', expected_type: Typ
 
 
 def resolve_generic_type_ref(validator: 'TypeValidator', ty: Type) -> Type:
-    """Resolve GenericTypeRef to monomorphized EnumType or StructType.
-
-    Uses the centralized TypeResolver for consistent resolution logic.
-
-    Args:
-        validator: The TypeValidator instance.
-        ty: The type to resolve (may be GenericTypeRef or any other type).
-
-    Returns:
-        The resolved EnumType or StructType if ty is a GenericTypeRef with a monomorphized version,
-        otherwise returns ty unchanged.
-    """
+    """Resolve GenericTypeRef to monomorphized EnumType or StructType."""
     resolver = TypeResolver(validator.struct_table.by_name, validator.enum_table.by_name)
     return resolver.resolve_generic_type_ref(ty)
 
 
 def compare_resolved_types(validator: 'TypeValidator', actual: Type, expected: Type) -> bool:
-    """Compare two resolved types (no GenericTypeRef or UnknownType resolution).
-
-    This method assumes both types have been through resolution and performs
-    direct comparison with recursive handling for container types.
-
-    Args:
-        validator: The TypeValidator instance.
-        actual: The actual type (already resolved).
-        expected: The expected type (already resolved).
-
-    Returns:
-        True if types are compatible, False otherwise.
-    """
+    """Compare two resolved types (no GenericTypeRef or UnknownType resolution)."""
     from sushi_lang.semantics.typesys import DynamicArrayType, ArrayType
 
     # Direct equality check
@@ -157,22 +126,7 @@ def compare_resolved_types(validator: 'TypeValidator', actual: Type, expected: T
 
 
 def _params_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -> bool:
-    """Compatibility for one parameter INSIDE a function type: no borrow coercion.
-
-    `poke T` may be handed to a place that only reads, so it coerces to `peek T` at a
-    call site. That coercion is a property of the POSITION -- a value being passed once,
-    now -- and it must not travel into a function type, where it would make parameters
-    covariant in mutability:
-
-        fn poker(poke i32 x) i32: x := 999 ...
-        let fn(peek i32) -> i32 g = poker      # accepted before this check
-        g(peek n)                              # writes 999 through a `peek`
-
-    That compiled clean and defeated the entire `peek` write gate (CE2408) through one
-    indirection. The function-type arm recursed through `types_compatible`, which applies
-    the coercion, although its own comment said parameters are invariant. They are: the
-    mutability is part of what the value promises its callers.
-    """
+    """Compatibility for one parameter INSIDE a function type: no borrow coercion."""
     if isinstance(actual, ReferenceType) or isinstance(expected, ReferenceType):
         return (isinstance(actual, ReferenceType) and isinstance(expected, ReferenceType)
                 and actual.mutability == expected.mutability
@@ -183,13 +137,6 @@ def _params_compatible(validator: 'TypeValidator', actual: Type, expected: Type)
 
 def types_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -> bool:
     """Check if two types are compatible (handles UnknownType resolution to StructType/EnumType).
-
-    This is a recursive comparison that handles:
-    - Direct type equality
-    - UnknownType -> StructType/EnumType resolution
-    - GenericTypeRef -> EnumType/StructType resolution (for generic types like Result<T>, Box<T>)
-    - ReferenceType compatibility with coercion (poke T -> peek T allowed)
-    - Recursive comparison for container types (arrays, etc.)
     """
     from sushi_lang.semantics.typesys import FunctionType
 
@@ -233,15 +180,7 @@ def types_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -
 
 
 def is_valid_cast(source_type: Type, target_type: Type) -> bool:
-    """Check if a cast from source_type to target_type is valid.
-
-    Args:
-        source_type: The type being cast from.
-        target_type: The type being cast to.
-
-    Returns:
-        True if the cast is valid, False otherwise.
-    """
+    """Check if a cast from source_type to target_type is valid."""
     # Same type is always valid (no-op cast)
     if source_type == target_type:
         return True

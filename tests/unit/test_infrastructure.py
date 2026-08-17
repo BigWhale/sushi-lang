@@ -1,9 +1,4 @@
-"""Sanity checks for the unit-test infrastructure itself.
-
-Verifies that the shared fixtures (make_unit, analyze) and the core compiler
-entrypoints they wrap are wired correctly, so the Phase B suites can rely on
-them. These are intentionally minimal.
-"""
+"""Sanity checks for the unit-test infrastructure itself."""
 from __future__ import annotations
 
 from sushi_lang.compiler.fingerprint import compute_unit_fingerprint

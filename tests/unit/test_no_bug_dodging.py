@@ -1,19 +1,4 @@
-"""
-Guard: a .sushi test may not quietly avoid exercising something because of a bug.
-
-Tier 0 found five tests that narrowed their own coverage in a `#` comment -- "u32
-comparisons only (arithmetic ops have compiler bug)", "Skip this test for now" above a
-commented-out `const u32 NOT_MASK = ~(0x00 as u32)" -- for bugs that either no longer
-existed or had never been filed. Nothing checked those comments, so the lost coverage
-was invisible. One of them was hiding a live formatter defect.
-
-The project already has the right shape for this: the QUARANTINE registry in
-test_stdout_coverage.py demands a reason AND a tracking issue, and a guard keeps it
-honest. This is the same idea for the .sushi files themselves.
-
-To dodge a bug in a test, you must say so in the registry below, with an issue. To fix
-one, delete its entry and restore the assertion.
-"""
+"""Guard: a .sushi test may not quietly avoid exercising something because of a bug."""
 
 import re
 from pathlib import Path

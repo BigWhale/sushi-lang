@@ -1,12 +1,4 @@
-"""
-Basic String Operations
-
-Implements fundamental string methods that work with fat pointer representation:
-- size(): Returns byte count (O(1) field access)
-- len(): Returns UTF-8 character count (O(n) using utf8_count)
-- is_empty(): Returns true if byte count is 0 (O(1))
-- concat(): Concatenates two strings (allocates new string)
-"""
+"""Basic String Operations"""
 
 import llvmlite.ir as ir
 from ..intrinsics import declare_utf8_count_intrinsic
@@ -15,17 +7,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 
 
 def emit_string_size(module: ir.Module) -> ir.Function:
-    """Emit the string.size() method.
-
-    Returns the byte count of a string (NOT character count).
-    This is an O(1) operation - just extracts field 1 from the fat pointer.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: i32 string_size({ i8*, i32 } str)
-    """
+    """Emit `i32 string_size({i8*, i32} str)`."""
     func_name = "string_size"
 
     # Check if already defined
@@ -54,17 +36,7 @@ def emit_string_size(module: ir.Module) -> ir.Function:
 
 
 def emit_string_len(module: ir.Module) -> ir.Function:
-    """Emit the string.len() method.
-
-    Returns the UTF-8 character count of a string (NOT byte count).
-    This is an O(n) operation - calls utf8_count intrinsic.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: i32 string_len({ i8*, i32 } str)
-    """
+    """Emit `i32 string_len({i8*, i32} str)`."""
     func_name = "string_len"
 
     # Check if already defined
@@ -100,16 +72,7 @@ def emit_string_len(module: ir.Module) -> ir.Function:
 
 
 def emit_string_concat(module: ir.Module) -> ir.Function:
-    """Emit the string.concat() method.
-
-    Concatenates two strings by allocating new memory and copying both strings.
-
-    Args:
-        module: The LLVM module to emit the function into.
-
-    Returns:
-        The emitted function: { i8*, i32 } string_concat({ i8*, i32 } str1, { i8*, i32 } str2)
-    """
+    """Emit `{i8*, i32} string_concat({i8*, i32} str1, {i8*, i32} str2)`."""
     func_name = "string_concat"
 
     # Check if already defined

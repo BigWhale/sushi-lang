@@ -20,19 +20,7 @@ from sushi_lang.semantics.library_templates import deserialize_perk_impl
 
 
 def enum_base_names(*tables) -> set[str]:
-    """The base name of every enum in `tables`, for the borrow checker's sink test.
-
-    `Box.Full(a)` and `xs.push(a)` are the same node shape at Pass 3, and only the first
-    is an ownership sink, so the checker needs the enum type names to tell them apart.
-    A monomorphized generic is interned as `Result<i32, StdError>` while its constructor
-    is written bare, hence the split.
-
-    Each argument is a collector table (which HAS a `by_name` mapping) or a plain mapping
-    (which IS one). The question is PRESENCE, not truthiness: this used to be an
-    `or`-chain, and an EMPTY `by_name` is falsy, so it fell through to the table OBJECT --
-    a dataclass with no `__iter__` -- and raised a bare `TypeError`.
-    Nothing masked that except Phase 0 always pre-registering `Result` and `Maybe`.
-    """
+    """The base name of every enum in `tables`, for the borrow checker's sink test."""
     names: set[str] = set()
     for table in tables:
         mapping = table.by_name if hasattr(table, 'by_name') else table
@@ -41,21 +29,7 @@ def enum_base_names(*tables) -> set[str]:
 
 
 class SemanticAnalyzer:
-    """
-    Semantic analysis coordinator that runs all semantic analysis passes.
-
-    Pass execution order:
-      - Pass 0: Symbol collection (constants, structs, enums, generics, functions, extensions)
-      - Pass 1.5: Generic instantiation collection (find all Result<T> usages)
-      - Pass 1.6: Monomorphization (generate concrete types from generics)
-      - Pass 1.7: AST transformation (resolve EnumConstructor vs MethodCall ambiguity)
-      - Pass 1.8: Hash registration (auto-derive .hash() for structs)
-      - Pass 1: Scope analysis (variable lifecycle, usage tracking)
-      - Pass 2: Type validation (type checking, inference, compatibility)
-      - Pass 3: Borrow checking (reference safety, ownership validation)
-
-    Supports both single-file and multi-file compilation modes.
-    """
+    """Semantic analysis coordinator that runs all semantic analysis passes."""
 
     def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional[object] = None, library_registry: Optional['LibraryRegistry'] = None) -> None:
         self.reporter = reporter
@@ -82,12 +56,7 @@ class SemanticAnalyzer:
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
 
     def check(self, program: Program) -> None:
-        """
-        Entry point for semantic analysis. Runs all semantic analysis passes in sequence.
-
-        The production pipeline always analyzes through a UnitManager (a single
-        file is a one-unit compile), so this delegates to the multi-unit path.
-        """
+        """Entry point for semantic analysis. Runs all semantic analysis passes in sequence."""
         self._check_multi_file()
 
     def _check_multi_file(self) -> None:
@@ -426,18 +395,7 @@ class SemanticAnalyzer:
 
 
     def _check_extension_shadows_builtin(self) -> None:
-        """Reject an extension method that collides with a built-in (CE2097).
-
-        Keyed on `builtin_method_exists` for this exact (target type, method name) pair --
-        never on the bare method name -- so a type that carries no such built-in can still
-        be extended with a `hash()` of its own. Must run after Pass 1.8 (which registers
-        the struct/enum pair) AND after the generic-extension merge, or a monomorphized
-        `extend Box@(i32) hash()` is never examined.
-
-        Tier 2: one primary location, at the extension declaration. A built-in has no
-        source span, so the note uses the house idiom for a compiler-predefined name
-        ("defined by the compiler" -- see collect/utils.py:note_first_declaration).
-        """
+        """Reject an extension method that collides with a built-in (CE2097)."""
         if self.extensions is None:
             return
 
@@ -465,11 +423,7 @@ class SemanticAnalyzer:
                 ).emit()
 
     def _build_library_registry(self) -> None:
-        """Build LibraryRegistry from loaded library manifests.
-
-        Creates a LibraryRegistry with pre-parsed type information,
-        eliminating duplicate parsing in codegen.
-        """
+        """Build LibraryRegistry from loaded library manifests."""
         if self.library_linker is None:
             return
 
@@ -487,11 +441,7 @@ class SemanticAnalyzer:
             )
 
     def _register_library_functions(self) -> None:
-        """Register functions from loaded libraries into the function table.
-
-        Uses pre-parsed data from LibraryRegistry if available, otherwise
-        falls back to manual parsing from library_linker manifests.
-        """
+        """Register functions from loaded libraries into the function table."""
         if self.funcs is None:
             return
 
@@ -552,19 +502,7 @@ class SemanticAnalyzer:
                 self.funcs.order.append(func_name)
 
     def _register_library_private_functions(self) -> None:
-        """Register export-closure private helpers from loaded libraries (C4b/C5).
-
-        A library generic's body may call library-private concrete helpers;
-        these ship as signature-only records (``templates.private_functions``)
-        and their definitions link from the library bitcode. Registering the
-        signature here lets the consumer's type checker validate the
-        monomorphized body's call sites.
-
-        Unlike every other registration helper, a name clash is an ERROR
-        (CE5007), not local-wins: the library's monomorphized body calls the
-        symbol by name, so a local function shadowing it would silently change
-        the library's behavior.
-        """
+        """Register export-closure private helpers from loaded libraries (C4b/C5)."""
         if self.funcs is None or self.library_registry is None:
             return
 
@@ -581,17 +519,7 @@ class SemanticAnalyzer:
             self.funcs.order.append(name)
 
     def _register_library_constants(self, compilation_order) -> None:
-        """Register export-closure constants from loaded libraries (C4b/C5).
-
-        Shipped with their source (``templates.constants``) because the
-        consumer needs the VALUE for compile-time evaluation. Each record is
-        re-parsed; its signature merges into the constant table and its
-        ``ConstDef`` is appended to the first unit's AST so both codegen paths
-        emit the global (constants are emitted with internal linkage per
-        module, so re-emission alongside the library bitcode cannot collide).
-
-        Name clashes are CE5007, same rationale as private functions.
-        """
+        """Register export-closure constants from loaded libraries (C4b/C5)."""
         if self.constants is None or self.library_linker is None:
             return
 
@@ -638,25 +566,7 @@ class SemanticAnalyzer:
                 host_unit.ast.constants.append(const_defs[0])
 
     def _seed_library_perks(self, perk_table) -> None:
-        """Seed perk DEFINITIONS shipped by loaded libraries into ``perk_table``.
-
-        Each consumed library may ship the perk contracts (method signatures)
-        that its exported generics constrain on, under ``templates.perks``. We
-        rebuild a ``PerkDef`` for each via the canonical collection path
-        (re-parse the source snippet, run a throwaway ``CollectorPass``, pull
-        the ``PerkDef`` out of the resulting ``PerkTable``) so that a consumer
-        no longer has to redeclare a perk it does not author.
-
-        This must run BEFORE the consumer's own units are collected: perk-impl
-        collection (``extend T with Perk``) validates each impl against the
-        visible perk definitions (CE4003), so a consumer that implements a
-        library-shipped perk needs the contract present at collection time.
-
-        Only DEFINITIONS are shipped; the consumer still supplies its own
-        ``extend T with Perk`` implementations. Local definitions win: a perk is
-        only seeded if its name is not already present (mirrors the other
-        library-registration helpers).
-        """
+        """Seed perk DEFINITIONS shipped by loaded libraries into ``perk_table``."""
         if perk_table is None or self.library_linker is None:
             return
 
@@ -692,28 +602,7 @@ class SemanticAnalyzer:
                 perk_table.order.append(perk_name)
 
     def _register_library_perk_impls(self) -> None:
-        """Register concrete perk IMPLEMENTATIONS shipped by loaded libraries.
-
-        C4a: each library may ship its own concrete ``extend T with Perk``
-        blocks for the perks its exported generics constrain on, under
-        ``templates.perk_impls``. Registering them in the consumer's perk-impl
-        table makes the constraint validator (CE4006) and method dispatch see
-        the impl; the bodies are NOT re-emitted - codegen declares the method
-        symbols and the definitions resolve from the library bitcode at link
-        time (they carry weak linkage there, so a local impl wins).
-
-        Precedence (all silent, mirroring the other registration helpers):
-        - A consumer's own impl of the same (type, perk) wins outright.
-        - Across multiple libraries shipping the same impl, the first
-          registered wins.
-        - If a local extension method on the target type already uses one of
-          the impl's method names, the library impl is skipped entirely:
-          registering it would create exactly the dispatch ambiguity CE4007
-          exists to prevent, but erroring would make adding an impl to a
-          library a breaking change for consumers. (If the consumer then needs
-          the perk, writing its own ``extend`` triggers the normal in-program
-          CE4007 with a proper source span.)
-        """
+        """Register concrete perk IMPLEMENTATIONS shipped by loaded libraries."""
         if self.perk_impls is None or self.perks is None or self.library_linker is None:
             return
 
@@ -757,20 +646,7 @@ class SemanticAnalyzer:
                     self.library_perk_impls.append(impl)
 
     def _register_library_generic_functions(self) -> None:
-        """Register generic function templates from loaded libraries.
-
-        Each consumed library may ship instantiable generic function bodies in
-        its ``.slib`` manifest under ``templates.generic_functions``. We rebuild
-        a ``GenericFuncDef`` for each via the canonical collection path
-        (re-parse the source snippet, run a throwaway ``CollectorPass``, pull the
-        ``GenericFuncDef`` out of the resulting table) so that the existing
-        instantiation + monomorphization machinery (Pass 1.5/1.6) emits a
-        concrete instance at the consumer's call site.
-
-        Local definitions win: a template is only registered if its name is not
-        already present in the generic function table (mirrors the other
-        library-registration helpers).
-        """
+        """Register generic function templates from loaded libraries."""
         if self.generic_funcs is None or self.library_linker is None:
             return
 
@@ -833,28 +709,7 @@ class SemanticAnalyzer:
     def _register_library_generic_types(
         self, manifest_key: str, table, collected_attr: str
     ) -> None:
-        """Register generic struct/enum templates from loaded libraries.
-
-        Shared by ``_register_library_generic_structs`` /
-        ``_register_library_generic_enums``. Mirrors
-        ``_register_library_generic_functions``: each consumed library may ship
-        instantiable generic struct/enum templates under
-        ``templates.generic_structs`` / ``templates.generic_enums``. We rebuild a
-        ``GenericStructType`` / ``GenericEnumType`` for each via the canonical
-        collection path (re-parse the source snippet, run a throwaway
-        ``CollectorPass``, pull the generic type out of the resulting table) so
-        the existing instantiation + monomorphization machinery (Pass 1.5/1.6)
-        emits a concrete instance at the consumer's call site.
-
-        Local definitions win: a template is only registered if its name is not
-        already present in the target table.
-
-        Args:
-            manifest_key: ``"generic_structs"`` or ``"generic_enums"``.
-            table: the consumer's ``GenericStructTable`` / ``GenericEnumTable``.
-            collected_attr: attribute of the ``SymbolTables`` result holding the
-                matching table (``"generic_structs"`` or ``"generic_enums"``).
-        """
+        """Register generic struct/enum templates from loaded libraries."""
         if table is None or self.library_linker is None:
             return
 
@@ -897,11 +752,7 @@ class SemanticAnalyzer:
             "generic_enums", self.generic_enums, "generic_enums")
 
     def _register_library_structs(self) -> None:
-        """Register struct definitions from loaded libraries.
-
-        Uses pre-parsed data from LibraryRegistry if available.
-        Local struct definitions take precedence over library definitions.
-        """
+        """Register struct definitions from loaded libraries."""
         if self.structs is None:
             return
 
@@ -938,11 +789,7 @@ class SemanticAnalyzer:
                 self.structs.order.append(struct_name)
 
     def _register_library_enums(self) -> None:
-        """Register enum definitions from loaded libraries.
-
-        Uses pre-parsed data from LibraryRegistry if available.
-        Local enum definitions take precedence over library definitions.
-        """
+        """Register enum definitions from loaded libraries."""
         if self.enums is None:
             return
 
@@ -983,12 +830,7 @@ class SemanticAnalyzer:
                 self.enums.order.append(enum_name)
 
     def _check_main_function_args(self, program: Program) -> None:
-        """
-        Check if the main function has a string[] args parameter.
-
-        Looks for exactly: `fn main(..., string[] args, ...)` where args must be named "args"
-        and have type string[]. Other parameters are ignored.
-        """
+        """Check if the main function has a string[] args parameter."""
         main_func = None
         for func in program.functions:
             if func.name == "main":
@@ -998,11 +840,7 @@ class SemanticAnalyzer:
         self._process_main_function_for_args(main_func)
 
     def _check_main_function_args_multi_file(self, compilation_order: list[Unit]) -> None:
-        """
-        Check if the main function has a string[] args parameter in multi-file mode.
-
-        Searches for main function across all units and checks if it has the args parameter.
-        """
+        """Check if the main function has a string[] args parameter in multi-file mode."""
         main_func = None
         # Search for main function across all units
         for unit in compilation_order:
@@ -1018,12 +856,7 @@ class SemanticAnalyzer:
         self._process_main_function_for_args(main_func)
 
     def _process_main_function_for_args(self, main_func) -> None:
-        """
-        Process a main function to check if it has a string[] args parameter.
-
-        Args:
-            main_func: The main function AST node, or None if not found.
-        """
+        """Process a main function to check if it has a string[] args parameter."""
         from sushi_lang.semantics.typesys import DynamicArrayType
 
         if main_func is None:

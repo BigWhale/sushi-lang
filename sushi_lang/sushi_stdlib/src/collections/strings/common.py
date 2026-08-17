@@ -1,11 +1,4 @@
-"""
-Common Utilities for String Operations
-
-Shared helper functions to reduce code duplication across string method implementations.
-Follows DRY and SOLID principles by extracting repeated patterns into reusable components.
-
-REFACTORED: Type definitions have been moved to stdlib.src.type_definitions
-"""
+"""Common Utilities for String Operations"""
 
 import llvmlite.ir as ir
 
@@ -40,19 +33,7 @@ def allocate_and_copy_bytes(
     byte_count: ir.Value,
     i64: ir.IntType
 ) -> ir.Value:
-    """Allocate memory and copy bytes from source.
-
-    Args:
-        builder: IR builder
-        malloc: malloc function
-        memcpy: memcpy function
-        src_ptr: Source pointer (i8*)
-        byte_count: Number of bytes to copy (i32)
-        i64: i64 type for malloc argument
-
-    Returns:
-        Pointer to allocated and copied data (i8*)
-    """
+    """Allocate memory and copy bytes from source."""
     # Allocate memory
     byte_count_i64 = builder.zext(byte_count, i64, name="byte_count_i64")
     new_data = builder.call(malloc, [byte_count_i64], name="new_data")
@@ -75,24 +56,7 @@ def allocate_substring(
     i32: ir.IntType,
     i64: ir.IntType
 ) -> ir.Value:
-    """Allocate and return a substring as a fat pointer struct.
-
-    This is a common pattern in slice operations: calculate offset, allocate,
-    copy bytes, and build the struct.
-
-    Args:
-        builder: IR builder
-        malloc: malloc function
-        memcpy: memcpy function
-        string_type: String fat pointer type
-        src_data: Source string data pointer (i8*)
-        start_offset: Byte offset to start from (i32)
-        byte_length: Number of bytes to copy (i32)
-        i32, i64: LLVM types
-
-    Returns:
-        String struct value
-    """
+    """Allocate and return a substring as a fat pointer struct."""
     # Calculate source pointer
     src_ptr = builder.gep(src_data, [start_offset], name="src_ptr")
 
@@ -110,23 +74,7 @@ def build_string_struct(
     size: ir.Value,
     owned: int,
 ) -> ir.Value:
-    """Build a string fat pointer struct { i8*, i32, i8 owned }.
-
-    `owned` is REQUIRED (no default) so every construction site declares heap-vs-literal
-    explicitly (issue #145) -- an un-updated caller is a loud TypeError rather than a
-    silent owned=undef that corrupts the RAII free path.
-
-    Args:
-        builder: IR builder
-        string_type: String struct type
-        data_ptr: Data pointer (i8*)
-        size: Size in bytes (i32)
-        owned: 1 if this is a fresh heap allocation the runtime must free, 0 if it is a
-               global-backed literal / borrow that must never be freed.
-
-    Returns:
-        String struct value
-    """
+    """Build a string fat pointer struct { i8*, i32, i8 owned }."""
     owned_flag = ir.Constant(ir.IntType(8), 1 if owned else 0)
     undef_struct = ir.Constant(string_type, ir.Undefined)
     struct_with_data = builder.insert_value(undef_struct, data_ptr, 0, name="struct_with_data")
@@ -141,23 +89,7 @@ def clone_string_to_owned(
     string_val: ir.Value,
     string_type: ir.LiteralStructType,
 ) -> ir.Value:
-    """Copy a string fat pointer's bytes into a fresh heap buffer, returning an owned string.
-
-    Used by string-method "no change" fast-paths that would otherwise return the input
-    fat pointer aliased (`ret func.args[0]`). Aliasing the input is unsound under string
-    RAII (issue #145): if the caller binds the result while the input still lives, both
-    would carry owned=1 over the SAME buffer and double-free. Cloning keeps the invariant
-    "every string method returns a fresh, independently owned string."
-
-    Args:
-        builder: IR builder positioned at the return site.
-        module: LLVM module (to declare malloc/memcpy).
-        string_val: The source string fat pointer to copy.
-        string_type: String struct type.
-
-    Returns:
-        A new string fat pointer {copy, size, owned=1}.
-    """
+    """Copy a string fat pointer's bytes into a fresh heap buffer, returning an owned string."""
     malloc = declare_malloc(module)
     memcpy = declare_memcpy(module)
     i64 = ir.IntType(64)

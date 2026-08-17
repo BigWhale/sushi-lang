@@ -1,9 +1,4 @@
-"""Validation and element-type parsing for the built-in List<T> methods.
-
-The ir-free half of ``backend/generics/list/``: method recognition, Pass-2
-argument validation, and List<T> element-type resolution. LLVM emission stays in
-``backend/generics/list/``.
-"""
+"""Validation and element-type parsing for the built-in List<T> methods."""
 from typing import Any, Optional
 
 from sushi_lang.semantics.ast import MethodCall

@@ -1,9 +1,4 @@
-"""
-String operations and UTF-8 support for LLVM code generation.
-
-This module provides functions for string manipulation, UTF-8 character handling,
-and string-related code emission.
-"""
+"""String operations and UTF-8 support for LLVM code generation."""
 from __future__ import annotations
 
 import typing
@@ -22,11 +17,7 @@ class StringOperations:
     """Manages string operations and UTF-8 support."""
 
     def __init__(self, codegen: LLVMCodegen) -> None:
-        """Initialize with reference to main codegen instance.
-
-        Args:
-            codegen: The main LLVMCodegen instance providing context and module.
-        """
+        """Initialize with reference to main codegen instance."""
         self.codegen = codegen
 
         # UTF-8 support functions (defined in this module) - declared immediately for type safety
@@ -37,16 +28,7 @@ class StringOperations:
         self._declare_and_define_utf8_char_count()
 
     def emit_string_literal(self, string_value: str) -> ir.Value:
-        """Generate a global string constant and return a fat pointer struct.
-
-        Uses the centralized StringConstantManager for deduplication.
-
-        Args:
-            string_value: The string literal value.
-
-        Returns:
-            Fat pointer struct {i8* data, i32 size} for the string literal.
-        """
+        """Generate a global string constant and return a fat pointer struct."""
         # Use StringConstantManager for deduplication (no null terminator for fat pointers)
         global_str = self.codegen.string_manager.get_or_create_raw(string_value)
 
@@ -72,23 +54,7 @@ class StringOperations:
         return struct_complete
 
     def emit_string_comparison(self, op: str, lhs: ir.Value, rhs: ir.Value) -> ir.Value:
-        """Generate string comparison for fat pointer structs.
-
-        Compares strings by first checking if sizes match, then comparing
-        data byte-by-byte using memcmp.
-
-        Args:
-            op: The comparison operator ("==" or "!=").
-            lhs: Left-hand side string fat pointer struct.
-            rhs: Right-hand side string fat pointer struct.
-
-        Returns:
-            An i1 value representing the comparison result.
-
-        Raises:
-            AssertionError: If required runtime functions are not declared.
-            NotImplementedError: If the comparison operator is not supported.
-        """
+        """Generate string comparison for fat pointer structs."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
 
@@ -134,12 +100,7 @@ class StringOperations:
             raise NotImplementedError(f"String comparison '{op}' not implemented")
 
     def emit_string_null_termination(self, string_ptr: ir.Value, offset: ir.Value) -> None:
-        """Add null terminator to string at specified offset.
-
-        Args:
-            string_ptr: Pointer to string buffer.
-            offset: Byte offset where to place null terminator.
-        """
+        """Add null terminator to string at specified offset."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
         # Get pointer to the position where we want to place null terminator
@@ -150,18 +111,7 @@ class StringOperations:
         self.codegen.builder.store(null_char, null_pos_ptr)
 
     def emit_string_concat(self, str1: ir.Value, str2: ir.Value) -> ir.Value:
-        """Generate string concatenation by allocating new memory and copying both strings.
-
-        Args:
-            str1: First string fat pointer struct.
-            str2: Second string fat pointer struct.
-
-        Returns:
-            New fat pointer struct containing concatenated string.
-
-        Raises:
-            AssertionError: If required runtime functions are not declared.
-        """
+        """Generate string concatenation by allocating new memory and copying both strings."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
 
@@ -210,20 +160,7 @@ class StringOperations:
         return struct_complete
 
     def emit_to_cstr(self, string_struct: ir.Value) -> ir.Value:
-        """Convert fat pointer string to null-terminated C string.
-
-        This is used for C interop functions like printf, fopen, etc.
-        Allocates size+1 bytes, copies data, adds null terminator.
-
-        Args:
-            string_struct: Fat pointer struct {i8* data, i32 size}.
-
-        Returns:
-            Null-terminated i8* suitable for C functions.
-
-        Raises:
-            AssertionError: If required runtime functions are not declared.
-        """
+        """Convert fat pointer string to null-terminated C string."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
 
@@ -253,27 +190,7 @@ class StringOperations:
         return c_str
 
     def emit_cstr_to_fat_pointer(self, c_str: ir.Value, owned: int) -> ir.Value:
-        """Convert null-terminated C string to fat pointer struct.
-
-        This is the inverse of emit_to_cstr() - used when C functions
-        return strings that need to be converted to fat pointers.
-
-        `owned` is REQUIRED and wraps `c_str` in place (no copy): pass 1 when `c_str`
-        is a fresh Sushi-owned heap buffer the RAII path must free (e.g. an int/float
-        to-string conversion buffer); pass 0 when it is foreign / borrowed memory Sushi
-        must never free. The FFI copy-to-owned policy (issue #145) is applied at the FFI
-        call site by copying the foreign buffer first, then wrapping the copy with owned=1.
-
-        Args:
-            c_str: Null-terminated i8* from C function.
-            owned: 1 if Sushi owns `c_str` (RAII frees it), 0 if it is foreign/borrowed.
-
-        Returns:
-            Fat pointer struct {i8* data, i32 size, i8 owned}.
-
-        Raises:
-            AssertionError: If required runtime functions are not declared.
-        """
+        """Convert null-terminated C string to fat pointer struct."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
 
@@ -291,20 +208,7 @@ class StringOperations:
         return struct_complete
 
     def emit_cstr_to_owned_fat_pointer(self, c_str: ir.Value) -> ir.Value:
-        """Copy a foreign C `char*` into a fresh Sushi-owned buffer (owned=1).
-
-        The FFI copy-to-owned policy (#145/#147): Sushi never frees foreign memory, so a
-        C-returned `char*` is COPIED (strlen + malloc + i64-length memcpy) into a Sushi heap
-        buffer that RAII frees at scope exit; the foreign pointer is left untouched. This
-        makes an FFI string return a normal owning `string` (no leak). Authors who want
-        zero-copy foreign data use the `ptr` escape hatch instead.
-
-        Args:
-            c_str: Null-terminated i8* returned by a C function.
-
-        Returns:
-            Fat pointer struct {i8* data, i32 size, i8 owned=1} owning a fresh copy.
-        """
+        """Copy a foreign C `char*` into a fresh Sushi-owned buffer (owned=1)."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
         b = self.codegen.builder
@@ -329,49 +233,15 @@ class StringOperations:
         return s
 
     def emit_string_byte_count(self, string_ptr: ir.Value) -> ir.Value:
-        """Generate call to strlen for string BYTE count (not character count).
-
-        IMPORTANT: This returns the number of BYTES in the UTF-8 string, NOT
-        the number of Unicode characters. For Unicode character count, use
-        emit_string_char_count() instead.
-
-        For ASCII-only strings, byte count equals character count.
-        For Unicode strings with multi-byte characters (e.g., emojis, accented
-        letters), byte count will be larger than character count.
-
-        Example:
-            "Hello"   -> 5 bytes, 5 characters
-            "Hello 👋" -> 10 bytes, 7 characters
-
-        Args:
-            string_ptr: Pointer to null-terminated UTF-8 string.
-
-        Returns:
-            Number of bytes in the string (excluding null terminator) as i32.
-
-        See Also:
-            emit_string_char_count() for Unicode-aware character counting.
-        """
+        """Generate call to strlen for string BYTE count (not character count)."""
         return self.codegen.builder.call(self.codegen.runtime.libc_strings.strlen, [string_ptr])
 
     def emit_string_length(self, string_ptr: ir.Value) -> ir.Value:
-        """DEPRECATED: Use emit_string_byte_count() for clarity.
-
-        This method is maintained for backward compatibility but will be
-        removed in a future version. Use emit_string_byte_count() instead
-        to make it clear you want byte count, not character count.
-        """
+        """DEPRECATED: Use emit_string_byte_count() for clarity."""
         return self.emit_string_byte_count(string_ptr)
 
     def emit_string_allocation(self, size: ir.Value) -> ir.Value:
-        """Generate call to malloc for string allocation.
-
-        Args:
-            size: Size in bytes to allocate.
-
-        Returns:
-            Pointer to allocated memory.
-        """
+        """Generate call to malloc for string allocation."""
         # Use the existing malloc infrastructure from the main codegen
         # Convert i32 to i64 for size_t parameter if needed
         if isinstance(size.type, ir.IntType) and size.type.width == 32:
@@ -381,53 +251,13 @@ class StringOperations:
         return emit_malloc(self.codegen, self.codegen.builder, size_i64)
 
     def emit_string_char_count(self, string_ptr: ir.Value) -> ir.Value:
-        """Generate call to utf8_char_count for Unicode-aware CHARACTER counting.
-
-        IMPORTANT: This returns the number of Unicode CHARACTERS (codepoints),
-        NOT the number of bytes. This is the semantically correct count for
-        user-facing string operations.
-
-        For ASCII-only strings, character count equals byte count.
-        For Unicode strings with multi-byte characters (e.g., emojis, accented
-        letters), character count will be smaller than byte count.
-
-        Example:
-            "Hello"   -> 5 characters, 5 bytes
-            "Hello 👋" -> 7 characters, 10 bytes
-
-        This is what users expect when they call .len() on a string.
-
-        Args:
-            string_ptr: Pointer to null-terminated UTF-8 string.
-
-        Returns:
-            Number of UTF-8 characters (codepoints) in the string as i32.
-
-        Raises:
-            AssertionError: If utf8_char_count function is not declared.
-
-        See Also:
-            emit_string_byte_count() for byte-level operations.
-        """
+        """Generate call to utf8_char_count for Unicode-aware CHARACTER counting."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
         return self.codegen.builder.call(self.utf8_char_count, [string_ptr])
 
     def _declare_and_define_utf8_char_count(self) -> None:
-        """Declare and define the utf8_char_count function for Unicode-aware string length.
-
-        This function counts the number of UTF-8 characters (code points) in a string,
-        not the number of bytes. It correctly handles multi-byte UTF-8 sequences.
-
-        UTF-8 encoding rules:
-        - 0xxxxxxx: 1-byte character (ASCII)
-        - 110xxxxx 10xxxxxx: 2-byte character
-        - 1110xxxx 10xxxxxx 10xxxxxx: 3-byte character
-        - 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx: 4-byte character
-        - 10xxxxxx: continuation byte (not counted as a character start)
-
-        Creates the utf8_char_count(int8*) -> i32 function.
-        """
+        """Declare and define the utf8_char_count function for Unicode-aware string length."""
         # Check if function already exists
         existing = self.codegen.module.globals.get("utf8_char_count")
         if isinstance(existing, ir.Function):
@@ -515,23 +345,7 @@ class StringOperations:
 
 # Module-level utility functions for stdlib inline emitters
 def emit_utf8_count(builder: ir.IRBuilder, module: ir.Module, string_ptr: ir.Value) -> ir.Value:
-    """Emit inline UTF-8 character count for stdlib fallback.
-
-    This is a simplified interface for stdlib inline emitters that don't have
-    access to the full codegen context. It calls the utf8_char_count function
-    that should already be declared in the module.
-
-    Args:
-        builder: The IR builder to use for emitting the call.
-        module: The LLVM module containing the utf8_char_count function.
-        string_ptr: Pointer to null-terminated UTF-8 string.
-
-    Returns:
-        Number of UTF-8 characters (codepoints) in the string as i32.
-
-    Raises:
-        KeyError: If utf8_char_count function is not declared in the module.
-    """
+    """Emit inline UTF-8 character count for stdlib fallback."""
     i32 = ir.IntType(INT32_BIT_WIDTH)
     i8_ptr = ir.IntType(INT8_BIT_WIDTH).as_pointer()
 
