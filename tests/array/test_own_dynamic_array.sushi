@@ -1,0 +1,23 @@
+# `Own@(T[])` -- an Own of a BARE dynamic array (#281).
+#
+# `emit_expr` handed a dynamic array back as a POINTER to its descriptor, so `Own.alloc`
+# stored a pointer into a descriptor-shaped slot: `cannot store {i32,i32,i32*}* to
+# {i32,i32,i32*}*`. `emit_expr` yields the descriptor by VALUE now, as it does for every
+# other type, and the RECEIVER path is the one place that takes an address.
+#
+# Both spellings are here. The named one used to get past the store and then die in `.len()`
+# with `'IntType' object has no attribute 'gep'` -- the same inconsistency from the other
+# side, and unfiled until this fix.
+# EXPECT_STDOUT_EXACT: "inline=3 first=1\nnamed=2 first=7\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let Own@(i32[]) inline = Own.alloc(from([1, 2, 3]))
+    println("inline={inline.get().len()} first={inline.get()[0]}")
+    inline.destroy()
+
+    let i32[] w = from([7, 8])
+    let Own@(i32[]) named = Own.alloc(w)
+    println("named={named.get().len()} first={named.get()[0]}")
+    named.destroy()
+    return Result.Ok(0)

@@ -51,12 +51,12 @@ def emit_dynamic_array_from(codegen: 'LLVMCodegen', expr: DynamicArrayFrom) -> i
 
     element_type = _infer_builtin_type_from_llvm(element_llvm_type)
 
-    array_struct = create_dynamic_array_from_elements(codegen, element_type, element_llvm_type, elements)
-
-    array_alloca = codegen.builder.alloca(array_struct.type, name="from_array_temp")
-    codegen.builder.store(array_struct, array_alloca)
-
-    return array_alloca
+    # The DESCRIPTOR, by value -- what `ll_type(DynamicArrayType)` says a `T[]` is, and what
+    # every other type's `emit_expr` yields. Returning a pointer to it made this one
+    # expression disagree with `emit_expr` of a Name, so a value position took a pointer
+    # (#281, #283) and an address position took a value. The RECEIVER path is the one place
+    # that needs an address, and it takes one (`normalize_array_receiver`).
+    return create_dynamic_array_from_elements(codegen, element_type, element_llvm_type, elements)
 
 
 def emit_dynamic_array_len(codegen: 'LLVMCodegen', array_value: ir.Value, to_i1: bool) -> ir.Value:

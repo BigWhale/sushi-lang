@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 from .methods import core, iterators, hashing
+from .addressing import as_array_address
 
 
 def is_builtin_array_method(method_name: str) -> bool:
@@ -100,6 +101,12 @@ def emit_array_method(
     else:
         array_struct_type = receiver_type
 
+    # Every dynamic-array method below reads its receiver through a GEP, so THIS is the one
+    # place that turns a descriptor value into an address. A receiver that already IS an
+    # address keeps it, which is what makes a mutating method reach the owner: a Name gives
+    # its slot and a field read gives a GEP into the struct.
+    receiver_value = as_array_address(codegen, receiver_value, array_struct_type)
+
     # The methods on `&T` are the methods on `T`. The arms below read
     # `semantic_type.base_type`, so a reference receiver raised CE0042 and made `a.clone()`
     # unusable as CE2411's escape (#301). Unwrapped ONCE here, not per arm.
@@ -176,3 +183,4 @@ def emit_array_method(
 
         case _:
             raise NotImplementedError(f"Dynamic array method not implemented: {method_name}")
+

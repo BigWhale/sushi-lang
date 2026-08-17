@@ -1,6 +1,6 @@
 """Resolve a `Type` from its string representation."""
 
-from typing import Any
+from typing import Any, Optional
 import re
 
 from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType
@@ -152,3 +152,21 @@ def resolve_type_from_string(type_str: str, tables: Any) -> Type:
         return tables.enum_table.by_name[type_str]
 
     raise_internal_error("CE0022", type=type_str)
+
+
+def resolve_type_argument(type_str: str, tables: Any) -> Optional[Type]:
+    """One type argument of an interned generic name, or None if it cannot be resolved.
+
+    THE reader for a `List<...>` / `HashMap<..., ...>` type argument. Each container used to
+    carry its own hand-rolled version -- a builtin dict plus two table lookups -- and every
+    one of them lacked an array case, so `List@(i32[])` and `HashMap@(K, V[])` resolved their
+    element to None and `get(0)??` reached the backend unstamped as CE0124 (#283).
+
+    `resolve_type_from_string` raises for a name it cannot place, which is right for a
+    manifest but not here: a caller asking about a type argument treats None as "unknown".
+    """
+    from sushi_lang.internals.diagnostics import InternalCompilerError
+    try:
+        return resolve_type_from_string(type_str, tables)
+    except InternalCompilerError:
+        return None

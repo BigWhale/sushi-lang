@@ -1,0 +1,28 @@
+# `List@(T[])` -- a List whose element is a BARE dynamic array (#283).
+#
+# The inline `push(from([...]))` stored a POINTER into a descriptor-shaped element slot and
+# gave the same CE0000 as #281; a named-variable push already worked, because `emit_expr` of
+# a Name yields the descriptor. One convention now: `emit_expr` yields the value, and
+# `as_array_address` is the one seam that takes an address.
+#
+# `get(0)??` is the other half: Pass 2 did not stamp the unwrapped type when the element is
+# a dynamic array, so the backend reported CE0124.
+# EXPECT_STDOUT_EXACT: "len=2\nrow0=2 row1=3\nfirst=1 last=5\n"
+# EXPECT_NO_LEAKS
+
+fn read_rows() i32:
+    let List@(i32[]) rows = List.new()
+    rows.push(from([1, 2]))
+    let i32[] w = from([3, 4, 5])
+    rows.push(w)
+    println("len={rows.len()}")
+
+    let i32[] a = rows.get(0)??
+    let i32[] b = rows.get(1)??
+    println("row0={a.len()} row1={b.len()}")
+    println("first={a[0]} last={b[2]}")
+    rows.destroy()
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(read_rows().realise(1))

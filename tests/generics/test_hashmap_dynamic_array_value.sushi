@@ -1,0 +1,25 @@
+# `HashMap@(K, V[])` -- a HashMap whose VALUE is a bare dynamic array.
+#
+# The same defect as #283, found while fixing it and unfiled: each container carried its own
+# hand-rolled reader for a type argument of its interned name, and none of the three had an
+# array case. So the value type resolved to None, `get(k)??` reached the backend with no
+# stamp, and the report was CE0124. All three read through `resolve_type_argument` now.
+# EXPECT_STDOUT_EXACT: "a=2 b=3\nfirst=1 last=30\n"
+# EXPECT_NO_LEAKS
+use <collections/hashmap>
+
+fn read_rows() i32:
+    let HashMap@(string, i32[]) m = HashMap.new()
+    m.insert("a", from([1, 2]))
+    let i32[] w = from([10, 20, 30])
+    m.insert("b", w)
+
+    let i32[] a = m.get("a")??
+    let i32[] b = m.get("b")??
+    println("a={a.len()} b={b.len()}")
+    println("first={a[0]} last={b[2]}")
+    m.free()
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(read_rows().realise(1))

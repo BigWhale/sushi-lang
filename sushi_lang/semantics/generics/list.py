@@ -2,7 +2,7 @@
 from typing import Any, Optional
 
 from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
+from sushi_lang.semantics.typesys import StructType, Type
 import sushi_lang.internals.errors as er
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.type_display import display_type
@@ -101,31 +101,8 @@ def _validate_list_element_type(
 
 def parse_list_types(list_type: StructType, validator: Any) -> Optional[Type]:
     """Resolve the element type T from a List<T> struct type, or None."""
+    from sushi_lang.semantics.generics.type_strings import resolve_type_argument
     if not list_type.name.startswith("List<"):
         return None
 
-    type_param_str = list_type.name[5:-1]  # strip "List<" and ">"
-
-    if type_param_str.startswith("fn(") or type_param_str.startswith("fn ("):
-        from sushi_lang.semantics.generics.type_strings import resolve_type_from_string
-        try:
-            return resolve_type_from_string(type_param_str, validator)
-        except Exception:
-            return None
-
-    builtin_map = {
-        'i8': BuiltinType.I8, 'i16': BuiltinType.I16, 'i32': BuiltinType.I32, 'i64': BuiltinType.I64,
-        'u8': BuiltinType.U8, 'u16': BuiltinType.U16, 'u32': BuiltinType.U32, 'u64': BuiltinType.U64,
-        'f32': BuiltinType.F32, 'f64': BuiltinType.F64,
-        'bool': BuiltinType.BOOL, 'string': BuiltinType.STRING,
-    }
-    if type_param_str in builtin_map:
-        return builtin_map[type_param_str]
-
-    if hasattr(validator, 'enum_table') and type_param_str in validator.enum_table.by_name:
-        return validator.enum_table.by_name[type_param_str]
-
-    if hasattr(validator, 'struct_table') and type_param_str in validator.struct_table.by_name:
-        return validator.struct_table.by_name[type_param_str]
-
-    return None
+    return resolve_type_argument(list_type.name[5:-1], validator)  # strip "List<" and ">"
