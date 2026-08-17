@@ -164,6 +164,14 @@ table. It is modelled on the closed `ConsumingUse` enum: `CalleeKind` is a close
 a member with no row fails a unit test statically. Pass 3 and the backend call the same
 resolver, which is what stops the two halves drifting the way they did before this ruling.
 
+One applier applies it. Every call shape reaches `apply_mode` in
+`semantics/passes/borrow/calls.py` — a direct call, an indirect call through a fn-typed
+local, and an indirect call through a fn-typed struct field. That last one had a thinner arm
+of its own, which never registered the implicit borrow of an unmarked argument, so
+`h.handler(arr, poke arr)` compiled clean and read the buffer the `poke` had reallocated
+(#365). Reading the mode from one place and applying it in several is the same hazard as
+deriving it in several.
+
 ## 7. Rules that follow
 
 - **A function type carries the mode, and stays invariant.** `fn(nom string) -> i32` and

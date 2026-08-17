@@ -1,0 +1,19 @@
+# The `nom` marker is written at both ends of a fn-typed FIELD call too (#365).
+#
+# Routing the field arm through `apply_mode` brought the CE2427 check with it. Before that
+# the arm consumed the argument without asking for the marker, so the hand-over was
+# invisible at the one place the reader looks.
+# EXPECT_ERROR_CODE: CE2427
+
+struct Holder:
+    fn(nom string) -> i32 eat
+
+fn consume_it(nom string owned) i32:
+    println("owned: {owned}")
+    return Result.Ok(1)
+
+fn main() i32:
+    let string s = "hello-{1}"
+    let Holder h = Holder(consume_it)
+    println(h.eat(s).realise(-1))
+    return Result.Ok(0)

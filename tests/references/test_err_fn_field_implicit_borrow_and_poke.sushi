@@ -1,0 +1,20 @@
+# An indirect call through a fn-typed struct FIELD registers the implicit borrow of an
+# unmarked argument, exactly as the same call through a fn-typed local does (#365).
+#
+# The field spelling arrives as a DotCall and used to take a thinner path that never
+# counted the unmarked argument as the shared borrow it is, so its conflict with the
+# `poke` went unseen and the program compiled clean.
+# EXPECT_ERROR_CODE: CE2407
+
+struct Holder:
+    fn(i32[], poke i32[]) -> i32 handler
+
+fn grow_and_read(i32[] a, poke i32[] b) i32:
+    b.push(999)
+    return Result.Ok(a[0] + a[1])
+
+fn main() i32:
+    let i32[] arr = from([11, 22])
+    let Holder h = Holder(grow_and_read)
+    println(h.handler(arr, poke arr).realise(-1))
+    return Result.Ok(0)

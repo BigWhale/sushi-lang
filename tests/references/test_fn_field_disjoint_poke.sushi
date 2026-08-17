@@ -1,0 +1,26 @@
+# The disjoint control for #365: the same callee, the same reallocating pushes, two
+# DIFFERENT arrays. This must keep compiling and keep reading the right values.
+#
+# It is here because a test that only pins CE2407 on both call spellings would still pass
+# if the rule came back somewhere that does not cover the aliasing read. The four pushes
+# grow a 2-element buffer past its capacity, so the read after them is a read of the
+# reallocated storage -- the exact operation the aliased version got wrong (it printed 2).
+# EXPECT_STDOUT_CONTAINS: 33
+# EXPECT_NO_LEAKS
+
+struct Holder:
+    fn(i32[], poke i32[]) -> i32 handler
+
+fn grow_and_read(i32[] a, poke i32[] b) i32:
+    b.push(999)
+    b.push(998)
+    b.push(997)
+    b.push(996)
+    return Result.Ok(a[0] + a[1])
+
+fn main() i32:
+    let i32[] arr = from([11, 22])
+    let i32[] other = from([5, 6])
+    let Holder h = Holder(grow_and_read)
+    println(h.handler(arr, poke other).realise(-1))
+    return Result.Ok(0)
