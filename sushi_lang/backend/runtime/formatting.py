@@ -21,7 +21,6 @@ class FormattingOperations:
         """Initialize with reference to main codegen instance."""
         self.codegen = codegen
 
-        # Global format string constants (cached)
         self.fmt_i32: ir.GlobalVariable | None = None
         self.fmt_i64: ir.GlobalVariable | None = None
         self.fmt_u32: ir.GlobalVariable | None = None
@@ -34,7 +33,6 @@ class FormattingOperations:
 
     def declare_format_strings(self) -> None:
         """Declare global format string constants for printf operations."""
-        # Pre-create format strings (without GEP, just the globals)
         for name in ["i32", "str", "f32", "f64"]:
             attr_name = f"fmt_{name}"
             if getattr(self, attr_name, None) is None:
@@ -63,7 +61,6 @@ class FormattingOperations:
             self.codegen.builder.call(self.codegen.runtime.libc_stdio.printf, [fmt_ptr, size, data_ptr])
         elif isinstance(v.type, ir.FloatType):
             fmt_ptr = self.codegen.utils.cstr_ptr(self.fmt_f32)
-            # Convert f32 to f64 for printf (C variadic function requirement)
             f64_val = self.codegen.builder.fpext(v, self.codegen.types.f64)
             self.codegen.builder.call(self.codegen.runtime.libc_stdio.printf, [fmt_ptr, f64_val])
         elif isinstance(v.type, ir.DoubleType):
@@ -72,7 +69,6 @@ class FormattingOperations:
         else:
             self._emit_print_integer(v, semantic_type)
 
-        # Print newline if this is println
         if is_line:
             # Emit the newline via a dedicated format-string global -- no heap copy (#141).
             newline_fmt = self._get_format_string("newline", "\n")
@@ -115,7 +111,6 @@ class FormattingOperations:
             raise_internal_error("CE0009")
         if self.codegen.runtime.libc_strings.sprintf is None:
             raise_internal_error("CE0013", name="sprintf")
-        # Choose appropriate format string based on type
         if bit_width <= 32:
             if is_signed:
                 fmt_str = self._get_format_string("i32", FORMAT_STRINGS["i32"])
@@ -127,16 +122,12 @@ class FormattingOperations:
             else:
                 fmt_str = self._get_format_string("u64", FORMAT_STRINGS["u64"])
 
-        # Allocate buffer for the string (32 bytes should be enough for any integer)
         buffer = self._allocate_conversion_buffer(32)
 
-        # Convert value to appropriate type for sprintf
         converted_value = self._prepare_integer_for_sprintf(int_value, is_signed, bit_width)
 
-        # Call sprintf
         self.codegen.builder.call(self.codegen.runtime.libc_strings.sprintf, [buffer, fmt_str, converted_value])
 
-        # Convert C string to fat pointer struct
         return self.codegen.runtime.strings.emit_cstr_to_fat_pointer(buffer, owned=1)
 
     def emit_float_to_string(self, float_value: ir.Value, is_double: bool) -> ir.Value:
@@ -145,21 +136,16 @@ class FormattingOperations:
             raise_internal_error("CE0009")
         if self.codegen.runtime.libc_strings.sprintf is None:
             raise_internal_error("CE0013", name="sprintf")
-        # Choose appropriate format string
         if is_double:
             fmt_str = self._get_format_string("f64", "%.6f")
         else:
             fmt_str = self._get_format_string("f32", "%.6f")
-            # Extend f32 to f64 for sprintf
             float_value = self.codegen.builder.fpext(float_value, self.codegen.types.f64)
 
-        # Allocate buffer for the string (64 bytes should be enough for any float)
         buffer = self._allocate_conversion_buffer(64)
 
-        # Call sprintf
         self.codegen.builder.call(self.codegen.runtime.libc_strings.sprintf, [buffer, fmt_str, float_value])
 
-        # Convert C string to fat pointer struct
         return self.codegen.runtime.strings.emit_cstr_to_fat_pointer(buffer, owned=1)
 
     def emit_bool_to_string(self, bool_value: ir.Value) -> ir.Value:
@@ -167,16 +153,12 @@ class FormattingOperations:
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
 
-        # Emit fat pointer structs for true/false
         true_str = self.codegen.runtime.strings.emit_string_literal(FORMAT_STRINGS["bool_true"])
         false_str = self.codegen.runtime.strings.emit_string_literal(FORMAT_STRINGS["bool_false"])
 
-        # Convert to i1 if needed
         if bool_value.type != self.codegen.i1:
             bool_value = self.codegen.utils.as_i1(bool_value)
 
-        # Use select to choose between true/false fat pointer structs
-        # In modern LLVM, select works on aggregate types like structs
         return self.codegen.builder.select(bool_value, true_str, false_str)
 
     def emit_character_case_conversion(self, char_value: ir.Value, to_upper: bool) -> ir.Value:
@@ -228,12 +210,10 @@ class FormattingOperations:
         existing = getattr(self, attr_name, None)
 
         if existing is None:
-            # Use the centralized format string creation method
             global_str = self._create_format_string(name, format_str)
             setattr(self, attr_name, global_str)
             existing = global_str
 
-        # Return GEP to get char* pointer
         zero = ir.Constant(self.codegen.i32, 0)
         return self.codegen.builder.gep(existing, [zero, zero])
 
@@ -251,11 +231,9 @@ class FormattingOperations:
     ) -> ir.Value:
         """Prepare integer value for sprintf by converting to appropriate type."""
         if bit_width < 32:
-            # Extend smaller integers to 32-bit for sprintf
             if is_signed:
                 return self.codegen.builder.sext(int_value, self.codegen.i32)
             else:
                 return self.codegen.builder.zext(int_value, self.codegen.i32)
         else:
-            # 32-bit or 64-bit, use as-is
             return int_value

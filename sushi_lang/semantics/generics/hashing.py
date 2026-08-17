@@ -1,4 +1,3 @@
-# semantics/generics/hashing.py
 """Hashability analysis and hash() method registration."""
 from __future__ import annotations
 
@@ -27,19 +26,13 @@ from sushi_lang.sushi_stdlib.src.common import (
 from sushi_lang.semantics.generics.type_display import display_type
 
 
-# --------------------------------------------------------------------------
-# Hashability predicates (mutually recursive)
-# --------------------------------------------------------------------------
-
 def can_struct_be_hashed(struct_type: StructType, visited: Optional[set] = None, path: Optional[list] = None) -> tuple[bool, str]:
     """Check if a struct type can have an auto-derived hash method."""
-    # Initialize tracking for recursive calls
     if visited is None:
         visited = set()
     if path is None:
         path = []
 
-    # Detect cycles (shouldn't happen with Sushi's type system, but be defensive)
     if struct_type.name in visited:
         return False, f"recursive struct type: {' -> '.join(path + [struct_type.name])}"
 
@@ -50,29 +43,23 @@ def can_struct_be_hashed(struct_type: StructType, visited: Optional[set] = None,
     if isinstance(struct_type, GenericStructType):
         return False, f"generic struct {struct_type.name} (should be monomorphized first)"
 
-    # Check each field (fields is a tuple of (name, type) tuples)
     for field_name, field_type in struct_type.fields:
-        # Skip structs with unresolved types (will be registered later)
         if isinstance(field_type, UnknownType):
             return False, f"field '{field_name}' has unresolved type '{field_type.name}'"
 
-        # Foreign pointers are opaque handles with no stable identity to hash
         if isinstance(field_type, ForeignPtrType):
             return False, f"field '{field_name}' is a foreign ptr (unhashable)"
 
-        # Arrays must have hashable element types (recursive check)
         if isinstance(field_type, (ArrayType, DynamicArrayType)):
             can_hash, reason = can_array_be_hashed(field_type, visited.copy(), path.copy())
             if not can_hash:
                 return False, f"field '{field_name}' -> {reason}"
 
-        # Enums must also be hashable (recursive check)
         if isinstance(field_type, EnumType):
             can_hash, reason = can_enum_be_hashed(field_type, visited.copy(), path.copy())
             if not can_hash:
                 return False, f"field '{field_name}' -> {reason}"
 
-        # Nested structs must also be hashable (recursive check)
         if isinstance(field_type, StructType):
             can_hash, reason = can_struct_be_hashed(field_type, visited.copy(), path.copy())
             if not can_hash:
@@ -83,13 +70,11 @@ def can_struct_be_hashed(struct_type: StructType, visited: Optional[set] = None,
 
 def can_enum_be_hashed(enum_type: EnumType, visited: Optional[set] = None, path: Optional[list] = None) -> tuple[bool, str]:
     """Check if an enum type can have an auto-derived hash method."""
-    # Initialize tracking for recursive calls
     if visited is None:
         visited = set()
     if path is None:
         path = []
 
-    # Detect cycles (shouldn't happen with Sushi's type system, but be defensive)
     if enum_type.name in visited:
         return False, f"recursive enum type: {' -> '.join(path + [enum_type.name])}"
 
@@ -100,30 +85,24 @@ def can_enum_be_hashed(enum_type: EnumType, visited: Optional[set] = None, path:
     if isinstance(enum_type, GenericEnumType):
         return False, f"generic enum {enum_type.name} (should be monomorphized first)"
 
-    # Check each variant's associated types
     for variant in enum_type.variants:
         for _assoc_idx, assoc_type in enumerate(variant.associated_types):
-            # Skip enums with unresolved types (will be registered later)
             if isinstance(assoc_type, UnknownType):
                 return False, f"variant {variant.name} has unresolved type '{assoc_type.name}'"
 
-            # Foreign pointers are opaque handles with no stable identity to hash
             if isinstance(assoc_type, ForeignPtrType):
                 return False, f"variant {variant.name} carries a foreign ptr (unhashable)"
 
-            # Arrays must have hashable element types (recursive check)
             if isinstance(assoc_type, (ArrayType, DynamicArrayType)):
                 can_hash, reason = can_array_be_hashed(assoc_type, visited.copy(), path.copy())
                 if not can_hash:
                     return False, f"variant {variant.name} -> {reason}"
 
-            # Nested enums must also be hashable (recursive check)
             if isinstance(assoc_type, EnumType):
                 can_hash, reason = can_enum_be_hashed(assoc_type, visited.copy(), path.copy())
                 if not can_hash:
                     return False, f"variant {variant.name} -> {reason}"
 
-            # Nested structs must also be hashable (recursive check)
             if isinstance(assoc_type, StructType):
                 can_hash, reason = can_struct_be_hashed(assoc_type, visited.copy(), path.copy())
                 if not can_hash:
@@ -139,29 +118,23 @@ def can_array_be_hashed(array_type: Type, visited: Optional[set] = None, path: O
 
     element_type = array_type.base_type
 
-    # Initialize tracking for recursive calls
     if visited is None:
         visited = set()
     if path is None:
         path = []
 
-    # Check for nested arrays
     if isinstance(element_type, (ArrayType, DynamicArrayType)):
         return False, "nested array type (arrays of arrays not supported)"
 
-    # Check if element type is hashable
-    # Primitives are always hashable
     if isinstance(element_type, BuiltinType):
         return True, "element type is primitive"
 
-    # Structs need to be checked recursively
     if isinstance(element_type, StructType):
         can_hash, reason = can_struct_be_hashed(element_type, visited.copy(), path.copy())
         if not can_hash:
             return False, f"element struct type cannot be hashed: {reason}"
         return True, "element struct type is hashable"
 
-    # Enums need to be checked recursively
     if isinstance(element_type, EnumType):
         can_hash, reason = can_enum_be_hashed(element_type, visited.copy(), path.copy())
         if not can_hash:
@@ -170,10 +143,6 @@ def can_array_be_hashed(array_type: Type, visited: Optional[set] = None, path: O
 
     return False, f"element type {element_type} is not hashable"
 
-
-# --------------------------------------------------------------------------
-# hash() call validation (Pass 2, via the builtin-method registry)
-# --------------------------------------------------------------------------
 
 def _validate_struct_hash(call: MethodCall, target_type: Type, reporter: Any) -> None:
     """Validate hash() method call on struct types."""
@@ -201,10 +170,6 @@ def _validate_array_hash(call: MethodCall, target_type: Type, reporter: Any) -> 
             er.emit(reporter, er.ERR.CE2051, call.loc,
                     message="cannot hash array of arrays (nested arrays not supported)")
 
-
-# --------------------------------------------------------------------------
-# Registration
-# --------------------------------------------------------------------------
 
 def _lazy_hash_emitter(kind: str, target_type: Type):
     """Build a hash() emitter that resolves its backend factory on first emission."""

@@ -12,7 +12,6 @@ from sushi_lang.sushi_stdlib.src.common import register_builtin_method, BuiltinM
 from sushi_lang.semantics.generics.type_display import display_type
 
 
-# Validation function for to_bits() method
 def _validate_to_bits(call: MethodCall, target_type: Type, reporter: Any) -> None:
     """Validate to_bits() method call on float primitive types (takes no arguments)."""
     if call.args:
@@ -35,7 +34,6 @@ def _emit_to_bits(prim_type: BuiltinType) -> Any:
     return emitter
 
 
-# Register to_bits() for f32 (-> u32) and f64 (-> u64)
 _TO_BITS_RETURN = {
     BuiltinType.F32: BuiltinType.U32,
     BuiltinType.F64: BuiltinType.U64,

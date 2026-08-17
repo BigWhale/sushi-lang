@@ -1,4 +1,3 @@
-# semantics/generics/instantiate/functions.py
 """Function-level instantiation collection."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Set, Tuple
@@ -60,7 +59,6 @@ class FunctionCollector:
 
     def collect_from_function(self, func) -> None:
         """Collect generic instantiations from function signature and body."""
-        # Skip generic functions entirely - they will be scanned during monomorphization
         if hasattr(func, 'type_params') and func.type_params:
             return
 
@@ -71,20 +69,15 @@ class FunctionCollector:
         # record Result<T, E> instantiation for the function's return type
         if func.ret is not None:
             self._collect_from_type(func.ret)
-            # If func.ret is not already a Result type, add implicit Result<T, StdError> instantiation
             from sushi_lang.semantics.typesys import GenericTypeRef as GTypeRef, UnknownType
             if not (isinstance(func.ret, GTypeRef) and func.ret.base_name == "Result"):
-                # Add implicit Result<T, StdError> instantiation for functions without explicit Result
-                # StdError is a predefined EnumType, reference it by name using UnknownType
                 std_error_ref = UnknownType("StdError")
                 result_instantiation = GenericTypeRef(base_name="Result", type_args=(func.ret, std_error_ref))
                 self._collect_from_type(result_instantiation)
 
-        # Collect from parameters
         for param in func.params:
             self._collect_from_param(param)
 
-        # Collect from function body (variable declarations)
         self._collect_from_block(func.body)
 
     def collect_from_extension(self, ext) -> None:
@@ -92,38 +85,29 @@ class FunctionCollector:
         self._reset_scope()
         self._bind_self(ext.target_type)
 
-        # Collect from target type
         if ext.target_type is not None:
             self._collect_from_type(ext.target_type)
 
-        # Collect from return type
-        # Extension methods return bare types (not Result<T>)
         if ext.ret is not None:
             self._collect_from_type(ext.ret)
 
-        # Collect from parameters
         for param in ext.params:
             self._collect_from_param(param)
 
-        # Collect from method body (variable declarations)
         self._collect_from_block(ext.body)
 
     def collect_from_perk_impl(self, perk_impl) -> None:
         """Collect generic instantiations from perk implementation methods."""
-        # Process each method in the perk implementation
         for method in perk_impl.methods:
             self._reset_scope()
             self._bind_self(perk_impl.target_type)
 
-            # Collect from return type (but don't wrap in Result)
             if method.ret is not None:
                 self._collect_from_type(method.ret)
 
-            # Collect from parameters
             for param in method.params:
                 self._collect_from_param(param)
 
-            # Collect from method body (variable declarations)
             self._collect_from_block(method.body)
 
     def collect_from_const(self, const) -> None:
@@ -147,7 +131,6 @@ class FunctionCollector:
         """Collect generic instantiations from parameter type."""
         if param.ty is not None:
             self._collect_from_type(param.ty)
-            # Track parameter type for method call inference
             if param.name is not None:
                 self.variable_types[param.name] = self._resolve_local_type(param.ty)
 
@@ -158,11 +141,9 @@ class FunctionCollector:
 
     def _collect_from_statement(self, stmt) -> None:
         """Collect generic instantiations from a statement."""
-        # Import here to avoid circular dependency
         from sushi_lang.semantics.ast import Let, Foreach, If, While, Match, Return, ExprStmt, Print, PrintLn, Rebind, Break, Continue
 
         if isinstance(stmt, Let):
-            # Variable declaration with type annotation
             if stmt.ty is not None:
                 self._collect_from_type(stmt.ty)
                 # Track variable type for later reference. Resolve a bare struct/enum
@@ -171,46 +152,34 @@ class FunctionCollector:
                 # call argument (#191: identity(p.x), identity(p.method())).
                 if stmt.name is not None:
                     self.variable_types[stmt.name] = self._resolve_local_type(stmt.ty)
-            # NEW: Scan initialization expression
             if stmt.value is not None:
                 self.expression_scanner.scan_expression(stmt.value)
-                # Bare generic-fn reference `let fn(..) g = generic_fn` (T2.3): the
-                # declared function type drives the instantiation the backend needs.
                 from sushi_lang.semantics.ast import Name
                 if isinstance(stmt.value, Name) and stmt.ty is not None:
                     self.expression_scanner.scan_generic_fn_reference(stmt.value.id, stmt.ty)
 
         elif isinstance(stmt, Foreach):
-            # Foreach loop with type annotation
             if stmt.item_type is not None:
                 self._collect_from_type(stmt.item_type)
-            # NEW: Scan iterable expression
             if stmt.iterable is not None:
                 self.expression_scanner.scan_expression(stmt.iterable)
-            # Also check body
             self._collect_from_block(stmt.body)
 
         elif isinstance(stmt, If):
-            # If statement - check all arms and else block
             for cond, block in stmt.arms:
-                # NEW: Scan condition expression
                 self.expression_scanner.scan_expression(cond)
                 self._collect_from_block(block)
             if stmt.else_block is not None:
                 self._collect_from_block(stmt.else_block)
 
         elif isinstance(stmt, While):
-            # NEW: Scan condition expression
             if stmt.cond is not None:
                 self.expression_scanner.scan_expression(stmt.cond)
-            # While statement - check body
             self._collect_from_block(stmt.body)
 
         elif isinstance(stmt, Match):
-            # NEW: Scan scrutinee expression
             if stmt.scrutinee is not None:
                 self.expression_scanner.scan_expression(stmt.scrutinee)
-            # Match statement - check all arm bodies
             for arm in stmt.arms:
                 from sushi_lang.semantics.ast import Block
                 if isinstance(arm.body, Block):
@@ -219,59 +188,44 @@ class FunctionCollector:
                 # because expressions don't introduce new type annotations
 
         elif isinstance(stmt, Return):
-            # NEW: Scan return value expression
             if stmt.value is not None:
                 self.expression_scanner.scan_expression(stmt.value)
 
         elif isinstance(stmt, (ExprStmt, Print, PrintLn)):
-            # NEW: Scan expression/value
             expr = stmt.expr if hasattr(stmt, 'expr') else stmt.value
             if expr is not None:
                 self.expression_scanner.scan_expression(expr)
 
         elif isinstance(stmt, Rebind):
-            # NEW: Scan rebind value
             if stmt.value is not None:
                 self.expression_scanner.scan_expression(stmt.value)
 
         elif isinstance(stmt, (Break, Continue)):
-            # These statements don't have expressions
             pass
 
     def _collect_from_type(self, ty: "Type") -> None:
         """Collect generic instantiations from a type annotation."""
-        # Use TypeResolver from expression_scanner for centralized resolution
         resolver = self.expression_scanner._resolver
 
         if isinstance(ty, GenericTypeRef):
-            # Found a generic type instantiation!
-            # Use centralized resolver
             resolved_type_args = resolver.resolve_type_args(ty.type_args)
 
-            # Skip if any type argument is still UnknownType (can't be resolved)
             if resolver.contains_unresolvable_in_tuple(resolved_type_args):
                 return
 
-            # Record it as (base_name, type_args) tuple with resolved types
             self.instantiations.add((ty.base_name, resolved_type_args))
 
-            # Recursively collect from type arguments
-            # Example: Result<Result<i32>> has nested generics
             for arg in resolved_type_args:
                 self._collect_from_type(arg)
 
-        # For array types, check element type
         from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
         if isinstance(ty, ArrayType):
             self._collect_from_type(ty.base_type)
         elif isinstance(ty, DynamicArrayType):
             self._collect_from_type(ty.base_type)
 
-        # For struct types, check field types
         from sushi_lang.semantics.typesys import StructType
         if isinstance(ty, StructType):
-            # Check for cycles to prevent infinite recursion on recursive structs
-            # (e.g., struct Node with Own<Node> field)
             type_key = f"struct:{ty.name}"
             if type_key in self.visited_types:
                 return  # Already processed this struct
@@ -281,10 +235,8 @@ class FunctionCollector:
             for _field_name, field_type in ty.fields:
                 self._collect_from_type(field_type)
 
-        # For enum types, check variant associated types
         from sushi_lang.semantics.typesys import EnumType
         if isinstance(ty, EnumType):
-            # Check for cycles to prevent infinite recursion on recursive enums
             type_key = f"enum:{ty.name}"
             if type_key in self.visited_types:
                 return  # Already processed this enum

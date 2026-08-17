@@ -7,10 +7,6 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
-# ============================================================================
-# Struct Field Access
-# ============================================================================
-
 def gep_struct_field(
     codegen: 'LLVMCodegen',
     struct_ptr: 'ir.Value',
@@ -23,10 +19,6 @@ def gep_struct_field(
     field_idx_const = ir.Constant(codegen.types.i32, field_index)
     return codegen.builder.gep(struct_ptr, [zero, field_idx_const], name=name)
 
-
-# ============================================================================
-# Array Element Access
-# ============================================================================
 
 def gep_array_element(
     codegen: 'LLVMCodegen',
@@ -49,10 +41,6 @@ def gep_fixed_array_element(
     zero = ir.Constant(codegen.types.i32, 0)
     return codegen.builder.gep(array_ptr, [zero, index], name=name)
 
-
-# ============================================================================
-# Dynamic Array Field Access
-# ============================================================================
 
 def gep_dynamic_array_len(
     codegen: 'LLVMCodegen',
@@ -80,10 +68,6 @@ def gep_dynamic_array_data(
     """Get pointer to the 'data' field of a dynamic array struct."""
     return gep_struct_field(codegen, array_struct_ptr, 2, name)
 
-
-# ============================================================================
-# Byte Offset Access (for enums, raw memory)
-# ============================================================================
 
 def gep_byte_offset(
     codegen: 'LLVMCodegen',

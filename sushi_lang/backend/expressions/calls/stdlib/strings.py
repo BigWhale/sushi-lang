@@ -25,48 +25,39 @@ def emit_stdlib_string_call(
     i8_ptr = ir.IntType(INT8_BIT_WIDTH).as_pointer()
     string_type = codegen.types.string_struct  # {i8* data, i32 size}
 
-    # Build function name: string_{method}
     func_name = f"string_{method}"
 
-    # Determine return type and parameter types based on method
     if method in ("len", "size"):
-        # len() -> i32, size() -> i32
         return_type = i32
         param_types = [string_type]
         call_args = [receiver_value]
     elif method == "concat":
-        # concat(string other) -> string
         return_type = string_type
         param_types = [string_type, string_type]
         other_value = codegen.expressions.emit_expr(args[0])
         call_args = [receiver_value, other_value]
     elif method in ("contains", "starts_with", "ends_with"):
-        # These methods: (string) -> bool (i8)
         return_type = i8
         param_types = [string_type, string_type]
         arg_value = codegen.expressions.emit_expr(args[0])
         call_args = [receiver_value, arg_value]
     elif method == "count":
-        # count(string needle) -> i32
         return_type = i32
         param_types = [string_type, string_type]
         arg_value = codegen.expressions.emit_expr(args[0])
         call_args = [receiver_value, arg_value]
     elif method in ("sleft", "sright", "char_at", "repeat"):
-        # These methods: (i32) -> string
         return_type = string_type
         param_types = [string_type, i32]
         arg_value = codegen.expressions.emit_expr(args[0])
         call_args = [receiver_value, arg_value]
     elif method in ("s", "ss"):
-        # These methods: (i32, i32) -> string
         return_type = string_type
         param_types = [string_type, i32, i32]
         arg1_value = codegen.expressions.emit_expr(args[0])
         arg2_value = codegen.expressions.emit_expr(args[1])
         call_args = [receiver_value, arg1_value, arg2_value]
     elif method in ("upper", "lower", "cap", "trim", "tleft", "tright", "reverse"):
-        # No-arg methods that return string
         return_type = string_type
         param_types = [string_type]
         call_args = [receiver_value]
@@ -98,41 +89,35 @@ def emit_stdlib_string_call(
         param_types = [string_type, array_struct_type]
         arg_expr = args[0]
         array_ptr_value = codegen.expressions.emit_expr(arg_expr)
-        # Check if we already have the value or need to load
         if isinstance(array_ptr_value.type, ir.PointerType):
             array_value = codegen.builder.load(array_ptr_value, name="array_value")
         else:
             array_value = array_ptr_value
         call_args = [receiver_value, array_value]
     elif method == "replace":
-        # replace(string old, string new) -> string
         return_type = string_type
         param_types = [string_type, string_type, string_type]
         old_value = codegen.expressions.emit_expr(args[0])
         new_value = codegen.expressions.emit_expr(args[1])
         call_args = [receiver_value, old_value, new_value]
     elif method == "pad_left":
-        # pad_left(i32 width, string pad_char) -> string
         return_type = string_type
         param_types = [string_type, i32, string_type]
         width_value = codegen.expressions.emit_expr(args[0])
         pad_char_value = codegen.expressions.emit_expr(args[1])
         call_args = [receiver_value, width_value, pad_char_value]
     elif method == "pad_right":
-        # pad_right(i32 width, string pad_char) -> string
         return_type = string_type
         param_types = [string_type, i32, string_type]
         width_value = codegen.expressions.emit_expr(args[0])
         pad_char_value = codegen.expressions.emit_expr(args[1])
         call_args = [receiver_value, width_value, pad_char_value]
     elif method == "strip_prefix":
-        # strip_prefix(string prefix) -> string
         return_type = string_type
         param_types = [string_type, string_type]
         prefix_value = codegen.expressions.emit_expr(args[0])
         call_args = [receiver_value, prefix_value]
     elif method == "strip_suffix":
-        # strip_suffix(string suffix) -> string
         return_type = string_type
         param_types = [string_type, string_type]
         suffix_value = codegen.expressions.emit_expr(args[0])
@@ -179,7 +164,6 @@ def emit_stdlib_string_call(
     else:
         raise_internal_error("CE0077", method=method)
 
-    # Declare the external function
     from sushi_lang.backend.functions import declare_stdlib_function
     stdlib_func = declare_stdlib_function(
         codegen.module,
@@ -188,24 +172,17 @@ def emit_stdlib_string_call(
         param_types
     )
 
-    # Emit the call
     result = codegen.builder.call(
         stdlib_func,
         call_args,
         name=f"{method}_result"
     )
 
-    # Special handling for methods that return array structs by value
-    # The compiler expects pointers to array structs, so we need to allocate on stack
     if method in ("to_bytes", "split"):
-        # Allocate struct on stack
         array_ptr = codegen.builder.alloca(return_type, name=f"{method}_array")
-        # Store the result struct
         codegen.builder.store(result, array_ptr)
-        # Return pointer to the stack-allocated struct
         return array_ptr
 
-    # Convert to i1 if needed (for boolean methods used in conditions)
     if to_i1 and return_type == i8:
         result = codegen.utils.as_i1(result)
 

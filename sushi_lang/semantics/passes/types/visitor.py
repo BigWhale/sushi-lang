@@ -11,9 +11,7 @@ from sushi_lang.semantics.visitors import NodeVisitor, RecursiveVisitor
 from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType, StructType, ForeignPtrType
 from sushi_lang.semantics.type_predicates import is_string_convertible
 from sushi_lang.semantics.ast import (
-    # Statements
     Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, Break, Continue,
-    # Expressions
     Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
     UnaryOp, BinaryOp, Call, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom, CastExpr, EnumConstructor, TryExpr, RangeExpr, Borrow, Spread, Lambda,
     BlankLit, MemberAccess
@@ -64,7 +62,6 @@ def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
         if pty is not None:
             type_validator.variable_types[p.name] = pty
 
-    # Fill captured names' types from the ENCLOSING scope (pre-param bindings).
     if stamp:
         for cap in (lam.captures or []):
             if cap.ty is None:
@@ -83,7 +80,6 @@ def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
     if err_type is None:
         err_type = expected.err_type if isinstance(expected, FunctionType) else UnknownType("StdError")
 
-    # Restore the enclosing variable table (params are lambda-local).
     type_validator.variable_types.clear()
     type_validator.variable_types.update(saved)
 
@@ -109,8 +105,6 @@ def resolve_fn_field_call(type_validator, node) -> Optional["Type"]:
     field_ty = recv_ty.get_field_type(node.method)
     if not isinstance(field_ty, FunctionType):
         return None
-    # A method of the same name wins over the field: auto-derived .hash(), then
-    # concrete and generic extension/perk methods.
     if node.method == "hash":
         return None
     if type_validator.extension_table.get_method(recv_ty, node.method) is not None:
@@ -137,18 +131,13 @@ class StatementValidator(RecursiveVisitor):
         """Initialize with reference to the main type validator."""
         self.type_validator = type_validator
 
-    # === Statement validation methods ===
-
     def visit_if(self, node: If) -> None:
         """Validate if statement conditions and branches."""
-        # Validate all condition-block arms
         for cond, block in node.arms:
             # Validate condition is boolean (CE2005)
             self.type_validator._validate_boolean_condition(cond, "if")
-            # Validate block
             self.type_validator._validate_block(block)
 
-        # Validate else branch if present
         if node.else_block:
             self.type_validator._validate_block(node.else_block)
 
@@ -156,7 +145,6 @@ class StatementValidator(RecursiveVisitor):
         """Validate while statement condition and body."""
         # Validate condition is boolean (CE2005)
         self.type_validator._validate_boolean_condition(node.cond, "while")
-        # Validate body
         self.type_validator._validate_block(node.body)
 
     def visit_foreach(self, node: Foreach) -> None:
@@ -182,16 +170,13 @@ class StatementValidator(RecursiveVisitor):
 
     def visit_exprstmt(self, node: ExprStmt) -> None:
         """Validate expression statement and warn if Result<T> is unused."""
-        # First validate the expression
         self.type_validator.validate_expression(node.expr)
 
-        # Check if the expression evaluates to Result<T, E>
         expr_type = self.type_validator.infer_expression_type(node.expr)
         if expr_type is not None:
             from sushi_lang.semantics.typesys import EnumType, BuiltinType
 
             if isinstance(expr_type, EnumType) and expr_type.name.startswith("Result<"):
-                # Extract T from Result<T, E>
                 ok_variant = expr_type.get_variant("Ok")
                 if ok_variant and ok_variant.associated_types:
                     t_type = ok_variant.associated_types[0]
@@ -246,8 +231,6 @@ class ExpressionValidator(RecursiveVisitor):
         """Initialize with reference to the main type validator."""
         self.type_validator = type_validator
 
-    # === Expression validation methods ===
-
     def visit_unaryop(self, node: UnaryOp) -> None:
         """Validate unary operation."""
         # CE5010: a foreign ptr is an opaque handle - no negation, NOT, or truthiness
@@ -267,7 +250,6 @@ class ExpressionValidator(RecursiveVisitor):
 
         self.type_validator.validate_expression(node.expr)
 
-        # Additional validation for bitwise NOT operator
         if node.op == "~":
             from sushi_lang.semantics.passes.types.expressions import validate_bitwise_unary
             validate_bitwise_unary(self.type_validator, node)
@@ -293,15 +275,12 @@ class ExpressionValidator(RecursiveVisitor):
 
         # Check for string concatenation with + operator (CE2509)
         if node.op == "+":
-            # Emit error if either operand is a string
             if left_type == BuiltinType.STRING or right_type == BuiltinType.STRING:
                 er.emit_with(self.type_validator.reporter, er.ERR.CE2509, node.loc) \
                     .help("use string interpolation: \"{a}{b}\"").emit()
 
-        # Check for mixed numeric types in comparison and arithmetic operations
         if node.op in ["==", "!=", "<", "<=", ">", ">=", "+", "-", "*", "/", "%"]:
             if left_type is not None and right_type is not None:
-                # Check if both are numeric types but different
                 left_is_numeric = isinstance(left_type, BuiltinType) and left_type in [
                     BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
                     BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
@@ -314,11 +293,9 @@ class ExpressionValidator(RecursiveVisitor):
                 ]
 
                 if left_is_numeric and right_is_numeric and left_type != right_type:
-                    # Mixed numeric types - require explicit cast
                     er.emit(self.type_validator.reporter, er.ERR.CE2510, node.loc,
                            left_type=display_type(left_type), right_type=display_type(right_type))
 
-        # Additional validation for bitwise operators
         if node.op in ["&", "|", "^", "<<", ">>"]:
             self.type_validator._validate_bitwise_operation(node)
 
@@ -376,14 +353,11 @@ class ExpressionValidator(RecursiveVisitor):
                         reason=f"lambda parameter '{p.name}' has an owning type '{display_type(p.ty)}'; "
                                f"owning function-value parameters are deferred to Tier 2")
 
-        # Validate the body with the lambda's params in scope (captures already are).
         saved_vars = dict(tv.variable_types)
         for p in node.params:
             if p.ty is not None:
                 tv.variable_types[p.name] = p.ty
         if node.is_block_body:
-            # Return statements inside must check against the LAMBDA's ok/err, not
-            # the enclosing function's, so swap current_function to a synthetic sig.
             from sushi_lang.semantics.ast import FuncDef
             synthetic = FuncDef(name="<lambda>", params=list(node.params), ret=ft.ok_type,
                                 body=node.body, err_type=ft.err_type, loc=node.loc)
@@ -406,8 +380,6 @@ class ExpressionValidator(RecursiveVisitor):
 
     def visit_dotcall(self, node: DotCall) -> None:
         """Validate dot-call expression - resolve to enum constructor or method call."""
-        # FFI: foreign namespace call (e.g., libc.strlen) - NEW FIRST branch.
-        # Locals shadow namespaces, so skip if the name is a bound local.
         if self.type_validator._resolve_external_call(node):
             for arg in node.args:
                 self.type_validator.validate_expression(arg)
@@ -432,14 +404,10 @@ class ExpressionValidator(RecursiveVisitor):
         #   method call       -- validate_method_call validates it (calls/methods.py), as it must
         #                        anyway for a real MethodCall node reaching visit_methodcall
 
-        # Check if receiver is an enum type name
         if isinstance(node.receiver, Name):
             receiver_name = node.receiver.id
-            # Check if it's an enum type (concrete or generic)
             if (receiver_name in self.type_validator.enum_table.by_name or
                 receiver_name in self.type_validator.generic_enum_table.by_name):
-                # This is an enum constructor - validate as such
-                # Convert to EnumConstructor for validation
                 from sushi_lang.semantics.ast import EnumConstructor
                 temp_constructor = EnumConstructor(
                     enum_name=receiver_name,
@@ -449,15 +417,11 @@ class ExpressionValidator(RecursiveVisitor):
                     loc=node.loc
                 )
 
-                # CRITICAL: Copy resolved_enum_type FROM the DotCall TO the temp BEFORE validation
-                # This is set by _validate_return_statement or _validate_let_statement
                 if hasattr(node, 'resolved_enum_type') and node.resolved_enum_type is not None:
                     temp_constructor.resolved_enum_type = node.resolved_enum_type
 
                 self.type_validator._validate_enum_constructor(temp_constructor)
 
-                # CRITICAL: Copy resolved_enum_type back to the DotCall node for codegen
-                # (in case validation set or updated it)
                 if hasattr(temp_constructor, 'resolved_enum_type'):
                     node.resolved_enum_type = temp_constructor.resolved_enum_type
                 return
@@ -467,14 +431,11 @@ class ExpressionValidator(RecursiveVisitor):
         # node.callee_fn_type to emit the fat-pointer indirect call.
         fn_field_ty = resolve_fn_field_call(self.type_validator, node)
         if fn_field_ty is not None:
-            # This branch does not reach validate_method_call, so it owns the receiver walk.
             self.type_validator.validate_expression(node.receiver)
             node.callee_fn_type = fn_field_ty
             validate_fn_field_call_args(self.type_validator, node, fn_field_ty)
             return
 
-        # Otherwise, it's a method call - validate as such
-        # Convert to MethodCall for validation
         from sushi_lang.semantics.ast import MethodCall
         temp_method_call = MethodCall(
             receiver=node.receiver,
@@ -484,13 +445,9 @@ class ExpressionValidator(RecursiveVisitor):
         )
         self.type_validator._validate_method_call(temp_method_call)
 
-        # CRITICAL: Copy inferred_return_type back to the DotCall node for codegen
-        # This is set by perk/extension method validation
         if hasattr(temp_method_call, 'inferred_return_type') and temp_method_call.inferred_return_type is not None:
             node.inferred_return_type = temp_method_call.inferred_return_type
 
-        # CRITICAL: Copy resolved_enum_type back to the DotCall node for codegen
-        # This is set by Result<T>/Maybe<T> method validation
         if hasattr(temp_method_call, 'resolved_enum_type') and temp_method_call.resolved_enum_type is not None:
             node.resolved_enum_type = temp_method_call.resolved_enum_type
 
@@ -562,7 +519,6 @@ class ExpressionValidator(RecursiveVisitor):
         from sushi_lang.semantics.passes.types.expressions import validate_range_expression
         validate_range_expression(self.type_validator, node)
 
-    # Terminal expressions don't need recursive validation
     def visit_name(self, node: Name) -> None:
         """Name expressions are terminal."""
         tv = self.type_validator
@@ -585,15 +541,12 @@ class ExpressionValidator(RecursiveVisitor):
         """Range-check a bare integer literal (CE2070)."""
         if getattr(node, 'in_cast_context', False) or getattr(node, 'range_checked', False):
             return
-        # A context-typed literal was already range-checked against its stamped type
-        # at propagation time; skip the default-i32 overflow check.
         if node.resolved_type is not None:
             return
         value = int(node.value)
         if node.radix == 10:
             in_range = 0 <= value <= 2 ** 31 - 1
         else:
-            # Bit-pattern semantics: 0xFFFFFFFF is a legal 32-bit pattern
             in_range = 0 <= value <= 2 ** 32 - 1
         if not in_range:
             self._emit_literal_overflow(node)
@@ -631,27 +584,19 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         """Initialize with reference to the main type validator."""
         self.type_validator = type_validator
 
-    # === Utility methods ===
-
     def _resolve_generic_to_semantic_type(self, generic_type: 'Type') -> 'Type':
         """Resolve a GenericTypeRef to its concrete semantic type where applicable."""
         from sushi_lang.semantics.generics.types import GenericTypeRef
 
-        # Only process GenericTypeRef types
         if not isinstance(generic_type, GenericTypeRef):
             return generic_type
 
-        # Result<T, E> interns to its EnumType, like every other generic.
         if generic_type.base_name == "Result" and len(generic_type.type_args) == 2:
             interned = self._intern_result(generic_type.type_args[0], generic_type.type_args[1])
             if interned is not None:
                 return interned
 
-        # For other generic types (Maybe, Own, etc.), return as-is
-        # They will be handled by monomorphization
         return generic_type
-
-    # === Type inference methods ===
 
     def visit_intlit(self, node: IntLit) -> Optional[Type]:
         """Infer integer literal type (context-typed if stamped, else default i32)."""
@@ -679,13 +624,10 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_interpolatedstring(self, node: InterpolatedString) -> Optional[Type]:
         """Infer interpolated string type and validate expression types."""
-        # Validate that all expression parts can be converted to strings
         for part in node.parts:
             if not isinstance(part, str):
-                # This is an expression - validate it can be converted to string
                 expr_type = self.type_validator.infer_expression_type(part)
                 if expr_type and not is_string_convertible(expr_type):
-                    # Emit error for unsupported type in interpolation
                     er.emit(
                         self.type_validator.reporter,
                         er.ERR.CE2035,
@@ -704,15 +646,12 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_memberaccess(self, node: MemberAccess) -> Optional[Type]:
         """Infer member access type (struct field access)."""
-        # Get the type of the receiver (the struct)
         receiver_type = self.type_validator.infer_expression_type(node.receiver)
 
         if receiver_type is None:
             return None
 
-        # If it's a struct type, look up the field type
         if isinstance(receiver_type, StructType):
-            # Fields are stored as tuples of (field_name, field_type)
             for field_name, field_type in receiver_type.fields:
                 if field_name == node.member:
                     # Resolve generic types to semantic types where applicable
@@ -725,7 +664,6 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_name(self, node: Name) -> Optional[Type]:
         """Infer name expression type."""
-        # Check for special built-in identifiers first (stdin, stdout, stderr)
         if node.id == "stdin":
             return BuiltinType.STDIN
         elif node.id == "stdout":
@@ -733,28 +671,22 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         elif node.id == "stderr":
             return BuiltinType.STDERR
 
-        # Check for math module constants (PI, E, TAU)
         if node.id in {'PI', 'E', 'TAU'}:
             from sushi_lang.sushi_stdlib.src import math as math_module
             if math_module.is_builtin_math_constant(node.id):
                 return BuiltinType.F64
 
-        # Look up variable type from variable table
         var_type = self.type_validator.variable_types.get(node.id)
         if var_type is not None:
-            # Auto-dereference reference types - using a reference variable
-            # yields the referenced value, not the reference itself
             from sushi_lang.semantics.typesys import ReferenceType
             if isinstance(var_type, ReferenceType):
                 return var_type.referenced_type
             return var_type
 
-        # If not found in variables, check constants
         if node.id in self.type_validator.const_table.by_name:
             const_sig = self.type_validator.const_table.by_name[node.id]
             return const_sig.const_type
 
-        # A bare reference to a plain top-level function is a first-class function value.
         fn_value_type = function_value_type_of(self.type_validator, node.id)
         if fn_value_type is not None:
             return fn_value_type
@@ -777,35 +709,26 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_unaryop(self, node: UnaryOp) -> Optional[Type]:
         """Infer unary operation type."""
-        # Logical NOT returns bool
         if node.op == "not":
             return BuiltinType.BOOL
-        # Bitwise NOT preserves the integer operand type
         if node.op == "~":
             return self.type_validator.infer_expression_type(node.expr)
-        # Negation preserves numeric type
         if node.op == "neg":
             return self.type_validator.infer_expression_type(node.expr)
-        # Default: preserve type
         return self.type_validator.infer_expression_type(node.expr)
 
     def visit_binaryop(self, node: BinaryOp) -> Optional[Type]:
         """Infer binary operation type directly (no delegation)."""
-        # Comparison operators return bool
         if node.op in ["==", "!=", "<", "<=", ">", ">="]:
             return BuiltinType.BOOL
 
-        # Logical operators return bool
         if node.op in ["and", "or", "xor"]:
             return BuiltinType.BOOL
 
-        # Arithmetic operators - return type depends on operands
         if node.op in ["+", "-", "*", "/", "%"]:
             left_type = self.type_validator.infer_expression_type(node.left)
             right_type = self.type_validator.infer_expression_type(node.right)
 
-            # If either operand is a string, this is an error (handled by validation)
-            # Return None to avoid cascading type mismatch errors
             if left_type == BuiltinType.STRING or right_type == BuiltinType.STRING:
                 return None
 
@@ -818,14 +741,12 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                        BuiltinType.F32, BuiltinType.F64)
             if left_type == right_type and left_type in numeric:
                 return left_type
-            # One side unknown (e.g. an unresolved call): trust the known side
             if left_type is None and right_type in numeric:
                 return right_type
             if right_type is None and left_type in numeric:
                 return left_type
             return None
 
-        # Bitwise operators return the type of the left operand
         if node.op in ["&", "|", "^", "<<", ">>"]:
             return self.type_validator.infer_expression_type(node.left)
 
@@ -880,22 +801,16 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 return self._intern_result(callee_ty.ok_type, callee_ty.err_type)
             return None
 
-        # Look up function return type
         function_name = node.callee.id
 
-        # Indirect call through a first-class function value: yields Result<ok, err>,
-        # exactly like a direct call (so `f(x)??` unwraps to ok_type).
         callee_var_ty = self.type_validator.variable_types.get(function_name)
         if isinstance(callee_var_ty, FunctionType):
             return self._intern_result(callee_var_ty.ok_type, callee_var_ty.err_type)
 
-        # Check if this is a struct constructor
         if function_name in self.type_validator.struct_table.by_name:
             return self.type_validator.struct_table.by_name[function_name]
 
-        # Check for built-in global functions
         if function_name == "open":
-            # open() returns FileResult enum
             return self.type_validator.enum_table.by_name.get("FileResult")
 
         # Stdlib functions whose return type the registry declares outright. The registry
@@ -914,37 +829,29 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             if stdlib_func is not None and not stdlib_func.is_constant:
                 return self._materialize_stdlib_return_type(stdlib_func.get_return_type())
 
-        # Check for math module functions
         if function_name in {'abs', 'min', 'max', 'sqrt', 'pow', 'floor', 'ceil', 'round', 'trunc'}:
             from sushi_lang.sushi_stdlib.src import math as math_module
             if math_module.is_builtin_math_function(function_name):
-                # Get the parameter types to determine return type
                 param_types = []
                 for arg in node.args:
                     arg_type = self.type_validator.infer_expression_type(arg)
                     if arg_type is not None:
                         param_types.append(arg_type)
 
-                # abs, min, max return the same type as their input(s)
                 if function_name in {'abs', 'min', 'max'} and param_types:
                     return param_types[0]
 
-                # sqrt, pow, floor, ceil, round, trunc always return f64
                 if function_name in {'sqrt', 'pow', 'floor', 'ceil', 'round', 'trunc'}:
                     return BuiltinType.F64
 
             return None
 
-        # Otherwise, check if it's a function call
         if function_name in self.type_validator.func_table.by_name:
             func_sig = self.type_validator.func_table.by_name[function_name]
-            # Functions can declare explicit Result<T, E> or just T (implicit Result<T, StdError>)
             if func_sig.ret_type is not None:
                 from sushi_lang.semantics.generics.types import GenericTypeRef
                 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
-                # Every shape of Result a signature can declare interns to the same EnumType,
-                # which is what the call's value actually is at runtime.
                 from sushi_lang.semantics.generics.results import is_result_enum
 
                 # Already the interned enum (the signature was resolved in place): return it.
@@ -952,7 +859,6 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 if is_result_enum(func_sig.ret_type):
                     return func_sig.ret_type
 
-                # Explicit `fn foo() Result<T, E>` -- not wrapped again.
                 if isinstance(func_sig.ret_type, GenericTypeRef) and func_sig.ret_type.base_name == "Result":
                     if len(func_sig.ret_type.type_args) == 2:
                         return self._intern_result(func_sig.ret_type.type_args[0],
@@ -963,26 +869,19 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                         self.type_validator.enum_table.by_name
                     )
                 elif func_sig.err_type is not None:
-                    # Implicit Result with a custom error: fn foo() i32 | MyError
                     return self._intern_result(func_sig.ret_type, func_sig.err_type)
                 else:
-                    # Implicit Result, default error: fn foo() i32 -> Result<i32, StdError>
                     err_type = self.type_validator.enum_table.by_name.get("StdError")
                     if err_type is not None:
                         return self._intern_result(func_sig.ret_type, err_type)
-                # Fallback to declared return type
                 return func_sig.ret_type
         return None
 
     def visit_methodcall(self, node: MethodCall) -> Optional[Type]:
         """Infer method call type and annotate node with inferred return type."""
-        # Check if this is actually an enum constructor (like Result.Ok())
-        # In the new parsing, these are MethodCall nodes, not EnumConstructor nodes
         if isinstance(node.receiver, Name):
             enum_name = node.receiver.id
-            # Check if the receiver is an enum type
             if enum_name in self.type_validator.enum_table.by_name:
-                # This is an enum constructor, return the enum type
                 inferred_type = self.type_validator.enum_table.by_name[enum_name]
                 node.inferred_return_type = inferred_type
                 return inferred_type
@@ -992,18 +891,13 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 # For now, return None and let the type be inferred from context
                 return None
 
-        # Look up method return type using the registry pattern
         receiver_type = self.type_validator.infer_expression_type(node.receiver)
         from sushi_lang.semantics.typesys import StructType, EnumType, ReferenceType
 
-
-        # Unwrap ReferenceType to get the underlying type
-        # Methods on &T are the same as methods on T
         actual_type = receiver_type
         if isinstance(receiver_type, ReferenceType):
             actual_type = receiver_type.referenced_type
 
-        # Handle GenericTypeRef by resolving to actual StructType
         from sushi_lang.semantics.generics.types import GenericTypeRef
         if isinstance(actual_type, GenericTypeRef):
             type_args_str = ", ".join(str(arg) for arg in actual_type.type_args)
@@ -1014,26 +908,21 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 actual_type = self.type_validator.enum_table.by_name[type_name]
 
         if actual_type is not None and isinstance(actual_type, (BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)):
-            # Try the method type registry first (handles all built-in types)
             from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
             inferred_type = METHOD_TYPE_REGISTRY.infer_method_type(
                 actual_type, node.method, self.type_validator
             )
 
-            # Fall back to perk methods first (higher priority than extensions)
             if inferred_type is None:
                 perk_method = self.type_validator.perk_impl_table.get_method(actual_type, node.method)
                 if perk_method is not None and perk_method.ret is not None:
-                    # Perk methods return bare types (like extension methods)
                     inferred_type = perk_method.ret
 
-            # Fall back to extension table if registry didn't find it
             if inferred_type is None:
                 method = self.type_validator.extension_table.get_method(actual_type, node.method)
                 if method is not None:
                     inferred_type = method.ret_type
 
-            # Annotate the node with the inferred type
             if inferred_type is not None:
                 node.inferred_return_type = inferred_type
                 return inferred_type
@@ -1042,25 +931,20 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_dotcall(self, node: DotCall) -> Optional[Type]:
         """Infer dot-call type and annotate node with inferred return type."""
-        # FFI: foreign namespace call - the raw C return type stands verbatim.
         sig = self.type_validator._resolve_external_call(node)
         if sig is not None:
             node.inferred_return_type = sig.ret_type
             return sig.ret_type
 
-        # f64.from_bits(bits) / f32.from_bits(bits): static bit-reinterpret -> f64/f32.
         if (isinstance(node.receiver, Name) and node.receiver.id in ("f64", "f32")
                 and node.method == "from_bits"):
             ty = BuiltinType.F64 if node.receiver.id == "f64" else BuiltinType.F32
             node.inferred_return_type = ty
             return ty
 
-        # Check if receiver is an enum type name
         if isinstance(node.receiver, Name):
             receiver_name = node.receiver.id
-            # Check if it's an enum type (concrete or generic)
             if receiver_name in self.type_validator.enum_table.by_name:
-                # This is an enum constructor - return the enum type
                 inferred_type = self.type_validator.enum_table.by_name[receiver_name]
                 node.inferred_return_type = inferred_type
                 return inferred_type
@@ -1070,8 +954,6 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 # For now, return None and let the type be inferred from context
                 return None
 
-        # obj.handler(): indirect call through a fn-typed struct field yields
-        # Result<ok, err>, exactly like a direct call (so `obj.handler(x)??` unwraps).
         fn_field_ty = resolve_fn_field_call(self.type_validator, node)
         if fn_field_ty is not None:
             node.callee_fn_type = fn_field_ty
@@ -1079,8 +961,6 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                                                             fn_field_ty.err_type)
             return node.inferred_return_type
 
-        # Otherwise, it's a method call - infer return type from method
-        # Convert to MethodCall temporarily for type inference
         from sushi_lang.semantics.ast import MethodCall
         temp_method_call = MethodCall(
             receiver=node.receiver,
@@ -1089,14 +969,12 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             loc=node.loc
         )
         inferred_type = self.visit_methodcall(temp_method_call)
-        # Copy the inferred type to the DotCall node
         if inferred_type is not None:
             node.inferred_return_type = inferred_type
         return inferred_type
 
     def visit_dynamicarraynew(self, node: DynamicArrayNew) -> Optional[Type]:
         """new() constructor requires context for type inference."""
-        # This should be handled by the caller that has access to LHS type
         return None
 
     def visit_dynamicarrayfrom(self, node: DynamicArrayFrom) -> Optional[Type]:
@@ -1109,12 +987,9 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_enumconstructor(self, node: EnumConstructor) -> Optional[Type]:
         """EnumConstructor - return the enum type (including Result.Ok/Result.Err)."""
-        # Check if the node has a resolved enum type (for generic enums like Result<T>)
-        # This is set by the type checker during validation
         if hasattr(node, 'resolved_enum_type') and node.resolved_enum_type is not None:
             return node.resolved_enum_type
 
-        # Otherwise, look up the concrete enum type
         if node.enum_name in self.type_validator.enum_table.by_name:
             return self.type_validator.enum_table.by_name[node.enum_name]
 
@@ -1122,7 +997,6 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
     def visit_tryexpr(self, node: TryExpr) -> Optional[Type]:
         """Try expression (?? operator) - unwrap result-like enum to Ok type."""
-        # Infer the type of the inner expression
         inner_type = self.type_validator.infer_expression_type(node.expr)
 
         if inner_type is None:
@@ -1132,14 +1006,12 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         # EnumType); `??` unwraps it to its ok_type -- e.g. a captured closure called in
         # a lambda body, `f(x)??`.
         from sushi_lang.semantics.typesys import EnumType
-        # Result-like (Ok(T)) or Maybe (Some(T)) enum: `??` unwraps the payload variant.
         if isinstance(inner_type, EnumType):
             for variant_name in ("Ok", "Some"):
                 variant = inner_type.get_variant(variant_name)
                 if variant and variant.associated_types:
                     return variant.associated_types[0]
 
-        # Not a result-like enum - will be caught by validation
         return None
 
     def visit_rangeexpr(self, node: RangeExpr) -> Optional[Type]:
@@ -1151,12 +1023,10 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         """Infer type of borrow expression (peek expr or poke expr)."""
         from sushi_lang.semantics.typesys import ReferenceType, BorrowMode
 
-        # Get the type of the borrowed expression
         inner_type = self.type_validator.infer_expression_type(node.expr)
         if inner_type is None:
             return None
 
-        # Create ReferenceType with the correct mutability
         mutability = BorrowMode.PEEK if node.mutability == "peek" else BorrowMode.POKE
         return ReferenceType(referenced_type=inner_type, mutability=mutability)
 

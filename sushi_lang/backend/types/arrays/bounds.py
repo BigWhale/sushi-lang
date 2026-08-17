@@ -34,7 +34,6 @@ def emit_bounds_check(
             index_value,
             size_value,
         )
-        # emit_runtime_error_with_values calls exit(); terminate for LLVM.
         builder.unreachable()
     else:
         on_fail()

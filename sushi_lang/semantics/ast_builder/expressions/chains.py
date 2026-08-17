@@ -57,12 +57,10 @@ def expr_atom(atom: Tree | Token, ast_builder: 'ASTBuilder') -> Expr:
         from sushi_lang.semantics.ast_builder.expressions import lambdas
         return lambdas.parse_lambda(atom, ast_builder)
 
-    # Parenthesized expression
     inner = next((c for c in atom.children if isinstance(c, Tree)), None)
     if inner is not None:
         return ast_builder._expr(inner)
 
-    # Single literal/name token
     lone_tok = next((c for c in atom.children if isinstance(c, Token)), None)
     if lone_tok is not None:
         return literals.expr_from_token(lone_tok, ast_builder)

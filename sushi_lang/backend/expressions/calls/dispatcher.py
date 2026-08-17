@@ -33,28 +33,22 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
 
     callee = expr.callee.id
 
-    # Indirect call through a first-class function value held in a local variable.
-    # A local shadows any same-named top-level function, so this is checked first.
     fn_value = _try_function_value_local(codegen, callee)
     if fn_value is not None:
         fat_value, fn_type = fn_value
         return _emit_indirect_call(codegen, expr, fat_value, fn_type, to_i1)
 
-    # Check if this is a struct constructor
     if callee in codegen.struct_table.by_name:
         from sushi_lang.backend.expressions import structs
         return structs.emit_struct_constructor(codegen, expr, to_i1)
 
-    # Check if this is a generic struct constructor
     if hasattr(codegen, 'generic_structs') and callee in codegen.generic_structs.by_name:
         from sushi_lang.backend.expressions import structs
         return structs.emit_struct_constructor(codegen, expr, to_i1)
 
-    # Check for built-in global functions
     if callee == "open":
         return emit_open_function(codegen, expr, to_i1)
 
-    # Check if this is a stdlib function (from registry)
     stdlib_func = _check_stdlib_function_codegen(codegen, callee)
     if stdlib_func is not None:
         return _emit_stdlib_function(codegen, expr, callee, stdlib_func, to_i1)
@@ -237,22 +231,18 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     if result is not None:
         return result
 
-    # 1. Enum constructors (e.g., Color.Red(), Result.Ok())
     result = intrinsics.try_emit_enum_constructor(codegen, expr)
     if result is not None:
         return result
 
-    # 2. Struct constructors (e.g., Own.alloc())
     result = intrinsics.try_emit_struct_constructor(codegen, expr)
     if result is not None:
         return result
 
-    # 3. stdio methods (stdin/stdout/stderr)
     result = intrinsics.try_emit_stdio_method(codegen, expr, to_i1)
     if result is not None:
         return result
 
-    # 4. File methods
     result = intrinsics.try_emit_file_method(codegen, expr, to_i1)
     if result is not None:
         return result
@@ -264,53 +254,40 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     if result is not None:
         return result
 
-    # 7. Own<T> instance methods (get, destroy)
     result = generics.try_emit_own_method(codegen, expr, to_i1)
     if result is not None:
         return result
 
-    # 8. HashMap<K, V> methods (new, insert, get, etc.)
     result = generics.try_emit_hashmap_method(codegen, expr, to_i1)
     if result is not None:
         return result
 
-    # 9. List<T> methods (new, push, pop, get, etc.)
     result = generics.try_emit_list_method(codegen, expr, to_i1)
     if result is not None:
         return result
 
-    # 9.5 Primitive static reinterpret: f64.from_bits(u64) / f32.from_bits(u32).
-    # Runs BEFORE emit_receiver_value below, since the receiver is a type name, not a value.
     result = intrinsics.try_emit_primitive_static(codegen, expr, to_i1)
     if result is not None:
         return result
 
-    # ========================================================================
-    # For remaining handlers, emit receiver and infer types
-    # ========================================================================
     receiver_value, receiver_type, semantic_type = emit_receiver_value(codegen, expr.receiver)
 
-    # 10. Array methods (len, get, push, pop, etc.)
     result = intrinsics.try_emit_array_method(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
     if result is not None:
         return result
 
-    # 11. String methods
     result = intrinsics.try_emit_string_method(codegen, expr, receiver_value, receiver_type, to_i1)
     if result is not None:
         return result
 
-    # 12. Perk methods (extension methods via perk implementations) - BEFORE auto-derived
     result = intrinsics.try_emit_perk_method(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
     if result is not None:
         return result
 
-    # 13. Auto-derived struct hash
     result = intrinsics.try_emit_struct_hash(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
     if result is not None:
         return result
 
-    # 14. Auto-derived enum hash
     result = intrinsics.try_emit_enum_hash(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
     if result is not None:
         return result
@@ -332,7 +309,6 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     if result is not None:
         return result
 
-    # 15. Primitive methods (to_str, hash, etc.)
     result = intrinsics.try_emit_primitive_method(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
     if result is not None:
         return result
@@ -342,34 +318,27 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     # ========================================================================
     # Use semantic type if available to distinguish bool from i8
     if semantic_type is not None:
-        # Unwrap ReferenceType if present (for peek T or poke T parameters)
         from sushi_lang.semantics.typesys import deref_type
         actual_type = deref_type(semantic_type)
         lang_type = str(actual_type)
     else:
         lang_type = codegen.types.map_llvm_to_language_type(receiver_type)
 
-    # Sanitize generic type names for valid LLVM identifiers (match declaration mangling)
-    # Replace < with __, > with nothing, and ", " with _
     sanitized_lang_type = lang_type.replace("<", "__").replace(">", "").replace(", ", "_")
     func_name = f"{sanitized_lang_type}_{expr.method}"
     llvm_fn = codegen.funcs.get(func_name)
 
-    # Fallback: Check module globals for stdlib extension methods
     if llvm_fn is None and func_name in codegen.module.globals:
         llvm_fn = codegen.module.globals[func_name]
 
-    # Fallback: Declare stdlib string extension methods if not found
     if llvm_fn is None and lang_type == "string":
         from sushi_lang.backend.functions import declare_stdlib_function
         from sushi_lang.sushi_stdlib.src.collections.strings import get_builtin_string_method_return_type
         from sushi_lang.semantics.typesys import BuiltinType
 
-        # Get return type from method registry
         ret_sushi_type = get_builtin_string_method_return_type(expr.method, BuiltinType.STRING)
         if ret_sushi_type is not None:
             ret_llvm_type = codegen.types.ll_type(ret_sushi_type)
-            # String methods take the string fat pointer as parameter
             llvm_fn = declare_stdlib_function(codegen.module, func_name, ret_llvm_type, [receiver_type])
 
     if llvm_fn is None:
@@ -417,8 +386,6 @@ def emit_method_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], t
     casted = [codegen.utils.cast_for_param(v, p.type) for v, p in zip(emitted_args, params, strict=True)]
     result_value = codegen.builder.call(llvm_fn, casted)
 
-    # Extension methods return bare types (not Result<T>)
-    # This matches built-in extension methods and provides zero-cost abstraction
     return codegen.utils.as_i1(result_value) if to_i1 else result_value
 
 
@@ -469,7 +436,6 @@ def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     call_result = codegen.builder.call(llvm_fn, fixed_args + trailing_args)
 
     ret_ty = sig.ret_type
-    # `~` (void) return: nothing to use - hand back an i32 blank value.
     if ret_ty is None or (isinstance(ret_ty, BuiltinType) and ret_ty == BuiltinType.BLANK):
         return ir.Constant(codegen.i32, 0)
     # `string` return: COPY the C char* into a fresh Sushi-owned buffer (#147). Sushi never
@@ -492,7 +458,6 @@ def _promote_variadic_arg(codegen: 'LLVMCodegen', value: ir.Value, sushi_ty) -> 
     builder = codegen.builder
     vty = value.type
 
-    # float -> double.
     if isinstance(vty, ir.FloatType):
         return builder.fpext(value, codegen.types.f64)
 
@@ -509,16 +474,13 @@ def _promote_variadic_arg(codegen: 'LLVMCodegen', value: ir.Value, sushi_ty) -> 
             return builder.zext(value, codegen.i32)
         return builder.sext(value, codegen.i32)
 
-    # ptr, i32, i64, f64: pass as-is.
     return value
 
 
 def _check_stdlib_function_codegen(codegen: 'LLVMCodegen', function_name: str) -> tuple | None:
     """Check if a function is a stdlib function during code generation."""
-    # Access the function table from the codegen
     func_table = codegen.func_table
 
-    # Try common module paths
     possible_modules = ["time", "sys/env", "sys/process", "math", "random", "io/files"]
 
     for module_path in possible_modules:
@@ -534,7 +496,6 @@ def _emit_stdlib_function(codegen: 'LLVMCodegen', expr: Call, function_name: str
     """Emit code for a stdlib function call."""
     module_path, stdlib_func = module_and_func
 
-    # Dispatch to module-specific emitters
     if module_path == "time":
         return emit_time_function(codegen, expr, function_name, to_i1)
     elif module_path == "sys/env":

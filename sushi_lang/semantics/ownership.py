@@ -41,15 +41,12 @@ class Provenance(Enum):
     """Where the value at a consuming use came from."""
 
     OWNED = "owned"        # a registered owner in this scope: a `let` local or a
-                           # by-value parameter
     BORROWED = "borrowed"  # names storage owned elsewhere, for a SHORTER lifetime: a
                            # match payload binding, a foreach binding, a peek/poke
                            # parameter, a `let` bound from any of these, and every read
                            # THROUGH a still-live owner -- `s.field`, `own.get()`, and a
                            # container get-out
     FRESH = "fresh"        # nothing owns it yet: a constructor, a call result,
-                           # `.clone()`, a literal, a `List.pop()` (which REMOVES the
-                           # element, so the container stops owning it)
 
 
 class TypeClass(Enum):
@@ -105,8 +102,6 @@ def classify(provenance: Provenance, type_class: TypeClass) -> Ownership:
     """The rule. Total over the grid, pure, and the only implementation of it."""
     return _TABLE[(provenance, type_class)]
 
-
-# --- Type classification -----------------------------------------------------------
 
 def _IDENTITY(t: Type) -> Type:
     """The default resolver: a caller with no type tables resolves nothing."""

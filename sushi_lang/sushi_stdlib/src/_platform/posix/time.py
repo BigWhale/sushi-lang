@@ -10,19 +10,15 @@ if typing.TYPE_CHECKING:
 
 def declare_nanosleep(module: ir.Module) -> ir.Function:
     """Declare nanosleep: int nanosleep(const struct timespec *req, struct timespec *rem)"""
-    # Check if already declared
     if "nanosleep" in module.globals:
         return module.globals["nanosleep"]
 
-    # Get common types
     _, _, i32, _ = get_basic_types()
     timespec = get_timespec_type()
     timespec_ptr = timespec.as_pointer()
 
-    # int nanosleep(const struct timespec *req, struct timespec *rem)
     fn_ty = ir.FunctionType(i32, [timespec_ptr, timespec_ptr])
 
-    # Declare with external linkage (resolved by linker)
     func = ir.Function(module, fn_ty, name="nanosleep")
 
     return func
@@ -33,7 +29,6 @@ def generate_module_ir() -> ir.Module:
     module = ir.Module(name="platform_time")
     module.triple = ""  # Use default target triple
 
-    # Declare all platform-specific time functions
     declare_nanosleep(module)
 
     return module

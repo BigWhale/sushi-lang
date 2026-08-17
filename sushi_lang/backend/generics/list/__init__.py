@@ -7,7 +7,6 @@ import llvmlite.ir as ir
 
 from sushi_lang.internals.errors import raise_internal_error
 
-# Public API - LLVM emission
 from .methods_simple import (
     emit_list_clone,
     emit_list_new,
@@ -50,7 +49,6 @@ def emit_list_method(
     """Emit LLVM IR for List<T> method calls."""
     method = expr.method
 
-    # Dispatch to method-specific emitters
     if method == "new":
         result = emit_list_new(codegen, receiver_type)
     elif method == "with_capacity":
@@ -90,7 +88,6 @@ def emit_list_method(
     else:
         raise_internal_error("CE0083", method=method)
 
-    # Convert to i1 if needed
     if to_i1 and method == "is_empty":
         result = codegen.utils.as_i1(result)
 

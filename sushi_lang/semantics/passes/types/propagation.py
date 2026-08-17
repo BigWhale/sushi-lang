@@ -1,4 +1,3 @@
-# semantics/passes/types/propagation.py
 """Type propagation utilities for generic types."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
@@ -17,11 +16,7 @@ _NUMERIC_INT = {BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I6
                 BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64}
 _NUMERIC_FLOAT = {BuiltinType.F32, BuiltinType.F64}
 
-# Binary operators whose result shares the operand type, so an expected numeric type
-# flows into both operands (`let u32 m = 0x01 | 0x02`).
 _ARITH_BITWISE_OPS = {"+", "-", "*", "/", "%", "&", "|", "^"}
-# Shift operators: the expected type flows into the shifted value (left) only; the
-# shift amount (right) is typed independently.
 _SHIFT_OPS = {"<<", ">>"}
 
 
@@ -56,7 +51,6 @@ def _stamp_numeric_literal(validator: 'TypeValidator', node: 'Expr',
 
     if isinstance(lit, IntLit) and expected in _NUMERIC_INT:
         value = sign * int(lit.value)
-        # A negated literal is a signed value, so use value (decimal) semantics.
         radix = 10 if sign == -1 else lit.radix
         if not int_literal_fits(value, radix, expected):
             er.emit(validator.reporter, er.ERR.CE2073, lit.loc,
@@ -79,7 +73,6 @@ def _propagate_to_enum_args(validator: 'TypeValidator', node: Expr,
     if not node.args:
         return
 
-    # Extract variant name
     variant_name = None
     if isinstance(node, EnumConstructor):
         variant_name = node.variant_name
@@ -89,7 +82,6 @@ def _propagate_to_enum_args(validator: 'TypeValidator', node: Expr,
     if not variant_name:
         return
 
-    # Find the variant in the enum type
     variant = None
     for v in enum_type.variants:
         if v.name == variant_name:
@@ -114,8 +106,6 @@ def _propagate_to_struct_args(validator: 'TypeValidator', node: Expr,
     if not node.args:
         return
 
-    # Named construction (`Holder(next: Maybe.None(), value: 0)`) is order
-    # independent, so match on the name rather than the position.
     field_names = getattr(node, "field_names", None)
     if field_names:
         by_name = dict(struct_type.fields)
@@ -141,7 +131,6 @@ def _propagate_generic_enum_type(validator: 'TypeValidator', node: Expr,
     if not isinstance(node, (EnumConstructor, DotCall)):
         return
 
-    # Extract enum name from constructor
     enum_name = None
     if isinstance(node, EnumConstructor):
         enum_name = node.enum_name
@@ -151,12 +140,9 @@ def _propagate_generic_enum_type(validator: 'TypeValidator', node: Expr,
     if not (enum_name and isinstance(enum_type, EnumType)):
         return
 
-    # Check if this is a generic enum constructor
     if enum_name in validator.generic_enum_table.by_name:
-        # Store the resolved enum type in the AST node for backend
         node.resolved_enum_type = enum_type
 
-        # Recursively propagate to constructor arguments
         _propagate_to_enum_args(validator, node, enum_type)
 
     # A PLAIN enum still has to propagate to its arguments. Only the
@@ -181,14 +167,11 @@ def _propagate_generic_enum_type(validator: 'TypeValidator', node: Expr,
 def _propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
                                    struct_type: StructType) -> None:
     """Propagate generic struct type (Own, Box, Pair, user-defined) to constructor."""
-    # Handle DotCall constructors (e.g., Own.alloc(42))
     if isinstance(node, DotCall) and isinstance(node.receiver, Name):
         struct_name = node.receiver.id
 
-        # Check if this is a generic struct constructor
         if (struct_name in validator.generic_struct_table.by_name and
             isinstance(struct_type, StructType)):
-            # Store the resolved struct type in the AST node for backend
             node.resolved_struct_type = struct_type
 
             # Own<T>'s only field is T* (a PointerType), which propagate_types_to_value has
@@ -203,24 +186,20 @@ def _propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
                     validator, node.args[0], get_own_element_type(struct_type))
                 return
 
-            # Recursively propagate to constructor arguments
             _propagate_to_struct_args(validator, node, struct_type)
 
-    # Handle Call constructors (e.g., Box(42))
     elif isinstance(node, Call) and hasattr(node.callee, 'id'):
         struct_name = node.callee.id
 
         if not isinstance(struct_type, StructType):
             return
 
-        # Check if this is a generic struct constructor
         if struct_name in validator.generic_struct_table.by_name:
             # Update the Call node's callee id to use the concrete type name
             # This allows validate_struct_constructor to find the right struct
             # e.g., Box -> Box<i32>
             node.callee.id = struct_type.name
 
-            # Recursively propagate to constructor arguments
             _propagate_to_struct_args(validator, node, struct_type)
 
         # A CONCRETE struct constructor still has to hand its field types down.
@@ -235,8 +214,6 @@ def _propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
 def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
                             expected_type: 'Type') -> None:
     """Unified entry point for all type propagation."""
-    # Context-typed numeric literals: stamp bare literal leaves with the expected
-    # type, recursing through arithmetic/bitwise/shift operands.
     if isinstance(expected_type, BuiltinType) and (
             expected_type in _NUMERIC_INT or expected_type in _NUMERIC_FLOAT):
         _propagate_numeric_type(validator, value_expr, expected_type)
@@ -257,6 +234,5 @@ def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
     if isinstance(expected_type, EnumType):
         _propagate_generic_enum_type(validator, value_expr, expected_type)
 
-    # Handle generic struct propagation (Own, Box, Pair, user-defined)
     elif isinstance(expected_type, StructType):
         _propagate_generic_struct_type(validator, value_expr, expected_type)

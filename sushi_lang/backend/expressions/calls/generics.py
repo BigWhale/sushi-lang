@@ -43,7 +43,6 @@ def try_emit_result_or_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCa
         if isinstance(receiver_semantic_type, EnumType) and receiver_semantic_type.name.startswith("Result<"):
             from sushi_lang.backend.generics.results import emit_builtin_result_method
             temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
-            # Copy resolved_enum_type from original expr if it exists
             if hasattr(expr, 'resolved_enum_type'):
                 temp_expr.resolved_enum_type = expr.resolved_enum_type
             emitted = emit_builtin_result_method(codegen, temp_expr, receiver_value, receiver_semantic_type, to_i1)
@@ -79,7 +78,6 @@ def try_emit_own_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]
             and receiver_semantic_type.name.startswith("Own<")):
         return None
 
-    # `Own.alloc()` is a static call: its receiver is the type name, not a value.
     own_value = None if method == "alloc" else codegen.expressions.emit_expr(expr.receiver)
     temp_expr = MethodCall(receiver=expr.receiver, method=method, args=expr.args, loc=expr.loc)
     return emit_builtin_own_method(codegen, temp_expr, own_value, receiver_semantic_type)
@@ -87,7 +85,6 @@ def try_emit_own_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]
 
 def try_emit_hashmap_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
     """Try to emit as HashMap<K, V> method. Returns None if not a HashMap<K, V> method."""
-    # Import from stdlib location
     from sushi_lang.backend.generics.hashmap import is_builtin_hashmap_method, emit_hashmap_method
     from sushi_lang.backend.expressions.calls.utils import infer_semantic_type, emit_receiver_as_pointer
 

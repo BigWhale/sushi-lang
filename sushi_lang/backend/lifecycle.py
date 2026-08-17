@@ -20,10 +20,6 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
-# ---------------------------------------------------------------------------
-# Identity and symbols
-# ---------------------------------------------------------------------------
-
 def composite_type_key(value_type: Type) -> str:
     """A stable identity key for a composite type's lifecycle bodies."""
     if isinstance(value_type, DynamicArrayType):
@@ -45,10 +41,6 @@ def lifecycle_symbol(prefix: str, value_type: Type) -> str:
         out.append(ch if (ch.isalnum() or ch == "_") else _SYMBOL_CHAR_MAP.get(ch, "_"))
     return prefix + "".join(out)
 
-
-# ---------------------------------------------------------------------------
-# The handler table
-# ---------------------------------------------------------------------------
 
 _KINDS = ("dynamic_array", "fixed_array", "struct", "enum")
 
@@ -109,10 +101,6 @@ def registered_halves() -> Dict[str, tuple]:
     """kind -> sorted halves present. For the totality test."""
     return {kind: tuple(sorted(entry)) for kind, entry in _HANDLERS.items()}
 
-
-# ---------------------------------------------------------------------------
-# The one out-of-line emitter (for self-referential types)
-# ---------------------------------------------------------------------------
 
 def get_or_emit_lifecycle_func(codegen: 'LLVMCodegen', value_type: Type,
                                half: str) -> ir.Function:

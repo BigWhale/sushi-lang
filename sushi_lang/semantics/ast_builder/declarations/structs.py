@@ -16,16 +16,13 @@ def parse_structdef(t: Tree, ast_builder: 'ASTBuilder') -> StructDef:
     """Parse struct_def: STRUCT NAME [type_params] ":" _NEWLINE _INDENT struct_field+ _DEDENT"""
     t = expect(t, "struct_def")
 
-    # Extract struct name
     name_tok = first_name(t.children)
     if name_tok is None:
         ice(t, "missing struct NAME")
 
-    # Extract type parameters if present (e.g., <T> or <T: Hashable>)
     type_params_node = first_tree(t.children, "type_params")
     type_params = parse_bounded_type_params(type_params_node) if type_params_node else None
 
-    # Extract fields
     fields: List[StructField] = []
     for child in t.children:
         if isinstance(child, Tree) and child.data == "struct_field":
@@ -47,19 +44,16 @@ def parse_structfield(t: Tree, ast_builder: 'ASTBuilder') -> StructField:
     """Parse struct_field: type NAME _NEWLINE"""
     t = expect(t, "struct_field")
 
-    # Extract field type
     type_node = None
     for child in t.children:
         if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):
             type_node = child
             break
 
-    # Extract field name
     name_tok = first_name(t.children)
     if name_tok is None:
         ice(t, "missing field NAME")
 
-    # Parse type
     field_type = ast_builder._parse_type(type_node) if type_node else None
 
     return StructField(

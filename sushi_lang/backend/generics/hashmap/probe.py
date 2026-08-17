@@ -15,8 +15,6 @@ class ProbeSlot(NamedTuple):
     continue_bb: ir.Block  # branch here to probe the next slot
 
 
-# A slot handler. It may terminate its block (to leave the loop); if it does not,
-# the loop continues probing.
 SlotFn = Callable[[ProbeSlot], None]
 
 

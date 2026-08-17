@@ -7,33 +7,26 @@ import llvmlite.ir as ir
 from .types import get_list_len_ptr, get_list_capacity_ptr, extract_element_type, get_list_data_ptr
 
 
-
 def emit_list_destroy(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
     """Emit LLVM IR for list.destroy() - destroy all elements and free memory."""
     element_type = extract_element_type(list_type, codegen)
 
-    # Use the provided pointer directly
     list_alloca = list_ptr
 
-    # Get pointers
     len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
     capacity_ptr = get_list_capacity_ptr(codegen.builder, list_alloca)
     data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
 
-    # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
-    # Destroy all elements
     from .methods_modify import _emit_destroy_elements_loop
     _emit_destroy_elements_loop(codegen, data_ptr, current_len, element_type)
 
-    # Free data pointer
     free_func = codegen.get_free_func()
     data_void_ptr = codegen.builder.bitcast(data_ptr, ir.PointerType(codegen.types.i8))
     codegen.builder.call(free_func, [data_void_ptr])
 
-    # Set to unusable state: data=null, len=0, capacity=0
     zero = ir.Constant(codegen.types.i32, 0)
     null_ptr = ir.Constant(data_ptr.type, None)
 
@@ -41,7 +34,6 @@ def emit_list_destroy(codegen: Any, list_ptr: ir.Value, list_type: StructType) -
     codegen.builder.store(zero, capacity_ptr)
     codegen.builder.store(null_ptr, data_ptr_ptr)
 
-    # Return updated list
     return codegen.builder.load(list_alloca, name="destroyed_list")
 
 
@@ -49,28 +41,22 @@ def emit_list_free(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> i
     """Emit LLVM IR for list.free() - destroy elements and reset to empty."""
     element_type = extract_element_type(list_type, codegen)
 
-    # Use the provided pointer directly
     list_alloca = list_ptr
 
-    # Get pointers
     len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
     capacity_ptr = get_list_capacity_ptr(codegen.builder, list_alloca)
     data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
 
-    # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
-    # Destroy all elements
     from .methods_modify import _emit_destroy_elements_loop
     _emit_destroy_elements_loop(codegen, data_ptr, current_len, element_type)
 
-    # Free data pointer
     free_func = codegen.get_free_func()
     data_void_ptr = codegen.builder.bitcast(data_ptr, ir.PointerType(codegen.types.i8))
     codegen.builder.call(free_func, [data_void_ptr])
 
-    # Reset to empty but usable state: data=null, len=0, capacity=0
     zero = ir.Constant(codegen.types.i32, 0)
     null_ptr = ir.Constant(data_ptr.type, None)
 
@@ -78,5 +64,4 @@ def emit_list_free(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> i
     codegen.builder.store(zero, capacity_ptr)
     codegen.builder.store(null_ptr, data_ptr_ptr)
 
-    # Return reset list (same as .new())
     return codegen.builder.load(list_alloca, name="freed_list")

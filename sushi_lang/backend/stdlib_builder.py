@@ -3,11 +3,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-# sushi_lang/backend/stdlib_builder.py -> sushi_lang/sushi_stdlib/dist
 _DIST_DIR = Path(__file__).resolve().parent.parent / "sushi_stdlib" / "dist"
 _MARKER_NAME = ".build_fingerprint"
 
-# Run the freshness check at most once per process (per platform).
 _checked: set[str] = set()
 
 

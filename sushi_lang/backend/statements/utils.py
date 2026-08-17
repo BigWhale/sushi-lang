@@ -26,10 +26,6 @@ def emit_condition(codegen: 'LLVMCodegen', expr) -> 'ir.Value':
     return cond
 
 
-# ============================================================================
-# RAII Cleanup Helpers
-# ============================================================================
-
 def emit_struct_cleanup(codegen: 'LLVMCodegen') -> None:
     """Emit cleanup code for struct fields with dynamic arrays."""
     if not hasattr(codegen, 'dynamic_arrays') or codegen.dynamic_arrays is None:
@@ -76,7 +72,6 @@ def emit_dynamic_array_cleanup(codegen: 'LLVMCodegen') -> None:
         array_scope = codegen.dynamic_arrays.scope_stack[scope_idx]
         for array_name in array_scope:
             if array_name in codegen.dynamic_arrays.arrays:
-                # _emit_array_destructor is a no-op for moved / explicitly-destroyed arrays.
                 codegen.dynamic_arrays._emit_array_destructor(array_name)
 
 
@@ -95,7 +90,6 @@ def emit_own_cleanup(codegen: 'LLVMCodegen') -> None:
     if not hasattr(codegen, 'dynamic_arrays') or codegen.dynamic_arrays is None:
         return
 
-    # Emit cleanup for all Own<T> variables
     codegen.dynamic_arrays.emit_own_cleanup()
 
 
@@ -106,8 +100,6 @@ def emit_loop_exit_cleanup(codegen: 'LLVMCodegen', min_scope_index: int) -> None
         return
     mem = codegen.memory
 
-    # Dynamic arrays and List<T> live in per-scope stacks whose indices align with the
-    # memory scope depth captured as min_scope_index.
     for scope_idx in range(len(da.scope_stack) - 1, min_scope_index - 1, -1):
         for array_name in da.scope_stack[scope_idx]:
             if array_name in da.arrays:
@@ -144,7 +136,6 @@ def emit_loop_exit_cleanup(codegen: 'LLVMCodegen', min_scope_index: int) -> None
                     and not descriptor.destroyed and not codegen.moves.is_moved(descriptor.slot)):
                 da._emit_own_destructor(var_name, descriptor.own_type)
 
-    # FFI marshalled C strings (per-scope).
     for scope_idx in range(len(mem._cstr_cleanup) - 1, min_scope_index - 1, -1):
         mem._free_cstr_list(mem._cstr_cleanup[scope_idx])
 
@@ -197,10 +188,6 @@ def emit_scope_cleanup(codegen: 'LLVMCodegen', cleanup_type: str = 'all') -> Non
         codegen.emit_string_temp_frame_cleanup_all()
 
 
-# ============================================================================
-# Basic Block Management Helpers
-# ============================================================================
-
 def create_loop_blocks(codegen: 'LLVMCodegen', prefix: str = "loop") -> tuple['ir.Block', 'ir.Block', 'ir.Block']:
     """Create standard loop basic blocks (condition, body, end)."""
     require_function(codegen)
@@ -224,26 +211,17 @@ def create_conditional_blocks(
     return arm_blocks, end_block, else_block
 
 
-# ============================================================================
-# Scope Management Helpers
-# ============================================================================
-
 def emit_block_with_scope(codegen: 'LLVMCodegen', block, emit_func=None) -> None:
     """Emit a block with automatic scope management."""
     codegen.memory.push_scope()
     if emit_func:
         emit_func(block)
     else:
-        # Import here to avoid circular dependency
         from sushi_lang.backend.statements import StatementEmitter
         emitter = StatementEmitter(codegen)
         emitter.emit_block(block)
     codegen.memory.pop_scope()
 
-
-# ============================================================================
-# Loop Emission Helpers
-# ============================================================================
 
 def emit_copy_loop(
     codegen: 'LLVMCodegen',
@@ -259,34 +237,28 @@ def emit_copy_loop(
     zero = ir.Constant(codegen.i32, 0)
     one = ir.Constant(codegen.i32, 1)
 
-    # Allocate loop counter
     index_ptr = codegen.memory.entry_alloca(codegen.i32, f"{name_prefix}_index")
     codegen.builder.store(zero, index_ptr)
 
-    # Create blocks
     loop_head = codegen.builder.append_basic_block(f'{name_prefix}_loop_head')
     loop_body = codegen.builder.append_basic_block(f'{name_prefix}_loop_body')
     loop_done = codegen.builder.append_basic_block(f'{name_prefix}_loop_done')
 
     codegen.builder.branch(loop_head)
 
-    # Loop condition: index < count
     codegen.builder.position_at_end(loop_head)
     current_index = codegen.builder.load(index_ptr)
     loop_continue = codegen.builder.icmp_signed('<', current_index, count)
     codegen.builder.cbranch(loop_continue, loop_body, loop_done)
 
-    # Loop body: copy element
     codegen.builder.position_at_end(loop_body)
     src_elem_ptr = codegen.builder.gep(src_ptr, [current_index])
     dst_elem_ptr = codegen.builder.gep(dst_ptr, [current_index])
     elem_value = codegen.builder.load(src_elem_ptr)
     codegen.builder.store(elem_value, dst_elem_ptr)
 
-    # Increment and continue
     next_index = codegen.builder.add(current_index, one)
     codegen.builder.store(next_index, index_ptr)
     codegen.builder.branch(loop_head)
 
-    # Position at done block
     codegen.builder.position_at_end(loop_done)

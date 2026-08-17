@@ -8,10 +8,8 @@ def emit_string_is_empty(codegen: Any, string_val: ir.Value) -> ir.Value:
     """Emit LLVM IR for string.is_empty() - check if string length is 0."""
     assert codegen.builder is not None
 
-    # Extract length field from fat pointer struct (field 1)
     length = codegen.builder.extract_value(string_val, 1, name="string_len")
 
-    # Compare with zero
     zero = ir.Constant(codegen.i32, 0)
     is_empty = codegen.builder.icmp_signed('==', length, zero)
 

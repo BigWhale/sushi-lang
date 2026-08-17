@@ -69,7 +69,6 @@ def slice_decl_source(node, source_text: str) -> str:
 
     decl_lines = lines[start:end]
 
-    # Strip trailing blank lines that the span overshot into.
     while decl_lines and decl_lines[-1].strip() == "":
         decl_lines.pop()
 
@@ -96,7 +95,6 @@ def serialize_generic_function(func: "FuncDef", source_text: str) -> dict:
 
 def deserialize_generic_function(record: dict) -> "FuncDef":
     """Reconstruct a ``FuncDef`` from a manifest record by re-parsing its source."""
-    # Lazy import to avoid frontend import cycles.
     from sushi_lang.internals.parser import parse_to_ast
 
     program, _tree = parse_to_ast(record["source"])
@@ -213,7 +211,6 @@ def serialize_perk(perk: "PerkDef", source_text: str) -> dict:
 
 def deserialize_perk(record: dict) -> "PerkDef":
     """Reconstruct a ``PerkDef`` from a manifest record by re-parsing its source."""
-    # Lazy import to avoid frontend import cycles.
     from sushi_lang.internals.parser import parse_to_ast
 
     program, _tree = parse_to_ast(record["source"])

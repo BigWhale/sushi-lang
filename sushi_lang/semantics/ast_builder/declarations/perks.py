@@ -16,16 +16,13 @@ def parse_perkdef(t: Tree, ast_builder: 'ASTBuilder') -> PerkDef:
     """Parse perk_def: PERK NAME [type_params] ":" _NEWLINE _INDENT perk_method+ _DEDENT"""
     t = expect(t, "perk_def")
 
-    # Extract perk name
     name_tok = first_name(t.children)
     if name_tok is None:
         ice(t, "missing perk NAME")
 
-    # Extract type parameters if present
     type_params_node = first_tree(t.children, "type_params")
     type_params = parse_bounded_type_params(type_params_node) if type_params_node else None
 
-    # Extract method signatures
     methods: List[PerkMethodSignature] = []
     for child in t.children:
         if isinstance(child, Tree) and child.data == "perk_method":
@@ -47,18 +44,15 @@ def parse_perk_method_signature(t: Tree, ast_builder: 'ASTBuilder') -> PerkMetho
     """Parse perk_method: FN NAME "(" [parameters] ")" type _NEWLINE"""
     t = expect(t, "perk_method")
 
-    # Extract method name
     name_tok = first_name(t.children)
     if name_tok is None:
         ice(t, "missing method NAME")
 
-    # Extract parameters
     from sushi_lang.semantics.ast_builder.declarations.functions import parse_params, strip_self_param
     params_node = first_tree(t.children, "parameters")
     params = parse_params(params_node, ast_builder) if params_node else []
     self_mode, self_mode_span, params = strip_self_param(params, span_of(t))
 
-    # Extract return type
     return_type_node = None
     for child in t.children:
         if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):
@@ -86,15 +80,12 @@ def parse_extendwithdef(t: Tree, ast_builder: 'ASTBuilder') -> ExtendWithDef:
     """Parse extend_with_def: EXTEND type WITH NAME ":" _NEWLINE _INDENT function_def+ _DEDENT"""
     t = expect(t, "extend_with_def")
 
-    # Extract target type (first type node)
     target_type_node = None
     for child in t.children:
         if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):
             target_type_node = child
             break
 
-    # Extract perk name (the NAME after WITH)
-    # The first NAME is the type, so we need to find the token after WITH
     perk_name_tok = None
     found_type = False
     for child in t.children:
@@ -107,7 +98,6 @@ def parse_extendwithdef(t: Tree, ast_builder: 'ASTBuilder') -> ExtendWithDef:
     if perk_name_tok is None:
         ice(t, "missing perk NAME")
 
-    # Extract method implementations (function_def nodes)
     from sushi_lang.semantics.ast_builder.declarations.functions import parse_funcdef
     methods: List[FuncDef] = []
     for child in t.children:
@@ -131,17 +121,13 @@ def parse_extendwithdef(t: Tree, ast_builder: 'ASTBuilder') -> ExtendWithDef:
 
 def parse_handle_extend_stmt_with(t: Tree, ast_builder: 'ASTBuilder') -> ExtendWithDef:
     """Handle extend_stmt when it's a perk implementation."""
-    # extend_stmt: EXTEND type extend_suffix
-    # extend_suffix (aliased as extend_with_def): WITH NAME ":" _NEWLINE _INDENT function_def+ _DEDENT
 
-    # Extract target type (first child after EXTEND)
     target_type_node = None
     for child in t.children:
         if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):
             target_type_node = child
             break
 
-    # Find the extend_with_def suffix
     suffix = None
     for child in t.children:
         if isinstance(child, Tree) and child.data == "extend_with_def":
@@ -151,12 +137,10 @@ def parse_handle_extend_stmt_with(t: Tree, ast_builder: 'ASTBuilder') -> ExtendW
     if not suffix:
         ice(t, "missing extend_with_def suffix")
 
-    # Extract perk name (the NAME after WITH in suffix)
     perk_name_tok = first_name(suffix.children)
     if perk_name_tok is None:
         ice(suffix, "missing perk NAME")
 
-    # Extract method implementations (function_def nodes)
     from sushi_lang.semantics.ast_builder.declarations.functions import parse_funcdef
     methods = []
     for child in suffix.children:
@@ -166,7 +150,6 @@ def parse_handle_extend_stmt_with(t: Tree, ast_builder: 'ASTBuilder') -> ExtendW
     if not methods:
         ice(suffix, "must have at least one method implementation")
 
-    # Parse target type
     target_type = ast_builder._parse_type(target_type_node) if target_type_node else None
 
     return ExtendWithDef(

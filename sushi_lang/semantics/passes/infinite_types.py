@@ -1,4 +1,3 @@
-# semantics/passes/infinite_types.py
 """Reject types that contain themselves by value (CE2095)."""
 from __future__ import annotations
 
@@ -12,7 +11,6 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
 
 
-# A node in the containment graph: ("struct", name) or ("enum", name).
 Node = Tuple[str, str]
 
 
@@ -23,8 +21,6 @@ def _inline_targets(ty: 'Type') -> List[Node]:
     if isinstance(ty, StructType):
         return [("struct", ty.name)]
     if isinstance(ty, EnumType):
-        # Enum payloads are stored inline in the variant, so an enum on a
-        # by-value path keeps the path by-value.
         return [("enum", ty.name)]
     if isinstance(ty, ArrayType):
         # FIXED array: N elements stored inline. DynamicArrayType is deliberately
@@ -86,7 +82,6 @@ def check_infinite_size_types(struct_table: 'StructTable', enum_table: 'EnumTabl
             continue
 
         path: List[Node] = []
-        # (node, index of the next successor to visit)
         stack: List[Tuple[Node, int]] = [(root, 0)]
         state[root] = 0
         path.append(root)
@@ -105,8 +100,6 @@ def check_infinite_size_types(struct_table: 'StructTable', enum_table: 'EnumTabl
             successor = successors[next_index]
 
             if state.get(successor) == 0:
-                # Back edge: everything from `successor` to the top of the path
-                # is one cycle.
                 cycle = path[path.index(successor):]
                 key = frozenset(cycle)
                 if key not in reported and _is_ours(cycle):

@@ -1,4 +1,3 @@
-# semantics/ast.py
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union, Literal
@@ -7,7 +6,6 @@ from sushi_lang.semantics.typesys import Type
 
 from lark import Token
 
-# === Core node base ===
 
 @dataclass
 class Node:
@@ -17,7 +15,6 @@ class Node:
 class Stmt(Node):
     pass
 
-# === Program structure ===
 
 @dataclass
 class UseStatement(Node):
@@ -50,9 +47,7 @@ class Param:
     type_span: Optional[Span] = None
     loc: Optional[Span] = None
     is_variadic: bool = False         # True for a trailing ...T native variadic param;
-                                      # `ty` then holds the collected DynamicArrayType(T)
     is_pack: bool = False             # True for a v2 type-pack value parameter (...Ts args);
-                                      # ty is the bare pack type-param reference, NOT a DynamicArrayType.
     self_mode: Optional[str] = None   # "peek"/"poke" for a `poke self` receiver parameter
                                       # (#327); ty is None. Stripped-and-lifted onto the
                                       # declaration by the builders, never reaches collect.
@@ -148,7 +143,6 @@ class ExtendDef(Node):
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
     self_mode: Optional[str] = None  # "peek"/"poke" when declared `(poke self, ...)` (#327);
-                                     # None is the classic read-only-borrow receiver
     self_mode_span: Optional[Span] = None
 
 @dataclass
@@ -211,7 +205,6 @@ class ExternalBlock(Node):
 class Block(Node):
     statements: List[Stmt]
 
-# === Statements ===
 
 @dataclass
 class Let(Stmt):
@@ -327,8 +320,6 @@ class Match(Stmt):
     resolved_scrutinee_type: Optional[Type] = None
 
 
-# === Expressions ===
-
 @dataclass
 class Name(Node):
     id: str
@@ -337,14 +328,11 @@ class Name(Node):
 class IntLit(Node):
     value: int
     radix: int = 10  # 2 (binary), 8 (octal), 10 (decimal), 16 (hexadecimal)
-    # Context-typed literals: the expected numeric type stamped in by propagation
-    # (`propagate_types_to_value`). None means "no context" -> defaults to i32.
     resolved_type: Optional[Type] = None
 
 @dataclass
 class FloatLit(Node):
     value: float
-    # As IntLit.resolved_type; None means "no context" -> defaults to f64.
     resolved_type: Optional[Type] = None
 
 @dataclass
@@ -419,8 +407,6 @@ class Lambda(Node):
     # binding/argument context, used to infer bare-param types (`|x|`).
     resolved_type: Optional[Type] = None
     expected_type: Optional[Type] = None
-    # Filled by the lambda-lifting pass: the synthesized environment StructType
-    # holding the captured values (backend emit_lambda heap-allocs and populates it).
     env_struct: Optional[Type] = None
 
 
@@ -508,7 +494,6 @@ class TryExpr(Node):
     """Try expression: expr??"""
     expr: "Expr"  # The expression being unwrapped (must be Result<T>)
 
-    # AST annotations set during semantic analysis (Pass 2)
     inferred_inner_type: "Optional[Type]" = None
     inferred_unwrapped_type: "Optional[Type]" = None
     inferred_success_tag: "Optional[int]" = None
@@ -530,9 +515,7 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
     "+","-","*","/","%","==","!=","<","<=",">",">=","and","or","&","|","^","<<",">>". Raises if
     unknown (fail-fast so we don't emit invalid AST).
     """
-    # Map both token TYPES and string LEXEMES to canonical op strings
     op_map = {
-        # token types (adjust to your lexer names if different)
         "PLUS": "+", "MINUS": "-", "STAR": "*", "SLASH": "/", "MOD": "%",
         "EQEQ": "==", "NEQ": "!=",
         "LT": "<", "LE": "<=", "GT": ">", "GE": ">=",
@@ -540,7 +523,6 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
         "BIT_AND": "&", "BIT_OR": "|", "BIT_XOR": "^",
         "LSHIFT": "<<", "RSHIFT": ">>",
 
-        # lexemes (when you see raw text in c.value already)
         "+": "+", "-": "-", "*": "*", "/": "/", "%": "%",
         "==": "==", "!=": "!=",
         "<": "<", "<=": "<=", ">": ">", ">=": ">=",
@@ -550,20 +532,17 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
         "<<": "<<", ">>": ">>",
     }
 
-    # Figure out a lookup key from the input
     key = getattr(op_tok_or_str, "type", None)
     if key is not None:
         hit = op_map.get(key)
         if hit is not None:
             return hit
 
-    # If it wasn't a token type (or type wasn’t mapped), try its string value
     val = getattr(op_tok_or_str, "value", op_tok_or_str)
     hit = op_map.get(val)
     if hit is not None:
         return hit
 
-    # No match → fail fast
     raise NotImplementedError(f"unknown binary operator: {op_tok_or_str!r}")
 
 

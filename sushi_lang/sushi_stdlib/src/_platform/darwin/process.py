@@ -15,7 +15,6 @@ from sushi_lang.sushi_stdlib.src._platform.posix.process import (
     get_environ,
 )
 
-# Re-exported for the platform dispatcher (get_platform_module); referenced dynamically.
 __all__ = [
     "declare_getcwd",
     "declare_chdir",

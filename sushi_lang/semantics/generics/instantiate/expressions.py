@@ -1,4 +1,3 @@
-# semantics/generics/instantiate/expressions.py
 """Expression scanning for instantiation collection."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Set, Tuple
@@ -33,7 +32,6 @@ class ExpressionScanner:
         # the unit-test paths that drive the scanner directly (a block-body lambda is a
         # `let` RHS, which those paths do not construct).
         self.scan_block = None
-        # Create TypeResolver for centralized type resolution
         self._resolver = TypeResolver(
             type_inferrer.struct_table or {},
             type_inferrer.enum_table or {}
@@ -41,7 +39,6 @@ class ExpressionScanner:
 
     def scan_expression(self, expr) -> None:
         """Recursively collect generic instantiations from expressions."""
-        # Import here to avoid circular dependency
         from sushi_lang.semantics.ast import (
             Call, BinaryOp, UnaryOp, IndexAccess, ArrayLiteral,
             EnumConstructor, CastExpr, InterpolatedString, DotCall, TryExpr,
@@ -51,9 +48,7 @@ class ExpressionScanner:
         )
 
         if isinstance(expr, Call):
-            # Regular function calls - check for generic function instantiation
             self._scan_call(expr)
-            # Also scan arguments recursively
             for arg in expr.args:
                 self.scan_expression(arg)
 
@@ -62,75 +57,59 @@ class ExpressionScanner:
             # DotCall can be either a method call or enum constructor
             # We treat it as a potential method call for generic return types
             self._scan_dot_call(expr)
-            # Recursively scan receiver and arguments
             self.scan_expression(expr.receiver)
             for arg in expr.args:
                 self.scan_expression(arg)
 
         elif isinstance(expr, BinaryOp):
-            # Binary operations - scan both operands
             self.scan_expression(expr.left)
             self.scan_expression(expr.right)
 
         elif isinstance(expr, UnaryOp):
-            # Unary operations - scan expression
             self.scan_expression(expr.expr)
 
         elif isinstance(expr, IndexAccess):
-            # Array indexing - scan array and index
             self.scan_expression(expr.array)
             self.scan_expression(expr.index)
 
         elif isinstance(expr, ArrayLiteral):
-            # Array literals - scan all elements
             for element in expr.elements:
                 self.scan_expression(element)
 
         elif isinstance(expr, EnumConstructor):
-            # Enum constructors - scan arguments
             for arg in expr.args:
                 self.scan_expression(arg)
 
         elif isinstance(expr, CastExpr):
-            # Type casts - scan the expression being cast
             self.scan_expression(expr.expr)
 
         elif isinstance(expr, InterpolatedString):
-            # String interpolation - scan all parts
             for part in expr.parts:
                 if not isinstance(part, str):  # Skip string literals
                     self.scan_expression(part)
 
         elif isinstance(expr, TryExpr):
-            # Try operator (??) - scan the expression being unwrapped
             self.scan_expression(expr.expr)
 
         elif isinstance(expr, Borrow):
-            # Borrow expression (&x) - scan the expression being borrowed
             self.scan_expression(expr.expr)
 
         elif isinstance(expr, RangeExpr):
-            # Range (start..end) - scan both bounds
             self.scan_expression(expr.start)
             self.scan_expression(expr.end)
 
         elif isinstance(expr, Spread):
-            # Bloom (arr...) - scan the array being spread
             self.scan_expression(expr.value)
 
         elif isinstance(expr, MemberAccess):
-            # Field access (x.field) - scan the receiver
             self.scan_expression(expr.receiver)
 
         elif isinstance(expr, MethodCall):
-            # MethodCall is normally backend-only (the parser emits DotCall), but handle
-            # it for totality: scan the receiver and arguments.
             self.scan_expression(expr.receiver)
             for arg in expr.args:
                 self.scan_expression(arg)
 
         elif isinstance(expr, DynamicArrayFrom):
-            # from([...]) - scan the element array literal
             self.scan_expression(expr.elements)
 
         elif isinstance(expr, Lambda):
@@ -147,8 +126,6 @@ class ExpressionScanner:
 
         elif isinstance(expr, (IntLit, FloatLit, StringLit, BoolLit, Name,
                                BlankLit, DynamicArrayNew)):
-            # Leaf nodes: no nested expressions to scan. (DynamicArrayNew is an empty `T[]`;
-            # BlankLit is `~`.)
             pass
 
     def _scan_dot_call(self, call) -> None:
@@ -158,14 +135,11 @@ class ExpressionScanner:
         if not isinstance(call, DotCall):
             return
 
-        # Infer receiver type (simple cases only - no full type inference needed)
         receiver_type = self.type_inferrer.infer_simple_receiver_type(call.receiver)
 
         if receiver_type is not None:
-            # Look up built-in method return type
             return_type = self.type_inferrer.get_builtin_method_return_type(receiver_type, call.method)
 
-            # If return type is generic, collect it
             if return_type is not None and isinstance(return_type, GenericTypeRef):
                 self._collect_from_type(return_type)
 
@@ -174,47 +148,37 @@ class ExpressionScanner:
         from sushi_lang.semantics.ast import Name
         from sushi_lang.semantics.typesys import BuiltinType
 
-        # Get function name
         callee = getattr(call, "callee", None)
         if not isinstance(callee, Name):
-            # Not a simple function call (could be complex expression)
             return
 
         function_name = callee.id
 
-        # Check for stdlib functions that return generic types
         if function_name in {'sleep', 'msleep', 'usleep', 'nanosleep'}:
-            # Time functions return Result<i32, StdError>
             std_error = self.type_inferrer.enum_table.get("StdError")
             if std_error:
                 self.instantiations.add(("Result", (BuiltinType.I32, std_error)))
             return
         elif function_name == 'setenv':
-            # setenv returns Result<i32, EnvError>
             env_error = self.type_inferrer.enum_table.get("EnvError")
             if env_error:
                 self.instantiations.add(("Result", (BuiltinType.I32, env_error)))
             return
         elif function_name == 'getenv':
-            # getenv() returns Maybe<string>
             self.instantiations.add(("Maybe", (BuiltinType.STRING,)))
             return
         elif function_name == 'file_size':
-            # file_size() returns Result<i64, FileError>
             file_error = self.type_inferrer.enum_table.get("FileError")
             if file_error:
                 self.instantiations.add(("Result", (BuiltinType.I64, file_error)))
             return
         elif function_name in {'remove', 'rename', 'copy', 'mkdir', 'rmdir'}:
-            # File utility functions return Result<i32, FileError>
             file_error = self.type_inferrer.enum_table.get("FileError")
             if file_error:
                 self.instantiations.add(("Result", (BuiltinType.I32, file_error)))
             return
 
-        # Check if this is a generic function
         if not self.generic_funcs or function_name not in self.generic_funcs:
-            # Not a generic function
             return
 
         generic_func = self.generic_funcs[function_name]
@@ -235,22 +199,18 @@ class ExpressionScanner:
                 self.type_inferrer.enum_table,
             )
         else:
-            # Infer type arguments from call site
             type_args = self._infer_type_args_from_call(call, generic_func)
 
         if type_args is not None:
-            # Successfully inferred - record instantiation
             self.function_instantiations.add((function_name, type_args))
 
             # IMPORTANT: Also detect Result<T, E> instantiation for the return type
             # All Sushi functions implicitly return Result<T, E> where T is the declared return type
             # and E is StdError by default (unless explicitly specified)
             if generic_func.ret is not None:
-                # Substitute type parameters in return type
                 ret_type = self.type_inferrer.substitute_type_simple(
                     generic_func.ret, generic_func.type_params, type_args
                 )
-                # Add Result<ret_type, StdError> to enum instantiations
                 if ret_type is not None:
                     std_error = self.type_inferrer.enum_table.get("StdError")
                     if std_error:
@@ -283,14 +243,11 @@ class ExpressionScanner:
         """Infer type arguments for generic function call."""
         from sushi_lang.semantics.generics.pack_inference import infer_flat_type_args
 
-        # Infer argument types up front (the shared helper operates on types, so
-        # both this site and Pass 2 feed it already-resolved concrete types).
         call_args = getattr(call, "args", []) or []
         arg_types: list["Type"] = []
         for arg_expr in call_args:
             arg_type = self._infer_arg_type(arg_expr)
             if arg_type is None:
-                # Can't infer argument type
                 return None
             arg_types.append(arg_type)
 
@@ -306,49 +263,38 @@ class ExpressionScanner:
         """Infer the leading (non-pack) type-args from already-inferred arg types."""
         from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
-        # Build type parameter -> concrete type mapping
         type_param_map: dict[str, "Type"] = {}
 
-        # Leading value-params are those that are NOT the pack value-param.
         func_params = [
             p for p in generic_func.params if not getattr(p, "is_pack", False)
         ]
 
         if len(leading_arg_types) != len(func_params):
-            # Argument count mismatch - can't infer
             return None
 
-        # Match each argument type to corresponding parameter
         for arg_type, param in zip(leading_arg_types, func_params, strict=False):
-            # Unify argument type with parameter type
             if param.ty is None:
                 # Parameter has no type annotation - shouldn't happen
                 return None
 
             success = self.type_inferrer.unify_types(param.ty, arg_type, type_param_map)
             if not success:
-                # Unification failed
                 return None
 
-        # Leading type-params are the non-pack ones, in declaration order.
         leading_type_params = [
             tp for tp in generic_func.type_params
             if not getattr(tp, "is_pack", False)
         ]
 
-        # Check that all leading type parameters were inferred
         for tp in leading_type_params:
             tp_name = tp.name if hasattr(tp, 'name') else str(tp)
             if tp_name not in type_param_map:
-                # Type parameter not inferred (not used in parameters)
                 return None
 
-        # Extract type arguments in parameter order and resolve UnknownType
         type_args = []
         for tp in leading_type_params:
             tp_name = tp.name if hasattr(tp, 'name') else str(tp)
             inferred_type = type_param_map[tp_name]
-            # Resolve UnknownType to concrete StructType/EnumType if possible
             resolved_type = resolve_unknown_type(
                 inferred_type,
                 self.type_inferrer.struct_table or {},
@@ -367,7 +313,6 @@ class ExpressionScanner:
         if not self.generic_funcs or name not in self.generic_funcs:
             return
         generic_func = self.generic_funcs[name]
-        # v1 slice: plain (non-pack) generic functions only.
         func_params = [p for p in generic_func.params if not getattr(p, "is_pack", False)]
         if len(func_params) != len(expected_ty.param_types):
             return
@@ -402,18 +347,12 @@ class ExpressionScanner:
     def _collect_from_type(self, ty: "Type") -> None:
         """Collect generic instantiations from a type annotation."""
         if isinstance(ty, GenericTypeRef):
-            # Found a generic type instantiation!
-            # Use TypeResolver for centralized resolution
             resolved_type_args = self._resolver.resolve_type_args(ty.type_args)
 
-            # Skip if any type argument is still UnknownType (can't be resolved)
             if self._resolver.contains_unresolvable_in_tuple(resolved_type_args):
                 return
 
-            # Record it as (base_name, type_args) tuple with resolved types
             self.instantiations.add((ty.base_name, resolved_type_args))
 
-            # Recursively collect from type arguments
-            # Example: Result<Result<i32>> has nested generics
             for arg in resolved_type_args:
                 self._collect_from_type(arg)

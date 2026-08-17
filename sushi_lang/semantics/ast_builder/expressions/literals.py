@@ -17,7 +17,6 @@ def expr_from_token(tok: Token, ast_builder: 'ASTBuilder') -> Expr:
     t = tok.type
 
     if t == "INT":
-        # Check for C-style octal literals (leading zero) and reject them
         if len(tok.value) > 1 and tok.value[0] == '0' and tok.value[1].isdigit():
             raise SyntaxDiagnostic("CE2071", span=span_of(tok), literal=tok.value,
                                    octal=tok.value.lstrip('0') or '0')

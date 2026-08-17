@@ -54,11 +54,9 @@ class LLVMOptimizer:
         pto = llvm.PipelineTuningOptions(speed_level=level, size_level=0)
         pb = llvm.PassBuilder(tm, pto)
 
-        # Create pass managers
         fpm = llvm.create_new_function_pass_manager()
         mpm = llvm.create_new_module_pass_manager()
 
-        # Apply optimization pipeline based on level
         if mode == "o1":
             LLVMOptimizer._build_o1_pipeline(fpm, mpm)
         elif mode == "o2":
@@ -66,69 +64,54 @@ class LLVMOptimizer:
         elif mode == "o3":
             LLVMOptimizer._build_o3_pipeline(fpm, mpm)
 
-        # Run function passes on all functions
         for fn in llmod.functions:
             if not fn.is_declaration:
                 fpm.run(fn, pb)
 
-        # Run module passes
         mpm.run(llmod, pb)
 
     @staticmethod
     def _build_o1_pipeline(fpm: Any, mpm: Any) -> None:
         """Build O1 optimization pipeline with basic optimizations."""
-        # Basic SROA and memory optimizations
         fpm.add_sroa_pass()
 
-        # Basic simplifications
         fpm.add_simplify_cfg_pass()
         fpm.add_instruction_combine_pass()
 
-        # Dead code elimination
         fpm.add_dead_code_elimination_pass()
 
-        # Module-level optimizations
         mpm.add_global_dead_code_eliminate_pass()
         mpm.add_strip_dead_prototype_pass()
 
     @staticmethod
     def _build_o2_pipeline(fpm: Any, mpm: Any) -> None:
         """Build O2 optimization pipeline with moderate optimizations."""
-        # Early optimizations (O1 base)
         fpm.add_sroa_pass()
         fpm.add_simplify_cfg_pass()
 
-        # Scalar optimizations
         fpm.add_sccp_pass()  # Sparse conditional constant propagation
         fpm.add_instruction_combine_pass()
         fpm.add_reassociate_pass()
 
-        # CFG optimizations
         fpm.add_jump_threading_pass()
         fpm.add_simplify_cfg_pass()
 
-        # Loop optimizations
         fpm.add_loop_simplify_pass()
         fpm.add_lcssa_pass()  # Loop-closed SSA form
         fpm.add_loop_rotate_pass()
         fpm.add_loop_deletion_pass()
 
-        # More scalar optimizations
         fpm.add_instruction_combine_pass()
         fpm.add_new_gvn_pass()  # Global value numbering (redundancy elimination)
 
-        # Memory optimizations
         fpm.add_mem_copy_opt_pass()
         fpm.add_dead_store_elimination_pass()
 
-        # Cleanup
         fpm.add_aggressive_dce_pass()
         fpm.add_simplify_cfg_pass()
 
-        # Tail call elimination
         fpm.add_tail_call_elimination_pass()
 
-        # Module-level optimizations
         mpm.add_global_opt_pass()
         mpm.add_ipsccp_pass()  # Interprocedural SCCP
         mpm.add_dead_arg_elimination_pass()
@@ -139,20 +122,16 @@ class LLVMOptimizer:
     @staticmethod
     def _build_o3_pipeline(fpm: Any, mpm: Any) -> None:
         """Build O3 optimization pipeline with aggressive optimizations."""
-        # Early optimizations (O2 base + more aggressive settings)
         fpm.add_sroa_pass()
         fpm.add_simplify_cfg_pass()
 
-        # Scalar optimizations (first pass)
         fpm.add_sccp_pass()
         fpm.add_instruction_combine_pass()
         fpm.add_reassociate_pass()
 
-        # CFG optimizations
         fpm.add_jump_threading_pass()
         fpm.add_simplify_cfg_pass()
 
-        # Loop optimizations (aggressive)
         fpm.add_loop_simplify_pass()
         fpm.add_lcssa_pass()
         fpm.add_loop_rotate_pass()
@@ -160,30 +139,23 @@ class LLVMOptimizer:
         fpm.add_loop_deletion_pass()
         fpm.add_loop_strength_reduce_pass()  # Loop strength reduction
 
-        # More aggressive scalar optimizations
         fpm.add_instruction_combine_pass()
         fpm.add_new_gvn_pass()
         fpm.add_aggressive_instcombine_pass()  # More aggressive than standard
 
-        # Memory optimizations
         fpm.add_mem_copy_opt_pass()
         fpm.add_dead_store_elimination_pass()
 
-        # Instruction sinking for better register allocation
         fpm.add_sinking_pass()
 
-        # Second round of optimizations
         fpm.add_instruction_combine_pass()
         fpm.add_simplify_cfg_pass()
 
-        # Cleanup
         fpm.add_aggressive_dce_pass()
         fpm.add_simplify_cfg_pass()
 
-        # Tail call elimination
         fpm.add_tail_call_elimination_pass()
 
-        # Module-level optimizations (aggressive)
         mpm.add_global_opt_pass()
         mpm.add_ipsccp_pass()
         mpm.add_dead_arg_elimination_pass()
@@ -193,7 +165,6 @@ class LLVMOptimizer:
         mpm.add_constant_merge_pass()
         mpm.add_strip_dead_prototype_pass()
 
-        # Final module-level cleanup
         mpm.add_global_dead_code_eliminate_pass()
 
     @staticmethod
@@ -218,8 +189,6 @@ class LLVMOptimizer:
         triple = target_triple or llvm.get_default_triple()
         target = llvm.Target.from_triple(triple)
 
-        # Determine if we need PIC relocation model
-        # Linux requires PIC for both ARM64 and x86_64
         reloc = "default"
         if "linux" in triple.lower():
             reloc = "pic"

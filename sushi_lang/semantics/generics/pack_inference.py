@@ -33,15 +33,11 @@ def infer_flat_type_args(
     """Infer the flat tuple of concrete type-args for a generic call."""
     pack_idx = _pack_value_param_index(generic_func)
 
-    # No pack value-param: existing behavior, byte-for-byte unchanged. The
-    # caller's leading-inference handles ALL params/args and ALL type-params.
     if pack_idx is None:
         return infer_leading(generic_func, list(arg_types))
 
     arg_types = list(arg_types)
 
-    # A pack absorbs zero-or-more trailing args, so a call may legally pass
-    # fewer args than there are parameters only down to the leading count.
     if len(arg_types) < pack_idx:
         return None
 
@@ -54,6 +50,4 @@ def infer_flat_type_args(
     if leading_type_args is None:
         return None
 
-    # Flat key: leading inferred type-args followed by ALL trailing arg types
-    # (these are the concrete types bound to the pack type-param, arity == len).
     return tuple(leading_type_args) + trailing_arg_types

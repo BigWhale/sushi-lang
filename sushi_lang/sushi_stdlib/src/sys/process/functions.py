@@ -13,7 +13,6 @@ from sushi_lang.sushi_stdlib.src.libc_declarations import (
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 
 
-# ProcessError variant tags (order matches semantics/passes/collect/enums.py)
 _PE_SPAWN_FAILED = 0
 _PE_EXIT_FAILURE = 1
 _PE_SIGNAL_RECEIVED = 2
@@ -31,16 +30,13 @@ def generate_getcwd(module: ir.Module) -> None:
     process_error_type = get_process_error_type()
     result_type = get_result_type(string_type, process_error_type)
 
-    # Declare platform-specific getcwd
     platform_process = get_platform_module('process')
     libc_getcwd = platform_process.declare_getcwd(module)
 
-    # Declare helper functions
     malloc_fn = declare_malloc(module)
     free_fn = declare_free(module)
     strlen_fn = declare_strlen(module)
 
-    # Define sushi_getcwd() -> Result<string>
     func_type = ir.FunctionType(result_type, [])
     func = ir.Function(module, func_type, name="sushi_getcwd")
 
@@ -50,19 +46,15 @@ def generate_getcwd(module: ir.Module) -> None:
 
     builder = ir.IRBuilder(entry)
 
-    # Allocate buffer (PATH_MAX = 4096)
     path_max = ir.Constant(i64, 4096)
     buffer = builder.call(malloc_fn, [path_max])
 
-    # Call getcwd(buffer, size)
     result_ptr = builder.call(libc_getcwd, [buffer, path_max])
 
-    # Check for NULL (error)
     null_ptr = ir.Constant(i8_ptr, None)
     is_error = builder.icmp_unsigned('==', result_ptr, null_ptr)
     builder.cbranch(is_error, error_block, success_block)
 
-    # Success block: convert C string to Sushi string
     builder.position_at_end(success_block)
     str_len = builder.call(strlen_fn, [result_ptr])
     str_len_i32 = builder.trunc(str_len, i32)
@@ -72,7 +64,6 @@ def generate_getcwd(module: ir.Module) -> None:
     # owns it now.
     sushi_string = cstr_to_fat_pointer_with_len(builder, result_ptr, str_len_i32, owned=1)
 
-    # Pack into Result.Ok
     result_ok = builder.alloca(result_type)
     tag_ptr = builder.gep(result_ok, [ir.Constant(i32, 0), ir.Constant(i32, 0)])
     builder.store(ir.Constant(i32, 0), tag_ptr)  # tag = 0 (Ok)
@@ -84,7 +75,6 @@ def generate_getcwd(module: ir.Module) -> None:
     result_val = builder.load(result_ok)
     builder.ret(result_val)
 
-    # Error block: free buffer and return Result.Err()
     builder.position_at_end(error_block)
     builder.call(free_fn, [buffer])
 
@@ -103,11 +93,9 @@ def generate_chdir(module: ir.Module) -> None:
     process_error_type = get_process_error_type()
     result_type = get_result_type(i32, process_error_type)
 
-    # Declare platform-specific chdir
     platform_process = get_platform_module('process')
     libc_chdir = platform_process.declare_chdir(module)
 
-    # Define sushi_chdir(string path) -> Result<i32>
     func_type = ir.FunctionType(result_type, [string_type])
     func = ir.Function(module, func_type, name="sushi_chdir")
     path_arg = func.args[0]
@@ -116,13 +104,10 @@ def generate_chdir(module: ir.Module) -> None:
     entry = func.append_basic_block("entry")
     builder = ir.IRBuilder(entry)
 
-    # Convert Sushi string to C string
     c_path = fat_pointer_to_cstr(module, builder, path_arg)
 
-    # Call chdir(path)
     chdir_result = builder.call(libc_chdir, [c_path])
 
-    # Pack result into Result.Ok (we return both success and error as Ok with the code)
     result_ok = builder.alloca(result_type)
     tag_ptr = builder.gep(result_ok, [ir.Constant(i32, 0), ir.Constant(i32, 0)])
     builder.store(ir.Constant(i32, 0), tag_ptr)  # tag = 0 (Ok)
@@ -140,11 +125,9 @@ def generate_exit(module: ir.Module) -> None:
     i8, i8_ptr, i32, i64 = get_basic_types()
     void = ir.VoidType()
 
-    # Declare platform-specific exit
     platform_process = get_platform_module('process')
     libc_exit = platform_process.declare_exit(module)
 
-    # Define sushi_exit(i32 code) -> void
     func_type = ir.FunctionType(void, [i32])
     func = ir.Function(module, func_type, name="sushi_exit")
     code_arg = func.args[0]
@@ -162,18 +145,15 @@ def generate_getpid(module: ir.Module) -> None:
     """Generate getpid() -> i32"""
     i8, i8_ptr, i32, i64 = get_basic_types()
 
-    # Declare platform-specific getpid
     platform_process = get_platform_module('process')
     libc_getpid = platform_process.declare_getpid(module)
 
-    # Define sushi_getpid() -> i32
     func_type = ir.FunctionType(i32, [])
     func = ir.Function(module, func_type, name="sushi_getpid")
 
     entry = func.append_basic_block("entry")
     builder = ir.IRBuilder(entry)
 
-    # Call and return
     result = builder.call(libc_getpid, [])
     builder.ret(result)
 
@@ -182,18 +162,15 @@ def generate_getuid(module: ir.Module) -> None:
     """Generate getuid() -> i32"""
     i8, i8_ptr, i32, i64 = get_basic_types()
 
-    # Declare platform-specific getuid
     platform_process = get_platform_module('process')
     libc_getuid = platform_process.declare_getuid(module)
 
-    # Define sushi_getuid() -> i32
     func_type = ir.FunctionType(i32, [])
     func = ir.Function(module, func_type, name="sushi_getuid")
 
     entry = func.append_basic_block("entry")
     builder = ir.IRBuilder(entry)
 
-    # Call and return
     result = builder.call(libc_getuid, [])
     builder.ret(result)
 
@@ -234,7 +211,6 @@ def generate_run(module: ir.Module) -> None:
     one_i32 = ir.Constant(i32, 1)
     null_i8ptr = ir.Constant(i8_ptr, None)
 
-    # --- blocks ---
     entry = func.append_basic_block("entry")
     tmpfile_fail = func.append_basic_block("tmpfile_fail")
     setup = func.append_basic_block("setup")
@@ -251,7 +227,6 @@ def generate_run(module: ir.Module) -> None:
 
     b = ir.IRBuilder(entry)
 
-    # helper: return Result.Err(ProcessError.<variant>)
     def emit_err(variant_tag: int) -> None:
         res = b.alloca(result_type)
         b.store(ir.Constant(i32, 1), b.gep(res, [z, z]))          # Result tag = Err
@@ -263,7 +238,6 @@ def generate_run(module: ir.Module) -> None:
         b.store(b.load(ev), data)
         b.ret(b.load(res))
 
-    # helper: read a whole FILE* into a Sushi string (buffer owned by the returned string)
     def emit_read_all(f) -> ir.Value:
         b.call(fseek_fn, [f, ir.Constant(i64, 0), ir.Constant(i32, 2)])   # SEEK_END
         n64 = b.call(ftell_fn, [f])
@@ -273,7 +247,6 @@ def generate_run(module: ir.Module) -> None:
         b.store(ir.Constant(i8, 0), b.gep(buf, [n64]))                    # NUL terminate
         return cstr_to_fat_pointer_with_len(b, buf, b.trunc(n64, i32), owned=1)
 
-    # entry: allocas + open capture files
     args_slot = b.alloca(argv_type)
     i_slot = b.alloca(i32)
     j_slot = b.alloca(i32)
@@ -287,11 +260,9 @@ def generate_run(module: ir.Module) -> None:
     err_bad = b.icmp_unsigned('==', err_file, null_i8ptr)
     b.cbranch(b.or_(out_bad, err_bad), tmpfile_fail, setup)
 
-    # tmpfile_fail: nothing allocated yet beyond the (failed) FILE handles
     b.position_at_end(tmpfile_fail)
     emit_err(_PE_SPAWN_FAILED)
 
-    # setup: build argv[0] = cmd, allocate the argv vector
     b.position_at_end(setup)
     cmd_cstr = fat_pointer_to_cstr(module, b, cmd_arg)
     arg_len = b.load(b.gep(args_slot, [z, z]))                    # args.len
@@ -305,12 +276,10 @@ def generate_run(module: ir.Module) -> None:
     b.store(z, i_slot)
     b.branch(argv_cond)
 
-    # argv_cond: while i < arg_len
     b.position_at_end(argv_cond)
     i_val = b.load(i_slot)
     b.cbranch(b.icmp_signed('<', i_val, arg_len), argv_body, argv_done)
 
-    # argv_body: argv[i+1] = cstr(args.data[i])
     b.position_at_end(argv_body)
     i_val = b.load(i_slot)
     elem = b.load(b.gep(arg_data, [i_val]))                       # {i8*,i32} fat pointer
@@ -319,7 +288,6 @@ def generate_run(module: ir.Module) -> None:
     b.store(b.add(i_val, one_i32), i_slot)
     b.branch(argv_cond)
 
-    # argv_done: NULL-terminate argv, set up file actions, spawn
     b.position_at_end(argv_done)
     b.store(null_i8ptr, b.gep(argv, [argc]))                      # argv[argc] = NULL
     fa = b.bitcast(fa_buf, i8_ptr)
@@ -332,7 +300,6 @@ def generate_run(module: ir.Module) -> None:
     b.store(z, j_slot)
     b.branch(free_cond)
 
-    # free argv element cstrs, then argv itself (no longer needed after spawn)
     b.position_at_end(free_cond)
     j_val = b.load(j_slot)
     b.cbranch(b.icmp_signed('<', j_val, argc), free_body, free_done)
@@ -347,13 +314,11 @@ def generate_run(module: ir.Module) -> None:
     b.call(free_fn, [argv_raw])
     b.cbranch(b.icmp_signed('==', rc, z), spawned, spawn_err)
 
-    # spawn_err: posix_spawnp failed (rc != 0) -> Err(SpawnFailed)
     b.position_at_end(spawn_err)
     b.call(fclose_fn, [out_file])
     b.call(fclose_fn, [err_file])
     emit_err(_PE_SPAWN_FAILED)
 
-    # spawned: wait for the child, decode status
     b.position_at_end(spawned)
     b.call(waitpid_fn, [b.load(pid_slot), status_slot, z])
     status = b.load(status_slot)
@@ -364,13 +329,11 @@ def generate_run(module: ir.Module) -> None:
     )
     b.cbranch(is_signaled, signaled, exited)
 
-    # signaled: killed by a signal -> Err(SignalReceived)
     b.position_at_end(signaled)
     b.call(fclose_fn, [out_file])
     b.call(fclose_fn, [err_file])
     emit_err(_PE_SIGNAL_RECEIVED)
 
-    # exited: normal termination -> Ok(ProcessOutput{exit_code, stdout, stderr})
     b.position_at_end(exited)
     exit_code = b.and_(b.lshr(status, ir.Constant(i32, 8)), ir.Constant(i32, 0xff))
     stdout_str = emit_read_all(out_file)

@@ -25,8 +25,6 @@ def _register_discarded_owning_temp(codegen: 'LLVMCodegen', expr, value) -> None
     from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
     ty = infer_expr_semantic_type(codegen, expr)
     if ty is None and getattr(expr, 'method', None) == 'clone':
-        # clone() returns the receiver's type; its inference is annotation-driven and may be
-        # absent on the call node, so fall back to the receiver.
         ty = infer_expr_semantic_type(codegen, expr.receiver)
     ty = resolve_named_type(codegen, ty) if ty is not None else None
     if ty is None or not needs_cleanup(ty):
@@ -48,15 +46,12 @@ class StatementEmitter:
             raise_internal_error("CE0009")
         self.codegen.utils.ensure_open_block()
 
-        # Import statement types
         from sushi_lang.semantics.ast import (
             Let, Print, PrintLn, Return, If, While, Foreach, Match,
             Break, Continue, Rebind, ExprStmt
         )
 
-        # Delegate to appropriate specialized emitter based on statement type
         match stmt:
-            # I/O statements - MIGRATED in Phase 2
             case Print():
                 from sushi_lang.backend.statements import io
                 return io.emit_print(self.codegen, stmt)
@@ -64,7 +59,6 @@ class StatementEmitter:
                 from sushi_lang.backend.statements import io
                 return io.emit_println(self.codegen, stmt)
 
-            # Loop control - MIGRATED in Phase 2
             case Break():
                 from sushi_lang.backend.statements import loops
                 return loops.emit_break(self.codegen)
@@ -72,7 +66,6 @@ class StatementEmitter:
                 from sushi_lang.backend.statements import loops
                 return loops.emit_continue(self.codegen)
 
-            # Control flow - MIGRATED in Phase 3
             case If():
                 from sushi_lang.backend.statements import control_flow
                 return control_flow.emit_if(self.codegen, stmt)
@@ -80,12 +73,10 @@ class StatementEmitter:
                 from sushi_lang.backend.statements import control_flow
                 return control_flow.emit_while(self.codegen, stmt)
 
-            # Return statements - MIGRATED in Phase 3
             case Return():
                 from sushi_lang.backend.statements import returns
                 return returns.emit_return(self.codegen, stmt)
 
-            # Variable lifecycle - MIGRATED in Phase 4
             case Let():
                 from sushi_lang.backend.statements import variables
                 return variables.emit_let(self.codegen, stmt)
@@ -93,23 +84,19 @@ class StatementEmitter:
                 from sushi_lang.backend.statements import variables
                 return variables.emit_rebind(self.codegen, stmt)
 
-            # Expression statements - MIGRATED in Phase 4 (trivial inline)
             case ExprStmt():
                 value = self.codegen.expressions.emit_expr(stmt.expr)
                 _register_discarded_owning_temp(self.codegen, stmt.expr, value)
                 return
 
-            # Complex loops - MIGRATED in Phase 5
             case Foreach():
                 from sushi_lang.backend.statements import loops
                 return loops.emit_foreach(self.codegen, stmt)
 
-            # Pattern matching - MIGRATED in Phase 5
             case Match():
                 from sushi_lang.backend.statements import matching
                 return matching.emit_match(self.codegen, stmt)
 
-            # Unknown statement type
             case _:
                 raise NotImplementedError(f"statement not supported yet: {type(stmt).__name__}")
 

@@ -4,8 +4,6 @@ from typing import Optional, Set
 from sushi_lang.semantics.typesys import Type, BuiltinType
 
 
-# === Type Sets ===
-
 BUILTIN_INTEGER_TYPES: Set[BuiltinType] = {
     BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
     BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64
@@ -25,8 +23,6 @@ BUILTIN_STRING_CONVERTIBLE_TYPES: Set[BuiltinType] = BUILTIN_NUMERIC_TYPES | {
     BuiltinType.BOOL, BuiltinType.STRING
 }
 
-
-# === Type Predicates ===
 
 def is_numeric_type(ty: Type) -> bool:
     """Check if a type is numeric (integer or floating-point)."""
@@ -52,7 +48,6 @@ def is_string_convertible(ty: Type) -> bool:
     """Check if a type can be converted to string in string interpolation."""
     if isinstance(ty, BuiltinType):
         return ty in BUILTIN_STRING_CONVERTIBLE_TYPES
-    # Arrays, structs, enums, iterators are not supported
     return False
 
 

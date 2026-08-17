@@ -5,9 +5,7 @@ from typing import TypeVar, Generic, TYPE_CHECKING
 
 from sushi_lang.semantics.ast import Node, Block
 from sushi_lang.semantics.ast import (
-    # Statements
     Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, Break, Continue,
-    # Expressions
     Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
     UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor,
     DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread
@@ -42,8 +40,6 @@ class RecursiveVisitor(NodeVisitor[None]):
     def generic_visit(self, node: Node) -> None:
         """Default behavior: no action for unknown nodes."""
         pass
-
-    # === Statement visitors ===
 
     def visit_let(self, node: Let) -> None:
         """Visit a let statement. Default: visit the value expression."""
@@ -110,8 +106,6 @@ class RecursiveVisitor(NodeVisitor[None]):
         """Visit a block. Default: visit all statements."""
         for stmt in node.statements:
             self.visit(stmt)
-
-    # === Expression visitors ===
 
     def visit_name(self, node: Name) -> None:
         """Visit a name expression. Default: no action."""

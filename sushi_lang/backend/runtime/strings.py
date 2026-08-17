@@ -20,7 +20,6 @@ class StringOperations:
         """Initialize with reference to main codegen instance."""
         self.codegen = codegen
 
-        # UTF-8 support functions (defined in this module) - declared immediately for type safety
         self.utf8_char_count: ir.Function
 
     def declare_utf8_functions(self) -> None:
@@ -29,10 +28,8 @@ class StringOperations:
 
     def emit_string_literal(self, string_value: str) -> ir.Value:
         """Generate a global string constant and return a fat pointer struct."""
-        # Use StringConstantManager for deduplication (no null terminator for fat pointers)
         global_str = self.codegen.string_manager.get_or_create_raw(string_value)
 
-        # Get pointer to the string data
         zero = ir.Constant(self.codegen.i32, 0)
         data_ptr = self.codegen.builder.gep(global_str, [zero, zero])
 
@@ -44,7 +41,6 @@ class StringOperations:
         size = len(string_value.encode('utf-8'))
         size_value = ir.Constant(self.codegen.i32, size)
 
-        # Use insertvalue to build the struct
         undef_struct = ir.Constant(string_struct_type, ir.Undefined)
         struct_with_data = self.codegen.builder.insert_value(undef_struct, data_ptr, 0)
         struct_with_size = self.codegen.builder.insert_value(struct_with_data, size_value, 1)
@@ -58,26 +54,20 @@ class StringOperations:
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
 
-        # Extract data pointers and sizes from fat pointer structs
         lhs_data = self.codegen.builder.extract_value(lhs, 0)
         lhs_size = self.codegen.builder.extract_value(lhs, 1)
         rhs_data = self.codegen.builder.extract_value(rhs, 0)
         rhs_size = self.codegen.builder.extract_value(rhs, 1)
 
-        # First check if sizes are equal
         sizes_equal = self.codegen.builder.icmp_signed('==', lhs_size, rhs_size)
 
-        # Create blocks for conditional comparison
         check_data_block = self.codegen.builder.append_basic_block(name="check_data")
         merge_block = self.codegen.builder.append_basic_block(name="merge")
 
-        # Remember current block for phi node
         entry_block = self.codegen.builder.block
 
-        # If sizes not equal, strings can't be equal
         self.codegen.builder.cbranch(sizes_equal, check_data_block, merge_block)
 
-        # Block for checking data when sizes match
         self.codegen.builder.position_at_end(check_data_block)
         # Use memcmp to compare data. memcmp's n is size_t (i64); zero-extend the
         # i32 string size so the full 64-bit length register is defined (issue #149).
@@ -86,7 +76,6 @@ class StringOperations:
         data_equal = self.codegen.builder.icmp_signed('==', memcmp_result, ir.Constant(self.codegen.i32, 0))
         self.codegen.builder.branch(merge_block)
 
-        # Merge block
         self.codegen.builder.position_at_end(merge_block)
         phi = self.codegen.builder.phi(self.codegen.i1)
         phi.add_incoming(ir.Constant(self.codegen.i1, 0), entry_block)  # Different sizes = not equal
@@ -103,10 +92,8 @@ class StringOperations:
         """Add null terminator to string at specified offset."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
-        # Get pointer to the position where we want to place null terminator
         null_pos_ptr = self.codegen.builder.gep(string_ptr, [offset])
 
-        # Store null terminator
         null_char = ir.Constant(self.codegen.i8, 0)
         self.codegen.builder.store(null_char, null_pos_ptr)
 
@@ -115,16 +102,13 @@ class StringOperations:
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
 
-        # Extract data pointers and sizes from fat pointer structs
         data1 = self.codegen.builder.extract_value(str1, 0)
         size1 = self.codegen.builder.extract_value(str1, 1)
         data2 = self.codegen.builder.extract_value(str2, 0)
         size2 = self.codegen.builder.extract_value(str2, 1)
 
-        # Calculate total size (no null terminator needed)
         total_size = self.codegen.builder.add(size1, size2)
 
-        # Allocate memory for the new string
         total_size_i64 = self.codegen.builder.zext(total_size, ir.IntType(INT64_BIT_WIDTH))
         new_data = emit_malloc(self.codegen, self.codegen.builder, total_size_i64)
         # If emitted inside a print/println argument, this concat buffer is a temporary
@@ -144,12 +128,10 @@ class StringOperations:
         size1_i64 = self.codegen.builder.zext(size1, ir.IntType(INT64_BIT_WIDTH))
         self.codegen.builder.call(memcpy_fn, [new_data, data1, size1_i64, is_volatile])
 
-        # Copy second string after first
         offset_ptr = self.codegen.builder.gep(new_data, [size1])
         size2_i64 = self.codegen.builder.zext(size2, ir.IntType(INT64_BIT_WIDTH))
         self.codegen.builder.call(memcpy_fn, [offset_ptr, data2, size2_i64, is_volatile])
 
-        # Build and return fat pointer struct (freshly malloc'd -> heap-owned)
         string_struct_type = self.codegen.types.string_struct
         undef_struct = ir.Constant(string_struct_type, ir.Undefined)
         struct_with_data = self.codegen.builder.insert_value(undef_struct, new_data, 0)
@@ -164,11 +146,9 @@ class StringOperations:
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
 
-        # Extract data pointer and size
         data_ptr = self.codegen.builder.extract_value(string_struct, 0)
         size = self.codegen.builder.extract_value(string_struct, 1)
 
-        # Allocate size+1 bytes for null terminator
         size_plus_one = self.codegen.builder.add(size, ir.Constant(self.codegen.i32, 1))
         size_i64 = self.codegen.builder.zext(size_plus_one, ir.IntType(INT64_BIT_WIDTH))
         c_str = emit_malloc(self.codegen, self.codegen.builder, size_i64)
@@ -183,7 +163,6 @@ class StringOperations:
         size_copy_i64 = self.codegen.builder.zext(size, ir.IntType(INT64_BIT_WIDTH))
         self.codegen.builder.call(memcpy_fn, [c_str, data_ptr, size_copy_i64, is_volatile])
 
-        # Add null terminator
         null_ptr = self.codegen.builder.gep(c_str, [size])
         self.codegen.builder.store(ir.Constant(self.codegen.i8, 0), null_ptr)
 
@@ -194,10 +173,8 @@ class StringOperations:
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
 
-        # Use strlen to get the size
         size = self.codegen.builder.call(self.codegen.runtime.libc_strings.strlen, [c_str])
 
-        # Build fat pointer struct: {i8* data, i32 size, i8 owned}
         string_struct_type = self.codegen.types.string_struct
         undef_struct = ir.Constant(string_struct_type, ir.Undefined)
         struct_with_data = self.codegen.builder.insert_value(undef_struct, c_str, 0)
@@ -242,8 +219,6 @@ class StringOperations:
 
     def emit_string_allocation(self, size: ir.Value) -> ir.Value:
         """Generate call to malloc for string allocation."""
-        # Use the existing malloc infrastructure from the main codegen
-        # Convert i32 to i64 for size_t parameter if needed
         if isinstance(size.type, ir.IntType) and size.type.width == 32:
             size_i64 = self.codegen.builder.zext(size, ir.IntType(INT64_BIT_WIDTH))
         else:
@@ -258,35 +233,28 @@ class StringOperations:
 
     def _declare_and_define_utf8_char_count(self) -> None:
         """Declare and define the utf8_char_count function for Unicode-aware string length."""
-        # Check if function already exists
         existing = self.codegen.module.globals.get("utf8_char_count")
         if isinstance(existing, ir.Function):
             self.utf8_char_count = existing
             return
 
-        # Declare function: i32 utf8_char_count(i8* str)
         fn_ty = ir.FunctionType(self.codegen.i32, [self.codegen.i8.as_pointer()])
         func = ir.Function(self.codegen.module, fn_ty, name="utf8_char_count")
         self.utf8_char_count = func
 
-        # Define function body
         entry_block = func.append_basic_block("entry")
         loop_head = func.append_basic_block("loop_head")
         loop_body = func.append_basic_block("loop_body")
         loop_exit = func.append_basic_block("loop_exit")
 
-        # Save current builder state
         saved_builder = self.codegen.builder
         saved_block = saved_builder.block if saved_builder else None
 
-        # Create temporary builder for this function
         builder = ir.IRBuilder(entry_block)
 
-        # Entry block: Initialize counter and index
         str_param = func.args[0]
         str_param.name = "str"
 
-        # Allocate local variables
         count_ptr = builder.alloca(self.codegen.i32, name="count")
         index_ptr = builder.alloca(self.codegen.i32, name="index")
 
@@ -294,18 +262,15 @@ class StringOperations:
         builder.store(ir.Constant(self.codegen.i32, 0), index_ptr)
         builder.branch(loop_head)
 
-        # Loop head: Check if we've reached null terminator
         builder.position_at_end(loop_head)
         current_index = builder.load(index_ptr)
         char_ptr = builder.gep(str_param, [current_index])
         current_byte = builder.load(char_ptr)
 
-        # Check if current byte is null terminator
         zero_i8 = ir.Constant(self.codegen.i8, 0)
         is_not_null = builder.icmp_signed('!=', current_byte, zero_i8)
         builder.cbranch(is_not_null, loop_body, loop_exit)
 
-        # Loop body: Count UTF-8 characters
         builder.position_at_end(loop_body)
         current_byte_loaded = builder.load(char_ptr)
         byte_as_u8 = builder.zext(current_byte_loaded, self.codegen.i32)
@@ -319,7 +284,6 @@ class StringOperations:
         masked_byte = builder.and_(byte_as_u8, mask)
         is_not_continuation = builder.icmp_signed('!=', masked_byte, continuation_pattern)
 
-        # Increment count if this is a character start (not a continuation byte)
         current_count = builder.load(count_ptr)
         new_count = builder.select(
             is_not_continuation,
@@ -328,34 +292,27 @@ class StringOperations:
         )
         builder.store(new_count, count_ptr)
 
-        # Increment index
         next_index = builder.add(current_index, ir.Constant(self.codegen.i32, 1))
         builder.store(next_index, index_ptr)
         builder.branch(loop_head)
 
-        # Loop exit: Return count
         builder.position_at_end(loop_exit)
         final_count = builder.load(count_ptr)
         builder.ret(final_count)
 
-        # Restore original builder state
         if saved_builder and saved_block:
             saved_builder.position_at_end(saved_block)
 
 
-# Module-level utility functions for stdlib inline emitters
 def emit_utf8_count(builder: ir.IRBuilder, module: ir.Module, string_ptr: ir.Value) -> ir.Value:
     """Emit inline UTF-8 character count for stdlib fallback."""
     i32 = ir.IntType(INT32_BIT_WIDTH)
     i8_ptr = ir.IntType(INT8_BIT_WIDTH).as_pointer()
 
-    # Get or declare utf8_char_count function
     if "utf8_char_count" in module.globals:
         utf8_char_count_fn = module.globals["utf8_char_count"]
     else:
-        # Declare the function if not already present
         fn_ty = ir.FunctionType(i32, [i8_ptr])
         utf8_char_count_fn = ir.Function(module, fn_ty, name="utf8_char_count")
 
-    # Call the function
     return builder.call(utf8_char_count_fn, [string_ptr])

@@ -15,17 +15,13 @@ def emit_math_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
 
     from sushi_lang.backend.functions import declare_stdlib_function
 
-    # Get argument values
     args = [codegen.expressions.emit_expr(arg) for arg in expr.args]
 
-    # Determine the type-specific function name for polymorphic functions (abs, min, max)
     if func_name in {'abs', 'min', 'max'} and args:
-        # These are polymorphic - need to determine the type suffix
         arg_type = args[0].type
         type_suffix = _get_math_type_suffix(arg_type)
         stdlib_func_name = f"sushi_{func_name}_{type_suffix}"
 
-        # Declare the function with the appropriate signature
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, arg_type, [arg_type] * len(args))
     elif func_name in {
         'sqrt', 'floor', 'ceil', 'round', 'trunc',
@@ -35,11 +31,9 @@ def emit_math_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
         'log', 'log2', 'log10',
         'exp', 'exp2',
     }:
-        # These take f64 and return f64
         f64 = ir.DoubleType()
         stdlib_func_name = f"sushi_{func_name}"
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, f64, [f64])
-        # Convert args to f64 if needed
         if args and args[0].type != f64:
             from sushi_lang.backend.expressions.casts import cast_int_to_float, cast_float_to_float
             if isinstance(args[0].type, ir.IntType):
@@ -47,11 +41,9 @@ def emit_math_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
             else:
                 args[0] = cast_float_to_float(codegen, args[0], f64)
     elif func_name in {'pow', 'atan2', 'hypot'}:
-        # These take two f64 arguments and return f64
         f64 = ir.DoubleType()
         stdlib_func_name = f"sushi_{func_name}"
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, f64, [f64, f64])
-        # Convert both args to f64 if needed
         from sushi_lang.backend.expressions.casts import cast_int_to_float, cast_float_to_float
         for i in range(len(args)):
             if args[i].type != f64:
@@ -62,7 +54,6 @@ def emit_math_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
     else:
         raise ValueError(f"Unknown math function: {func_name}")
 
-    # Call the function
     result = codegen.builder.call(stdlib_func, args, name=f"{func_name}_result")
     return codegen.utils.as_i1(result) if to_i1 else result
 

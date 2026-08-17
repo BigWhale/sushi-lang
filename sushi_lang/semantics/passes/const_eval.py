@@ -1,4 +1,3 @@
-# semantics/passes/const_eval.py
 """Compile-time constant expression evaluator."""
 from __future__ import annotations
 from dataclasses import dataclass
@@ -48,10 +47,8 @@ class ConstantValue:
         elif self.semantic_type == BuiltinType.F64:
             return ir.Constant(types.f64, self.value)
         elif self.semantic_type == BuiltinType.STRING:
-            # Strings require special handling - return None to trigger fallback
             return None
         elif isinstance(self.value, list):
-            # Array constant
             element_constants = [elem.to_llvm_constant(types) for elem in self.value]
             if any(c is None for c in element_constants):
                 return None
@@ -74,7 +71,6 @@ class ConstantEvaluator:
 
     def evaluate(self, expr: Expr, expected_type: Type, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate an expression to a compile-time constant."""
-        # Literals
         if isinstance(expr, IntLit):
             return self._evaluate_int_lit(expr, expected_type)
         elif isinstance(expr, FloatLit):
@@ -84,60 +80,48 @@ class ConstantEvaluator:
         elif isinstance(expr, StringLit):
             return ConstantValue(expr.value, BuiltinType.STRING)
 
-        # Binary operations
         elif isinstance(expr, BinaryOp):
             return self._evaluate_binary_op(expr, expected_type, span)
 
-        # Unary operations
         elif isinstance(expr, UnaryOp):
             return self._evaluate_unary_op(expr, expected_type, span)
 
-        # Array literals
         elif isinstance(expr, ArrayLiteral):
             return self._evaluate_array_literal(expr, expected_type, span)
 
-        # Name references (other constants)
         elif isinstance(expr, Name):
             return self._evaluate_name(expr, span)
 
-        # Type casts
         elif isinstance(expr, CastExpr):
             return self._evaluate_cast(expr, span)
 
-        # Everything else is not a compile-time constant
         else:
             er.emit(self.reporter, er.ERR.CE0108, span, expr_type=type(expr).__name__)
             return None
 
     def _evaluate_int_lit(self, expr: IntLit, expected_type: Type) -> ConstantValue:
         """Evaluate integer literal with type inference."""
-        # Use expected type if provided, otherwise default to i32
         if expected_type in (BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
                              BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64):
             return ConstantValue(expr.value, expected_type)
         else:
-            # Default to i32 for integer literals
             return ConstantValue(expr.value, BuiltinType.I32)
 
     def _evaluate_float_lit(self, expr: FloatLit, expected_type: Type) -> ConstantValue:
         """Evaluate float literal with type inference."""
-        # Use expected type if provided, otherwise default to f64
         if expected_type in (BuiltinType.F32, BuiltinType.F64):
             return ConstantValue(expr.value, expected_type)
         else:
-            # Default to f64 for float literals
             return ConstantValue(expr.value, BuiltinType.F64)
 
     def _evaluate_binary_op(self, expr: BinaryOp, expected_type: Type, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate binary operation."""
-        # Evaluate operands
         left_val = self.evaluate(expr.left, expected_type, expr.left.loc)
         right_val = self.evaluate(expr.right, expected_type, expr.right.loc)
 
         if left_val is None or right_val is None:
             return None
 
-        # Arithmetic operations
         if expr.op == '+':
             return self._eval_arithmetic(left_val, right_val, lambda a, b: a + b, span)
         elif expr.op == '-':
@@ -149,7 +133,6 @@ class ConstantEvaluator:
         elif expr.op == '%':
             return self._eval_modulo(left_val, right_val, span)
 
-        # Bitwise operations (integers only)
         elif expr.op == '&':
             return self._eval_bitwise(left_val, right_val, lambda a, b: a & b, '&', span)
         elif expr.op == '|':
@@ -161,11 +144,9 @@ class ConstantEvaluator:
         elif expr.op == '>>':
             return self._eval_shift_right(left_val, right_val, span)
 
-        # Logical operations (booleans only)
         elif expr.op in ('and', 'or', 'xor'):
             return self._eval_logical(left_val, right_val, expr.op, span)
 
-        # Comparison operations
         elif expr.op in ('==', '!=', '<', '<=', '>', '>='):
             return self._eval_comparison(left_val, right_val, expr.op, span)
 
@@ -180,7 +161,6 @@ class ConstantEvaluator:
             return None
 
         if expr.op == 'neg':
-            # Negation for numeric types
             if self._is_numeric_type(operand.semantic_type):
                 return ConstantValue(-operand.value, operand.semantic_type)
             else:
@@ -188,9 +168,7 @@ class ConstantEvaluator:
                 return None
 
         elif expr.op == '~':
-            # Bitwise NOT for integers only
             if self._is_integer_type(operand.semantic_type):
-                # Python bitwise NOT with type-aware masking
                 result = ~operand.value
                 return ConstantValue(result, operand.semantic_type)
             else:
@@ -198,7 +176,6 @@ class ConstantEvaluator:
                 return None
 
         elif expr.op == 'not':
-            # Logical NOT for booleans only
             if operand.semantic_type == BuiltinType.BOOL:
                 return ConstantValue(not operand.value, BuiltinType.BOOL)
             else:
@@ -213,12 +190,10 @@ class ConstantEvaluator:
         """Evaluate array literal with constant elements."""
         from sushi_lang.semantics.typesys import ArrayType
 
-        # Determine element type
         element_type = None
         if isinstance(expected_type, ArrayType):
             element_type = expected_type.base_type
 
-        # Evaluate all elements
         element_values = []
         for elem in expr.elements:
             elem_val = self.evaluate(elem, element_type, elem.loc)
@@ -230,32 +205,27 @@ class ConstantEvaluator:
             er.emit(self.reporter, er.ERR.CE0108, span, expr_type='empty array')
             return None
 
-        # Create array constant
         return ConstantValue(element_values, expected_type)
 
     def _evaluate_name(self, expr: Name, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate name reference (constant lookup)."""
         const_name = expr.id
 
-        # Check for circular dependency
         if const_name in self.evaluation_stack:
             chain = " -> ".join(self.evaluation_stack + [const_name])
             er.emit(self.reporter, er.ERR.CE0109, span, chain=chain)
             return None
 
-        # Lookup constant
         const_sig = self.const_table.by_name.get(const_name)
         if const_sig is None:
             er.emit(self.reporter, er.ERR.CE1002, span, name=const_name)
             return None
 
-        # Get AST node for the constant
         const_def = self.ast_constants.get(const_name)
         if const_def is None:
             er.emit(self.reporter, er.ERR.CE1002, span, name=const_name)
             return None
 
-        # Push to stack and evaluate recursively
         self.evaluation_stack.append(const_name)
         result = self.evaluate(const_def.value, const_sig.const_type, const_sig.loc)
         self.evaluation_stack.pop()
@@ -264,44 +234,34 @@ class ConstantEvaluator:
 
     def _evaluate_cast(self, expr: CastExpr, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate type cast."""
-        # Evaluate the expression being cast
         value = self.evaluate(expr.expr, expr.target_type, expr.expr.loc)
         if value is None:
             return None
 
-        # Perform cast based on types
         from_type = value.semantic_type
         to_type = expr.target_type
 
-        # Integer to integer
         if self._is_integer_type(from_type) and self._is_integer_type(to_type):
             return ConstantValue(value.value, to_type)
 
-        # Integer to float
         elif self._is_integer_type(from_type) and self._is_float_type(to_type):
             return ConstantValue(float(value.value), to_type)
 
-        # Float to integer (truncation)
         elif self._is_float_type(from_type) and self._is_integer_type(to_type):
             return ConstantValue(int(value.value), to_type)
 
-        # Integer to bool
         elif self._is_integer_type(from_type) and to_type == BuiltinType.BOOL:
             return ConstantValue(value.value != 0, BuiltinType.BOOL)
 
-        # Bool to integer
         elif from_type == BuiltinType.BOOL and self._is_integer_type(to_type):
             return ConstantValue(1 if value.value else 0, to_type)
 
-        # Float to float
         elif self._is_float_type(from_type) and self._is_float_type(to_type):
             return ConstantValue(value.value, to_type)
 
         else:
             er.emit(self.reporter, er.ERR.CE0111, span, from_type=display_type(from_type), to_type=display_type(to_type))
             return None
-
-    # Helper methods for arithmetic/bitwise operations
 
     def _eval_arithmetic(self, left: ConstantValue, right: ConstantValue, op, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate arithmetic operation."""
@@ -310,7 +270,6 @@ class ConstantEvaluator:
             return None
 
         result = op(left.value, right.value)
-        # Result type is the left operand's type (may need refinement)
         return ConstantValue(result, left.semantic_type)
 
     def _eval_division(self, left: ConstantValue, right: ConstantValue, span: Optional[Span]) -> Optional[ConstantValue]:
@@ -323,7 +282,6 @@ class ConstantEvaluator:
             er.emit(self.reporter, er.ERR.CE0112, span)
             return None
 
-        # Integer division for integers, float division for floats
         if self._is_integer_type(left.semantic_type):
             result = left.value // right.value
         else:
@@ -376,7 +334,6 @@ class ConstantEvaluator:
             er.emit(self.reporter, er.ERR.CE0110, span, op='shift by negative amount')
             return None
 
-        # Python's >> is arithmetic shift (sign-extends for negative numbers)
         result = left.value >> right.value
         return ConstantValue(result, left.semantic_type)
 
@@ -400,7 +357,6 @@ class ConstantEvaluator:
 
     def _eval_comparison(self, left: ConstantValue, right: ConstantValue, op: str, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate comparison operation."""
-        # Comparisons work on numeric types and booleans
         if not self._is_numeric_type(left.semantic_type) or not self._is_numeric_type(right.semantic_type):
             er.emit(self.reporter, er.ERR.CE0110, span, op=f'comparison {op} on non-comparable types')
             return None
@@ -422,8 +378,6 @@ class ConstantEvaluator:
             return None
 
         return ConstantValue(result, BuiltinType.BOOL)
-
-    # Type checking helpers
 
     def _is_integer_type(self, ty: Type) -> bool:
         """Check if type is an integer type."""

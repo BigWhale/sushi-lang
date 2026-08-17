@@ -12,5 +12,4 @@ class TypeSystemWrapper:
         self.enum_table = enum_table
 
 
-# Re-export LLVMTypeSystem for backward compatibility
 __all__ = ['LLVMTypeSystem', 'TypeSystemWrapper']

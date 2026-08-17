@@ -13,14 +13,11 @@ from llvmlite import binding as llvm
 from sushi_lang import __version__ as compiler_version
 
 
-# Cache directory name (placed at project root)
 CACHE_DIR_NAME = "__sushi_cache__"
 UNITS_DIR = "units"
 STDLIB_DIR = "stdlib"
 LIBS_DIR = "libs"
 
-# Length of the hex digests embedded in cached object names. Collision risk is
-# negligible and short names keep the cache readable.
 _KEY_LEN = 12
 
 
@@ -47,10 +44,6 @@ class CacheManager:
         )
         return hashlib.sha1(material.encode("utf-8")).hexdigest()[:_KEY_LEN]
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
     def prepare(self) -> None:
         """Ready the cache directory for a compile."""
         self.ensure_dirs()
@@ -63,10 +56,6 @@ class CacheManager:
     def wipe(self) -> None:
         """Remove the entire cache directory."""
         shutil.rmtree(self.cache_path, ignore_errors=True)
-
-    # ------------------------------------------------------------------
-    # Per-unit object file management
-    # ------------------------------------------------------------------
 
     def unit_object_path(self, unit_name: str, fingerprint: str) -> Path:
         """Cached .o path for a source unit (mirrors the source tree)."""
@@ -98,10 +87,6 @@ class CacheManager:
     def store_lib_object(self, lib_name: str, obj_bytes: bytes, fingerprint: str) -> Path:
         return self._store(self.lib_object_path(lib_name, fingerprint), obj_bytes)
 
-    # ------------------------------------------------------------------
-    # Internals
-    # ------------------------------------------------------------------
-
     def _object_path(self, section: Path, name: str, fingerprint: str) -> Path:
         return section / f"{name}.{self.global_key}.{fingerprint[:_KEY_LEN]}.o"
 
@@ -115,6 +100,5 @@ class CacheManager:
             tmp_path.write_bytes(obj_bytes)
             os.replace(tmp_path, obj_path)
         finally:
-            # os.replace consumed it on the happy path; this is for the failure path.
             tmp_path.unlink(missing_ok=True)
         return obj_path

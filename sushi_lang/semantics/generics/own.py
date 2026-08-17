@@ -28,7 +28,6 @@ def validate_own_method_with_validator(
     elif call.method == "clone":
         _validate_own_clone(call, own_type, reporter)
     else:
-        # Unknown method - should not happen if is_builtin_own_method was called first
         raise_internal_error("CE0080", method=call.method)
 
 
@@ -39,7 +38,6 @@ def _validate_own_alloc(
     validator: Any
 ) -> None:
     """Validate Own<T>.alloc(value) method call."""
-    # Validate argument count
     if len(call.args) != 1:
         er.emit(reporter, er.ERR.CE2016, call.loc,
                method="alloc", expected=1, got=len(call.args))
@@ -51,7 +49,6 @@ def _validate_own_get(
     reporter: Any
 ) -> None:
     """Validate Own<T>.get() method call."""
-    # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc,
                method="get", expected=0, got=len(call.args))
@@ -63,7 +60,6 @@ def _validate_own_destroy(
     reporter: Any
 ) -> None:
     """Validate Own<T>.destroy() method call."""
-    # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc,
                method="destroy", expected=0, got=len(call.args))
@@ -82,12 +78,9 @@ def _validate_own_clone(
 
 def get_own_element_type(own_type: StructType) -> Type:
     """Extract element type T from Own<T> struct type."""
-    # Get the "value" field type which is T* (PointerType)
     value_field_type = own_type.fields[0][1]  # First field, second element is type
 
-    # Extract pointee type from PointerType
     if isinstance(value_field_type, PointerType):
         return value_field_type.pointee_type
     else:
-        # Fallback: should not happen if Own<T> is properly registered
         raise_internal_error("CE0081", type=str(value_field_type))

@@ -1,4 +1,3 @@
-# semantics/generics/builtin_methods.py
 """One answer to "does the compiler already define this method on this type?"."""
 from __future__ import annotations
 
@@ -13,8 +12,6 @@ from sushi_lang.semantics.typesys import (
     Type,
 )
 
-# Named StructTypes/EnumTypes whose methods come from their own generic machinery rather
-# than from the struct/enum auto-derivation. Each maps to the predicate that owns it.
 _STDIO_RECEIVERS = (BuiltinType.STDIN, BuiltinType.STDOUT, BuiltinType.STDERR)
 
 
@@ -29,7 +26,6 @@ def builtin_method_exists(receiver_type: Type | None, method_name: str) -> bool:
     if receiver_type is None:
         return False
 
-    # Methods on &T are the methods on T.
     if isinstance(receiver_type, ReferenceType):
         receiver_type = receiver_type.referenced_type
 
@@ -38,8 +34,6 @@ def builtin_method_exists(receiver_type: Type | None, method_name: str) -> bool:
         return is_builtin_array_method(method_name)
 
     if receiver_type == BuiltinType.STRING:
-        # string carries BOTH families: the stdlib string methods and the primitive
-        # to_str/hash. Checking only the first is what left string.to_str() un-inferred.
         from sushi_lang.sushi_stdlib.src.collections.strings import is_builtin_string_method
         from sushi_lang.semantics.generics.primitives import has_primitive_method
         return (is_builtin_string_method(method_name)

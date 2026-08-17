@@ -45,11 +45,9 @@ def parse_triple(triple: str) -> TargetPlatform:
     """Parse an LLVM target triple into components."""
     parts = triple.split('-')
 
-    # Handle version numbers in OS (e.g., darwin25.0.0)
     os_part = parts[2] if len(parts) > 2 else 'unknown'
     if '.' in os_part:
         os_part = os_part.split('.')[0]  # darwin25.0.0 -> darwin25
-        # Further normalize darwin25 -> darwin
         if os_part.startswith('darwin'):
             os_part = 'darwin'
 

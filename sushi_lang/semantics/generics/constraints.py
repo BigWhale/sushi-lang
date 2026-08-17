@@ -32,9 +32,7 @@ class ConstraintValidator:
         """Check if a type satisfies a single perk constraint."""
         type_name = self._get_type_name(type_arg)
 
-        # Check if type implements the required perk
         if not self.perk_impl_table.implements(type_name, constraint_name):
-            # `type_name` stays `<>` (the impl-table lookup key above); display `@()`.
             er.emit(self.reporter, er.ERR.CE4006, span,
                    type=display_type(type_arg), perk=constraint_name)
             return False
@@ -48,16 +46,13 @@ class ConstraintValidator:
         span: Optional['Span']
     ) -> bool:
         """Validate all constraints on a type parameter."""
-        # If no constraints, always valid
         if not bounded_param.constraints or len(bounded_param.constraints) == 0:
             return True
 
-        # Validate each constraint
         all_valid = True
         for constraint in bounded_param.constraints:
             if not self.validate_constraint(type_arg, constraint, span):
                 all_valid = False
-                # Continue checking other constraints to report all errors
 
         return all_valid
 
@@ -68,5 +63,4 @@ class ConstraintValidator:
         elif isinstance(ty, (StructType, EnumType)):
             return ty.name
         else:
-            # Fallback: use string representation
             return str(ty)

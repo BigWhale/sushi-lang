@@ -26,27 +26,18 @@ def _emit_struct_hash(prim_type: Type) -> Any:
         builder = require_builder(codegen)
         builder = codegen.builder
 
-        # Initialize hash with FNV offset basis
         hash_value = emit_fnv1a_init(codegen)
 
-        # Combine hash of each field (fields is a tuple of (name, type) tuples)
         for field_idx, (field_name, field_type) in enumerate(struct_type.fields):
-            # Extract field value from struct using extractvalue
-            # receiver_value might be a pointer or a value, check its type
             if isinstance(receiver_value.type, ir.PointerType):
-                # If it's a pointer, load it first to get the struct value
                 struct_value = builder.load(receiver_value, name="struct_val")
             else:
-                # Already a value
                 struct_value = receiver_value
 
-            # Extract field value using extractvalue (LLVM instruction for struct field access)
             field_value = builder.extract_value(struct_value, field_idx, name=f"field_{field_name}")
 
-            # Get hash of this field by calling its .hash() method
             field_hash = _emit_field_hash(codegen, field_value, field_type)
 
-            # Combine using FNV-1a: hash = (hash XOR field_hash) * FNV_PRIME
             hash_value = emit_fnv1a_combine(codegen, hash_value, field_hash)
 
         return hash_value
@@ -62,9 +53,7 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
     builder = require_builder(codegen)
     builder = codegen.builder
 
-    # For primitive types, call their hash() method inline
     if isinstance(field_type, BuiltinType):
-        # Ensure hash methods are registered
         import sushi_lang.backend.types.primitives.hashing  # noqa: F401
         from sushi_lang.sushi_stdlib.src.common import get_builtin_method
 
@@ -72,7 +61,6 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
         if hash_method is None:
             raise_internal_error("CE0051", type=str(field_type))
 
-        # Create a fake MethodCall for the emitter
         fake_call = MethodCall(
             receiver=Name(id="field", loc=(0, 0)),
             method="hash",
@@ -80,36 +68,25 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
             loc=(0, 0)
         )
 
-        # Call the builtin hash emitter directly
         return hash_method.llvm_emitter(
             codegen, fake_call, field_value, field_value.type, False
         )
 
-    # For nested structs, recursively emit their hash
     elif isinstance(field_type, StructType):
-        # Recursively hash the nested struct fields inline
-        # field_value is already a struct value, process it directly
 
-        # Initialize hash with FNV offset basis
         nested_hash = emit_fnv1a_init(codegen)
 
-        # Combine hash of each field in the nested struct
         for nested_idx, (nested_name, nested_type) in enumerate(field_type.fields):
-            # Extract nested field value
             nested_field = builder.extract_value(field_value, nested_idx, name=f"nested_{nested_name}")
 
-            # Recursively get hash of this nested field
             nested_field_hash = _emit_field_hash(codegen, nested_field, nested_type)
 
-            # Combine using FNV-1a
             nested_hash = emit_fnv1a_combine(codegen, nested_hash, nested_field_hash)
 
         return nested_hash
 
-    # An unresolved Result<T, E> annotation (GenericTypeRef) - intern it to its EnumType and hash
     from sushi_lang.semantics.generics.types import GenericTypeRef
     if isinstance(field_type, GenericTypeRef) and field_type.base_name == "Result":
-        # Convert GenericTypeRef("Result", [T, E]) to Result enum
         if len(field_type.type_args) >= 2:
             from sushi_lang.semantics.generics.results import ensure_result_type_in_table
             ok_type = field_type.type_args[0]
@@ -118,7 +95,6 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
             if result_enum is not None:
                 field_type = result_enum
 
-    # For enum types (like Maybe<i32>, Result<T>), call their hash() method
     if isinstance(field_type, EnumType):
         from sushi_lang.sushi_stdlib.src.common import get_builtin_method
 
@@ -126,7 +102,6 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
         if hash_method is None:
             raise_internal_error("CE0051", type=str(field_type))
 
-        # Create a fake MethodCall for the emitter
         fake_call = MethodCall(
             receiver=Name(id="field", loc=(0, 0)),
             method="hash",
@@ -134,12 +109,10 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
             loc=(0, 0)
         )
 
-        # Call the enum hash emitter directly
         return hash_method.llvm_emitter(
             codegen, fake_call, field_value, field_value.type, False
         )
 
-    # For array types (fixed and dynamic), call their hash() method
     elif isinstance(field_type, (ArrayType, DynamicArrayType)):
         from sushi_lang.sushi_stdlib.src.common import get_builtin_method
 
@@ -147,7 +120,6 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
         if hash_method is None:
             raise_internal_error("CE0051", type=str(field_type))
 
-        # Create a fake MethodCall for the emitter
         fake_call = MethodCall(
             receiver=Name(id="field", loc=(0, 0)),
             method="hash",
@@ -168,10 +140,6 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
         raise_internal_error("CE0052", type=str(field_type))
 
 
-
-
-# Supply the struct hash() emitter to semantics/generics/hashing.py, which owns
-# hashability analysis and the registration itself.
 register_hash_emitter_factory("struct", _emit_struct_hash)
 
 
@@ -188,5 +156,4 @@ def _emit_struct_clone(target_type: Type) -> Any:
     return emitter
 
 
-# Supply the struct clone() emitter (registration lives in semantics/generics/cloning.py).
 register_clone_emitter_factory("struct", _emit_struct_clone)

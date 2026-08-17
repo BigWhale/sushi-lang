@@ -15,22 +15,18 @@ def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None
     """Compute a semantic fingerprint for a compilation unit."""
     hasher = hashlib.sha256()
 
-    # 1. Source content hash
     if unit.file_path.exists():
         source_bytes = unit.file_path.read_bytes()
         hasher.update(b"SOURCE:")
         hasher.update(source_bytes)
 
-    # 2. Own public symbol signatures (sorted for determinism)
     hasher.update(b"OWN_SYMBOLS:")
     for name in sorted(unit.public_symbols.keys()):
         sym = unit.public_symbols[name]
         hasher.update(f"{sym.symbol_type.value}:{name}".encode())
-        # Include function signature details
         defn = sym.definition
         hasher.update(_definition_signature(defn).encode())
 
-    # 3. Dependency symbol signatures (transitive visibility)
     if unit_manager is not None:
         hasher.update(b"DEP_SYMBOLS:")
         for dep_name in sorted(unit.dependencies):
@@ -43,7 +39,6 @@ def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None
                 hasher.update(f"{sym.symbol_type.value}:{sym_name}".encode())
                 hasher.update(_definition_signature(sym.definition).encode())
 
-    # 4. AST structural features that affect codegen
     if unit.ast is not None:
         _hash_ast_structure(hasher, unit.ast)
 
@@ -102,7 +97,6 @@ def compute_stdlib_source_fingerprint() -> str:
         # became a package. tests/unit/test_fingerprint.py pins the list.
         if not path.exists():
             continue
-        # Path-relative-to-sushi_lang keeps the digest stable across checkouts.
         rel = path.resolve().relative_to(sushi_lang_dir)
         hasher.update(f"{rel}:".encode())
         hasher.update(path.read_bytes())
@@ -111,7 +105,6 @@ def compute_stdlib_source_fingerprint() -> str:
 
 def _sushi_lang_dir():
     from pathlib import Path
-    # sushi_lang/compiler/fingerprint.py -> sushi_lang/
     return Path(__file__).resolve().parent.parent
 
 
@@ -119,8 +112,6 @@ def _stdlib_generator_sources() -> list:
     """The generator sources the stdlib fingerprint hashes, sorted by path."""
     sushi_lang_dir = _sushi_lang_dir()
     sources = list((sushi_lang_dir / "sushi_stdlib" / "src").rglob("*.py"))
-    # core/primitives is generated from the backend's primitives PACKAGE
-    # (build.py: `from sushi_lang.backend.types import primitives`).
     sources.extend((sushi_lang_dir / "backend" / "types" / "primitives").rglob("*.py"))
     sources.append(sushi_lang_dir / "sushi_stdlib" / "build.py")
     # The ABI files: the enum layout lives in mapping.py/sizing.py, and the stdlib .bc
@@ -153,12 +144,10 @@ def compute_compiler_source_fingerprint() -> str:
 
     from pathlib import Path
 
-    # sushi_lang/compiler/fingerprint.py -> sushi_lang/
     sushi_lang_dir = Path(__file__).resolve().parent.parent
     hasher = hashlib.sha256()
     hasher.update(b"COMPILER_SRC:")
     for path in sorted(sushi_lang_dir.rglob("*.py"), key=str):
-        # Path-relative-to-sushi_lang keeps the digest stable across checkouts.
         rel = path.resolve().relative_to(sushi_lang_dir)
         hasher.update(f"{rel}:".encode())
         hasher.update(path.read_bytes())
@@ -230,7 +219,6 @@ def _definition_signature(defn) -> str:
 
 def _hash_ast_structure(hasher: hashlib._Hash, ast: Program) -> None:
     """Hash structural features of an AST that affect codegen."""
-    # Struct definitions
     hasher.update(b"STRUCTS:")
     for struct in sorted(ast.structs, key=lambda s: s.name):
         fields = ",".join(f"{f.ty}:{f.name}" for f in struct.fields)
@@ -239,7 +227,6 @@ def _hash_ast_structure(hasher: hashlib._Hash, ast: Program) -> None:
             generic = "<" + ",".join(str(tp) for tp in struct.type_params) + ">"
         hasher.update(f"{struct.name}{generic}({fields})".encode())
 
-    # Enum definitions
     hasher.update(b"ENUMS:")
     for enum in sorted(ast.enums, key=lambda e: e.name):
         variants = ",".join(
@@ -251,14 +238,12 @@ def _hash_ast_structure(hasher: hashlib._Hash, ast: Program) -> None:
             generic = "<" + ",".join(str(tp) for tp in enum.type_params) + ">"
         hasher.update(f"{enum.name}{generic}[{variants}]".encode())
 
-    # Extension method signatures
     hasher.update(b"EXTENSIONS:")
     for ext in sorted(ast.extensions, key=lambda e: f"{e.target_type}::{e.name}"):
         params = ",".join(f"{p.ty}:{p.name}" for p in ext.params)
         ret = str(ext.ret) if ext.ret else "~"
         hasher.update(f"{ext.target_type}::{ext.name}({params})->{ret}".encode())
 
-    # Perk implementations
     hasher.update(b"PERK_IMPLS:")
     for perk_impl in ast.perk_impls:
         for method in sorted(perk_impl.methods, key=lambda m: m.name):
@@ -266,7 +251,6 @@ def _hash_ast_structure(hasher: hashlib._Hash, ast: Program) -> None:
             ret = str(method.ret) if method.ret else "~"
             hasher.update(f"{perk_impl.target_type}::{method.name}({params})->{ret}".encode())
 
-    # Use statements (affect stdlib/library linking)
     hasher.update(b"USES:")
     for use_stmt in sorted(ast.uses, key=lambda u: u.path):
         hasher.update(f"{use_stmt.path}:{use_stmt.is_stdlib}:{use_stmt.is_library}".encode())

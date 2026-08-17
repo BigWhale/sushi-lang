@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 
 def _infer_builtin_type_from_llvm(llvm_type: ir.Type) -> BuiltinType:
     """Infer BuiltinType from LLVM type using dispatch table."""
-    # Dispatch table for integer width to BuiltinType
     if isinstance(llvm_type, ir.IntType):
         width_to_builtin = {
             32: BuiltinType.I32,
@@ -25,7 +24,6 @@ def _infer_builtin_type_from_llvm(llvm_type: ir.Type) -> BuiltinType:
         }
         return width_to_builtin.get(llvm_type.width, BuiltinType.I32)
 
-    # Default fallback for non-integer types
     return BuiltinType.I32
 
 
@@ -47,29 +45,22 @@ def emit_dynamic_array_from(codegen: 'LLVMCodegen', expr: DynamicArrayFrom) -> i
     elements = emit_array_literal_elements(codegen, expr.elements.elements, None)
 
     if not elements:
-        # Empty array case
         raise NotImplementedError("Empty from() constructor not yet supported")
 
-    # Get element type from first element
     element_llvm_type = elements[0].type
 
-    # Infer semantic type from the array literal using centralized function
     element_type = _infer_builtin_type_from_llvm(element_llvm_type)
 
-    # Create the dynamic array struct value
     array_struct = create_dynamic_array_from_elements(codegen, element_type, element_llvm_type, elements)
 
-    # Allocate space on stack for the struct and store it
     array_alloca = codegen.builder.alloca(array_struct.type, name="from_array_temp")
     codegen.builder.store(array_struct, array_alloca)
 
-    # Return pointer to the stack-allocated struct
     return array_alloca
 
 
 def emit_dynamic_array_len(codegen: 'LLVMCodegen', array_value: ir.Value, to_i1: bool) -> ir.Value:
     """Emit code to get the length of a dynamic array."""
-    # Get pointer to len field (first field, index 0)
     len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
     len_value = codegen.builder.load(len_ptr, name="array_len")
 
@@ -78,7 +69,6 @@ def emit_dynamic_array_len(codegen: 'LLVMCodegen', array_value: ir.Value, to_i1:
 
 def emit_dynamic_array_capacity(codegen: 'LLVMCodegen', array_value: ir.Value, to_i1: bool) -> ir.Value:
     """Emit code to get the capacity of a dynamic array."""
-    # Get pointer to cap field (second field, index 1)
     cap_ptr = codegen.types.get_dynamic_array_cap_ptr(codegen.builder, array_value)
     cap_value = codegen.builder.load(cap_ptr, name="array_capacity")
 
@@ -90,62 +80,49 @@ def emit_dynamic_array_push(codegen: 'LLVMCodegen', array_value: ir.Value, array
     """Emit code to append an element to a dynamic array."""
     from sushi_lang.backend.expressions import memory
 
-    # Get pointers to struct fields
     len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
     cap_ptr = codegen.types.get_dynamic_array_cap_ptr(codegen.builder, array_value)
     data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
 
-    # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")
     current_cap = codegen.builder.load(cap_ptr, name="current_cap")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
-    # Check if growth is needed (len >= cap)
     need_growth = codegen.builder.icmp_unsigned(">=", current_len, current_cap)
 
-    # Save current basic block and function for phi node
     func = codegen.func
     before_if = codegen.builder.block
 
     with codegen.builder.if_then(need_growth):
-        # Calculate new capacity (2x current, min 1)
         zero = ir.Constant(codegen.types.i32, 0)
         one = ir.Constant(codegen.types.i32, 1)
         two = ir.Constant(codegen.types.i32, 2)
 
-        # new_cap = cap == 0 ? 1 : cap * 2
         cap_is_zero = codegen.builder.icmp_unsigned("==", current_cap, zero)
         double_cap = codegen.builder.mul(current_cap, two)
         new_cap = codegen.builder.select(cap_is_zero, one, double_cap, name="new_cap")
 
-        # Calculate element size and new total size
         element_type = array_type.elements[2].pointee
         element_size = memory.get_element_size_constant(codegen, element_type)
         new_total_size = codegen.builder.mul(new_cap, element_size, name="new_total_size")
 
-        # Reallocate memory
         new_data_ptr = memory.emit_realloc_call(codegen, data_ptr, new_total_size)
 
-        # Cast void* to typed pointer
         typed_new_data_ptr = codegen.builder.bitcast(new_data_ptr, ir.PointerType(element_type), name="typed_new_data_ptr")
 
-        # Update capacity and data pointer
         codegen.builder.store(new_cap, cap_ptr)
         codegen.builder.store(typed_new_data_ptr, data_ptr_ptr)
         after_if = codegen.builder.block
 
-    # Create phi node to merge data_ptr from both branches
     phi = codegen.builder.phi(data_ptr.type, name="data_ptr_phi")
     phi.add_incoming(data_ptr, before_if)
     if 'after_if' in locals():
         phi.add_incoming(typed_new_data_ptr, after_if)
     data_ptr = phi
 
-    # Store element at data[len]
     element_ptr = gep_utils.gep_array_element(codegen, data_ptr, current_len, "element_ptr")
     codegen.builder.store(element_value, element_ptr)
 
-    # Increment length
     new_len = codegen.builder.add(current_len, ir.Constant(codegen.types.i32, 1), name="new_len")
     codegen.builder.store(new_len, len_ptr)
 
@@ -155,50 +132,39 @@ def emit_dynamic_array_push(codegen: 'LLVMCodegen', array_value: ir.Value, array
 def emit_dynamic_array_pop(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
                            to_i1: bool) -> ir.Value:
     """Emit code to remove and return the last element from a dynamic array."""
-    # Get pointers to struct fields
     len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
     data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
 
-    # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
-    # Check if array is empty (len == 0)
     zero = ir.Constant(codegen.types.i32, 0)
     one = ir.Constant(codegen.types.i32, 1)
     is_empty = codegen.builder.icmp_unsigned("==", current_len, zero)
 
-    # Create basic blocks for empty and non-empty cases
     element_type = array_type.elements[2].pointee
     empty_block = codegen.builder.function.append_basic_block("array_empty")
     non_empty_block = codegen.builder.function.append_basic_block("array_non_empty")
     merge_block = codegen.builder.function.append_basic_block("pop_merge")
 
-    # Branch based on emptiness
     codegen.builder.cbranch(is_empty, empty_block, non_empty_block)
 
-    # Empty case: return zero value
     codegen.builder.position_at_end(empty_block)
     zero_element = ir.Constant(element_type, 0)
     codegen.builder.branch(merge_block)
 
-    # Non-empty case: pop the element
     codegen.builder.position_at_end(non_empty_block)
 
-    # Calculate index of last element (len - 1)
     last_index = codegen.builder.sub(current_len, one, name="last_index")
 
-    # Load the last element
     last_element_ptr = gep_utils.gep_array_element(codegen, data_ptr, last_index, "last_element_ptr")
     popped_element = codegen.builder.load(last_element_ptr, name="popped_element")
 
-    # Decrement length
     new_len = codegen.builder.sub(current_len, one, name="new_len")
     codegen.builder.store(new_len, len_ptr)
 
     codegen.builder.branch(merge_block)
 
-    # Merge block: phi node to select result
     codegen.builder.position_at_end(merge_block)
     result_phi = codegen.builder.phi(element_type, name="pop_result")
     result_phi.add_incoming(zero_element, empty_block)
@@ -213,32 +179,25 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
     from sushi_lang.backend.expressions import memory
     from sushi_lang.backend.memory.heap import emit_malloc
 
-    # Constants
     zero = ir.Constant(codegen.types.i32, 0)
     one = ir.Constant(codegen.types.i32, 1)
     initial_capacity = ir.Constant(codegen.types.i32, 8)
 
-    # Get pointers to struct fields
     len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
     cap_ptr = codegen.types.get_dynamic_array_cap_ptr(codegen.builder, array_value)
     data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
 
-    # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")
     old_data_ptr = codegen.builder.load(data_ptr_ptr, name="old_data_ptr")
 
-    # Get element type
     element_type = array_type.elements[2].pointee
 
-    # Check if data pointer is not null
     null_ptr = ir.Constant(ir.PointerType(element_type), None)
     is_not_null = codegen.builder.icmp_unsigned("!=", old_data_ptr, null_ptr)
 
     with codegen.builder.if_then(is_not_null):
-        # Check if elements need cleanup (similar to HashMap.free())
         from sushi_lang.backend.destructors import needs_cleanup, emit_value_destructor
         if needs_cleanup(element_semantic_type):
-            # Iterate through all elements and destroy each one
             loop_i = codegen.builder.alloca(codegen.types.i32, name="free_loop_i")
             codegen.builder.store(zero, loop_i)
 
@@ -248,41 +207,32 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
 
             codegen.builder.branch(loop_cond_bb)
 
-            # Loop condition: i < current_len
             codegen.builder.position_at_end(loop_cond_bb)
             i_val = codegen.builder.load(loop_i, name="i_val")
             loop_cond = codegen.builder.icmp_unsigned("<", i_val, current_len, name="loop_cond")
             codegen.builder.cbranch(loop_cond, loop_body_bb, loop_end_bb)
 
-            # Loop body: destroy element[i]
             codegen.builder.position_at_end(loop_body_bb)
             i_val = codegen.builder.load(loop_i, name="i_val")
             element_ptr = codegen.builder.gep(old_data_ptr, [i_val], name="element_ptr")
 
-            # Recursively destroy this element
             emit_value_destructor(codegen, element_ptr, element_semantic_type)
 
-            # Increment loop counter
             i_next = codegen.builder.add(i_val, one, name="i_next")
             codegen.builder.store(i_next, loop_i)
             codegen.builder.branch(loop_cond_bb)
 
-            # After loop, continue to free the buffer
             codegen.builder.position_at_end(loop_end_bb)
 
-        # Free the old data buffer
         void_ptr = codegen.builder.bitcast(old_data_ptr, ir.PointerType(codegen.types.i8), name="void_ptr")
         memory.emit_free_call(codegen, void_ptr)
 
-    # Allocate new buffer with initial capacity
     element_size = memory.get_element_size_constant(codegen, element_type)
     new_total_size = codegen.builder.mul(initial_capacity, element_size, name="new_total_size")
     new_data_ptr = emit_malloc(codegen, codegen.builder, new_total_size)
 
-    # Cast to typed pointer
     typed_new_data_ptr = codegen.builder.bitcast(new_data_ptr, ir.PointerType(element_type), name="typed_new_data_ptr")
 
-    # Update array fields: len=0, cap=8, data=new_ptr
     codegen.builder.store(zero, len_ptr)
     codegen.builder.store(initial_capacity, cap_ptr)
     codegen.builder.store(typed_new_data_ptr, data_ptr_ptr)
@@ -293,27 +243,20 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
 def emit_dynamic_array_destroy(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
                               array_semantic_type: 'Type') -> ir.Value:
     """Emit code to explicitly destroy a dynamic array (makes it unusable)."""
-    # Get pointers to struct fields
     len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
     cap_ptr = codegen.types.get_dynamic_array_cap_ptr(codegen.builder, array_value)
     data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
 
-    # Load data pointer
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
-    # Check if data pointer is not null (avoid double-free)
     element_type = array_type.elements[2].pointee
     null_ptr = ir.Constant(ir.PointerType(element_type), None)
     is_not_null = codegen.builder.icmp_unsigned("!=", data_ptr, null_ptr)
 
-    # Free memory only if pointer is not null
     with codegen.builder.if_then(is_not_null):
-        # Use the general recursive destructor which handles element cleanup and buffer freeing
-        # This automatically handles nested structures, enums, arrays, etc.
         from sushi_lang.backend.destructors import emit_value_destructor
         emit_value_destructor(codegen, array_value, array_semantic_type)
 
-    # Reset all struct fields to zero/null
     zero = ir.Constant(codegen.types.i32, 0)
     codegen.builder.store(zero, len_ptr)
     codegen.builder.store(zero, cap_ptr)
@@ -325,22 +268,17 @@ def emit_dynamic_array_destroy(codegen: 'LLVMCodegen', array_value: ir.Value, ar
 def emit_dynamic_array_fill(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
                             fill_value: ir.Value) -> ir.Value:
     """Emit code to fill all elements of a dynamic array with a value."""
-    # Get pointers to struct fields
     len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
     data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
 
-    # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
-    # Check if array is empty (len == 0)
     zero = ir.Constant(codegen.types.i32, 0)
     one = ir.Constant(codegen.types.i32, 1)
     is_empty = codegen.builder.icmp_unsigned("==", current_len, zero)
 
-    # Only fill if array is not empty
     with codegen.builder.if_then(codegen.builder.not_(is_empty)):
-        # Create loop: for i = 0; i < len; i++
         loop_i = codegen.builder.alloca(codegen.types.i32, name="fill_loop_i")
         codegen.builder.store(zero, loop_i)
 
@@ -350,24 +288,20 @@ def emit_dynamic_array_fill(codegen: 'LLVMCodegen', array_value: ir.Value, array
 
         codegen.builder.branch(loop_cond_bb)
 
-        # Loop condition: i < current_len
         codegen.builder.position_at_end(loop_cond_bb)
         i_val = codegen.builder.load(loop_i, name="i_val")
         loop_cond = codegen.builder.icmp_unsigned("<", i_val, current_len, name="loop_cond")
         codegen.builder.cbranch(loop_cond, loop_body_bb, loop_end_bb)
 
-        # Loop body: data[i] = fill_value
         codegen.builder.position_at_end(loop_body_bb)
         i_val = codegen.builder.load(loop_i, name="i_val")
         element_ptr = gep_utils.gep_array_element(codegen, data_ptr, i_val, "element_ptr")
         codegen.builder.store(fill_value, element_ptr)
 
-        # Increment loop counter
         i_next = codegen.builder.add(i_val, one, name="i_next")
         codegen.builder.store(i_next, loop_i)
         codegen.builder.branch(loop_cond_bb)
 
-        # After loop
         codegen.builder.position_at_end(loop_end_bb)
 
     return ir.Constant(codegen.types.i32, 0)
@@ -375,32 +309,24 @@ def emit_dynamic_array_fill(codegen: 'LLVMCodegen', array_value: ir.Value, array
 
 def emit_dynamic_array_reverse(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType) -> ir.Value:
     """Emit code to reverse a dynamic array in-place."""
-    # Get pointers to struct fields
     len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
     data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
 
-    # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
-    # Constants
     zero = ir.Constant(codegen.types.i32, 0)
     one = ir.Constant(codegen.types.i32, 1)
     two = ir.Constant(codegen.types.i32, 2)
 
-    # Check if array has fewer than 2 elements
     is_trivial = codegen.builder.icmp_unsigned("<", current_len, two)
 
-    # Only reverse if array has 2+ elements
     with codegen.builder.if_then(codegen.builder.not_(is_trivial)):
-        # Calculate half_len = len / 2
         half_len = codegen.builder.udiv(current_len, two, name="half_len")
 
-        # Get element type for temporary storage
         element_type = array_type.elements[2].pointee
         temp_var = codegen.builder.alloca(element_type, name="temp")
 
-        # Create loop: for i = 0; i < half_len; i++
         loop_i = codegen.builder.alloca(codegen.types.i32, name="reverse_loop_i")
         codegen.builder.store(zero, loop_i)
 
@@ -410,25 +336,20 @@ def emit_dynamic_array_reverse(codegen: 'LLVMCodegen', array_value: ir.Value, ar
 
         codegen.builder.branch(loop_cond_bb)
 
-        # Loop condition: i < half_len
         codegen.builder.position_at_end(loop_cond_bb)
         i_val = codegen.builder.load(loop_i, name="i_val")
         loop_cond = codegen.builder.icmp_unsigned("<", i_val, half_len, name="loop_cond")
         codegen.builder.cbranch(loop_cond, loop_body_bb, loop_end_bb)
 
-        # Loop body: swap arr[i] with arr[len-1-i]
         codegen.builder.position_at_end(loop_body_bb)
         i_val = codegen.builder.load(loop_i, name="i_val")
 
-        # Calculate j = len - 1 - i
         len_minus_one = codegen.builder.sub(current_len, one, name="len_minus_one")
         j_val = codegen.builder.sub(len_minus_one, i_val, name="j_val")
 
-        # Get pointers to arr[i] and arr[j]
         left_ptr = gep_utils.gep_array_element(codegen, data_ptr, i_val, "left_ptr")
         right_ptr = gep_utils.gep_array_element(codegen, data_ptr, j_val, "right_ptr")
 
-        # Swap: temp = arr[i]; arr[i] = arr[j]; arr[j] = temp
         left_val = codegen.builder.load(left_ptr, name="left_val")
         codegen.builder.store(left_val, temp_var)
 
@@ -438,12 +359,10 @@ def emit_dynamic_array_reverse(codegen: 'LLVMCodegen', array_value: ir.Value, ar
         temp_val = codegen.builder.load(temp_var, name="temp_val")
         codegen.builder.store(temp_val, right_ptr)
 
-        # Increment loop counter
         i_next = codegen.builder.add(i_val, one, name="i_next")
         codegen.builder.store(i_next, loop_i)
         codegen.builder.branch(loop_cond_bb)
 
-        # After loop
         codegen.builder.position_at_end(loop_end_bb)
 
     return ir.Constant(codegen.types.i32, 0)
@@ -451,12 +370,10 @@ def emit_dynamic_array_reverse(codegen: 'LLVMCodegen', array_value: ir.Value, ar
 def emit_fixed_array_fill(codegen: 'LLVMCodegen', array_ptr: ir.Value, array_type: ir.ArrayType,
                           fill_value: ir.Value) -> ir.Value:
     """Emit code to fill all elements of a fixed array with a value."""
-    # Constants
     zero = ir.Constant(codegen.types.i32, 0)
     one = ir.Constant(codegen.types.i32, 1)
     array_size = ir.Constant(codegen.types.i32, array_type.count)
 
-    # Create loop: for i = 0; i < array_size; i++
     loop_i = codegen.builder.alloca(codegen.types.i32, name="fill_loop_i")
     codegen.builder.store(zero, loop_i)
 
@@ -466,24 +383,20 @@ def emit_fixed_array_fill(codegen: 'LLVMCodegen', array_ptr: ir.Value, array_typ
 
     codegen.builder.branch(loop_cond_bb)
 
-    # Loop condition: i < array_size
     codegen.builder.position_at_end(loop_cond_bb)
     i_val = codegen.builder.load(loop_i, name="i_val")
     loop_cond = codegen.builder.icmp_unsigned("<", i_val, array_size, name="loop_cond")
     codegen.builder.cbranch(loop_cond, loop_body_bb, loop_end_bb)
 
-    # Loop body: arr[i] = fill_value
     codegen.builder.position_at_end(loop_body_bb)
     i_val = codegen.builder.load(loop_i, name="i_val")
     element_ptr = codegen.builder.gep(array_ptr, [zero, i_val], name="element_ptr")
     codegen.builder.store(fill_value, element_ptr)
 
-    # Increment loop counter
     i_next = codegen.builder.add(i_val, one, name="i_next")
     codegen.builder.store(i_next, loop_i)
     codegen.builder.branch(loop_cond_bb)
 
-    # After loop
     codegen.builder.position_at_end(loop_end_bb)
 
     return ir.Constant(codegen.types.i32, 0)
@@ -491,24 +404,19 @@ def emit_fixed_array_fill(codegen: 'LLVMCodegen', array_ptr: ir.Value, array_typ
 
 def emit_fixed_array_reverse(codegen: 'LLVMCodegen', array_ptr: ir.Value, array_type: ir.ArrayType) -> ir.Value:
     """Emit code to reverse a fixed array in-place."""
-    # Constants
     zero = ir.Constant(codegen.types.i32, 0)
     one = ir.Constant(codegen.types.i32, 1)
     array_size = array_type.count
 
-    # If array has fewer than 2 elements, nothing to reverse
     if array_size < 2:
         return ir.Constant(codegen.types.i32, 0)
 
-    # Calculate half_len = array_size / 2
     half_len = ir.Constant(codegen.types.i32, array_size // 2)
     array_size_const = ir.Constant(codegen.types.i32, array_size)
 
-    # Get element type for temporary storage
     element_type = array_type.element
     temp_var = codegen.builder.alloca(element_type, name="temp")
 
-    # Create loop: for i = 0; i < half_len; i++
     loop_i = codegen.builder.alloca(codegen.types.i32, name="reverse_loop_i")
     codegen.builder.store(zero, loop_i)
 
@@ -518,25 +426,20 @@ def emit_fixed_array_reverse(codegen: 'LLVMCodegen', array_ptr: ir.Value, array_
 
     codegen.builder.branch(loop_cond_bb)
 
-    # Loop condition: i < half_len
     codegen.builder.position_at_end(loop_cond_bb)
     i_val = codegen.builder.load(loop_i, name="i_val")
     loop_cond = codegen.builder.icmp_unsigned("<", i_val, half_len, name="loop_cond")
     codegen.builder.cbranch(loop_cond, loop_body_bb, loop_end_bb)
 
-    # Loop body: swap arr[i] with arr[size-1-i]
     codegen.builder.position_at_end(loop_body_bb)
     i_val = codegen.builder.load(loop_i, name="i_val")
 
-    # Calculate j = size - 1 - i
     size_minus_one = codegen.builder.sub(array_size_const, one, name="size_minus_one")
     j_val = codegen.builder.sub(size_minus_one, i_val, name="j_val")
 
-    # Get pointers to arr[i] and arr[j]
     left_ptr = codegen.builder.gep(array_ptr, [zero, i_val], name="left_ptr")
     right_ptr = codegen.builder.gep(array_ptr, [zero, j_val], name="right_ptr")
 
-    # Swap: temp = arr[i]; arr[i] = arr[j]; arr[j] = temp
     left_val = codegen.builder.load(left_ptr, name="left_val")
     codegen.builder.store(left_val, temp_var)
 
@@ -546,12 +449,10 @@ def emit_fixed_array_reverse(codegen: 'LLVMCodegen', array_ptr: ir.Value, array_
     temp_val = codegen.builder.load(temp_var, name="temp_val")
     codegen.builder.store(temp_val, right_ptr)
 
-    # Increment loop counter
     i_next = codegen.builder.add(i_val, one, name="i_next")
     codegen.builder.store(i_next, loop_i)
     codegen.builder.branch(loop_cond_bb)
 
-    # After loop
     codegen.builder.position_at_end(loop_end_bb)
 
     return ir.Constant(codegen.types.i32, 0)

@@ -9,43 +9,33 @@ def emit_string_to_bytes(module: ir.Module) -> ir.Function:
     """Emit `{i32 len, i32 cap, u8* data} string_to_bytes({i8*, i32} str)`."""
     func_name = "string_to_bytes"
 
-    # Check if already defined
     if func_name in module.globals:
         func = module.globals[func_name]
         if not func.is_declaration:
             return func
 
-    # Get common types
     i8, i8_ptr, i32, i64, string_type = get_string_types()
     dyn_array_type = ir.LiteralStructType([i32, i32, i8_ptr])  # {i32 len, i32 cap, u8* data}
 
-    # Declare external functions
     malloc = declare_malloc(module)
     memcpy = declare_memcpy(module)
 
-    # Function signature: { i32, i32, u8* } string_to_bytes({ i8*, i32 } str)
     fn_ty = ir.FunctionType(dyn_array_type, [string_type])
     func = ir.Function(module, fn_ty, name=func_name)
     func.args[0].name = "str"
 
-    # Create entry block
     entry_block = func.append_basic_block("entry")
     builder = ir.IRBuilder(entry_block)
 
-    # Extract data pointer and size from fat pointer
     data = builder.extract_value(func.args[0], 0, name="data")
     size = builder.extract_value(func.args[0], 1, name="size")
 
-    # Allocate memory for the byte array
     size_i64 = builder.zext(size, i64, name="size_i64")
     byte_data = builder.call(malloc, [size_i64], name="byte_data")
 
-    # Copy string bytes to array using llvm.memcpy intrinsic
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [byte_data, data, builder.zext(size, ir.IntType(64)), is_volatile])
 
-    # Build dynamic array struct: {i32 len, i32 cap, u8* data}
-    # len = cap = size (exact fit, no extra capacity)
     undef_struct = ir.Constant(dyn_array_type, ir.Undefined)
     struct_with_len = builder.insert_value(undef_struct, size, 0, name="struct_with_len")
     struct_with_cap = builder.insert_value(struct_with_len, size, 1, name="struct_with_cap")
@@ -61,29 +51,24 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     """
     func_name = "string_split"
 
-    # Check if already defined
     if func_name in module.globals:
         func = module.globals[func_name]
         if not func.is_declaration:
             return func
 
-    # Get common types
     i8, i8_ptr, i32, i64, string_type = get_string_types()
     i1 = ir.IntType(1)
     string_ptr = string_type.as_pointer()
     dyn_array_type = ir.LiteralStructType([i32, i32, string_ptr])  # {i32 len, i32 cap, string* data}
 
-    # Declare external functions
     malloc = declare_malloc(module)
     memcpy = declare_memcpy(module)
 
-    # Function signature: { i32, i32, string* } string_split({ i8*, i32 } str, { i8*, i32 } delim)
     fn_ty = ir.FunctionType(dyn_array_type, [string_type, string_type])
     func = ir.Function(module, fn_ty, name=func_name)
     func.args[0].name = "str"
     func.args[1].name = "delim"
 
-    # Create basic blocks
     entry_block = func.append_basic_block("entry")
     empty_delim_block = func.append_basic_block("empty_delim")
     normal_split_block = func.append_basic_block("normal_split")
@@ -99,18 +84,15 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     split_done_block = func.append_basic_block("split_done")
     return_block = func.append_basic_block("return")
 
-    # Entry block: Extract string and delimiter data
     builder = ir.IRBuilder(entry_block)
     str_data = builder.extract_value(func.args[0], 0, name="str_data")
     str_size = builder.extract_value(func.args[0], 1, name="str_size")
     delim_data = builder.extract_value(func.args[1], 0, name="delim_data")
     delim_size = builder.extract_value(func.args[1], 1, name="delim_size")
 
-    # Check if delimiter is empty
     delim_is_empty = builder.icmp_signed("==", delim_size, ir.Constant(i32, 0), name="delim_is_empty")
     builder.cbranch(delim_is_empty, empty_delim_block, normal_split_block)
 
-    # Empty delimiter case: return array with single element (original string)
     builder.position_at_end(empty_delim_block)
     one_elem = ir.Constant(i32, 1)
     string_size = ir.Constant(i64, 16)  # sizeof({i8*, i32}) = 16 bytes (8 + 4 + padding)
@@ -124,7 +106,6 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     result_empty = builder.insert_value(struct_empty_cap, array_data_empty_typed, 2, name="result_empty")
     builder.branch(return_block)
 
-    # Normal split: Count delimiter occurrences
     builder.position_at_end(normal_split_block)
     count_ptr = builder.alloca(i32, name="count_ptr")
     builder.store(ir.Constant(i32, 0), count_ptr)
@@ -132,14 +113,12 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     builder.store(ir.Constant(i32, 0), pos_ptr)
     builder.branch(count_loop_block)
 
-    # Count loop: iterate through string looking for delimiter
     builder.position_at_end(count_loop_block)
     pos = builder.load(pos_ptr, name="pos")
     remaining = builder.sub(str_size, pos, name="remaining")
     can_fit = builder.icmp_signed(">=", remaining, delim_size, name="can_fit")
     builder.cbranch(can_fit, count_check_block, count_done_block)
 
-    # Check if delimiter matches at current position
     builder.position_at_end(count_check_block)
     match_ptr = builder.alloca(i1, name="match_ptr")
     builder.store(ir.Constant(i1, 1), match_ptr)
@@ -147,7 +126,6 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     cmp_idx_ptr = builder.alloca(i32, name="cmp_idx_ptr")
     builder.store(ir.Constant(i32, 0), cmp_idx_ptr)
 
-    # Inner loop to compare delimiter bytes
     cmp_loop_block = func.append_basic_block("cmp_loop")
     cmp_body_block = func.append_basic_block("cmp_body")
     cmp_done_block = func.append_basic_block("cmp_done")
@@ -167,7 +145,6 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     delim_byte = builder.load(delim_byte_ptr, name="delim_byte")
     bytes_match = builder.icmp_signed("==", str_byte, delim_byte, name="bytes_match")
 
-    # If mismatch, set match to false
     not_match = builder.select(bytes_match, ir.Constant(i1, 1), ir.Constant(i1, 0), name="not_match")
     current_match = builder.load(match_ptr, name="current_match")
     new_match = builder.and_(current_match, not_match, name="new_match")
@@ -181,7 +158,6 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     final_match = builder.load(match_ptr, name="final_match")
     builder.cbranch(final_match, count_match_block, count_continue_block)
 
-    # Match found: increment count, skip delimiter
     builder.position_at_end(count_match_block)
     count = builder.load(count_ptr, name="count")
     new_count = builder.add(count, ir.Constant(i32, 1), name="new_count")
@@ -190,24 +166,20 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     builder.store(new_pos, pos_ptr)
     builder.branch(count_loop_block)
 
-    # No match: advance by 1 byte
     builder.position_at_end(count_continue_block)
     next_pos = builder.add(pos, ir.Constant(i32, 1), name="next_pos")
     builder.store(next_pos, pos_ptr)
     builder.branch(count_loop_block)
 
-    # Count done: allocate array for (count + 1) strings
     builder.position_at_end(count_done_block)
     final_count = builder.load(count_ptr, name="final_count")
     num_strings = builder.add(final_count, ir.Constant(i32, 1), name="num_strings")
 
-    # Allocate array: num_strings * 16 bytes (sizeof string struct)
     num_strings_i64 = builder.zext(num_strings, i64, name="num_strings_i64")
     array_bytes = builder.mul(num_strings_i64, string_size, name="array_bytes")
     array_data_raw = builder.call(malloc, [array_bytes], name="array_data_raw")
     array_data = builder.bitcast(array_data_raw, string_ptr, name="array_data")
 
-    # Reset position for splitting
     builder.store(ir.Constant(i32, 0), pos_ptr)
     array_idx_ptr = builder.alloca(i32, name="array_idx_ptr")
     builder.store(ir.Constant(i32, 0), array_idx_ptr)
@@ -215,14 +187,12 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     builder.store(ir.Constant(i32, 0), start_ptr)
     builder.branch(split_loop_block)
 
-    # Split loop: extract substrings
     builder.position_at_end(split_loop_block)
     pos2 = builder.load(pos_ptr, name="pos2")
     remaining2 = builder.sub(str_size, pos2, name="remaining2")
     can_fit2 = builder.icmp_signed(">=", remaining2, delim_size, name="can_fit2")
     builder.cbranch(can_fit2, split_check_block, split_done_block)
 
-    # Check for delimiter match (similar to count loop)
     builder.position_at_end(split_check_block)
     match_ptr2 = builder.alloca(i1, name="match_ptr2")
     builder.store(ir.Constant(i1, 1), match_ptr2)
@@ -261,29 +231,23 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     final_match2 = builder.load(match_ptr2, name="final_match2")
     builder.cbranch(final_match2, split_match_block, split_continue_block)
 
-    # Match found: extract substring from start to pos, store in array
     builder.position_at_end(split_match_block)
     start = builder.load(start_ptr, name="start")
     substr_size = builder.sub(pos2, start, name="substr_size")
 
-    # Allocate substring data
     substr_size_i64 = builder.zext(substr_size, i64, name="substr_size_i64")
     substr_data_raw = builder.call(malloc, [substr_size_i64], name="substr_data_raw")
 
-    # Copy substring bytes using llvm.memcpy intrinsic
     start_ptr_gep = builder.gep(str_data, [start], name="start_ptr_gep")
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [substr_data_raw, start_ptr_gep, builder.zext(substr_size, ir.IntType(64)), is_volatile])
 
-    # Build substring struct
     substr_complete = build_string_struct(builder, string_type, substr_data_raw, substr_size, owned=1)
 
-    # Store in array
     array_idx = builder.load(array_idx_ptr, name="array_idx")
     array_elem_ptr = builder.gep(array_data, [array_idx], name="array_elem_ptr")
     builder.store(substr_complete, array_elem_ptr)
 
-    # Update indices
     next_array_idx = builder.add(array_idx, ir.Constant(i32, 1), name="next_array_idx")
     builder.store(next_array_idx, array_idx_ptr)
     new_pos2 = builder.add(pos2, delim_size, name="new_pos2")
@@ -291,41 +255,33 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     builder.store(new_pos2, start_ptr)
     builder.branch(split_loop_block)
 
-    # No match: advance by 1
     builder.position_at_end(split_continue_block)
     next_pos2 = builder.add(pos2, ir.Constant(i32, 1), name="next_pos2")
     builder.store(next_pos2, pos_ptr)
     builder.branch(split_loop_block)
 
-    # Split done: add final substring from last delimiter to end
     builder.position_at_end(split_done_block)
     final_start = builder.load(start_ptr, name="final_start")
     final_substr_size = builder.sub(str_size, final_start, name="final_substr_size")
 
-    # Allocate final substring
     final_substr_size_i64 = builder.zext(final_substr_size, i64, name="final_substr_size_i64")
     final_substr_data_raw = builder.call(malloc, [final_substr_size_i64], name="final_substr_data_raw")
 
-    # Copy final bytes using llvm.memcpy intrinsic
     final_start_ptr = builder.gep(str_data, [final_start], name="final_start_ptr")
     builder.call(memcpy, [final_substr_data_raw, final_start_ptr, builder.zext(final_substr_size, ir.IntType(64)), is_volatile])
 
-    # Build final substring struct
     final_complete = build_string_struct(builder, string_type, final_substr_data_raw, final_substr_size, owned=1)
 
-    # Store final substring
     final_array_idx = builder.load(array_idx_ptr, name="final_array_idx")
     final_array_elem_ptr = builder.gep(array_data, [final_array_idx], name="final_array_elem_ptr")
     builder.store(final_complete, final_array_elem_ptr)
 
-    # Build result array
     undef_result = ir.Constant(dyn_array_type, ir.Undefined)
     result_with_len = builder.insert_value(undef_result, num_strings, 0, name="result_with_len")
     result_with_cap = builder.insert_value(result_with_len, num_strings, 1, name="result_with_cap")
     result_normal = builder.insert_value(result_with_cap, array_data, 2, name="result_normal")
     builder.branch(return_block)
 
-    # Return block: merge both paths
     builder.position_at_end(return_block)
     result_phi = builder.phi(dyn_array_type, name="result")
     result_phi.add_incoming(result_empty, empty_delim_block)

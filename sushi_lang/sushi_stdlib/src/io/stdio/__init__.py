@@ -8,10 +8,6 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 
 
-# ==============================================================================
-# Standalone IR Generation (for stdlib module)
-# ==============================================================================
-
 def generate_module_ir() -> ir.Module:
     """Generate standalone LLVM IR module for stdio extension methods."""
     from sushi_lang.sushi_stdlib.src.ir_common import create_stdlib_module
@@ -34,26 +30,18 @@ def generate_module_ir() -> ir.Module:
 
     module = create_stdlib_module("io.stdio")
 
-    # Generate stdin methods
     generate_stdin_readln(module)
     generate_stdin_read(module)
     generate_stdin_read_bytes(module)
     generate_stdin_lines(module)
 
-    # Generate stdout methods
     generate_stdout_write(module)
     generate_stdout_write_bytes(module)
 
-    # Generate stderr methods
     generate_stderr_write(module)
     generate_stderr_write_bytes(module)
 
     return module
-
-
-# ==============================================================================
-# Validation and Type Checking (used by semantic analyzer)
-# ==============================================================================
 
 
 def _validate_readln(call: MethodCall, reporter: Any) -> None:
@@ -84,7 +72,6 @@ def _validate_read_bytes(call: MethodCall, reporter: Any, validator: Any = None)
                name="stdin.read_bytes", expected=1, got=len(call.args))
         return
 
-    # Validate argument is an i32 using the validator if available
     if validator:
         validator.validate_expression(call.args[0])
         arg_type = validator.infer_expression_type(call.args[0])
@@ -100,7 +87,6 @@ def _validate_write(call: MethodCall, stream_name: str, reporter: Any, validator
                name=f"{stream_name}.write", expected=1, got=len(call.args))
         return
 
-    # Validate argument is a string using the validator if available
     if validator:
         validator.validate_expression(call.args[0])
         arg_type = validator.infer_expression_type(call.args[0])
@@ -118,7 +104,6 @@ def _validate_write_bytes(call: MethodCall, stream_name: str, reporter: Any, val
                name=f"{stream_name}.write_bytes", expected=1, got=len(call.args))
         return
 
-    # Validate argument is a u8[] using the validator if available
     if validator:
         validator.validate_expression(call.args[0])
         arg_type = validator.infer_expression_type(call.args[0])
@@ -148,7 +133,6 @@ def validate_builtin_stdio_method_with_validator(call: MethodCall, stdio_type: B
         elif method_name == "read_bytes":
             _validate_read_bytes(call, reporter, validator)
         else:
-            # Invalid method on stdin
             er.emit(reporter, er.ERR.CE2008, call.loc,
                    name=f"{display_type(stdio_type)}.{method_name}")
     elif stdio_type == BuiltinType.STDOUT:
@@ -157,7 +141,6 @@ def validate_builtin_stdio_method_with_validator(call: MethodCall, stdio_type: B
         elif method_name == "write_bytes":
             _validate_write_bytes(call, "stdout", reporter, validator)
         else:
-            # Invalid method on stdout
             er.emit(reporter, er.ERR.CE2008, call.loc,
                    name=f"{display_type(stdio_type)}.{method_name}")
     elif stdio_type == BuiltinType.STDERR:
@@ -166,7 +149,6 @@ def validate_builtin_stdio_method_with_validator(call: MethodCall, stdio_type: B
         elif method_name == "write_bytes":
             _validate_write_bytes(call, "stderr", reporter, validator)
         else:
-            # Invalid method on stderr
             er.emit(reporter, er.ERR.CE2008, call.loc,
                    name=f"{display_type(stdio_type)}.{method_name}")
 
@@ -176,15 +158,11 @@ def get_builtin_stdio_method_return_type(method_name: str, stdio_type: BuiltinTy
     from sushi_lang.semantics.typesys import IteratorType, DynamicArrayType
 
     if method_name in {"readln", "read"}:
-        # stdin methods return string
         return BuiltinType.STRING
     elif method_name == "lines":
-        # stdin.lines() returns Iterator<string>
         return IteratorType(element_type=BuiltinType.STRING)
     elif method_name == "read_bytes":
-        # stdin.read_bytes(n) returns u8[]
         return DynamicArrayType(BuiltinType.U8)
     elif method_name in {"write", "write_bytes"}:
-        # stdout/stderr.write() and write_bytes() return blank type
         return BuiltinType.BLANK
     return None

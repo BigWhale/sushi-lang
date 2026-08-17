@@ -19,18 +19,13 @@ def extract_call_args(call_node: Tree, ast_builder: 'ASTBuilder') -> Tuple[List[
     if call_node and call_node.children:
         args_node = first_tree(call_node.children, "args") or find_tree_recursive(call_node, "args")
         if args_node:
-            # Check for arg_list wrapper
             arg_list = first_tree(args_node.children, "arg_list")
             if arg_list:
-                # Check which style: positional_args or named_args
                 positional = first_tree(arg_list.children, "positional_args")
                 named = first_tree(arg_list.children, "named_args")
 
                 if positional:
-                    # Positional arguments
                     for expr_node in positional.children:
-                        # A `spread_arg` tree wraps a bloomed argument `arr...`; unwrap its
-                        # inner expression into a Spread node. Plain args pass through.
                         if isinstance(expr_node, Tree) and expr_node.data == "spread_arg":
                             inner = ast_builder._expr(expr_node.children[0])
                             args.append(Spread(value=inner, loc=span_of(expr_node)))
@@ -51,14 +46,11 @@ def extract_call_args(call_node: Tree, ast_builder: 'ASTBuilder') -> Tuple[List[
                     field_names = None
 
                 elif named:
-                    # Named arguments
                     field_names = []
                     for named_arg in named.children:
-                        # named_arg: NAME ":" expr
                         named_arg = expect(named_arg, "named_arg")
                         name_token = first_name(named_arg.children)
 
-                        # Find the expression node (it's the first Tree child after the NAME)
                         expr_node = None
                         for child in named_arg.children:
                             if isinstance(child, Tree):
@@ -71,7 +63,6 @@ def extract_call_args(call_node: Tree, ast_builder: 'ASTBuilder') -> Tuple[List[
                         field_names.append(str(name_token))
                         args.append(ast_builder._expr(expr_node))
             else:
-                # Legacy: direct expr children (positional)
                 for a in args_node.children:
                     args.append(ast_builder._expr(a))
                 field_names = None
@@ -114,7 +105,6 @@ def method_call_from_parts(receiver: Expr, method_call_node: Tree, ast_builder: 
     if method_name_tok is None:
         ice(method_call_node, "missing method NAME")
 
-    # Extract arguments (named arguments not supported for methods yet)
     args, field_names = extract_call_args(method_call_node, ast_builder)
 
     # Named arguments are not supported for method calls

@@ -1,4 +1,3 @@
-# semantics/symbol_merger.py
 """Symbol table merger for multi-file compilation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
@@ -66,7 +65,6 @@ class SymbolTableMerger:
             if key not in global_perk_impls.implementations:
                 type_name, perk_name = key
                 global_perk_impls.implementations[key] = impl
-                # Update indexes
                 if type_name not in global_perk_impls.by_type:
                     global_perk_impls.by_type[type_name] = set()
                 global_perk_impls.by_type[type_name].add(perk_name)
@@ -82,7 +80,6 @@ class SymbolTableMerger:
         """Merge functions (both public and private are tracked)."""
         self._merge_by_name(unit_funcs, global_funcs)
 
-        # Merge stdlib functions (registered from use <module> statements)
         for key, stdlib_func in unit_funcs._stdlib_functions.items():
             if key not in global_funcs._stdlib_functions:
                 global_funcs._stdlib_functions[key] = stdlib_func

@@ -43,23 +43,19 @@ class TypeMapper:
         self.enum_table = enum_table
         self.context = context if context is not None else ir.Context()
 
-        # LLVM primitive types
         self.i8: ir.IntType = ir.IntType(INT8_BIT_WIDTH)
         self.i16: ir.IntType = ir.IntType(16)
         self.i32: ir.IntType = ir.IntType(INT32_BIT_WIDTH)
         self.i64: ir.IntType = ir.IntType(INT64_BIT_WIDTH)
 
-        # Unsigned types (same LLVM representation as signed)
         self.u8: ir.IntType = ir.IntType(INT8_BIT_WIDTH)
         self.u16: ir.IntType = ir.IntType(16)
         self.u32: ir.IntType = ir.IntType(INT32_BIT_WIDTH)
         self.u64: ir.IntType = ir.IntType(INT64_BIT_WIDTH)
 
-        # Floating-point types
         self.f32: ir.Type = ir.FloatType()
         self.f64: ir.Type = ir.DoubleType()
 
-        # Utility types
         self.i1: ir.IntType = ir.IntType(1)
         self.str_ptr: ir.PointerType = ir.PointerType(self.i8)
         self.void: ir.VoidType = ir.VoidType()
@@ -86,7 +82,6 @@ class TypeMapper:
             self.str_ptr,  # clone_ptr (null when non-capturing)
         ])
 
-        # Type mapping dictionary for O(1) lookups
         self._builtin_type_map: dict[BuiltinType, ir.Type] = {
             BuiltinType.I8: self.i8,
             BuiltinType.I16: self.i16,
@@ -117,44 +112,32 @@ class TypeMapper:
 
     def ll_type(self, t: Ty) -> ir.Type:
         """Map language type to corresponding LLVM IR type."""
-        # Fast path: O(1) lookup for builtin types
         if isinstance(t, BuiltinType):
             llvm_type = self._builtin_type_map.get(t)
             if llvm_type is not None:
                 return llvm_type
             raise_internal_error("CE0018", type=str(t))
 
-        # Complex types require special handling
         match t:
             case ArrayType():
-                # Map ArrayType to LLVM array: [N x element_type]
                 element_type = self.ll_type(t.base_type)
                 return ir.ArrayType(element_type, t.size)
             case DynamicArrayType():
-                # Map DynamicArrayType to LLVM struct: {i32 len, i32 cap, T* data}
                 element_type = self.ll_type(t.base_type)
                 return self._create_dynamic_array_struct_type(element_type)
             case StructType():
-                # Map StructType to LLVM struct: {field1_type, field2_type, ...}
                 return self._get_struct_type(t)
             case EnumType():
-                # Map EnumType to LLVM tagged union struct: {i32 tag, [union of variant data]}
                 return self._get_enum_type(t)
             case IteratorType():
-                # Map IteratorType to LLVM struct based on underlying collection type
                 return self._create_iterator_struct_type(t)
             case ReferenceType():
-                # Map ReferenceType to LLVM pointer: T*
-                # References are zero-cost abstractions that compile to pointers
                 referenced_llvm_type = self.ll_type(t.referenced_type)
                 return ir.PointerType(referenced_llvm_type)
             case PointerType():
-                # Map PointerType to LLVM pointer: T*
-                # Pointers are heap-allocated memory used by Own<T>
                 pointee_llvm_type = self.ll_type(t.pointee_type)
                 return ir.PointerType(pointee_llvm_type)
             case ForeignPtrType():
-                # Map ForeignPtrType (`ptr`) to opaque LLVM i8* for the C ABI.
                 return ir.PointerType(self.i8)
             case FunctionType():
                 # Map a first-class function value to the 4-word fat pointer
@@ -166,7 +149,6 @@ class TypeMapper:
                 # FunctionType at the call site, not from this opaque LLVM type.
                 return self.closure_struct
             case UnknownType():
-                # UnknownType might be a struct or enum type that needs resolution
                 resolved = resolve_unknown_type(
                     t, self.struct_table.by_name, self.enum_table.by_name
                 )
@@ -174,12 +156,10 @@ class TypeMapper:
                     return self._get_struct_type(resolved)
                 return self._get_enum_type(resolved)
             case _:
-                # Check if this is a TypeParameter (should not reach codegen)
                 from sushi_lang.semantics.generics.types import TypeParameter
                 if isinstance(t, TypeParameter):
                     raise_internal_error("CE0045", type=t.name)
 
-                # Check if this is a GenericTypeRef using shared helper
                 resolved = resolve_generic_type_ref(
                     t, self.struct_table.by_name, self.enum_table.by_name
                 )
@@ -208,7 +188,6 @@ class TypeMapper:
 
     def _get_struct_type(self, struct_type: StructType) -> ir.LiteralStructType:
         """Create LLVM struct type for user-defined structs with caching."""
-        # Check cache first
         cached = self.cache.get_struct(struct_type.name)
         if cached is not None:
             return cached
@@ -248,7 +227,6 @@ class TypeMapper:
         llvm_struct = self.context.get_identified_type(struct_type.name)
         self.cache.cache_struct(struct_type.name, llvm_struct)
 
-        # Compute field types (a self-reference resolves to the opaque handle above)
         field_types = []
         for _field_name, field_type in struct_type.fields:
             field_types.append(self.ll_type(field_type))
@@ -261,14 +239,12 @@ class TypeMapper:
         from sushi_lang.backend.generics.hashmap.types import get_entry_type
         from sushi_lang.semantics.generics.hashmap import extract_key_value_types
 
-        # Need TypeSystemWrapper for generic helpers
         from sushi_lang.backend.llvm_types import TypeSystemWrapper
         wrapper = TypeSystemWrapper(self, self.struct_table, self.enum_table)
 
         key_type, value_type = extract_key_value_types(struct_type, wrapper)
         entry_type = get_entry_type(wrapper, key_type, value_type)
 
-        # HashMap LLVM struct: {Entry<K,V>[], i32 size, i32 capacity, i32 tombstones}
         buckets_type = ir.LiteralStructType([
             self.i32,
             self.i32,
@@ -288,7 +264,6 @@ class TypeMapper:
         """Create LLVM struct type for List<T>."""
         from sushi_lang.backend.generics.list.types import extract_element_type, get_list_llvm_type
 
-        # Need TypeSystemWrapper for generic helpers
         from sushi_lang.backend.llvm_types import TypeSystemWrapper
         wrapper = TypeSystemWrapper(self, self.struct_table, self.enum_table)
 
@@ -308,7 +283,6 @@ class TypeMapper:
 
     def _get_enum_type(self, enum_type: EnumType) -> ir.LiteralStructType:
         """Create LLVM struct type for enum (tagged union) with caching."""
-        # Check cache first
         cached = self.cache.get_enum(enum_type.name)
         if cached is not None:
             return cached
@@ -324,6 +298,5 @@ class TypeMapper:
             ir.ArrayType(self.i64, word_count),
         ])
 
-        # Cache for reuse
         self.cache.cache_enum(enum_type.name, llvm_enum)
         return llvm_enum

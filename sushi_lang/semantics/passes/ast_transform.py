@@ -10,43 +10,32 @@ def resolve_struct_field_types(
     enum_table: EnumTable
 ) -> None:
     """Resolve UnknownType references in struct fields to concrete types."""
-    # Build a lookup table for all known types
     type_lookup: Dict[str, Type] = {}
 
-    # Add all built-in types
     for builtin in BuiltinType:
         type_lookup[str(builtin).lower()] = builtin
 
-    # Add all struct types
     for struct_name, struct_type in struct_table.by_name.items():
         type_lookup[struct_name] = struct_type
 
-    # Add all enum types
     for enum_name, enum_type in enum_table.by_name.items():
         type_lookup[enum_name] = enum_type
 
-    # Resolve field types for each struct
-    # Use list() to avoid "dictionary changed size during iteration" errors
     for struct_name in list(struct_table.by_name.keys()):
         struct_type = struct_table.by_name[struct_name]
 
         if not isinstance(struct_type, StructType):
             continue  # Skip if not a regular StructType
 
-        # Resolve each field type
         resolved_fields = []
         needs_update = False
         for field_name, field_type in struct_type.fields:
             resolved_type = _resolve_type(field_type, type_lookup)
             resolved_fields.append((field_name, resolved_type))
-            # Check if any type was actually resolved
             if resolved_type is not field_type:
                 needs_update = True
 
-        # Only update if we actually resolved something
         if needs_update:
-            # Update struct fields in-place (StructType is a dataclass, so we need to replace the whole tuple)
-            # Since StructType is frozen (immutable), we need to use object.__setattr__
             object.__setattr__(struct_type, 'fields', tuple(resolved_fields))
 
 
@@ -55,29 +44,23 @@ def resolve_enum_variant_types(
     enum_table: EnumTable
 ) -> None:
     """Resolve UnknownType references in enum variant associated types to concrete types."""
-    # Build a lookup table for all known types
     type_lookup: Dict[str, Type] = {}
 
-    # Add all built-in types
     for builtin in BuiltinType:
         type_lookup[str(builtin).lower()] = builtin
 
-    # Add all struct types
     for struct_name, struct_type in struct_table.by_name.items():
         type_lookup[struct_name] = struct_type
 
-    # Add all enum types
     for enum_name, enum_type in enum_table.by_name.items():
         type_lookup[enum_name] = enum_type
 
-    # Resolve variant associated types for each enum
     for enum_name in list(enum_table.by_name.keys()):
         enum_type = enum_table.by_name[enum_name]
 
         if not isinstance(enum_type, EnumType):
             continue  # Skip if not a regular EnumType
 
-        # Resolve each variant's associated types
         needs_update = False
         resolved_variants = []
         for variant in enum_type.variants:
@@ -90,7 +73,6 @@ def resolve_enum_variant_types(
                     variant_needs_update = True
                     needs_update = True
 
-            # Create new variant with resolved types if needed
             if variant_needs_update:
                 from sushi_lang.semantics.typesys import EnumVariantInfo
                 resolved_variant = EnumVariantInfo(
@@ -101,10 +83,7 @@ def resolve_enum_variant_types(
             else:
                 resolved_variants.append(variant)
 
-        # Only update if we actually resolved something
         if needs_update:
-            # Update enum variants in-place
-            # Since EnumType is frozen (immutable), we need to use object.__setattr__
             object.__setattr__(enum_type, 'variants', tuple(resolved_variants))
 
 
@@ -113,38 +92,27 @@ def _resolve_type(ty: Type, type_lookup: Dict[str, Type]) -> Type:
     from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
-    # If it's an UnknownType, look it up in the type table
     if isinstance(ty, UnknownType):
         type_name = ty.name
         if type_name in type_lookup:
             return type_lookup[type_name]
         else:
-            # Type not found - this will be caught during type validation (Pass 2)
-            # For now, keep it as UnknownType
             return ty
 
-    # If it's a GenericTypeRef (e.g., Maybe<i32>, Pair<i32, string>)
-    # Look up the monomorphized concrete type
     elif isinstance(ty, GenericTypeRef):
-        # GenericTypeRef's __str__ produces the full name like "Maybe<i32>" or "Pair<i32, string>"
         full_name = str(ty)
         if full_name in type_lookup:
             return type_lookup[full_name]
         else:
-            # Monomorphized type not found - keep as GenericTypeRef
-            # This will be caught during type validation if it's actually missing
             return ty
 
-    # If it's an ArrayType, resolve the base type
     elif isinstance(ty, ArrayType):
         resolved_base = _resolve_type(ty.base_type, type_lookup)
         return ArrayType(base_type=resolved_base, size=ty.size)
 
-    # If it's a DynamicArrayType, resolve the base type
     elif isinstance(ty, DynamicArrayType):
         resolved_base = _resolve_type(ty.base_type, type_lookup)
         return DynamicArrayType(base_type=resolved_base)
 
-    # Already a concrete type (StructType, EnumType, BuiltinType, etc.)
     else:
         return ty

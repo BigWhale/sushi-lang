@@ -24,7 +24,6 @@ def emit_enum_tag_check(
     check_name: str
 ) -> ir.Value:
     """Extract enum tag and compare to expected value."""
-    # Extract tag and compare to expected value
     return enum_utils.check_enum_variant(
         codegen, enum_value, expected_tag, signed=False, name=check_name
     )
@@ -42,7 +41,6 @@ def emit_enum_realise(
     if len(call.args) != 1:
         raise_internal_error("CE0023", method="realise", expected=1, got=len(call.args))
 
-    # Extract T from generic enum
     success_variant = enum_type.get_variant(success_variant_name)
     if success_variant is None:
         raise_internal_error("CE0035", variant=success_variant_name, enum=enum_type.name)
@@ -52,7 +50,6 @@ def emit_enum_realise(
 
     t_type = success_variant.associated_types[0]
 
-    # Get the LLVM type for T
     value_llvm_type = codegen.types.ll_type(t_type)
 
     # Extract (is_success, value) from enum using the helper on the function manager
@@ -62,7 +59,6 @@ def emit_enum_realise(
         enum_value, value_llvm_type, t_type
     )
 
-    # Emit the default value expression
     default_value = codegen.expressions.emit_expr(call.args[0])
 
     # A dynamic-array default arrives as a POINTER: `from([...])` (emit_dynamic_array_from) hands
@@ -74,31 +70,20 @@ def emit_enum_realise(
             and default_value.type.pointee == value_llvm_type):
         default_value = codegen.builder.load(default_value, name="realise_default_value")
 
-    # Ensure default_value has the same LLVM type as unpacked_value
-    # The LLVM select instruction requires both operands to have identical types
     if default_value.type != value_llvm_type:
-        # Type mismatch - need to convert default_value to match
-        # Handle float-to-float conversions (f32 <-> f64)
         if isinstance(default_value.type, (ir.FloatType, ir.DoubleType)) and isinstance(value_llvm_type, (ir.FloatType, ir.DoubleType)):
             if isinstance(value_llvm_type, ir.DoubleType) and isinstance(default_value.type, ir.FloatType):
-                # f32 -> f64: extend precision
                 default_value = codegen.builder.fpext(default_value, value_llvm_type)
             elif isinstance(value_llvm_type, ir.FloatType) and isinstance(default_value.type, ir.DoubleType):
-                # f64 -> f32: truncate precision
                 default_value = codegen.builder.fptrunc(default_value, value_llvm_type)
-        # Handle integer-to-integer conversions (i8 <-> i32, i16 <-> i64, etc.)
         elif isinstance(default_value.type, ir.IntType) and isinstance(value_llvm_type, ir.IntType):
             src_width = default_value.type.width
             dst_width = value_llvm_type.width
             if src_width < dst_width:
-                # Extend: i8 -> i32, i32 -> i64, etc.
-                # Use sign extension for signed types (i32 is signed in Sushi)
                 default_value = codegen.builder.sext(default_value, value_llvm_type)
             elif src_width > dst_width:
-                # Truncate: i32 -> i8, i64 -> i32, etc.
                 default_value = codegen.builder.trunc(default_value, value_llvm_type)
         else:
-            # Type mismatch that shouldn't happen after proper semantic analysis
             raise_internal_error("CE0017", src=str(default_value.type), dst=str(value_llvm_type))
 
     # Select: is_success ? unpacked_value : default_value
@@ -112,8 +97,6 @@ def emit_enum_realise(
     # through the choice is always a scalar select and copies the whole aggregate
     # correctly, so use that for any aggregate T (mem2reg/O1+ folds the alloca away).
     if isinstance(value_llvm_type, ir.Aggregate):
-        # `t_type` reaches here as a bare name for a user struct/enum; the ownership test,
-        # the clone and the destructor all dispatch on the resolved class.
         owned_type = resolve_named_type(codegen, t_type)
         if needs_cleanup(owned_type):
             return _emit_owning_realise(
@@ -176,12 +159,9 @@ def emit_enum_expect(
     owned_type = resolve_named_type(codegen, t_type)
     if needs_cleanup(owned_type) and _expression_is_borrow(codegen, call.receiver):
         payload = emit_value_clone(codegen, payload, owned_type)
-    # The clone may have appended blocks (a string copy branches), so the phi's incoming
-    # edge is wherever the builder ended up, not `ok_block` itself.
     ok_exit_block = codegen.builder.block
     codegen.builder.branch(continue_block)
 
-    # Failure: write "ERROR: <message>\n" to stderr, then exit(1).
     codegen.builder.position_at_end(fail_block)
     error_message = codegen.expressions.emit_expr(call.args[0])
     stderr_ptr = codegen.builder.load(codegen.runtime.libc_stdio.stderr_handle)
@@ -223,8 +203,6 @@ def _emit_owning_realise(
     borrowed_receiver = _expression_is_borrow(codegen, call.receiver)
     borrowed_default = _expression_is_borrow(codegen, call.args[0])
 
-    # The default is evaluated unconditionally (its expression may have side effects), so
-    # park it in a slot: the success path needs a pointer to destroy it through.
     default_slot = codegen.builder.alloca(value_llvm_type, name="realise_default_slot")
     codegen.builder.store(default_value, default_slot)
     result_slot = codegen.builder.alloca(value_llvm_type, name="realise_result_slot")
@@ -236,7 +214,6 @@ def _emit_owning_realise(
                 payload = emit_value_clone(codegen, payload, owned_type)
             codegen.builder.store(payload, result_slot)
             if not borrowed_default:
-                # We adopted the default temporary and are not returning it.
                 emit_value_destructor(codegen, default_slot, owned_type)
         with else_block:
             fallback = codegen.builder.load(default_slot, name="realise_default")

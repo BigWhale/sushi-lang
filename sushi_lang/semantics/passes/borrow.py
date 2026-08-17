@@ -1,4 +1,3 @@
-# semantics/passes/borrow.py
 """Borrow checker for Sushi's reference system."""
 
 from __future__ import annotations
@@ -438,8 +437,6 @@ def compute_destroy_effects(programs: Iterable[Program]) -> Dict[str, FrozenSet[
 
     effects: Dict[str, Set[int]] = {}
 
-    # Round 1: a literal `p.destroy()` where `p` is one of this function's poke params.
-    # Mirrors the receiver shape the intra-procedural check already recognises.
     for name, func in funcs.items():
         poke = _poke_param_indices(func)
         destroyed: Set[int] = set()
@@ -452,8 +449,6 @@ def compute_destroy_effects(programs: Iterable[Program]) -> Dict[str, FrozenSet[
                     destroyed.add(poke[call.receiver.id])
         effects[name] = destroyed
 
-    # Round 2..n: propagate through calls until nothing changes. `f` destroys its param i
-    # if it hands that param to a `g` that destroys the slot it lands in.
     changed = True
     while changed:
         changed = False
@@ -508,9 +503,7 @@ class BorrowChecker:
         # at this pass, and only the former is an ownership sink. Empty means "recognise
         # none", which is exactly the pre-#134 behaviour of not marking enum payloads.
         self.enum_names: Set[str] = enum_names or set()
-        # Track borrow state per variable in current scope
         self.borrow_state: Dict[str, BorrowState] = {}
-        # Track variables currently borrowed (for clearing after expressions)
         self.active_borrows: Set[str] = set()
         # One frame per open block, holding the (owner, binding) pairs that block
         # registered. `_check_block` pops its frame and releases them, which is what gives
@@ -524,15 +517,12 @@ class BorrowChecker:
 
     def run(self, program: Program) -> None:
         """Run borrow checking on the entire program."""
-        # Check all functions
         for func in program.functions:
             self._check_function(func)
 
-        # Check non-generic extension methods
         for ext in program.extensions:
             self._check_extension(ext)
 
-        # Check generic extension methods (borrow checking works the same regardless of generics)
         for ext in program.generic_extensions:
             self._check_extension(ext)
 
@@ -631,7 +621,6 @@ class BorrowChecker:
     def _check_stmt(self, stmt: Stmt) -> None:
         """Check borrow safety for a single statement."""
         if isinstance(stmt, Let):
-            # Variable declaration - initialize as unborrowed, unmoved
             from sushi_lang.semantics.typesys import ForeignPtrType
             if isinstance(stmt.ty, ForeignPtrType):
                 # Foreign `ptr` is exempt from borrow checking: aliasing through a
@@ -653,16 +642,13 @@ class BorrowChecker:
                 # Option B: a string bound straight from a literal owns no heap,
                 # so consuming it transfers nothing and CE2405 must not fire on it.
                 owns_no_heap=binds_a_bare_literal_string(stmt.ty, stmt.value))
-            # Check the initialization expression
             self._check_expr(stmt.value)
-            # Closure move-on-bind: `let g = f` transfers a capturing closure's owned env.
             self._reconcile_closure_bind(stmt)
             # A `let` BINDS; it does not take ownership (#242). The binding inherits the
             # source's provenance, so a bare owning variable still MOVES, and a read
             # through a live owner now makes the binding a BORROW instead of making the
             # compiler insert a deep copy.
             self._bind(stmt)
-            # Clear any borrows from the expression
             self._clear_borrows()
 
         elif isinstance(stmt, Rebind):
@@ -670,14 +656,11 @@ class BorrowChecker:
             # For simple rebind (x := value), target is a Name
             # For field rebind (obj.field := value), target is a MemberAccess
             if isinstance(stmt.target, Name):
-                # Simple variable rebinding
                 var_name = stmt.target.id
                 if var_name in self.borrow_state:
                     state = self.borrow_state[var_name]
 
-                    # Reference parameters: only poke allows modification
                     if isinstance(state.var_type, ReferenceType):
-                        # Check if it's a peek reference (read-only)
                         if state.var_type.is_peek():
                             self.err.emit(er.ERR.CE2408, stmt.loc, name=var_name)
                         # poke references allow rebind (mutable reference semantics)
@@ -709,7 +692,6 @@ class BorrowChecker:
                                             "assign to a field")
                 self._check_expr(stmt.target)
 
-            # Check the value expression
             self._check_expr(stmt.value)
             # Both rebind shapes take ownership of the value: `x := v` replaces what `x`
             # owned, `obj.field := v` replaces what the field owned. Only the first was
@@ -732,7 +714,6 @@ class BorrowChecker:
                     self._reinitialize(target_state)
             elif isinstance(stmt.target, MemberAccess):
                 self._consume(stmt.value, ConsumingUse.FIELD_ASSIGN)
-            # Clear any borrows from the expression
             self._clear_borrows()
 
         elif isinstance(stmt, Return):
@@ -789,7 +770,6 @@ class BorrowChecker:
                 if not self._terminates(stmt.else_block):
                     paths.append(self._snapshot_flow())
             else:
-                # No else arm: the fall-through path (no arm taken) changes nothing beyond entry.
                 paths.append(entry)
             self._restore_flow(FlowFacts.join(paths))
 
@@ -875,7 +855,6 @@ class BorrowChecker:
                     self._register_pattern_bindings(
                         arm.pattern, stmt.resolved_scrutinee_type, displaced,
                         scrutinee=stmt.scrutinee, frozen=frozen)
-                # Check arm body
                 try:
                     if isinstance(arm.body, Block):
                         self._check_block(arm.body)
@@ -916,7 +895,6 @@ class BorrowChecker:
             # unreachable; they are still checked, which over-checks and never under-checks.
             return any(cls._terminates(stmt) for stmt in node.statements)
         if isinstance(node, If):
-            # Only with an `else`: without one, the fall-through path survives.
             if not node.else_block:
                 return False
             return (all(cls._terminates(arm) for _cond, arm in node.arms)
@@ -959,7 +937,6 @@ class BorrowChecker:
         fixed_point = entry | self._snapshot_flow()
         self._restore_flow(fixed_point)
         self._check_block(body)
-        # A variable moved (or destroyed) anywhere in the loop is so after it (conservative join).
         self._restore_flow(fixed_point)
 
     def _register_binding(self, name: str, state: BorrowState,
@@ -1059,11 +1036,9 @@ class BorrowChecker:
                         self._freeze_ref_binding_owner(
                             state, scrutinee, ref_span, frozen, poke_span=ref_span)
             elif isinstance(binding, Pattern):
-                # Nested pattern: its own bindings are typed by the payload enum it matches.
                 self._register_pattern_bindings(binding, payload_type, displaced,
                                                 scrutinee=scrutinee, frozen=frozen)
             else:
-                # An OwnPattern auto-unwraps `Own@(T)`; its inner pattern binds the pointee.
                 inner = getattr(binding, "inner_pattern", None)
                 inner_borrow = getattr(binding, "inner_borrow", None)
                 if isinstance(inner, Pattern):
@@ -1131,11 +1106,9 @@ class BorrowChecker:
     def _check_expr(self, expr: Expr) -> None:
         """Check borrow safety for an expression."""
         if isinstance(expr, Borrow):
-            # Borrow expression: &variable
             self._check_borrow(expr)
 
         elif isinstance(expr, Name):
-            # Variable reference - check if it's moved or destroyed
             if expr.id in self.borrow_state:
                 state = self.borrow_state[expr.id]
                 if state.is_moved:
@@ -1147,8 +1120,6 @@ class BorrowChecker:
                     self._emit_use_of_invalidated_borrow(expr.id, expr.loc, state)
 
         elif isinstance(expr, Call):
-            # Check the callee (a moved closure used as `f(x)` is a use-after-move) and
-            # all arguments. A top-level fn name is not in borrow_state, so it is inert.
             self._check_expr(expr.callee)
             for arg in expr.args:
                 self._check_expr(arg)
@@ -1239,8 +1210,6 @@ class BorrowChecker:
         elif isinstance(expr, EnumConstructor):
             for arg in expr.args:
                 self._check_expr(arg)
-                # Same ownership sink as the DotCall spelling above, for whichever paths
-                # hand the checker an already-resolved EnumConstructor node.
                 self._consume(arg, ConsumingUse.ENUM_PAYLOAD)
 
         elif isinstance(expr, DynamicArrayFrom):
@@ -1296,7 +1265,6 @@ class BorrowChecker:
             self._check_expr(expr.end)
 
         elif isinstance(expr, _INERT_EXPRS):
-            # A leaf that owns nothing and names nothing: there is nothing to check.
             pass
 
         else:
@@ -1312,7 +1280,6 @@ class BorrowChecker:
         is_poke = borrow.mutability == "poke"
 
         if isinstance(borrow.expr, Name):
-            # Variable borrows
             var_name = borrow.expr.id
 
             # A name this pass cannot find has ALREADY been reported by the scope pass,
@@ -1326,7 +1293,6 @@ class BorrowChecker:
 
             state = self.borrow_state[var_name]
 
-            # Check if variable has been moved
             if state.is_moved:
                 self._emit_use_after_move(var_name, borrow.loc, state)
                 return
@@ -1346,9 +1312,7 @@ class BorrowChecker:
             if is_poke:
                 self._check_owner_not_borrowed(var_name, borrow.loc, "take `poke`")
 
-            # Check borrow compatibility based on mode
             if is_poke:
-                # poke: exclusive borrow - no other borrows allowed
                 if state.poke_borrow_count > 0:
                     self.err.emit_with(er.ERR.CE2403, borrow.loc, name=var_name) \
                         .note("first borrowed here", state.first_borrow_span).emit()
@@ -1357,14 +1321,11 @@ class BorrowChecker:
                     self.err.emit_with(er.ERR.CE2407, borrow.loc, name=var_name) \
                         .note("first borrowed here", state.first_borrow_span).emit()
                     return
-                # Warn when creating poke of a variable that is itself a poke reference
-                # This is a nested mutable borrow - potentially dangerous but allowed
                 if isinstance(state.var_type, ReferenceType) and state.var_type.is_poke():
                     self.err.emit(er.ERR.CW2409, borrow.loc, name=var_name)
                 state.poke_borrow_count = 1
                 state.first_borrow_span = borrow.loc
             else:
-                # peek: shared borrow - only check for poke conflict
                 if state.poke_borrow_count > 0:
                     self.err.emit_with(er.ERR.CE2407, borrow.loc, name=var_name) \
                         .note("first borrowed here", state.first_borrow_span).emit()
@@ -1376,7 +1337,6 @@ class BorrowChecker:
             self.active_borrows.add(var_name)
 
         elif isinstance(borrow.expr, MemberAccess):
-            # Member access borrows
             base = self._get_member_access_base(borrow.expr)
 
             if not isinstance(base, Name):
@@ -1384,8 +1344,6 @@ class BorrowChecker:
                 self.err.emit(er.ERR.CE2404, borrow.loc, expr=expr_str)
                 return
 
-            # Check if base variable exists and is not moved. As in the Name arm: an
-            # unknown base was already reported by the scope pass.
             base_var = base.id
             if base_var not in self.borrow_state:
                 return
@@ -1405,9 +1363,7 @@ class BorrowChecker:
             if is_poke:
                 self._check_owner_not_borrowed(base_var, borrow.loc, "take `poke`")
 
-            # Check borrow compatibility based on mode
             if is_poke:
-                # poke: exclusive borrow - no other borrows allowed
                 if state.poke_borrow_count > 0:
                     self.err.emit_with(er.ERR.CE2403, borrow.loc, name=base_var) \
                         .note("first borrowed here", state.first_borrow_span).emit()
@@ -1419,7 +1375,6 @@ class BorrowChecker:
                 state.poke_borrow_count = 1
                 state.first_borrow_span = borrow.loc
             else:
-                # peek: shared borrow - only check for poke conflict
                 if state.poke_borrow_count > 0:
                     self.err.emit_with(er.ERR.CE2407, borrow.loc, name=base_var) \
                         .note("first borrowed here", state.first_borrow_span).emit()
@@ -1513,7 +1468,6 @@ class BorrowChecker:
                 # "unstated", and a plain fn reference would then move on every use.
                 dest.var_type = replace(stmt.ty, captures=())
             elif isinstance(src.var_type, FunctionType):
-                # `let g = f` hands `f`'s environment, if it has one, to `g`.
                 dest.var_type = src.var_type
 
     def _emit_use_after_move(self, name: str, use_span: Optional[Span],
@@ -1649,7 +1603,6 @@ class BorrowChecker:
     def _reads_through_owner(self, expr: Optional[Expr]) -> bool:
         """Does `expr` read a value out of storage something else still owns?"""
         while isinstance(expr, TryExpr):
-            # `c.get(i)??` -- the get-out sits under the propagation operator.
             expr = expr.expr
 
         if self._is_bare_enum_constant(expr):
@@ -1688,7 +1641,6 @@ class BorrowChecker:
         """The `Provenance` of a source that is a bare name."""
         state = self.borrow_state.get(name)
         if state is None:
-            # Not declared in this function: a top-level fn reference or a constant.
             return Provenance.FRESH
         if state.owns_no_heap:
             # There is nothing to borrow. This binding's CURRENT value owns no heap, so
@@ -1787,7 +1739,6 @@ class BorrowChecker:
         """Give a `let` binding the provenance of its initializer (#242)."""
         expr = stmt.value
         provenance = self._source_provenance(expr)
-        # Stamped for the backend seam, exactly as `_consume` stamps a consuming use.
         expr.ownership_provenance = provenance
 
         dest = self.borrow_state.get(stmt.name)
@@ -1811,8 +1762,6 @@ class BorrowChecker:
 
         decision = classify(provenance, self._type_class_of_source(src_state, ty))
         if decision is Ownership.MOVE:
-            # OWNED is the only provenance that reaches MOVE, and only a named local is
-            # ever OWNED, so `src_state` is always present here.
             src_state.is_moved = True
             src_state.moved_at_span = src_state.moved_at_span or expr.loc
         elif decision is Ownership.REJECT:

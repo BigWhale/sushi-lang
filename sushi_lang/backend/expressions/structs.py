@@ -24,24 +24,18 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
     struct_name = expr.callee.id
     struct_type = codegen.struct_table.by_name[struct_name]
 
-    # Get the LLVM struct type
     llvm_struct_type = codegen.types.get_struct_type(struct_type)
 
-    # Emit field values
     field_values = []
     for arg, (_field_name, field_type) in zip(expr.args, struct_type.fields, strict=True):
-        # Special handling for dynamic array fields
         if isinstance(field_type, DynamicArrayType):
-            # For dynamic arrays, we need to create the struct value directly
             if isinstance(arg, DynamicArrayNew):
-                # Create empty dynamic array struct: {0, 0, null}
                 element_llvm_type = codegen.types.ll_type(field_type.base_type)
                 array_struct_type = ir.LiteralStructType([
                     codegen.types.i32,                     # len
                     codegen.types.i32,                     # cap
                     ir.PointerType(element_llvm_type)           # data*
                 ])
-                # Create empty array struct
                 zero_i32 = ir.Constant(codegen.types.i32, 0)
                 null_ptr = ir.Constant(ir.PointerType(element_llvm_type), None)
                 array_struct = ir.Constant(array_struct_type, ir.Undefined)
@@ -63,11 +57,8 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
                 )
                 field_values.append(array_struct)
             else:
-                # An existing dynamic array handed to a `T[]` field.
                 arg_value = codegen.expressions.emit_expr(arg)
 
-                # Handle method calls that return pointers (like .clone())
-                # If arg_value is a pointer to a dynamic array struct, load the value
                 if isinstance(arg_value.type, ir.PointerType):
                     element_llvm_type = codegen.types.ll_type(field_type.base_type)
                     expected_struct_type = ir.LiteralStructType([
@@ -81,10 +72,8 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
                 field_values.append(consume(codegen, arg, arg_value, field_type,
                                             ConsumingUse.STRUCT_FIELD))
         else:
-            # Regular field - emit normally
             arg_value = codegen.expressions.emit_expr(arg)
 
-            # Resolve UnknownType to a concrete struct or enum if needed
             resolved_field_type = field_type
             if isinstance(field_type, UnknownType):
                 if field_type.name in codegen.struct_table.by_name:
@@ -100,16 +89,12 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
             arg_value = consume(codegen, arg, arg_value, resolved_field_type,
                                 ConsumingUse.STRUCT_FIELD)
 
-            # Cast to the expected field type
             llvm_field_type = codegen.types.ll_type(field_type)
             casted_value = codegen.utils.cast_for_param(arg_value, llvm_field_type)
             field_values.append(casted_value)
 
-    # Construct the struct value
-    # Start with an undefined struct value
     struct_value = ir.Constant(llvm_struct_type, ir.Undefined)
 
-    # Insert each field value
     for i, field_value in enumerate(field_values):
         struct_value = codegen.builder.insert_value(struct_value, field_value, i)
 
@@ -118,10 +103,8 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
 
 def emit_member_access(codegen: 'LLVMCodegen', expr: MemberAccess, to_i1: bool = False) -> ir.Value:
     """Emit member access expression for struct fields."""
-    # Infer the receiver's struct type
     struct_type = infer_struct_type(codegen, expr.receiver)
 
-    # Get the field index and type
     field_index = struct_type.get_field_index(expr.member)
     if field_index is None:
         raise_internal_error("CE0029", struct=struct_type.name, field=expr.member)
@@ -131,11 +114,9 @@ def emit_member_access(codegen: 'LLVMCodegen', expr: MemberAccess, to_i1: bool =
     # Special handling for dynamic array fields: use GEP to get pointer to field
     # This enables method calls like c.numbers.push(10) to work (Rust-style)
     if isinstance(field_type, DynamicArrayType):
-        # Try to get struct variable's alloca for GEP-based access
         struct_alloca = try_get_struct_alloca(codegen, expr.receiver)
 
         if struct_alloca is not None:
-            # Use GEP to get pointer to the dynamic array field
             from sushi_lang.backend import gep_utils
             field_ptr = gep_utils.gep_struct_field(
                 codegen,
@@ -145,20 +126,15 @@ def emit_member_access(codegen: 'LLVMCodegen', expr: MemberAccess, to_i1: bool =
             )
             return field_ptr
 
-    # Default: emit receiver and extract field value
-    # For references, we need to load the struct value first
     if isinstance(expr.receiver, Name):
         from sushi_lang.backend.expressions.type_utils import is_reference_parameter
         if is_reference_parameter(codegen, expr.receiver.id):
-            # Reference parameter: get the pointer and load the struct
             slot = codegen.memory.find_local_slot(expr.receiver.id)
             struct_ptr = codegen.builder.load(slot, name=f"{expr.receiver.id}_ptr")
             receiver_value = codegen.builder.load(struct_ptr, name=f"{expr.receiver.id}_deref")
         else:
-            # Regular variable: emit normally
             receiver_value = codegen.expressions.emit_expr(expr.receiver)
     else:
-        # Other expressions: emit normally
         receiver_value = codegen.expressions.emit_expr(expr.receiver)
 
     field_value = codegen.builder.extract_value(receiver_value, field_index)
@@ -168,34 +144,25 @@ def emit_member_access(codegen: 'LLVMCodegen', expr: MemberAccess, to_i1: bool =
 def try_get_struct_alloca(codegen: 'LLVMCodegen', receiver_expr: Expr) -> Optional[ir.Value]:
     """Try to get the alloca instruction or pointer for a struct variable."""
     if isinstance(receiver_expr, Name):
-        # Simple variable access: look up alloca. "Not a local" is a real answer here --
-        # this function's contract is to return None for an inaccessible receiver.
         slot = codegen.memory.try_find_local_slot(receiver_expr.id)
         if slot is None:
             return None
 
-        # Check if this is a reference parameter
         from sushi_lang.backend.expressions.type_utils import is_reference_parameter
         if is_reference_parameter(codegen, receiver_expr.id):
-            # For reference parameters, the slot contains a pointer to the struct
-            # Load the pointer from the slot to get the actual struct pointer
             return codegen.builder.load(slot, name=f"{receiver_expr.id}_ptr")
         else:
-            # For regular variables, return the alloca directly
             return slot
     elif isinstance(receiver_expr, MemberAccess):
-        # Nested struct access: recursively get base alloca, then GEP through fields
         base_alloca = try_get_struct_alloca(codegen, receiver_expr.receiver)
         if base_alloca is None:
             return None
 
-        # Get the parent struct type and field index
         parent_struct_type = infer_struct_type(codegen, receiver_expr.receiver)
         field_index = parent_struct_type.get_field_index(receiver_expr.member)
         if field_index is None:
             return None
 
-        # GEP to get pointer to the nested struct field
         from sushi_lang.backend import gep_utils
         field_ptr = gep_utils.gep_struct_field(
             codegen,
@@ -211,7 +178,6 @@ def try_get_struct_alloca(codegen: 'LLVMCodegen', receiver_expr: Expr) -> Option
         from sushi_lang.backend.types.arrays.indexing import emit_element_pointer
         return emit_element_pointer(codegen, receiver_expr)
     else:
-        # Other expressions (method calls, etc.) - can't get alloca
         return None
 
 
@@ -257,7 +223,6 @@ def _infer_get_element_struct(codegen: 'LLVMCodegen',
 
     receiver = expr.receiver
 
-    # A bare name: read the semantic type recorded for the local.
     receiver_type = None
     if isinstance(receiver, Name):
         receiver_type = codegen.memory.find_semantic_type(receiver.id)
@@ -273,14 +238,11 @@ def _infer_get_element_struct(codegen: 'LLVMCodegen',
             raise_internal_error("CE0020", type=receiver_type.base_type.name)
         raise_internal_error("CE0043", type=str(receiver_type.base_type))
 
-    # Own@(T): the receiver is itself the `Own<T>` struct, so fall back to the
-    # general struct inference, which also covers a non-Name receiver.
     own_struct = _resolve_to_struct(codegen, receiver_type)
     if own_struct is None:
         try:
             own_struct = infer_struct_type(codegen, receiver)
         except InternalCompilerError:
-            # Not a struct receiver at all; let the caller report its own code.
             return None
 
     if own_struct.name.startswith("Own<"):
@@ -305,11 +267,9 @@ def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
         if var_type is None:
             raise_internal_error("CE0056", name=var_name)
 
-        # Unwrap ReferenceType to get the underlying type
         if isinstance(var_type, ReferenceType):
             var_type = var_type.referenced_type
 
-        # Resolve UnknownType to StructType if needed
         if isinstance(var_type, UnknownType):
             if var_type.name not in codegen.struct_table.by_name:
                 raise_internal_error("CE0020", type=var_type.name)
@@ -317,10 +277,8 @@ def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
         elif isinstance(var_type, StructType):
             return var_type
         else:
-            # Check if this is a GenericTypeRef that resolves to a struct
             from sushi_lang.semantics.generics.types import GenericTypeRef
             if isinstance(var_type, GenericTypeRef):
-                # Build struct name from generic type ref: Box<i32> -> "Box<i32>"
                 type_args_str = ", ".join(str(arg) for arg in var_type.type_args)
                 struct_name = f"{var_type.base_name}<{type_args_str}>"
                 if struct_name in codegen.struct_table.by_name:
@@ -329,14 +287,12 @@ def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
             raise_internal_error("CE0031", type=str(var_type))
 
     elif isinstance(expr, MemberAccess):
-        # Recursively infer the type of nested member access
         parent_struct_type = infer_struct_type(codegen, expr.receiver)
         field_type = parent_struct_type.get_field_type(expr.member)
 
         if field_type is None:
             raise_internal_error("CE0029", struct=parent_struct_type.name, field=expr.member)
 
-        # Resolve field type to StructType
         if isinstance(field_type, UnknownType):
             if field_type.name not in codegen.struct_table.by_name:
                 raise_internal_error("CE0020", type=field_type.name)
@@ -344,10 +300,8 @@ def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
         elif isinstance(field_type, StructType):
             return field_type
         else:
-            # Check if this is a GenericTypeRef that resolves to a struct
             from sushi_lang.semantics.generics.types import GenericTypeRef
             if isinstance(field_type, GenericTypeRef):
-                # Build struct name from generic type ref: Box<i32> -> "Box<i32>"
                 type_args_str = ", ".join(str(arg) for arg in field_type.type_args)
                 struct_name = f"{field_type.base_name}<{type_args_str}>"
                 if struct_name in codegen.struct_table.by_name:
@@ -363,7 +317,6 @@ def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
         raise_internal_error("CE0068", method=expr.method)
 
     elif isinstance(expr, DotCall):
-        # DotCall: unified X.Y(args)
         inferred = _infer_call_struct(codegen, expr)
         if inferred is not None:
             return inferred

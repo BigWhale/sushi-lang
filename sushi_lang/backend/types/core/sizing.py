@@ -30,13 +30,11 @@ class TypeSizing:
 
     def get_type_size_bytes(self, semantic_type: Ty) -> int:
         """Get the size in bytes of a Sushi semantic type."""
-        # Resolve UnknownType first using shared helper
         if isinstance(semantic_type, UnknownType):
             semantic_type = resolve_unknown_type(
                 semantic_type, self.struct_table.by_name, self.enum_table.by_name
             )
 
-        # Builtin types
         if isinstance(semantic_type, BuiltinType):
             match semantic_type:
                 case BuiltinType.I8 | BuiltinType.U8 | BuiltinType.BOOL:
@@ -54,16 +52,12 @@ class TypeSizing:
                 case _:
                     raise_internal_error("CE0021", type=str(semantic_type))
 
-        # Complex types
         match semantic_type:
             case DynamicArrayType():
-                # Dynamic array struct: {i32 len, i32 cap, T* data} = 4 + 4 + 8 = 16 bytes
                 return DYNAMIC_ARRAY_SIZE_BYTES
             case StructType():
-                # Recursive calculation for structs
                 return self._calculate_struct_size(semantic_type)
             case ArrayType():
-                # Fixed array: element_size * count
                 element_size = self.get_type_size_bytes(semantic_type.base_type)
                 return element_size * semantic_type.size
             case EnumType():
@@ -73,24 +67,17 @@ class TypeSizing:
                 # sizeof for the mapped type.
                 return ENUM_TAG_SIZE_BYTES + 8 * self.enum_payload_word_count(semantic_type)
             case IteratorType():
-                # Iterator struct: {i32 current_index, i32 length, T* data_ptr} = 4 + 4 + 8 = 16 bytes
                 return ITERATOR_SIZE_BYTES
             case ReferenceType():
-                # References compile to pointers
                 return 8  # 64-bit pointer
             case PointerType():
-                # Pointers are always 8 bytes (64-bit)
                 return 8
             case ForeignPtrType():
-                # Opaque foreign pointer (LLVM i8*), 64-bit
                 return 8
             case FunctionType():
-                # First-class function value is a 4-word fat pointer
-                # {i8* fn_ptr, i8* env_ptr, i8* drop_ptr, i8* clone_ptr} = 32 bytes.
                 from sushi_lang.backend.constants.sizes import CLOSURE_FAT_POINTER_SIZE_BYTES
                 return CLOSURE_FAT_POINTER_SIZE_BYTES
             case _:
-                # Check if this is a GenericTypeRef using shared helper
                 resolved = resolve_generic_type_ref(
                     semantic_type, self.struct_table.by_name, self.enum_table.by_name
                 )
@@ -104,14 +91,11 @@ class TypeSizing:
         max_align = 1  # Track maximum alignment requirement of all fields
 
         for _field_name, field_type in struct_type.fields:
-            # Get the size and alignment requirements for this field
             field_size = self.get_type_size_bytes(field_type)
             field_align = self.get_type_alignment(field_type)
 
-            # Track maximum alignment
             max_align = max(max_align, field_align)
 
-            # Add padding to align this field
             if offset % field_align != 0:
                 padding = field_align - (offset % field_align)
                 offset += padding
@@ -125,7 +109,6 @@ class TypeSizing:
             else:
                 offset += field_size
 
-        # Add final padding to align the entire struct
         if offset % max_align != 0:
             padding = max_align - (offset % max_align)
             offset += padding
@@ -162,14 +145,12 @@ class TypeSizing:
 
     def get_type_alignment(self, semantic_type: Ty) -> int:
         """Get the alignment requirement in bytes for a semantic type."""
-        # Resolve UnknownType first
         if isinstance(semantic_type, UnknownType):
             if semantic_type.name in self.struct_table.by_name:
                 semantic_type = self.struct_table.by_name[semantic_type.name]
             elif semantic_type.name in self.enum_table.by_name:
                 semantic_type = self.enum_table.by_name[semantic_type.name]
 
-        # Builtin types
         if isinstance(semantic_type, BuiltinType):
             match semantic_type:
                 case BuiltinType.I8 | BuiltinType.U8 | BuiltinType.BOOL:
@@ -181,27 +162,22 @@ class TypeSizing:
                 case BuiltinType.I64 | BuiltinType.U64 | BuiltinType.F64:
                     return 8
                 case BuiltinType.STRING:
-                    # String fat pointer struct: {i8*, i32} aligned to 8 bytes (pointer alignment)
                     return 8
                 case BuiltinType.STDIN | BuiltinType.STDOUT | BuiltinType.STDERR | BuiltinType.FILE:
                     return 8  # Pointer alignment
                 case _:
                     return 8  # Default to pointer alignment for unknown types
 
-        # Complex types
         match semantic_type:
             case DynamicArrayType():
-                # Dynamic array struct aligned to 8 bytes (pointer alignment)
                 return 8
             case StructType():
-                # Struct aligned to maximum alignment of its fields
                 max_align = 1
                 for _field_name, field_type in semantic_type.fields:
                     field_align = self.get_type_alignment(field_type)
                     max_align = max(max_align, field_align)
                 return max_align
             case ArrayType():
-                # Array aligned to element alignment
                 return self.get_type_alignment(semantic_type.base_type)
             case EnumType():
                 # Enum aligned to its [K x i64] data member (#300 phase 2). Leaving this
@@ -209,8 +185,6 @@ class TypeSizing:
                 # stride for any struct holding an enum field.
                 return 8
             case ReferenceType() | PointerType() | ForeignPtrType() | FunctionType():
-                # Pointers (incl. function pointers) aligned to 8 bytes
                 return 8
             case _:
-                # Default to 8 bytes for unknown types (pointer alignment)
                 return 8

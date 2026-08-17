@@ -25,7 +25,6 @@ class TypeInference:
             ir.DoubleType(): "f64",
         }
 
-        # Cache for complex type mappings (arrays, dynamic arrays, etc.)
         self._llvm_to_lang_type_cache: dict[ir.Type, str] = {}
 
     def infer_llvm_type_from_value(self, value: ir.Value) -> ir.Type:
@@ -34,34 +33,27 @@ class TypeInference:
 
     def map_llvm_to_language_type(self, llvm_type: ir.Type) -> str:
         """Map LLVM type back to language type name for method resolution."""
-        # Check cache first (covers both simple types and previously computed complex types)
         if llvm_type in self._llvm_to_lang_type_cache:
             return self._llvm_to_lang_type_cache[llvm_type]
 
-        # Fast path: Direct type mapping (O(1) lookup)
         if llvm_type in self._llvm_to_lang_type_map:
             return self._llvm_to_lang_type_map[llvm_type]
 
-        # Compute and cache complex types
         result = None
 
-        # String type check (fat pointer struct)
         if self.is_string_type(llvm_type):
             result = "string"
 
-        # Array types (require recursion)
         elif isinstance(llvm_type, ir.ArrayType):
             element_name = self.map_llvm_to_language_type(llvm_type.element)
             result = f"{element_name}[{llvm_type.count}]"
 
-        # Dynamic array types
         elif self.is_dynamic_array_type(llvm_type):
             data_field = llvm_type.elements[2]  # T*
             element_type = data_field.pointee
             element_name = self.map_llvm_to_language_type(element_type)
             result = f"{element_name}[]"
 
-        # Pointer to dynamic array (from GEP on struct fields)
         elif isinstance(llvm_type, ir.PointerType) and self.is_dynamic_array_type(llvm_type.pointee):
             pointee = llvm_type.pointee
             data_field = pointee.elements[2]  # T*
@@ -70,7 +62,6 @@ class TypeInference:
             result = f"{element_name}[]"
 
         if result is not None:
-            # Cache the result for future lookups
             self._llvm_to_lang_type_cache[llvm_type] = result
             return result
 
@@ -90,7 +81,6 @@ class TypeInference:
         if len(elements) != 3:
             return False
 
-        # Check field types
         return (
             isinstance(elements[0], ir.PointerType) and
             isinstance(elements[0].pointee, ir.IntType) and
@@ -109,12 +99,10 @@ class TypeInference:
         if not isinstance(llvm_type, ir.LiteralStructType):
             return False
 
-        # Check struct layout: {i32, i32, T*}
         elements = llvm_type.elements
         if len(elements) != 3:
             return False
 
-        # Check field types
         return (
             elements[0] == self.i32 and
             elements[1] == self.i32 and

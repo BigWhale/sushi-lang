@@ -8,7 +8,6 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type, EnumType, EnumVariantInfo, StructType
     from sushi_lang.semantics.ast import BoundedTypeParam
 
-# Type alias for type parameters (supports both old and new formats)
 TypeParam = Union['TypeParameter', 'BoundedTypeParam']
 
 
@@ -67,22 +66,18 @@ class GenericEnumType:
                 f"got {len(type_args)}"
             )
 
-        # Build substitution mapping: param_name -> concrete_type
         substitution = {}
         for param, arg in zip(self.type_params, type_args, strict=False):
             substitution[param.name] = arg
 
-        # Substitute type parameters in all variant associated types
         concrete_variants = []
         for variant in self.variants:
             concrete_associated_types = []
             for assoc_type in variant.associated_types:
-                # If it's a TypeParameter, substitute it
                 if isinstance(assoc_type, TypeParameter):
                     if assoc_type.name in substitution:
                         concrete_associated_types.append(substitution[assoc_type.name])
                     else:
-                        # This shouldn't happen if the generic enum is well-formed
                         raise ValueError(f"Unknown type parameter: {assoc_type.name}")
                 else:
                     # Not a type parameter (could be concrete type or nested generic).
@@ -95,7 +90,6 @@ class GenericEnumType:
                 associated_types=tuple(concrete_associated_types)
             ))
 
-        # Create concrete enum name with type arguments
         type_arg_strs = ", ".join(str(t) for t in type_args)
         concrete_name = f"{self.name}<{type_arg_strs}>"
 
@@ -135,19 +129,15 @@ class GenericStructType:
                 f"got {len(type_args)}"
             )
 
-        # Build substitution mapping: param_name -> concrete_type
         substitution = {}
         for param, arg in zip(self.type_params, type_args, strict=False):
             substitution[param.name] = arg
 
-        # Substitute type parameters in all field types
         concrete_fields = []
         for field_name, field_type in self.fields:
-            # Recursively substitute type parameters in field types
             concrete_type = _substitute_type_params(field_type, substitution)
             concrete_fields.append((field_name, concrete_type))
 
-        # Create concrete struct name with type arguments
         type_arg_strs = ", ".join(str(t) for t in type_args)
         concrete_name = f"{self.name}<{type_arg_strs}>"
 
@@ -180,35 +170,28 @@ def _substitute_type_params(ty: Type, substitution: dict[str, Type]) -> Type:
     """Recursively substitute type parameters in a type."""
     from sushi_lang.semantics.typesys import PointerType, ArrayType, DynamicArrayType, ReferenceType, FunctionType
 
-    # Direct type parameter
     if isinstance(ty, TypeParameter):
         if ty.name in substitution:
             return substitution[ty.name]
         else:
             raise ValueError(f"Unknown type parameter: {ty.name}")
 
-    # Pointer type: substitute in pointee
     elif isinstance(ty, PointerType):
         substituted_pointee = _substitute_type_params(ty.pointee_type, substitution)
         return PointerType(pointee_type=substituted_pointee)
 
-    # Array type: substitute in element type
     elif isinstance(ty, ArrayType):
         substituted_base = _substitute_type_params(ty.base_type, substitution)
         return ArrayType(base_type=substituted_base, size=ty.size)
 
-    # Dynamic array type: substitute in element type
     elif isinstance(ty, DynamicArrayType):
         substituted_base = _substitute_type_params(ty.base_type, substitution)
         return DynamicArrayType(base_type=substituted_base)
 
-    # Reference type: substitute in referenced type (preserve mutability)
     elif isinstance(ty, ReferenceType):
         substituted_ref = _substitute_type_params(ty.referenced_type, substitution)
         return ReferenceType(referenced_type=substituted_ref, mutability=ty.mutability)
 
-    # Function type: substitute in parameter, ok, and err types (preserve captures,
-    # which are metadata excluded from identity but relevant to ownership)
     elif isinstance(ty, FunctionType):
         return FunctionType(
             param_types=tuple(_substitute_type_params(p, substitution) for p in ty.param_types),
@@ -217,11 +200,8 @@ def _substitute_type_params(ty: Type, substitution: dict[str, Type]) -> Type:
             captures=ty.captures,
         )
 
-    # No substitution needed for other types
     else:
         return ty
 
 
-# Update the Type union to include generic types
-# This will be imported in typesys.py
 __all__ = ["TypeParameter", "TypePack", "GenericEnumType", "GenericStructType", "GenericTypeRef"]

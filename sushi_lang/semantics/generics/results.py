@@ -37,7 +37,6 @@ def validate_result_method_with_validator(
     elif call.method == "err":
         _validate_result_err(call, result_type, reporter)
     else:
-        # Unknown method - should not happen if is_builtin_result_method was called first
         raise_internal_error("CE0094", method=call.method)
 
 
@@ -47,7 +46,6 @@ def _validate_result_is_ok(
     reporter: Any
 ) -> None:
     """Validate Result<T, E>.is_ok() method call."""
-    # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="is_ok", expected=0, got=len(call.args))
 
@@ -58,7 +56,6 @@ def _validate_result_is_err(
     reporter: Any
 ) -> None:
     """Validate Result<T, E>.is_err() method call."""
-    # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="is_err", expected=0, got=len(call.args))
 
@@ -69,7 +66,6 @@ def _validate_result_err(
     reporter: Any
 ) -> None:
     """Validate Result<T, E>.err() method call."""
-    # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="err", expected=0, got=len(call.args))
 
@@ -81,18 +77,14 @@ def _validate_result_expect(
     validator: Any
 ) -> None:
     """Validate Result<T, E>.expect(message) method call."""
-    # Validate argument count
     if len(call.args) != 1:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="expect", expected=1, got=len(call.args))
         return
 
-    # Validate the message argument is a string
     message_arg = call.args[0]
 
-    # First validate the argument expression
     validator.validate_expression(message_arg)
 
-    # Then check it's a string
     from sushi_lang.semantics.typesys import BuiltinType
     arg_type = validator.infer_expression_type(message_arg)
     if arg_type is not None and arg_type != BuiltinType.STRING:
@@ -107,7 +99,6 @@ def validate_result_realise_method_with_validator(
     validator: Any
 ) -> None:
     """Validate Result<T>.realise(default) method call."""
-    # Validate argument count
     if len(call.args) != 1:
         er.emit(reporter, er.ERR.CE2502, call.loc, got=len(call.args))
         return
@@ -117,7 +108,6 @@ def validate_result_realise_method_with_validator(
     # We need to find the Ok variant and extract its associated type
     ok_variant = result_type.get_variant("Ok")
     if ok_variant is None:
-        # This shouldn't happen for a valid Result<T> enum
         raise_internal_error("CE0089", enum=result_type.name)
 
     if len(ok_variant.associated_types) != 1:
@@ -126,36 +116,26 @@ def validate_result_realise_method_with_validator(
 
     t_type = ok_variant.associated_types[0]
 
-    # Check if T is blank type - if's an error
     from sushi_lang.semantics.typesys import BuiltinType
     if t_type == BuiltinType.BLANK:
         er.emit(reporter, er.ERR.CE2506, call.loc)
         return
 
-    # Validate the default argument's type matches T
     default_arg = call.args[0]
 
-    # Resolve GenericTypeRef to concrete type for propagation
-    # This handles cases like HashMap<i32, string> which may be stored as GenericTypeRef
     from sushi_lang.semantics.type_resolution import TypeResolver
     from sushi_lang.semantics.typesys import StructType
     type_resolver = TypeResolver(validator.struct_table.by_name, validator.enum_table.by_name)
     resolved_t_type = type_resolver.resolve_generic_type_ref(t_type)
 
-    # Propagate expected type to DotCall nodes for generic enums (before validation)
-    # This allows result.realise(Maybe.None()) to work correctly
     from sushi_lang.semantics.passes.types.utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
     propagate_enum_type_to_dotcall(validator, default_arg, resolved_t_type)
 
-    # Propagate expected type to DotCall nodes for generic structs (before validation)
-    # This allows result.realise(HashMap.new()) to work correctly
     if isinstance(resolved_t_type, StructType):
         propagate_struct_type_to_dotcall(validator, default_arg, resolved_t_type)
 
-    # First validate the argument expression
     validator.validate_expression(default_arg)
 
-    # Then check type compatibility
     arg_type = validator.infer_expression_type(default_arg)
     if arg_type is not None and not validator._types_compatible(arg_type, t_type):
         er.emit(reporter, er.ERR.CE2503, default_arg.loc,
@@ -225,8 +205,6 @@ def ensure_result_type_in_table(
 
     existing = enums.get(result_enum_name)
     if existing is not None:
-        # Same name, different payloads: one of the two was interned unresolved. Fail loudly
-        # at the moment of corruption rather than let it decay into a cache miss.
         if existing.variants and existing.variants != variants:
             raise_internal_error(
                 "CE0126",
@@ -246,7 +224,6 @@ def ensure_result_type_in_table(
     enums[result_enum_name] = result_enum
     enum_table.order.append(result_enum_name)
 
-    # Register the auto-derived hash() for the on-demand type (mirrors Pass 1.8).
     can_hash, _ = can_enum_be_hashed(result_enum)
     if can_hash:
         register_enum_hash_method(result_enum)

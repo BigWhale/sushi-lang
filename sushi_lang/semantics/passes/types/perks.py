@@ -16,7 +16,6 @@ def validate_perk_implementation(
     implemented_methods = {m.name: m for m in impl.methods}
     required_methods = {m.name: m for m in perk_def.methods}
 
-    # Check for missing methods
     missing = set(required_methods.keys()) - set(implemented_methods.keys())
     if missing:
         for method_name in missing:
@@ -24,11 +23,9 @@ def validate_perk_implementation(
                    method=method_name, perk=perk_def.name)
         return False
 
-    # Check method signatures match
     valid = True
     for method_name, impl_method in implemented_methods.items():
         if method_name not in required_methods:
-            # Extra method not in perk - this is okay (implementation can have additional methods)
             continue
 
         required_sig = required_methods[method_name]
@@ -46,16 +43,13 @@ def _signatures_match(impl: FuncDef, required: PerkMethodSignature) -> bool:
     if getattr(impl, "self_mode", None) != getattr(required, "self_mode", None):
         return False
 
-    # Check parameter count (excluding implicit self)
     if len(impl.params) != len(required.params):
         return False
 
-    # Check parameter types
     for impl_param, req_param in zip(impl.params, required.params, strict=False):
         if impl_param.ty != req_param.ty:
             return False
 
-    # Check return type
     if impl.ret != required.ret:
         return False
 

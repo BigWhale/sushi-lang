@@ -66,26 +66,17 @@ def validate_hashmap_method_with_validator(
     elif method == "clone":
         _validate_hashmap_clone(call, hashmap_type, reporter)
     else:
-        # Unknown method - should not happen if is_builtin_hashmap_method was called first
         raise_internal_error("CE0085", method=method)
-
-
-# ==============================================================================
-# Type Parsing Helpers
-# ==============================================================================
 
 
 def parse_hashmap_types(hashmap_type: StructType, validator: Any) -> tuple[Optional[Type], Optional[Type]]:
     """Parse K and V types from HashMap<K, V> type name."""
 
-    # Extract K and V types from HashMap<K, V>
     if not hashmap_type.name.startswith("HashMap<"):
         return None, None
 
-    # Parse the type parameters (handle nested types like HashMap<Pair<i32, string>, bool>)
     type_params_str = hashmap_type.name[8:-1]  # Remove "HashMap<" and ">"
 
-    # Find the comma that separates K and V (need to handle nested brackets)
     bracket_depth = 0
     comma_pos = -1
     for i, c in enumerate(type_params_str):
@@ -103,7 +94,6 @@ def parse_hashmap_types(hashmap_type: StructType, validator: Any) -> tuple[Optio
     key_type_str = type_params_str[:comma_pos].strip()
     value_type_str = type_params_str[comma_pos + 1:].strip()
 
-    # Resolve type strings to actual Type objects
     key_type = _resolve_type_string(key_type_str, validator)
     value_type = _resolve_type_string(value_type_str, validator)
 
@@ -115,7 +105,6 @@ def _resolve_type_string(type_str: str, validator: Any) -> Optional[Type]:
     """
     from sushi_lang.semantics.typesys import BuiltinType
 
-    # Check for built-in types
     builtin_map = {
         'i8': BuiltinType.I8, 'i16': BuiltinType.I16, 'i32': BuiltinType.I32, 'i64': BuiltinType.I64,
         'u8': BuiltinType.U8, 'u16': BuiltinType.U16, 'u32': BuiltinType.U32, 'u64': BuiltinType.U64,
@@ -125,21 +114,13 @@ def _resolve_type_string(type_str: str, validator: Any) -> Optional[Type]:
     if type_str in builtin_map:
         return builtin_map[type_str]
 
-    # Check for enum types (including generic enums like Maybe<i32>, Result<i32>)
     if hasattr(validator, 'enum_table') and type_str in validator.enum_table.by_name:
         return validator.enum_table.by_name[type_str]
 
-    # Check for struct types (including generic structs like Pair<i32, string>)
     if hasattr(validator, 'struct_table') and type_str in validator.struct_table.by_name:
         return validator.struct_table.by_name[type_str]
 
-    # Type not found
     return None
-
-
-# ==============================================================================
-# Individual Method Validators
-# ==============================================================================
 
 
 def _validate_hashmap_new(
@@ -151,7 +132,6 @@ def _validate_hashmap_new(
     """Validate HashMap<K, V>.new() method call."""
     from sushi_lang.sushi_stdlib.src.common import get_builtin_method
 
-    # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="new", expected=0, got=len(call.args))
 
@@ -161,14 +141,11 @@ def _validate_hashmap_new(
     # We need to parse the type name directly
     from sushi_lang.semantics.typesys import EnumType
 
-    # Parse K type from HashMap<K, V> name
     if not hashmap_type.name.startswith("HashMap<"):
         return
 
-    # Extract type parameters
     type_params_str = hashmap_type.name[8:-1]  # Remove "HashMap<" and ">"
 
-    # Find the comma that separates K and V (handle nested brackets)
     bracket_depth = 0
     comma_pos = -1
     for i, c in enumerate(type_params_str):
@@ -185,32 +162,21 @@ def _validate_hashmap_new(
 
     key_type_str = type_params_str[:comma_pos].strip()
 
-    # Check for dynamic arrays (not comparable, disallowed as HashMap keys)
     if '[]' in key_type_str:
-        # Dynamic arrays are not allowed as HashMap keys (like Go slices)
-        # Fixed arrays are fine: i32[3] is allowed, i32[] is not
         er.emit(reporter, er.ERR.CE2058, call.loc, key_type=key_type_str)
         return
 
-    # Skip further validation for fixed array types (validated during codegen)
     if '[' in key_type_str:
-        # Fixed array type: hash method registered on-demand in codegen
-        # Equality checking is implemented in emit_key_equality_check()
         return
-
-    # For non-array types, validate using existing type resolution
 
     key_type = _resolve_type_string(key_type_str, validator)
     if key_type is None:
         return
 
-    # Validate that K has .hash() method
     hash_method = get_builtin_method(key_type, "hash")
     if hash_method is None:
         er.emit(reporter, er.ERR.CE2054, call.loc, key_type=display_type(key_type))
 
-    # Validate that K supports equality comparison
-    # Check if key_type is one of the supported types in emit_key_equality_check
     from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
     supported_equality = (
         key_type in (BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
@@ -235,43 +201,29 @@ def _validate_hashmap_insert(
     from sushi_lang.semantics.passes.types.utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
     from sushi_lang.semantics.passes.types.compatibility import types_compatible
 
-    # Validate argument count
     if len(call.args) != 2:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="insert", expected=2, got=len(call.args))
         return
 
-    # Extract K and V types from HashMap<K, V>
     key_type, value_type = parse_hashmap_types(hashmap_type, validator)
     if key_type is None or value_type is None:
-        # Couldn't parse types - just validate expressions without type checking
         for arg in call.args:
             validator.validate_expression(arg)
         return
 
-    # Validate each argument with type propagation (reuse standard validation logic)
     expected_types = [key_type, value_type]
     for i, (arg, expected_ty) in enumerate(zip(call.args, expected_types, strict=False)):
-        # Propagate expected types to DotCall nodes for generic enums (before validation)
-        # This allows Maybe.None(), Result.Ok(), etc. to work as function arguments
         propagate_enum_type_to_dotcall(validator, arg, expected_ty)
 
-        # Propagate expected types to DotCall nodes for generic structs (before validation)
-        # This allows Own.alloc(42) to work as function arguments
         propagate_struct_type_to_dotcall(validator, arg, expected_ty)
 
-        # Propagate expected types to Call nodes for generic struct constructors
-        # This allows Box(42) to work when parameter expects Box<i32>
         if isinstance(arg, Call) and hasattr(arg.callee, 'id') and isinstance(expected_ty, StructType):
             struct_name = arg.callee.id
-            # Check if this is a generic struct constructor
             if struct_name in validator.generic_struct_table.by_name:
-                # Update the Call node's callee id to use the concrete type name
                 arg.callee.id = expected_ty.name
 
-        # Recursively validate the argument expression
         validator.validate_expression(arg)
 
-        # Check type compatibility
         if expected_ty is not None:
             arg_type = validator.infer_expression_type(arg)
             if arg_type is not None and not types_compatible(validator, arg_type, expected_ty):
@@ -320,37 +272,28 @@ def _validate_hashmap_key_method(
     from sushi_lang.semantics.passes.types.utils import propagate_enum_type_to_dotcall, propagate_struct_type_to_dotcall
     from sushi_lang.semantics.passes.types.compatibility import types_compatible
 
-    # Validate argument count
     if len(call.args) != 1:
         er.emit(reporter, er.ERR.CE2016, call.loc, method=method_name, expected=1, got=len(call.args))
         return
 
-    # Extract K type from HashMap<K, V>
     key_type, _ = parse_hashmap_types(hashmap_type, validator)
     if key_type is None:
-        # Couldn't parse types - just validate expressions without type checking
         validator.validate_expression(call.args[0])
         return
 
-    # Validate the key argument with type propagation
     arg = call.args[0]
 
-    # Propagate expected types to DotCall nodes for generic enums
     propagate_enum_type_to_dotcall(validator, arg, key_type)
 
-    # Propagate expected types to DotCall nodes for generic structs
     propagate_struct_type_to_dotcall(validator, arg, key_type)
 
-    # Propagate expected types to Call nodes for generic struct constructors
     if isinstance(arg, Call) and hasattr(arg.callee, 'id') and isinstance(key_type, StructType):
         struct_name = arg.callee.id
         if struct_name in validator.generic_struct_table.by_name:
             arg.callee.id = key_type.name
 
-    # Recursively validate the argument expression
     validator.validate_expression(arg)
 
-    # Check type compatibility
     if key_type is not None:
         arg_type = validator.infer_expression_type(arg)
         if arg_type is not None and not types_compatible(validator, arg_type, key_type):
@@ -364,7 +307,6 @@ def _validate_hashmap_len(
     reporter: Any
 ) -> None:
     """Validate HashMap<K, V>.len() method call."""
-    # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="len", expected=0, got=len(call.args))
 
@@ -375,7 +317,6 @@ def _validate_hashmap_clone(
     reporter: Any
 ) -> None:
     """Validate HashMap<K, V>.clone() method call."""
-    # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="clone", expected=0, got=len(call.args))
 
@@ -386,7 +327,6 @@ def _validate_hashmap_is_empty(
     reporter: Any
 ) -> None:
     """Validate HashMap<K, V>.is_empty() method call."""
-    # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="is_empty", expected=0, got=len(call.args))
 
@@ -397,7 +337,6 @@ def _validate_hashmap_tombstone_count(
     reporter: Any
 ) -> None:
     """Validate HashMap<K, V>.tombstone_count() method call."""
-    # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="tombstone_count", expected=0, got=len(call.args))
 
@@ -408,7 +347,6 @@ def _validate_hashmap_rehash(
     reporter: Any
 ) -> None:
     """Validate HashMap<K, V>.rehash() method call."""
-    # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="rehash", expected=0, got=len(call.args))
 
@@ -419,7 +357,6 @@ def _validate_hashmap_free(
     reporter: Any
 ) -> None:
     """Validate HashMap<K, V>.free() method call."""
-    # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="free", expected=0, got=len(call.args))
 
@@ -430,7 +367,6 @@ def _validate_hashmap_destroy(
     reporter: Any
 ) -> None:
     """Validate HashMap<K, V>.destroy() method call."""
-    # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="destroy", expected=0, got=len(call.args))
 
@@ -441,7 +377,6 @@ def _validate_hashmap_debug(
     reporter: Any
 ) -> None:
     """Validate HashMap<K, V>.debug() method call."""
-    # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="debug", expected=0, got=len(call.args))
 
@@ -452,7 +387,6 @@ def _validate_hashmap_keys(
     reporter: Any
 ) -> None:
     """Validate HashMap<K, V>.keys() method call."""
-    # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="keys", expected=0, got=len(call.args))
 
@@ -463,7 +397,6 @@ def _validate_hashmap_values(
     reporter: Any
 ) -> None:
     """Validate HashMap<K, V>.values() method call."""
-    # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="values", expected=0, got=len(call.args))
 
@@ -474,14 +407,8 @@ def _validate_hashmap_entries(
     reporter: Any
 ) -> None:
     """Validate HashMap<K, V>.entries() method call."""
-    # Validate argument count
     if len(call.args) != 0:
         er.emit(reporter, er.ERR.CE2016, call.loc, method="entries", expected=0, got=len(call.args))
-
-
-# ==============================================================================
-# Type-table plumbing
-# ==============================================================================
 
 
 def hashmap_generic_struct() -> 'GenericStructType':
@@ -508,7 +435,6 @@ def extract_key_value_types(hashmap_type: StructType, tables: Any) -> tuple[Type
     if not name.startswith("HashMap<") or not name.endswith(">"):
         raise_internal_error("CE0087", type=name)
 
-    # Extract the type arguments string: "K, V"
     type_args_str = name[len("HashMap<"):-1]
 
     parts = split_type_arguments(type_args_str)

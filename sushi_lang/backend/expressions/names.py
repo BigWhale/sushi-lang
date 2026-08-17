@@ -33,7 +33,6 @@ def resolve_name_semantic_type(codegen: 'LLVMCodegen', name: str) -> Optional['T
 
 def emit_name(codegen: 'LLVMCodegen', expr: Name, to_i1: bool) -> ir.Value:
     """Emit variable or constant reference."""
-    # Check for math module constants (PI, E, TAU)
     if expr.id in {'PI', 'E', 'TAU'}:
         from sushi_lang.sushi_stdlib.src import math as math_module
         if math_module.is_builtin_math_constant(expr.id):
@@ -57,6 +56,5 @@ def emit_name(codegen: 'LLVMCodegen', expr: Name, to_i1: bool) -> ir.Value:
     if llvm_fn is not None:
         from sushi_lang.backend.runtime import closures
         return closures.materialize_function_ref(codegen, llvm_fn)
-    # Variable/constant not found (should be caught in semantic analysis)
     raise_internal_error("CE0055", name=expr.id)
 

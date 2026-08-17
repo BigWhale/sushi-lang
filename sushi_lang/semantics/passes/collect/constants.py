@@ -1,4 +1,3 @@
-# semantics/passes/collect/constants.py
 """Constant definition collection for Phase 0."""
 
 from __future__ import annotations
@@ -10,7 +9,6 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ERR
 from sushi_lang.semantics.ast import ConstDef, Program
 from sushi_lang.semantics.typesys import Type
-
 
 
 @dataclass
@@ -59,7 +57,6 @@ class ConstantCollector:
         const_type: Optional[Type] = getattr(const, "ty", None)
         type_span: Optional[Span] = getattr(const, "type_span", None) or name_span
 
-        # Check for missing type annotation (constants must be explicitly typed)
         if const_type is None:
             er.emit(self.r, ERR.CE0104, name_span, name=name)
 
@@ -70,7 +67,6 @@ class ConstantCollector:
             type_span=type_span,
         )
 
-        # Check for duplicate constant names
         if name in self.constants.by_name:
             prev = self.constants.by_name[name]
             er.emit_with(self.r, ERR.CE0105, name_span, name=name) \

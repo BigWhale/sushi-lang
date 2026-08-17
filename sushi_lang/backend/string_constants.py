@@ -14,7 +14,6 @@ class StringConstantManager:
     def __init__(self, codegen: 'LLVMCodegen'):
         """Initialize the string constant manager."""
         self.codegen = codegen
-        # Content-based cache: string content -> global variable
         self._cache: Dict[str, ir.GlobalVariable] = {}
 
     def _make_global_name(self, value: str, null_terminated: bool) -> str:
@@ -25,32 +24,26 @@ class StringConstantManager:
 
     def get_or_create(self, value: str, null_terminated: bool = False) -> ir.GlobalVariable:
         """Get existing or create new string constant with deduplication."""
-        # Create cache key including null-termination flag
         key_str = f"{value}|{'nt' if null_terminated else 'raw'}"
 
         if key_str in self._cache:
             return self._cache[key_str]
 
-        # Generate content-based name for cross-module deduplication
         global_name = self._make_global_name(value, null_terminated)
 
-        # Check if already exists in module (from linked library)
         existing = self.codegen.module.globals.get(global_name)
         if existing is not None:
             self._cache[key_str] = existing
             return existing
 
-        # Encode string data
         string_data = bytearray(value.encode('utf-8'))
         if null_terminated:
             string_data.append(0)
 
-        # Create LLVM constant
         i8 = self.codegen.types.i8
         const_type = ir.ArrayType(i8, len(string_data))
         const_value = ir.Constant(const_type, string_data)
 
-        # Create global variable with content-based name
         global_var = ir.GlobalVariable(
             self.codegen.module,
             const_type,

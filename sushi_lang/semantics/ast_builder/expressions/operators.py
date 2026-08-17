@@ -66,17 +66,13 @@ def handle_cast(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
     """Handle cast expressions: expr as type (as type)*."""
     children = t.children
 
-    # Simple case: just one expression (no cast)
     if len(children) == 1:
         return ast_builder._expr(children[0])
 
-    # Cast case: expr as type (as type)*
     expr = ast_builder._expr(children[0])
 
-    # Handle multiple casts: (expr as type1) as type2
     i = 1
     while i + 1 < len(children):
-        # children[i] should be "as" token, children[i+1] should be type
         if i + 1 >= len(children):
             break
         target_type = ast_builder._parse_type(children[i + 1])
@@ -90,7 +86,6 @@ def expr_borrow(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
     """Handle borrow expression: peek expr or poke expr."""
     from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree_child
 
-    # Extract borrow mode (peek or poke)
     mutability = None
     for child in t.children:
         if isinstance(child, Token) and child.type == "BORROW_MODE":
@@ -98,7 +93,6 @@ def expr_borrow(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
             break
 
     if mutability is None:
-        # This should not happen with the new grammar
         ice(t, "borrow expression missing borrow mode (peek/poke)")
 
     sub = first_tree_child(t)
@@ -111,17 +105,14 @@ def parse_range_expr(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
 
     children = t.children
 
-    # Simple case: no range operator (just shift expression)
     if len(children) == 1:
         return ast_builder._expr(children[0])
 
-    # Range case: start..end or start..=end
     if len(children) == 3:
         start_expr = ast_builder._expr(children[0])
         operator = children[1]  # Token (RANGE or RANGE_INCLUSIVE)
         end_expr = ast_builder._expr(children[2])
 
-        # Determine if inclusive based on token type
         inclusive = (operator.type == "RANGE_INCLUSIVE")
 
         return RangeExpr(
@@ -131,5 +122,4 @@ def parse_range_expr(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
             loc=span_of(t)
         )
 
-    # Unexpected structure
     ice(t, f"unexpected range structure: {len(children)} children")

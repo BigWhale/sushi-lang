@@ -7,11 +7,6 @@ import llvmlite.ir as ir
 from sushi_lang.internals.errors import raise_internal_error
 
 
-# ==============================================================================
-# Inline Emission (on-demand code generation)
-# ==============================================================================
-
-
 def emit_builtin_result_method(
     codegen: Any,
     call: MethodCall,
@@ -57,7 +52,6 @@ def _emit_result_err(
     """Emit LLVM code for result.err()."""
     from sushi_lang.backend.generics.maybe import emit_maybe_some, emit_maybe_none
 
-    # Extract E from Result<T, E>
     err_variant = result_type.get_variant("Err")
     if err_variant is None:
         raise_internal_error("CE0089", enum=result_type.name)
@@ -67,7 +61,6 @@ def _emit_result_err(
 
     e_type = err_variant.associated_types[0]
 
-    # Get the LLVM type for E
     error_llvm_type = codegen.types.ll_type(e_type)
 
     # Extract (is_ok, error_value) from Result<T, E>
@@ -77,32 +70,25 @@ def _emit_result_err(
         result_value, error_llvm_type, e_type
     )
 
-    # Create basic blocks for Ok and Err paths
     ok_block = codegen.builder.append_basic_block(name="result_err_ok")
     err_block = codegen.builder.append_basic_block(name="result_err_err")
     continue_block = codegen.builder.append_basic_block(name="result_err_continue")
 
-    # Branch based on is_ok
     codegen.builder.cbranch(is_ok, ok_block, err_block)
 
-    # Ok block: return Maybe.None()
     codegen.builder.position_at_end(ok_block)
     none_value = emit_maybe_none(codegen, e_type)
     codegen.builder.branch(continue_block)
 
-    # Err block: return Maybe.Some(error_value)
     codegen.builder.position_at_end(err_block)
     some_value = emit_maybe_some(codegen, e_type, error_value)
     codegen.builder.branch(continue_block)
 
-    # Continue block: phi to merge the two paths
     codegen.builder.position_at_end(continue_block)
 
-    # Get the Maybe<E> LLVM type
     from sushi_lang.backend.generics.maybe import get_maybe_enum_type
     maybe_llvm_type = get_maybe_enum_type(codegen, e_type)
 
-    # Create phi node to select between None and Some
     phi = codegen.builder.phi(maybe_llvm_type, name="err_result")
     phi.add_incoming(none_value, ok_block)
     phi.add_incoming(some_value, err_block)

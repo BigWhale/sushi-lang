@@ -38,12 +38,9 @@ class TwoPhaseLinker:
         import re
         constructors = set()
 
-        # Pattern to match constructor entries in @llvm.global_ctors
-        # Format: { i32 priority, void ()* @func_name, i8* null }
         ctor_pattern = re.compile(r'@llvm\.global_ctors.*?@([a-zA-Z_][a-zA-Z0-9_\.]*)')
 
         for module, _name, _source in self.modules:
-            # Get full IR text and search for global_ctors
             ir_text = str(module)
             for match in ctor_pattern.finditer(ir_text):
                 constructors.add(match.group(1))
@@ -60,21 +57,17 @@ class TwoPhaseLinker:
         if entry_points is None:
             entry_points = ["main"]
 
-        # Also include global constructors as entry points
         constructors = self._find_global_constructors()
         if constructors:
             entry_points = list(set(entry_points) | constructors)
 
-        # Phase 1: Extract symbol tables from all modules
         symbol_tables = []
         for module, name, source in self.modules:
             symbol_tables.append(extract_symbol_table(module, name, source))
 
-        # Phase 2: Build dependency graph and compute reachable symbols
         graph = build_dependency_graph(symbol_tables)
         reachable = graph.get_transitive_closure(set(entry_points))
 
-        # Phase 3: Resolve duplicates
         resolver = SymbolResolver(symbol_tables)
         resolved = resolver.resolve(reachable)
 

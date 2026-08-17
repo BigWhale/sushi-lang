@@ -22,20 +22,16 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
     if stmt.ty is None:
         raise_internal_error("CE0015", message=f"let statement missing type information for '{stmt.name}'")
 
-    # Track variable type for struct member access resolution
     codegen.variable_types[stmt.name] = stmt.ty
 
-    # Special handling for dynamic array constructors - don't create slot here
     if isinstance(stmt.ty, DynamicArrayType):
         from sushi_lang.backend.statements import initialization
         initialization.initialize_dynamic_array(codegen, stmt.name, stmt.ty, stmt.value)
     else:
         ll_type = codegen.types.ll_type(stmt.ty)
 
-        # Resolve struct type name to actual StructType object for RAII tracking
         semantic_type = stmt.ty
 
-        # Check if it's a StructType reference (not instantiated StructType from semantics)
         if isinstance(stmt.ty, StructType):
             semantic_type = stmt.ty
         elif isinstance(stmt.ty, UnknownType):
@@ -73,7 +69,6 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
             from llvmlite import ir as _ir
             codegen.builder.store(_ir.Constant(ll_type, None), slot)
 
-        # Special handling for array literals
         if isinstance(stmt.ty, ArrayType) and isinstance(stmt.value, ArrayLiteral):
             from sushi_lang.backend.statements import initialization
             initialization.initialize_array_literal(codegen, slot, stmt.value, ll_type,
@@ -84,16 +79,12 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
             owns = True
         else:
             rhs = codegen.expressions.emit_expr(stmt.value)
-            # A `let` BINDS. What that means for a given source is not this position's
-            # decision to make -- see backend/ownership.py.
             rhs, owns = bind(codegen, stmt.value, rhs, semantic_type)
             casted_rhs = codegen.utils.cast_for_param(rhs, ll_type)
             codegen.builder.store(casted_rhs, slot)
 
         if owns:
             codegen.memory.register_local_cleanup(stmt.name, semantic_type, slot)
-            # Own@(T) and List@(T) keep their own registries, which carry the element type
-            # the destructor needs. `register_local_cleanup` does not reach them.
             if isinstance(semantic_type, StructType) and hasattr(codegen, 'dynamic_arrays'):
                 if codegen.dynamic_arrays.is_own_type(semantic_type):
                     codegen.dynamic_arrays.register_own(stmt.name, semantic_type, slot)
@@ -107,12 +98,10 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
     from sushi_lang.semantics.ast import Name, MemberAccess
     from sushi_lang.semantics.typesys import ReferenceType
 
-    # Handle field rebinding (obj.field := value)
     if isinstance(stmt.target, MemberAccess):
         _emit_field_rebind(codegen, stmt)
         return
 
-    # Handle simple variable rebinding (x := value)
     if not isinstance(stmt.target, Name):
         raise_internal_error("CE0022", type=f"Unsupported rebind target: {type(stmt.target)}")
 
@@ -156,7 +145,6 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
 
     dst = slot.type.pointee
 
-    # Use centralized casting for integer types
     if isinstance(dst, ir.IntType):
         casted_value = codegen.utils.cast_to_int_width(val, dst)
         codegen.builder.store(casted_value, slot)
@@ -199,7 +187,6 @@ def _emit_dynamic_array_rebind(
     from llvmlite import ir
     from sushi_lang.semantics.ast import Name
 
-    # Extract variable name from target (must be Name for this function)
     if not isinstance(stmt.target, Name):
         raise_internal_error("CE0022", type=f"Expected Name target, got {type(stmt.target)}")
     var_name = stmt.target.id
@@ -216,11 +203,8 @@ def _emit_dynamic_array_rebind(
         descriptor = codegen.dynamic_arrays._array(var_name)
         if descriptor is not None:
             if not descriptor.destroyed:
-                # Free the old array's memory
                 codegen.dynamic_arrays._emit_array_destructor(var_name)
-                # Don't mark as destroyed - we're rebinding to a new value
 
-    # Store the new array value
     codegen.builder.store(val, slot)
     # The binding is RE-INITIALIZED: it owns the new array, so scope exit frees it
     # even if the previous value had been moved away (F5, 2026-08-14) or explicitly
@@ -258,7 +242,6 @@ def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value'
     from sushi_lang.backend.destructors import resolve_named_type
     from sushi_lang.semantics.ast import Name
 
-    # Extract variable name from target (must be Name for this function)
     if not isinstance(stmt.target, Name):
         raise_internal_error("CE0022", type=f"Expected Name target, got {type(stmt.target)}")
     var_name = stmt.target.id
@@ -290,7 +273,6 @@ def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value'
     # not to the decision about the new one.
     val = consume(codegen, stmt.value, val, resolved, ConsumingUse.REBIND)
 
-    # Store the new value
     codegen.builder.store(val, slot)
     # The binding is RE-INITIALIZED: it owns the new value, so scope exit frees it
     # even if the previous value had been moved away (F5, 2026-08-14) or explicitly
@@ -309,14 +291,11 @@ def _emit_field_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
     if not isinstance(target, MemberAccess):
         raise_internal_error("CE0022", type=f"Expected MemberAccess, got {type(target)}")
 
-    # Emit the value to store
     val = codegen.expressions.emit_expr(stmt.value)
 
-    # Get the receiver's struct type
     from sushi_lang.backend.expressions.structs import infer_struct_type
     struct_type = infer_struct_type(codegen, target.receiver)
 
-    # Get the field index
     field_index = struct_type.get_field_index(target.member)
     if field_index is None:
         raise_internal_error("CE0029", struct=struct_type.name, field=target.member)
@@ -327,15 +306,12 @@ def _emit_field_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
     field_type = struct_type.get_field_type(target.member)
     val = consume(codegen, stmt.value, val, field_type, ConsumingUse.FIELD_ASSIGN)
 
-    # Get a pointer to the struct (either alloca or reference parameter pointer)
     from sushi_lang.backend.expressions.structs import try_get_struct_alloca
     struct_ptr = try_get_struct_alloca(codegen, target.receiver)
 
     if struct_ptr is None:
-        # Can't get struct pointer - this shouldn't happen after semantic analysis
         raise_internal_error("CE0022", type="Cannot get pointer for field rebinding")
 
-    # Use GEP to get pointer to the specific field
     from sushi_lang.backend import gep_utils
     field_ptr = gep_utils.gep_struct_field(
         codegen,
@@ -352,10 +328,8 @@ def _emit_field_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
     if field_type is not None and needs_cleanup(field_type):
         emit_value_destructor(codegen, field_ptr, field_type)
 
-    # Cast the value if needed (for integer types)
     dst_type = field_ptr.type.pointee
     if isinstance(dst_type, ir.IntType):
         val = codegen.utils.cast_to_int_width(val, dst_type)
 
-    # Store the new value directly to the field
     codegen.builder.store(val, field_ptr)

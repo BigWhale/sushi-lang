@@ -1,4 +1,3 @@
-# semantics/passes/collect/perks.py
 """Perk definition and implementation collection for Phase 0."""
 
 from __future__ import annotations
@@ -12,7 +11,6 @@ from sushi_lang.semantics.ast import PerkDef, ExtendWithDef, FuncDef, Program
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
 
 from .utils import reject_reference_in
-
 
 
 @dataclass
@@ -37,13 +35,10 @@ class PerkTable:
 @dataclass
 class PerkImplementationTable:
     """Tracks which types implement which perks."""
-    # Key: (type_name, perk_name), Value: ExtendWithDef
     implementations: Dict[Tuple[str, str], ExtendWithDef] = field(default_factory=dict)
 
-    # Reverse index: type_name -> set of implemented perk names
     by_type: Dict[str, Set[str]] = field(default_factory=dict)
 
-    # Reverse index: perk_name -> set of implementing type names
     by_perk: Dict[str, Set[str]] = field(default_factory=dict)
 
     def register(self, impl: ExtendWithDef, type_name: str) -> bool:
@@ -54,7 +49,6 @@ class PerkImplementationTable:
 
         self.implementations[key] = impl
 
-        # Update indexes
         if type_name not in self.by_type:
             self.by_type[type_name] = set()
         self.by_type[type_name].add(impl.perk_name)
@@ -79,17 +73,14 @@ class PerkImplementationTable:
 
     def get_method(self, target_type: 'Type', method_name: str) -> Optional['FuncDef']:
         """Get a specific perk method for a type."""
-        # Convert Type to string name for lookup
         type_name = _get_type_name(target_type)
         if type_name is None:
             return None
 
-        # Check all perks implemented by this type
         perks = self.by_type.get(type_name, set())
         for perk_name in perks:
             impl = self.implementations.get((type_name, perk_name))
             if impl:
-                # Search for the method in this implementation
                 for method in impl.methods:
                     if method.name == method_name:
                         return method
@@ -102,10 +93,8 @@ class PerkImplementationTable:
         if key in self.implementations:
             return False  # Already registered (explicit or synthetic)
 
-        # Register as synthetic implementation (None indicates synthetic)
         self.implementations[key] = None  # type: ignore
 
-        # Update indexes
         if type_name not in self.by_type:
             self.by_type[type_name] = set()
         self.by_type[type_name].add(perk_name)
@@ -122,24 +111,19 @@ def _get_type_name(ty: Optional[Type]) -> Optional[str]:
     if ty is None:
         return None
 
-    # Handle built-in types
     if isinstance(ty, BuiltinType):
         return str(ty)
 
-    # Handle struct types
     if isinstance(ty, StructType):
         return ty.name
 
-    # Handle enum types
     if isinstance(ty, EnumType):
         return ty.name
 
-    # Handle generic type references (e.g., List<i32>)
     from sushi_lang.semantics.generics.types import GenericTypeRef
     if isinstance(ty, GenericTypeRef):
         return f"{ty.base_name}<{','.join(str(arg) for arg in ty.type_args)}>"
 
-    # Fallback to string representation
     return str(ty)
 
 
@@ -175,25 +159,20 @@ class PerkCollector:
 
     def register_synthetic_impls(self) -> None:
         """Auto-register synthetic perk implementations for primitive types."""
-        # Primitives with auto-derived hash() methods
-        # See: backend/types/primitives/hashing.py
         hashable_primitives = [
             "i8", "i16", "i32", "i64",
             "u8", "u16", "u32", "u64",
             "f32", "f64", "bool", "string"
         ]
 
-        # Check if Hashable perk is defined
         hashable_perk = self.perks.get("Hashable")
         if hashable_perk:
-            # Verify perk requires hash() method
             has_hash_method = any(
                 method.name == "hash" and method.ret == BuiltinType.U64
                 for method in hashable_perk.methods
             )
 
             if has_hash_method:
-                # Register all hashable primitives
                 for prim_type in hashable_primitives:
                     self.perk_impls.register_synthetic(prim_type, "Hashable")
 
@@ -231,7 +210,6 @@ class PerkCollector:
                                 or getattr(method, "name_span", None) or name_span,
                                 ERR.CE2417)
 
-        # Check for duplicate perk names
         if not self.perks.register(perk):
             prev = self.perks.get(name)
             prev_span = getattr(prev, "name_span", None) if prev else None
@@ -258,19 +236,14 @@ class PerkCollector:
                                or getattr(impl, "loc", None), ERR.CE2420):
             return
 
-        # Extract type name from target type
         type_name = _get_type_name(target_type)
         if type_name is None:
-            # Can't determine type name, skip
             return
 
-        # Check if perk exists
         if not self.perks.get(perk_name):
             er.emit(self.r, ERR.CE4003, perk_name_span, perk=perk_name)
             return
 
-        # Register the implementation
         if not self.perk_impls.register(impl, type_name):
-            # Duplicate implementation
             er.emit(self.r, ERR.CE4002, getattr(impl, "loc", None), type=type_name, perk=perk_name)
             return

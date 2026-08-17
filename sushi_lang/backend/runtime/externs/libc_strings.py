@@ -16,7 +16,6 @@ class LibCStrings:
         """Initialize with reference to main codegen instance."""
         self.codegen = codegen
 
-        # Function references - declared immediately for type safety
         self.strcmp: ir.Function
         self.strlen: ir.Function
         self.sprintf: ir.Function
@@ -38,13 +37,11 @@ class LibCStrings:
         var_arg: bool = False
     ) -> ir.Function:
         """Helper to declare external C function with reduced duplication."""
-        # Check if function already exists in module
         existing_global = self.codegen.module.globals.get(func_name)
         if isinstance(existing_global, ir.Function):
             setattr(self, attr_name, existing_global)
             return existing_global
 
-        # Declare new function
         fn_ty = ir.FunctionType(return_type, arg_types, var_arg=var_arg)
         func = ir.Function(self.codegen.module, fn_ty, name=func_name)
         setattr(self, attr_name, func)

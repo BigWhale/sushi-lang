@@ -1,4 +1,3 @@
-# semantics/semantic_analyzer.py
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
@@ -64,12 +63,10 @@ class SemanticAnalyzer:
         if self.unit_manager is None:
             return
 
-        # Get units in compilation order
         compilation_order = self.unit_manager.get_compilation_order()
         if compilation_order is None:
             return  # Error already reported
 
-        # Phase 0: Collect symbols from all units
         collector = CollectorPass(self.reporter)
         from sushi_lang.semantics.tables import SymbolTables
         global_tables = SymbolTables()
@@ -88,16 +85,12 @@ class SemanticAnalyzer:
             if unit.ast is None:
                 continue
 
-            # Collect symbols from this unit, passing unit name for visibility tracking
             unit_tables = collector.run(unit.ast, unit_name=unit.name,
                                         unit_file=str(unit.file_path))
 
-            # Merge unit symbols into global tables, considering visibility
             symbol_merger.merge_all(unit, unit_tables, global_tables)
 
         self.tables = global_tables
-        # Individual attributes are views onto the same table objects; the
-        # pipeline and backend read analyzer.structs / .enums / ... directly.
         self.constants = global_tables.constants
         self.structs = global_tables.structs
         self.enums = global_tables.enums
@@ -109,7 +102,6 @@ class SemanticAnalyzer:
         self.extensions = global_tables.extensions
         self.generic_extensions = global_tables.generic_extensions
         self.generic_funcs = global_tables.generic_funcs
-        # FFI externals accumulate across all units in the shared collector table.
         self.externals = collector.externals
         global_tables.externals = collector.externals
 
@@ -123,8 +115,6 @@ class SemanticAnalyzer:
                 validate_external_signatures(self.reporter, unit.ast)
                 validate_ptr_unit_gate(self.reporter, unit.ast)
 
-        # Register library types if any libraries are loaded
-        # Order: structs first, then enums (may reference structs), then functions (may reference both)
         if self.library_linker is not None and self.library_registry is None:
             self._build_library_registry()
         if self.library_registry is not None or self.library_linker is not None:
@@ -151,10 +141,8 @@ class SemanticAnalyzer:
             self._register_library_generic_structs()
             self._register_library_generic_enums()
 
-        # Check if main function expects command line arguments (across all units)
         self._check_main_function_args_multi_file(compilation_order)
 
-        # Pass 1.5: collect generic type instantiations from all units
         from sushi_lang.semantics.generics.instantiate import InstantiationCollector
         instantiation_collector = InstantiationCollector(
             struct_table=self.structs.by_name,
@@ -170,11 +158,9 @@ class SemanticAnalyzer:
         type_instantiations = instantiation_collector.instantiations
         func_instantiations = instantiation_collector.function_instantiations
 
-        # Pass 1.6: monomorphize generic types into concrete types
         from sushi_lang.semantics.generics.monomorphize import Monomorphizer
         from sushi_lang.semantics.generics.constraints import ConstraintValidator
 
-        # Create constraint validator for perk constraint checking (Phase 4)
         constraint_validator = ConstraintValidator(
             perk_table=self.perks,
             perk_impl_table=self.perk_impls,
@@ -221,11 +207,8 @@ class SemanticAnalyzer:
             elif base_name in self.generic_structs.by_name:
                 struct_instantiations.add((base_name, _resolve_args(type_args)))
 
-        # Phase 3: Monomorphize generic functions
-        # Monomorphize all detected function instantiations (multi-file mode)
         monomorphizer.monomorphize_all_functions(func_instantiations, compilation_order)
 
-        # Monomorphize generic enums
         concrete_enums = monomorphizer.monomorphize_all(self.generic_enums.by_name, enum_instantiations)
 
         # Merge monomorphized concrete enums into the global enum table. A name may already be
@@ -238,10 +221,8 @@ class SemanticAnalyzer:
             self.enums.by_name[enum_name] = enum_type
             self.enums.order.append(enum_name)
 
-        # Monomorphize generic structs
         concrete_structs = monomorphizer.monomorphize_all_structs(self.generic_structs.by_name, struct_instantiations)
 
-        # Merge monomorphized concrete structs into the global struct table
         for struct_name, struct_type in concrete_structs.items():
             self.structs.by_name[struct_name] = struct_type
             self.structs.order.append(struct_name)
@@ -272,7 +253,6 @@ class SemanticAnalyzer:
         )
         register_all_struct_hashes(self.structs)
 
-        # Register enum hash methods (with proper error reporting for direct recursion)
         register_all_enum_hashes(self.enums, self.reporter)
 
         register_all_array_hashes(self.structs, self.enums)
@@ -288,14 +268,12 @@ class SemanticAnalyzer:
         for enum_type in self.enums.by_name.values():
             register_enum_clone_method(enum_type)
 
-        # Monomorphize generic extension methods
         concrete_extension_defs = monomorphize_all_extension_methods(
             self.generic_extensions.by_type,
             struct_instantiations,
             concrete_structs
         )
 
-        # Store monomorphized ExtendDef nodes for backend codegen
         for (_target_type_name, _method_name, _type_args), extend_def in concrete_extension_defs.items():
             self.monomorphized_extensions.append(extend_def)
             # Add to extension table for method lookup during type validation.
@@ -353,7 +331,6 @@ class SemanticAnalyzer:
             if unit.ast is None:
                 continue
 
-            # Create unit-specific reporter with the unit's file path and source
             try:
                 unit_source = unit.file_path.read_text(encoding="utf-8")
             except Exception:
@@ -361,15 +338,12 @@ class SemanticAnalyzer:
 
             unit_reporter = Reporter(source=unit_source, filename=str(unit.file_path))
 
-            # Pass 1: scope analysis with global constants, structs, and enums (unit-specific reporter)
             scope_analyzer = ScopeAnalyzer(unit_reporter, self.constants, self.structs, self.enums, self.generic_enums, self.generic_structs, external_table=self.externals)
             scope_analyzer.run(unit.ast)
 
-            # Pass 2: type validation with global symbols (unit-specific reporter)
             type_validator = TypeValidator(unit_reporter, self.tables, current_unit_name=unit.name, monomorphized_functions=monomorphizer.monomorphized_functions)
             type_validator.run(unit.ast)
 
-            # Pass 2.5: lambda-lifting (between type and borrow, per unit).
             from sushi_lang.semantics.passes.lambda_lift import LambdaLifter
             LambdaLifter(self.structs, self.funcs, unit.ast,
                          annotate=type_validator._validate_function).run()
@@ -383,16 +357,12 @@ class SemanticAnalyzer:
                                            enum_names=enum_names, tables=self.tables)
             borrow_checker.run(unit.ast)
 
-            # Merge unit reporter results into main reporter
             self.reporter.items.extend(unit_reporter.items)
 
-        # Validate monomorphized generic extension methods (use main reporter for now)
         if self.monomorphized_extensions:
-            # Create a type validator with global context
             type_validator = TypeValidator(self.reporter, self.tables)
             for extend_def in self.monomorphized_extensions:
                 type_validator._validate_extension_method(extend_def)
-
 
     def _check_extension_shadows_builtin(self) -> None:
         """Reject an extension method that collides with a built-in (CE2097)."""
@@ -557,8 +527,6 @@ class SemanticAnalyzer:
                 sig = const_table.by_name.get(const_name)
                 const_defs = program.constants or []
                 if sig is None or len(const_defs) != 1:
-                    # The snippet failed to collect as a constant; skip rather
-                    # than crash the consumer build.
                     continue
 
                 self.constants.by_name[const_name] = sig
@@ -594,8 +562,6 @@ class SemanticAnalyzer:
 
                 perk_def = template_perks.by_name.get(perk_name)
                 if perk_def is None:
-                    # The snippet failed to collect as a perk; skip rather than
-                    # crash the consumer build.
                     continue
 
                 perk_table.by_name[perk_name] = perk_def
@@ -613,11 +579,8 @@ class SemanticAnalyzer:
                 perk_name = record.get("perk")
                 if not type_name or not perk_name:
                     continue
-                # Defensive: the shipping rule guarantees the perk definition
-                # ships alongside, but a hand-edited manifest may not honor it.
                 if perk_name not in self.perks.by_name:
                     continue
-                # Local (or earlier-library) impl wins.
                 if self.perk_impls.implements(type_name, perk_name):
                     continue
                 # CE4007 interplay: skip on a method-name clash with a local
@@ -685,8 +648,6 @@ class SemanticAnalyzer:
 
                 gfd = template_generic_funcs.by_name.get(func_name)
                 if gfd is None:
-                    # The snippet failed to collect as a generic function;
-                    # skip rather than crash the consumer build.
                     continue
 
                 gfd.is_library_template = True
@@ -734,8 +695,6 @@ class SemanticAnalyzer:
 
                 generic_type = template_table.by_name.get(type_name)
                 if generic_type is None:
-                    # The snippet failed to collect as a generic type; skip
-                    # rather than crash the consumer build.
                     continue
 
                 table.by_name[type_name] = generic_type
@@ -842,7 +801,6 @@ class SemanticAnalyzer:
     def _check_main_function_args_multi_file(self, compilation_order: list[Unit]) -> None:
         """Check if the main function has a string[] args parameter in multi-file mode."""
         main_func = None
-        # Search for main function across all units
         for unit in compilation_order:
             if unit.ast is None:
                 continue
@@ -860,11 +818,9 @@ class SemanticAnalyzer:
         from sushi_lang.semantics.typesys import DynamicArrayType
 
         if main_func is None:
-            # No main function found, no args processing needed
             self.main_expects_args = False
             return
 
-        # Check if main function has a parameter named "args" of type string[]
         for param in main_func.params:
             if (param.name == "args" and
                 isinstance(param.ty, DynamicArrayType) and
@@ -872,5 +828,4 @@ class SemanticAnalyzer:
                 self.main_expects_args = True
                 return
 
-        # No string[] args parameter found
         self.main_expects_args = False

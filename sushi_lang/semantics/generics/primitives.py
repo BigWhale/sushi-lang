@@ -1,4 +1,3 @@
-# semantics/generics/primitives.py
 """Recognition and Pass-2 validation of the built-in primitive methods."""
 from __future__ import annotations
 
@@ -10,7 +9,6 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 
 
-# Every primitive that carries to_str() and hash().
 _ALL_PRIMITIVES = frozenset({
     BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
     BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,

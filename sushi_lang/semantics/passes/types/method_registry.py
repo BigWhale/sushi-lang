@@ -17,7 +17,6 @@ class MethodTypeInferrer(Protocol):
         ...
 
 
-# Type for checker functions that determine if they can handle a receiver type
 TypeChecker = Callable[['Type', str, 'TypeValidator'], Optional[MethodTypeInferrer]]
 
 
@@ -39,7 +38,6 @@ class MethodTypeRegistry:
         validator: 'TypeValidator'
     ) -> Optional['Type']:
         """Infer the return type of a method call."""
-        # Try each registered checker in order
         for checker in self._checkers:
             inferrer = checker(receiver_type, method_name, validator)
             if inferrer is not None:
@@ -48,7 +46,6 @@ class MethodTypeRegistry:
         return None
 
 
-# Global registry instance
 METHOD_TYPE_REGISTRY = MethodTypeRegistry()
 
 
@@ -73,17 +70,14 @@ class ArrayMethodInferrer:
         from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
         from sushi_lang.semantics.typesys import deref_type
 
-        # Handle references to arrays (e.g., &i32[])
         actual_type = deref_type(self.receiver_type)
 
         if is_builtin_array_method(self.method_name):
-            # Special handling for .get() which returns Maybe<T>
             if self.method_name == "get":
                 element_type = actual_type.base_type
                 maybe_type = ensure_maybe_type_in_table(self.validator.enum_table, element_type, struct_table=self.validator.struct_table.by_name)
                 return maybe_type
 
-            # u8[].to_string_checked() returns Result<string, StdError>
             if self.method_name == "to_string_checked":
                 from sushi_lang.semantics.generics.results import ensure_result_type_in_table
                 std_error = self.validator.enum_table.by_name.get("StdError")
@@ -104,21 +98,16 @@ class StringMethodInferrer:
         from sushi_lang.sushi_stdlib.src.collections.strings import is_builtin_string_method, get_builtin_string_method_return_type
         from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
         if is_builtin_string_method(self.method_name):
-            # Special handling for methods returning Maybe<T>
             if self.method_name in ("find", "find_last"):
-                # Returns Maybe<i32>
                 maybe_i32_type = ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I32, struct_table=self.validator.struct_table.by_name)
                 return maybe_i32_type
             elif self.method_name == "to_i32":
-                # Returns Maybe<i32>
                 maybe_i32_type = ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I32, struct_table=self.validator.struct_table.by_name)
                 return maybe_i32_type
             elif self.method_name == "to_i64":
-                # Returns Maybe<i64>
                 maybe_i64_type = ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I64, struct_table=self.validator.struct_table.by_name)
                 return maybe_i64_type
             elif self.method_name == "to_f64":
-                # Returns Maybe<f64>
                 maybe_f64_type = ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.F64, struct_table=self.validator.struct_table.by_name)
                 return maybe_f64_type
             else:
@@ -255,15 +244,12 @@ class HashMapMethodInferrer:
                 elif self.method_name in ("new", "insert", "rehash", "debug", "free", "destroy"):
                     return BuiltinType.BLANK
                 elif self.method_name == "keys":
-                    # Return Iterator<K>
                     from sushi_lang.semantics.typesys import IteratorType
                     return IteratorType(element_type=key_type)
                 elif self.method_name == "values":
-                    # Return Iterator<V>
                     from sushi_lang.semantics.typesys import IteratorType
                     return IteratorType(element_type=value_type)
                 elif self.method_name == "entries":
-                    # Return Iterator<Entry<K, V>>
                     from sushi_lang.semantics.typesys import IteratorType
                     from sushi_lang.semantics.generics.hashmap import ensure_entry_type_in_struct_table
                     entry_type = ensure_entry_type_in_struct_table(
@@ -287,7 +273,6 @@ class ListMethodInferrer:
         import sushi_lang.internals.errors as er
 
         if is_builtin_list_method(self.method_name):
-            # Validate argument count if we have the call node
             if self.call is not None:
                 expected_args = {
                     "new": 0, "len": 0, "capacity": 0, "is_empty": 0,
@@ -341,7 +326,6 @@ class OwnMethodInferrer:
     def infer_return_type(self) -> Optional['Type']:
         from sushi_lang.semantics.generics.own import get_own_element_type
         if self.method_name == "get":
-            # Own<T>.get() yields the payload T (a non-owning borrow).
             try:
                 return get_own_element_type(self.receiver_type)
             except (TypeError, IndexError):
@@ -366,11 +350,9 @@ class FunctionMethodInferrer:
         return function_method_return_type(self.method_name, self.receiver_type)
 
 
-# Register all built-in type checkers
 @METHOD_TYPE_REGISTRY.register_checker
 def check_array_methods(receiver_type, method_name, validator):
     from sushi_lang.semantics.typesys import deref_type
-    # Handle both direct array types and references to arrays
     actual_type = deref_type(receiver_type)
     if isinstance(actual_type, (ArrayType, DynamicArrayType)):
         return ArrayMethodInferrer(receiver_type, method_name, validator)
@@ -448,8 +430,6 @@ def check_struct_enum_builtin_methods(receiver_type, method_name, validator):
     if receiver_type.name.startswith(CONTAINER_PREFIXES):
         return None
 
-    # Perk implementations win at codegen (dispatcher step 12, before the auto-derived
-    # step 13), so inference must let them win too.
     if validator.perk_impl_table.get_method(receiver_type, method_name) is not None:
         return None
 

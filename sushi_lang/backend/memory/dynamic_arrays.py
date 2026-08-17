@@ -21,7 +21,6 @@ class DynamicArrayDescriptor:
     element_type: Type           # Element type (int, bool, string)
     llvm_alloca: ir.Instruction  # LLVM alloca for the struct
     destroyed: bool = False      # Track if explicitly destroyed
-    # Move state lives in the unified codegen.moves MoveTracker (keyed by name).
 
 
 @dataclass
@@ -41,7 +40,6 @@ class ListDescriptor:
     list_type: StructType        # List<T> struct type
     llvm_alloca: ir.Instruction  # LLVM alloca for the List<T> struct
     destroyed: bool = False      # Explicitly .destroy()/.free()'d
-    # Move state lives in the unified codegen.moves MoveTracker (keyed by name).
 
 
 class DynamicArrayManager:
@@ -51,7 +49,6 @@ class DynamicArrayManager:
         """Initialize the dynamic array manager."""
         self.builder = builder
         self.codegen = codegen
-        # Stack of scopes, each containing dynamic arrays in that scope
         self.scope_stack: List[Set[str]] = []
         # Track dynamic arrays by name as a per-name STACK of descriptors (innermost last),
         # so a nested shadow of an owning array does not overwrite the outer descriptor:
@@ -64,7 +61,6 @@ class DynamicArrayManager:
         # arrays, so a per-name stack would never drain. The descriptor carries its slot for
         # slot-keyed move checks.
         self.owned_pointers: Dict[str, OwnDescriptor] = {}
-        # Track local List<T> variables for RAII cleanup (stacked, parallel to dynamic arrays).
         self.lists: Dict[str, List[ListDescriptor]] = {}
         self.list_scope_stack: List[Set[str]] = []
 
@@ -127,11 +123,9 @@ class DynamicArrayManager:
 
     def declare_dynamic_array(self, name: str, array_type: DynamicArrayType) -> ir.Instruction:
         """Declare a new dynamic array variable and allocate its struct on stack."""
-        # Resolve UnknownType to StructType/EnumType if needed
         from sushi_lang.semantics.typesys import UnknownType
         element_type = array_type.base_type
         if isinstance(element_type, UnknownType):
-            # Resolve to a concrete struct or enum from the symbol tables
             if element_type.name in self.codegen.struct_table.by_name:
                 element_type = self.codegen.struct_table.by_name[element_type.name]
             elif element_type.name in self.codegen.enum_table.by_name:
@@ -140,7 +134,6 @@ class DynamicArrayManager:
                 from sushi_lang.internals.errors import raise_internal_error
                 raise_internal_error("CE0020", type=element_type.name)
 
-        # Create LLVM struct type for the dynamic array
         element_llvm_type = self._get_llvm_type_for_element(element_type)
         struct_type = ir.LiteralStructType([
             ir.IntType(INT32_BIT_WIDTH),                 # len
@@ -148,13 +141,10 @@ class DynamicArrayManager:
             ir.PointerType(element_llvm_type)            # data*
         ])
 
-        # Allocate struct on stack
         alloca = self.builder.alloca(struct_type, name=f"{name}_struct")
 
-        # Initialize to zero (len=0, cap=0, data=null)
         null_ptr = ir.Constant(ir.PointerType(element_llvm_type), None)
 
-        # Store initial values using helper methods
         len_ptr = self.codegen.types.get_dynamic_array_len_ptr(self.builder, alloca)
         cap_ptr = self.codegen.types.get_dynamic_array_cap_ptr(self.builder, alloca)
         data_ptr = self.codegen.types.get_dynamic_array_data_ptr(self.builder, alloca)
@@ -163,7 +153,6 @@ class DynamicArrayManager:
         self.builder.store(ZERO_I32, cap_ptr)
         self.builder.store(null_ptr, data_ptr)
 
-        # Track the array (with resolved element type)
         descriptor = DynamicArrayDescriptor(
             name=name,
             element_type=element_type,  # Use resolved type
@@ -171,7 +160,6 @@ class DynamicArrayManager:
         )
         self.arrays.setdefault(name, []).append(descriptor)
 
-        # Add to current scope
         if self.scope_stack:
             self.scope_stack[-1].add(name)
 
@@ -210,32 +198,26 @@ class DynamicArrayManager:
         if descriptor.destroyed:
             raise_internal_error("CE0058", name=name)
 
-        # Determine initial capacity (at least len, but use power of 2)
         initial_len = len(elements)
         if initial_len == 0:
             return  # Empty array, already initialized
 
         initial_capacity = self._next_power_of_2(initial_len)
 
-        # Allocate memory
         element_size = self._get_element_size_bytes(descriptor.element_type)
         capacity_val = make_i32_const(initial_capacity)
         total_bytes = self.builder.mul(capacity_val, element_size, name="total_bytes")
 
         data_ptr = emit_malloc(self.codegen, self.builder, total_bytes)
 
-        # Cast void* to element_type*
         element_llvm_type = self._get_llvm_type_for_element(descriptor.element_type)
         typed_data_ptr = self.builder.bitcast(data_ptr, ir.PointerType(element_llvm_type), name="typed_data_ptr")
 
-        # Copy elements to allocated memory
         for i, element_value in enumerate(elements):
             element_ptr = self.builder.gep(typed_data_ptr, [make_i32_const(i)])
-            # Cast element to the target type if needed (e.g., i32 -> i8 for u8[] arrays)
             casted_element = self.codegen.utils.cast_for_param(element_value, element_llvm_type)
             self.builder.store(casted_element, element_ptr)
 
-        # Update struct fields with typed pointer
         self._update_array_fields(name, initial_len, initial_capacity, typed_data_ptr)
 
     def emit_destroy_call(self, name: str) -> None:
@@ -281,7 +263,6 @@ class DynamicArrayManager:
     def is_own_type(self, ty: Type) -> bool:
         """Check if a type is Own<T>."""
         if isinstance(ty, StructType):
-            # Check if struct name starts with "Own<" (e.g., "Own<i32>", "Own<string>")
             return ty.name.startswith("Own<")
         return False
 
@@ -329,8 +310,6 @@ class DynamicArrayManager:
         """Emit destructor code for a single Own<T> variable."""
         from sushi_lang.backend.destructors import emit_value_destructor
 
-        # Pass the variable slot (address of the Own<T> struct); the recursive
-        # destructor geps field 0, recurses into the payload, then frees.
         own_slot = self.codegen.memory.find_local_slot(var_name)
         emit_value_destructor(self.codegen, own_slot, own_type)
 
@@ -342,7 +321,6 @@ class DynamicArrayManager:
         if descriptor.destroyed or self.codegen.moves.is_moved(descriptor.llvm_alloca):
             return
 
-        # Use the general destructor for the array struct
         from sushi_lang.backend.destructors import emit_value_destructor
         emit_value_destructor(self.codegen, descriptor.llvm_alloca, DynamicArrayType(descriptor.element_type))
 
@@ -352,19 +330,16 @@ class DynamicArrayManager:
         if descriptor is None:
             raise_internal_error("CE0057", name=name)
 
-        # Get pointers to struct fields using helper methods
         len_ptr = self.codegen.types.get_dynamic_array_len_ptr(self.builder, descriptor.llvm_alloca)
         cap_ptr = self.codegen.types.get_dynamic_array_cap_ptr(self.builder, descriptor.llvm_alloca)
         data_ptr_ptr = self.codegen.types.get_dynamic_array_data_ptr(self.builder, descriptor.llvm_alloca)
 
-        # Store new values
         self.builder.store(make_i32_const(length), len_ptr)
         self.builder.store(make_i32_const(capacity), cap_ptr)
         self.builder.store(data_ptr, data_ptr_ptr)
 
     def _get_llvm_type_for_element(self, element_type: Type) -> ir.Type:
         """Convert Sushi element type to LLVM type."""
-        # Use the main type system for consistent mapping
         return self.codegen.types.ll_type(element_type)
 
     def _get_element_size_bytes(self, element_type: Type) -> ir.Value:
@@ -410,8 +385,6 @@ class DynamicArrayManager:
         # gates RECURSION, and the two disagreeing is exactly what #162/#183 were.
         if isinstance(ty, ArrayType):
             return self._payload_needs_cleanup(ty.base_type)
-        # A function-value (closure) owns a heap environment freed through its
-        # runtime-guarded drop pointer (a no-op for a non-capturing value).
         if isinstance(ty, FunctionType):
             return True
         # A `string` owns a heap buffer when its runtime `owned` bit is set (#147);

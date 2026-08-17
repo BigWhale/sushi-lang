@@ -2,7 +2,6 @@
 from sushi_lang.semantics.typesys import Type, BuiltinType
 
 
-# List of all file utility functions
 FILE_UTILITY_FUNCTIONS = [
     "exists", "is_file", "is_dir", "file_size",
     "remove", "rename", "copy", "mkdir", "rmdir"
@@ -39,18 +38,14 @@ def validate_files_function_call(func_name: str, args: list, reporter, loc) -> N
     """Validate a files utility function call."""
     from sushi_lang.internals import errors as er
 
-    # Validate argument count
     if func_name in ["exists", "is_file", "is_dir", "file_size", "remove", "rmdir"]:
-        # These take exactly 1 argument (string path)
         if len(args) != 1:
             er.emit(reporter, er.ERR.CE0004, loc,
                    func=func_name, expected=1, got=len(args))
             return
     elif func_name in ["rename", "copy", "mkdir"]:
-        # These take exactly 2 arguments
         if len(args) != 2:
             er.emit(reporter, er.ERR.CE0004, loc,
                    func=func_name, expected=2, got=len(args))
             return
 
-    # Argument types are validated in type checking pass

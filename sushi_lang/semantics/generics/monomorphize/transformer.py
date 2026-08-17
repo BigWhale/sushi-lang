@@ -1,4 +1,3 @@
-# semantics/generics/monomorphize/transformer.py
 """Type parameter substitution and AST transformation."""
 from __future__ import annotations
 from typing import Dict, List, TYPE_CHECKING
@@ -23,7 +22,6 @@ class TypeSubstitutor:
 
     def substitute_type(self, ty: Type, substitution: Dict[str, "Type | TypePack"]) -> Type:
         """Recursively substitute type parameters in a type."""
-        # If this is a type parameter, substitute it
         if isinstance(ty, TypeParameter):
             if ty.name in substitution:
                 result = substitution[ty.name]
@@ -35,16 +33,12 @@ class TypeSubstitutor:
                         f"type-pack '{ty.name}' used in a scalar type position; "
                         f"pack expansion happens at the parameter-list level"
                     )
-                # If the result is a GenericTypeRef, recursively resolve it to an EnumType
                 if isinstance(result, GenericTypeRef):
                     return self.substitute_type(result, {})
                 return result
             else:
-                # Unknown type parameter - shouldn't happen, but be defensive
                 return ty
 
-        # Handle UnknownType that represents a type parameter (e.g., UnknownType("T"))
-        # This happens when the AST builder creates UnknownType for type parameter references
         if isinstance(ty, UnknownType):
             if ty.name in substitution:
                 result = substitution[ty.name]
@@ -54,12 +48,9 @@ class TypeSubstitutor:
                         f"type-pack '{ty.name}' used in a scalar type position; "
                         f"pack expansion happens at the parameter-list level"
                     )
-                # This UnknownType is actually a type parameter reference
                 return result
-            # Otherwise, it's a real unknown type (struct/enum) - pass through
             return ty
 
-        # For pointer types, substitute the pointee type
         if isinstance(ty, PointerType):
             return PointerType(
                 pointee_type=self.substitute_type(ty.pointee_type, substitution)
@@ -74,7 +65,6 @@ class TypeSubstitutor:
                 mutability=ty.mutability,
             )
 
-        # For array types, substitute the element type
         if isinstance(ty, ArrayType):
             return ArrayType(
                 base_type=self.substitute_type(ty.base_type, substitution),
@@ -85,7 +75,6 @@ class TypeSubstitutor:
                 base_type=self.substitute_type(ty.base_type, substitution)
             )
 
-        # For struct types, substitute field types
         if isinstance(ty, StructType):
             new_fields = []
             for field_name, field_type in ty.fields:
@@ -93,7 +82,6 @@ class TypeSubstitutor:
                 new_fields.append((field_name, new_field_type))
             return StructType(name=ty.name, fields=tuple(new_fields))
 
-        # For enum types, substitute variant associated types
         if isinstance(ty, EnumType):
             new_variants = []
             for variant in ty.variants:
@@ -107,42 +95,29 @@ class TypeSubstitutor:
                 ))
             return EnumType(name=ty.name, variants=tuple(new_variants))
 
-        # For GenericTypeRef, recursively substitute type arguments and resolve to concrete type
         if isinstance(ty, GenericTypeRef):
-            # First, recursively substitute any type parameters in the type arguments
             new_type_args = []
             for arg in ty.type_args:
                 new_arg = self.substitute_type(arg, substitution)
                 new_type_args.append(new_arg)
 
-            # Check if we've already monomorphized this generic enum
-            # This handles nested generics like Result<Either<i32, string>>
             cache_key = (ty.base_name, tuple(new_type_args))
             if cache_key in self.monomorphizer.cache:
-                # Already monomorphized - return the concrete EnumType
                 return self.monomorphizer.cache[cache_key]
 
-            # Check if we've already monomorphized this generic struct
-            # This handles nested generics like Box<Box<i32>>
             if cache_key in self.monomorphizer.struct_cache:
-                # Already monomorphized - return the concrete StructType
                 return self.monomorphizer.struct_cache[cache_key]
 
-            # If not in cache, recursively monomorphize it now
-            # This ensures nested generics are fully resolved
             if ty.base_name in self.monomorphizer.generic_enums:
                 generic = self.monomorphizer.generic_enums[ty.base_name]
                 concrete = self.monomorphizer.monomorphize_enum(generic, tuple(new_type_args))
                 return concrete
 
-            # Check if it's a generic struct
             if ty.base_name in self.monomorphizer.generic_structs:
                 generic = self.monomorphizer.generic_structs[ty.base_name]
                 concrete = self.monomorphizer.monomorphize_struct(generic, tuple(new_type_args))
                 return concrete
 
-            # If it's not a known generic enum or struct, keep as GenericTypeRef
-            # (this shouldn't happen for well-formed programs)
             return GenericTypeRef(
                 base_name=ty.base_name,
                 type_args=tuple(new_type_args)
@@ -160,7 +135,6 @@ class TypeSubstitutor:
                 captures=ty.captures,
             )
 
-        # For all other types (BuiltinType, etc.), return as-is
         return ty
 
     def _pack_binding_for(
@@ -204,7 +178,6 @@ class TypeSubstitutor:
                 for i, element_type in enumerate(pack.types)
             ]
 
-        # Normal (non-pack) parameter: reproduce the legacy single-param result.
         concrete_type = self.substitute_type(param.ty, substitution) if param.ty else None
         return [
             Param(
@@ -224,13 +197,11 @@ class TypeSubstitutor:
 
     def substitute_body(self, body: 'Block', substitution: Dict[str, "Type | TypePack"]) -> 'Block':
         """Substitute type parameters in a function body."""
-        # Process all statements
         new_statements = []
         for stmt in body.statements:
             new_stmt = self.substitute_statement(stmt, substitution)
             new_statements.append(new_stmt)
 
-        # Always create a new Block for the monomorphized function
         result = copy.copy(body)
         result.statements = new_statements
         return result
@@ -242,7 +213,6 @@ class TypeSubstitutor:
             ExprStmt, Block, Break, Continue, Print, PrintLn
         )
 
-        # Let statement - substitute type annotation
         if isinstance(stmt, Let):
             result = copy.copy(stmt)
             if stmt.ty:
@@ -251,14 +221,12 @@ class TypeSubstitutor:
                 result.value = self.substitute_expr(stmt.value, substitution)
             return result
 
-        # Rebind statement (assignment)
         if isinstance(stmt, Rebind):
             result = copy.copy(stmt)
             result.target = self.substitute_expr(stmt.target, substitution)
             result.value = self.substitute_expr(stmt.value, substitution)
             return result
 
-        # If statement
         if isinstance(stmt, If):
             result = copy.copy(stmt)
             result.arms = [
@@ -269,14 +237,12 @@ class TypeSubstitutor:
                 result.else_block = self.substitute_body(stmt.else_block, substitution)
             return result
 
-        # While statement
         if isinstance(stmt, While):
             result = copy.copy(stmt)
             result.cond = self.substitute_expr(stmt.cond, substitution)
             result.body = self.substitute_body(stmt.body, substitution)
             return result
 
-        # Foreach statement
         if isinstance(stmt, Foreach):
             result = copy.copy(stmt)
             result.iterable = self.substitute_expr(stmt.iterable, substitution)
@@ -294,20 +260,17 @@ class TypeSubstitutor:
             result.body = self.substitute_body(stmt.body, substitution)
             return result
 
-        # Print/PrintLn statements
         if isinstance(stmt, (Print, PrintLn)):
             result = copy.copy(stmt)
             result.value = self.substitute_expr(stmt.value, substitution)
             return result
 
-        # Return statement
         if isinstance(stmt, Return):
             result = copy.copy(stmt)
             if stmt.value:
                 result.value = self.substitute_expr(stmt.value, substitution)
             return result
 
-        # Match statement
         if isinstance(stmt, Match):
             result = copy.copy(stmt)
             if stmt.scrutinee:
@@ -315,7 +278,6 @@ class TypeSubstitutor:
             new_arms = []
             for arm in stmt.arms:
                 new_arm = copy.copy(arm)
-                # Substitute body (can be Expr or Block)
                 if isinstance(arm.body, Block):
                     new_arm.body = self.substitute_body(arm.body, substitution)
                 else:
@@ -324,24 +286,20 @@ class TypeSubstitutor:
             result.arms = new_arms
             return result
 
-        # Expression statement
         if isinstance(stmt, ExprStmt):
             result = copy.copy(stmt)
             result.expr = self.substitute_expr(stmt.expr, substitution)
             return result
 
-        # Break/Continue - copy for unique instances
         if isinstance(stmt, (Break, Continue)):
             return copy.copy(stmt)
 
-        # Unknown statement type - fallback to deep copy (conservative)
         return copy.deepcopy(stmt)
 
     def substitute_expr(self, expr, substitution: Dict[str, "Type | TypePack"]):
         """Recursively substitute types in an expression."""
         from sushi_lang.semantics.ast import CastExpr, TryExpr
 
-        # Cast expression - IMPORTANT: substitute target type
         if isinstance(expr, CastExpr):
             new_expr = self.substitute_expr(expr.expr, substitution)
             new_target_type = self.substitute_type(expr.target_type, substitution)
@@ -350,13 +308,10 @@ class TypeSubstitutor:
             result.target_type = new_target_type
             return result
 
-        # Try expression (error propagation x??)
         if isinstance(expr, TryExpr):
             new_expr = self.substitute_expr(expr.expr, substitution)
             result = copy.copy(expr)
             result.expr = new_expr
             return result
 
-        # For all other expressions, deep copy is sufficient
-        # Expressions like Name, BinaryOp, Call, etc. don't contain type annotations
         return copy.deepcopy(expr)

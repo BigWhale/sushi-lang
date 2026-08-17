@@ -1,4 +1,3 @@
-# semantics/externs_manifest.py
 """Reserved built-in extern symbols."""
 from __future__ import annotations
 

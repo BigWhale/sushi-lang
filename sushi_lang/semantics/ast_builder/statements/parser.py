@@ -21,7 +21,6 @@ class StatementParser:
 
     def parse_stmt(self, node: Tree) -> Stmt:
         """Parse a statement node into a Stmt object."""
-        # Dispatch table for statement types
         stmt_handlers = {
             "return_stmt": returns.parse_return_stmt,
             "print_stmt": io.parse_print_stmt,
@@ -39,13 +38,10 @@ class StatementParser:
             "continue_stmt": flow.parse_continue_stmt,
         }
 
-        # A nested `fn` PARSES -- the grammar allows it inside a body -- so this is a
-        # real user error, not a builder bug.
         if node.data == "function_def":
             raise SyntaxDiagnostic("CE6101", span=span_of(node)) \
                 .help("move the function to the top level, or use a lambda")
 
-        # Dispatch to appropriate handler
         handler = stmt_handlers.get(node.data)
         if handler:
             return handler(node, self.ast_builder)

@@ -13,15 +13,12 @@ class LibraryResolver:
 
     def __init__(self):
         self.search_paths = self._get_search_paths()
-        # lib_name -> manifest dict. A shared cache: the semantic analyzer and the
-        # codegen both read it.
         self.loaded_libraries: dict[str, dict] = {}
 
     def _get_search_paths(self) -> list[Path]:
         """Get library search paths."""
         paths: list[Path] = []
 
-        # 1. SUSHI_LIB_PATH
         lib_path = os.environ.get('SUSHI_LIB_PATH')
         if lib_path:
             separator = ';' if platform.system() == 'Windows' else ':'
@@ -30,7 +27,6 @@ class LibraryResolver:
                 if path_str:
                     paths.append(Path(path_str).expanduser())
 
-        # 2. Project-local dependencies
         from sushi_lang.packager.paths import find_project_root, project_deps_dir
         project_root = find_project_root()
         if project_root:
@@ -41,7 +37,6 @@ class LibraryResolver:
                     if lib_dir.is_dir():
                         paths.append(lib_dir)
 
-        # 3. Nori bento packages (global)
         bento_dir = Path.home() / ".sushi" / "bento"
         if bento_dir.is_dir():
             for pkg_dir in sorted(bento_dir.iterdir()):
@@ -49,7 +44,6 @@ class LibraryResolver:
                 if lib_dir.is_dir():
                     paths.append(lib_dir)
 
-        # 4. Current directory as fallback
         cwd = Path.cwd()
         if cwd not in paths:
             paths.append(cwd)
@@ -58,22 +52,18 @@ class LibraryResolver:
 
     def resolve_library(self, lib_path: str) -> Path:
         """Resolve library path to .slib file."""
-        # Remove "lib/" prefix if present
         if lib_path.startswith("lib/"):
             lib_path = lib_path[4:]
 
-        # Search each path in order
         for search_dir in self.search_paths:
             slib_path = search_dir / f"{lib_path}.slib"
             if slib_path.exists():
                 return slib_path
 
-            # Also try without subdirectory (flat structure)
             lib_name = Path(lib_path).name
             slib_path_flat = search_dir / f"{lib_name}.slib"
             if slib_path_flat.exists():
                 return slib_path_flat
 
-        # Not found - generate helpful error with formal error code
         search_str = ', '.join(str(p) for p in self.search_paths)
         raise LibraryError("CE3502", lib=lib_path, paths=search_str)

@@ -34,9 +34,7 @@ def emit_value_destructor(
             return
         if value_type in (BuiltinType.STDIN, BuiltinType.STDOUT,
                           BuiltinType.STDERR, BuiltinType.FILE):
-            # I/O handle types don't need cleanup
             return
-        # All numeric types and bool: no cleanup
         return
 
     # Composite owning types (dynamic arrays, structs/List/Own, enums): routed through
@@ -170,7 +168,6 @@ def _emit_dynamic_array_destructor(
     ], name="array_data_ptr")
     data_ptr = builder.load(data_ptr_ptr, name="array_data")
 
-    # Check if data is not null before freeing
     is_not_null = builder.icmp_unsigned(
         "!=", data_ptr,
         ir.Constant(data_ptr.type, None)
@@ -180,14 +177,12 @@ def _emit_dynamic_array_destructor(
         # Check if element type needs cleanup (resolving a named/generic element first --
         # an unresolved name answers False and the elements are silently leaked)
         if field_needs_cleanup(codegen, value_type.base_type):
-            # Load array length
             len_ptr = builder.gep(value_ptr, [
                 ZERO_I32,
                 ZERO_I32  # len is first field
             ], name="array_len_ptr")
             array_len = builder.load(len_ptr, name="array_len")
 
-            # Iterate through array elements and destroy each one
             loop_i = builder.alloca(ZERO_I32.type, name="cleanup_i")
             builder.store(ZERO_I32, loop_i)
 
@@ -197,29 +192,23 @@ def _emit_dynamic_array_destructor(
 
             builder.branch(loop_cond_bb)
 
-            # Loop condition: i < len
             builder.position_at_end(loop_cond_bb)
             i_val = builder.load(loop_i, name="i_val")
             cond = builder.icmp_unsigned("<", i_val, array_len, name="cleanup_cond")
             builder.cbranch(cond, loop_body_bb, loop_end_bb)
 
-            # Loop body: destroy element[i]
             builder.position_at_end(loop_body_bb)
             i_val = builder.load(loop_i, name="i_val")
             element_ptr = builder.gep(data_ptr, [i_val], name="element_ptr")
 
-            # Recursively destroy this element
             emit_value_destructor(codegen, element_ptr, value_type.base_type)
 
-            # Increment loop counter
             i_next = builder.add(i_val, ONE_I32, name="i_next")
             builder.store(i_next, loop_i)
             builder.branch(loop_cond_bb)
 
-            # After loop, free the array data
             builder.position_at_end(loop_end_bb)
 
-        # Free the array data pointer
         void_ptr = builder.bitcast(data_ptr, ir.PointerType(ir.IntType(INT8_BIT_WIDTH)))
         free_func = codegen.get_free_func()
         builder.call(free_func, [void_ptr])
@@ -279,14 +268,12 @@ def _emit_struct_destructor(
     # it calls emitting into the SAME function (#257).
     builder = codegen.builder
     if value_type.name.startswith("Own<"):
-        # Own<T> has a single pointer field - free it and destroy the value
         ptr_field_ptr = builder.gep(value_ptr, [
             ZERO_I32,
             ZERO_I32
         ], name="own_ptr_field")
         owned_ptr = builder.load(ptr_field_ptr, name="owned_ptr")
 
-        # Check if not null
         is_not_null = builder.icmp_unsigned(
             "!=", owned_ptr,
             ir.Constant(owned_ptr.type, None)
@@ -300,10 +287,8 @@ def _emit_struct_destructor(
             if value_type.fields:
                 from sushi_lang.semantics.generics.own import get_own_element_type
                 owned_type = get_own_element_type(value_type)
-                # Recursively destroy the owned value
                 emit_value_destructor(codegen, owned_ptr, owned_type)
 
-            # Free the pointer itself
             void_ptr = builder.bitcast(owned_ptr, ir.PointerType(ir.IntType(INT8_BIT_WIDTH)))
             free_func = codegen.get_free_func()
             builder.call(free_func, [void_ptr])
@@ -320,9 +305,7 @@ def _emit_struct_destructor(
         # lockstep with _clone_hashmap_value (issue #181).
         _emit_hashmap_value_destructor(codegen, value_ptr, value_type)
     else:
-        # Regular struct: recursively destroy each field
         for i, (field_name, field_type) in enumerate(value_type.fields):
-            # Check if field needs cleanup (resolving a named/generic field type first)
             if field_needs_cleanup(codegen, field_type):
                 field_ptr = builder.gep(value_ptr, [
                     ZERO_I32,
@@ -346,7 +329,6 @@ def _emit_list_value_destructor(
 
     element_type = extract_element_type(value_type, codegen)
 
-    # data is field index 2 (DA_DATA_INDEX == 2 happens to match List's data slot)
     data_ptr_ptr = builder.gep(value_ptr, [ZERO_I32, make_i32_const(2)], name="list_data_field")
     data_ptr = builder.load(data_ptr_ptr, name="list_data")
 
@@ -420,11 +402,8 @@ def _emit_enum_destructor(
     tag_ptr = builder.gep(value_ptr, [ZERO_I32, ZERO_I32], name="enum_tag_ptr")
     tag = builder.load(tag_ptr, name="enum_tag")
 
-    # Get data field pointer (second field: [N x i8] byte array)
     data_ptr = builder.gep(value_ptr, [ZERO_I32, ONE_I32], name="enum_data_ptr")
 
-    # Create switch statement for each variant
-    # We need to check which variants have associated data that needs cleanup
     variants_needing_cleanup = []
     for i, variant in enumerate(value_type.variants):
         if variant.associated_types:
@@ -441,22 +420,18 @@ def _emit_enum_destructor(
                 variants_needing_cleanup.append((i, variant, resolved_types))
 
     if variants_needing_cleanup:
-        # Create basic blocks for each variant that needs cleanup
         cleanup_blocks = {}
         for tag_val, variant, _resolved in variants_needing_cleanup:
             cleanup_blocks[tag_val] = builder.append_basic_block(name=f"cleanup_variant_{variant.name}")
 
         end_block = builder.append_basic_block(name="enum_cleanup_end")
 
-        # Create switch instruction
         switch = builder.switch(tag, end_block)
 
-        # Add cases for each variant that needs cleanup
         for tag_val, _variant, _resolved in variants_needing_cleanup:
             tag_const = make_i32_const(tag_val)
             switch.add_case(tag_const, cleanup_blocks[tag_val])
 
-        # Emit cleanup code for each variant
         for tag_val, _variant, resolved_types in variants_needing_cleanup:
             builder.position_at_end(cleanup_blocks[tag_val])
 
@@ -465,24 +440,18 @@ def _emit_enum_destructor(
             field_offsets = codegen.types.payload_field_offsets(resolved_types)
             for j, (assoc_type, field_offset) in enumerate(zip(resolved_types, field_offsets, strict=True)):
                 if needs_cleanup(assoc_type):
-                    # Get pointer to this field within the data array
-                    # Cast the data array pointer to i8* first
                     data_i8_ptr = builder.bitcast(data_ptr, ir.PointerType(ir.IntType(8)), name=f"data_i8_ptr_{j}")
 
-                    # Add offset to get to this field
                     offset_const = make_i32_const(field_offset)
                     field_i8_ptr = builder.gep(data_i8_ptr, [offset_const], name=f"field_{j}_i8_ptr")
 
-                    # Cast to the actual field type pointer
                     field_llvm_type = codegen.types.ll_type(assoc_type)
                     field_ptr = builder.bitcast(field_i8_ptr, ir.PointerType(field_llvm_type), name=f"field_{j}_ptr")
 
-                    # Recursively destroy this field
                     emit_value_destructor(codegen, field_ptr, assoc_type)
 
             builder.branch(end_block)
 
-        # Position at end block for continuation
         builder.position_at_end(end_block)
 
 

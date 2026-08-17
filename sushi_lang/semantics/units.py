@@ -1,4 +1,3 @@
-# semantics/units.py
 """Unit management system for multi-file compilation."""
 
 from __future__ import annotations
@@ -68,7 +67,6 @@ class Unit:
 
         symbols = {}
 
-        # Extract public functions
         for func in self.ast.functions:
             if func.is_public:
                 symbol = Symbol(
@@ -79,7 +77,6 @@ class Unit:
                 )
                 symbols[func.name] = symbol
 
-        # Extract all constants (constants are always global)
         for const in self.ast.constants:
             symbol = Symbol(
                 name=const.name,
@@ -98,8 +95,6 @@ class Unit:
         self._extract_public_symbols()
 
 
-
-
 class UnitManager:
     """Manages compilation units, dependency resolution, and compilation ordering."""
 
@@ -113,7 +108,6 @@ class UnitManager:
 
     def resolve_unit_path(self, unit_name: str) -> Path:
         """Resolve a unit name to its file path."""
-        # Convert unit name to file path with .sushi extension
         relative_path = Path(unit_name + ".sushi")
         return self.root_path / relative_path
 
@@ -134,7 +128,6 @@ class UnitManager:
             public_symbols={}
         )
 
-        # This will trigger __post_init__ which extracts dependencies and symbols
         unit.load_ast(ast)
 
         self.units[unit_name] = unit
@@ -146,17 +139,14 @@ class UnitManager:
 
     def topological_sort(self) -> Optional[List[str]]:
         """Perform topological sorting to determine compilation order."""
-        # Kahn's algorithm for topological sorting with cycle detection
         dependency_graph = self.build_dependency_graph()
 
-        # Calculate in-degree for each unit
         in_degree = {unit: 0 for unit in dependency_graph}
         for _unit, deps in dependency_graph.items():
             for dep in deps:
                 if dep in in_degree:
                     in_degree[dep] += 1
 
-        # Queue for units with no dependencies
         queue = [unit for unit, degree in in_degree.items() if degree == 0]
         result = []
 
@@ -164,16 +154,13 @@ class UnitManager:
             current = queue.pop(0)
             result.append(current)
 
-            # Remove edges from current unit
             for dep in dependency_graph[current]:
                 if dep in in_degree:
                     in_degree[dep] -= 1
                     if in_degree[dep] == 0:
                         queue.append(dep)
 
-        # Check for cycles
         if len(result) != len(dependency_graph):
-            # Find cycle using DFS
             cycle = self._find_cycle(dependency_graph)
             if self.reporter:
                 cycle_str = " -> ".join(cycle + [cycle[0]])
@@ -198,7 +185,6 @@ class UnitManager:
                     if result:
                         return result
                 elif neighbor in rec_stack:
-                    # Found cycle - return the cycle portion
                     cycle_start = path.index(neighbor)
                     return path[cycle_start:]
 
@@ -224,11 +210,9 @@ class UnitManager:
                     symbol_units[symbol_name] = []
                 symbol_units[symbol_name].append(unit.name)
 
-                # Add to global symbols (first occurrence wins for now)
                 if symbol_name not in self.global_symbols:
                     self.global_symbols[symbol_name] = symbol
 
-        # Check for duplicates
         for symbol_name, units in symbol_units.items():
             if len(units) > 1:
                 if self.reporter:

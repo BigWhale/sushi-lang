@@ -11,7 +11,6 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Program, ExternalBlock, ExternalDecl
 
 
-# C-ABI representable builtin types (allowlist).
 _C_ABI_BUILTINS = {
     BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
     BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
@@ -58,12 +57,10 @@ def validate_ptr_unit_gate(reporter: Reporter, program: 'Program') -> None:
         if block is None:
             return
         for stmt in getattr(block, "stmts", ()):
-            # Declared types on statements (Let.ty, Foreach.item_type)
             check(getattr(stmt, "ty", None),
                   getattr(stmt, "type_span", None) or getattr(stmt, "loc", None))
             check(getattr(stmt, "item_type", None),
                   getattr(stmt, "item_type_span", None) or getattr(stmt, "loc", None))
-            # Recurse into nested blocks (if/while/foreach/match arms ...)
             if dataclasses.is_dataclass(stmt):
                 for f in dataclasses.fields(stmt):
                     value = getattr(stmt, f.name, None)
@@ -119,8 +116,6 @@ def _validate_block_abi(reporter: Reporter, block: 'ExternalBlock') -> None:
 def _validate_block_signatures(reporter: Reporter, block: 'ExternalBlock') -> None:
     """Validate every param and return type against the C-ABI allowlist."""
     for decl in block.decls:
-        # A variadic external needs at least one fixed parameter: the C ABI's
-        # va_start requires a named argument to anchor the variadic list.
         if getattr(decl, "is_variadic", False) and len(decl.params) == 0:
             er.emit(reporter, er.ERR.CE5004, decl.name_span or decl.loc,
                     name=decl.name)
@@ -175,12 +170,10 @@ def _emit_block_warning(reporter: Reporter, block: 'ExternalBlock') -> None:
         return  # Silenced by an explicit acknowledgment.
 
     builder = er.emit_with(reporter, er.ERR.CW5001, block.loc)
-    # Four suspended guarantees.
     builder.note("guarantee 1/4 suspended: borrow checking (peek/poke) - aliasing not tracked")
     builder.note("guarantee 2/4 suspended: RAII / move semantics - foreign `ptr` is unmanaged")
     builder.note("guarantee 3/4 suspended: Result / Maybe - externals return raw C values")
     builder.note("guarantee 4/4 suspended: bounds / null safety - a returned `ptr` may be null")
-    # Signature-driven per-declaration notes.
     for decl in block.decls:
         for note in _signature_notes(decl):
             builder.note(note)

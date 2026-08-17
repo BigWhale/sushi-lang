@@ -15,7 +15,6 @@ def emit_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, to_i1: bool = F
     """Emit array indexing operation using GEP instruction."""
     element_ptr = emit_element_pointer(codegen, expr)
 
-    # Load the value from the pointer
     result = codegen.builder.load(element_ptr)
     return _finish_index_access(codegen, expr, result, to_i1)
 
@@ -25,8 +24,6 @@ def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
     from sushi_lang.backend.expressions import type_utils
 
     require_builder(codegen)
-    # For array indexing, we need to get the array slot directly from the variable
-    # rather than loading the array value
     if isinstance(expr.array, Name):
         # Local alloca, or the global backing an array constant (#248) -- indexing a
         # constant directly used to be a CE0000 ICE because this consulted only locals.
@@ -35,8 +32,6 @@ def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
         if array_slot is None:
             raise_internal_error("CE0055", name=expr.array.id)
 
-        # For reference parameters, the slot contains a pointer to the actual array
-        # We need to load that pointer to get the array's address
         if type_utils.is_reference_parameter(codegen, expr.array.id):
             array_slot = codegen.builder.load(array_slot, name=f"{expr.array.id}_ref_ptr")
     elif isinstance(expr.array, MemberAccess):
@@ -51,20 +46,15 @@ def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
         array_slot = (field_ptr if field_ptr is not None
                       else codegen.expressions.emit_expr(expr.array))
     else:
-        # For more complex array expressions, emit normally
         array_value = codegen.expressions.emit_expr(expr.array)
         array_slot = array_value
 
-    # Emit the index expression (should be an integer)
     index_value = codegen.expressions.emit_expr(expr.index)
 
-    # Compile-time constant checking: detect negative or out-of-bounds constant indices
     if isinstance(index_value, ir.Constant):
         const_index = index_value.constant
-        # Check for negative index
         if const_index < 0:
             raise_internal_error("CE2056", index=const_index)
-        # For fixed arrays, check if index is out of bounds at compile time
         array_type = array_slot.type.pointee
         if isinstance(array_type, ir.ArrayType):
             array_size = array_type.count
@@ -108,7 +98,6 @@ def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
         data_ptr = codegen.builder.load(data_ptr_ptr, name="array_data")
         element_ptr = gep_utils.gep_array_element(codegen, data_ptr, index_value, "elem_ptr")
     else:
-        # Other pointer types (shouldn't happen for array indexing)
         element_ptr = codegen.builder.gep(array_slot, [zero, index_value])
 
     return element_ptr

@@ -39,10 +39,8 @@ class LLVMUtils:
         # {i32 tag, [K x i64]} layout -- only user STRUCTS became identified types. A user
         # struct shaped {i32, [K x i64]} must not be read as a Result here.
         if isinstance(ty, ir.LiteralStructType) and len(ty.elements) == 2:
-            # Check if first element is i32 (tag) and second is an array (data)
             if isinstance(ty.elements[0], ir.IntType) and ty.elements[0].width == 32:
                 if isinstance(ty.elements[1], ir.ArrayType):
-                    # This is a Result<T> enum - extract tag and compare to 0 (Ok variant)
                     return enum_utils.check_enum_variant(
                         self.codegen, v, variant_index=0, signed=True, name="is_ok"
                     )
@@ -67,7 +65,6 @@ class LLVMUtils:
         if not isinstance(llvm_type, ir.IntType):
             return False
 
-        # i1 (bool) is treated as unsigned
         if llvm_type.width == 1:
             return False
 
@@ -88,13 +85,11 @@ class LLVMUtils:
         if ty.width == 32:
             return v
         elif ty.width < 32:
-            # Extend smaller widths to i32
             if is_signed:
                 return self.codegen.builder.sext(v, self.codegen.i32)
             else:
                 return self.codegen.builder.zext(v, self.codegen.i32)
         else:
-            # Truncate larger widths to i32 (both signed and unsigned use trunc)
             return self.codegen.builder.trunc(v, self.codegen.i32)
 
     def as_i32(self, v: ir.Value) -> ir.Value:
@@ -103,10 +98,8 @@ class LLVMUtils:
             raise_internal_error("CE0009")
         ty = v.type
         if isinstance(ty, ir.IntType):
-            # Use convert_int_to_i32 with unsigned (zext) for backward compatibility
             return self.convert_int_to_i32(v, is_signed=False)
         elif isinstance(ty, (ir.FloatType, ir.DoubleType)):
-            # Convert floating-point to i32 using truncation toward zero
             return self.codegen.builder.fptosi(v, self.codegen.i32)
         raise_internal_error("CE0017", src=str(ty), dst="i32")
 
@@ -115,29 +108,23 @@ class LLVMUtils:
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
 
-        # Dispatch table for common widths
         width_dispatch = {
             32: lambda: self.as_i32(v),
             8: lambda: self.as_i8(v),
         }
 
-        # Try dispatch table first
         if dst.width in width_dispatch:
             return width_dispatch[dst.width]()
 
-        # Fallback for other integer widths (i1, i16, i64, etc.)
         if isinstance(v.type, ir.IntType):
             if v.type.width < dst.width:
-                # Extend: use signed or unsigned extension based on parameter
                 if is_signed:
                     return self.codegen.builder.sext(v, dst)
                 else:
                     return self.codegen.builder.zext(v, dst)
             elif v.type.width > dst.width:
-                # Truncate (same for both signed and unsigned)
                 return self.codegen.builder.trunc(v, dst)
             else:
-                # Same width, return as-is
                 return v
 
         raise_internal_error("CE0017", src=str(v.type), dst=str(dst))
@@ -146,23 +133,18 @@ class LLVMUtils:
         """Cast expression value to match function parameter type."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
-        # Fast path: exact type match (no casting needed)
         if v.type == dst:
             return v
 
-        # Integer type conversions (using width-based dispatch)
         if isinstance(dst, ir.IntType):
             return self._cast_to_int_width(v, dst)
 
-        # Floating-point type conversions
         if isinstance(dst, (ir.FloatType, ir.DoubleType)):
             return self._cast_to_float(v, dst)
 
-        # Pointer type checks (string pointers)
         if isinstance(dst, ir.PointerType):
             return self._cast_to_pointer(v, dst)
 
-        # Array type checks (exact match required)
         if isinstance(dst, ir.ArrayType):
             return self._cast_to_array(v, dst)
 
@@ -170,8 +152,6 @@ class LLVMUtils:
         # types). BaseStructType so a user struct's identified type (#257) reports the
         # specific "cannot convert struct to struct" diagnostic rather than the generic one.
         if isinstance(dst, ir.types.BaseStructType) and isinstance(v.type, ir.types.BaseStructType):
-            # If both are structs and structurally identical, no cast needed (caught by fast path above)
-            # If they differ, this is a type error that shouldn't happen after semantic analysis
             raise_internal_error("CE0017", src=str(v.type), dst=str(dst))
 
         raise_internal_error("CE0017", src=str(v.type), dst=str(dst))
@@ -183,10 +163,8 @@ class LLVMUtils:
     def _cast_to_float(self, v: ir.Value, dst: ir.Type) -> ir.Value:
         """Cast value to target float type."""
         if isinstance(v.type, ir.IntType):
-            # Integer to float
             return self.codegen.builder.sitofp(v, dst)
         elif isinstance(v.type, (ir.FloatType, ir.DoubleType)):
-            # Float to float conversions
             if isinstance(dst, ir.DoubleType) and isinstance(v.type, ir.FloatType):
                 return self.codegen.builder.fpext(v, dst)
             elif isinstance(dst, ir.FloatType) and isinstance(v.type, ir.DoubleType):
@@ -195,7 +173,6 @@ class LLVMUtils:
 
     def _cast_to_pointer(self, v: ir.Value, dst: ir.PointerType) -> ir.Value:
         """Cast value to pointer type (mainly for string pointers)."""
-        # Check for i8* (string pointer)
         if isinstance(dst.pointee, ir.IntType) and dst.pointee.width == 8:
             if isinstance(v.type, ir.PointerType) and isinstance(v.type.pointee, ir.IntType) and v.type.pointee.width == 8:
                 return v
@@ -245,19 +222,15 @@ class LLVMUtils:
 
     def get_zero_value(self, llvm_type: ir.Type) -> ir.Value:
         """Create a zero/default value for a given LLVM type."""
-        # Integer types -> 0
         if isinstance(llvm_type, ir.IntType):
             return ir.Constant(llvm_type, 0)
 
-        # Floating-point types -> 0.0
         if isinstance(llvm_type, (ir.FloatType, ir.DoubleType)):
             return ir.Constant(llvm_type, 0.0)
 
-        # Pointer types -> null
         if isinstance(llvm_type, ir.PointerType):
             return ir.Constant(llvm_type, None)
 
-        # Array types -> [0, 0, ..., 0]
         if isinstance(llvm_type, ir.ArrayType):
             element_zero = self.get_zero_value(llvm_type.element)
             return ir.Constant(llvm_type, [element_zero] * llvm_type.count)
@@ -271,5 +244,4 @@ class LLVMUtils:
             field_zeros = [self.get_zero_value(field_type) for field_type in llvm_type.elements]
             return ir.Constant(llvm_type, field_zeros)
 
-        # Fallback for unknown types - create undef
         return ir.Undefined(llvm_type)

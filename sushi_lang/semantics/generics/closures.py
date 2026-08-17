@@ -32,7 +32,6 @@ def validate_function_method_with_validator(
     if call.method == "clone":
         _validate_function_clone(call, fn_type, reporter)
     else:
-        # Unreachable if is_builtin_function_method was consulted first.
         raise_internal_error("CE0080", method=call.method)
 
 

@@ -21,28 +21,18 @@ class SymbolSource(Enum):
     RUNTIME = 4   # Lowest priority - runtime functions
 
 
-# Runtime functions that are commonly duplicated across modules
 RUNTIME_FUNCTIONS = frozenset({
-    # String/memory operations
     "utf8_char_count", "llvm_strlen", "strcmp", "strlen",
-    # I/O functions
     "printf", "sprintf", "fprintf", "puts", "putchar", "getchar",
-    # Memory operations
     "memcmp", "memcpy", "memset", "memmove",
-    # Character classification
     "toupper", "tolower", "isspace", "isdigit", "isalpha", "isalnum",
-    # Process control
     "exit", "abort",
-    # File operations
     "fopen", "fclose", "fgets", "fgetc", "fputc", "fputs",
     "fread", "fwrite", "fseek", "ftell", "rewind", "feof", "ferror",
-    # Memory allocation
     "malloc", "calloc", "realloc", "free",
-    # Math functions
     "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
     "sinh", "cosh", "tanh", "exp", "log", "log10", "pow", "sqrt",
     "ceil", "floor", "fabs", "fmod",
-    # Time functions
     "time", "nanosleep", "usleep", "sleep",
 })
 
@@ -161,14 +151,10 @@ def extract_symbol_table(
     table = SymbolTable(module_name, source)
     table.type_defs = _extract_module_type_defs(module)
 
-    # Extract function symbols
     for func in module.functions:
-        # Skip LLVM intrinsics - they're handled specially by LLVM
         if func.name.startswith("llvm."):
             continue
 
-        # Get full IR text for this function (both definitions and declarations)
-        # Declarations are needed so we can emit proper declare statements
         ir_text = str(func)
 
         symbol = SymbolInfo(
@@ -182,13 +168,10 @@ def extract_symbol_table(
         )
         table.add_symbol(symbol)
 
-    # Extract global variable symbols
     for gvar in module.global_variables:
-        # Skip LLVM internal globals
         if gvar.name.startswith("llvm."):
             continue
 
-        # Get full IR text for this global (both definitions and declarations)
         ir_text = str(gvar)
 
         symbol = SymbolInfo(

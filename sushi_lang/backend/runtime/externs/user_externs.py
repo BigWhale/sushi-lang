@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 
 def _abi_param_type(codegen: 'LLVMCodegen', ty) -> ir.Type:
     """Lower a parameter type to its C-ABI LLVM type."""
-    # `string` params are marshalled to char* (i8*) at the call site.
     if isinstance(ty, BuiltinType) and ty == BuiltinType.STRING:
         return ir.PointerType(codegen.i8)
     return codegen.types.ll_type(ty)
@@ -25,7 +24,6 @@ def _abi_return_type(codegen: 'LLVMCodegen', ty) -> ir.Type:
         return ir.VoidType()
     if isinstance(ty, BuiltinType) and ty == BuiltinType.BLANK:
         return ir.VoidType()
-    # `string` return is a C char* (i8*); converted back to a fat pointer at use.
     if isinstance(ty, BuiltinType) and ty == BuiltinType.STRING:
         return ir.PointerType(codegen.i8)
     return codegen.types.ll_type(ty)

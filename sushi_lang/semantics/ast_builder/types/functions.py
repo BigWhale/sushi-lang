@@ -34,7 +34,6 @@ def parse_function_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]
             direct_type_trees.append(child)
 
     if not direct_type_trees:
-        # Return type is mandatory in the grammar; should not happen.
         return None
 
     ok_type = ast_builder._parse_type(direct_type_trees[0])

@@ -25,13 +25,10 @@ class FunctionHelpers:
     def __init__(self, codegen: 'LLVMCodegen') -> None:
         """Initialize helpers with reference to main codegen instance."""
         self.codegen = codegen
-        # One entry per open `begin_function`, holding the name -> semantic-type map that
-        # was live when it started. See `begin_function` for why the map is per-function.
         self._variable_types_stack: list[dict] = []
 
     def is_valid_param_type(self, param_type: Ty) -> bool:
         """Check if a type is valid for function parameters."""
-        # Check for builtin types
         if param_type in (
             BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
             BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
@@ -39,44 +36,33 @@ class FunctionHelpers:
         ):
             return True
 
-        # Check for array types
         if isinstance(param_type, (ArrayType, DynamicArrayType)):
             return True
 
-        # Check for struct types
         if isinstance(param_type, StructType):
             return True
 
-        # Check for enum types
         if isinstance(param_type, EnumType):
             return True
 
-        # Check for reference types
         if isinstance(param_type, ReferenceType):
             return True
 
-        # Opaque foreign pointer (FFI handle) - valid in non-public signatures
         if isinstance(param_type, ForeignPtrType):
             return True
 
-        # First-class function value (bare function pointer)
         from sushi_lang.semantics.typesys import FunctionType
         if isinstance(param_type, FunctionType):
             return True
 
-        # Check for UnknownType that could be a struct or enum
         if isinstance(param_type, UnknownType):
-            # Check if this unknown type is in the struct table
             if hasattr(self.codegen, 'struct_table') and param_type.name in self.codegen.struct_table.by_name:
                 return True
-            # Check if this unknown type is in the enum table
             if hasattr(self.codegen, 'enum_table') and param_type.name in self.codegen.enum_table.by_name:
                 return True
 
-        # Check for generic type references (should be monomorphized by type checker)
         from sushi_lang.semantics.generics.types import GenericTypeRef
         if isinstance(param_type, GenericTypeRef):
-            # GenericTypeRef is valid - ll_type() will resolve it to monomorphized enum
             return True
 
         return False
@@ -107,8 +93,6 @@ class FunctionHelpers:
         else:
             target_type_name = str(ext.target_type) if ext.target_type else "unknown"
 
-        # Sanitize generic type names for valid LLVM identifiers
-        # Replace < with __, > with nothing, and ", " with _
         target_type_name = target_type_name.replace("<", "__").replace(">", "").replace(", ", "_")
 
         return f"{target_type_name}_{ext.name}"
@@ -118,18 +102,14 @@ class FunctionHelpers:
         if ret_type is None:
             return
 
-        # RAII: Emit cleanup for all resources before returning
         from sushi_lang.backend.statements import utils
         utils.emit_scope_cleanup(self.codegen, cleanup_type='all')
 
-        # With Result<T, E>, create an Err(error) result using enum constructor logic
-        # Get the monomorphized Result<T, E> enum type
         from sushi_lang.backend.generics.result_builder import intern_result
         std_error = self.codegen.enum_table.by_name.get("StdError")
         result_type = intern_result(self.codegen, ret_type, std_error if std_error else ret_type)
         result_llvm_type = self.codegen.types.ll_type(result_type)
 
-        # Look up the Result<T, E> enum in the enum table
         result_enum_name = str(result_type)
         if result_enum_name in self.codegen.enum_table.by_name:
             result_enum = self.codegen.enum_table.by_name[result_enum_name]
@@ -137,16 +117,13 @@ class FunctionHelpers:
             # Result.Err() has no arguments, variant index is 1 (Ok=0, Err=1)
             variant_index = result_enum.get_variant_index("Err")
 
-            # Create enum value with Err tag
             err_result = enum_utils.construct_enum_variant(
                 self.codegen, result_llvm_type, variant_index=variant_index,
                 data=None, name_prefix="Result_Err"
             )
 
-            # No data for Err variant, just return with tag set
             self.codegen.builder.ret(err_result)
         else:
-            # Fallback to old Result struct format
             value_llvm_type = self.codegen.types.ll_type(ret_type)
             zero_value = self.codegen.utils.get_zero_value(value_llvm_type)
             err_result = ir.Constant(result_llvm_type, [
@@ -160,11 +137,9 @@ class FunctionHelpers:
         if ret_type is None:
             return
 
-        # RAII: Emit cleanup for all resources before returning
         from sushi_lang.backend.statements import utils
         utils.emit_scope_cleanup(self.codegen, cleanup_type='all')
 
-        # Extension methods return bare types - return zero/default value
         value_llvm_type = self.codegen.types.ll_type(ret_type)
         zero_value = self.codegen.utils.get_zero_value(value_llvm_type)
         self.codegen.builder.ret(zero_value)
@@ -196,14 +171,12 @@ class FunctionHelpers:
         self.codegen.memory.reset_scope_stack()
         self.codegen.memory.push_scope()
 
-        # Initialize dynamic array memory manager with the builder
         from sushi_lang.backend.memory.dynamic_arrays import DynamicArrayManager
         self.codegen.dynamic_arrays = DynamicArrayManager(self.codegen.builder, self.codegen)
         self.codegen.dynamic_arrays.push_scope()
 
         self.codegen.entry_branch = self.codegen.alloca_builder.branch(start)
 
-        # Build parameter name -> semantic type mapping if fn_def is provided
         param_semantic_types = {}
         if fn_def is not None:
             for param in fn_def.params:
@@ -214,7 +187,6 @@ class FunctionHelpers:
         for i, arg in enumerate(llvm_fn.args):
             pname = arg.name or f"arg{i}"
 
-            # Get semantic type for this parameter
             semantic_type = param_semantic_types.get(pname)
 
             # For reference parameters, the arg is already a pointer, so we store the pointer itself
@@ -224,14 +196,11 @@ class FunctionHelpers:
             current_scope_level = self.codegen.memory._scope_depth
             self.codegen.memory._scope_vars[current_scope_level].add(pname)
 
-            # Update flat cache for O(1) lookup
             if pname not in self.codegen.memory._locals:
                 self.codegen.memory._locals[pname] = []
             self.codegen.memory._locals[pname].append((current_scope_level, slot))
 
-            # IMPORTANT: Register semantic type for pattern matching support
             if semantic_type is not None:
-                # Update flat cache for semantic types
                 if pname not in self.codegen.memory._types:
                     self.codegen.memory._types[pname] = []
                 self.codegen.memory._types[pname].append((current_scope_level, semantic_type))
@@ -310,14 +279,11 @@ def declare_stdlib_function(
     param_types: list[ir.Type]
 ) -> ir.Function:
     """Declare an external stdlib function."""
-    # Check if already declared
     if func_name in module.globals:
         existing = module.globals[func_name]
         if isinstance(existing, ir.Function):
             return existing
 
-    # Declare new external function
     fn_type = ir.FunctionType(return_type, param_types)
     func = ir.Function(module, fn_type, name=func_name)
-    # External linkage is default, no need to set explicitly
     return func

@@ -37,13 +37,11 @@ def split_type_arguments(type_args_str: str) -> list[str]:
             depth -= 1
             current.append(char)
         elif char == ',' and depth == 0:
-            # Top-level comma - split here
             parts.append(''.join(current).strip())
             current = []
         else:
             current.append(char)
 
-    # Add the last part
     if current:
         parts.append(''.join(current).strip())
 
@@ -113,7 +111,6 @@ def resolve_type_from_string(type_str: str, tables: Any) -> Type:
     if type_str.startswith("fn(") or type_str.startswith("fn ("):
         return _resolve_function_type_from_string(type_str, tables)
 
-    # Check for array types first (fixed: "type[N]" or dynamic: "type[]")
     if '[' in type_str and type_str.endswith(']'):
         match = re.match(r'^(.+)\[(\d*)\]$', type_str)
         if match:
@@ -129,8 +126,6 @@ def resolve_type_from_string(type_str: str, tables: Any) -> Type:
     if type_str in _BUILTIN_TYPES:
         return _BUILTIN_TYPES[type_str]
 
-    # A generic type ("Maybe<i32>", "Box<Point>") is already monomorphized by the
-    # time we get here, so it is present in one of the tables under its full name.
     if '<' in type_str and type_str.endswith('>'):
         if type_str in tables.enum_table.by_name:
             return tables.enum_table.by_name[type_str]

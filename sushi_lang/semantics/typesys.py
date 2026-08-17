@@ -3,7 +3,6 @@ from enum import Enum
 from typing import Optional, Mapping, Union
 from dataclasses import dataclass
 
-# Import generic types
 from sushi_lang.semantics.generics.types import TypeParameter, GenericTypeRef
 
 
@@ -77,7 +76,6 @@ class StructType:
     """Represents a user-defined struct type."""
     name: str                          # Struct name (e.g., "Point")
     fields: tuple[tuple[str, "Type"], ...]  # Immutable sequence of (field_name, field_type) tuples
-    # Generic metadata for monomorphized types
     generic_base: Optional[str] = None  # Base name before monomorphization (e.g., "Container" for "Container<Point>")
     generic_args: Optional[tuple["Type", ...]] = None  # Type arguments used (e.g., (StructType("Point"),))
 
@@ -212,7 +210,6 @@ class FunctionType:
             for p, m in zip(self.param_types, self.modes, strict=True)
         )
         base = f"fn({params}) -> {self.ok_type}"
-        # Hide the implicit StdError to match the surface syntax in diagnostics.
         if str(self.err_type) != "StdError":
             base += f" | {self.err_type}"
         return base
@@ -237,7 +234,6 @@ def owns_heap(t: Optional["Type"], _visited: Optional[set] = None,
     if resolve is not None and isinstance(t, UnknownType):
         t = resolve(t) or t
 
-    # --- base cases: the things that own a heap allocation outright ------------------
     if isinstance(t, ForeignPtrType):
         return False  # an opaque unmanaged foreign handle; RAII never frees it
     if isinstance(t, ReferenceType):
@@ -301,7 +297,6 @@ class EnumType:
     """Represents a user-defined enum type."""
     name: str                                   # Enum name (e.g., "Option", "Color")
     variants: tuple[EnumVariantInfo, ...]       # Immutable sequence of variants
-    # Generic metadata for monomorphized types
     generic_base: Optional[str] = None  # Base name before monomorphization (e.g., "Maybe" for "Maybe<i32>")
     generic_args: Optional[tuple["Type", ...]] = None  # Type arguments used (e.g., (BuiltinType.I32,))
 
@@ -309,7 +304,6 @@ class EnumType:
         return self.name
 
     def __hash__(self) -> int:
-        # Hash based on name only since enum names must be unique
         return hash(("enum", self.name))
 
     def __eq__(self, other) -> bool:
@@ -382,5 +376,4 @@ def type_string_from_rule_name(name: str) -> str:
     t = NODE_TO_TYPE.get(name)
     if t is not None:
         return t.value
-    # Fallback keeps messages nice for unknown types like 'string_t' → 'string'
     return name[:-2] if name.endswith("_t") else name

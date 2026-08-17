@@ -19,17 +19,13 @@ def emit_stdlib_primitive_call(
 ) -> ir.Value:
     """Emit a call to a stdlib primitive method."""
     require_builder(codegen)
-    # For now, only handle to_str()
     if method != "to_str":
         raise_internal_error("CE0028", method=method)
 
-    # Build function name: sushi_{type}_to_str
     func_name = f"sushi_{semantic_type_str}_to_str"
 
-    # Return type is always string fat pointer struct {i8*, i32} for to_str()
     string_struct_type = codegen.types.string_struct
 
-    # Declare the external function
     from sushi_lang.backend.functions import declare_stdlib_function
     stdlib_func = declare_stdlib_function(
         codegen.module,
@@ -38,7 +34,6 @@ def emit_stdlib_primitive_call(
         [receiver_type]
     )
 
-    # Emit the call
     result = codegen.builder.call(
         stdlib_func,
         [receiver_value],

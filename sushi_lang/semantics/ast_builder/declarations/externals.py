@@ -85,7 +85,6 @@ def parse_extern_decl(t: Tree, ast_builder: 'ASTBuilder') -> ExternalDecl:
     if link_tok is None:
         ice(t, "missing link-name STRING")
 
-    # The trailing `...` (untyped C varargs) lives inside the extern_params node.
     params_node = first_tree(t.children, "extern_params")
     params = parse_params(params_node, ast_builder) if params_node else []
     is_variadic = bool(
@@ -94,7 +93,6 @@ def parse_extern_decl(t: Tree, ast_builder: 'ASTBuilder') -> ExternalDecl:
                 for c in params_node.children)
     )
 
-    # The return type is the single type node child.
     ret_node = None
     for child in t.children:
         if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):

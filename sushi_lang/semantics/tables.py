@@ -1,4 +1,3 @@
-# semantics/tables.py
 """Aggregate container for the whole-program symbol tables."""
 from __future__ import annotations
 

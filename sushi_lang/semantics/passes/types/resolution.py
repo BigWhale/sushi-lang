@@ -1,4 +1,3 @@
-# semantics/passes/types/resolution.py
 """Type resolution utilities for semantic analysis."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
@@ -24,7 +23,6 @@ def resolve_return_type_to_result(validator: 'TypeValidator',
     """Convert a function's declared return type to its interned Result<T, E> enum."""
     resolved_type = declared_type
 
-    # Case 1: Explicit Result<T, E> - resolve the GenericTypeRef to the interned enum
     if isinstance(declared_type, GenericTypeRef):
         if declared_type.base_name == "Result" and len(declared_type.type_args) == 2:
             resolved_type = resolve_unknown_type(
@@ -33,7 +31,6 @@ def resolve_return_type_to_result(validator: 'TypeValidator',
                 validator.enum_table.by_name
             )
         else:
-            # For other generic types, look up monomorphized concrete type
             type_args_str = ", ".join(str(arg) for arg in declared_type.type_args)
             enum_name = f"{declared_type.base_name}<{type_args_str}>"
             if enum_name in validator.enum_table.by_name:
@@ -45,18 +42,14 @@ def resolve_return_type_to_result(validator: 'TypeValidator',
     from sushi_lang.semantics.generics.results import is_result_enum, ensure_result_type_in_table
 
     if not is_result_enum(resolved_type):
-        # Function declares T or T | E (not explicit Result<T, E>)
-        # Implicitly wraps in Result<T, E>
 
         if err_type_node:
-            # Case 2: Custom error type (fn foo() T | MyError)
             err_type = resolve_unknown_type(
                 err_type_node,
                 validator.struct_table.by_name,
                 validator.enum_table.by_name
             )
         else:
-            # Case 3: Default to StdError (fn foo() T)
             err_type = validator.enum_table.by_name.get("StdError")
 
         if err_type:
@@ -73,7 +66,6 @@ def resolve_variable_type(validator: 'TypeValidator',
                           declared_type: 'Type',
                           type_span: 'Span') -> 'Type':
     """Resolve variable type from declaration."""
-    # Already resolved types - return as-is
     if isinstance(declared_type, (BuiltinType, StructType, EnumType)):
         return declared_type
 
@@ -92,7 +84,6 @@ def resolve_variable_type(validator: 'TypeValidator',
         from .utils import resolve_declared_type
         return resolve_declared_type(validator, declared_type)
 
-    # UnknownType → resolve to StructType or EnumType
     if isinstance(declared_type, UnknownType):
         resolved = resolve_unknown_type(
             declared_type,
@@ -101,7 +92,6 @@ def resolve_variable_type(validator: 'TypeValidator',
         )
         return resolved
 
-    # GenericTypeRef → resolve based on base name
     if isinstance(declared_type, GenericTypeRef):
         # Result<T, E> interns to an EnumType, exactly like Maybe<T>. It used to resolve to a
         # ResultType here, which is not an EnumType -- so `let Result<T, E> r = mk()` compared
@@ -117,24 +107,18 @@ def resolve_variable_type(validator: 'TypeValidator',
             if interned is not None:
                 return interned
 
-        # Special case: HashMap<K, V> → validate key type first
         if declared_type.base_name == "HashMap" and len(declared_type.type_args) >= 1:
             key_type = declared_type.type_args[0]
             if isinstance(key_type, DynamicArrayType):
                 er.emit(validator.reporter, er.ERR.CE2058, type_span, key_type=display_type(key_type))
 
-        # General case: Monomorphized generic → concrete EnumType/StructType
-        # Build type name: Maybe<i32> -> "Maybe<i32>", HashMap<string, i32> -> "HashMap<string, i32>"
         type_args_str = ", ".join(str(arg) for arg in declared_type.type_args)
         concrete_name = f"{declared_type.base_name}<{type_args_str}>"
 
-        # Try enum table first (Maybe, Either, user-defined generic enums)
         if concrete_name in validator.enum_table.by_name:
             return validator.enum_table.by_name[concrete_name]
 
-        # Try struct table second (Own, Box, Pair, HashMap, user-defined generic structs)
         if concrete_name in validator.struct_table.by_name:
             return validator.struct_table.by_name[concrete_name]
 
-    # Fallback: return as-is (should be rare)
     return declared_type

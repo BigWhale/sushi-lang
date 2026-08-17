@@ -29,12 +29,10 @@ def cast_int_to_int(codegen: 'LLVMCodegen', source: ir.Value, target_type: ir.In
     if source_width == target_width:
         return source
     elif source_width < target_width:
-        # Zero-extend an unsigned source, sign-extend a signed source.
         if source_unsigned:
             return codegen.builder.zext(source, target_type)
         return codegen.builder.sext(source, target_type)
     else:
-        # Truncate for larger to smaller widths
         return codegen.builder.trunc(source, target_type)
 
 
@@ -56,13 +54,11 @@ def cast_float_to_int(codegen: 'LLVMCodegen', source: ir.Value, target_type: ir.
 
 def cast_float_to_float(codegen: 'LLVMCodegen', source: ir.Value, target_type: ir.Type) -> ir.Value:
     """Cast between floating-point types (extend or truncate precision)."""
-    # Determine operation based on type sizes
     if isinstance(source.type, ir.FloatType) and isinstance(target_type, ir.DoubleType):
         return codegen.builder.fpext(source, target_type)
     elif isinstance(source.type, ir.DoubleType) and isinstance(target_type, ir.FloatType):
         return codegen.builder.fptrunc(source, target_type)
     else:
-        # Same type, return as-is
         return source
 
 
@@ -85,28 +81,21 @@ def emit_cast_expression(codegen: 'LLVMCodegen', expr: CastExpr) -> ir.Value:
             mask = (1 << target_ll.width) - 1
             return ir.Constant(target_ll, literal & mask)
 
-    # Emit the source expression
     source_value = codegen.expressions.emit_expr(expr.expr)
 
-    # Get LLVM types for source and target
     source_llvm_type = source_value.type
     target_llvm_type = codegen.types.ll_type(expr.target_type)
 
-    # Fast path: If types are the same, no casting needed
     if source_llvm_type == target_llvm_type:
         return source_value
 
-    # Classify types and dispatch to appropriate cast handler
     src_category = classify_type_for_cast(source_llvm_type)
     dst_category = classify_type_for_cast(target_llvm_type)
 
-    # Signedness is invisible in the signless LLVM integer type, so recover it
-    # from the semantic types stamped in Pass 2 (source_type / target_type).
     from sushi_lang.semantics.type_predicates import is_unsigned_int
     source_unsigned = is_unsigned_int(expr.source_type)
     target_unsigned = is_unsigned_int(expr.target_type)
 
-    # Dispatch table for cast operations
     cast_ops = {
         ('int', 'int'): lambda src, dst: cast_int_to_int(codegen, src, dst, source_unsigned),
         ('int', 'float'): lambda src, dst: cast_int_to_float(codegen, src, dst, source_unsigned),

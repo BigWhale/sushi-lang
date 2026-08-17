@@ -37,10 +37,8 @@ def create_dynamic_array_from_elements(codegen: 'LLVMCodegen', element_type, ele
     """Create a dynamic array struct value from a list of elements."""
     from sushi_lang.backend.expressions import memory
 
-    # Calculate capacity (next power of 2)
     initial_len = len(elements)
     if initial_len == 0:
-        # Empty array
         zero_i32 = ir.Constant(codegen.types.i32, 0)
         null_ptr = ir.Constant(ir.PointerType(element_llvm_type), None)
         array_struct_type = ir.LiteralStructType([
@@ -54,7 +52,6 @@ def create_dynamic_array_from_elements(codegen: 'LLVMCodegen', element_type, ele
         array_struct = codegen.builder.insert_value(array_struct, null_ptr, 2)
         return array_struct
 
-    # Calculate capacity (power of 2)
     capacity = 1
     while capacity < initial_len:
         capacity *= 2
@@ -71,19 +68,15 @@ def create_dynamic_array_from_elements(codegen: 'LLVMCodegen', element_type, ele
     capacity_val = ir.Constant(codegen.types.i32, capacity)
     total_bytes = codegen.builder.mul(capacity_val, element_size, name="total_bytes")
 
-    # Allocate memory using realloc with null pointer (acts as malloc)
     null_ptr = ir.Constant(ir.PointerType(codegen.types.i8), None)
     data_ptr = memory.emit_realloc_call(codegen, null_ptr, total_bytes)
 
-    # Cast void* to element_type*
     typed_data_ptr = codegen.builder.bitcast(data_ptr, ir.PointerType(element_llvm_type))
 
-    # Copy elements to allocated memory
     for i, element_value in enumerate(elements):
         element_ptr = codegen.builder.gep(typed_data_ptr, [ir.Constant(codegen.types.i32, i)])
         codegen.builder.store(element_value, element_ptr)
 
-    # Create the array struct
     array_struct_type = ir.LiteralStructType([
         codegen.types.i32,
         codegen.types.i32,

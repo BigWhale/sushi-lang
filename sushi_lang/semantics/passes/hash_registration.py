@@ -14,10 +14,8 @@ from sushi_lang.internals.errors import raise_internal_error
 
 def register_all_struct_hashes(struct_table: StructTable) -> None:
     """Register hash methods for all hashable structs in dependency order."""
-    # Get structs in dependency order (dependencies first)
     sorted_structs = topological_sort_structs(struct_table)
 
-    # Register hash for each struct if hashable
     registered_count = 0
     skipped_count = 0
 
@@ -31,25 +29,18 @@ def register_all_struct_hashes(struct_table: StructTable) -> None:
         else:
             skipped_count += 1
 
-    # Minimal output - can be enabled with --debug flag in future
-    # Debug info available but not printed by default for cleaner compilation output
-
 
 def topological_sort_structs(struct_table: StructTable) -> List[str]:
     """Sort struct names in dependency order using Kahn's algorithm."""
-    # Build dependency graph
     dependencies: Dict[str, Set[str]] = defaultdict(set)  # struct -> set of structs it depends on
     dependents: Dict[str, Set[str]] = defaultdict(set)    # struct -> set of structs that depend on it
 
     for struct_name, struct_type in struct_table.by_name.items():
-        # Check each field for struct dependencies
         for _field_name, field_type in struct_type.fields:
             if isinstance(field_type, StructType):
-                # This struct depends on the field's struct type
                 dependencies[struct_name].add(field_type.name)
                 dependents[field_type.name].add(struct_name)
 
-    # Kahn's algorithm for topological sort
     in_degree = {name: len(deps) for name, deps in dependencies.items()}
 
     # Start with structs that have no dependencies
@@ -64,7 +55,6 @@ def topological_sort_structs(struct_table: StructTable) -> List[str]:
         current = queue.popleft()
         result.append(current)
 
-        # Reduce in-degree for all dependents
         for dependent in dependents.get(current, []):
             in_degree[dependent] -= 1
             if in_degree[dependent] == 0:
@@ -84,10 +74,8 @@ def topological_sort_structs(struct_table: StructTable) -> List[str]:
 
 def register_all_enum_hashes(enum_table: EnumTable, reporter: Reporter) -> None:
     """Register hash methods for all hashable enums in dependency order."""
-    # Get enums in dependency order (dependencies first)
     sorted_enums = topological_sort_enums(enum_table, reporter)
 
-    # Register hash for each enum if hashable
     registered_count = 0
     skipped_count = 0
 
@@ -101,13 +89,9 @@ def register_all_enum_hashes(enum_table: EnumTable, reporter: Reporter) -> None:
         else:
             skipped_count += 1
 
-    # Minimal output - can be enabled with --debug flag in future
-    # Debug info available but not printed by default for cleaner compilation output
-
 
 def topological_sort_enums(enum_table: EnumTable, reporter: Reporter) -> List[str]:
     """Sort enum names in dependency order using Kahn's algorithm."""
-    # Build dependency graph (only for enum-to-enum dependencies)
     dependencies: Dict[str, Set[str]] = defaultdict(set)  # enum -> set of other enums it depends on
     dependents: Dict[str, Set[str]] = defaultdict(set)    # enum -> set of enums that depend on it
 
@@ -117,12 +101,10 @@ def topological_sort_enums(enum_table: EnumTable, reporter: Reporter) -> List[st
         # struct hashes are already registered in Pass 1.8 before enum hashes
         for variant in enum_type.variants:
             for assoc_type in variant.associated_types:
-                # Track enum dependencies only
                 if isinstance(assoc_type, EnumType):
                     dependencies[enum_name].add(assoc_type.name)
                     dependents[assoc_type.name].add(enum_name)
 
-    # Kahn's algorithm for topological sort
     in_degree = {name: len(deps) for name, deps in dependencies.items()}
 
     # Start with enums that have no dependencies
@@ -137,18 +119,14 @@ def topological_sort_enums(enum_table: EnumTable, reporter: Reporter) -> List[st
         current = queue.popleft()
         result.append(current)
 
-        # Reduce in-degree for all dependents
         for dependent in dependents.get(current, []):
             in_degree[dependent] -= 1
             if in_degree[dependent] == 0:
                 queue.append(dependent)
 
-    # Check for cycles
     if len(result) != len(enum_table.by_name):
-        # Some enums not processed - check if they use Own<T> for recursion
         unprocessed = set(enum_table.by_name.keys()) - set(result)
 
-        # Separate: enums with Own<T> indirection vs direct recursion
         own_recursive = []
         direct_recursive = []
 
@@ -159,13 +137,10 @@ def topological_sort_enums(enum_table: EnumTable, reporter: Reporter) -> List[st
             else:
                 direct_recursive.append(enum_name)
 
-        # Direct recursion without Own<T> is still an error
         if direct_recursive:
-            # Report an error for each directly recursive enum
             for enum_name in sorted(direct_recursive):
                 er.emit(reporter, er.ERR.CE2052, None, name=enum_name)
 
-        # Own<T>-based recursion is allowed - add in any order
         result.extend(own_recursive)
 
     return result
@@ -175,9 +150,7 @@ def has_own_indirection(enum_type: EnumType, enum_name: str) -> bool:
     """Check if recursive enum uses Own<T> for indirection."""
     for variant in enum_type.variants:
         for assoc_type in variant.associated_types:
-            # Check if field is Own<T>
             if _is_own_type(assoc_type):
-                # Check if Own<T> wraps the enum itself
                 element_type = _get_own_element_type(assoc_type)
                 if _references_enum(element_type, enum_name):
                     return True
@@ -202,16 +175,13 @@ def _get_own_element_type(own_type: Type) -> Type:
     from sushi_lang.semantics.typesys import UnknownType
 
     if isinstance(own_type, GenericTypeRef):
-        # Before monomorphization: extract from type_args
         if len(own_type.type_args) == 1:
             return own_type.type_args[0]
     elif isinstance(own_type, StructType):
-        # After monomorphization: parse from name "Own<Expr>"
         if own_type.name.startswith("Own<") and own_type.name.endswith(">"):
             inner_name = own_type.name[4:-1]  # Extract "Expr" from "Own<Expr>"
             return UnknownType(name=inner_name)
 
-    # Fallback
     return UnknownType(name="Unknown")
 
 
@@ -220,16 +190,12 @@ def _references_enum(ty: Type, enum_name: str) -> bool:
     from sushi_lang.semantics.typesys import UnknownType
 
     if isinstance(ty, EnumType):
-        # Direct reference
         return ty.name == enum_name
     elif isinstance(ty, DynamicArrayType):
-        # Array of enums
         return _references_enum(ty.base_type, enum_name)
     elif isinstance(ty, ArrayType):
-        # Fixed array of enums
         return _references_enum(ty.base_type, enum_name)
     elif isinstance(ty, UnknownType):
-        # Unresolved type - check by name
         return ty.name == enum_name
 
     return False
@@ -244,12 +210,10 @@ def collect_array_types(struct_table: StructTable, enum_table: EnumTable) -> Set
         if isinstance(ty, (ArrayType, DynamicArrayType)):
             array_types.add(ty)
 
-    # Collect from struct fields
     for struct_type in struct_table.by_name.values():
         for _field_name, field_type in struct_type.fields:
             extract_arrays_from_type(field_type)
 
-    # Collect from enum variant data
     for enum_type in enum_table.by_name.values():
         for variant in enum_type.variants:
             for assoc_type in variant.associated_types:
@@ -260,10 +224,8 @@ def collect_array_types(struct_table: StructTable, enum_table: EnumTable) -> Set
 
 def register_all_array_hashes(struct_table: StructTable, enum_table: EnumTable) -> None:
     """Register hash methods for all hashable array types."""
-    # Collect all array types used in the program
     array_types = collect_array_types(struct_table, enum_table)
 
-    # Register hash for each array if element type is hashable
     registered_count = 0
     skipped_count = 0
 
@@ -276,5 +238,3 @@ def register_all_array_hashes(struct_table: StructTable, enum_table: EnumTable) 
         else:
             skipped_count += 1
 
-    # Minimal output - can be enabled with --debug flag in future
-    # Debug info available but not printed by default for cleaner compilation output

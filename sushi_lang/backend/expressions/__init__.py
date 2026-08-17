@@ -23,7 +23,6 @@ class ExpressionEmitter:
             raise_internal_error("CE0009")
         self.codegen.utils.ensure_open_block()
 
-        # Import specialized emitters
         from sushi_lang.semantics.ast import (
             IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString,
             ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Name, Call, MethodCall,
@@ -31,14 +30,11 @@ class ExpressionEmitter:
             EnumConstructor, DotCall, TryExpr, Lambda
         )
 
-        # Delegate to appropriate specialized emitter based on expression type
         match expr:
-            # Literals
             case IntLit() | FloatLit() | BoolLit() | BlankLit() | StringLit() | InterpolatedString():
                 from sushi_lang.backend.expressions import literals
                 return literals.emit_literal(self.codegen, expr, to_i1)
 
-            # Operators and names
             case UnaryOp() | BinaryOp():
                 from sushi_lang.backend.expressions import operators
                 return operators.emit_operator(self.codegen, expr, to_i1)
@@ -55,7 +51,6 @@ class ExpressionEmitter:
                 from sushi_lang.backend.expressions import try_expr
                 return try_expr.emit_try_expr(self.codegen, expr)
 
-            # Arrays
             case ArrayLiteral():
                 from sushi_lang.backend.types import arrays
                 return arrays.emit_array_literal(self.codegen, expr)
@@ -72,7 +67,6 @@ class ExpressionEmitter:
                 from sushi_lang.backend.types import arrays
                 return arrays.emit_dynamic_array_from(self.codegen, expr)
 
-            # Function and method calls
             case Call():
                 from sushi_lang.backend.expressions import calls
                 return calls.emit_function_call(self.codegen, expr, to_i1)
@@ -82,62 +76,47 @@ class ExpressionEmitter:
                 return calls.emit_method_call(self.codegen, expr, to_i1)
 
             case DotCall():
-                # obj.handler(): indirect call through a fn-typed struct field (the
-                # type checker annotated node.callee_fn_type -- see resolve_fn_field_call).
                 _fn_field_ty = getattr(expr, 'callee_fn_type', None)
                 if _fn_field_ty is not None:
                     from sushi_lang.semantics.typesys import FunctionType
                     if isinstance(_fn_field_ty, FunctionType):
                         from sushi_lang.backend.expressions import calls
                         return calls.emit_fn_field_call(self.codegen, expr, _fn_field_ty, to_i1)
-                # Resolve DotCall to either enum constructor or method call
                 if isinstance(expr.receiver, Name):
                     receiver_name = expr.receiver.id
-                    # Check if it's an enum type (concrete or generic)
                     if receiver_name in self.codegen.enum_table.by_name:
                         from sushi_lang.backend.expressions import enums
                         return enums.emit_enum_constructor(self.codegen, expr, is_dotcall=True)
-                    # Check for resolved generic enum type (e.g., Result<T>)
                     elif hasattr(expr, 'resolved_enum_type') and expr.resolved_enum_type is not None:
-                        # CRITICAL: Verify method is actually a variant, not a method like realise()
                         from sushi_lang.semantics.typesys import EnumType
                         resolved_type = expr.resolved_enum_type
                         if isinstance(resolved_type, EnumType) and resolved_type.get_variant(expr.method) is not None:
                             from sushi_lang.backend.expressions import enums
                             return enums.emit_enum_constructor(self.codegen, expr, is_dotcall=True)
-                        # Not a variant - fall through to method call dispatch
-                # Otherwise, it's a method call
                 from sushi_lang.backend.expressions import calls
                 return calls.emit_method_call(self.codegen, expr, to_i1, is_dotcall=True)
 
-            # Structs and enum variants (zero-argument)
             case MemberAccess():
-                # Check if this is enum variant access (EnumType.Variant)
                 if isinstance(expr.receiver, Name):
                     receiver_name = expr.receiver.id
                     if receiver_name in self.codegen.enum_table.by_name:
-                        # This is an enum variant, not struct field
                         from sushi_lang.backend.expressions import enums
                         enum_type = self.codegen.enum_table.by_name[receiver_name]
                         return enums.emit_enum_constructor_from_method_call(
                             self.codegen, enum_type, expr.member, []
                         )
 
-                # Regular struct member access
                 from sushi_lang.backend.expressions import structs
                 return structs.emit_member_access(self.codegen, expr, to_i1)
 
-            # Enums
             case EnumConstructor():
                 from sushi_lang.backend.expressions import enums
                 return enums.emit_enum_constructor(self.codegen, expr)
 
-            # Type casting
             case CastExpr():
                 from sushi_lang.backend.expressions import casts
                 return casts.emit_cast_expression(self.codegen, expr)
 
-            # Lambda literal (closure): build the function value (fat pointer).
             case Lambda():
                 from sushi_lang.backend.runtime import closures
                 return closures.emit_lambda(self.codegen, expr, to_i1)

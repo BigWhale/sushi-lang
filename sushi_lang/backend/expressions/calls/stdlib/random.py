@@ -20,16 +20,11 @@ def emit_random_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bo
     f64 = ir.DoubleType()
     void = ir.VoidType()
 
-    # Map user function name to stdlib function name
     stdlib_func_name = f"sushi_{func_name}"
 
     from sushi_lang.backend.functions import declare_stdlib_function
 
-    # Random functions return bare types (not Result<T>)
-    # Result wrapping happens at semantic level
-
     if func_name == "rand":
-        # rand() -> u64 (no parameters)
         if len(expr.args) != 0:
             raise_internal_error("CE0023", method=func_name, expected=0, got=len(expr.args))
 
@@ -38,7 +33,6 @@ def emit_random_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bo
         return codegen.utils.as_i1(result) if to_i1 else result
 
     elif func_name == "rand_range":
-        # rand_range(i32 min, i32 max) -> i32
         if len(expr.args) != 2:
             raise_internal_error("CE0023", method=func_name, expected=2, got=len(expr.args))
 
@@ -49,18 +43,15 @@ def emit_random_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bo
         return codegen.utils.as_i1(result) if to_i1 else result
 
     elif func_name == "srand":
-        # srand(u64 seed) -> ~ (void)
         if len(expr.args) != 1:
             raise_internal_error("CE0023", method=func_name, expected=1, got=len(expr.args))
 
         seed_value = codegen.expressions.emit_expr(expr.args[0])
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, void, [i64])
         codegen.builder.call(stdlib_func, [seed_value])
-        # Return blank (undef i32 value)
         return ir.Constant(i32, ir.Undefined)
 
     elif func_name == "rand_f64":
-        # rand_f64() -> f64 (no parameters)
         if len(expr.args) != 0:
             raise_internal_error("CE0023", method=func_name, expected=0, got=len(expr.args))
 

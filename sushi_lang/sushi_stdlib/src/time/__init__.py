@@ -7,7 +7,6 @@ if typing.TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
 
 
-
 def is_builtin_time_function(name: str) -> bool:
     """Check if name is a built-in time module function."""
     return name in {
@@ -23,7 +22,6 @@ def get_builtin_time_function_return_type(name: str) -> Type:
     from sushi_lang.semantics.typesys import BuiltinType
 
     if name in {'nanosleep', 'sleep', 'msleep', 'usleep'}:
-        # All sleep functions return Result<i32, StdError>
         from sushi_lang.semantics.typesys import UnknownType
         from sushi_lang.semantics.generics.types import GenericTypeRef
         return GenericTypeRef("Result", (BuiltinType('i32'), UnknownType("StdError")))
@@ -36,7 +34,6 @@ def validate_time_function_call(name: str, signature: typing.Any) -> None:
     from sushi_lang.semantics.typesys import BuiltinType
 
     if name == 'nanosleep':
-        # nanosleep(i64 seconds, i64 nanoseconds) -> Result<i32>
         if len(signature.params) != 2:
             raise TypeError(f"nanosleep expects 2 arguments, got {len(signature.params)}")
 
@@ -49,7 +46,6 @@ def validate_time_function_call(name: str, signature: typing.Any) -> None:
             raise TypeError(f"nanosleep expects i64 for nanoseconds, got {param2_type}")
 
     elif name in {'sleep', 'msleep', 'usleep'}:
-        # sleep/msleep/usleep(i64 duration) -> Result<i32>
         if len(signature.params) != 1:
             raise TypeError(f"{name} expects 1 argument, got {len(signature.params)}")
 
@@ -65,7 +61,6 @@ def generate_module_ir() -> ir.Module:
 
     module = create_stdlib_module("time")
 
-    # Generate all time functions
     sleep.generate_nanosleep(module)
     sleep.generate_sleep(module)
     sleep.generate_msleep(module)

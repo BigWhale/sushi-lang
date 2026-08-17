@@ -11,11 +11,6 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
 
 
-# ==============================================================================
-# Inline Emission (on-demand code generation)
-# ==============================================================================
-
-
 def emit_builtin_maybe_method(
     codegen: Any,
     call: MethodCall,
@@ -51,11 +46,6 @@ def _emit_maybe_expect(
                             missing_variant_code="CE0092", assoc_count_code="CE0093")
 
 
-# ==============================================================================
-# Helper Functions for Dynamic Maybe<T> Creation
-# ==============================================================================
-
-
 def ensure_maybe_type_exists(codegen: 'LLVMCodegen', value_type: Type) -> Optional[EnumType]:
     """Ensure that Maybe<T> exists in the enum table, creating it if necessary."""
     return ensure_maybe_type_in_table(codegen.enum_table, value_type, struct_table=codegen.struct_table.by_name)
@@ -73,29 +63,22 @@ def get_maybe_enum_type(codegen: 'LLVMCodegen', value_type: Type) -> ir.Type:
 def emit_maybe_some(codegen: 'LLVMCodegen', value_type: Type, value: ir.Value) -> ir.Value:
     """Emit Maybe.Some(value) constructor."""
 
-    # Ensure Maybe<T> type exists
     maybe_enum = ensure_maybe_type_exists(codegen, value_type)
     if maybe_enum is None:
         raise_internal_error("CE0047", type=str(value_type))
 
-    # Get the LLVM enum type: {i32 tag, [N x i8] data}
     llvm_enum_type = codegen.types.get_enum_type(maybe_enum)
 
-    # Get Some variant index (should be 0)
     some_index = maybe_enum.get_variant_index("Some")
 
-    # Create undefined enum value
     enum_value = ir.Constant(llvm_enum_type, ir.Undefined)
 
-    # Set the tag (discriminant) for Some variant
     tag = ir.Constant(codegen.types.i32, some_index)
     enum_value = codegen.builder.insert_value(enum_value, tag, 0, name="maybe_some_tag")
 
-    # Pack the value into the data field
     data_array_type = llvm_enum_type.elements[1]  # [N x i8] array
     temp_alloca = codegen.builder.alloca(data_array_type, name="enum_data_temp")
 
-    # Cast to i8* for bitcasting
     data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")
 
     # Store the value at payload offset 0. Natural alignment: the data member is a
@@ -105,7 +88,6 @@ def emit_maybe_some(codegen: 'LLVMCodegen', value_type: Type, value: ir.Value) -
     value_ptr_typed = codegen.builder.bitcast(data_ptr, ir.PointerType(value_llvm_type), name="value_ptr_typed")
     codegen.builder.store(value, value_ptr_typed)
 
-    # Load the packed data back into the enum
     packed_data = codegen.builder.load(temp_alloca, name="packed_data")
     enum_value = codegen.builder.insert_value(enum_value, packed_data, 1, name="maybe_some_value")
 
@@ -114,21 +96,16 @@ def emit_maybe_some(codegen: 'LLVMCodegen', value_type: Type, value: ir.Value) -
 
 def emit_maybe_none(codegen: 'LLVMCodegen', value_type: Type) -> ir.Value:
     """Emit Maybe.None() constructor."""
-    # Ensure Maybe<T> type exists
     maybe_enum = ensure_maybe_type_exists(codegen, value_type)
     if maybe_enum is None:
         raise_internal_error("CE0047", type=str(value_type))
 
-    # Get the LLVM enum type: {i32 tag, [N x i8] data}
     llvm_enum_type = codegen.types.get_enum_type(maybe_enum)
 
-    # Get None variant index (should be 1)
     none_index = maybe_enum.get_variant_index("None")
 
-    # Create undefined enum value
     enum_value = ir.Constant(llvm_enum_type, ir.Undefined)
 
-    # Set the tag (discriminant) for None variant
     tag = ir.Constant(codegen.types.i32, none_index)
     enum_value = codegen.builder.insert_value(enum_value, tag, 0, name="maybe_none_tag")
 

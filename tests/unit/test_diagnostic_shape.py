@@ -6,7 +6,6 @@ import subprocess
 from pathlib import Path
 
 
-
 HEAD_RE = re.compile(r"^(?P<loc>\S*?):?\s*(?P<severity>error|warning) \[(?P<code>[A-Z]{2}\d{4})\]: (?P<message>.+)$")
 LOCATED_HEAD_RE = re.compile(r"^(?P<file>\S+):(?P<line>\d+):(?P<col>\d+): (?P<severity>error|warning) \[(?P<code>[A-Z]{2}\d{4})\]: ")
 

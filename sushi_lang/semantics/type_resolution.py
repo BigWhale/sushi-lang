@@ -1,4 +1,3 @@
-# semantics/type_resolution.py
 """Type resolution utilities for UnknownType to StructType/EnumType conversion."""
 from __future__ import annotations
 from typing import Dict, Optional, Set, Tuple, TYPE_CHECKING
@@ -36,7 +35,6 @@ class TypeResolver:
         for arg in type_args:
             resolved_arg = resolve_unknown_type(arg, self.struct_table, self.enum_table)
 
-            # Recursively resolve nested types
             if isinstance(resolved_arg, (ArrayType, DynamicArrayType)):
                 resolved_base = resolve_unknown_type(
                     resolved_arg.base_type,
@@ -63,15 +61,12 @@ class TypeResolver:
         from sushi_lang.semantics.generics.types import GenericTypeRef
 
         if isinstance(ty, GenericTypeRef):
-            # Build type name: Result<i32> -> "Result<i32>", Box<i32> -> "Box<i32>"
             type_args_str = ", ".join(str(arg) for arg in ty.type_args)
             concrete_name = f"{ty.base_name}<{type_args_str}>"
 
-            # Check if it's a monomorphized enum
             if concrete_name in self.enum_table:
                 return self.enum_table[concrete_name]
 
-            # Check if it's a monomorphized struct
             if concrete_name in self.struct_table:
                 return self.struct_table[concrete_name]
 
@@ -101,10 +96,8 @@ def resolve_unknown_type(
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
     if isinstance(ty, UnknownType):
-        # Check if this unknown type is actually a known struct
         if ty.name in struct_table:
             return struct_table[ty.name]
-        # Check if this unknown type is actually a known enum
         if ty.name in enum_table:
             return enum_table[ty.name]
 
@@ -129,7 +122,6 @@ def resolve_unknown_type(
         )
         concrete_name = f"{ty.base_name}<{type_arg_strs}>"
 
-        # Look up the monomorphized concrete type
         if concrete_name in struct_table:
             return struct_table[concrete_name]
         if concrete_name in enum_table:
@@ -189,11 +181,8 @@ def resolve_type_recursively(
     if visited is None:
         visited = frozenset()
 
-    # First, try to resolve the type itself if it's UnknownType
     resolved_ty = resolve_unknown_type(ty, struct_table, enum_table)
 
-    # Cycle backstop, keyed on nominal identity (the same guard
-    # contains_unresolvable_unknown_type already carries).
     type_key = None
     if isinstance(resolved_ty, StructType):
         type_key = ("struct", resolved_ty.name)
@@ -204,8 +193,6 @@ def resolve_type_recursively(
             return resolved_ty
         visited = visited | {type_key}
 
-    # Handle function types: resolve params, ok type, and err type (the implicit
-    # UnknownType("StdError") binds to the StdError enum here).
     if isinstance(resolved_ty, FunctionType):
         new_params = tuple(
             resolve_type_recursively(p, struct_table, enum_table, visited)
@@ -221,7 +208,6 @@ def resolve_type_recursively(
             return FunctionType(param_types=new_params, ok_type=new_ok, err_type=new_err)
         return resolved_ty
 
-    # Handle array types with recursive base type resolution
     if isinstance(resolved_ty, ArrayType):
         resolved_base = resolve_type_recursively(
             resolved_ty.base_type, struct_table, enum_table, visited
@@ -236,7 +222,6 @@ def resolve_type_recursively(
         if resolved_base != resolved_ty.base_type:
             return DynamicArrayType(base_type=resolved_base)
 
-    # Handle generic type references with recursive type argument resolution
     elif isinstance(resolved_ty, GenericTypeRef):
         resolved_args = tuple(
             resolve_type_recursively(arg, struct_table, enum_table, visited)
@@ -248,8 +233,6 @@ def resolve_type_recursively(
                 type_args=resolved_args
             )
 
-    # StructType / EnumType: terminal. The table entry IS the type -- see the
-    # docstring. Returning it unchanged is the whole behaviour.
     return resolved_ty
 
 
@@ -265,33 +248,26 @@ def contains_unresolvable_unknown_type(
     )
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
-    # Initialize visited set on first call
     if visited is None:
         visited = set()
 
-    # Try to resolve the type
     resolved_ty = resolve_unknown_type(ty, struct_table, enum_table)
 
-    # If still UnknownType after resolution, it's unresolvable
     if isinstance(resolved_ty, UnknownType):
         return True
 
-    # Create a unique key for this type to detect cycles
     type_key = None
     if isinstance(resolved_ty, StructType):
         type_key = f"struct:{resolved_ty.name}"
     elif isinstance(resolved_ty, EnumType):
         type_key = f"enum:{resolved_ty.name}"
 
-    # Check for cycles - if we've seen this type before, assume it's resolvable
     if type_key and type_key in visited:
         return False
 
-    # Mark this type as visited
     if type_key:
         visited = visited | {type_key}
 
-    # Recursively check nested types
     if isinstance(resolved_ty, (ArrayType, DynamicArrayType)):
         return contains_unresolvable_unknown_type(
             resolved_ty.base_type, struct_table, enum_table, visited
@@ -341,17 +317,14 @@ def parse_type_string(
 
     type_str = type_str.strip()
 
-    # Blank type
     if type_str == "~":
         return BuiltinType.BLANK
 
-    # References: `peek T` / `poke T`
     for word, mode in (("peek ", BorrowMode.PEEK), ("poke ", BorrowMode.POKE)):
         if type_str.startswith(word):
             referent = parse_type_string(type_str[len(word):], struct_table, enum_table)
             return ReferenceType(referenced_type=referent, mutability=mode)
 
-    # Primitive types
     primitives = {
         "i8": BuiltinType.I8,
         "i16": BuiltinType.I16,
@@ -369,13 +342,11 @@ def parse_type_string(
     if type_str in primitives:
         return primitives[type_str]
 
-    # Dynamic arrays: type[]
     if type_str.endswith("[]"):
         base_str = type_str[:-2]
         base_type = parse_type_string(base_str, struct_table, enum_table)
         return DynamicArrayType(base_type=base_type)
 
-    # Fixed arrays: type[size]
     if type_str.endswith("]") and "[" in type_str:
         bracket_idx = type_str.rfind("[")
         size_str = type_str[bracket_idx+1:-1]
@@ -384,13 +355,10 @@ def parse_type_string(
             base_type = parse_type_string(base_str, struct_table, enum_table)
             return ArrayType(base_type=base_type, size=int(size_str))
 
-    # Check struct table
     if type_str in struct_table:
         return struct_table[type_str]
 
-    # Check enum table
     if type_str in enum_table:
         return enum_table[type_str]
 
-    # Unknown type - will be resolved later or cause error
     return UnknownType(name=type_str)

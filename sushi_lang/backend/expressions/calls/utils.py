@@ -56,18 +56,14 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
     from sushi_lang.semantics.typesys import ReferenceType
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
-    # Strategy 1: Check if receiver is a Name (variable)
     if isinstance(receiver, Name):
         semantic_type = codegen.memory.find_semantic_type(receiver.id)
-        # Unwrap ReferenceType if present (for peek T or poke T parameters)
         if isinstance(semantic_type, ReferenceType):
             semantic_type = semantic_type.referenced_type
 
         if isinstance(semantic_type, StructType) and semantic_type.name.startswith(prefix):
             return semantic_type
 
-        # Handle GenericTypeRef (e.g., HashMap<string, string> before resolution)
-        # Resolve it to the actual StructType from the struct table
         if isinstance(semantic_type, GenericTypeRef):
             type_name = str(semantic_type)  # e.g., "HashMap<string, string>"
             if type_name.startswith(prefix) and type_name in codegen.struct_table.by_name:
@@ -153,10 +149,8 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
     from sushi_lang.semantics.typesys import ReferenceType
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
-    # Strategy 1: Check if receiver is a Name (variable)
     if isinstance(receiver, Name):
         semantic_type = codegen.memory.find_semantic_type(receiver.id)
-        # Unwrap ReferenceType if present (for peek T or poke T parameters)
         if isinstance(semantic_type, ReferenceType):
             semantic_type = semantic_type.referenced_type
 
@@ -168,8 +162,6 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
         if isinstance(semantic_type, EnumType):
             return semantic_type if semantic_type.name.startswith(prefix) else None
 
-        # Handle GenericTypeRef (e.g., Result<i32> before resolution). A known enum
-        # ref is likewise authoritative.
         if isinstance(semantic_type, GenericTypeRef):
             type_name = str(semantic_type)  # e.g., "Result<i32>"
             if type_name in codegen.enum_table.by_name:
@@ -196,8 +188,6 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
     if isinstance(receiver, Call):
         from sushi_lang.semantics.typesys import FunctionType
         if not isinstance(receiver.callee, Name):
-            # Indirect call through a function value (env.f(x), arr[0]()): recover the
-            # Result enum from the FunctionType the type checker annotated.
             fn_ty = getattr(receiver, 'callee_fn_type', None)
             if isinstance(fn_ty, FunctionType):
                 from sushi_lang.backend.generics.result_builder import intern_result
@@ -224,8 +214,6 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
             if stdlib_ret is not None:
                 return stdlib_ret if stdlib_ret.name.startswith(prefix) else None
 
-    # Strategy 3: Fallback to LLVM type matching (last resort, only when the
-    # receiver's semantic type could not be determined above).
     for enum_name, enum_type in codegen.enum_table.by_name.items():
         if isinstance(enum_type, EnumType) and enum_name.startswith(prefix):
             expected_llvm_type = codegen.types.ll_type(enum_type)
@@ -270,7 +258,6 @@ def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Valu
         slot_type = slot.type.pointee
         semantic_type = resolve_name_semantic_type(codegen, receiver.id)
 
-        # Check if this is a reference parameter
         if type_utils.is_reference_parameter(codegen, receiver.id):
             receiver_value = codegen.builder.load(slot, name=f"{receiver.id}_ref")
             receiver_type = receiver_value.type
@@ -283,17 +270,13 @@ def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Valu
             receiver_value = codegen.expressions.emit_expr(receiver)
             receiver_type = codegen.types.infer_llvm_type_from_value(receiver_value)
     elif isinstance(receiver, MemberAccess):
-        # _emit_member_access() already returns a pointer for dynamic array fields
         receiver_value = codegen.expressions.emit_expr(receiver)
         receiver_type = codegen.types.infer_llvm_type_from_value(receiver_value)
-        # Extract semantic type from struct field
         from sushi_lang.backend.expressions.structs import infer_struct_type
         try:
             struct_type = infer_struct_type(codegen, receiver.receiver)
             semantic_type = struct_type.get_field_type(receiver.member)
         except InternalCompilerError:
-            # Not a struct receiver (infer_struct_type raise_internal_error()s); leave
-            # semantic_type as None. A bare `except:` here also swallowed Ctrl-C.
             pass
     else:
         receiver_value = codegen.expressions.emit_expr(receiver)
@@ -341,8 +324,6 @@ def _infer_enum_construction_type(codegen: 'LLVMCodegen', receiver: Expr) -> Opt
     """Recover the EnumType for a receiver that CONSTRUCTS an enum variant."""
     from sushi_lang.semantics.ast import EnumConstructor
 
-    # An EnumConstructor node IS a construction by definition -- there is nothing else it
-    # can be, so its annotation (set for generic enums) or its name is the whole answer.
     if isinstance(receiver, EnumConstructor):
         resolved = getattr(receiver, 'resolved_enum_type', None)
         if resolved is not None:
@@ -390,7 +371,6 @@ def infer_semantic_type(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]
     """Unified type inference for generic types."""
     receiver = expr.receiver
 
-    # Priority 1: Check for resolved type annotation
     if expected_type_class == EnumType:
         resolved_type = get_resolved_type(expr, 'resolved_enum_type')
         if resolved_type is not None:
@@ -400,10 +380,8 @@ def infer_semantic_type(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]
         if resolved_type is not None:
             return resolved_type
 
-    # Priority 2: Use appropriate inference function
     if expected_type_class == EnumType:
         if receiver_value is None:
-            # Need to emit receiver first
             receiver_value = codegen.expressions.emit_expr(receiver)
         return infer_generic_enum_type(codegen, receiver, receiver_value, expected_prefix)
     elif expected_type_class == StructType:
@@ -428,7 +406,6 @@ def emit_receiver_as_pointer(codegen: 'LLVMCodegen', receiver: Expr,
         slot = resolve_name_slot(codegen, receiver.id)
         if slot is None:
             return None
-        # Check if this is a reference parameter - if so, load the pointer
         if type_utils.is_reference_parameter(codegen, receiver.id):
             return codegen.builder.load(slot, name=f"{receiver.id}_ref_ptr")
         return slot
@@ -443,7 +420,6 @@ def emit_receiver_as_pointer(codegen: 'LLVMCodegen', receiver: Expr,
     return _spill_receiver(codegen, receiver, semantic_type)
 
 
-# One counter per module, so two spills in the same function get distinct names.
 _SPILL_SEQ = itertools.count()
 
 

@@ -1,4 +1,3 @@
-# semantics/generics/unify.py
 """Single type-unification engine shared by Pass 1.5 and Pass 2."""
 from __future__ import annotations
 
@@ -29,7 +28,6 @@ def unify_types(param_type: Type, arg_type: Type, type_param_map: Dict[str, Type
                      if isinstance(arg_type, ReferenceType) else arg_type)
         return unify_types(param_type.referenced_type, inner_arg, type_param_map)
 
-    # Case 1: param_type is a type parameter
     if isinstance(param_type, TypeParameter):
         param_name = param_type.name
         if param_name in type_param_map:
@@ -37,7 +35,6 @@ def unify_types(param_type: Type, arg_type: Type, type_param_map: Dict[str, Type
         type_param_map[param_name] = arg_type
         return True
 
-    # Case 1b: param_type is UnknownType (may be a type-parameter name, e.g. "T")
     if isinstance(param_type, UnknownType):
         param_name = str(param_type)
         if param_name in type_param_map:
@@ -45,16 +42,13 @@ def unify_types(param_type: Type, arg_type: Type, type_param_map: Dict[str, Type
         type_param_map[param_name] = arg_type
         return True
 
-    # Case 2: both concrete - must match exactly
     if param_type == arg_type:
         return True
 
-    # Case 3: nested generic types (e.g. Container<T>)
     if isinstance(param_type, GenericTypeRef):
         param_base = param_type.base_name
         param_type_args = param_type.type_args
 
-        # arg_type is a monomorphized generic carrying its base/args metadata
         if isinstance(arg_type, (StructType, EnumType)):
             if arg_type.generic_base is not None and arg_type.generic_args is not None:
                 if param_base != arg_type.generic_base:
@@ -66,7 +60,6 @@ def unify_types(param_type: Type, arg_type: Type, type_param_map: Dict[str, Type
                         return False
                 return True
 
-        # arg_type is itself a GenericTypeRef - unify directly
         elif isinstance(arg_type, GenericTypeRef):
             if param_base != arg_type.base_name:
                 return False
@@ -77,8 +70,6 @@ def unify_types(param_type: Type, arg_type: Type, type_param_map: Dict[str, Type
                     return False
             return True
 
-    # Case 4: function types (fn(T) -> U) - unify each parameter and the return type,
-    # the enabler for generic higher-order functions like map<T, U>(List<T>, fn(T) -> U).
     if isinstance(param_type, FunctionType) and isinstance(arg_type, FunctionType):
         if len(param_type.param_types) != len(arg_type.param_types):
             return False

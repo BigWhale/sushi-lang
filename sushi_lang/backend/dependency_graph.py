@@ -57,11 +57,9 @@ def extract_symbol_references(ir_text: str) -> set[str]:
 
     references = set()
     for match in matches:
-        # Clean up quoted names (remove quotes)
         if match.startswith('"') and match.endswith('"'):
             references.add(match[1:-1])  # Strip quotes
         else:
-            # Skip LLVM intrinsics - they're not user symbols
             if not match.startswith("llvm."):
                 references.add(match)
 
@@ -72,36 +70,26 @@ def build_dependency_graph(symbol_tables: list['SymbolTable']) -> DependencyGrap
     """Build dependency graph from symbol tables."""
     graph = DependencyGraph()
 
-    # Create unified symbol lookup across all tables
-    # We need to track all symbols to know what's a valid reference
     all_symbols: dict[str, 'SymbolInfo'] = {}
     for table in symbol_tables:
         for name, symbol in table.symbols.items():
-            # First occurrence wins (main program symbols take precedence)
             if name not in all_symbols:
                 all_symbols[name] = symbol
 
-    # For dependency analysis, we need the DEFINITION of each symbol
-    # (not just declarations), so create a separate lookup for definitions
     definitions: dict[str, 'SymbolInfo'] = {}
     for table in symbol_tables:
         for name, symbol in table.symbols.items():
             if symbol.is_definition():
-                # Prefer first definition found (main > library > stdlib)
                 if name not in definitions:
                     definitions[name] = symbol
 
-    # Parse each definition's IR to find references
     for symbol in definitions.values():
         if symbol.ir_text is None:
             continue  # Should not happen for definitions, but be safe
 
-        # Extract symbol references from IR text
         referenced = extract_symbol_references(symbol.ir_text)
 
         for ref in referenced:
-            # Only add edge if the reference is to a known symbol
-            # This filters out external symbols like libc functions
             if ref in all_symbols or ref == symbol.name:
                 graph.add_dependency(symbol.name, ref)
 

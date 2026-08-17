@@ -27,8 +27,6 @@ class FunctionDefinitions:
         main_wrapper
     ) -> ir.Function:
         """Define the body of a regular function."""
-        # Special handling for main function - needs wrapper for C compatibility
-        # Skip wrapper in library mode (no main() entry point)
         if fn.name == 'main' and not getattr(self.codegen, 'is_library_mode', False):
             if self.codegen.main_expects_args:
                 return main_wrapper.emit_main_with_args(
@@ -47,15 +45,11 @@ class FunctionDefinitions:
                     )
                 )
 
-        # Normal function emission
         llvm_fn = self.codegen.funcs.get(fn.name) or emit_func_decl_fn(fn)
-        # Pass fn to _begin_function so it can register parameter semantic types
         begin_function_fn(llvm_fn, fn)
 
-        # Track current function AST for ?? operator (needs return type info)
         self.codegen.current_function_ast = fn
 
-        # Track parameter types in variable_types for struct member access resolution
         for param in fn.params:
             if param.ty is not None:
                 self.codegen.variable_types[param.name] = param.ty
@@ -67,7 +61,6 @@ class FunctionDefinitions:
 
         end_function_fn()
 
-        # Clear function AST after emission
         self.codegen.current_function_ast = None
 
         return llvm_fn
@@ -95,7 +88,6 @@ class FunctionDefinitions:
         # unaffected: `nom self` does not exist.
         begin_function_fn(llvm_fn, ext)
 
-        # Mark that we're compiling an extension method (for return handling)
         self.codegen.in_extension_method = True
 
         # Track 'self' and parameter types in variable_types for struct member access

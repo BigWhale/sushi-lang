@@ -13,37 +13,30 @@ if TYPE_CHECKING:
 
 def parse_extenddef(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDef:
     """Parse extend_def: EXTEND type NAME "(" [parameters] ")" type ":" block"""
-    # Extract target type (first type node)
     target_type_node = None
     for child in t.children:
         if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):
             target_type_node = child
             break
 
-    # Extract method name
     name_tok = first_name(t.children)
     if name_tok is None:
         ice(t, "missing method NAME")
 
-    # Extract parameters (excluding implicit self)
     params_node = first_tree(t.children, "parameters")
 
-    # Extract return type (second type node)
     return_type_node = None
     type_nodes = [child for child in t.children
                  if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t")]
     if len(type_nodes) >= 2:
         return_type_node = type_nodes[1]
     elif len(type_nodes) == 1:
-        # Only one type node found, this might be malformed
         ice(t, "missing return type")
 
-    # Extract body
     body_node = first_tree(t.children, "block") or find_tree_recursive(t, "block")
     if body_node is None:
         ice(t, "missing body block")
 
-    # Parse components
     from sushi_lang.semantics.ast_builder.declarations.functions import parse_params, strip_self_param
     target_type = ast_builder._parse_type(target_type_node) if target_type_node else None
     params = parse_params(params_node, ast_builder) if params_node else []
@@ -67,17 +60,13 @@ def parse_extenddef(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDef:
 
 def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDef:
     """Handle extend_stmt when it's an extension method definition."""
-    # extend_stmt: EXTEND type extend_suffix
-    # extract_suffix (aliased as extend_def): NAME "(" [parameters] ")" type ":" block
 
-    # Extract target type (first child after EXTEND)
     target_type_node = None
     for child in t.children:
         if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):
             target_type_node = child
             break
 
-    # Find the extend_def suffix
     suffix = None
     for child in t.children:
         if isinstance(child, Tree) and child.data == "extend_def":
@@ -87,27 +76,22 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
     if not suffix:
         ice(t, "missing extend_def suffix")
 
-    # Extract method name from suffix
     name_tok = first_name(suffix.children)
     if name_tok is None:
         ice(suffix, "missing method NAME")
 
-    # Extract parameters
     params_node = first_tree(suffix.children, "parameters")
 
-    # Extract return type (will be a type node in suffix)
     return_type_node = None
     for child in suffix.children:
         if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):
             return_type_node = child
             break
 
-    # Extract body
     body_node = first_tree(suffix.children, "block") or find_tree_recursive(suffix, "block")
     if body_node is None:
         ice(suffix, "missing body block")
 
-    # Parse components
     from sushi_lang.semantics.ast_builder.declarations.functions import parse_params, strip_self_param
     target_type = ast_builder._parse_type(target_type_node) if target_type_node else None
     params = parse_params(params_node, ast_builder) if params_node else []

@@ -17,15 +17,10 @@ class ScopeManager:
         """Initialize scope manager with reference to main codegen instance."""
         self.codegen = codegen
 
-        # Current scope depth (starts at 0 when first scope is pushed)
         self._scope_depth: int = -1
 
-        # Lightweight scope tracking: just variable names per scope level
-        # Used for cleanup and popping - no duplicate storage of allocas
         self._scope_vars: List[Set[str]] = []
 
-        # Primary storage: flat caches for O(1) lookup
-        # Maps variable name -> stack of (scope_level, value) for shadowing support
         self._locals: Dict[str, List[tuple[int, ir.AllocaInstr]]] = {}
         self._types: Dict[str, List[tuple[int, 'Type']]] = {}
 
@@ -45,8 +40,6 @@ class ScopeManager:
         # owns; the caller transferred through the seam). Extension/perk-method bodies
         # (fn_def=None) register nothing and stay borrows.
         self._closure_cleanup: Dict[str, List[tuple[int, ir.AllocaInstr]]] = {}
-
-        # Struct move tracking is delegated to the unified codegen.moves MoveTracker.
 
         # FFI no-leak registry: per-scope stack of marshalled C strings (i8*) that
         # must be freed at scope exit. Parallel to the dynamic-array scope stack.
@@ -121,7 +114,6 @@ class ScopeManager:
         self._cstr_cleanup.append([])
         self._closure_temp_cleanup.append([])
 
-        # Also push dynamic array scope if the manager is initialized
         if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
             self.codegen.dynamic_arrays.push_scope()
 
@@ -130,7 +122,6 @@ class ScopeManager:
         if self._scope_depth < 0:
             raise IndexError("No scopes to pop")
 
-        # Get variables in current scope
         current_vars = self._scope_vars[self._scope_depth]
 
         # Drain the three stacked cleanup registries on the fall-through (normal) exit.
@@ -155,16 +146,13 @@ class ScopeManager:
             self._string_cleanup, current_vars,
             lambda _name, entry: self._emit_string_free(entry[-1]))
 
-        # Remove variables from flat caches
         for var_name in current_vars:
-            # Remove from locals cache
             if var_name in self._locals and self._locals[var_name]:
                 if self._locals[var_name][-1][0] == self._scope_depth:
                     self._locals[var_name].pop()
                     if not self._locals[var_name]:
                         del self._locals[var_name]
 
-            # Remove from types cache
             if var_name in self._types and self._types[var_name]:
                 if self._types[var_name][-1][0] == self._scope_depth:
                     self._types[var_name].pop()
@@ -191,7 +179,6 @@ class ScopeManager:
         self._scope_vars.pop()
         self._scope_depth -= 1
 
-        # Also pop dynamic array scope if the manager is initialized
         if hasattr(self.codegen, 'dynamic_arrays') and self.codegen.dynamic_arrays is not None:
             self.codegen.dynamic_arrays.pop_scope()
 
@@ -270,10 +257,8 @@ class ScopeManager:
         """
         slot = self.entry_alloca(ty, name)
 
-        # Track variable in current scope
         self._scope_vars[self._scope_depth].add(name)
 
-        # Add to flat cache (primary storage)
         if name not in self._locals:
             self._locals[name] = []
         self._locals[name].append((self._scope_depth, slot))
@@ -320,7 +305,6 @@ class ScopeManager:
             from sushi_lang.backend.destructors import needs_cleanup
             if needs_cleanup(semantic_ty):
                 self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
-        # Track function-value locals for runtime-guarded env free at scope exit.
         elif isinstance(semantic_ty, FunctionType):
             self._closure_cleanup.setdefault(name, []).append((self._scope_depth, slot))
         # Track string locals for owned-bit-guarded free at scope exit (#145).
@@ -351,7 +335,6 @@ class ScopeManager:
     def create_local_nostore(self, name: str, ty: ir.Type, semantic_ty: Optional['Type'] = None,
                              register_cleanup: bool = True) -> ir.AllocaInstr:
         """Create local variable without initialization."""
-        # Check for duplicate in current scope
         if name in self._scope_vars[self._scope_depth]:
             raise KeyError(f"duplicate local in same scope: {name}")
 
@@ -450,11 +433,9 @@ class ScopeManager:
 
     def reset_scope_stack(self) -> None:
         """Reset the scope stack to empty state."""
-        # Pop all scopes to trigger cleanup
         while self._scope_depth >= 0:
             self.pop_scope()
 
-        # Clear all state (should already be empty after popping)
         self._scope_vars = []
         self._scope_depth = -1
         self._locals.clear()
@@ -465,7 +446,6 @@ class ScopeManager:
         self._cstr_cleanup = []
         self._closure_temp_cleanup = []
 
-        # Clear moved tracking (function boundary)
         self.codegen.moves.reset()
 
     def current_scope_size(self) -> int:
@@ -490,11 +470,9 @@ class ScopeManager:
             raise IndexError(f"Invalid scope level: {scope_level}")
         return name in self._scope_vars[scope_level]
 
-    # Backward compatibility properties
     @property
     def locals(self) -> List[Dict[str, ir.AllocaInstr]]:
         """Backward compatible access to locals (deprecated, use flat cache directly)."""
-        # Reconstruct scope-based view for legacy code
         result = []
         for level, scope_vars in enumerate(self._scope_vars):
             scope_dict = {}

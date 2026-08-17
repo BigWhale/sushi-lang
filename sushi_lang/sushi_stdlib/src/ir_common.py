@@ -3,10 +3,6 @@
 import llvmlite.ir as ir
 
 
-# ==============================================================================
-# Module Creation Utilities
-# ==============================================================================
-
 def create_stdlib_module(name: str) -> ir.Module:
     """Create a new LLVM module for stdlib with standard naming and settings."""
     module = ir.Module(name=f"stdlib.{name}")

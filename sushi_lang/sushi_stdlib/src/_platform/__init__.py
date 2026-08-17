@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from sushi_lang.backend.platform_detect import get_current_platform
@@ -22,7 +21,6 @@ def get_platform_module(module_name: str):
     else:
         raise RuntimeError(f"Unsupported platform: {platform.os}")
 
-    # Dynamic import: from sushi_lang.sushi_stdlib.src._platform.{platform_name}.{module_name}
     import importlib
     module_path = f"sushi_stdlib.src._platform.{platform_name}.{module_name}"
 

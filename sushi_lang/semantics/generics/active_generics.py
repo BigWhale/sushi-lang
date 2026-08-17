@@ -1,9 +1,7 @@
 """Which optional generic types are available in this compilation."""
 
-# Sushi stdlib unit path -> the generic type that importing it makes available.
 GENERIC_UNIT_TYPES = {
     "collections/hashmap": "HashMap",
-    # Future: "collections/set": "Set",
 }
 
 _active: set[str] = set()

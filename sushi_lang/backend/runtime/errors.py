@@ -50,14 +50,11 @@ class RuntimeErrors:
         """Emit runtime error message to stderr and exit program."""
         builder = self.codegen.builder
 
-        # The registry owns the text. A code says the same thing wherever it fires.
         full_message = f"Runtime Error {error_code}: {message_for(error_code, **params)}\n"
 
-        # Create global string constant for error message (or reuse if exists)
         arr_ty = ir.ArrayType(ir.IntType(INT8_BIT_WIDTH), len(full_message) + 1)
         msg_name = _message_global_name(error_code, full_message)
 
-        # Check if global already exists
         existing = self.codegen.module.globals.get(msg_name)
         if existing and isinstance(existing, ir.GlobalVariable):
             msg_const = existing
@@ -70,22 +67,17 @@ class RuntimeErrors:
                 bytearray(full_message.encode('utf-8')) + bytearray([0])
             )
 
-        # Get pointer to the string
         msg_ptr = builder.gep(
             msg_const,
             [ZERO_I32, ZERO_I32],
             name="err_msg_ptr"
         )
 
-        # Load stderr handle
         stderr_ptr = builder.load(self.codegen.runtime.libc_stdio.stderr_handle, name="stderr")
 
-        # Call fprintf(stderr, "%s", message) - passing the message through a "%s"
-        # format so any '%' inside it is not interpreted as a conversion specifier.
         pct_s_ptr = self._get_pct_s_format_ptr(builder)
         builder.call(self.codegen.runtime.libc_stdio.fprintf, [stderr_ptr, pct_s_ptr, msg_ptr])
 
-        # Call exit(1) to terminate program
         builder.call(self.codegen.runtime.libc_process.exit, [ir.Constant(self.codegen.i32, 1)])
 
     def emit_runtime_error_with_values(
@@ -97,11 +89,9 @@ class RuntimeErrors:
         # Create format string: "Runtime Error RE2020: <registry text>\n"
         full_format = f"Runtime Error {error_code}: {message_for(error_code)}\n"
 
-        # Create global string constant for format string
         arr_ty = ir.ArrayType(ir.IntType(INT8_BIT_WIDTH), len(full_format) + 1)
         fmt_name = _message_global_name(error_code, full_format, kind="fmt")
 
-        # Check if global already exists
         existing = self.codegen.module.globals.get(fmt_name)
         if existing and isinstance(existing, ir.GlobalVariable):
             fmt_const = existing
@@ -114,20 +104,16 @@ class RuntimeErrors:
                 bytearray(full_format.encode('utf-8')) + bytearray([0])
             )
 
-        # Get pointer to the format string
         fmt_ptr = builder.gep(
             fmt_const,
             [ZERO_I32, ZERO_I32],
             name="err_fmt_ptr"
         )
 
-        # Load stderr handle
         stderr_ptr = builder.load(self.codegen.runtime.libc_stdio.stderr_handle, name="stderr")
 
-        # Call fprintf(stderr, format, values...)
         builder.call(self.codegen.runtime.libc_stdio.fprintf, [stderr_ptr, fmt_ptr] + list(values))
 
-        # Call exit(1) to terminate program
         builder.call(self.codegen.runtime.libc_process.exit, [ir.Constant(self.codegen.i32, 1)])
 
     def get_errno(self) -> ir.Value:
@@ -138,10 +124,8 @@ class RuntimeErrors:
             self.codegen.runtime.libc_process.errno_location is not None
         ), "errno_location function not declared"
 
-        # Call __error() or __errno_location() to get pointer to errno
         errno_ptr = self.codegen.builder.call(self.codegen.runtime.libc_process.errno_location, [])
 
-        # Load the errno value
         return self.codegen.builder.load(errno_ptr, name="errno_value")
 
     def map_errno_to_file_error(self, errno_value: ir.Value) -> ir.Value:
@@ -150,16 +134,12 @@ class RuntimeErrors:
             raise_internal_error("CE0009")
         builder = self.codegen.builder
 
-        # Start with default (Other)
         result = ir.Constant(self.codegen.i32, ERRNO_DEFAULT_FILE_ERROR)
 
-        # Build chain of select instructions using the mapping dictionary
-        # Process in reverse order so most common errors are checked last (more efficient)
         for errno_val, file_error_tag in reversed(list(ERRNO_TO_FILE_ERROR.items())):
             errno_const = ir.Constant(self.codegen.i32, errno_val)
             file_error_const = ir.Constant(self.codegen.i32, file_error_tag)
 
-            # Check if errno matches this value
             is_match = builder.icmp_signed('==', errno_value, errno_const)
             result = builder.select(is_match, file_error_const, result)
 

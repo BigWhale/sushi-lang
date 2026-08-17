@@ -1,4 +1,3 @@
-# semantics/generics/monomorphize/unroll.py
 """Compile-time unrolling of ``expand(...)`` over parameter packs."""
 from __future__ import annotations
 
@@ -87,10 +86,7 @@ def _unroll_expand(
 
     out: List[Stmt] = []
     for i, elem_name in enumerate(fanout):
-        # Independent deep copy so later passes annotate each copy separately.
         body_copy = copy.deepcopy(node.body)
-        # Rename free occurrences of the binding var to this fan-out param,
-        # honoring sequential let-shadowing across the whole statement list.
         renamed = _rename_block_statements(
             body_copy.statements, node.var, elem_name, _seen=set()
         )
@@ -100,7 +96,6 @@ def _unroll_expand(
         # named like the loop var (which the loop-var rename already shadow-stops
         # at) still gets its own fresh local name here.
         renamed = _rename_copy_locals(renamed, i)
-        # A nested expand inside this copy must itself be unrolled.
         renamed = _unroll_stmt_list(renamed, pack_param_fanout)
         out.extend(renamed)
     return out
@@ -112,7 +107,6 @@ def _rename_copy_locals(statements: List[Stmt], copy_index: int) -> List[Stmt]:
         if isinstance(stmt, Let):
             old = stmt.name
             new = f"{old}__x{copy_index}"
-            # Rename the declaration itself.
             stmt.name = new
             # Rewrite references in the statements that follow (the local's
             # scope is from its declaration to the end of the block), honoring
@@ -158,14 +152,8 @@ def _walk_unroll_value(value, pack_param_fanout, _seen) -> None:
         _walk_unroll(value, pack_param_fanout, _seen)
 
 
-# ---------------------------------------------------------------------------
-# Shadow-aware Name renaming
-# ---------------------------------------------------------------------------
-
 def _rename_walk(obj, var: str, new_name: str, _seen) -> None:
     """Recurse into a dataclass node, renaming FREE ``Name(id == var)`` within."""
-    # Replace happens at the parent level (so we can swap the field); here we only
-    # descend. A bare Name at the top is handled by callers via _rename_value.
     if not dataclasses.is_dataclass(obj):
         return
     # Frozen typesys Type nodes (EnumType, StructType, ...) are immutable and
@@ -178,14 +166,10 @@ def _rename_walk(obj, var: str, new_name: str, _seen) -> None:
         return
     _seen.add(obj_id)
 
-    # A Foreach binding the same name shadows it inside its body.
     if isinstance(obj, Foreach) and obj.item_name == var:
-        # Still rename in the iterable (evaluated in the outer scope), but not
-        # in the body.
         _set_if_changed(obj, "iterable", _rename_value(obj.iterable, var, new_name, _seen))
         return
 
-    # An Expand binding the same name shadows it inside its body.
     if isinstance(obj, Expand) and obj.var == var:
         _set_if_changed(obj, "iterable", _rename_value(obj.iterable, var, new_name, _seen))
         return
@@ -198,7 +182,6 @@ def _rename_walk(obj, var: str, new_name: str, _seen) -> None:
         _set_if_changed(obj, "scrutinee", _rename_value(obj.scrutinee, var, new_name, _seen))
         for arm in obj.arms:
             if isinstance(arm, MatchArm) and var in _pattern_binding_names(arm.pattern):
-                # Shadowed in this arm's body: leave the body untouched.
                 continue
             _rename_walk(arm, var, new_name, _seen)
         return
@@ -246,11 +229,8 @@ def _rename_block_statements(statements, var: str, new_name: str, _seen):
     shadowed = False
     for stmt in statements:
         if shadowed:
-            # Inside the shadowed tail: leave statements untouched.
             out.append(stmt)
             continue
-        # A `let var = VALUE` shadows `var` for all subsequent statements, but the
-        # VALUE itself is evaluated in the pre-shadow scope and must be renamed.
         if isinstance(stmt, Let) and stmt.name == var:
             if stmt.value is not None:
                 stmt.value = _rename_value(stmt.value, var, new_name, _seen)

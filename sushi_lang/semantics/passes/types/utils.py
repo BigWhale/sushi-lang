@@ -1,4 +1,3 @@
-# semantics/passes/types/utils.py
 """Shared utilities for type validation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, Optional
@@ -19,7 +18,6 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
     if type_obj is None:
         return
 
-    # Check if this is a GenericTypeRef
     from sushi_lang.semantics.generics.types import GenericTypeRef
     if isinstance(type_obj, GenericTypeRef):
         # CE2419: a reference as a generic type argument. Checked FIRST, above the Result
@@ -35,12 +33,9 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
             er.emit(validator.reporter, er.ERR.CE2419, span, ty=display_type(offender))
             return
 
-        # Result<T, E> is monomorphized into the enum table like any other generic
         if type_obj.base_name == "Result" and len(type_obj.type_args) == 2:
-            # Validate type arguments recursively
             for type_arg in type_obj.type_args:
                 validate_type_name(validator, type_arg, span)
-            # Result<T, E> is valid - it resolves to its interned enum during type checking
             return
 
         # CE5012: foreign `ptr` as a generic type argument is only supported by
@@ -54,7 +49,6 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
                 er.emit(validator.reporter, er.ERR.CE5012, span, base=type_obj.base_name)
                 return
 
-        # Validate that the generic type base exists (check both enums and structs)
         is_generic_enum = type_obj.base_name in validator.generic_enum_table.by_name
         is_generic_struct = type_obj.base_name in validator.generic_struct_table.by_name
 
@@ -62,11 +56,9 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
             er.emit(validator.reporter, er.ERR.CE2001, span, name=type_obj.base_name)
             return
 
-        # Validate all type arguments recursively
         for type_arg in type_obj.type_args:
             validate_type_name(validator, type_arg, span)
 
-        # Check if the monomorphized version exists in the enum or struct table
         type_args_str = ", ".join(str(arg) for arg in type_obj.type_args)
         concrete_name = f"{type_obj.base_name}<{type_args_str}>"
 
@@ -77,27 +69,19 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
             er.emit(validator.reporter, er.ERR.CE2001, span, name=display_type(type_obj))
         return
 
-    # Check if this is an unknown type
     if isinstance(type_obj, UnknownType):
-        # Check if it's a struct type
         if type_obj.name in validator.struct_table.by_name:
-            # Valid struct type - this is okay
             return
-        # Check if it's an enum type
         if type_obj.name in validator.enum_table.by_name:
-            # Valid enum type - this is okay
             return
-        # Unknown type that's not a struct or enum
         er.emit(validator.reporter, er.ERR.CE2001, span, name=display_type(type_obj))
     elif isinstance(type_obj, BuiltinType) and type_obj not in validator.known_types:
-        # This shouldn't happen with current builtin types, but good to check
         er.emit(validator.reporter, er.ERR.CE2001, span, name=display_type(type_obj))
     elif isinstance(type_obj, ArrayType):
         # Blank type cannot be used as array base type
         if type_obj.base_type == BuiltinType.BLANK:
             er.emit(validator.reporter, er.ERR.CE2032, span)
             return
-        # Recursively validate the base type of the array
         validate_type_name(validator, type_obj.base_type, span)
         # Validate array size (CE2010: Array size must be positive integer literal)
         if type_obj.size <= 0:
@@ -107,7 +91,6 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
         if type_obj.base_type == BuiltinType.BLANK:
             er.emit(validator.reporter, er.ERR.CE2032, span)
             return
-        # Recursively validate the base type
         validate_type_name(validator, type_obj.base_type, span)
 
 
@@ -141,8 +124,6 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
             er.emit(validator.reporter, er.ERR.CE2032, param.type_span)
             continue
 
-        # Handle ReferenceType by registering the full reference type
-        # This is important for pattern matching and method resolution on reference params
         if isinstance(param.ty, ReferenceType):
             # The REFERENT gets the same resolution as a by-value parameter of that type
             # (#305). A borrow of a type is not a different type.
@@ -164,15 +145,12 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
         if isinstance(param.ty, (BuiltinType, StructType, EnumType)):
             validator.variable_types[param.name] = param.ty
         elif isinstance(param.ty, UnknownType):
-            # Resolve UnknownType to StructType/EnumType for struct/enum-typed parameters
             resolved_type = resolve_declared_type(validator, param.ty)
             if resolved_type != param.ty:
                 validator.variable_types[param.name] = resolved_type
         else:
-            # Handle GenericTypeRef and other types
             from sushi_lang.semantics.generics.types import GenericTypeRef
             if isinstance(param.ty, GenericTypeRef):
-                # Resolve GenericTypeRef to monomorphized EnumType or StructType
                 resolved_type = resolve_declared_type(validator, param.ty)
                 if isinstance(resolved_type, GenericTypeRef):
                     resolved_type = None
@@ -181,8 +159,6 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
                     validator.variable_types[param.name] = resolved_type
                     param.ty = resolved_type  # Update AST node for backend
 
-                    # CRITICAL: Also update the FuncSig parameter in the function table
-                    # This ensures function call validation uses the resolved type for propagation
                     if validator.current_function and validator.current_function.name in validator.func_table.by_name:
                         func_sig = validator.func_table.by_name[validator.current_function.name]
                         for sig_param in func_sig.params:
@@ -190,8 +166,6 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
                                 sig_param.ty = resolved_type
                                 break
                 else:
-                    # GenericTypeRef should have been monomorphized - this is an error
-                    # but validation has already been done in validate_type_name
                     pass
 
 
@@ -240,11 +214,9 @@ def propagate_enum_type_to_dotcall(
     expected_type: Optional[Type]
 ) -> None:
     """Propagate expected enum type to DotCall nodes for generic enums."""
-    # Early exit if no expected type
     if expected_type is None:
         return
 
-    # Use the unified propagation function which handles recursion
     from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
     propagate_types_to_value(validator, arg, expected_type)
 
@@ -255,10 +227,8 @@ def propagate_struct_type_to_dotcall(
     expected_type: Optional[Type]
 ) -> None:
     """Propagate expected struct type to DotCall nodes for generic structs."""
-    # Early exit if no expected type
     if expected_type is None:
         return
 
-    # Use the unified propagation function which handles recursion
     from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
     propagate_types_to_value(validator, arg, expected_type)

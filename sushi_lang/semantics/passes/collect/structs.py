@@ -1,4 +1,3 @@
-# semantics/passes/collect/structs.py
 """Struct definition collection for Phase 0."""
 
 from __future__ import annotations
@@ -86,11 +85,9 @@ class StructCollector:
 
         name_span: Optional[Span] = getattr(struct, "name_span", None) or getattr(struct, "loc", None)
 
-        # Check if this struct has type parameters (e.g., struct Pair<T, U>:)
         type_params_raw = getattr(struct, "type_params", None)
         type_params: Optional[List[str]] = extract_type_param_names(type_params_raw)
 
-        # Check for duplicate struct names (both regular and generic namespaces)
         if name in self.structs.by_name:
             note_first_declaration(
                 er.emit_with(self.r, ERR.CE0004, name_span, name=name),
@@ -106,7 +103,6 @@ class StructCollector:
             ).emit()
             return
 
-        # Collect struct fields
         fields_list: List[Tuple[str, Type]] = []
         field_spans: Dict[str, Optional[Span]] = {}
 
@@ -119,7 +115,6 @@ class StructCollector:
             if not isinstance(field_name, str):
                 continue
 
-            # Check for duplicate field names
             if field_name in field_spans:
                 note_first_declaration(
                     er.emit_with(self.r, ERR.CE0005, field_loc,
@@ -129,7 +124,6 @@ class StructCollector:
                 ).emit()
                 continue
 
-            # Check for missing field type
             if field_type is None:
                 er.emit(self.r, ERR.CE0104, field_loc, name=f"field '{field_name}'")
                 continue
@@ -148,12 +142,8 @@ class StructCollector:
             field_spans[field_name] = field_loc
             fields_list.append((field_name, field_type))
 
-        # Branch based on whether this is a generic struct or regular struct
         if type_params and len(type_params) > 0:
-            # Generic struct - store in generic_structs table
 
-            # Preserve BoundedTypeParam objects (Phase 4: constraint validation)
-            # Convert to tuple, handling both BoundedTypeParam and legacy string formats
             type_param_instances = tuple(
                 tp if isinstance(tp, BoundedTypeParam)
                 else TypeParameter(name=tp) if isinstance(tp, TypeParameter)
@@ -173,7 +163,6 @@ class StructCollector:
 
             # Note: Generic structs are not added to known_types until instantiated
         else:
-            # Regular struct - store in structs table (existing behavior)
             struct_type = StructType(
                 name=name,
                 fields=tuple(fields_list)
@@ -183,7 +172,6 @@ class StructCollector:
             self.structs.by_name[name] = struct_type
             self.structs.spans[name] = name_span
 
-            # Register struct type as known type for future lookups
             self.known_types.add(struct_type)
 
             # Hash registration is deferred to Pass 1.8 (hash_registration.py)

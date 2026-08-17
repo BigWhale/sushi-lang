@@ -1,4 +1,3 @@
-# semantics/generics/monomorphize/types.py
 """Enum and struct type monomorphization."""
 from __future__ import annotations
 from typing import Dict, Tuple, Set, TYPE_CHECKING
@@ -29,7 +28,6 @@ class TypeMonomorphizer:
         instantiations: Set[Tuple[str, Tuple[Type, ...]]]
     ) -> Dict[str, EnumType]:
         """Monomorphize all collected generic enum instantiations."""
-        # Store generic enums for recursive monomorphization
         self.monomorphizer.generic_enums = generic_enums
 
         concrete_enums: Dict[str, EnumType] = {}
@@ -37,9 +35,7 @@ class TypeMonomorphizer:
         from sushi_lang.semantics.type_predicates import is_abstract_type
 
         for base_name, type_args in instantiations:
-            # Look up the generic enum definition
             if base_name not in generic_enums:
-                # This shouldn't happen if type validation passes, but be defensive
                 continue
 
             # An abstract instantiation still names an enclosing template's own type params
@@ -55,7 +51,6 @@ class TypeMonomorphizer:
 
             generic = generic_enums[base_name]
 
-            # Generate concrete enum type
             try:
                 concrete = self.monomorphize_enum(generic, type_args)
             except MonomorphizationDepthExceeded:
@@ -63,7 +58,6 @@ class TypeMonomorphizer:
                 # recursive. Skip it and let the reporter's error abort the build.
                 continue
 
-            # Store by concrete name (e.g., "Result<i32>")
             concrete_enums[concrete.name] = concrete
 
         return concrete_enums
@@ -74,34 +68,25 @@ class TypeMonomorphizer:
         type_args: Tuple[Type, ...]
     ) -> EnumType:
         """Create concrete enum by substituting type parameters."""
-        # Check cache first
         cache_key = (generic.name, type_args)
         if cache_key in self.monomorphizer.cache:
             return self.monomorphizer.cache[cache_key]
 
-        # Validate that number of type arguments matches number of type parameters
         if len(type_args) != len(generic.type_params):
-            # This shouldn't happen if type validation passes, but emit error to be safe
             er.emit(
                 self.monomorphizer.reporter,
                 er.ERR.CE2001,  # Use generic type error for now
                 None,
                 name=f"{generic.name}@({', '.join(display_type(t) for t in type_args)})"
             )
-            # Return a dummy enum to continue compilation
             return EnumType(name=f"{generic.name}<error>", variants=())
 
-        # Validate perk constraints on type arguments
         self.monomorphizer._validate_type_constraints(generic.type_params, type_args)
 
-        # Build substitution map: type parameter name → concrete type
-        # Example: {"T": BuiltinType.I32}
         substitution: Dict[str, Type] = {}
         for param, arg in zip(generic.type_params, type_args, strict=False):
             substitution[param.name] = arg
 
-        # Generate unique name for concrete type
-        # Example: "Result<i32>", "Result<string>", "Result<MyStruct>"
         concrete_name = self._generate_concrete_name(generic.name, type_args)
 
         # Tie-the-knot: publish an empty shell into the cache BEFORE substituting
@@ -120,11 +105,9 @@ class TypeMonomorphizer:
         )
         self.monomorphizer.cache[cache_key] = concrete
 
-        # Substitute type parameters in all variants
         with self.monomorphizer._monomorphize_depth_guard(generic.name):
             concrete_variants = []
             for variant in generic.variants:
-                # Substitute in associated types
                 concrete_associated_types = []
                 for assoc_type in variant.associated_types:
                     concrete_type = self.monomorphizer.substitutor.substitute_type(
@@ -137,7 +120,6 @@ class TypeMonomorphizer:
                     associated_types=tuple(concrete_associated_types)
                 ))
 
-        # Patch the shell in place (EnumType is a frozen dataclass).
         object.__setattr__(concrete, "variants", tuple(concrete_variants))
 
         return concrete
@@ -148,27 +130,22 @@ class TypeMonomorphizer:
         instantiations: Set[Tuple[str, Tuple[Type, ...]]]
     ) -> Dict[str, StructType]:
         """Monomorphize all collected generic struct instantiations."""
-        # Store generic structs for recursive monomorphization
         self.monomorphizer.generic_structs = generic_structs
 
         concrete_structs: Dict[str, StructType] = {}
 
         for base_name, type_args in instantiations:
-            # Look up the generic struct definition
             if base_name not in generic_structs:
-                # This shouldn't happen if type validation passes, but be defensive
                 continue
 
             generic = generic_structs[base_name]
 
-            # Generate concrete struct type
             try:
                 concrete = self.monomorphize_struct(generic, type_args)
             except MonomorphizationDepthExceeded:
                 # CE0122 already reported; skip the infinitely recursive type.
                 continue
 
-            # Store by concrete name (e.g., "Pair<i32, string>")
             concrete_structs[concrete.name] = concrete
 
         return concrete_structs
@@ -179,32 +156,25 @@ class TypeMonomorphizer:
         type_args: Tuple[Type, ...]
     ) -> StructType:
         """Create concrete struct by substituting type parameters."""
-        # Check cache first
         cache_key = (generic.name, type_args)
         if cache_key in self.monomorphizer.struct_cache:
             return self.monomorphizer.struct_cache[cache_key]
 
-        # Validate that number of type arguments matches number of type parameters
         if len(type_args) != len(generic.type_params):
-            # This shouldn't happen if type validation passes, but emit error to be safe
             er.emit(
                 self.monomorphizer.reporter,
                 er.ERR.CE2001,  # Use generic type error for now
                 None,
                 name=f"{generic.name}@({', '.join(display_type(t) for t in type_args)})"
             )
-            # Return a dummy struct to continue compilation
             return StructType(name=f"{generic.name}<error>", fields=())
 
-        # Validate perk constraints on type arguments
         self.monomorphizer._validate_type_constraints(generic.type_params, type_args)
 
-        # Build substitution map: type parameter name → concrete type
         substitution: Dict[str, Type] = {}
         for param, arg in zip(generic.type_params, type_args, strict=False):
             substitution[param.name] = arg
 
-        # Generate unique name for concrete type
         concrete_name = self._generate_concrete_name(generic.name, type_args)
 
         # Tie-the-knot: publish an empty shell before substituting fields so a
@@ -218,7 +188,6 @@ class TypeMonomorphizer:
         )
         self.monomorphizer.struct_cache[cache_key] = concrete
 
-        # Substitute type parameters in all fields
         with self.monomorphizer._monomorphize_depth_guard(generic.name):
             concrete_fields = []
             for field_name, field_type in generic.fields:
@@ -227,7 +196,6 @@ class TypeMonomorphizer:
                 )
                 concrete_fields.append((field_name, concrete_type))
 
-        # Patch the shell in place (StructType is a frozen dataclass).
         object.__setattr__(concrete, "fields", tuple(concrete_fields))
 
         return concrete
@@ -237,14 +205,10 @@ class TypeMonomorphizer:
         if not type_args:
             return base_name
 
-        # Format type arguments as strings
         arg_strs = [self._type_to_string(arg) for arg in type_args]
 
-        # Build concrete name: Result<i32>, Result<string>, etc.
         return f"{base_name}<{', '.join(arg_strs)}>"
 
     def _type_to_string(self, ty: Type) -> str:
         """Convert a type to its string representation for name generation."""
-        # Use the built-in str() which should work for all Type instances
-        # BuiltinType, ArrayType, etc. all have __str__ implementations
         return str(ty)

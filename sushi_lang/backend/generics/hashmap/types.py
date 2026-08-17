@@ -13,18 +13,10 @@ from sushi_lang.backend.constants import (
 )
 
 
-# ==============================================================================
-# Entry State Constants
-# ==============================================================================
-
 ENTRY_EMPTY = 0      # Slot is empty (never used)
 ENTRY_OCCUPIED = 1   # Slot contains valid key-value pair
 ENTRY_TOMBSTONE = 2  # Slot was deleted (marks probe chain)
 
-
-# ==============================================================================
-# Power-of-Two Capacity Table for Resize
-# ==============================================================================
 
 # Power-of-two capacities for HashMap (fast bitwise AND indexing)
 # With strong hash functions (FxHash, FNV-1a), power-of-two provides:
@@ -44,13 +36,7 @@ def get_next_capacity(current: int) -> int:
     for capacity in POWER_OF_TWO_CAPACITIES:
         if capacity >= target:
             return capacity
-    # If we exceed our table, just double (still power-of-two)
     return target
-
-
-# ==============================================================================
-# LLVM Type Constructors
-# ==============================================================================
 
 
 def get_entry_type(codegen: Any, key_type: Type, value_type: Type) -> ir.Type:
@@ -66,25 +52,18 @@ def get_hashmap_llvm_type(codegen: Any, key_type: Type, value_type: Type) -> ir.
     """Get LLVM struct type for HashMap<K, V>."""
     entry_type = get_entry_type(codegen, key_type, value_type)
 
-    # Dynamic array of Entry<K, V>: {i32 len, i32 cap, Entry* data}
     buckets_type = ir.LiteralStructType([
         codegen.types.i32,                    # len
         codegen.types.i32,                    # cap
         ir.PointerType(entry_type)            # data (Entry<K, V>*)
     ])
 
-    # HashMap struct: {buckets, size, capacity, tombstones}
     return ir.LiteralStructType([
         buckets_type,         # Entry<K, V>[] buckets
         codegen.types.i32,    # i32 size
         codegen.types.i32,    # i32 capacity
         codegen.types.i32,    # i32 tombstones
     ])
-
-
-# ==============================================================================
-# Field Access
-# ==============================================================================
 
 
 class HashMapFields(NamedTuple):
@@ -107,21 +86,14 @@ def get_hashmap_field_ptrs(codegen: Any, hashmap_ptr: ir.Value) -> HashMapFields
     )
 
 
-# ==============================================================================
-# Key Hashing
-# ==============================================================================
-
-
 def get_key_hash_method(key_type: Type) -> Optional[Any]:
     """Get the hash method for a HashMap key type, registering it on-demand if needed."""
     from sushi_lang.sushi_stdlib.src.common import get_builtin_method
 
-    # Try to get existing hash method
     hash_method = get_builtin_method(key_type, "hash")
     if hash_method is not None:
         return hash_method
 
-    # For array types, try to register on-demand
     if isinstance(key_type, (ArrayType, DynamicArrayType)):
         from sushi_lang.semantics.generics.hashing import register_array_hash_method, can_array_be_hashed
         can_hash, reason = can_array_be_hashed(key_type)

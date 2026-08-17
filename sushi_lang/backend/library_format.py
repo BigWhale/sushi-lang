@@ -27,25 +27,20 @@ def _read_header_and_metadata(f: BinaryIO, path: str) -> dict:
     """Read and validate header, return deserialized metadata."""
     from sushi_lang.backend.library_errors import LibraryError
 
-    # Read and validate magic (16 bytes)
     magic = _read_bytes(f, 16, path, "metadata")
     if magic != LibraryFormat.MAGIC:
         raise LibraryError("CE3508", path=path)
 
-    # Read version + spares (28 bytes)
     header_rest = _read_bytes(f, 28, path, "metadata")
     version = struct.unpack("<I", header_rest[0:4])[0]
 
-    # Check version compatibility
     if version != LibraryFormat.VERSION:
         raise LibraryError("CE3509", path=path,
                            version=version, supported=LibraryFormat.VERSION)
 
-    # Read metadata length + blob
     meta_len = struct.unpack("<Q", _read_bytes(f, 8, path, "metadata"))[0]
     metadata_blob = _read_bytes(f, meta_len, path, "metadata")
 
-    # Deserialize metadata
     try:
         return msgpack.unpackb(metadata_blob, raw=False)
     except Exception as e:
@@ -55,7 +50,6 @@ def _read_header_and_metadata(f: BinaryIO, path: str) -> dict:
 class LibraryFormat:
     """Binary format reader/writer for .slib files."""
 
-    # Magic bytes: 🍣SUSHILIB🍣 (each emoji is 4 UTF-8 bytes)
     MAGIC = b'\xf0\x9f\x8d\xa3SUSHILIB\xf0\x9f\x8d\xa3'
     # 3: every public-function parameter carries a `mode` field (borrow / nom /
     #    peek / poke). A v2 library states no mode, so its parameters cannot be
@@ -70,21 +64,17 @@ class LibraryFormat:
         metadata_blob = msgpack.packb(metadata, use_bin_type=True)
 
         with open(output_path, 'wb') as f:
-            # Write magic (16 bytes)
             f.write(LibraryFormat.MAGIC)
 
-            # Write version + spares (28 bytes total)
             f.write(struct.pack("<I", LibraryFormat.VERSION))
             f.write(struct.pack("<I", 0))  # SPARE_1
             f.write(struct.pack("<I", 0))  # SPARE_2
             f.write(struct.pack("<Q", 0))  # SPARE_3
             f.write(struct.pack("<Q", 0))  # SPARE_4
 
-            # Write metadata length + blob
             f.write(struct.pack("<Q", len(metadata_blob)))
             f.write(metadata_blob)
 
-            # Write bitcode length + blob
             f.write(struct.pack("<Q", len(bitcode)))
             f.write(bitcode)
 
@@ -98,11 +88,9 @@ class LibraryFormat:
         with open(library_path, 'rb') as f:
             metadata = _read_header_and_metadata(f, path)
 
-            # Read bitcode length + blob
             bc_len = struct.unpack("<Q", _read_bytes(f, 8, path, "bitcode"))[0]
             bitcode = _read_bytes(f, bc_len, path, "bitcode")
 
-            # Check file size sanity
             total_size = f.tell()
             if total_size > LibraryFormat.MAX_FILE_SIZE:
                 raise LibraryError("CE3513", path=path,

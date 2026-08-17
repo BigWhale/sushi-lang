@@ -4,14 +4,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Union
 
 
-# Validation lives in semantics (semantics/generics/hashmap.py); re-exported here so the
-# backend dispatcher can gate on it without reaching across packages twice.
 from sushi_lang.semantics.generics.hashmap import (
     is_builtin_hashmap_method,
     validate_hashmap_method_with_validator,
 )
 
-# Public API - LLVM emission
 from .methods import (
     emit_hashmap_new,
     emit_hashmap_len,
@@ -48,7 +45,6 @@ def emit_hashmap_method(
 
     method = expr.method
 
-    # Dispatch to method-specific emitters
     if method == "new":
         result = emit_hashmap_new(codegen, receiver_type)
     elif method == "insert":
@@ -88,7 +84,6 @@ def emit_hashmap_method(
     else:
         raise_internal_error("CE0085", method=method)
 
-    # Convert to i1 if needed
     if to_i1 and method in ("is_empty", "contains_key"):
         result = codegen.utils.as_i1(result)
 
@@ -96,12 +91,9 @@ def emit_hashmap_method(
 
 
 __all__ = [
-    # Validation
     'is_builtin_hashmap_method',
     'validate_hashmap_method_with_validator',
-    # Emission entry point
     'emit_hashmap_method',
-    # Individual method emitters (for advanced use)
     'emit_hashmap_new',
     'emit_hashmap_insert',
     'emit_hashmap_get',

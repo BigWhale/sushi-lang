@@ -1,6 +1,5 @@
 """Backend constants facade."""
 
-# Bit widths
 from sushi_lang.backend.constants.bit_widths import (
     INT8_BIT_WIDTH,
     INT16_BIT_WIDTH,
@@ -8,7 +7,6 @@ from sushi_lang.backend.constants.bit_widths import (
     INT64_BIT_WIDTH,
 )
 
-# LLVM constant values and factory functions
 from sushi_lang.backend.constants.llvm_values import (
     FALSE_I1,
     TRUE_I1,
@@ -41,7 +39,6 @@ from sushi_lang.backend.constants.llvm_values import (
     ENTRY_STATE_INDICES,
 )
 
-# Type and struct sizes
 from sushi_lang.backend.constants.sizes import (
     I8_SIZE_BYTES,
     I16_SIZE_BYTES,
@@ -61,7 +58,6 @@ from sushi_lang.backend.constants.sizes import (
     ENUM_TAG_SIZE_BYTES,
 )
 
-# Struct field indices
 from sushi_lang.backend.constants.indices import (
     DA_LEN_INDEX,
     DA_CAP_INDEX,
@@ -78,7 +74,6 @@ from sushi_lang.backend.constants.indices import (
     ITERATOR_DATA_INDEX,
 )
 
-# Error codes and enum tags
 from sushi_lang.backend.constants.error_codes import (
     RESULT_OK_TAG,
     RESULT_ERR_TAG,
@@ -88,19 +83,16 @@ from sushi_lang.backend.constants.error_codes import (
     RE_MEMORY_ALLOCATION_FAILURE,
 )
 
-# Hash algorithm constants
 from sushi_lang.backend.constants.hash_constants import (
     FNV1A_OFFSET_BASIS,
     FNV1A_PRIME,
 )
 
 __all__ = [
-    # Bit widths
     'INT8_BIT_WIDTH',
     'INT16_BIT_WIDTH',
     'INT32_BIT_WIDTH',
     'INT64_BIT_WIDTH',
-    # LLVM values
     'FALSE_I1',
     'TRUE_I1',
     'ZERO_I8',
@@ -130,7 +122,6 @@ __all__ = [
     'ENTRY_KEY_INDICES',
     'ENTRY_VALUE_INDICES',
     'ENTRY_STATE_INDICES',
-    # Sizes
     'I8_SIZE_BYTES',
     'I16_SIZE_BYTES',
     'I32_SIZE_BYTES',
@@ -147,7 +138,6 @@ __all__ = [
     'DYNAMIC_ARRAY_SIZE_BYTES',
     'ITERATOR_SIZE_BYTES',
     'ENUM_TAG_SIZE_BYTES',
-    # Indices
     'DA_LEN_INDEX',
     'DA_CAP_INDEX',
     'DA_DATA_INDEX',
@@ -161,14 +151,12 @@ __all__ = [
     'ITERATOR_CURRENT_INDEX',
     'ITERATOR_LENGTH_INDEX',
     'ITERATOR_DATA_INDEX',
-    # Error codes
     'RESULT_OK_TAG',
     'RESULT_ERR_TAG',
     'MAYBE_SOME_TAG',
     'MAYBE_NONE_TAG',
     'RE_ARRAY_INDEX_OUT_OF_BOUNDS',
     'RE_MEMORY_ALLOCATION_FAILURE',
-    # Hash constants
     'FNV1A_OFFSET_BASIS',
     'FNV1A_PRIME',
 ]

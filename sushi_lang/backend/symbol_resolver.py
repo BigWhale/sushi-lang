@@ -17,7 +17,6 @@ class SymbolResolver:
 
     def resolve(self, reachable_symbols: set[str]) -> dict[str, 'SymbolInfo']:
         """Resolve all reachable symbols, handling duplicates."""
-        # Build index of all available definitions per symbol
         definitions: dict[str, list['SymbolInfo']] = {}
         declarations: dict[str, list['SymbolInfo']] = {}
 
@@ -35,22 +34,16 @@ class SymbolResolver:
                         declarations[name] = []
                     declarations[name].append(symbol)
 
-        # Resolve each symbol using priority rules
         for symbol_name in reachable_symbols:
             defs = definitions.get(symbol_name, [])
 
             if len(defs) == 0:
-                # No definition found - must be external (libc, etc.)
-                # Keep as declaration from any table that has it
                 decls = declarations.get(symbol_name, [])
                 if decls:
                     self.resolution_map[symbol_name] = decls[0]
-                # If no declaration either, it's truly external - skip
             elif len(defs) == 1:
-                # Unique definition - use it
                 self.resolution_map[symbol_name] = defs[0]
             else:
-                # Multiple definitions - apply priority rules
                 chosen = self._choose_definition(symbol_name, defs)
                 self.resolution_map[symbol_name] = chosen
                 self.conflicts.append((symbol_name, defs))
@@ -63,7 +56,6 @@ class SymbolResolver:
         candidates: list['SymbolInfo']
     ) -> 'SymbolInfo':
         """Choose which definition to use when multiple exist."""
-        # Sort by priority (lower enum value = higher priority)
         candidates_sorted = sorted(candidates, key=lambda s: s.source.value)
 
         return candidates_sorted[0]

@@ -62,17 +62,14 @@ def construct_enum_variant(
     name_prefix: str = "enum"
 ) -> ir.Value:
     """Construct an enum value with a specific variant tag and optional data."""
-    # Start with undefined enum struct
     enum_value = ir.Constant(enum_llvm_type, ir.Undefined)
 
-    # Insert discriminant tag
     tag = ir.Constant(codegen.types.i32, variant_index)
     enum_value = codegen.builder.insert_value(
         enum_value, tag, 0,
         name=f"{name_prefix}_tag"
     )
 
-    # Insert data if provided
     if data is not None:
         enum_value = codegen.builder.insert_value(
             enum_value, data, 1,

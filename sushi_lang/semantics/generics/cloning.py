@@ -1,4 +1,3 @@
-# semantics/generics/cloning.py
 """Auto-derived clone() method registration (#134)."""
 from __future__ import annotations
 

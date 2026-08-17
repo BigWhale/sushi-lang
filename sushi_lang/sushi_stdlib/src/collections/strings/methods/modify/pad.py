@@ -11,26 +11,21 @@ def emit_string_repeat(module: ir.Module) -> ir.Function:
     """Emit `{i8*, i32} string_repeat({i8*, i32} str, i32 n)`."""
     func_name = "string_repeat"
 
-    # Check if already defined
     if func_name in module.globals:
         func = module.globals[func_name]
         if not func.is_declaration:
             return func
 
-    # Get common types
     i8, i8_ptr, i32, i64, string_type = get_string_types()
 
-    # Declare external functions
     malloc = declare_malloc(module)
     memcpy = declare_memcpy(module)
 
-    # Function signature: { i8*, i32 } string_repeat({ i8*, i32 } str, i32 n)
     fn_ty = ir.FunctionType(string_type, [string_type, i32])
     func = ir.Function(module, fn_ty, name=func_name)
     func.args[0].name = "str"
     func.args[1].name = "n"
 
-    # Create blocks
     entry_block = func.append_basic_block("entry")
     check_n = func.append_basic_block("check_n")
     check_size = func.append_basic_block("check_size")
@@ -40,33 +35,27 @@ def emit_string_repeat(module: ir.Module) -> ir.Function:
     loop_done = func.append_basic_block("loop_done")
     return_empty = func.append_basic_block("return_empty")
 
-    # Entry: extract string data and size
     builder = ir.IRBuilder(entry_block)
     str_data = builder.extract_value(func.args[0], 0, name="str_data")
     str_size = builder.extract_value(func.args[0], 1, name="str_size")
     builder.branch(check_n)
 
-    # Check n: if n <= 0, return empty string
     builder = ir.IRBuilder(check_n)
     n_positive = builder.icmp_signed(">", func.args[1], ir.Constant(i32, 0), name="n_positive")
     builder.cbranch(n_positive, check_size, return_empty)
 
-    # Check size: if size == 0, return empty string
     builder = ir.IRBuilder(check_size)
     size_nonzero = builder.icmp_unsigned(">", str_size, ir.Constant(i32, 0), name="size_nonzero")
     builder.cbranch(size_nonzero, allocate_block, return_empty)
 
-    # Allocate: calculate total size and allocate buffer
     builder = ir.IRBuilder(allocate_block)
     total_size = builder.mul(str_size, func.args[1], name="total_size")
 
-    # Allocate buffer
     total_size_i64 = builder.zext(total_size, i64, name="total_size_i64")
     result_data = builder.call(malloc, [total_size_i64], name="result_data")
 
     builder.branch(loop_cond)
 
-    # Loop condition: i < n
     builder = ir.IRBuilder(loop_cond)
     i_phi = builder.phi(i32, name="i")
     i_phi.add_incoming(ir.Constant(i32, 0), allocate_block)
@@ -74,27 +63,22 @@ def emit_string_repeat(module: ir.Module) -> ir.Function:
     continue_loop = builder.icmp_unsigned("<", i_phi, func.args[1], name="continue_loop")
     builder.cbranch(continue_loop, loop_body, loop_done)
 
-    # Loop body: copy string at offset i * size
     builder = ir.IRBuilder(loop_body)
     offset = builder.mul(i_phi, str_size, name="offset")
     dest_ptr = builder.gep(result_data, [offset], name="dest_ptr")
 
-    # Copy string data
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [dest_ptr, str_data, builder.zext(str_size, ir.IntType(64)), is_volatile])
 
-    # Increment i
     i_next = builder.add(i_phi, ir.Constant(i32, 1), name="i_next")
     i_phi.add_incoming(i_next, loop_body)
 
     builder.branch(loop_cond)
 
-    # Loop done: build and return result string
     builder = ir.IRBuilder(loop_done)
     result_string = build_string_struct(builder, string_type, result_data, total_size, owned=1)
     builder.ret(result_string)
 
-    # Return empty: return empty string { NULL, 0 }
     builder = ir.IRBuilder(return_empty)
     null_ptr = ir.Constant(i8_ptr, None)
     empty_string = build_string_struct(builder, string_type, null_ptr, ir.Constant(i32, 0), owned=0)

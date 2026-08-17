@@ -34,10 +34,8 @@ def load_with_reference_handling(
     slot: ir.AllocaInstr
 ) -> ir.Value:
     """Load a variable's value with automatic reference dereferencing."""
-    # Load the value from the slot
     v = codegen.builder.load(slot, name=var_name)
 
-    # Check if this is a reference parameter
     if is_reference_parameter(codegen, var_name):
         # For reference parameters, we need to dereference twice:
         # 1. First load gives us the pointer (stored in the slot)
@@ -75,33 +73,25 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
                 return sig.const_type
         return None
 
-    # Explicit cast: the target type IS the semantic type
     elif isinstance(expr, CastExpr):
         return expr.target_type
 
-    # Integer literals default to i32
     elif isinstance(expr, IntLit):
         return BuiltinType.I32
 
-    # Float literals default to f64
     elif isinstance(expr, FloatLit):
         return BuiltinType.F64
 
-    # String literals
     elif isinstance(expr, StringLit):
         return BuiltinType.STRING
 
-    # Boolean literals
     elif isinstance(expr, BoolLit):
         return BuiltinType.BOOL
 
-    # Unary operations preserve operand type
     elif isinstance(expr, UnaryOp):
         return infer_expr_semantic_type(codegen, expr.expr)
 
-    # Binary operations: type inference rules
     elif isinstance(expr, BinaryOp):
-        # Bitwise operators return the type of the left operand
         if expr.op in ["&", "|", "^", "<<", ">>"]:
             return infer_expr_semantic_type(codegen, expr.left)
 
@@ -117,14 +107,11 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
             if right_type is not None:
                 return right_type
 
-            # Default fallback for integers
             return BuiltinType.I32
 
-        # Comparison operators return bool
         elif expr.op in ["==", "!=", "<", "<=", ">", ">="]:
             return BuiltinType.BOOL
 
-        # Logical operators return bool
         elif expr.op in ["and", "or", "xor", "&&", "||", "^^"]:
             return BuiltinType.BOOL
 

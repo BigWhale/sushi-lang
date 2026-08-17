@@ -19,16 +19,13 @@ def emit_process_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: b
     i32 = ir.IntType(INT32_BIT_WIDTH)
     void = ir.VoidType()
 
-    # Map user function name to stdlib function name
     stdlib_func_name = f"sushi_{func_name}"
 
     from sushi_lang.backend.functions import declare_stdlib_function
 
-    # String type: {i8* data, i32 size}
     string_type = codegen.types.ll_type(BuiltinType.STRING)
 
     if func_name == "getcwd":
-        # getcwd() -> Result<string, ProcessError>
         if len(expr.args) != 0:
             raise_internal_error("CE0023", method="getcwd", expected=0, got=len(expr.args))
 
@@ -54,13 +51,9 @@ def emit_process_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: b
         from sushi_lang.semantics.typesys import DynamicArrayType
 
         cmd_value = codegen.expressions.emit_expr(expr.args[0])   # string {i8*,i32}
-        # emit_expr yields a value for a variable but a pointer-to-slot for a temporary
-        # (e.g. an inline literal); normalize the command to by-value for the call.
         if isinstance(cmd_value.type, ir.PointerType):
             cmd_value = codegen.builder.load(cmd_value, name="run_cmd_val")
 
-        # Build the owned argv string[] from the trailing args (collect or bloom). The
-        # helper returns a by-value struct, so no extra load is needed.
         args_value = build_variadic_array(
             codegen, expr.args[1:], DynamicArrayType(BuiltinType.STRING), "run",
             callee_owns=False)
@@ -80,7 +73,6 @@ def emit_process_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: b
         return codegen.utils.as_i1(result) if to_i1 else result
 
     elif func_name == "chdir":
-        # chdir(string path) -> Result<i32, ProcessError>
         if len(expr.args) != 1:
             raise_internal_error("CE0023", method="chdir", expected=1, got=len(expr.args))
 
@@ -98,24 +90,20 @@ def emit_process_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: b
         return codegen.utils.as_i1(result) if to_i1 else result
 
     elif func_name == "exit":
-        # exit(i32 code) -> ~
         if len(expr.args) != 1:
             raise_internal_error("CE0023", method="exit", expected=1, got=len(expr.args))
 
         code_value = codegen.expressions.emit_expr(expr.args[0])
 
-        # The stdlib function returns void
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, void, [i32])
         codegen.builder.call(stdlib_func, [code_value], name="exit_call")
 
         # exit() never returns, so emit unreachable
         codegen.builder.unreachable()
 
-        # Return undef value (won't be used)
         return ir.Constant(i32, ir.Undefined)
 
     elif func_name == "getpid":
-        # getpid() -> i32
         if len(expr.args) != 0:
             raise_internal_error("CE0023", method="getpid", expected=0, got=len(expr.args))
 
@@ -125,7 +113,6 @@ def emit_process_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: b
         return codegen.utils.as_i1(result) if to_i1 else result
 
     elif func_name == "getuid":
-        # getuid() -> i32
         if len(expr.args) != 0:
             raise_internal_error("CE0023", method="getuid", expected=0, got=len(expr.args))
 

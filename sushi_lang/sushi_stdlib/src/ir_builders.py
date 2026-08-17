@@ -4,10 +4,6 @@ from typing import Callable, Optional, Tuple, Any
 import llvmlite.ir as ir
 
 
-# ==============================================================================
-# Struct Builders
-# ==============================================================================
-
 class IRStructBuilder:
     """Helper for building common struct types and operations."""
 
@@ -68,10 +64,6 @@ class IRStructBuilder:
         return struct_complete
 
 
-# ==============================================================================
-# Loop Builders
-# ==============================================================================
-
 class IRLoopBuilder:
     """Helper for building common loop patterns."""
 
@@ -86,29 +78,24 @@ class IRLoopBuilder:
         exit_block: Optional[Any] = None
     ) -> Any:
         """Build a counting loop: for (i = start; i < end; i++) { body_fn(i) }"""
-        # Create blocks
         loop_cond_block = func.append_basic_block("loop_cond")
         loop_body_block = func.append_basic_block("loop_body")
         if exit_block is None:
             exit_block = func.append_basic_block("loop_exit")
 
-        # Initialize loop counter
         i_ptr = builder.alloca(i32, name="i_ptr")
         builder.store(start, i_ptr)
         builder.branch(loop_cond_block)
 
-        # Loop condition: i < end
         builder = ir.IRBuilder(loop_cond_block)
         i = builder.load(i_ptr, name="i")
         cond = builder.icmp_unsigned("<", i, end, name="loop_cond")
         builder.cbranch(cond, loop_body_block, exit_block)
 
-        # Loop body
         builder = ir.IRBuilder(loop_body_block)
         i = builder.load(i_ptr, name="i")
         body_fn(builder, i)
 
-        # Increment and continue
         i_next = builder.add(i, ir.Constant(i32, 1), name="i_next")
         builder.store(i_next, i_ptr)
         builder.branch(loop_cond_block)
@@ -130,25 +117,19 @@ class IRLoopBuilder:
         string_type: ir.LiteralStructType
     ) -> None:
         """Build a character transformation loop and return result."""
-        # Allocate new string
         size_i64 = builder.zext(size, i64, name="size_i64")
         new_data = builder.call(malloc_fn, [size_i64], name="new_data")
 
-        # Create exit block
         exit_block = func.append_basic_block("loop_exit")
 
-        # Build counting loop
         def transform_body(body_builder: ir.IRBuilder, i: ir.Value):
-            # Load character
             src_ptr = body_builder.gep(data, [i], name="src_ptr")
             ch = body_builder.load(src_ptr, name="ch")
 
-            # Transform (i8 -> i32 -> transform -> i8)
             ch_i32 = body_builder.zext(ch, i32, name="ch_i32")
             transformed_i32 = body_builder.call(transform_fn, [ch_i32], name="transformed_i32")
             transformed = body_builder.trunc(transformed_i32, i8, name="transformed")
 
-            # Store in destination
             dst_ptr = body_builder.gep(new_data, [i], name="dst_ptr")
             body_builder.store(transformed, dst_ptr)
 
@@ -159,15 +140,10 @@ class IRLoopBuilder:
             exit_block
         )
 
-        # Exit: build and return fat pointer
         builder = ir.IRBuilder(exit_block)
         result = IRStructBuilder.build_fat_pointer(builder, string_type, new_data, size, owned=1)
         builder.ret(result)
 
-
-# ==============================================================================
-# Conditional Builders
-# ==============================================================================
 
 class IRConditionalBuilder:
     """Helper for building conditional structures."""
@@ -188,19 +164,16 @@ class IRConditionalBuilder:
         if merge_block is None:
             merge_block = func.append_basic_block("merge")
 
-        # Branch to then/else
         if else_fn:
             builder.cbranch(condition, then_block, else_block)
         else:
             builder.cbranch(condition, then_block, merge_block)
 
-        # Then block
         builder = ir.IRBuilder(then_block)
         then_fn(builder)
         if not builder.block.is_terminated:
             builder.branch(merge_block)
 
-        # Else block (if provided)
         if else_fn:
             builder = ir.IRBuilder(else_block)
             else_fn(builder)
@@ -224,16 +197,11 @@ class IRConditionalBuilder:
 
         builder.cbranch(condition, return_block, continue_block)
 
-        # Return block
         builder = ir.IRBuilder(return_block)
         builder.ret(return_value)
 
         return continue_block
 
-
-# ==============================================================================
-# Memory Allocation Helpers
-# ==============================================================================
 
 class IRMemoryBuilder:
     """Helper for common memory allocation patterns."""
@@ -248,11 +216,9 @@ class IRMemoryBuilder:
         i64: ir.IntType
     ) -> ir.Value:
         """Allocate memory and copy bytes from source."""
-        # Allocate
         byte_count_i64 = builder.zext(byte_count, i64, name="byte_count_i64")
         new_data = builder.call(malloc_fn, [byte_count_i64], name="new_data")
 
-        # Copy using llvm.memcpy intrinsic
         is_volatile = ir.Constant(ir.IntType(1), 0)
         builder.call(memcpy_fn, [new_data, src_ptr, builder.zext(byte_count, ir.IntType(64)), is_volatile])
 
@@ -271,13 +237,10 @@ class IRMemoryBuilder:
         i64: ir.IntType
     ) -> ir.Value:
         """Allocate and return a substring as a fat pointer struct."""
-        # Calculate source pointer
         src_ptr = builder.gep(src_data, [start_offset], name="src_ptr")
 
-        # Allocate and copy
         new_data = IRMemoryBuilder.allocate_and_copy(
             builder, malloc_fn, memcpy_fn, src_ptr, byte_length, i64
         )
 
-        # Build fat pointer
         return IRStructBuilder.build_fat_pointer(builder, string_type, new_data, byte_length, owned=1)

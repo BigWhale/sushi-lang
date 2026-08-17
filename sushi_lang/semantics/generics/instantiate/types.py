@@ -1,4 +1,3 @@
-# semantics/generics/instantiate/types.py
 """Type inference for instantiation collection."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
@@ -25,7 +24,6 @@ class TypeInferrer:
         """Simple type inference for method call receivers."""
         from sushi_lang.semantics.ast import Name, StringLit, IntLit, FloatLit, BoolLit, DotCall
 
-        # Dispatch to type-specific handler based on receiver type
         if isinstance(receiver, StringLit):
             return self._infer_stringlit_type(receiver)
         elif isinstance(receiver, IntLit):
@@ -39,8 +37,6 @@ class TypeInferrer:
         elif isinstance(receiver, Name):
             return self._infer_name_type(receiver)
         else:
-            # For more complex expressions, return None
-            # Users will need to use explicit type annotations
             return None
 
     def _infer_stringlit_type(self, expr) -> "Type":
@@ -61,16 +57,13 @@ class TypeInferrer:
 
     def _infer_dotcall_type(self, expr) -> "Type | None":
         """Infer type for chained method call expressions."""
-        # Recursively infer the receiver type
         inner_receiver_type = self.infer_simple_receiver_type(expr.receiver)
         if inner_receiver_type is not None:
-            # Look up the method's return type
             return self.get_builtin_method_return_type(inner_receiver_type, expr.method)
         return None
 
     def _infer_name_type(self, expr) -> "Type | None":
         """Infer type for name references (variables, builtins)."""
-        # Handle builtin I/O streams
         if expr.id == "stdin":
             return BuiltinType.STDIN
         elif expr.id == "stdout":
@@ -78,7 +71,6 @@ class TypeInferrer:
         elif expr.id == "stderr":
             return BuiltinType.STDERR
 
-        # Check if this is a known variable with explicit type annotation
         if expr.id in self.variable_types:
             return self.variable_types[expr.id]
 
@@ -89,20 +81,14 @@ class TypeInferrer:
 
     def get_builtin_method_return_type(self, receiver_type: "Type", method_name: str) -> "Type | None":
         """Get return type of built-in extension methods."""
-        # String methods
         if receiver_type == BuiltinType.STRING:
             if method_name in ("find", "find_last"):
-                # string.find()/find_last() returns Maybe<i32>
                 return GenericTypeRef(base_name="Maybe", type_args=(BuiltinType.I32,))
             elif method_name in ("upper", "lower", "cap", "trim", "tleft", "tright"):
                 return BuiltinType.STRING
-            # Other string methods - skip for now
 
-        # Maybe<T> methods
         if isinstance(receiver_type, GenericTypeRef) and receiver_type.base_name == "Maybe":
             if method_name in ("realise", "expect"):
-                # Maybe<T>.realise(T) -> T, Maybe<T>.expect(string) -> T
-                # Extract T from Maybe<T>
                 if receiver_type.type_args:
                     return receiver_type.type_args[0]
             elif method_name in ("is_some", "is_none"):
@@ -124,25 +110,21 @@ class TypeInferrer:
         """Simple type substitution for instantiation detection."""
         from sushi_lang.semantics.typesys import UnknownType
 
-        # Build substitution map
         substitution = {}
         for param, arg in zip(type_params, type_args, strict=False):
             param_name = param.name if hasattr(param, 'name') else str(param)
             substitution[param_name] = arg
 
-        # If type is a type parameter, substitute it
         if isinstance(ty, TypeParameter):
             param_name = ty.name
             if param_name in substitution:
                 return substitution[param_name]
             return ty
 
-        # If type is UnknownType that represents a type parameter
         if isinstance(ty, UnknownType):
             type_name = str(ty)
             if type_name in substitution:
                 return substitution[type_name]
             return ty
 
-        # Otherwise return as-is (concrete types like i32, structs, etc.)
         return ty

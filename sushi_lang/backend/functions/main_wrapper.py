@@ -26,7 +26,6 @@ class MainFunctionWrapper:
         semantic_type: Ty
     ) -> Tuple[ir.Value, ir.Value]:
         """Extract the Ok value from a Result<T> enum."""
-        # Extract tag and check if Ok variant (tag == 0)
         is_ok = enum_utils.check_enum_variant(
             self.codegen, result_enum, variant_index=0, signed=True, name="is_ok"
         )
@@ -52,26 +51,19 @@ class MainFunctionWrapper:
 
     def emit_main_with_args(self, fn: FuncDef, begin_function_fn, end_function_fn, create_user_main_fn) -> ir.Function:
         """Emit the main function when command line arguments are expected."""
-        # Get the C-style main function that was already declared
         c_main = self.codegen.funcs.get('main')
         if c_main is None:
             raise_internal_error("CE0064")
 
-        # Create a user_main function with the original Sushi signature
         user_main = create_user_main_fn(fn)
 
-        # Generate the C-style main function body
         begin_function_fn(c_main)
 
-        # Get argc and argv parameters
         argc = c_main.args[0]  # int argc
         argv = c_main.args[1]  # char** argv
 
-        # Convert argc/argv to Sushi string[] using the conversion utility
         args_array = self.codegen._generate_argc_argv_conversion(argc, argv)
 
-        # Call the user_main function with the converted arguments
-        # Find the args parameter position in the user's main function
         args_param_index = None
         for i, param in enumerate(fn.params):
             if param.name == "args":
@@ -81,49 +73,35 @@ class MainFunctionWrapper:
         if args_param_index is None:
             raise_internal_error("CE0065")
 
-        # Create argument list for user_main call
         user_main_args = []
         for _i, param in enumerate(fn.params):
             if param.name == "args":
-                # args_array is a pointer to the struct, but we need to load the struct value
                 args_struct = self.codegen.builder.load(args_array, name="args_struct")
                 user_main_args.append(args_struct)
             else:
-                # For other parameters, create zero/null values
                 param_type = self.codegen.types.ll_type(param.ty)
                 if hasattr(param_type, 'intrinsic_name') and param_type.intrinsic_name.startswith('i'):
-                    # Integer type
                     zero_val = ir.Constant(param_type, 0)
                 elif str(param_type).endswith('*'):
-                    # Pointer type
                     zero_val = ir.Constant(param_type, None)
                 else:
-                    # Other types - use zero
                     zero_val = ir.Constant(param_type, 0)
                 user_main_args.append(zero_val)
 
-        # Call user_main (returns Result<T>)
         result_struct = self.codegen.builder.call(user_main, user_main_args, name="user_main_result")
 
-        # Extract the value from Result<T> enum using helper
-        # Get the expected value type (T from Result<T>)
         value_type = self.codegen.types.ll_type(fn.ret)
 
-        # Extract (is_ok, value) from Result enum (pass semantic type for accurate size calculation)
         is_ok, value = self.extract_value_from_result_enum(result_struct, value_type, fn.ret)
 
-        # Convert value to i32 for C main() return
         if value.type != self.codegen.types.i32:
             if value.type == self.codegen.types.i8:  # i8/u8 -> i32
-                # Use zext for unsigned types (u8), sext for signed (i8)
-                # Since we can't distinguish here, use zext (zero-extend)
                 converted_value = self.codegen.builder.zext(value, self.codegen.types.i32, name="i8_to_int")
             elif value.type == self.codegen.types.i16:  # i16/u16 -> i32
                 converted_value = self.codegen.builder.sext(value, self.codegen.types.i32, name="i16_to_int")
             elif value.type == self.codegen.types.i64:  # i64/u64 -> i32 (truncate)
                 converted_value = self.codegen.builder.trunc(value, self.codegen.types.i32, name="i64_to_int")
             else:
-                # For other types (shouldn't happen after validation), use 0 as fallback
                 converted_value = ir.Constant(self.codegen.types.i32, 0)
         else:
             converted_value = value
@@ -134,14 +112,11 @@ class MainFunctionWrapper:
         one = ir.Constant(self.codegen.types.i32, 1)
         result = self.codegen.builder.select(is_ok, converted_value, one, name="main_exit_code")
 
-        # Clean up cmd_args array before returning
-        # (Must happen before return to avoid terminated block issue)
         cmd_args_desc = self.codegen.dynamic_arrays._array("cmd_args")
         if cmd_args_desc is not None:
             self.codegen.dynamic_arrays._emit_array_destructor("cmd_args")
             cmd_args_desc.destroyed = True
 
-        # Return the result
         self.codegen.builder.ret(result)
 
         end_function_fn()
@@ -149,48 +124,34 @@ class MainFunctionWrapper:
 
     def emit_main_without_args(self, fn: FuncDef, begin_function_fn, end_function_fn, create_user_main_fn) -> ir.Function:
         """Emit the main function without command line arguments."""
-        # Get the C-style main function that was already declared
         c_main = self.codegen.funcs.get('main')
         if c_main is None:
             raise_internal_error("CE0064")
 
-        # Create a user_main function with the original Sushi signature
         user_main = create_user_main_fn(fn)
 
-        # Generate the C-style main function body
         begin_function_fn(c_main)
 
-        # Create argument list for user_main call
-        # If user's main has parameters, we need to provide zero/default values
         user_main_args = []
         for param in fn.params:
             param_type = self.codegen.types.ll_type(param.ty)
-            # Create zero/default value for the parameter
             zero_val = self.codegen.utils.get_zero_value(param_type)
             user_main_args.append(zero_val)
 
-        # Call user_main (returns Result<T>)
         result_struct = self.codegen.builder.call(user_main, user_main_args, name="user_main_result")
 
-        # Extract the value from Result<T> enum using helper
-        # Get the expected value type (T from Result<T>)
         value_type = self.codegen.types.ll_type(fn.ret)
 
-        # Extract (is_ok, value) from Result enum (pass semantic type for accurate size calculation)
         is_ok, value = self.extract_value_from_result_enum(result_struct, value_type, fn.ret)
 
-        # Convert value to i32 for C main() return
         if value.type != self.codegen.types.i32:
             if value.type == self.codegen.types.i8:  # i8/u8 -> i32
-                # Use zext for unsigned types (u8), sext for signed (i8)
-                # Since we can't distinguish here, use zext (zero-extend)
                 converted_value = self.codegen.builder.zext(value, self.codegen.types.i32, name="i8_to_int")
             elif value.type == self.codegen.types.i16:  # i16/u16 -> i32
                 converted_value = self.codegen.builder.sext(value, self.codegen.types.i32, name="i16_to_int")
             elif value.type == self.codegen.types.i64:  # i64/u64 -> i32 (truncate)
                 converted_value = self.codegen.builder.trunc(value, self.codegen.types.i32, name="i64_to_int")
             else:
-                # For other types (shouldn't happen after validation), use 0 as fallback
                 converted_value = ir.Constant(self.codegen.types.i32, 0)
         else:
             converted_value = value
@@ -201,7 +162,6 @@ class MainFunctionWrapper:
         one = ir.Constant(self.codegen.types.i32, 1)
         result = self.codegen.builder.select(is_ok, converted_value, one, name="main_exit_code")
 
-        # Return the result
         self.codegen.builder.ret(result)
 
         end_function_fn()
@@ -209,7 +169,6 @@ class MainFunctionWrapper:
 
     def create_user_main_function(self, fn: FuncDef, params_of_fn, begin_function_fn, end_function_fn, emit_default_return_fn) -> ir.Function:
         """Create a separate function for the user's main function body."""
-        # Create function signature matching the user's main function
         params = params_of_fn(fn)
         ll_param_tys = [self.codegen.types.ll_type(ty) for _, ty in params]
         from sushi_lang.backend.generics.result_builder import intern_result
@@ -221,17 +180,13 @@ class MainFunctionWrapper:
         user_main = ir.Function(self.codegen.module, fnty, name="user_main")
         user_main.linkage = 'internal'  # Internal function
 
-        # Set parameter names
         for i, (pname, _) in enumerate(params):
             user_main.args[i].name = pname
 
-        # Emit the user's main function body
         begin_function_fn(user_main, fn)
 
-        # Track current function AST for ?? operator (needs return type info)
         self.codegen.current_function_ast = fn
 
-        # Track parameter types in variable_types for struct member access resolution
         for param in fn.params:
             if param.ty is not None:
                 self.codegen.variable_types[param.name] = param.ty
@@ -243,7 +198,6 @@ class MainFunctionWrapper:
 
         end_function_fn()
 
-        # Clear function AST after emission
         self.codegen.current_function_ast = None
 
         return user_main

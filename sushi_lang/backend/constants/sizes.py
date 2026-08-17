@@ -1,8 +1,5 @@
 """Type and struct size constants."""
 
-# ============================================================================
-# Primitive Type Sizes (bytes)
-# ============================================================================
 
 I8_SIZE_BYTES = 1
 I16_SIZE_BYTES = 2
@@ -19,16 +16,9 @@ F64_SIZE_BYTES = 8
 
 BOOL_SIZE_BYTES = 1
 
-# ============================================================================
-# Pointer Sizes (64-bit architecture)
-# ============================================================================
 
 POINTER_SIZE_BYTES = 8       # 64-bit pointers (i8*, T*)
 
-
-# ============================================================================
-# Composite Structure Sizes (bytes)
-# ============================================================================
 
 # String fat pointer: {i8* data, i32 size, i8 owned} -- aligned LLVM sizeof = 16 bytes
 # (data@0..8, size@8..12, owned@12, pad@13..16). MUST be the aligned sizeof, not the raw
@@ -41,10 +31,8 @@ FAT_POINTER_SIZE_BYTES = 16
 # Distinct from the string fat pointer above.
 CLOSURE_FAT_POINTER_SIZE_BYTES = 32
 
-# Dynamic array struct: {i32 len, i32 cap, T* data} = 4 + 4 + 8 = 16 bytes
 DYNAMIC_ARRAY_SIZE_BYTES = 16
 
-# Iterator struct: {i32 current_index, i32 length, T* data_ptr} = 4 + 4 + 8 = 16 bytes
 ITERATOR_SIZE_BYTES = 16
 
 # Enum payload base offset: the i32 tag plus 4 bytes of struct padding before the

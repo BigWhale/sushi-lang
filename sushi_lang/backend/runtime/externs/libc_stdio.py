@@ -18,7 +18,6 @@ class LibCStdio:
         """Initialize with reference to main codegen instance."""
         self.codegen = codegen
 
-        # Function references - declared immediately for type safety
         self.printf: ir.Function
         self.fprintf: ir.Function
         self.fopen: ir.Function
@@ -35,7 +34,6 @@ class LibCStdio:
         self.feof: ir.Function
         self.ferror: ir.Function
 
-        # Global variable references (FILE* handles) - declared immediately for type safety
         self.stdin_handle: ir.GlobalVariable
         self.stdout_handle: ir.GlobalVariable
         self.stderr_handle: ir.GlobalVariable
@@ -260,7 +258,6 @@ class LibCStdio:
 
     def _declare_stdio_handles(self) -> None:
         """Declare global variables for stdin, stdout, stderr FILE* handles."""
-        # Detect platform and get correct handle names
         platform = get_current_platform()
 
         if platform.is_darwin:
@@ -272,7 +269,6 @@ class LibCStdio:
             stdout_name = "stdout"
             stderr_name = "stderr"
         else:
-            # Default to POSIX names (Linux-style) for other Unix-like systems
             stdin_name = "stdin"
             stdout_name = "stdout"
             stderr_name = "stderr"

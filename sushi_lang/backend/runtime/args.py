@@ -10,7 +10,6 @@ if TYPE_CHECKING:
 
 def allocate_string_array_data(codegen: 'LLVMCodegen', count: ir.Value) -> ir.Value:
     """Allocate memory for a string[] dynamic array data buffer."""
-    # Strings are fat pointers: {i8*, i32}
     string_struct_type = codegen.types.ll_type(BuiltinType.STRING)
 
     # Calculate element size with proper alignment
@@ -20,16 +19,12 @@ def allocate_string_array_data(codegen: 'LLVMCodegen', count: ir.Value) -> ir.Va
     alignment = codegen.types._get_type_alignment(BuiltinType.STRING)   # 8
     element_size = ((size_bytes + alignment - 1) // alignment) * alignment  # 16
 
-    # Calculate total bytes needed
     total_bytes = codegen.builder.mul(count, ir.Constant(codegen.i32, element_size), name="total_bytes")
 
-    # Convert to 64-bit for malloc
     total_bytes_64 = codegen.builder.zext(total_bytes, ir.IntType(64), name="total_bytes_64")
 
-    # Allocate memory
     data_ptr = emit_malloc(codegen, codegen.builder, total_bytes_64)
 
-    # Cast void* to string struct array pointer
     string_struct_ptr_type = ir.PointerType(string_struct_type)
     return codegen.builder.bitcast(data_ptr, string_struct_ptr_type, name="typed_string_array")
 
@@ -45,40 +40,31 @@ def populate_string_array_from_argv(
     zero_i32 = ir.Constant(codegen.i32, 0)
     one_i32 = ir.Constant(codegen.i32, 1)
 
-    # Get strlen function
     strlen_func = codegen.runtime.libc_strings.strlen
 
-    # Create loop blocks
     loop_cond = builder.append_basic_block(name="argv_loop_cond")
     loop_body = builder.append_basic_block(name="argv_loop_body")
     loop_end = builder.append_basic_block(name="argv_loop_end")
 
-    # Initialize loop counter
     counter = builder.alloca(codegen.i32, name="argv_counter")
     builder.store(zero_i32, counter)
     builder.branch(loop_cond)
 
-    # Loop condition: counter < argc
     builder.position_at_end(loop_cond)
     counter_val = builder.load(counter, name="counter")
     cmp = builder.icmp_signed("<", counter_val, argc, name="loop_cond")
     builder.cbranch(cmp, loop_body, loop_end)
 
-    # Loop body: convert argv[i] to fat pointer
     builder.position_at_end(loop_body)
     counter_val = builder.load(counter, name="counter")
 
-    # Get argv[i] (char* from C)
     argv_i_ptr = builder.gep(argv, [counter_val], name="argv_i_ptr")
     argv_i = builder.load(argv_i_ptr, name="argv_i")
 
-    # Call strlen to get length
     strlen_result = builder.call(strlen_func, [argv_i], name="strlen_result")
 
-    # Get pointer to string struct slot in array
     string_slot = builder.gep(target_array_data, [counter_val], name="string_slot")
 
-    # Store fat pointer: {i8* data, i32 size, i8 owned}
     two_i32 = ir.Constant(codegen.i32, 2)
     ptr_field = builder.gep(string_slot, [zero_i32, zero_i32], name="ptr_field")
     len_field = builder.gep(string_slot, [zero_i32, one_i32], name="len_field")
@@ -89,12 +75,10 @@ def populate_string_array_from_argv(
     # Leaving this byte as malloc garbage risks the RAII destructor free()ing argv.
     builder.store(ir.Constant(codegen.i8, 0), owned_field)
 
-    # Increment counter
     next_counter = builder.add(counter_val, one_i32, name="next_counter")
     builder.store(next_counter, counter)
     builder.branch(loop_cond)
 
-    # Loop end
     builder.position_at_end(loop_end)
 
 
@@ -105,16 +89,12 @@ def generate_argc_argv_conversion(codegen: 'LLVMCodegen', argc: ir.Value, argv: 
     one_i32 = ir.Constant(codegen.i32, 1)
     two_i32 = ir.Constant(codegen.i32, 2)
 
-    # Create dynamic array type for strings
     string_array_type = DynamicArrayType(BuiltinType.STRING)
 
-    # Declare the dynamic array and get its struct allocation
     args_array_alloca = codegen.dynamic_arrays.declare_dynamic_array("cmd_args", string_array_type)
 
-    # Allocate data buffer for strings with proper alignment
     typed_data_ptr = allocate_string_array_data(codegen, argc)
 
-    # Update array struct fields: {len, cap, data}
     len_ptr = builder.gep(args_array_alloca, [zero_i32, zero_i32], name="len_ptr")
     cap_ptr = builder.gep(args_array_alloca, [zero_i32, one_i32], name="cap_ptr")
     data_ptr_ptr = builder.gep(args_array_alloca, [zero_i32, two_i32], name="data_ptr_ptr")
@@ -123,7 +103,6 @@ def generate_argc_argv_conversion(codegen: 'LLVMCodegen', argc: ir.Value, argv: 
     builder.store(argc, cap_ptr)           # capacity = argc
     builder.store(typed_data_ptr, data_ptr_ptr)  # data pointer
 
-    # Convert each argv[i] to fat pointer and populate array
     populate_string_array_from_argv(codegen, argc, argv, typed_data_ptr)
 
     return args_array_alloca

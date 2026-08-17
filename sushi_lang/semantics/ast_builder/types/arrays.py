@@ -10,7 +10,6 @@ if TYPE_CHECKING:
 
 def parse_array_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[ArrayType]:
     """Parse fixed-size array type (array_t)."""
-    # Find the base type (first child tree) and size (first INT token)
     base_type_node = None
     size_token = None
 
@@ -38,7 +37,6 @@ def parse_array_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[ArrayTyp
 
 def parse_dynamic_array_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[DynamicArrayType]:
     """Parse dynamic array type (dynamic_array_t)."""
-    # Find the base type (first child tree)
     base_type_node = None
 
     for child in node.children:

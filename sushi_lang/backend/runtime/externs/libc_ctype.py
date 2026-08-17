@@ -16,7 +16,6 @@ class LibCCType:
         """Initialize with reference to main codegen instance."""
         self.codegen = codegen
 
-        # Function references - declared immediately for type safety
         self.toupper: ir.Function
         self.tolower: ir.Function
         self.isspace: ir.Function
@@ -35,13 +34,11 @@ class LibCCType:
 
     def _declare_ctype_func(self, name: str) -> ir.Function:
         """Helper to declare ctype function: int func(int c)."""
-        # Check if function already exists in module
         existing_global = self.codegen.module.globals.get(name)
         if isinstance(existing_global, ir.Function):
             setattr(self, name, existing_global)
             return existing_global
 
-        # Declare new function: int func(int c)
         fn_ty = ir.FunctionType(self.codegen.i32, [self.codegen.i32])
         func = ir.Function(self.codegen.module, fn_ty, name=name)
         setattr(self, name, func)

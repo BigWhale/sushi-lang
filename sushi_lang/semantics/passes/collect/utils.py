@@ -1,4 +1,3 @@
-# semantics/passes/collect/utils.py
 """Shared utilities for collection passes."""
 
 from __future__ import annotations
@@ -20,13 +19,10 @@ def extract_type_param_names(type_params_raw: Optional[List]) -> Optional[List[s
     names = []
     for tp in type_params_raw:
         if isinstance(tp, str):
-            # Legacy format: direct string
             names.append(tp)
         elif isinstance(tp, BoundedTypeParam):
-            # New format: BoundedTypeParam with .name attribute
             names.append(tp.name)
         else:
-            # Unknown format - skip
             continue
 
     return names if names else None
@@ -36,13 +32,11 @@ def param_from_node(p: Any, idx: int) -> 'Param':
     """Convert AST parameter node to Param dataclass."""
     from .functions import Param  # Import here to avoid circular dependency
 
-    # Expect object-style params with .name/.ty and optional spans
     pname = getattr(p, "name", None)
     pty: Optional[Type] = getattr(p, "ty", None)
     pname_span: Optional[Span] = getattr(p, "name_span", None)
     ptype_span: Optional[Span] = getattr(p, "type_span", None)
 
-    # Defensive fallbacks
     if not isinstance(pname, str):
         pname = str(pname) if pname is not None else f"_p{idx}"
 

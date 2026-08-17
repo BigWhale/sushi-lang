@@ -7,7 +7,6 @@ import llvmlite.ir as ir
 from .types import get_list_len_ptr, get_list_capacity_ptr, get_list_element_type, get_list_data_ptr
 
 
-
 def emit_list_reserve(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
     """Emit LLVM IR for list.reserve(additional) - ensure capacity for more elements."""
     from sushi_lang.backend.expressions import memory
@@ -15,38 +14,29 @@ def emit_list_reserve(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: St
     list_llvm_type = list_ptr.type.pointee
     element_llvm_type = get_list_element_type(codegen, list_llvm_type)
 
-    # Use the provided pointer directly
     list_alloca = list_ptr
 
-    # Get pointers
     len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
     capacity_ptr = get_list_capacity_ptr(codegen.builder, list_alloca)
     data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
 
-    # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")
     current_cap = codegen.builder.load(capacity_ptr, name="current_cap")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
-    # Evaluate additional argument
     additional = codegen.expressions.emit_expr(expr.args[0])
 
-    # Ensure additional is i32 (truncate if i64)
     if additional.type != codegen.types.i32:
         if additional.type.width > 32:
             additional = codegen.builder.trunc(additional, codegen.types.i32, name="additional_i32")
         elif additional.type.width < 32:
             additional = codegen.builder.sext(additional, codegen.types.i32, name="additional_i32")
 
-    # Calculate needed capacity: len + additional
     needed_cap = codegen.builder.add(current_len, additional, name="needed_cap")
 
-    # Check if growth needed
     need_growth = codegen.builder.icmp_unsigned(">", needed_cap, current_cap)
 
-
     with codegen.builder.if_then(need_growth):
-        # Reallocate to needed_cap
         element_size = memory.get_element_size_constant(codegen, element_llvm_type)
         new_total_size = codegen.builder.mul(needed_cap, element_size, name="new_total_size")
 
@@ -57,11 +47,9 @@ def emit_list_reserve(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: St
             name="typed_new_data_ptr"
         )
 
-        # Update capacity and data pointer
         codegen.builder.store(needed_cap, capacity_ptr)
         codegen.builder.store(typed_new_data_ptr, data_ptr_ptr)
 
-    # Return updated list
     return codegen.builder.load(list_alloca, name="updated_list")
 
 
@@ -72,39 +60,31 @@ def emit_list_shrink_to_fit(codegen: Any, list_ptr: ir.Value, list_type: StructT
     list_llvm_type = list_ptr.type.pointee
     element_llvm_type = get_list_element_type(codegen, list_llvm_type)
 
-    # Use the provided pointer directly
     list_alloca = list_ptr
 
-    # Get pointers
     len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
     capacity_ptr = get_list_capacity_ptr(codegen.builder, list_alloca)
     data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
 
-    # Load current values
     current_len = codegen.builder.load(len_ptr, name="current_len")
     current_cap = codegen.builder.load(capacity_ptr, name="current_cap")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
-    # Check if len != cap (needs shrinking)
     need_shrink = codegen.builder.icmp_unsigned("!=", current_len, current_cap)
 
     with codegen.builder.if_then(need_shrink):
-        # Check if len == 0 (free completely)
         zero = ir.Constant(codegen.types.i32, 0)
         is_empty = codegen.builder.icmp_unsigned("==", current_len, zero)
 
         with codegen.builder.if_then(is_empty):
-            # Free data
             free_func = codegen.get_free_func()
             data_void_ptr = codegen.builder.bitcast(data_ptr, ir.PointerType(codegen.types.i8))
             codegen.builder.call(free_func, [data_void_ptr])
 
-            # Set data to null, capacity to 0
             null_ptr = ir.Constant(data_ptr.type, None)
             codegen.builder.store(null_ptr, data_ptr_ptr)
             codegen.builder.store(zero, capacity_ptr)
 
-        # Not empty: realloc to exact size
         not_empty_block = codegen.func.append_basic_block("shrink_not_empty")
         after_empty_check = codegen.func.append_basic_block("after_empty_check")
 
@@ -127,5 +107,4 @@ def emit_list_shrink_to_fit(codegen: Any, list_ptr: ir.Value, list_type: StructT
 
         codegen.builder.position_at_end(after_empty_check)
 
-    # Return updated list
     return codegen.builder.load(list_alloca, name="updated_list")

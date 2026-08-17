@@ -1,8 +1,6 @@
-# semantics/passes/types/calls/__init__.py
 """Call validation facade - maintains backward compatibility."""
 from __future__ import annotations
 
-# Re-export public API for backward compatibility
 from .user_defined import (
     validate_function_call,
     validate_open_function,

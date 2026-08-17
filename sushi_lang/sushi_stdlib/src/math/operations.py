@@ -21,7 +21,6 @@ def _generate_f64_intrinsic_wrapper(module: ir.Module, llvm_name: str, sushi_nam
 
 def generate_abs_functions(module: ir.Module) -> None:
     """Generate abs() functions for all signed numeric types."""
-    # Integer types
     int_types = [
         (ir.IntType(8), 'i8'),
         (ir.IntType(16), 'i16'),
@@ -39,38 +38,31 @@ def generate_abs_functions(module: ir.Module) -> None:
         entry = func.append_basic_block("entry")
         builder = ir.IRBuilder(entry)
 
-        # Check if value < 0
         zero = ir.Constant(int_type, 0)
         is_negative = builder.icmp_signed('<', value_param, zero, name="is_negative")
 
-        # Create blocks
         negative_block = func.append_basic_block("negative")
         positive_block = func.append_basic_block("positive")
 
         builder.cbranch(is_negative, negative_block, positive_block)
 
-        # Negative block: return -value
         builder.position_at_end(negative_block)
         negated = builder.sub(zero, value_param, name="negated")
         builder.ret(negated)
 
-        # Positive block: return value
         builder.position_at_end(positive_block)
         builder.ret(value_param)
 
-    # Float types - use LLVM intrinsic
     float_types = [
         (ir.FloatType(), 'f32'),
         (ir.DoubleType(), 'f64'),
     ]
 
     for float_type, type_name in float_types:
-        # Declare LLVM fabs intrinsic
         intrinsic_name = f"llvm.fabs.{type_name}"
         intrinsic_type = ir.FunctionType(float_type, [float_type])
         intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
 
-        # Create our wrapper function
         func_type = ir.FunctionType(float_type, [float_type])
         func = ir.Function(module, func_type, name=f"sushi_abs_{type_name}")
 
@@ -80,14 +72,12 @@ def generate_abs_functions(module: ir.Module) -> None:
         entry = func.append_basic_block("entry")
         builder = ir.IRBuilder(entry)
 
-        # Call LLVM intrinsic
         result = builder.call(intrinsic, [value_param])
         builder.ret(result)
 
 
 def generate_min_max_functions(module: ir.Module) -> None:
     """Generate min() and max() functions for all numeric types."""
-    # Signed integer types
     signed_int_types = [
         (ir.IntType(8), 'i8', True),
         (ir.IntType(16), 'i16', True),
@@ -95,7 +85,6 @@ def generate_min_max_functions(module: ir.Module) -> None:
         (ir.IntType(64), 'i64', True),
     ]
 
-    # Unsigned integer types
     unsigned_int_types = [
         (ir.IntType(8), 'u8', False),
         (ir.IntType(16), 'u16', False),
@@ -103,15 +92,12 @@ def generate_min_max_functions(module: ir.Module) -> None:
         (ir.IntType(64), 'u64', False),
     ]
 
-    # Float types
     float_types = [
         (ir.FloatType(), 'f32'),
         (ir.DoubleType(), 'f64'),
     ]
 
-    # Generate for signed integers
     for int_type, type_name, is_signed in signed_int_types + unsigned_int_types:
-        # Min function
         func_type = ir.FunctionType(int_type, [int_type, int_type])
         min_func = ir.Function(module, func_type, name=f"sushi_min_{type_name}")
 
@@ -123,7 +109,6 @@ def generate_min_max_functions(module: ir.Module) -> None:
         entry = min_func.append_basic_block("entry")
         builder = ir.IRBuilder(entry)
 
-        # Compare: a < b
         if is_signed:
             cmp = builder.icmp_signed('<', a_param, b_param, name="cmp")
         else:
@@ -132,7 +117,6 @@ def generate_min_max_functions(module: ir.Module) -> None:
         result = builder.select(cmp, a_param, b_param, name="min")
         builder.ret(result)
 
-        # Max function
         max_func = ir.Function(module, func_type, name=f"sushi_max_{type_name}")
 
         a_param = max_func.args[0]
@@ -143,7 +127,6 @@ def generate_min_max_functions(module: ir.Module) -> None:
         entry = max_func.append_basic_block("entry")
         builder = ir.IRBuilder(entry)
 
-        # Compare: a > b
         if is_signed:
             cmp = builder.icmp_signed('>', a_param, b_param, name="cmp")
         else:
@@ -152,9 +135,7 @@ def generate_min_max_functions(module: ir.Module) -> None:
         result = builder.select(cmp, a_param, b_param, name="max")
         builder.ret(result)
 
-    # Generate for floats
     for float_type, type_name in float_types:
-        # Min function - use LLVM minnum intrinsic (handles NaN correctly)
         intrinsic_name = f"llvm.minnum.{type_name}"
         intrinsic_type = ir.FunctionType(float_type, [float_type, float_type])
         min_intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
@@ -173,7 +154,6 @@ def generate_min_max_functions(module: ir.Module) -> None:
         result = builder.call(min_intrinsic, [a_param, b_param])
         builder.ret(result)
 
-        # Max function - use LLVM maxnum intrinsic (handles NaN correctly)
         intrinsic_name = f"llvm.maxnum.{type_name}"
         max_intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
 
@@ -221,10 +201,6 @@ def generate_trunc(module: ir.Module) -> None:
     _generate_f64_intrinsic_wrapper(module, "llvm.trunc.f64", "sushi_trunc", ('x',))
 
 
-# =============================================================================
-# Trigonometric Functions
-# =============================================================================
-
 def generate_sin(module: ir.Module) -> None:
     """Generate sushi_sin(f64 x) -> f64 via the llvm.sin.f64 intrinsic."""
     _generate_f64_intrinsic_wrapper(module, "llvm.sin.f64", "sushi_sin", ('x',))
@@ -239,7 +215,6 @@ def generate_tan(module: ir.Module) -> None:
     """Generate tan function: tan(f64) -> f64"""
     f64 = ir.DoubleType()
 
-    # Get or declare sin and cos intrinsics
     sin_intrinsic = module.globals.get("llvm.sin.f64")
     if sin_intrinsic is None:
         sin_type = ir.FunctionType(f64, [f64])
@@ -265,15 +240,10 @@ def generate_tan(module: ir.Module) -> None:
     builder.ret(result)
 
 
-# =============================================================================
-# Inverse Trigonometric Functions (libc)
-# =============================================================================
-
 def generate_asin(module: ir.Module) -> None:
     """Generate asin function: asin(f64) -> f64"""
     f64 = ir.DoubleType()
 
-    # Declare libc asin
     libc_asin_type = ir.FunctionType(f64, [f64])
     libc_asin = ir.Function(module, libc_asin_type, name="asin")
 
@@ -352,15 +322,10 @@ def generate_atan2(module: ir.Module) -> None:
     builder.ret(result)
 
 
-# =============================================================================
-# Hyperbolic Functions (pure LLVM IR using exp)
-# =============================================================================
-
 def generate_sinh(module: ir.Module) -> None:
     """Generate sinh function: sinh(f64) -> f64"""
     f64 = ir.DoubleType()
 
-    # Get or declare exp intrinsic
     exp_intrinsic = module.globals.get("llvm.exp.f64")
     if exp_intrinsic is None:
         exp_type = ir.FunctionType(f64, [f64])
@@ -375,19 +340,14 @@ def generate_sinh(module: ir.Module) -> None:
     entry = func.append_basic_block("entry")
     builder = ir.IRBuilder(entry)
 
-    # exp(x)
     exp_x = builder.call(exp_intrinsic, [x_param], name="exp_x")
 
-    # -x
     neg_x = builder.fneg(x_param, name="neg_x")
 
-    # exp(-x)
     exp_neg_x = builder.call(exp_intrinsic, [neg_x], name="exp_neg_x")
 
-    # exp(x) - exp(-x)
     diff = builder.fsub(exp_x, exp_neg_x, name="diff")
 
-    # (exp(x) - exp(-x)) / 2
     two = ir.Constant(f64, 2.0)
     result = builder.fdiv(diff, two, name="sinh_x")
     builder.ret(result)
@@ -415,7 +375,6 @@ def generate_cosh(module: ir.Module) -> None:
     neg_x = builder.fneg(x_param, name="neg_x")
     exp_neg_x = builder.call(exp_intrinsic, [neg_x], name="exp_neg_x")
 
-    # exp(x) + exp(-x)
     sum_val = builder.fadd(exp_x, exp_neg_x, name="sum")
 
     two = ir.Constant(f64, 2.0)
@@ -445,19 +404,13 @@ def generate_tanh(module: ir.Module) -> None:
     neg_x = builder.fneg(x_param, name="neg_x")
     exp_neg_x = builder.call(exp_intrinsic, [neg_x], name="exp_neg_x")
 
-    # numerator: exp(x) - exp(-x)
     numer = builder.fsub(exp_x, exp_neg_x, name="numer")
 
-    # denominator: exp(x) + exp(-x)
     denom = builder.fadd(exp_x, exp_neg_x, name="denom")
 
     result = builder.fdiv(numer, denom, name="tanh_x")
     builder.ret(result)
 
-
-# =============================================================================
-# Logarithmic Functions
-# =============================================================================
 
 def generate_log(module: ir.Module) -> None:
     """Generate sushi_log(f64 x) -> f64 via the llvm.log.f64 intrinsic."""
@@ -474,10 +427,6 @@ def generate_log10(module: ir.Module) -> None:
     _generate_f64_intrinsic_wrapper(module, "llvm.log10.f64", "sushi_log10", ('x',))
 
 
-# =============================================================================
-# Exponential Functions
-# =============================================================================
-
 def generate_exp(module: ir.Module) -> None:
     """Generate sushi_exp(f64 x) -> f64 via the llvm.exp.f64 intrinsic."""
     _generate_f64_intrinsic_wrapper(module, "llvm.exp.f64", "sushi_exp", ('x',))
@@ -488,15 +437,10 @@ def generate_exp2(module: ir.Module) -> None:
     _generate_f64_intrinsic_wrapper(module, "llvm.exp2.f64", "sushi_exp2", ('x',))
 
 
-# =============================================================================
-# Utility Functions
-# =============================================================================
-
 def generate_hypot(module: ir.Module) -> None:
     """Generate hypot function: hypot(f64 x, f64 y) -> f64"""
     f64 = ir.DoubleType()
 
-    # Get or declare sqrt intrinsic
     sqrt_intrinsic = module.globals.get("llvm.sqrt.f64")
     if sqrt_intrinsic is None:
         sqrt_type = ir.FunctionType(f64, [f64])
@@ -513,15 +457,11 @@ def generate_hypot(module: ir.Module) -> None:
     entry = func.append_basic_block("entry")
     builder = ir.IRBuilder(entry)
 
-    # x * x
     x_sq = builder.fmul(x_param, x_param, name="x_sq")
 
-    # y * y
     y_sq = builder.fmul(y_param, y_param, name="y_sq")
 
-    # x*x + y*y
     sum_sq = builder.fadd(x_sq, y_sq, name="sum_sq")
 
-    # sqrt(x*x + y*y)
     result = builder.call(sqrt_intrinsic, [sum_sq], name="hypot")
     builder.ret(result)

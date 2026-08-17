@@ -1,4 +1,3 @@
-# semantics/passes/types/inference.py
 """Type inference helpers for type validation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
@@ -15,10 +14,8 @@ if TYPE_CHECKING:
 def infer_array_literal_type(validator: 'TypeValidator', expr: ArrayLiteral) -> Optional[Type]:
     """Infer type of array literal based on elements (validates all elements match)."""
     if not expr.elements:
-        # Empty array - can't infer type without context
         return None
 
-    # Infer type from first element
     first_element_type = validator.infer_expression_type(expr.elements[0])
     if first_element_type is None:
         return None
@@ -27,10 +24,8 @@ def infer_array_literal_type(validator: 'TypeValidator', expr: ArrayLiteral) -> 
     for _i, element in enumerate(expr.elements[1:], start=1):
         element_type = validator.infer_expression_type(element)
         if element_type is not None and element_type != first_element_type:
-            # Type mismatch in array literal elements
             er.emit(validator.reporter, er.ERR.CE2013, element.loc,
                    expected=display_type(first_element_type), got=display_type(element_type))
-            # Continue checking other elements
 
     return ArrayType(base_type=first_element_type, size=len(expr.elements))
 
@@ -41,12 +36,10 @@ def infer_index_access_type(validator: 'TypeValidator', expr: IndexAccess) -> Op
     if array_type is None:
         return None
 
-    # Both fixed (T[N]) and dynamic (T[]) arrays index to their element type
     if isinstance(array_type, (ArrayType, DynamicArrayType)):
         expr.inferred_element_type = array_type.base_type
         return array_type.base_type
 
-    # If not an array type, this will be caught by other validation
     return None
 
 
@@ -54,22 +47,17 @@ def infer_dynamic_array_from_type(validator: 'TypeValidator', expr: DynamicArray
     """Infer type of from(array_literal) constructor from array literal elements."""
     array_literal = expr.elements
     if not array_literal.elements:
-        # Empty array - can't infer type
         return None
 
-    # Get the expected element type for contextual inference
     expected_element_type = expected_type.base_type if expected_type else None
 
-    # Infer type from first element with contextual typing
     first_element_type = infer_element_type_with_context(validator, array_literal.elements[0], expected_element_type)
     if first_element_type is None:
         return None
 
-    # Validate all elements have the same type (with contextual typing)
     for element in array_literal.elements[1:]:
         element_type = infer_element_type_with_context(validator, element, expected_element_type)
         if element_type != first_element_type:
-            # Type mismatch - will be caught by validation elsewhere
             return None
 
     return DynamicArrayType(base_type=first_element_type)
@@ -84,19 +72,16 @@ def infer_element_type_with_context(validator: 'TypeValidator', expr: Expr, expe
         from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
         propagate_types_to_value(validator, expr, expected_type)
 
-    # Read back the (possibly stamped) type via normal inference.
     return validator.infer_expression_type(expr)
 
 
 def infer_range_expression_type(validator: 'TypeValidator', expr: 'RangeExpr') -> Optional[Type]:
     """Infer type of range expression - always returns Iterator<i32>."""
-    # Always return Iterator<i32> for consistency with array iteration
     return IteratorType(element_type=BuiltinType.I32)
 
 
 def int_literal_fits_in_type(value: int, target_type: BuiltinType) -> bool:
     """Check if an integer literal value fits in the target type's range."""
-    # Define ranges for each integer type
     ranges = {
         BuiltinType.I8: (-128, 127),
         BuiltinType.I16: (-32768, 32767),
@@ -112,11 +97,9 @@ def int_literal_fits_in_type(value: int, target_type: BuiltinType) -> bool:
         min_val, max_val = ranges[target_type]
         return min_val <= value <= max_val
 
-    # For non-integer types, don't apply range check
     return False
 
 
-# Bit widths for the integer builtin types, used for radix bit-pattern range checks.
 _INT_WIDTHS = {
     BuiltinType.I8: 8, BuiltinType.U8: 8,
     BuiltinType.I16: 16, BuiltinType.U16: 16,
@@ -124,7 +107,6 @@ _INT_WIDTHS = {
     BuiltinType.I64: 64, BuiltinType.U64: 64,
 }
 
-# Largest finite magnitude representable in IEEE-754 single precision.
 _F32_MAX = 3.4028234663852886e38
 
 

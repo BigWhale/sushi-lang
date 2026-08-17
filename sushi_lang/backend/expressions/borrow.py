@@ -22,19 +22,14 @@ def emit_borrow(codegen: 'LLVMCodegen', expr: Borrow) -> ir.Value:
         var_name = expr.expr.id
         slot = codegen.memory.find_local_slot(var_name)
 
-        # Check if this variable is itself a reference parameter
         if hasattr(codegen, 'variable_types') and var_name in codegen.variable_types:
             semantic_type = codegen.variable_types[var_name]
             if isinstance(semantic_type, ReferenceType):
-                # For reference parameters, the slot stores a pointer to the actual variable
-                # We need to load that pointer to get the actual variable's address
                 return codegen.builder.load(slot, name=f"{var_name}_ref_ptr")
 
-        # For regular variables, just return the slot
         return slot  # Return the pointer directly (zero-cost)
 
     elif isinstance(expr.expr, MemberAccess):
-        # New logic: borrow a struct field
         return emit_member_access_borrow(codegen, expr.expr)
 
     else:
@@ -46,21 +41,17 @@ def emit_member_access_borrow(codegen: 'LLVMCodegen', expr) -> ir.Value:
     """Emit borrow of struct field access using GEP."""
     from sushi_lang.backend.expressions.structs import infer_struct_type, try_get_struct_alloca
 
-    # Get the struct type and field information
     struct_type = infer_struct_type(codegen, expr.receiver)
     field_index = struct_type.get_field_index(expr.member)
 
     if field_index is None:
         raise_internal_error("CE0029", struct=struct_type.name, field=expr.member)
 
-    # Get pointer to the struct (either alloca or loaded reference)
-    # This function already handles reference parameters correctly
     struct_ptr = try_get_struct_alloca(codegen, expr.receiver)
 
     if struct_ptr is None:
         raise_internal_error("CE0030")
 
-    # Use GEP to get pointer to the field
     zero = ir.Constant(codegen.types.i32, 0)
     field_idx = ir.Constant(codegen.types.i32, field_index)
     field_ptr = codegen.builder.gep(

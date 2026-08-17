@@ -7,7 +7,6 @@ if typing.TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
 
 
-
 def is_builtin_env_function(name: str) -> bool:
     """Check if name is a built-in env module function."""
     return name in {
@@ -28,7 +27,6 @@ def get_builtin_env_function_return_type(name: str) -> Type:
         return GenericTypeRef("Maybe", (BuiltinType.STRING,))
 
     elif name == 'setenv':
-        # setenv(string key, string value) -> Result<i32, EnvError>
         from sushi_lang.semantics.typesys import UnknownType
         from sushi_lang.semantics.generics.types import GenericTypeRef
         return GenericTypeRef("Result", (BuiltinType('i32'), UnknownType("EnvError")))
@@ -41,7 +39,6 @@ def validate_env_function_call(name: str, signature: typing.Any) -> None:
     from sushi_lang.semantics.typesys import BuiltinType
 
     if name == 'getenv':
-        # getenv(string key) -> Maybe<string>
         if len(signature.params) != 1:
             raise TypeError(f"getenv expects 1 argument, got {len(signature.params)}")
 
@@ -50,7 +47,6 @@ def validate_env_function_call(name: str, signature: typing.Any) -> None:
             raise TypeError(f"getenv expects string, got {param_type}")
 
     elif name == 'setenv':
-        # setenv(string key, string value) -> Result<i32>
         if len(signature.params) != 2:
             raise TypeError(f"setenv expects 2 arguments, got {len(signature.params)}")
 
@@ -70,7 +66,6 @@ def generate_module_ir() -> ir.Module:
 
     module = create_stdlib_module("sys.env")
 
-    # Generate all env functions
     functions.generate_getenv(module)
     functions.generate_setenv(module)
 

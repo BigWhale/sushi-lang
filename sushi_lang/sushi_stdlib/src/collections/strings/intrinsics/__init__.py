@@ -7,7 +7,6 @@ def declare_utf8_count_intrinsic(module: ir.Module) -> ir.Function:
     """Declare the UTF-8 character count intrinsic function."""
     func_name = "llvm_utf8_count"
 
-    # Check if already declared
     if func_name in module.globals:
         return module.globals[func_name]
 
@@ -21,7 +20,6 @@ def declare_utf8_byte_offset_intrinsic(module: ir.Module) -> ir.Function:
     """Declare the UTF-8 byte offset intrinsic function."""
     func_name = "llvm_utf8_byte_offset"
 
-    # Check if already declared
     if func_name in module.globals:
         return module.globals[func_name]
 
@@ -35,7 +33,6 @@ def declare_toupper_intrinsic(module: ir.Module) -> ir.Function:
     """Declare the ASCII toupper intrinsic function."""
     func_name = "llvm_toupper"
 
-    # Check if already declared
     if func_name in module.globals:
         return module.globals[func_name]
 
@@ -48,7 +45,6 @@ def declare_tolower_intrinsic(module: ir.Module) -> ir.Function:
     """Declare the ASCII tolower intrinsic function."""
     func_name = "llvm_tolower"
 
-    # Check if already declared
     if func_name in module.globals:
         return module.globals[func_name]
 
@@ -61,7 +57,6 @@ def declare_isspace_intrinsic(module: ir.Module) -> ir.Function:
     """Declare the ASCII isspace intrinsic function."""
     func_name = "llvm_isspace"
 
-    # Check if already declared
     if func_name in module.globals:
         return module.globals[func_name]
 
@@ -75,7 +70,6 @@ def declare_strcmp_intrinsic(module: ir.Module) -> ir.Function:
     """Declare the string comparison intrinsic function."""
     func_name = "llvm_strcmp"
 
-    # Check if already declared
     if func_name in module.globals:
         return module.globals[func_name]
 

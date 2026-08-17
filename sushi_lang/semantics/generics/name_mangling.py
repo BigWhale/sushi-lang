@@ -32,13 +32,11 @@ def mangle_function_name(
     if pack_arity is not None and pack_arity < 0:
         raise ValueError(f"pack_arity must be >= 0, got {pack_arity}")
 
-    # --- No-pack path: byte-for-byte unchanged historical behavior ---
     if pack_arity is None:
         if not type_args:
             return base_name
         return f"{base_name}__{_join_sanitized(type_args)}"
 
-    # --- Pack path: append a ".pack{N}" arity-encoding marker segment ---
     if type_args:
         prefix = f"{base_name}__{_join_sanitized(type_args)}"
     else:
@@ -50,10 +48,8 @@ def _join_sanitized(type_args: Tuple['Type', ...]) -> str:
     """Sanitize each type arg's string form and join with single underscores."""
     arg_strs = []
     for arg in type_args:
-        # Get string representation
         type_str = str(arg)
 
-        # Sanitize for use in identifier
         sanitized = (type_str
                      .replace('<', '_')
                      .replace('>', '')

@@ -31,7 +31,6 @@ class LibraryManifestGenerator:
         platform_name = current_platform_name()
         VERSION = _get_versions()["app"]
 
-        # Extract library name from output path (mylib.slib -> mylib)
         library_name = output_path.stem
 
         manifest = {
@@ -48,7 +47,6 @@ class LibraryManifestGenerator:
             "dependencies": self._extract_dependencies(units),
         }
 
-        # Write .slib binary format
         LibraryFormat.write(output_path, manifest, bitcode)
 
     def _contains_foreign_ptr(self, ty) -> bool:
@@ -223,7 +221,6 @@ class LibraryManifestGenerator:
         elif isinstance(node, A.EnumConstructor):
             acc.add(node.enum_name)
 
-        # Recurse into dataclass fields (AST nodes are dataclasses).
         import dataclasses
         if dataclasses.is_dataclass(node) and not isinstance(node, type):
             for f in dataclasses.fields(node):
@@ -330,13 +327,9 @@ class LibraryManifestGenerator:
                     shipped_consts[name] = (c, src)
                     _walk(c, root)
                 elif name in types_by_name:
-                    # Concrete types already ship; generic types ship as
-                    # templates. Walk them for transitive references only.
                     tnode, _src = types_by_name[name]
                     visited.add(name)
                     _walk(tnode, root)
-                # Anything else: builtins, params, locals, public symbols -
-                # resolvable at the consumer without shipping.
 
         for node, _source in exported:
             _walk(node, node)
@@ -391,8 +384,6 @@ class LibraryManifestGenerator:
         # (shipping them below) and reject un-shippable references (CE5006).
         closure = self._compute_export_closure(units, exported)
 
-        # Private generic functions ride the existing template path, flagged
-        # so the consumer can apply closure (not local-wins) clash semantics.
         for fn, src in closure["private_generic_functions"]:
             record = serialize_generic_function(fn, src)
             record["private"] = True
@@ -426,8 +417,6 @@ class LibraryManifestGenerator:
             "constants": sorted(r["name"] for r in shipped_constants),
         }
 
-        # Ship only the perk DEFINITIONS referenced by an exported generic's
-        # constraints, de-duplicated by name (a perk is defined once).
         perks: list[dict] = []
         seen_perks: set[str] = set()
         for unit in units:
@@ -440,8 +429,6 @@ class LibraryManifestGenerator:
                 seen_perks.add(perk.name)
                 perks.append(serialize_perk(perk, source))
 
-        # Ship the library's own concrete impls of the shipped perks (C4a).
-        # Signatures + symbol names only - the bodies are in the bitcode.
         from sushi_lang.semantics.passes.collect.perks import _get_type_name
         from sushi_lang.semantics.generics.types import GenericTypeRef
 
@@ -454,8 +441,6 @@ class LibraryManifestGenerator:
             for impl in unit.ast.perk_impls:
                 if impl.perk_name not in seen_perks:
                     continue
-                # Generic-target impls (extend List<T> with ...) are not
-                # supported in-program; only concrete targets ship.
                 if isinstance(impl.target_type, GenericTypeRef):
                     continue
                 type_name = _get_type_name(impl.target_type)

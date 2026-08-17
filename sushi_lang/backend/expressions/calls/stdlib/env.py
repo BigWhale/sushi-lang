@@ -19,16 +19,13 @@ def emit_env_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
 
     i32 = ir.IntType(INT32_BIT_WIDTH)
 
-    # Map user function name to stdlib function name
     stdlib_func_name = f"sushi_{func_name}"
 
     from sushi_lang.backend.functions import declare_stdlib_function
 
-    # String type: {i8* data, i32 size}
     string_type = codegen.types.ll_type(BuiltinType.STRING)
 
     if func_name == "getenv":
-        # getenv(string key) -> Maybe<string>
         if len(expr.args) != 1:
             raise_internal_error("CE0023", method="getenv", expected=1, got=len(expr.args))
 
@@ -45,22 +42,18 @@ def emit_env_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
         return codegen.utils.as_i1(result) if to_i1 else result
 
     elif func_name == "setenv":
-        # setenv(string key, string value) -> Result<i32>
         if len(expr.args) != 2:
             raise_internal_error("CE0023", method="setenv", expected=2, got=len(expr.args))
 
         key_value = codegen.expressions.emit_expr(expr.args[0])
         value_value = codegen.expressions.emit_expr(expr.args[1])
 
-        # The stdlib function returns bare i32
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, i32, [string_type, string_type])
         result = codegen.builder.call(stdlib_func, [key_value, value_value], name="setenv_result")
 
-        # Wrap in Result.Ok() enum (same as time functions)
         from sushi_lang.semantics.typesys import UnknownType
         from sushi_lang.semantics.generics.results import ensure_result_type_in_table
 
-        # Create Result<i32, EnvError> enum if it doesn't exist
         ok_type = BuiltinType.I32
         err_type = UnknownType("EnvError")
         result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type, struct_table=codegen.struct_table.by_name)
@@ -69,21 +62,17 @@ def emit_env_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
             result_llvm_type = codegen.types.ll_type(result_enum)
             ok_variant_index = result_enum.get_variant_index("Ok")
 
-            # Create Result.Ok(value) enum
             ok_result = ir.Constant(result_llvm_type, ir.Undefined)
             tag = ir.Constant(codegen.types.i32, ok_variant_index)
             ok_result = codegen.builder.insert_value(ok_result, tag, 0, name="ok_tag")
 
-            # Pack the i32 value into the data array
             data_array_type = result_llvm_type.elements[1]
 
-            # Allocate space for the value and data array
             value_alloca = codegen.builder.alloca(i32, name="setenv_result_value")
             codegen.builder.store(result, value_alloca)
 
             data_alloca = codegen.builder.alloca(data_array_type, name="data_array")
 
-            # Bitcast pointers to i8* for memcpy
             src_ptr = codegen.builder.bitcast(value_alloca, codegen.types.i8.as_pointer())
             dest_ptr = codegen.builder.bitcast(data_alloca, codegen.types.i8.as_pointer())
 
@@ -98,7 +87,6 @@ def emit_env_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool)
             is_volatile = FALSE_I1
             codegen.builder.call(memcpy_fn, [dest_ptr, src_ptr, size_const, is_volatile])
 
-            # Load the data array and insert into enum
             data_value = codegen.builder.load(data_alloca, name="data_value")
             ok_result = codegen.builder.insert_value(ok_result, data_value, 1, name="ok_result")
 

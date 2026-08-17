@@ -1,4 +1,3 @@
-# semantics/passes/types/statements.py
 """Statement validation for type validation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
@@ -23,7 +22,6 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
         er.emit(validator.reporter, er.ERR.CE2007, stmt.name_span, name=stmt.name)
         return  # Cannot continue without type info
 
-    # Validate the declared type
     validate_type_name(validator, stmt.ty, stmt.type_span)
 
     # Blank type cannot be used for variables
@@ -41,16 +39,13 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
                 mode=mode, ty=display_type(stmt.ty.referenced_type))
         return
 
-    # Resolve variable type (handles UnknownType, GenericTypeRef, Result<T, E>, HashMap<K, V>, etc.)
     from .resolution import resolve_variable_type
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
     resolved_type = resolve_variable_type(validator, stmt.ty, stmt.type_span)
 
-    # Store resolved type in variable table
     validator.variable_types[stmt.name] = resolved_type
 
-    # Update AST node for backend (but keep GenericTypeRef for Result<T, E>)
     if not (isinstance(stmt.ty, GenericTypeRef) and stmt.ty.base_name == "Result"):
         if resolved_type != stmt.ty:
             stmt.ty = resolved_type
@@ -77,8 +72,6 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
             er.emit(validator.reporter, er.ERR.CE2505, stmt.value.loc)
             return
 
-    # Propagate expected type to constructors BEFORE validation
-    # This is CRITICAL for generic type inference (Result<T>, Maybe<T>, Own<T>, etc.)
     if stmt.value:
         from .propagation import propagate_types_to_value
         propagate_types_to_value(validator, stmt.value, resolved_type)
@@ -103,7 +96,6 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
             or (isinstance(stmt.ty, EnumType) and stmt.ty.name.startswith("Result<"))
         )
 
-        # Check if RHS is Result<T> but LHS is not
         if (rhs_type is not None and
             isinstance(rhs_type, EnumType) and
             rhs_type.name.startswith("Result<") and
@@ -112,7 +104,6 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
             # Allow if RHS is already a method call (like .realise() or .clone())
             # because those methods return the unwrapped type
             if not isinstance(stmt.value, (MethodCall, DotCall)):
-                # Error: assigning Result<T> to non-Result variable without handling
                 er.emit(validator.reporter, er.ERR.CE2505, stmt.value.loc)
 
 
@@ -152,7 +143,6 @@ def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:
     if expected_type is None:
         return  # Functions without return type (shouldn't happen after CE0103)
 
-    # Resolve the return type to its Result enum (explicit Result<T, E> and implicit T | E)
     from .resolution import resolve_return_type_to_result
     expected_type = resolve_return_type_to_result(
         validator,
@@ -161,19 +151,14 @@ def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:
     )
 
     if stmt.value:
-        # Propagate expected type to constructors BEFORE validation
-        # This is CRITICAL for generic type inference (Result<T>, Maybe<T>, Own<T>, etc.)
         from .propagation import propagate_types_to_value
         propagate_types_to_value(validator, stmt.value, expected_type)
 
-        # Validate the return expression after type propagation
         validator.validate_expression(stmt.value)
 
-        # Validate Result.Ok() or Result.Err() pattern using extracted utilities
         from .result_validation import validate_result_pattern
 
         if not validate_result_pattern(validator, stmt.value, expected_type):
-            # Return statement must use Result.Ok() or Result.Err()
             er.emit_with(validator.reporter, er.ERR.CE2030, stmt.value.loc) \
                 .help("wrap return value: return Result.Ok(value)").emit()
 
@@ -183,7 +168,6 @@ def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:
             if check_propagation_in_expression(stmt.value):
                 er.emit(validator.reporter, er.ERR.CW2511, stmt.value.loc)
     else:
-        # Bare "return" is no longer allowed - must use Ok() or Err()
         er.emit_with(validator.reporter, er.ERR.CE2030, stmt.loc) \
             .help("wrap return value: return Result.Ok(value)").emit()
 
@@ -192,19 +176,14 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
     """Validate rebind statement type compatibility (CE2002)."""
     from sushi_lang.semantics.ast import Name
 
-    # Determine the target type based on whether we're rebinding a variable or a field
     actual_type = None
 
     if isinstance(stmt.target, Name):
-        # Simple variable rebind (x := value)
         var_name = stmt.target.id
         if var_name not in validator.variable_types:
-            # Variable not found - this should have been caught in scope pass
-            # but we'll validate the expression anyway
             validator.validate_expression(stmt.value)
             return
 
-        # Get variable type
         var_type = validator.variable_types[var_name]
 
         # Unwrap reference types for validation
@@ -216,36 +195,27 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
             actual_type = var_type.referenced_type
 
     elif isinstance(stmt.target, MemberAccess):
-        # Field rebind (obj.field := value)
-        # First, validate the target expression to ensure it's valid
         validator.validate_expression(stmt.target)
 
-        # Infer the type of the field being rebound
         actual_type = validator.infer_expression_type(stmt.target)
         if actual_type is None:
-            # Can't infer field type - validation already failed
             validator.validate_expression(stmt.value)
             return
 
     else:
-        # Unknown target type - should not happen
         validator.validate_expression(stmt.target)
         validator.validate_expression(stmt.value)
         return
 
-    # Propagate expected type to constructors BEFORE validation
-    # This is critical for generic type inference (user-defined generic enums, etc.)
     if stmt.value:
         from .propagation import propagate_types_to_value
         propagate_types_to_value(validator, stmt.value, actual_type)
 
-    # Validate the expression after propagating type information
     validator.validate_expression(stmt.value)
 
     expr_type = validator.infer_expression_type(stmt.value)
 
     if expr_type is None:
-        # Can't infer expression type - validation already failed elsewhere
         return
 
     # Check type compatibility with the actual type (unwrapped for references).
@@ -259,21 +229,17 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
     # recurses into function members, which is what every other CE2002 site uses.
     from .compatibility import types_compatible
     if not types_compatible(validator, expr_type, actual_type):
-        # Type mismatch in rebind statement
         er.emit(validator.reporter, er.ERR.CE2002, stmt.loc,
                expected=display_type(actual_type), got=display_type(expr_type))
 
 
 def validate_if_statement(validator: 'TypeValidator', stmt: If) -> None:
     """Validate if statement conditions and branches."""
-    # Validate all condition-block arms
     for cond, block in stmt.arms:
         # Validate condition is boolean (CE2005)
         validate_boolean_condition(validator, cond, "if")
-        # Validate block
         validator._validate_block(block)
 
-    # Validate else branch if present
     if stmt.else_block:
         validator._validate_block(stmt.else_block)
 
@@ -283,17 +249,14 @@ def validate_while_statement(validator: 'TypeValidator', stmt: While) -> None:
     # Validate condition is boolean (CE2005)
     validate_boolean_condition(validator, stmt.cond, "while")
 
-    # Validate body
     validator._validate_block(stmt.body)
 
 
 def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> None:
     """Validate foreach statement: check iterator type and item variable."""
-    # Validate the iterable expression
     validator.validate_expression(stmt.iterable)
     iterable_type = validator.infer_expression_type(stmt.iterable)
 
-    # Ensure iterable is an IteratorType
     if iterable_type is None:
         return  # Error already emitted during expression validation
 
@@ -301,15 +264,11 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
         er.emit(validator.reporter, er.ERR.CE2033, stmt.iterable.loc, got=display_type(iterable_type))
         return
 
-    # Get the element type from the iterator
     element_type = iterable_type.element_type
 
-    # If item type is explicitly declared, validate compatibility
     if stmt.item_type is not None:
-        # Validate the declared type
         validate_type_name(validator, stmt.item_type, stmt.item_type_span)
 
-        # Resolve UnknownType to StructType if needed
         declared_type = stmt.item_type
         from sushi_lang.semantics.typesys import UnknownType
         if isinstance(stmt.item_type, UnknownType):
@@ -317,16 +276,13 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
             if resolved_type != stmt.item_type:
                 declared_type = resolved_type
 
-        # Check type compatibility
         if not types_compatible(validator, declared_type, element_type):
             er.emit(validator.reporter, er.ERR.CE2034, stmt.item_type_span,
                    expected=display_type(element_type), got=display_type(declared_type))
             return
 
-        # Use declared type
         stmt.item_type = declared_type
     else:
-        # Infer item type from iterator's element type
         stmt.item_type = element_type
 
     # A reference binding (#300 phase 1) is a pointer into the container's element
@@ -357,10 +313,8 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
         mode = BorrowMode.POKE if stmt.item_borrow == "poke" else BorrowMode.PEEK
         validator.variable_types[stmt.item_name] = ReferenceType(stmt.item_type, mode)
     else:
-        # Track the item variable type
         validator.variable_types[stmt.item_name] = stmt.item_type
 
-    # Validate the body block
     try:
         validator._validate_block(stmt.body)
     finally:

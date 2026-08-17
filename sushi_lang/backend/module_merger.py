@@ -24,13 +24,10 @@ class ModuleMerger:
         module_type_defs: set[str] | None = None
     ) -> llvm.ModuleRef:
         """Build new module from resolved symbols."""
-        # Type definitions must come before uses. Union the source modules' declarations
-        # with any that happen to be embedded in a symbol's own text.
         type_defs = self._extract_type_definitions(resolved_symbols)
         if module_type_defs:
             type_defs |= module_type_defs
 
-        # Build IR text by concatenating all symbol definitions
         ir_parts = [
             f'; ModuleID = "{module_name}"',
             f'source_filename = "{module_name}"',
@@ -44,12 +41,10 @@ class ModuleMerger:
 
         ir_parts.append('')  # Blank line
 
-        # Add collected type definitions
         if type_defs:
             ir_parts.extend(sorted(type_defs))
             ir_parts.append('')
 
-        # Separate declarations from definitions for cleaner IR
         declarations = []
         definitions = []
 
@@ -57,8 +52,6 @@ class ModuleMerger:
             if symbol.ir_text is None:
                 continue
 
-            # Strip type definitions from individual IR texts
-            # (we already collected them above)
             ir_text = self._strip_type_definitions(symbol.ir_text)
 
             if symbol.is_declaration:
@@ -66,20 +59,17 @@ class ModuleMerger:
             else:
                 definitions.append(ir_text)
 
-        # Declarations first, then definitions
         ir_parts.extend(declarations)
         if declarations and definitions:
             ir_parts.append('')
         ir_parts.extend(definitions)
 
-        # Join and parse
         full_ir = '\n'.join(ir_parts)
 
         try:
             merged_module = llvm.parse_assembly(full_ir)
             return merged_module
         except Exception as e:
-            # Debug: write IR to file for inspection
             debug_path = '/tmp/sushi_merge_failed.ll'
             with open(debug_path, 'w') as f:
                 f.write(full_ir)
@@ -95,8 +85,6 @@ class ModuleMerger:
         """Extract all type definitions from symbol IR texts."""
         type_defs = set()
 
-        # Regex to match type definitions
-        # Matches: %name = type { ... } or %"name" = type { ... }
         type_def_pattern = re.compile(
             r'^(%[a-zA-Z_][a-zA-Z0-9_\.]*|%"[^"]+") = type \{[^}]*\}',
             re.MULTILINE
@@ -108,7 +96,6 @@ class ModuleMerger:
 
             matches = type_def_pattern.findall(symbol.ir_text)
             for match in matches:
-                # Get the full line containing this type definition
                 for line in symbol.ir_text.split('\n'):
                     if line.strip().startswith(match) and '= type' in line:
                         type_defs.add(line.strip())
@@ -123,10 +110,8 @@ class ModuleMerger:
 
         for line in lines:
             stripped = line.strip()
-            # Skip type definition lines
             if '= type {' in stripped and stripped.startswith('%'):
                 continue
-            # Skip module-level metadata we'll add ourselves
             if stripped.startswith('; ModuleID'):
                 continue
             if stripped.startswith('source_filename'):

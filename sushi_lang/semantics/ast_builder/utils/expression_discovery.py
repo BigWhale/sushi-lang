@@ -6,26 +6,17 @@ from lark import Tree, Token
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import ice
 
 
-# Expression node names from grammar v0.4
 _EXPR_NODES = {
     "expr",        # Top-level expression wrapper
-    # Logical operators (lowest precedence)
     "or_expr", "xor_expr", "and_expr",
-    # Bitwise operators
     "bitwise_or", "bitwise_xor", "bitwise_and",
-    # Comparison and equality
     "equality", "comparison",
-    # Shift operators
     "shift",
-    # Arithmetic operators
     "add", "mul",
-    # Unary operators and atoms
     "unary", "neg", "not", "bitnot",
-    # Postfix operations and atoms (highest precedence)
     "maybe_call", "postfix", "atom",
 }
 
-# Expression priority for structural disambiguation
 _EXPR_PRIORITY = {
     "expr": 0,
     "or_expr": 1,
@@ -49,7 +40,6 @@ _EXPR_PRIORITY = {
     "atom": 15,
 }
 
-# Operator token sets for structural analysis
 _OP_TEXTS = {
     "+", "-", "*", "/", "%",
     "==", "!=", "<", "<=", ">", ">=",
@@ -123,7 +113,6 @@ def find_outer_expr_structural(container: Tree) -> Optional[Tree]:
     if not candidates:
         return None
 
-    # Keep nodes that are NOT nested within any other candidate
     outer: List[Tree] = []
     for node, anc in candidates:
         nested = any((other is not node) and (other in anc) for other, _ in candidates)
@@ -132,11 +121,9 @@ def find_outer_expr_structural(container: Tree) -> Optional[Tree]:
     if not outer:
         return candidates[0][0]
 
-    # Prefer nodes that contain an operator
     with_ops = [n for n in outer if contains_op(n)]
     pool = with_ops if with_ops else outer
 
-    # Prefer largest by token count; tie-break by priority (smaller is "higher-level")
     pool.sort(key=lambda n: (-token_count(n), _EXPR_PRIORITY.get(n.data, 999)))
     return pool[0]
 
@@ -149,7 +136,6 @@ def expr_and_block(container: Tree) -> Tuple[Tree, Tree]:
     if blk is None:
         ice(container, "clause missing block")
 
-    # For if/elif/while statements, find expression before the block
     expr = None
     for child in container.children:
         if isinstance(child, Tree) and child.data in _EXPR_NODES:
@@ -157,7 +143,6 @@ def expr_and_block(container: Tree) -> Tuple[Tree, Tree]:
                 expr = child
                 break
 
-    # Fallback to structural search if no direct expression child found
     if expr is None:
         expr = find_outer_expr_structural(container)
 

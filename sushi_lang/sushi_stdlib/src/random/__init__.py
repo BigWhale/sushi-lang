@@ -7,7 +7,6 @@ if typing.TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
 
 
-
 def is_builtin_random_function(name: str) -> bool:
     """Check if name is a built-in random module function."""
     return name in {
@@ -39,12 +38,10 @@ def validate_random_function_call(name: str, signature: typing.Any) -> None:
     from sushi_lang.semantics.typesys import BuiltinType
 
     if name == 'rand':
-        # rand() -> u64 (no parameters)
         if len(signature.params) != 0:
             raise TypeError(f"rand expects 0 arguments, got {len(signature.params)}")
 
     elif name == 'rand_range':
-        # rand_range(i32 min, i32 max) -> i32
         if len(signature.params) != 2:
             raise TypeError(f"rand_range expects 2 arguments, got {len(signature.params)}")
 
@@ -59,7 +56,6 @@ def validate_random_function_call(name: str, signature: typing.Any) -> None:
         # TODO: Add compile-time validation that min < max (requires constant evaluation)
 
     elif name == 'srand':
-        # srand(u64 seed) -> ~
         if len(signature.params) != 1:
             raise TypeError(f"srand expects 1 argument, got {len(signature.params)}")
 
@@ -68,7 +64,6 @@ def validate_random_function_call(name: str, signature: typing.Any) -> None:
             raise TypeError(f"srand expects u64, got {param_type}")
 
     elif name == 'rand_f64':
-        # rand_f64() -> f64 (no parameters)
         if len(signature.params) != 0:
             raise TypeError(f"rand_f64 expects 0 arguments, got {len(signature.params)}")
 
@@ -80,7 +75,6 @@ def generate_module_ir() -> ir.Module:
 
     module = create_stdlib_module("random")
 
-    # Generate all random functions
     generators.generate_rand(module)
     generators.generate_rand_range(module)
     generators.generate_srand(module)

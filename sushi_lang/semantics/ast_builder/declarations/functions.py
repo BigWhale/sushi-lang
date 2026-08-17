@@ -37,14 +37,12 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
     if name_tok is None:
         ice(t, "missing NAME")
 
-    # Check for PUBLIC token
     is_public = False
     for child in t.children:
         if isinstance(child, Token) and child.type == "PUBLIC":
             is_public = True
             break
 
-    # Extract type parameters if present
     type_params_node = first_tree(t.children, "type_params")
     type_params = parse_bounded_type_params(type_params_node) if type_params_node else None
 
@@ -104,7 +102,6 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> 
 
     out: List[Param] = []
     for ch in t.children:
-        # The shared `parameters` rule wraps each entry in a `param` node.
         node = ch
         if isinstance(node, Tree) and node.data == "param":
             inner = next((c for c in node.children if isinstance(c, Tree)), None)
@@ -125,7 +122,6 @@ def parse_params(t: Tree, ast_builder: 'ASTBuilder', pack_names=frozenset()) -> 
             if mode_tok is None or name_tok is None:
                 ice(node, "malformed self_param")
             if str(name_tok) != "self":
-                # `poke x` in a parameter list is a missing type, not a receiver.
                 raise SyntaxDiagnostic("CE2425", span=span_of(node)) \
                     .help("a reference parameter is written `poke T name`; the bare "
                           "form is only the receiver, spelled `poke self`")

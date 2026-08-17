@@ -4,10 +4,6 @@ import llvmlite.ir as ir
 from typing import Tuple
 
 
-# ==============================================================================
-# Basic Types
-# ==============================================================================
-
 def get_basic_types() -> Tuple[ir.IntType, ir.PointerType, ir.IntType, ir.IntType]:
     """Get commonly used basic LLVM types."""
     i8 = ir.IntType(8)
@@ -16,10 +12,6 @@ def get_basic_types() -> Tuple[ir.IntType, ir.PointerType, ir.IntType, ir.IntTyp
     i64 = ir.IntType(64)
     return i8, i8_ptr, i32, i64
 
-
-# ==============================================================================
-# String Type (Fat Pointer)
-# ==============================================================================
 
 def get_string_type() -> ir.LiteralStructType:
     """The string fat pointer `{i8* data, i32 size, i8 owned}`.
@@ -42,10 +34,6 @@ def get_string_types() -> Tuple[ir.IntType, ir.PointerType, ir.IntType, ir.IntTy
     return i8, i8_ptr, i32, i64, string_type
 
 
-# ==============================================================================
-# Iterator Type
-# ==============================================================================
-
 def get_iterator_type(element_type: ir.Type) -> ir.LiteralStructType:
     """The iterator struct `{i32 index, i32 length, T* data}`; length -1 means streaming."""
     i32 = ir.IntType(32)
@@ -58,10 +46,6 @@ def get_string_iterator_type() -> ir.LiteralStructType:
     string_type = get_string_type()
     return get_iterator_type(string_type)
 
-
-# ==============================================================================
-# Dynamic Array Type
-# ==============================================================================
 
 def get_dynamic_array_type(element_type: ir.Type) -> ir.LiteralStructType:
     """Get the dynamic array struct type for a given element type."""
@@ -76,18 +60,10 @@ def get_byte_array_type() -> ir.LiteralStructType:
     return get_dynamic_array_type(i8)
 
 
-# ==============================================================================
-# File Type
-# ==============================================================================
-
 def get_file_type() -> ir.PointerType:
     """Get the FILE* type (opaque pointer)."""
     return ir.IntType(8).as_pointer()
 
-
-# ==============================================================================
-# ProcessOutput Struct
-# ==============================================================================
 
 def get_process_output_type() -> ir.LiteralStructType:
     """Get the ProcessOutput struct VALUE type: { i32 exit_code, string, string }."""
@@ -121,10 +97,6 @@ def get_process_output_result_type() -> ir.LiteralStructType:
     return ir.LiteralStructType([i32, ir.ArrayType(ir.IntType(64), _payload_word_count(data_bytes))])
 
 
-# ==============================================================================
-# Enum Type Helpers
-# ==============================================================================
-
 def _payload_word_count(byte_size: int) -> int:
     """i64 words needed for `byte_size` payload bytes, minimum 1 (#300 phase 2)."""
     return max((byte_size + 7) // 8, 1)
@@ -137,26 +109,18 @@ def get_unit_enum_type() -> ir.LiteralStructType:
     return ir.LiteralStructType([i32, ir.ArrayType(i64, 1)])
 
 
-# ==============================================================================
-# Result and Maybe Types (for future use)
-# ==============================================================================
-
 def get_result_type(ok_type: ir.Type, err_type: ir.Type = None) -> ir.LiteralStructType:
     """Get the Result<T, E> enum type."""
     from sushi_lang.backend.expressions.memory import calculate_llvm_type_size
 
     i32 = ir.IntType(32)
 
-    # Calculate size of ok_type in bytes
     ok_size = calculate_llvm_type_size(ok_type)
 
-    # Calculate size of err_type if provided
     if err_type is not None:
         err_size = calculate_llvm_type_size(err_type)
-        # Use the maximum of ok_type and err_type sizes, with minimum 1 byte
         size_bytes = max(ok_size, err_size, 1)
     else:
-        # Legacy behavior: use only ok_type size
         size_bytes = max(ok_size, 1)
 
     data_array = ir.ArrayType(ir.IntType(64), _payload_word_count(size_bytes))
@@ -169,16 +133,11 @@ def get_maybe_type(some_type: ir.Type) -> ir.LiteralStructType:
 
     i32 = ir.IntType(32)
 
-    # Calculate size of some_type in bytes using existing infrastructure
     size_bytes = calculate_llvm_type_size(some_type)
 
     data_array = ir.ArrayType(ir.IntType(64), _payload_word_count(max(size_bytes, 1)))
     return ir.LiteralStructType([i32, data_array])
 
-
-# ==============================================================================
-# Time Types
-# ==============================================================================
 
 def get_timespec_type() -> ir.LiteralStructType:
     """Get the POSIX timespec struct type."""

@@ -16,16 +16,13 @@ def parse_enumdef(t: Tree, ast_builder: 'ASTBuilder') -> EnumDef:
     """Parse enum_def: ENUM NAME [type_params] ":" _NEWLINE _INDENT enum_variant+ _DEDENT"""
     t = expect(t, "enum_def")
 
-    # Extract enum name
     name_tok = first_name(t.children)
     if name_tok is None:
         ice(t, "missing enum NAME")
 
-    # Extract type parameters if present (e.g., <T> or <T: Hashable>)
     type_params_node = first_tree(t.children, "type_params")
     type_params = parse_bounded_type_params(type_params_node) if type_params_node else None
 
-    # Extract variants
     variants: List[EnumVariant] = []
     for child in t.children:
         if isinstance(child, Tree) and child.data == "enum_variant":
@@ -47,16 +44,13 @@ def parse_enumvariant(t: Tree, ast_builder: 'ASTBuilder') -> EnumVariant:
     """Parse enum_variant: NAME ["(" enum_variant_fields ")"] _NEWLINE"""
     t = expect(t, "enum_variant")
 
-    # Extract variant name
     name_tok = first_name(t.children)
     if name_tok is None:
         ice(t, "missing variant NAME")
 
-    # Extract associated types (if any)
     associated_types: List[Type] = []
     fields_node = first_tree(t.children, "enum_variant_fields")
     if fields_node is not None:
-        # Parse each type in the fields list
         for child in fields_node.children:
             if isinstance(child, Tree) and (child.data in TYPE_NODE_NAMES or child.data == "name_t"):
                 ty = ast_builder._parse_type(child)

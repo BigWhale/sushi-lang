@@ -3,7 +3,6 @@
 import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 
-# Get platform-specific stdio module (darwin, linux, etc.)
 _platform_stdio = get_platform_module('stdio')
 
 
@@ -27,7 +26,6 @@ def declare_stderr_handle(module: ir.Module) -> ir.GlobalVariable:
     return _platform_stdio.declare_stderr_handle(module)
 
 
-# Expose platform-specific handle name getters for use by other modules
 def get_stdin_handle_name() -> str:
     """Get the platform-specific name for stdin handle."""
     return _platform_stdio.get_stdin_handle_name()

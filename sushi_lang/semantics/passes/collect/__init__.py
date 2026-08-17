@@ -1,4 +1,3 @@
-# semantics/passes/collect/__init__.py
 """Phase 0 collection pass - orchestrates all collectors via facade pattern."""
 
 from __future__ import annotations
@@ -21,7 +20,6 @@ from sushi_lang.semantics.generics.types import (
     GenericStructType,
 )
 
-# Import specialized collectors
 from .constants import ConstantCollector, ConstantTable, ConstSig
 from .structs import StructCollector, StructTable, GenericStructTable
 from .enums import EnumCollector, EnumTable, GenericEnumTable
@@ -41,11 +39,8 @@ from .perks import PerkCollector, PerkTable, PerkImplementationTable
 from .externals import ExternalCollector, ExternalTable, ExternalSig
 from .utils import extract_type_param_names
 
-# Re-export all public classes for backward compatibility
 __all__ = [
-    # Main facade
     'CollectorPass',
-    # Tables
     'ConstantTable',
     'StructTable',
     'GenericStructTable',
@@ -58,7 +53,6 @@ __all__ = [
     'PerkTable',
     'PerkImplementationTable',
     'ExternalTable',
-    # Signatures
     'ConstSig',
     'ExternalSig',
     'FuncSig',
@@ -66,7 +60,6 @@ __all__ = [
     'Param',
     'ExtensionMethod',
     'GenericExtensionMethod',
-    # Utilities
     'extract_type_param_names',
 ]
 
@@ -78,7 +71,6 @@ class CollectorPass:
         """Initialize collector pass with all sub-collectors."""
         self.r = reporter
 
-        # Initialize shared tables (these will be populated by collectors)
         self.constants = ConstantTable()
         self.structs = StructTable()
         self.generic_structs = GenericStructTable()
@@ -92,14 +84,12 @@ class CollectorPass:
         self.perk_impls = PerkImplementationTable()
         self.externals = ExternalTable()
 
-        # Known types set (shared across collectors)
         self.known_types: Set[Type] = {
             BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
             BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
             BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL, BuiltinType.STRING
         }
 
-        # Initialize specialized collectors with shared table references
         self.constant_collector = ConstantCollector(
             reporter=reporter,
             constants=self.constants
@@ -144,7 +134,6 @@ class CollectorPass:
             generic_enums=self.generic_enums
         )
 
-        # Register predefined types (must happen after collectors initialized)
         self._register_predefined_structs()
         self._register_predefined_enums()
         self._register_predefined_generics()
@@ -152,7 +141,6 @@ class CollectorPass:
     def run(self, root: Program, unit_name: Optional[str] = None,
             unit_file: Optional[str] = None) -> 'SymbolTables':
         """Run all collection passes in dependency order."""
-        # Collect in dependency order
         self.constant_collector.collect(root)
         self.struct_collector.collect(root)
         self.enum_collector.collect(root)
@@ -201,13 +189,10 @@ class CollectorPass:
             variants=(
                 EnumVariantInfo(
                     name="Ok",
-                    # Ok variant holds a value of type T (the generic parameter)
-                    # We use TypeParameter("T") to represent the generic type
                     associated_types=(TypeParameter(name="T"),)
                 ),
                 EnumVariantInfo(
                     name="Err",
-                    # Err variant holds an error of type E (the generic parameter)
                     associated_types=(TypeParameter(name="E"),)
                 ),
             )
@@ -226,7 +211,6 @@ class CollectorPass:
             variants=(
                 EnumVariantInfo(
                     name="Some",
-                    # Some variant holds a value of type T (the generic parameter)
                     associated_types=(TypeParameter(name="T"),)
                 ),
                 EnumVariantInfo(
@@ -247,14 +231,11 @@ class CollectorPass:
         own_generic = GenericStructType(
             name="Own",
             type_params=(TypeParameter(name="T"),),
-            # Field stores a pointer to T (T*)
             fields=(("value", PointerType(pointee_type=TypeParameter(name="T"))),)
         )
         self.generic_structs.by_name["Own"] = own_generic
         self.generic_structs.order.append("Own")
 
-        # HashMap<K, V> generic struct - hash table with open addressing.
-        # Only registered if activated via `use <collections/hashmap>`.
         from sushi_lang.semantics.generics.active_generics import is_generic_active
         from sushi_lang.semantics.generics.hashmap import hashmap_generic_struct
         if is_generic_active("HashMap"):
@@ -275,8 +256,6 @@ class CollectorPass:
         list_generic = GenericStructType(
             name="List",
             type_params=(TypeParameter(name="T"),),
-            # Fields represent the List structure
-            # data is a placeholder (i32*) - actual LLVM type is T*
             fields=(
                 ("len", BuiltinType.I32),
                 ("capacity", BuiltinType.I32),

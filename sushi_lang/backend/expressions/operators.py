@@ -31,15 +31,12 @@ def emit_float_negation(codegen: 'LLVMCodegen', val: ir.Value) -> ir.Value:
 
 def emit_unary_op(codegen: 'LLVMCodegen', expr: UnaryOp, to_i1: bool) -> ir.Value:
     """Emit unary operation (negation, logical not)."""
-    # Use codegen.expressions for recursive call
     val = codegen.expressions.emit_expr(expr.expr)
 
     if expr.op == "neg":
-        # Handle both integer and float negation
         if isinstance(val.type, (ir.FloatType, ir.DoubleType)):
             return emit_float_negation(codegen, val)
         else:
-            # Integer negation at the operand's own width (no i32 squeeze)
             return codegen.builder.sub(ir.Constant(val.type, 0), val)
 
     if expr.op == "not":
@@ -50,7 +47,6 @@ def emit_unary_op(codegen: 'LLVMCodegen', expr: UnaryOp, to_i1: bool) -> ir.Valu
         return codegen.builder.zext(codegen.builder.xor(i1v, ir.Constant(codegen.i1, 1)), codegen.i8)
 
     if expr.op == "~":
-        # Bitwise NOT (complement) at the operand's own width
         return codegen.builder.not_(val)
 
     raise NotImplementedError(f"unknown UnaryOp: {expr.op!r}")
@@ -58,10 +54,8 @@ def emit_unary_op(codegen: 'LLVMCodegen', expr: UnaryOp, to_i1: bool) -> ir.Valu
 
 def _ensure_i32(codegen: 'LLVMCodegen', val: ir.Value) -> ir.Value:
     """Efficiently convert value to i32, avoiding redundant conversions."""
-    # Fast path: already i32, return directly
     if isinstance(val.type, ir.IntType) and val.type.width == 32:
         return val
-    # Slow path: needs conversion
     return codegen.utils.as_i32(val)
 
 
@@ -75,19 +69,15 @@ def emit_binary_op(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.Va
     if op in ("==", "!=", "<", "<=", ">", ">="):
         return emit_comparison(codegen, expr, to_i1)
 
-    # Use codegen.expressions for recursive calls
     if op in ("&", "|", "^", "<<", ">>"):
         left = codegen.expressions.emit_expr(expr.left)
         right = codegen.expressions.emit_expr(expr.right)
-        # Infer semantic type for right shift signed/unsigned dispatch
         from .type_utils import infer_expr_semantic_type
         left_type = infer_expr_semantic_type(codegen, expr.left)
         return emit_bitwise(codegen, op, left, right, left_type)
 
-    # Arithmetic operations: preserve operand types (don't force i32)
     left = codegen.expressions.emit_expr(expr.left)
     right = codegen.expressions.emit_expr(expr.right)
-    # Infer semantic type for signed/unsigned dispatch of / and %
     from .type_utils import infer_expr_semantic_type
     left_type = infer_expr_semantic_type(codegen, expr.left)
     if left_type is None:
@@ -97,12 +87,10 @@ def emit_binary_op(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.Va
 
 def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.Value:
     """Emit comparison operations with string support."""
-    # Use codegen.expressions for recursive calls
     lhs = codegen.expressions.emit_expr(expr.left)
     rhs = codegen.expressions.emit_expr(expr.right)
     op = expr.op
 
-    # String comparisons
     if (codegen.types.is_string_type(lhs.type) and
         codegen.types.is_string_type(rhs.type)):
         if op in ("==", "!="):
@@ -111,10 +99,8 @@ def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.V
         else:
             raise NotImplementedError(f"String comparison '{op}' not yet supported")
 
-    # Floating-point comparisons
     is_float = str(lhs.type) in ('double', 'float')
     if is_float:
-        # Use fcmp with ordered comparisons (oeq, one, olt, ole, ogt, oge)
         i1v = codegen.builder.fcmp_ordered(op, lhs, rhs)
         return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
 
@@ -141,17 +127,14 @@ def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.V
 
 def emit_arithmetic(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value, left_type: 'Optional[Type]' = None) -> ir.Value:
     """Emit arithmetic operations on integer or floating-point values."""
-    # Constant folding: if both operands are constants, compute at compile time
     if isinstance(left, ir.Constant) and isinstance(right, ir.Constant):
         folded = _fold_arithmetic_constants(op, left, right)
         if folded is not None:
             return folded
 
-    # Check if operands are floating-point types
     is_float = str(left.type) in ('double', 'float')
 
     if is_float:
-        # Floating-point arithmetic operations
         float_ops = {
             "+": codegen.builder.fadd,
             "-": codegen.builder.fsub,
@@ -182,18 +165,15 @@ def emit_arithmetic(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.V
 
 def _fold_arithmetic_constants(op: str, left: ir.Constant, right: ir.Constant) -> 'Optional[ir.Constant]':
     """Fold arithmetic operations on constant values at compile time."""
-    # Only fold integer constants for now (float constant folding is more complex)
     if not isinstance(left.type, ir.IntType) or not isinstance(right.type, ir.IntType):
         return None
 
-    # Extract constant values
     try:
         lval = left.constant
         rval = right.constant
     except (AttributeError, TypeError):
         return None
 
-    # Perform the operation (sign-agnostic operators only)
     result = None
     if op == "+":
         result = lval + rval
@@ -205,12 +185,10 @@ def _fold_arithmetic_constants(op: str, left: ir.Constant, right: ir.Constant) -
     if result is None:
         return None
 
-    # Handle overflow by masking to type width
     width = left.type.width
     mask = (1 << width) - 1
     result = result & mask
 
-    # Handle signed representation
     if result >= (1 << (width - 1)):
         result -= (1 << width)
 
@@ -219,28 +197,21 @@ def _fold_arithmetic_constants(op: str, left: ir.Constant, right: ir.Constant) -
 
 def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value, left_type: 'Optional[Type]' = None) -> ir.Value:
     """Emit bitwise operations on integer values."""
-    # Constant folding: if both operands are constants, compute at compile time
     if isinstance(left, ir.Constant) and isinstance(right, ir.Constant):
         folded = _fold_bitwise_constants(op, left, right)
         if folded is not None:
             return folded
 
-    # Ensure right operand matches left operand's type for shift/bitwise operations
-    # LLVM requires both operands to have the same type
     if left.type != right.type:
         if isinstance(left.type, ir.IntType) and isinstance(right.type, ir.IntType):
             if left.type.width > right.type.width:
-                # Zero-extend right to match left
                 right = codegen.builder.zext(right, left.type)
             elif left.type.width < right.type.width:
-                # Truncate right to match left
                 right = codegen.builder.trunc(right, left.type)
 
-    # For right shift, determine whether to use arithmetic or logical shift based on type
     if op == ">>":
         from sushi_lang.semantics.typesys import BuiltinType
 
-        # Determine if the type is unsigned using the semantic type
         is_unsigned = False
         if left_type is not None:
             is_unsigned = left_type in [
@@ -251,13 +222,10 @@ def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Valu
             ]
 
         if is_unsigned:
-            # Logical right shift (zero-fill) for unsigned types
             return codegen.builder.lshr(left, right)
         else:
-            # Arithmetic right shift (sign-extend) for signed types
             return codegen.builder.ashr(left, right)
 
-    # Other bitwise operations
     bitwise_ops = {
         "&": codegen.builder.and_,
         "|": codegen.builder.or_,
@@ -298,7 +266,6 @@ def _fold_bitwise_constants(op: str, left: ir.Constant, right: ir.Constant) -> '
     if result is None:
         return None
 
-    # Mask to type width
     result = result & mask
 
     return ir.Constant(left.type, result)
@@ -308,14 +275,12 @@ def emit_logic(codegen: 'LLVMCodegen', op: str, left_expr: Expr, right_expr: Exp
     """Emit short-circuit boolean logic for 'and', 'or', and 'xor' operations."""
     builder, func = require_both_initialized(codegen)
 
-    # For xor, we need to evaluate both sides (no short-circuiting)
     if op == "xor":
         lhs_i1 = codegen.utils.as_i1(codegen.expressions.emit_expr(left_expr, to_i1=True))
         rhs_i1 = codegen.utils.as_i1(codegen.expressions.emit_expr(right_expr, to_i1=True))
         result = codegen.builder.xor(lhs_i1, rhs_i1, name="xor_result")
         return result if to_i1 else codegen.builder.zext(result, codegen.i8)
 
-    # Use codegen.expressions for recursive calls
     lhs_i1 = codegen.utils.as_i1(codegen.expressions.emit_expr(left_expr, to_i1=True))
     lhs_branch_bb = codegen.builder.block
 

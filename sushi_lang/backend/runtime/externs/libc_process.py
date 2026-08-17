@@ -16,7 +16,6 @@ class LibCProcess:
         """Initialize with reference to main codegen instance."""
         self.codegen = codegen
 
-        # Function references - declared immediately for type safety
         self.exit: ir.Function
         self.errno_location: ir.Function
 
@@ -44,8 +43,6 @@ class LibCProcess:
             []  # No parameters
         )
 
-        # Platform-specific errno location function
-        # Check if already declared
         existing = self.codegen.module.globals.get("__error")
         if isinstance(existing, ir.Function):
             self.errno_location = existing
@@ -56,7 +53,6 @@ class LibCProcess:
             self.errno_location = existing
             return
 
-        # Declare based on platform
         from sushi_lang.backend.platform_detect import get_current_platform
         platform = get_current_platform()
 

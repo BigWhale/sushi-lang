@@ -1,4 +1,3 @@
-# semantics/passes/collect/enums.py
 """Enum definition collection for Phase 0."""
 
 from __future__ import annotations
@@ -28,8 +27,6 @@ class EnumTable:
     """Table of enum types collected in Phase 0."""
     by_name: Dict[str, EnumType] = field(default_factory=dict)
     order: List[str] = field(default_factory=list)
-    # Where each name was declared; see StructTable.spans. A name present in by_name
-    # but absent here was predefined by the compiler.
     spans: Dict[str, Optional[Span]] = field(default_factory=dict)
 
 
@@ -71,7 +68,6 @@ class EnumCollector:
 
     def register_predefined_enums(self) -> None:
         """Register predefined enums for file operations and error handling."""
-        # FileMode enum - file open modes
         file_mode_enum = EnumType(
             name="FileMode",
             variants=(
@@ -87,7 +83,6 @@ class EnumCollector:
         self.enums.order.append("FileMode")
         self.known_types.add(file_mode_enum)
 
-        # SeekFrom enum - seek origins
         seek_from_enum = EnumType(
             name="SeekFrom",
             variants=(
@@ -100,8 +95,6 @@ class EnumCollector:
         self.enums.order.append("SeekFrom")
         self.known_types.add(seek_from_enum)
 
-        # FileError enum - file error types
-        # Maps errno values to user-friendly error variants
         file_error_enum = EnumType(
             name="FileError",
             variants=(
@@ -136,7 +129,6 @@ class EnumCollector:
         self.enums.order.append("FileResult")
         self.known_types.add(file_result_enum)
 
-        # StdError enum - Generic standard library errors
         std_error_enum = EnumType(
             name="StdError",
             variants=(
@@ -147,7 +139,6 @@ class EnumCollector:
         self.enums.order.append("StdError")
         self.known_types.add(std_error_enum)
 
-        # IoError enum - I/O operation errors
         io_error_enum = EnumType(
             name="IoError",
             variants=(
@@ -160,7 +151,6 @@ class EnumCollector:
         self.enums.order.append("IoError")
         self.known_types.add(io_error_enum)
 
-        # ProcessError enum - Process control errors
         process_error_enum = EnumType(
             name="ProcessError",
             variants=(
@@ -173,7 +163,6 @@ class EnumCollector:
         self.enums.order.append("ProcessError")
         self.known_types.add(process_error_enum)
 
-        # EnvError enum - Environment variable errors
         env_error_enum = EnumType(
             name="EnvError",
             variants=(
@@ -186,7 +175,6 @@ class EnumCollector:
         self.enums.order.append("EnvError")
         self.known_types.add(env_error_enum)
 
-        # MathError enum - Mathematical operation errors
         math_error_enum = EnumType(
             name="MathError",
             variants=(
@@ -213,7 +201,6 @@ class EnumCollector:
         type_params_raw = getattr(enum, "type_params", None)
         type_params: Optional[List[str]] = extract_type_param_names(type_params_raw)
 
-        # Check for duplicate enum names (both regular and generic namespaces)
         if name in self.enums.by_name:
             note_first_declaration(
                 er.emit_with(self.r, ERR.CE2046, name_span, name=name),
@@ -245,7 +232,6 @@ class EnumCollector:
             ).emit()
             return
 
-        # Collect enum variants
         variants_list: List[EnumVariantInfo] = []
         variant_names: Set[str] = set()
 
@@ -258,12 +244,10 @@ class EnumCollector:
             if not isinstance(variant_name, str):
                 continue
 
-            # Check for duplicate variant names
             if variant_name in variant_names:
                 er.emit(self.r, ERR.CE2047, variant_loc, name=variant_name, enum_name=name)
                 continue
 
-            # Convert associated types list to tuple
             if variant_types is None:
                 variant_types = []
 
@@ -282,7 +266,6 @@ class EnumCollector:
                 associated_types=tuple(variant_types)
             ))
 
-        # Branch based on whether this is a generic enum or regular enum
         if type_params and len(type_params) > 0:
             # Generic enum - store in generic_enums table
             # Preserve BoundedTypeParam objects (Phase 4: constraint validation)
@@ -306,7 +289,6 @@ class EnumCollector:
 
             # Note: Generic enums are not added to known_types until instantiated
         else:
-            # Regular enum - store in enums table (existing behavior)
             enum_type = EnumType(
                 name=name,
                 variants=tuple(variants_list)
@@ -316,5 +298,4 @@ class EnumCollector:
             self.enums.by_name[name] = enum_type
             self.enums.spans[name] = name_span
 
-            # Register enum type as known type for future lookups
             self.known_types.add(enum_type)

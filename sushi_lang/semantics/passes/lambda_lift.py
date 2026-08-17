@@ -25,8 +25,6 @@ class LambdaLifter:
             if getattr(fn, "type_params", None):
                 continue  # generic templates: their instantiations carry the lambdas
             self._walk(fn.body)
-        # Annotate the synthesized functions (resolve Result.Ok concrete types, etc.)
-        # so the backend sees the same annotations a normally type-checked fn has.
         if self.annotate is not None:
             for lifted in self._lifted:
                 self.annotate(lifted)
@@ -40,7 +38,6 @@ class LambdaLifter:
             for item in node:
                 self._walk(item)
             return
-        # Only AST nodes can contain a lambda; skip Type objects / params / spans.
         if isinstance(node, Node):
             for f in dataclasses.fields(node):
                 self._walk(getattr(node, f.name))
@@ -52,14 +49,12 @@ class LambdaLifter:
         lifted_name = f"__lambda_{idx}"
         captures = lam.captures or []
 
-        # 1. Environment struct holding the captured values.
         env_struct = StructType(name=env_name,
                                 fields=tuple((c.name, c.ty) for c in captures))
         if env_name not in self.structs.by_name:
             self.structs.by_name[env_name] = env_struct
             self.structs.order.append(env_name)
 
-        # 2. Lifted-function body.
         if lam.is_block_body:
             body = lam.body
         else:
@@ -67,14 +62,11 @@ class LambdaLifter:
                          args=[lam.body], loc=lam.loc)
             body = Block(statements=[Return(value=ok, loc=lam.loc)], loc=lam.loc)
 
-        # Rewrite captured reads to env-field reads.
         cap_names = {c.name for c in captures}
         _rewrite_captures(body, cap_names)
 
-        # Lift any nested lambdas found in the (rewritten) body.
         self._walk(body)
 
-        # 3. Lifted FuncDef: leading env reference param + the lambda's own params.
         ok_type = lam.resolved_type.ok_type if lam.resolved_type is not None else lam.ret
         err_type = lam.resolved_type.err_type if lam.resolved_type is not None else lam.err_type
         # The env borrow is `poke`, and the mode is not decoration: a move-captured

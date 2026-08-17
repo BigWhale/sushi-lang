@@ -78,7 +78,6 @@ class ExternalCollector:
             loc=decl.loc,
         )
 
-        # Duplicate Sushi-name within the namespace.
         existing = self.externals.lookup(block.namespace, decl.name)
         if existing is not None:
             er.emit_with(self.r, er.ERR.CE0101, decl.name_span,
@@ -104,7 +103,6 @@ class ExternalCollector:
         from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
 
         def abi_key(ty):
-            # string and ptr are both i8* at the C boundary.
             if isinstance(ty, ForeignPtrType):
                 return "i8*"
             if isinstance(ty, BuiltinType) and ty == BuiltinType.STRING:

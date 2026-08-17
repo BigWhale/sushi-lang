@@ -38,7 +38,6 @@ def generate_exists(module: ir.Module) -> None:
     platform_files = get_platform_module('files')
     access_func = platform_files.declare_access(module)
 
-    # Declare malloc and memcpy
     malloc_func = _declare_malloc(module, i8_ptr, i64)
 
     memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
@@ -52,16 +51,13 @@ def generate_exists(module: ir.Module) -> None:
     path_ptr = builder.extract_value(path_arg, 0, name="path_ptr")
     path_len = builder.extract_value(path_arg, 1, name="path_len")
 
-    # Allocate buffer for null-terminated string (length + 1 for null terminator)
     len_plus_one = builder.add(path_len, ir.Constant(i32, 1), name="len_plus_one")
     buffer_size = builder.zext(len_plus_one, i64, name="buffer_size")
     null_term_path = builder.call(malloc_func, [buffer_size], name="null_term_path")
 
-    # Copy string data to buffer
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy_fn, [null_term_path, path_ptr, builder.zext(path_len, ir.IntType(64)), is_volatile])
 
-    # Add null terminator
     null_pos = builder.gep(null_term_path, [path_len], name="null_pos")
     builder.store(ir.Constant(i8, 0), null_pos)
 
@@ -95,12 +91,10 @@ def _generate_stat_mode_check(module: ir.Module, sushi_name: str, s_iftype: int)
     path_ptr = builder.extract_value(path_arg, 0, name="path_ptr")
     path_len = builder.extract_value(path_arg, 1, name="path_len")
 
-    # Allocate buffer for null-terminated string
     len_plus_one = builder.add(path_len, ir.Constant(i32, 1), name="len_plus_one")
     buffer_size = builder.zext(len_plus_one, i64, name="buffer_size")
     null_term_path = builder.call(malloc_func, [buffer_size], name="null_term_path")
 
-    # Copy string data and add null terminator
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy_fn, [null_term_path, path_ptr, builder.zext(path_len, ir.IntType(64)), is_volatile])
     null_pos = builder.gep(null_term_path, [path_len], name="null_pos")
@@ -166,7 +160,6 @@ def generate_file_size(module: ir.Module) -> None:
     platform_files = get_platform_module('files')
     stat_func = platform_files.declare_stat(module)
 
-    # Declare malloc and memcpy
     malloc_func = _declare_malloc(module, i8_ptr, i64)
 
     memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
@@ -184,12 +177,10 @@ def generate_file_size(module: ir.Module) -> None:
     path_ptr = builder.extract_value(path_arg, 0, name="path_ptr")
     path_len = builder.extract_value(path_arg, 1, name="path_len")
 
-    # Allocate buffer for null-terminated string
     len_plus_one = builder.add(path_len, ir.Constant(i32, 1), name="len_plus_one")
     buffer_size = builder.zext(len_plus_one, i64, name="buffer_size")
     null_term_path = builder.call(malloc_func, [buffer_size], name="null_term_path")
 
-    # Copy string data and add null terminator
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy_fn, [null_term_path, path_ptr, builder.zext(path_len, ir.IntType(64)), is_volatile])
     null_pos = builder.gep(null_term_path, [path_len], name="null_pos")
@@ -227,13 +218,11 @@ def generate_file_size(module: ir.Module) -> None:
     size_ptr = builder.gep(i64_buffer_ptr, [ir.Constant(i32, size_idx)], name="size_ptr")
     st_size = builder.load(size_ptr, name="st_size")
 
-    # Pack i64 into [8 x i8] data array
     i64_alloca = builder.alloca(i64, name="size_value")
     builder.store(st_size, i64_alloca)
     data_alloca = builder.alloca(data_array_type, name="data_array")
     builder.store(ir.Constant(data_array_type, None), data_alloca)
 
-    # Bitcast and memcpy
     src_ptr = builder.bitcast(i64_alloca, i8_ptr)
     dest_ptr = builder.bitcast(data_alloca, i8_ptr)
     size_const = ir.Constant(i32, 8)

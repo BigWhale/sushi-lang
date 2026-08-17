@@ -14,7 +14,6 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.type_display import display_type
 
 
-# Validation function for to_str() method
 def _validate_to_str(call: MethodCall, target_type: Type, reporter: Any) -> None:
     """Validate to_str() method call on primitive types."""
     if call.args:
@@ -22,7 +21,6 @@ def _validate_to_str(call: MethodCall, target_type: Type, reporter: Any) -> None
                name=f"{display_type(target_type)}.to_str", expected=0, got=len(call.args))
 
 
-# Type conversion specifications - maps builtin type to (is_signed, bit_width) or conversion function
 _TYPE_CONVERSION_SPECS = {
     BuiltinType.I8: ('integer', True, 8),
     BuiltinType.I16: ('integer', True, 16),
@@ -60,7 +58,6 @@ def _emit_generic_to_str(prim_type: BuiltinType) -> Any:
         elif kind == 'bool':
             return codegen.runtime.formatting.emit_bool_to_string(receiver_value)
         elif kind == 'string':
-            # Identity operation for strings
             return receiver_value
         else:
             raise_internal_error("CE0075", kind=kind)
@@ -68,14 +65,12 @@ def _emit_generic_to_str(prim_type: BuiltinType) -> Any:
     return emitter
 
 
-# Register to_str() methods for all primitive types
 primitive_types = [
     BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
     BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
     BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL, BuiltinType.STRING
 ]
 
-# Generate emitters dynamically using the factory function
 emitters = {prim_type: _emit_generic_to_str(prim_type) for prim_type in primitive_types}
 
 for prim_type in primitive_types:
@@ -92,15 +87,10 @@ for prim_type in primitive_types:
     )
 
 
-# ==============================================================================
-# Standalone IR Generation (Phase 4)
-# ==============================================================================
-
 def generate_module_ir() -> ir.Module:
     """Generate standalone LLVM IR module for primitive type extension methods."""
     module = ir_common.create_stdlib_module("core.primitives")
 
-    # Generate to_str() for all primitive types
     _generate_i8_to_str(module)
     _generate_i16_to_str(module)
     _generate_i32_to_str(module)
@@ -116,8 +106,6 @@ def generate_module_ir() -> ir.Module:
 
     return module
 
-
-# Helper functions for generating individual to_str() methods
 
 def _generate_i8_to_str(module: ir.Module) -> None:
     """Generate i8.to_str() -> string"""
@@ -176,15 +164,12 @@ def _generate_bool_to_str(module: ir.Module) -> None:
     i32 = ir.IntType(INT32_BIT_WIDTH)
     string_struct = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
 
-    # Function signature: sushi_bool_to_str(i8 value) -> {i8*, i32}
     fn_ty = ir.FunctionType(string_struct, [i8])
     func = ir.Function(module, fn_ty, name="sushi_bool_to_str")
 
-    # Create entry block
     block = func.append_basic_block(name="entry")
     builder = ir.IRBuilder(block)
 
-    # Use ir_common helper to generate bool to string conversion
     result = conversions.emit_bool_to_string(module, builder, func.args[0])
 
     builder.ret(result)
@@ -196,15 +181,12 @@ def _generate_string_to_str(module: ir.Module) -> None:
     i32 = ir.IntType(INT32_BIT_WIDTH)
     string_struct = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
 
-    # Function signature: sushi_string_to_str({i8*, i32} value) -> {i8*, i32}
     fn_ty = ir.FunctionType(string_struct, [string_struct])
     func = ir.Function(module, fn_ty, name="sushi_string_to_str")
 
-    # Create entry block
     block = func.append_basic_block(name="entry")
     builder = ir.IRBuilder(block)
 
-    # Identity operation - just return the input struct
     builder.ret(func.args[0])
 
 
@@ -220,15 +202,12 @@ def _generate_integer_to_str(
     i32 = ir.IntType(INT32_BIT_WIDTH)
     string_struct = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
 
-    # Function signature: sushi_{type}_to_str(int_type value) -> {i8*, i32}
     fn_ty = ir.FunctionType(string_struct, [int_type])
     func = ir.Function(module, fn_ty, name=f"sushi_{type_name}_to_str")
 
-    # Create entry block
     block = func.append_basic_block(name="entry")
     builder = ir.IRBuilder(block)
 
-    # Use conversions helper to generate integer to string conversion
     result = conversions.emit_integer_to_string(
         module, builder, func.args[0], is_signed, bit_width
     )
@@ -247,15 +226,12 @@ def _generate_float_to_str(
     i32 = ir.IntType(INT32_BIT_WIDTH)
     string_struct = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
 
-    # Function signature: sushi_{type}_to_str(float_type value) -> {i8*, i32}
     fn_ty = ir.FunctionType(string_struct, [float_type])
     func = ir.Function(module, fn_ty, name=f"sushi_{type_name}_to_str")
 
-    # Create entry block
     block = func.append_basic_block(name="entry")
     builder = ir.IRBuilder(block)
 
-    # Use ir_common helper to generate float to string conversion
     result = conversions.emit_float_to_string(
         module, builder, func.args[0], is_double
     )

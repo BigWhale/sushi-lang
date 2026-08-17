@@ -21,15 +21,10 @@ class LLVMFunctionManager:
         """Initialize function manager with all components."""
         self.codegen = codegen
 
-        # Initialize all components
         self.helpers = FunctionHelpers(codegen)
         self.declarations = FunctionDeclarations(codegen)
         self.definitions = FunctionDefinitions(codegen)
         self.main_wrapper = MainFunctionWrapper(codegen)
-
-    # ========================================================================
-    # Regular Function Operations
-    # ========================================================================
 
     def emit_func_decl(self, fn: FuncDef) -> ir.Function:
         """Create LLVM function prototype for regular function."""
@@ -50,10 +45,6 @@ class LLVMFunctionManager:
             main_wrapper=self.main_wrapper
         )
 
-    # ========================================================================
-    # Extension Method Operations
-    # ========================================================================
-
     def emit_extension_method_decl(self, ext: ExtendDef) -> ir.Function:
         """Create LLVM function prototype for extension method."""
         return self.declarations.emit_extension_method_decl(
@@ -71,10 +62,6 @@ class LLVMFunctionManager:
             emit_default_return_for_extension_fn=self.helpers.emit_default_return_for_extension
         )
 
-    # ========================================================================
-    # Helper Methods (exposed for backward compatibility)
-    # ========================================================================
-
     def _get_extension_method_name(self, ext: ExtendDef) -> str:
         """Generate unique function name for extension method."""
         return self.helpers.get_extension_method_name(ext)
@@ -86,5 +73,4 @@ class LLVMFunctionManager:
         )
 
 
-# Re-export for backward compatibility
 __all__ = ['LLVMFunctionManager', 'declare_stdlib_function']

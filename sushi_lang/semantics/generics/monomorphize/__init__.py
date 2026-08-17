@@ -1,4 +1,3 @@
-# semantics/generics/monomorphize/__init__.py
 """Pass 1.6: Monomorphization"""
 from __future__ import annotations
 from contextlib import contextmanager
@@ -17,13 +16,11 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.structs import StructTable
 from sushi_lang.internals import errors as er
 
-# Import constraint validator for perk constraint checking
 try:
     from sushi_lang.semantics.generics.constraints import ConstraintValidator
 except ImportError:
     ConstraintValidator = None  # Graceful degradation if not available
 
-# Import specialized sub-modules
 from .transformer import TypeSubstitutor
 from .types import TypeMonomorphizer, MonomorphizationDepthExceeded
 from .functions import FunctionMonomorphizer
@@ -38,42 +35,26 @@ class Monomorphizer:
     """
 
     reporter: Reporter
-    # Constraint validator for checking perk constraints on type parameters
     constraint_validator: 'ConstraintValidator | None' = None
-    # Cache of already-monomorphized enum types: (base_name, type_args) → EnumType
-    # Prevents re-generating the same concrete type multiple times
     cache: Dict[Tuple[str, Tuple[Type, ...]], EnumType] = field(default_factory=dict)
-    # Cache of already-monomorphized struct types: (base_name, type_args) → StructType
     struct_cache: Dict[Tuple[str, Tuple[Type, ...]], StructType] = field(default_factory=dict)
-    # Cache of already-monomorphized function definitions: (base_name, type_args) → FuncDef
     func_cache: Dict[Tuple[str, Tuple[Type, ...]], 'FuncDef'] = field(default_factory=dict)
-    # Generic enum table for recursive monomorphization
     generic_enums: Dict[str, GenericEnumType] = field(default_factory=dict)
-    # Generic struct table for recursive monomorphization
     generic_structs: Dict[str, GenericStructType] = field(default_factory=dict)
-    # Generic function table for function monomorphization
     generic_funcs: Dict[str, 'GenericFuncDef'] = field(default_factory=dict)
-    # Function table for registering monomorphized functions
     func_table: 'FunctionTable | None' = None
-    # Track monomorphized functions for type validation (maps mangled_name → (generic_name, type_args))
     monomorphized_functions: Dict[str, Tuple[str, Tuple[Type, ...]]] = field(default_factory=dict)
-    # Enum table for registering on-demand monomorphized enums
     enum_table: 'EnumTable | None' = None
-    # Struct table for registering on-demand monomorphized structs
     struct_table: 'StructTable | None' = None
     # Whole-program SymbolTables. Lets the nested-call collector infer a generic call's
     # argument types through Pass 2's TypeValidator instead of the old Names-only inferrer,
     # so a non-Name argument (a call, cast, or method result) no longer aborts inference and
     # drops the instantiation (issue #214). None on unit-test paths built from loose tables.
     tables: object | None = None
-    # Pending instantiations worklist (for nested generic function calls)
     pending_instantiations: Set[Tuple[str, Tuple[Type, ...]]] = field(default_factory=set)
 
-    # Depth of the current recursive type-monomorphization chain. Tie-the-knot
-    # bounds finite self-reference; this bounds the pathological infinite case.
     _monomorphize_depth: int = field(default=0, init=False, repr=False)
 
-    # Specialized sub-modules (initialized lazily)
     _substitutor: TypeSubstitutor | None = field(default=None, init=False, repr=False)
     _type_monomorphizer: TypeMonomorphizer | None = field(default=None, init=False, repr=False)
     _function_monomorphizer: FunctionMonomorphizer | None = field(default=None, init=False, repr=False)
@@ -109,9 +90,7 @@ class Monomorphizer:
             return
 
         for param, arg in zip(type_params, type_args, strict=False):
-            # All params are now BoundedTypeParam (may have empty constraints list)
             if isinstance(param, BoundedTypeParam) and param.constraints:
-                # Validate all constraints on this type parameter
                 self.constraint_validator.validate_all_constraints(param, arg, None)
 
     # Ceiling on nested type monomorphization. Real programs stay well under this
@@ -131,8 +110,6 @@ class Monomorphizer:
         finally:
             self._monomorphize_depth -= 1
 
-    # ===== ENUM MONOMORPHIZATION API =====
-
     def monomorphize_all(
         self,
         generic_enums: Dict[str, GenericEnumType],
@@ -149,8 +126,6 @@ class Monomorphizer:
         """Create concrete enum by substituting type parameters."""
         return self.type_monomorphizer.monomorphize_enum(generic, type_args)
 
-    # ===== STRUCT MONOMORPHIZATION API =====
-
     def monomorphize_all_structs(
         self,
         generic_structs: Dict[str, GenericStructType],
@@ -166,8 +141,6 @@ class Monomorphizer:
     ) -> StructType:
         """Create concrete struct by substituting type parameters."""
         return self.type_monomorphizer.monomorphize_struct(generic, type_args)
-
-    # ===== FUNCTION MONOMORPHIZATION API =====
 
     def monomorphize_function(
         self,

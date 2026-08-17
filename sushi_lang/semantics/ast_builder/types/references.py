@@ -12,7 +12,6 @@ if TYPE_CHECKING:
 
 def parse_reference_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]:
     """Parse reference type (reference_t)."""
-    # Extract borrow mode (peek or poke)
     mutability = None
     referenced_type_node = None
 
@@ -27,7 +26,6 @@ def parse_reference_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type
             referenced_type_node = child
 
     if mutability is None:
-        # This should not happen with the new grammar
         return None
 
     if referenced_type_node is None:

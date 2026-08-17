@@ -49,7 +49,6 @@ class BuiltinMethodRegistry:
         return set(self._methods.keys())
 
 
-# Global registry instance
 builtin_registry = BuiltinMethodRegistry()
 
 
@@ -113,7 +112,6 @@ def get_clone_emitter_factory(kind: str) -> Optional[Callable[[Type], Callable]]
     return _clone_emitter_factories.get(kind)
 
 
-# Type matching utilities
 def matches_fixed_array_type(target_type: Type) -> bool:
     """Check if type is a fixed array type."""
     return isinstance(target_type, ArrayType)

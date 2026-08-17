@@ -19,10 +19,8 @@ def build_variadic_array(codegen: 'LLVMCodegen', trailing_exprs: List,
                          callee_owns: bool = True) -> ir.Value:
     """Produce the T[] struct value for a variadic callee's collected slot."""
     if not isinstance(array_type, DynamicArrayType):
-        # Defensive: callers should pass the wrapped array type.
         array_type = DynamicArrayType(base_type=array_type)
 
-    # Bloom: `arr...` moves an existing array in whole.
     if len(trailing_exprs) == 1 and isinstance(trailing_exprs[0], Spread):
         return _bloom_move_array(codegen, trailing_exprs[0].value, array_type,
                                  callee_owns)
@@ -64,6 +62,5 @@ def _bloom_move_array(codegen: 'LLVMCodegen', source, array_type,
     if isinstance(value.type, ir.PointerType):
         value = codegen.builder.load(value, name="bloom_src_val")
     if not callee_owns:
-        # The callee frees nothing, so the source keeps its buffer and frees it once.
         return value
     return consume(codegen, source, value, array_type, ConsumingUse.CALL_ARG)

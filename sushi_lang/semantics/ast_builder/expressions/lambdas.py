@@ -36,7 +36,6 @@ def parse_lambda(t: Tree, ast_builder: "ASTBuilder") -> Lambda:
         block_node = first_tree(t.children, "block")
         body = ast_builder._block(block_node)
     else:
-        # Expression body is the trailing child (the body expr tree).
         body = ast_builder._expr(t.children[-1])
 
     return Lambda(
@@ -77,7 +76,6 @@ def _parse_lambda_params(t: Tree, ast_builder: "ASTBuilder") -> List[Param]:
                 nom_span=span_of(nom_tok) if nom_tok is not None else None,
             ))
         elif ch.data == "lambda_bare_param":
-            # A bare-name param: type is inferred later from an expected FunctionType.
             nm_tok = first_name(ch.children)
             out.append(Param(
                 name=str(nm_tok),

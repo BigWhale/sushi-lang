@@ -35,17 +35,13 @@ def emit_hashmap_insert(
 
     builder = codegen.builder
 
-    # Extract K and V types
     key_type, value_type = extract_key_value_types(hashmap_type, codegen)
 
-    # Get LLVM types
     entry_type = get_entry_type(codegen, key_type, value_type)
     key_llvm = codegen.types.ll_type(key_type)
 
-    # Constants
     one_i32 = ir.Constant(codegen.types.i32, 1)
 
-    # Emit the key and value arguments
     if len(expr.args) != 2:
         raise_internal_error("CE0023", method="insert", expected=2, got=len(expr.args))
 
@@ -68,12 +64,10 @@ def emit_hashmap_insert(
     size_ptr, capacity_ptr = fields.size, fields.capacity
     tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
 
-    # Load current values
     size = builder.load(size_ptr, name="size")
     capacity = builder.load(capacity_ptr, name="capacity")
     tombstones = builder.load(tombstones_ptr, name="tombstones")
 
-    # Get buckets array pointer
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
 
     # Check load factor and resize if needed
@@ -85,32 +79,25 @@ def emit_hashmap_insert(
     rhs = builder.mul(capacity, ir.Constant(codegen.types.i32, 3), name="rhs")
     should_resize = builder.icmp_unsigned(">", lhs, rhs, name="should_resize")
 
-    # Create conditional resize
     resize_bb = builder.append_basic_block(name="resize_hashmap")
     continue_insert_bb = builder.append_basic_block(name="continue_insert")
     builder.cbranch(should_resize, resize_bb, continue_insert_bb)
 
-    # Resize block
     builder.position_at_end(resize_bb)
-    # Next capacity = capacity * 2 (simple doubling, guaranteed power-of-two)
     new_capacity = builder.shl(capacity, ir.Constant(codegen.types.i32, 1), name="new_capacity")
 
-    # Call resize helper
     emit_hashmap_resize_to_capacity(codegen, hashmap_value, hashmap_type, new_capacity)
     builder.branch(continue_insert_bb)
 
-    # Continue with insertion - reload capacity and buckets_data after potential resize
     builder.position_at_end(continue_insert_bb)
     capacity = builder.load(capacity_ptr, name="capacity_current")
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data_current")
 
-    # Hash the key (register on-demand if needed for array types)
     from ..types import get_key_hash_method
     hash_method = get_key_hash_method(key_type)
     if hash_method is None:
         raise_internal_error("CE0053", type=key_type)
 
-    # Create a fake MethodCall for the hash emitter
     fake_call = MethodCall(
         receiver=Name(id="key", loc=(0, 0)),
         method="hash",
@@ -118,13 +105,10 @@ def emit_hashmap_insert(
         loc=(0, 0)
     )
 
-    # Emit hash call - key_value is already a value (not pointer)
     hash_value = hash_method.llvm_emitter(codegen, fake_call, key_value, key_llvm, False)
 
-    # Truncate hash to i32 for indexing
     hash_i32 = builder.trunc(hash_value, codegen.types.i32, name="hash_i32")
 
-    # Linear probing loop
     insert_done_bb = builder.append_basic_block(name="insert_done")
 
     # Loop-carried across probe steps: the first tombstone this chain passed, or
@@ -142,7 +126,6 @@ def emit_hashmap_insert(
         update_value_bb = builder.append_basic_block(name="update_value")
         builder.cbranch(keys_equal, update_value_bb, slot.continue_bb)
 
-        # Same key: overwrite in place, size unchanged.
         builder.position_at_end(update_value_bb)
         entry_value_ptr = builder.gep(slot.entry_ptr, ENTRY_VALUE_INDICES, name="entry_value_ptr")
         builder.store(value_value, entry_value_ptr)
@@ -160,8 +143,6 @@ def emit_hashmap_insert(
         builder.branch(slot.continue_bb)
 
     def on_empty(slot: ProbeSlot) -> None:
-        # End of the chain, so the key is not in the map. Reuse the first tombstone
-        # we passed if there was one -- that keeps the table from filling with them.
         first_tombstone = builder.load(first_tombstone_idx, name="first_tombstone_final")
         has_tombstone = builder.icmp_signed("!=", first_tombstone, no_tombstone, name="has_tombstone")
 
@@ -197,12 +178,9 @@ def emit_hashmap_insert(
     codegen.runtime.errors.emit_runtime_error("RE2022")
     builder.unreachable()
 
-    # Done
     builder.position_at_end(insert_done_bb)
 
-    # Return unit (~) - represented as i32 constant 0
     return ir.Constant(codegen.types.i32, 0)
-
 
 
 def emit_hashmap_remove(
@@ -217,35 +195,27 @@ def emit_hashmap_remove(
 
     builder = codegen.builder
 
-    # Extract K and V types
     key_type, value_type = extract_key_value_types(hashmap_type, codegen)
 
-    # Get LLVM types
     value_llvm = codegen.types.ll_type(value_type)
 
-    # Constants
     one_i32 = ir.Constant(codegen.types.i32, 1)
 
-    # Emit the key argument
     if len(expr.args) != 1:
         raise_internal_error("CE0023", method="remove", expected=1, got=len(expr.args))
 
     key_value = codegen.expressions.emit_expr(expr.args[0])
 
-    # Get HashMap field pointers
     fields = get_hashmap_field_ptrs(codegen, hashmap_value)
     size_ptr, capacity_ptr = fields.size, fields.capacity
     tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
 
-    # Load values
     size = builder.load(size_ptr, name="size")
     capacity = builder.load(capacity_ptr, name="capacity")
     tombstones = builder.load(tombstones_ptr, name="tombstones")
 
-    # Get buckets array pointer
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
 
-    # Hash the key (register on-demand if needed for array types)
     from ..types import get_key_hash_method
     hash_method = get_key_hash_method(key_type)
     if hash_method is None:
@@ -261,7 +231,6 @@ def emit_hashmap_remove(
     hash_value = hash_method.llvm_emitter(codegen, fake_call, key_value, codegen.types.ll_type(key_type), False)
     hash_i32 = builder.trunc(hash_value, codegen.types.i32, name="hash_i32")
 
-    # Linear probing loop
     found_bb = builder.append_basic_block(name="remove_found")
     not_found_bb = builder.append_basic_block(name="remove_not_found")
     remove_done_bb = builder.append_basic_block(name="remove_done")
@@ -287,13 +256,11 @@ def emit_hashmap_remove(
         exhausted_bb=not_found_bb, prefix="remove_probe",
     )
 
-    # Found: remove entry and return Maybe.Some(value)
     builder.position_at_end(found_bb)
     entry_ptr = matched["entry_ptr"]
     entry_key_ptr = matched["entry_key_ptr"]
     state_ptr = builder.gep(entry_ptr, ENTRY_STATE_INDICES, name="state_ptr")
 
-    # Save the value before marking as tombstone
     entry_value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="entry_value_ptr")
     entry_value = builder.load(entry_value_ptr, name="entry_value")
 
@@ -303,17 +270,13 @@ def emit_hashmap_remove(
     from sushi_lang.backend.destructors import emit_value_destructor
     emit_value_destructor(codegen, entry_key_ptr, key_type)
 
-    # Mark entry as Tombstone
     builder.store(ir.Constant(codegen.types.i8, ENTRY_TOMBSTONE), state_ptr)
 
-    # Update size-- and tombstones++
     new_size = builder.sub(size, one_i32, name="new_size")
     builder.store(new_size, size_ptr)
     new_tombstones = builder.add(tombstones, one_i32, name="new_tombstones")
     builder.store(new_tombstones, tombstones_ptr)
 
-    # Get Maybe<V> enum type
-    # Format the type name properly
     if isinstance(value_type, BuiltinType):
         type_str = str(value_type).lower()
     else:
@@ -323,23 +286,17 @@ def emit_hashmap_remove(
     maybe_enum_type = codegen.enum_table.by_name.get(maybe_enum_name)
 
     if maybe_enum_type is None:
-        # Maybe<V> not monomorphized - create it on the fly
-        # This happens when HashMap.remove() is used but Maybe<V> wasn't used elsewhere
         from sushi_lang.backend.generics.maybe import ensure_maybe_type_exists
         maybe_enum_type = ensure_maybe_type_exists(codegen, value_type)
         if maybe_enum_type is None:
-            # Still couldn't create it - this shouldn't happen
             raise_internal_error("CE0047", type=type_str)
 
-    # Get LLVM type for Maybe<V> enum: {i32 tag, [N x i8] data}
     maybe_llvm_type = codegen.types.get_enum_type(maybe_enum_type)
 
-    # Create Maybe.Some(value)
     maybe_some = ir.Constant(maybe_llvm_type, ir.Undefined)
     some_tag = ir.Constant(codegen.types.i32, 0)  # Some is first variant
     maybe_some = builder.insert_value(maybe_some, some_tag, 0, name="maybe_some_tag")
 
-    # Pack the value into the data field [N x i8]
     data_array_type = maybe_llvm_type.elements[1]  # [N x i8]
     data_ptr = builder.alloca(data_array_type, name="some_data_alloc")
     value_ptr = builder.bitcast(data_ptr, ir.PointerType(value_llvm), name="value_ptr")
@@ -347,30 +304,23 @@ def emit_hashmap_remove(
     data_value = builder.load(data_ptr, name="some_data")
     maybe_some = builder.insert_value(maybe_some, data_value, 1, name="maybe_some_value")
 
-    # Capture the live block: destroying an owning key above may have inserted
-    # basic blocks, so the phi predecessor is no longer found_bb.
     found_pred_bb = builder.block
     builder.branch(remove_done_bb)
 
-    # Not found: return Maybe.None()
     builder.position_at_end(not_found_bb)
     maybe_none = ir.Constant(maybe_llvm_type, ir.Undefined)
     none_tag = ir.Constant(codegen.types.i32, 1)  # None is second variant
     maybe_none = builder.insert_value(maybe_none, none_tag, 0, name="maybe_none_tag")
-    # Data field is undefined for None
     undef_data = ir.Constant(data_array_type, ir.Undefined)
     maybe_none = builder.insert_value(maybe_none, undef_data, 1, name="maybe_none_data")
     builder.branch(remove_done_bb)
 
-    # Done: merge results
     builder.position_at_end(remove_done_bb)
     result_phi = builder.phi(maybe_llvm_type, name="remove_result")
     result_phi.add_incoming(maybe_some, found_pred_bb)
     result_phi.add_incoming(maybe_none, not_found_bb)
 
     return result_phi
-
-
 
 
 def emit_hashmap_resize_to_capacity(
@@ -385,48 +335,36 @@ def emit_hashmap_resize_to_capacity(
 
     builder = codegen.builder
 
-    # Extract K and V types
     key_type, value_type = extract_key_value_types(hashmap_type, codegen)
 
-    # Get LLVM types
     entry_type = get_entry_type(codegen, key_type, value_type)
 
-    # Constants
     zero_i32 = ir.Constant(codegen.types.i32, 0)
     one_i32 = ir.Constant(codegen.types.i32, 1)
 
-    # Get HashMap field pointers
     fields = get_hashmap_field_ptrs(codegen, hashmap_value)
     size_ptr, capacity_ptr = fields.size, fields.capacity
     tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
 
-    # Load current values
     builder.load(size_ptr, name="size")
     old_capacity = builder.load(capacity_ptr, name="old_capacity")
 
-    # Get old buckets pointer
     old_buckets_data = builder.load(buckets_data_ptr, name="old_buckets_data")
 
-    # Allocate new buckets array with new_capacity
     entry_size = get_element_size_constant(codegen, entry_type)
     total_bytes = builder.mul(entry_size, new_capacity, name="bucket_bytes")
 
-    # Call malloc
     total_bytes_i64 = builder.zext(total_bytes, ir.IntType(64), name="total_bytes_i64")
     new_bucket_ptr_i8 = emit_malloc(codegen, builder, total_bytes_i64)
     new_bucket_ptr = builder.bitcast(new_bucket_ptr_i8, ir.PointerType(entry_type), name="new_buckets_ptr")
 
     emit_init_buckets_empty(codegen, new_bucket_ptr, new_capacity)
 
-    # After init loop: iterate through old buckets and reinsert Occupied entries
-
-    # Get hash method for keys (register on-demand if not already registered)
     from ..types import get_key_hash_method
     hash_method = get_key_hash_method(key_type)
     if hash_method is None:
         raise_internal_error("CE0053", type=key_type)
 
-    # Iterate through old buckets
     old_i = builder.alloca(codegen.types.i32, name="old_i")
     builder.store(zero_i32, old_i)
 
@@ -439,13 +377,11 @@ def emit_hashmap_resize_to_capacity(
 
     builder.branch(rehash_loop_cond_bb)
 
-    # Rehash loop condition: i < old_capacity
     builder.position_at_end(rehash_loop_cond_bb)
     old_i_val = builder.load(old_i, name="old_i_val")
     rehash_cond = builder.icmp_unsigned("<", old_i_val, old_capacity, name="rehash_cond")
     builder.cbranch(rehash_cond, rehash_loop_body_bb, rehash_loop_end_bb)
 
-    # Rehash loop body: check if entry is Occupied
     builder.position_at_end(rehash_loop_body_bb)
     old_i_val = builder.load(old_i, name="old_i_val")
     old_entry_ptr = builder.gep(old_buckets_data, [old_i_val], name="old_entry_ptr")
@@ -458,16 +394,13 @@ def emit_hashmap_resize_to_capacity(
     is_occupied = builder.icmp_unsigned("==", old_state, ir.Constant(codegen.types.i8, ENTRY_OCCUPIED), name="is_occupied")
     builder.cbranch(is_occupied, rehash_reinsert_bb, rehash_skip_bb)
 
-    # Reinsert occupied entry into new buckets
     builder.position_at_end(rehash_reinsert_bb)
 
-    # Load key and value from old entry
     old_key_ptr = builder.gep(old_entry_ptr, ENTRY_KEY_INDICES, name="old_key_ptr")
     old_key = builder.load(old_key_ptr, name="old_key")
     old_value_ptr = builder.gep(old_entry_ptr, ENTRY_VALUE_INDICES, name="old_value_ptr")
     old_value = builder.load(old_value_ptr, name="old_value")
 
-    # Hash the key
     fake_call = MethodCall(
         receiver=Name(id="key", loc=(0, 0)),
         method="hash",
@@ -503,22 +436,17 @@ def emit_hashmap_resize_to_capacity(
     codegen.runtime.errors.emit_runtime_error("RE2022")
     builder.unreachable()
 
-    # Skip non-occupied entries
     builder.position_at_end(rehash_skip_bb)
     old_i_next = builder.add(old_i_val, one_i32, name="old_i_next")
     builder.store(old_i_next, old_i)
     builder.branch(rehash_loop_cond_bb)
 
-    # After rehashing all entries: update HashMap
     builder.position_at_end(rehash_loop_end_bb)
 
-    # Store new buckets pointer
     builder.store(new_bucket_ptr, buckets_data_ptr)
 
-    # Update capacity to new_capacity
     builder.store(new_capacity, capacity_ptr)
 
-    # Reset tombstones to 0
     builder.store(zero_i32, tombstones_ptr)
 
     # Free old buckets to prevent memory leak
@@ -535,17 +463,12 @@ def emit_hashmap_rehash(
     """Emit HashMap<K, V>.rehash() -> ~"""
     builder = codegen.builder
 
-    # Load current capacity
     capacity_ptr = builder.gep(hashmap_value, HASHMAP_CAPACITY_INDICES, name="capacity_ptr")
     capacity = builder.load(capacity_ptr, name="capacity")
 
-    # Resize to same capacity (removes tombstones)
     emit_hashmap_resize_to_capacity(codegen, hashmap_value, hashmap_type, capacity)
 
-    # Return unit (~)
     return ir.Constant(codegen.types.i32, 0)
-
-
 
 
 def emit_hashmap_free(
@@ -556,57 +479,42 @@ def emit_hashmap_free(
     """Emit HashMap<K, V>.free() -> ~"""
     builder = codegen.builder
 
-    # Extract K and V types
     key_type, value_type = extract_key_value_types(hashmap_type, codegen)
 
-    # Get LLVM types
     entry_type = get_entry_type(codegen, key_type, value_type)
 
-    # Constants
     zero_i32 = ir.Constant(codegen.types.i32, 0)
     initial_capacity = ir.Constant(codegen.types.i32, 16)
 
-    # Get HashMap field pointers
     fields = get_hashmap_field_ptrs(codegen, hashmap_value)
     size_ptr, capacity_ptr = fields.size, fields.capacity
     tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
 
-    # Load old values
     old_capacity = builder.load(capacity_ptr, name="old_capacity")
 
-    # Get old buckets pointer
     old_buckets_data = builder.load(buckets_data_ptr, name="old_buckets_data")
 
-    # Destroy every occupied entry, then release the bucket storage
     emit_destroy_all_entries(codegen, old_buckets_data, old_capacity, key_type, value_type)
 
-    # Free old buckets array
     old_buckets_void_ptr = builder.bitcast(old_buckets_data, ir.PointerType(codegen.types.i8), name="old_buckets_void_ptr")
     free_func = codegen.get_free_func()
     builder.call(free_func, [old_buckets_void_ptr])
 
-    # Allocate new buckets with initial capacity (16)
     entry_size = get_element_size_constant(codegen, entry_type)
     total_bytes = builder.mul(entry_size, initial_capacity, name="bucket_bytes")
 
-    # Call malloc
     total_bytes_i64 = builder.zext(total_bytes, ir.IntType(64), name="total_bytes_i64")
     new_bucket_ptr_i8 = emit_malloc(codegen, builder, total_bytes_i64)
     new_bucket_ptr = builder.bitcast(new_bucket_ptr_i8, ir.PointerType(entry_type), name="new_buckets_ptr")
 
     emit_init_buckets_empty(codegen, new_bucket_ptr, initial_capacity)
 
-    # After initialization: update HashMap fields
-
-    # Store new values: size=0, capacity=16, tombstones=0
     builder.store(zero_i32, size_ptr)
     builder.store(initial_capacity, capacity_ptr)
     builder.store(zero_i32, tombstones_ptr)
     builder.store(new_bucket_ptr, buckets_data_ptr)
 
-    # Return unit (~)
     return ir.Constant(codegen.types.i32, 0)
-
 
 
 def emit_hashmap_destroy(
@@ -617,28 +525,20 @@ def emit_hashmap_destroy(
     """Emit HashMap<K, V>.destroy() -> ~"""
     builder = codegen.builder
 
-    # Extract K and V types
     key_type, value_type = extract_key_value_types(hashmap_type, codegen)
 
-    # Get LLVM types
     entry_type = get_entry_type(codegen, key_type, value_type)
 
-    # Constants
     zero_i32 = ir.Constant(codegen.types.i32, 0)
 
-    # Get HashMap field pointers
     fields = get_hashmap_field_ptrs(codegen, hashmap_value)
     size_ptr, capacity_ptr = fields.size, fields.capacity
     tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
 
-    # Load old values
     old_capacity = builder.load(capacity_ptr, name="old_capacity")
 
-    # Get old buckets pointer
     old_buckets_data = builder.load(buckets_data_ptr, name="old_buckets_data")
 
-    # destroy() is idempotent: the buckets may already be gone, so both the walk
-    # and the free are guarded against a null bucket pointer.
     null_entry_ptr = ir.Constant(ir.PointerType(entry_type), None)
 
     emit_destroy_all_entries(codegen, old_buckets_data, old_capacity, key_type,
@@ -646,16 +546,13 @@ def emit_hashmap_destroy(
 
     is_not_null = builder.icmp_unsigned("!=", old_buckets_data, null_entry_ptr)
     with builder.if_then(is_not_null):
-        # Free old buckets array
         old_buckets_void_ptr = builder.bitcast(old_buckets_data, ir.PointerType(codegen.types.i8), name="old_buckets_void_ptr")
         free_func = codegen.get_free_func()
         builder.call(free_func, [old_buckets_void_ptr])
 
-    # Reset all fields to 0/null (HashMap is unusable)
     builder.store(zero_i32, size_ptr)
     builder.store(zero_i32, capacity_ptr)
     builder.store(zero_i32, tombstones_ptr)
     builder.store(null_entry_ptr, buckets_data_ptr)
 
-    # Return unit (~)
     return ir.Constant(codegen.types.i32, 0)

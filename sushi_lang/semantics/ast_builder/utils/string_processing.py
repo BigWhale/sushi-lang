@@ -112,7 +112,6 @@ def parse_interpolated_string(raw_string: str, span: 'Span') -> Tuple[List[Union
     return parts, expr_spans
 
 
-# Cached parser for interpolation expressions (lazy initialized)
 _interpolation_parser: Optional[Lark] = None
 
 
@@ -209,11 +208,9 @@ def parse_string_token(tok: Token, ast_builder: 'ASTBuilder') -> Union['StringLi
     unquoted_value = raw_value[1:-1]  # Strip opening and closing quotes
     span = span_of(tok)
 
-    # Only STRING (double-quote) tokens support interpolation
     is_interpolation_capable = (tok.type == 'STRING')
 
     if is_interpolation_capable and '{' in unquoted_value:
-        # Double-quote string with interpolation expressions
         parts, expr_spans = parse_interpolated_string(unquoted_value, span)
 
         ast_parts: List[Union[str, Expr]] = []
@@ -221,11 +218,9 @@ def parse_string_token(tok: Token, ast_builder: 'ASTBuilder') -> Union['StringLi
 
         for i, part in enumerate(parts):
             if i % 2 == 0:
-                # String literal part
                 processed_string = process_string_escapes(part)
                 ast_parts.append(processed_string)
             else:
-                # Expression part
                 expr_text = part
                 expr_span = expr_spans[expr_index]
                 expr_index += 1
@@ -238,7 +233,5 @@ def parse_string_token(tok: Token, ast_builder: 'ASTBuilder') -> Union['StringLi
 
         return InterpolatedString(parts=ast_parts, loc=span)
     else:
-        # Plain string literal (no interpolation)
-        # Apply escape sequence processing for both STRING and CHAR_STRING
         string_value = process_string_escapes(unquoted_value)
         return StringLit(value=string_value, loc=span)

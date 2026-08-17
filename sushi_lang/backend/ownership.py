@@ -100,8 +100,6 @@ def resolver_for(codegen: 'LLVMCodegen'):
     return resolve
 
 
-# --- Internals. Everything below is private to the seam. ---------------------------
-
 def _provenance_of(source, use: ConsumingUse) -> Provenance:
     """The `Provenance` Pass 3 stamped on `source`, or CE0129 if there is none."""
     provenance = getattr(source, "ownership_provenance", None)

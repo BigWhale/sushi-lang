@@ -1,4 +1,3 @@
-# semantics/passes/scope.py
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional
@@ -34,13 +33,10 @@ class ScopeAnalyzer:
         from sushi_lang.semantics.passes.collect import GenericStructTable, ExternalTable
         self.generic_structs = generic_structs or GenericStructTable()
         self.external_table = external_table or ExternalTable()
-        # Stack of scopes, each scope maps variable name to VariableInfo
         self.scopes: List[Dict[str, VariableInfo]] = []
         # Loop-nesting depth for the current function. break/continue are only
         # legal when this is > 0 (CE1003); reset to 0 across nested functions.
         self._loop_depth: int = 0
-        # Names of top-level functions. A bare reference to one (not shadowed by a
-        # local) is a first-class function value, not an undeclared identifier.
         self.function_names: set[str] = set()
         # Active lambda capture collectors (one per enclosing lambda, innermost
         # last). Each is {'boundary': int, 'names': dict[str, Param]}: a variable
@@ -58,26 +54,20 @@ class ScopeAnalyzer:
         # legal — e.g. CE2093 for generic functions.)
         self.function_names = {func.name for func in program.functions}
 
-        # Check constants (validate expressions in constant definitions)
         for const in program.constants:
             self._check_constant(const)
 
-        # Check regular functions
         for func in program.functions:
-            # Skip generic functions in Phase 1 (no scope analysis yet - will be handled in Pass 2 after monomorphization)
             if hasattr(func, 'type_params') and func.type_params:
                 continue
             self._check_function(func)
 
-        # Check non-generic extension methods
         for ext in program.extensions:
             self._check_extension_method(ext)
 
-        # Check generic extension methods (scope analysis works the same regardless of generics)
         for ext in program.generic_extensions:
             self._check_extension_method(ext)
 
-        # Check perk implementations (each method needs implicit self)
         for perk_impl in program.perk_impls:
             self._check_perk_implementation(perk_impl)
 
@@ -93,12 +83,9 @@ class ScopeAnalyzer:
         current_scope = self.scopes.pop()
         for var_info in current_scope.values():
             if not var_info.used:
-                # Skip warnings for implicit variables (e.g., 'self' in extension/perk methods)
-                # These have declared_at=None
                 if var_info.declared_at is None:
                     continue
 
-                # Variable is completely unused (a borrow counts as a use).
                 self.err.emit(er.ERR.CW1001, var_info.declared_at, name=var_info.name)
 
     def _declare_variable(self, name: str, span: Optional[Span]) -> None:
@@ -106,7 +93,6 @@ class ScopeAnalyzer:
         if not self.scopes:
             return
 
-        # Check for shadowing - look in outer scopes (not including current scope)
         for outer_scope in self.scopes[:-1]:
             if name in outer_scope:
                 outer_var = outer_scope[name]
@@ -150,7 +136,6 @@ class ScopeAnalyzer:
                 self._record_capture(name, i, usage_span)
                 return
 
-        # Variable not found in any scope - emit appropriate error
         if is_rebind:
             self.err.emit(er.ERR.CE1002, usage_span, name=name)
         else:
@@ -193,8 +178,6 @@ class ScopeAnalyzer:
 
     def _check_constant(self, const: ConstDef) -> None:
         """Check a constant definition - validate the value expression."""
-        # Constants are global and don't create their own scope
-        # We just need to validate the value expression for any variable references
         self._check_expression(const.value)
 
     def _check_function(self, func: FuncDef) -> None:
@@ -210,8 +193,6 @@ class ScopeAnalyzer:
         saved_loop_depth = self._loop_depth
         self._loop_depth = 0
 
-        # Function parameters are implicitly declared and should be considered used
-        # if they appear in the function signature (to avoid warnings for unused params)
         for param in func.params:
             # Synthesized pack fan-out params (args_0, args_1, ... produced when a
             # ...Ts pack is monomorphized) carry user-invisible names and cannot be
@@ -219,7 +200,6 @@ class ScopeAnalyzer:
             # implicit-variable exemption suppresses a spurious CW1001 unused warning.
             span = None if getattr(param, 'is_pack', False) else param.name_span
             self._declare_variable(param.name, span)
-            # Don't mark params as used automatically - let actual usage determine it
 
         self._check_block(func.body)
         self._loop_depth = saved_loop_depth
@@ -235,7 +215,6 @@ class ScopeAnalyzer:
         self._self_is_poke = getattr(ext, "self_mode", None) == "poke"
         self._declare_variable("self", None)
 
-        # Add explicit parameters from the extension method signature
         for param in ext.params:
             self._declare_variable(param.name, param.name_span)
 
@@ -252,7 +231,6 @@ class ScopeAnalyzer:
             self._self_is_poke = getattr(method, "self_mode", None) == "poke"
             self._declare_variable("self", None)
 
-            # Add explicit parameters from the method signature
             for param in method.params:
                 self._declare_variable(param.name, param.name_span)
 
@@ -266,7 +244,6 @@ class ScopeAnalyzer:
 
     def _check_statement(self, stmt: Stmt) -> None:
         """Check a statement."""
-        # Dispatch to specific handler based on statement type
         handler_name = f"_check_{type(stmt).__name__.lower()}"
         if hasattr(self, handler_name):
             handler = getattr(self, handler_name)
@@ -301,14 +278,10 @@ class ScopeAnalyzer:
             else:
                 self._use_variable(var_name, stmt.loc, is_rebind=True)
         elif isinstance(stmt.target, MemberAccess):
-            # For field rebinding, we need to check the receiver expression
-            # The receiver must be a valid variable/expression
             self._check_expression(stmt.target)
         else:
-            # Target must be Name or MemberAccess - validate it as an expression
             self._check_expression(stmt.target)
 
-        # Check the value expression
         self._check_expression(stmt.value)
 
     def _check_return(self, stmt: Return) -> None:
@@ -329,7 +302,6 @@ class ScopeAnalyzer:
 
     def _check_if(self, stmt: If) -> None:
         """Check an if statement."""
-        # Check all condition/block pairs in arms
         for condition, block in stmt.arms:
             self._check_expression(condition)
             self._check_scoped_block(block)
@@ -346,7 +318,6 @@ class ScopeAnalyzer:
 
     def _check_foreach(self, stmt: Foreach) -> None:
         """Check a foreach statement."""
-        # Check the iterable expression first (in outer scope)
         self._check_expression(stmt.iterable)
 
         # A `poke` element binding (#300 phase 1) writes through a pointer into the
@@ -363,9 +334,7 @@ class ScopeAnalyzer:
                 self.err.emit(er.ERR.CE2400, stmt.item_borrow_span or stmt.loc,
                               name=root.id)
 
-        # The foreach body gets its own scope with the item variable
         self._push_scope()
-        # Declare the loop variable in the inner scope
         self._declare_variable(stmt.item_name, stmt.item_name_span)
         self._loop_depth += 1
         self._check_block(stmt.body)
@@ -382,24 +351,19 @@ class ScopeAnalyzer:
 
     def _check_match(self, stmt: Match) -> None:
         """Check a match statement."""
-        # Check the scrutinee expression (in current scope)
         self._check_expression(stmt.scrutinee)
 
-        # Check each match arm
         for arm in stmt.arms:
             self._check_match_arm(arm)
 
     def _check_match_arm(self, arm: MatchArm) -> None:
         """Check a match arm with pattern bindings (supports nested patterns)."""
-        # Each match arm body gets its own scope with pattern bindings
         self._push_scope()
 
-        # Declare pattern bindings as variables in the arm's scope (recursive for nested patterns)
         pattern = arm.pattern
         if isinstance(pattern, Pattern):
             self._declare_pattern_bindings(pattern)
 
-        # Check the arm body (either expression or block)
         if isinstance(arm.body, Block):
             self._check_block(arm.body)
         elif isinstance(arm.body, Expr):
@@ -411,23 +375,16 @@ class ScopeAnalyzer:
         """Recursively declare variables from pattern bindings (including Own patterns)."""
         for binding_item in pattern.bindings:
             if isinstance(binding_item, str):
-                # Simple binding: variable name or wildcard
                 if binding_item != "_":
-                    # Declare each binding as a variable
-                    # We use the pattern's location since we don't have individual spans for bindings
                     self._declare_variable(binding_item, pattern.loc)
             elif isinstance(binding_item, Pattern):
-                # Nested pattern: recursively declare its bindings
                 self._declare_pattern_bindings(binding_item)
             elif isinstance(binding_item, OwnPattern):
-                # Own pattern: unwrap and declare the inner pattern
                 inner = binding_item.inner_pattern
                 if isinstance(inner, str):
-                    # Simple variable binding
                     if inner != "_":
                         self._declare_variable(inner, binding_item.loc or pattern.loc)
                 elif isinstance(inner, Pattern):
-                    # Nested pattern inside Own(...)
                     self._declare_pattern_bindings(inner)
             else:
                 # A RefBinding (#300 phase 3) declares its name like a plain binding;
@@ -459,25 +416,19 @@ class ScopeAnalyzer:
         match expr:
             case Name():
                 if self._names_a_non_local(expr.id):
-                    # Not a variable: nothing to track, and nothing to report.
                     pass
                 else:
-                    # It's a variable, track its usage
                     self._use_variable(expr.id, expr.loc)
             case IntLit() | FloatLit() | BoolLit() | StringLit():
-                # Literals don't use variables
                 pass
             case InterpolatedString():
-                # Check expressions in interpolated string
                 for part in expr.parts:
                     if not isinstance(part, str):  # part is an Expr
                         self._check_expression(part)
             case ArrayLiteral():
-                # Check each element expression
                 for element in expr.elements:
                     self._check_expression(element)
             case IndexAccess():
-                # Check both array and index expressions
                 self._check_expression(expr.array)
                 self._check_expression(expr.index)
             case UnaryOp():
@@ -486,8 +437,6 @@ class ScopeAnalyzer:
                 self._check_expression(expr.left)
                 self._check_expression(expr.right)
             case Call():
-                # A callee that is a bound local is an indirect call through a function
-                # value -> mark it used. A bare top-level function name is not a variable.
                 if isinstance(expr.callee, Name) and self._is_bound_local(expr.callee.id):
                     self._use_variable(expr.callee.id, expr.callee.loc)
                 for arg in expr.args:
@@ -498,11 +447,8 @@ class ScopeAnalyzer:
                 # this is actually an enum constructor, not a method call
                 # We need to handle this specially to avoid treating the enum name as a variable
                 if isinstance(expr.receiver, Name) and (expr.receiver.id in self.enums.by_name or expr.receiver.id in self.generic_enums.by_name):
-                    # This is an enum constructor (concrete or generic enum)
-                    # Don't check receiver as variable, just check arguments
                     pass
                 else:
-                    # Normal method call - check receiver
                     self._check_expression(expr.receiver)
 
                 for arg in expr.args:
@@ -513,44 +459,28 @@ class ScopeAnalyzer:
                 # Otherwise, it's a method call
                 if isinstance(expr.receiver, Name):
                     receiver_name = expr.receiver.id
-                    # FFI: foreign namespace call (e.g., libc.strlen) - locals shadow
-                    # namespaces, so only treat as a namespace if not a bound local.
                     if self._is_external_namespace(receiver_name):
-                        # Don't check the namespace name as a variable.
                         pass
-                    # Check if it's an enum type (concrete or generic)
                     elif receiver_name in self.enums.by_name or receiver_name in self.generic_enums.by_name:
-                        # Enum constructor (concrete or generic) - don't check receiver as variable
                         pass
-                    # Check if it's a generic struct type (e.g., Own)
                     elif receiver_name in self.generic_structs.by_name:
-                        # Struct constructor (e.g., Own.alloc) - don't check receiver as variable
                         pass
-                    # f64.from_bits(...) / f32.from_bits(...): a primitive type name used
-                    # as a static-method namespace, not a variable.
                     elif receiver_name in ("f64", "f32") and expr.method == "from_bits":
                         pass
                     else:
-                        # Method call - check receiver as variable
                         self._check_expression(expr.receiver)
                 else:
-                    # Complex receiver expression - check it
                     self._check_expression(expr.receiver)
 
-                # Always check arguments
                 for arg in expr.args:
                     self._check_expression(arg)
             case DynamicArrayNew():
-                # new() constructor doesn't use variables
                 pass
             case DynamicArrayFrom():
-                # from(array_literal) - check the array literal
                 self._check_expression(expr.elements)
             case CastExpr():
-                # Cast expression - check the source expression for variable usage
                 self._check_expression(expr.expr)
             case MemberAccess():
-                # Struct member access - check the base expression (receiver.field)
                 self._check_expression(expr.receiver)
             case EnumConstructor():
                 # Enum variant constructor (including Result.Ok(), Result.Err()) - check all arguments
@@ -558,7 +488,6 @@ class ScopeAnalyzer:
                 # This happens when user writes: let Result<i32> x = Result.Ok(42); x.realise(0)
                 # The AST builder parses both as EnumConstructor, but x.realise should be MethodCall
 
-                # Check if the enum_name is actually a variable, not an enum type
                 enum_name = expr.enum_name
                 is_variable = False
                 for scope in reversed(self.scopes):
@@ -573,15 +502,11 @@ class ScopeAnalyzer:
                     # For now, just check the receiver variable as used and check arguments
                     self._use_variable(enum_name, expr.enum_name_span)
                 else:
-                    # Normal enum constructor - don't check enum name as variable
                     pass
 
-                # Check all arguments regardless
                 for arg in expr.args:
                     self._check_expression(arg)
             case TryExpr():
-                # Try operator: expr??
-                # Check the inner expression for variable usage
                 self._check_expression(expr.expr)
             case Borrow():
                 # Borrow expression: &expr. What is borrowed is the ROOT of the place --
@@ -599,17 +524,13 @@ class ScopeAnalyzer:
                     # CE2404; here it is just an ordinary expression to walk.
                     self._check_expression(expr.expr)
             case RangeExpr():
-                # Range expression: start..end or start..=end
-                # Check both start and end expressions for variable usage
                 self._check_expression(expr.start)
                 self._check_expression(expr.end)
             case Spread():
-                # Bloom argument: arr... uses (and moves) its source array.
                 self._check_expression(expr.value)
             case Lambda():
                 self._check_lambda(expr)
             case BlankLit():
-                # The blank literal `~` is a leaf: it owns nothing and names nothing.
                 pass
             case _:
                 # NOT a silent fall-through (#245). An expression node with no case got

@@ -4,13 +4,8 @@ import llvmlite.ir as ir
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType, ArrayType, DynamicArrayType
 
 
-# ==============================================================================
-# Semantic Type to LLVM Type Conversion
-# ==============================================================================
-
 def semantic_type_to_llvm(sem_type: Type) -> ir.Type:
     """Convert a semantic type to an LLVM IR type (standalone version)."""
-    # Basic integer types
     if sem_type == BuiltinType.I8:
         return ir.IntType(8)
     elif sem_type == BuiltinType.I16:
@@ -27,29 +22,21 @@ def semantic_type_to_llvm(sem_type: Type) -> ir.Type:
         return ir.IntType(32)
     elif sem_type == BuiltinType.U64:
         return ir.IntType(64)
-    # Floating-point types
     elif sem_type == BuiltinType.F32:
         return ir.FloatType()
     elif sem_type == BuiltinType.F64:
         return ir.DoubleType()
-    # Boolean and string
     elif sem_type == BuiltinType.BOOL:
         return ir.IntType(8)
     elif sem_type == BuiltinType.STRING:
         return ir.IntType(8).as_pointer()
-    # Blank type
     elif sem_type == BuiltinType.BLANK:
         return ir.IntType(32)  # Represented as i32 (dummy value)
-    # I/O handles
     elif sem_type in (BuiltinType.STDIN, BuiltinType.STDOUT, BuiltinType.STDERR, BuiltinType.FILE):
         return ir.IntType(8).as_pointer()  # FILE* as opaque pointer
     else:
         raise TypeError(f"Unsupported semantic type in standalone mode: {sem_type}")
 
-
-# ==============================================================================
-# Name Mangling for Generic Types
-# ==============================================================================
 
 def mangle_generic_name(base_name: str, type_params: list[Type]) -> str:
     """Generate a mangled name for a generic type instantiation."""
@@ -61,7 +48,6 @@ def mangle_generic_name(base_name: str, type_params: list[Type]) -> str:
 
 def _type_to_mangled_string(t: Type) -> str:
     """Convert a type to a string suitable for name mangling."""
-    # Basic types
     if t == BuiltinType.I8:
         return "i8"
     elif t == BuiltinType.I16:
@@ -88,7 +74,6 @@ def _type_to_mangled_string(t: Type) -> str:
         return "string"
     elif t == BuiltinType.BLANK:
         return "blank"
-    # Complex types (simplified - expand as needed)
     elif isinstance(t, StructType):
         return t.name.lower()
     elif isinstance(t, EnumType):
@@ -98,5 +83,4 @@ def _type_to_mangled_string(t: Type) -> str:
     elif isinstance(t, DynamicArrayType):
         return f"dynarray_{_type_to_mangled_string(t.base_type)}"
     else:
-        # Fallback: use string representation
         return str(t).replace("<", "_").replace(">", "_").replace("[", "_").replace("]", "_").lower()

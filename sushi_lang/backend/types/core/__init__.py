@@ -30,7 +30,6 @@ class LLVMTypeSystem:
         self.struct_table = struct_table or StructTable()
         self.enum_table = enum_table or EnumTable()
 
-        # Initialize subsystems
         self.cache = TypeCache()
         self.sizing = TypeSizing(self.struct_table, self.enum_table)
         self.mapper = TypeMapper(self.cache, self.struct_table, self.enum_table,
@@ -41,7 +40,6 @@ class LLVMTypeSystem:
             self.mapper.string_struct,
         )
 
-        # Expose LLVM primitive types from mapper for direct access
         self.i1 = self.mapper.i1
         self.i8 = self.mapper.i8
         self.i16 = self.mapper.i16
@@ -58,12 +56,10 @@ class LLVMTypeSystem:
         self.string_struct = self.mapper.string_struct
         self.closure_struct = self.mapper.closure_struct
 
-    # Type mapping interface
     def ll_type(self, semantic_type: Ty) -> ir.Type:
         """Convert Sushi type to LLVM type."""
         return self.mapper.ll_type(semantic_type)
 
-    # Type inference interface
     def infer_llvm_type_from_value(self, value: ir.Value) -> ir.Type:
         """Infer LLVM type from runtime value."""
         return self.inference.infer_llvm_type_from_value(value)
@@ -72,7 +68,6 @@ class LLVMTypeSystem:
         """Map LLVM type back to language type name."""
         return self.inference.map_llvm_to_language_type(llvm_type)
 
-    # Type checking utilities
     def is_string_type(self, llvm_type: ir.Type) -> bool:
         """Check if LLVM type represents a string."""
         return self.inference.is_string_type(llvm_type)
@@ -85,7 +80,6 @@ class LLVMTypeSystem:
         """Check if LLVM type represents a dynamic array."""
         return self.inference.is_dynamic_array_type(llvm_type)
 
-    # Type sizing interface
     def get_type_size_bytes(self, semantic_type: Ty) -> int:
         """Get size in bytes of a Sushi type."""
         return self.sizing.get_type_size_bytes(semantic_type)
@@ -110,7 +104,6 @@ class LLVMTypeSystem:
         """Get alignment requirement for a Sushi type."""
         return self.sizing.get_type_alignment(semantic_type)
 
-    # Struct/enum type helpers (delegated to mapper)
     def get_string_struct_type(self) -> ir.LiteralStructType:
         """Get LLVM struct type for strings: {i8* data, i32 size, i8 owned}."""
         return self.mapper.string_struct
@@ -131,7 +124,6 @@ class LLVMTypeSystem:
         """Get LLVM struct type for Iterator<T>."""
         return self.mapper._create_iterator_struct_type(iterator_type)
 
-    # GEP helpers for dynamic arrays
     def get_dynamic_array_len_ptr(self, builder: ir.IRBuilder, array_ptr: ir.Value) -> ir.Value:
         """Get pointer to 'len' field of dynamic array struct."""
         from llvmlite import ir

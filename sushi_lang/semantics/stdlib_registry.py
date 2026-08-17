@@ -72,44 +72,35 @@ def _get_param_specs():
 
     specs = {}
 
-    # time module
     for fn in ("sleep", "msleep", "usleep"):
         specs[("time", fn)] = [I64]
     specs[("time", "nanosleep")] = [I64, I64]
 
-    # sys/env module
     specs[("env", "getenv")] = [STRING]
     specs[("env", "setenv")] = [STRING, STRING]
 
-    # sys/process module
     for fn in ("getcwd", "getpid", "getuid"):
         specs[("process", fn)] = []
     specs[("process", "chdir")] = [STRING]
     specs[("process", "exit")] = [I32]
     specs[("process", "run")] = [STRING, STRING_ARRAY]
 
-    # math module - polymorphic
     for fn in ("abs", "min", "max"):
         specs[("math", fn)] = None
-    # math module - f64 unary
     for fn in ("sqrt", "floor", "ceil", "round", "trunc",
                "sin", "cos", "tan", "asin", "acos", "atan",
                "sinh", "cosh", "tanh", "log", "log2", "log10", "exp", "exp2"):
         specs[("math", fn)] = [F64]
-    # math module - f64 binary
     for fn in ("pow", "atan2", "hypot"):
         specs[("math", fn)] = [F64, F64]
 
-    # random module
     for fn in ("rand", "rand_f64"):
         specs[("random", fn)] = []
     specs[("random", "rand_range")] = [I32, I32]
     specs[("random", "srand")] = [U64]
 
-    # io/files module - string unary
     for fn in ("exists", "is_file", "is_dir", "file_size", "remove", "rmdir"):
         specs[("files", fn)] = [STRING]
-    # io/files module - string binary
     for fn in ("rename", "copy"):
         specs[("files", fn)] = [STRING, STRING]
     specs[("files", "mkdir")] = [STRING, I32]
@@ -121,7 +112,6 @@ def _get_param_specs():
 class StdlibRegistry:
     """Central registry for stdlib functions."""
 
-    # Known stdlib modules and their Python module paths
     KNOWN_MODULES = {
         "time": "sushi_lang.sushi_stdlib.src.time",
         "math": "sushi_lang.sushi_stdlib.src.math",
@@ -144,53 +134,40 @@ class StdlibRegistry:
             try:
                 self._discover_module(module_path, python_path)
             except ImportError:
-                # Module not available (e.g., platform-specific)
-                # This is not an error - some modules may be platform-specific
                 pass
 
     def _discover_module(self, module_path: str, python_path: str) -> None:
         """Discover and register a single stdlib module."""
-        # Import the Python module
         py_module = importlib.import_module(python_path)
 
-        # Create module metadata
         stdlib_module = StdlibModule(
             path=module_path,
             python_module=py_module
         )
 
-        # Extract module name for interface functions (e.g., "time" from "time", "env" from "sys/env")
         module_name = module_path.split('/')[-1]
 
-        # Get the checker function (is_builtin_*_function)
         checker_name = f"is_builtin_{module_name}_function"
         checker = getattr(py_module, checker_name, None)
 
-        # Get the type resolver function (get_builtin_*_function_return_type)
         type_resolver_name = f"get_builtin_{module_name}_function_return_type"
         type_resolver = getattr(py_module, type_resolver_name, None)
 
-        # Get the validator function (validate_*_function_call)
         validator_name = f"validate_{module_name}_function_call"
         validator = getattr(py_module, validator_name, None)
 
         if not checker or not type_resolver or not validator:
-            # Module doesn't follow standard interface, skip it
             return
 
-        # Discover all functions by trying common function names
-        # This is a heuristic - we could also add a list_functions() interface
         self._discover_functions_heuristic(
             stdlib_module, module_name, checker, type_resolver, validator
         )
 
-        # Check for constants (math module has PI, E, TAU)
         constant_checker_name = f"is_builtin_{module_name}_constant"
         constant_checker = getattr(py_module, constant_checker_name, None)
         if constant_checker:
             self._discover_constants(stdlib_module, module_name, constant_checker, py_module)
 
-        # Register the module
         self._modules[module_path] = stdlib_module
 
     def _discover_functions_heuristic(
@@ -202,25 +179,17 @@ class StdlibRegistry:
         validator: Callable
     ) -> None:
         """Discover functions using heuristic approach."""
-        # Common function names per module
         common_names = {
             "time": ["sleep", "msleep", "usleep", "nanosleep"],
             "env": ["getenv", "setenv"],
             "process": ["getcwd", "chdir", "exit", "getpid", "getuid", "run"],
             "math": [
-                # Basic
                 "abs", "min", "max", "sqrt", "pow", "floor", "ceil", "round", "trunc",
-                # Trigonometric
                 "sin", "cos", "tan",
-                # Inverse trigonometric
                 "asin", "acos", "atan", "atan2",
-                # Hyperbolic
                 "sinh", "cosh", "tanh",
-                # Logarithmic
                 "log", "log2", "log10",
-                # Exponential
                 "exp", "exp2",
-                # Utility
                 "hypot",
             ],
             "random": ["rand", "rand_range", "srand", "rand_f64"],
@@ -234,12 +203,10 @@ class StdlibRegistry:
                 # Create closures that capture the specific values
                 # Note: Different modules have different type_resolver signatures
                 if module_name in ["time", "env", "process", "random", "files"]:
-                    # time, env, process, random, files: get_builtin_*_function_return_type(name) -> Type
                     def make_type_resolver(fn_name):
                         return lambda: type_resolver(fn_name)
                     get_ret_type = make_type_resolver(name)
                 else:
-                    # math: get_builtin_*_function_return_type(name, params) -> Type
                     def make_type_resolver_with_params(fn_name):
                         return lambda params: type_resolver(fn_name, params)
                     get_ret_type = make_type_resolver_with_params(name)
@@ -271,13 +238,11 @@ class StdlibRegistry:
         """Discover constants (e.g., PI, E, TAU in math module)."""
         common_constants = ["PI", "E", "TAU"]
 
-        # Get constant value getter
         constant_getter_name = f"get_builtin_{module_name}_constant_value"
         getattr(py_module, constant_getter_name, None)
 
         for name in common_constants:
             if checker(name):
-                # Constants are treated as zero-parameter functions returning f64
                 from sushi_lang.semantics.typesys import BuiltinType
 
                 func = StdlibFunction(
@@ -293,7 +258,6 @@ class StdlibRegistry:
     def register_module(self, module_path: str, imported_units: List[str]) -> None:
         """Register a module that was imported via 'use <module>'."""
         if module_path not in self._modules and module_path in self.KNOWN_MODULES:
-            # Lazy registration - only register when actually used
             python_path = self.KNOWN_MODULES[module_path]
             self._discover_module(module_path, python_path)
 
@@ -314,7 +278,6 @@ class StdlibRegistry:
         return list(self._modules.keys())
 
 
-# Global registry instance (created on-demand)
 _global_registry: Optional[StdlibRegistry] = None
 
 

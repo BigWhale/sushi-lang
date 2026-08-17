@@ -56,8 +56,6 @@ def synthesize_thunk(codegen: "LLVMCodegen", target: ir.Function) -> ir.Function
 
     thunk = ir.Function(codegen.module, thunk_ty, name=thunk_name)
     thunk.linkage = "internal"
-    # Emit the body with a private builder so the caller's builder position is
-    # untouched (we may be mid-emit inside another function).
     block = thunk.append_basic_block("entry")
     b = ir.IRBuilder(block)
     forwarded = list(thunk.args[1:])  # drop the leading env
@@ -158,8 +156,6 @@ def get_or_create_env_clone(codegen: "LLVMCodegen", env_struct) -> ir.Function:
         new_ptr = b.bitcast(raw, env_ptr_ty, name="cloned_env")
         old_ptr = b.bitcast(env_i8, env_ptr_ty, name="src_env")
 
-        # Shallow-copy first so non-owning captures carry over untouched, then deep-copy
-        # exactly the fields the drop fn destroys.
         b.store(b.load(old_ptr, name="src_env_val"), new_ptr)
 
         i32 = codegen.types.i32
@@ -195,7 +191,6 @@ def emit_lambda(codegen: "LLVMCodegen", lam, to_i1: bool) -> ir.Value:
         nul = null_ptr(codegen)
         return build_closure_value(codegen, fn_ptr_i8, nul, nul, nul)
 
-    # Heap-allocate the environment struct and populate captured values into it.
     env_struct = lam.env_struct
     env_ll = codegen.types.ll_type(env_struct)
     size = codegen.types.get_type_size_bytes(env_struct)
@@ -205,8 +200,6 @@ def emit_lambda(codegen: "LLVMCodegen", lam, to_i1: bool) -> ir.Value:
     i32 = codegen.types.i32
     zero = ir.Constant(i32, 0)
     for idx, cap in enumerate(captures):
-        # A capture names a variable but holds no source `Expr`, so Pass 3 puts the
-        # provenance on the `Param`. Carry it onto the synthesized `Name` the seam reads.
         source = _Name(id=cap.name, loc=lam.loc)
         source.ownership_provenance = getattr(cap, "ownership_provenance", None)
         value = codegen.expressions.emit_expr(source)

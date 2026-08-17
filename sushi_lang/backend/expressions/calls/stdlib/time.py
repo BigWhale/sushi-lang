@@ -20,7 +20,6 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
     i32 = ir.IntType(INT32_BIT_WIDTH)
     i64 = ir.IntType(INT64_BIT_WIDTH)
 
-    # Map user function name to stdlib function name
     stdlib_func_name = f"sushi_{func_name}"
 
     from sushi_lang.backend.functions import declare_stdlib_function
@@ -30,7 +29,6 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
     # The actual LLVM functions return bare i32
 
     if func_name in ["sleep", "msleep", "usleep"]:
-        # These functions take one i64 argument
         if len(expr.args) != 1:
             raise_internal_error("CE0023", method=func_name, expected=1, got=len(expr.args))
 
@@ -39,7 +37,6 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
         result = codegen.builder.call(stdlib_func, [arg_value], name=f"{func_name}_result")
 
     elif func_name == "nanosleep":
-        # nanosleep takes two i64 arguments (seconds, nanoseconds)
         if len(expr.args) != 2:
             raise_internal_error("CE0023", method="nanosleep", expected=2, got=len(expr.args))
 
@@ -58,7 +55,6 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
     from sushi_lang.semantics.typesys import UnknownType
     from sushi_lang.semantics.generics.results import ensure_result_type_in_table
 
-    # Create Result<i32, StdError> enum if it doesn't exist
     ok_type = BuiltinType.I32
     err_type = UnknownType("StdError")
     result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type, struct_table=codegen.struct_table.by_name)
@@ -67,22 +63,17 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
         result_llvm_type = codegen.types.ll_type(result_enum)
         ok_variant_index = result_enum.get_variant_index("Ok")
 
-        # Create Result.Ok(value) enum
         ok_result = ir.Constant(result_llvm_type, ir.Undefined)
         tag = ir.Constant(codegen.types.i32, ok_variant_index)
         ok_result = codegen.builder.insert_value(ok_result, tag, 0, name="ok_tag")
 
-        # Pack the i32 value into the data array
-        # Get the data array type from the enum type
         data_array_type = result_llvm_type.elements[1]
 
-        # Allocate space for the value and data array
         value_alloca = codegen.builder.alloca(i32, name="time_result_value")
         codegen.builder.store(result, value_alloca)
 
         data_alloca = codegen.builder.alloca(data_array_type, name="data_array")
 
-        # Bitcast pointers to i8* for memcpy
         src_ptr = codegen.builder.bitcast(value_alloca, codegen.types.i8.as_pointer())
         dest_ptr = codegen.builder.bitcast(data_alloca, codegen.types.i8.as_pointer())
 
@@ -97,7 +88,6 @@ def emit_time_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
         is_volatile = FALSE_I1
         codegen.builder.call(memcpy_fn, [dest_ptr, src_ptr, size_const, is_volatile])
 
-        # Load the data array and insert into enum
         data_value = codegen.builder.load(data_alloca, name="data_value")
         ok_result = codegen.builder.insert_value(ok_result, data_value, 1, name="ok_result")
 

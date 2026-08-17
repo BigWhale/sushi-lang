@@ -7,10 +7,8 @@ import llvmlite.ir as ir
 from sushi_lang.backend import gep_utils
 
 
-# (element_ptr, index) -> None. Emits the per-element body.
 ElementFn = Callable[[ir.Value, ir.Value], None]
 
-# (element_ptr, index) -> i1. True means "run the body for this element".
 PredicateFn = Callable[[ir.Value, ir.Value], ir.Value]
 
 
@@ -60,7 +58,6 @@ def _emit_walk(
 
     builder.branch(cond_bb)
 
-    # i < count
     builder.position_at_end(cond_bb)
     index = builder.load(index_slot, name=f"{prefix}_i_val")
     builder.cbranch(
@@ -75,7 +72,6 @@ def _emit_walk(
 
     if should_visit is None:
         on_element(element_ptr, index)
-        # The body may have appended blocks; branch from wherever we now are.
         builder.branch(next_bb)
     else:
         visit = should_visit(element_ptr, index)
@@ -86,7 +82,6 @@ def _emit_walk(
         on_element(element_ptr, index)
         builder.branch(next_bb)
 
-    # i += 1
     builder.position_at_end(next_bb)
     index = builder.load(index_slot, name=f"{prefix}_i_val")
     builder.store(builder.add(index, one, name=f"{prefix}_i_next"), index_slot)

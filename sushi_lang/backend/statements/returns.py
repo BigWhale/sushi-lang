@@ -13,21 +13,14 @@ def _extract_return_variables(expr: 'Expr') -> set[str]:
     from sushi_lang.semantics.ast import EnumConstructor, DotCall, Name
 
     if isinstance(expr, EnumConstructor):
-        # Result.Ok(value) or Result.Err()
         if expr.args:
-            # Recursively extract from the first argument
             return _extract_return_variables(expr.args[0])
     elif isinstance(expr, DotCall):
-        # DotCall node (unified X.Y(args)) - check if it's an enum constructor
-        # For returns, this is typically Result.Ok(value) or Result.Err()
         if expr.args:
-            # Recursively extract from the first argument
             return _extract_return_variables(expr.args[0])
     elif isinstance(expr, Name):
-        # Simple variable reference
         return {expr.id}
 
-    # Other expressions (literals, method calls, etc.) don't have variables to move
     return set()
 
 
@@ -56,7 +49,6 @@ def emit_return(codegen: 'LLVMCodegen', stmt: 'Return') -> None:
     from sushi_lang.backend.statements import utils
     utils.emit_scope_cleanup(codegen, cleanup_type='all')
 
-    # Return the value (Result struct for functions, bare value for extension methods)
     codegen.builder.ret(value)
 
 

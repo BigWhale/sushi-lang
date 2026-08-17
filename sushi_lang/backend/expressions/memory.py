@@ -16,7 +16,6 @@ if TYPE_CHECKING:
 
 def get_element_size_constant(codegen: 'LLVMCodegen', element_type: ir.Type) -> ir.Value:
     """Get the size in bytes of an element type as an LLVM constant."""
-    # Fast path: Check common types
     if element_type == codegen.types.i32:
         return ir.Constant(codegen.types.i32, 4)  # i32 = 4 bytes
     elif element_type == codegen.types.i8:
@@ -36,17 +35,13 @@ def get_element_size_constant(codegen: 'LLVMCodegen', element_type: ir.Type) -> 
     # narrower check sent every user-struct element to the CE0079 below -- and this is the
     # element-size path for `T[]`, so it fired on the first recursive `Node[]`.
     elif isinstance(element_type, ir.types.BaseStructType):
-        # Create a null pointer of type element_type*
         null_ptr = ir.Constant(ir.PointerType(element_type), None)
-        # GEP to get pointer to element [1]
         size_gep = codegen.builder.gep(
             null_ptr,
             [ir.Constant(codegen.types.i64, 1)],
             name="size_gep"
         )
-        # Convert pointer to integer to get the size
         size_i64 = codegen.builder.ptrtoint(size_gep, codegen.types.i64, name="size_i64")
-        # Truncate to i32 (sizes should fit in 32 bits)
         size_i32 = codegen.builder.trunc(size_i64, codegen.types.i32, name="size_i32")
         return size_i32
 
@@ -79,17 +74,14 @@ def calculate_llvm_type_size(llvm_type: 'ir.Type') -> int:
                 and isinstance(els[1], ir.IntType) and els[1].width == 32
                 and isinstance(els[2], ir.IntType) and els[2].width == 8):
             return 16
-        # For structs (including enums), calculate total size
         total_size = 0
         for element_type in llvm_type.elements:
             total_size += calculate_llvm_type_size(element_type)
         return total_size
     elif isinstance(llvm_type, ir.ArrayType):
-        # For arrays, multiply element size by count
         element_size = calculate_llvm_type_size(llvm_type.element)
         return element_size * llvm_type.count
     else:
-        # Conservative estimate for unknown types
         return 16
 
 
@@ -97,34 +89,26 @@ def emit_realloc_call(codegen: 'LLVMCodegen', old_ptr: ir.Value, new_size: ir.Va
     """Emit realloc() call with error checking."""
     realloc_func = codegen.get_realloc_func()
 
-    # Cast old pointer to void* if needed
     if old_ptr.type != ir.PointerType(codegen.types.i8):
         old_ptr = codegen.builder.bitcast(old_ptr, ir.PointerType(codegen.types.i8), name="old_void_ptr")
 
-    # Convert size to i64 for realloc (size_t)
     if new_size.type != ir.IntType(INT64_BIT_WIDTH):
         new_size = codegen.builder.zext(new_size, ir.IntType(INT64_BIT_WIDTH), name="size_i64")
 
-    # Call realloc
     new_void_ptr = codegen.builder.call(realloc_func, [old_ptr, new_size], name="realloc_result")
 
-    # Check if realloc returned NULL (allocation failure)
     null_ptr = ir.Constant(ir.PointerType(codegen.types.i8), None)
     is_null = codegen.builder.icmp_unsigned('==', new_void_ptr, null_ptr, name="is_null")
 
-    # Create basic blocks for null check
     null_block = codegen.builder.append_basic_block(name="realloc_null")
     success_block = codegen.builder.append_basic_block(name="realloc_success")
 
-    # Branch based on null check
     codegen.builder.cbranch(is_null, null_block, success_block)
 
-    # Null block: emit runtime error and exit
     codegen.builder.position_at_end(null_block)
     codegen.runtime.errors.emit_runtime_error("RE2021")
     codegen.builder.unreachable()
 
-    # Success block: continue normal execution
     codegen.builder.position_at_end(success_block)
 
     return new_void_ptr
@@ -140,16 +124,13 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     """Clone a dynamic array struct value (creates deep copy with independent memory)."""
     zero = ir.Constant(codegen.types.i32, 0)
 
-    # Extract fields from source array
     source_len = codegen.builder.extract_value(array_struct, 0)
     source_cap = codegen.builder.extract_value(array_struct, 1)
     source_data_ptr = codegen.builder.extract_value(array_struct, 2)
 
-    # Get LLVM element type
     element_llvm_type = codegen.types.ll_type(element_type)
     array_struct_type = array_struct.type
 
-    # Check if source array is empty (len == 0)
     len_is_zero = codegen.builder.icmp_unsigned('==', source_len, zero)
 
     empty_clone_bb = codegen.builder.append_basic_block('clone_empty')
@@ -158,7 +139,6 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
 
     codegen.builder.cbranch(len_is_zero, empty_clone_bb, non_empty_clone_bb)
 
-    # Empty clone path: return {0, 0, null}
     codegen.builder.position_at_end(empty_clone_bb)
     null_ptr = ir.Constant(ir.PointerType(element_llvm_type), None)
     empty_array = ir.Constant(array_struct_type, ir.Undefined)
@@ -167,21 +147,16 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     empty_array = codegen.builder.insert_value(empty_array, null_ptr, 2)
     codegen.builder.branch(clone_merge_bb)
 
-    # Non-empty clone path: allocate and copy
     codegen.builder.position_at_end(non_empty_clone_bb)
 
-    # Allocate new memory (capacity * sizeof(element))
-    # Use centralized size calculation with semantic type
     sizeof_element_i32 = codegen.types.get_type_size_constant(element_type)
     cap_i64 = codegen.builder.zext(source_cap, codegen.types.i64)
     sizeof_element_i64 = codegen.builder.zext(sizeof_element_i32, codegen.types.i64)
     total_bytes = codegen.builder.mul(cap_i64, sizeof_element_i64)
 
-    # Use our malloc wrapper with error checking
     new_data_ptr_i8 = emit_malloc(codegen, codegen.builder, total_bytes)
     new_data_ptr = codegen.builder.bitcast(new_data_ptr_i8, ir.PointerType(element_llvm_type))
 
-    # Copy elements (manual loop for portability)
     copy_index = codegen.builder.alloca(codegen.types.i32, name="copy_idx")
     codegen.builder.store(zero, copy_index)
 
@@ -191,7 +166,6 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
 
     codegen.builder.branch(copy_loop_head)
 
-    # Loop head: check if index < len
     codegen.builder.position_at_end(copy_loop_head)
     idx = codegen.builder.load(copy_index)
     cond = codegen.builder.icmp_unsigned('<', idx, source_len)
@@ -209,12 +183,10 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     dst_elem_ptr = codegen.builder.gep(new_data_ptr, [idx])
     codegen.builder.store(elem, dst_elem_ptr)
 
-    # Increment index
     next_idx = codegen.builder.add(idx, ir.Constant(codegen.types.i32, 1))
     codegen.builder.store(next_idx, copy_index)
     codegen.builder.branch(copy_loop_head)
 
-    # Loop exit: create new array struct
     codegen.builder.position_at_end(copy_loop_exit)
     new_array = ir.Constant(array_struct_type, ir.Undefined)
     new_array = codegen.builder.insert_value(new_array, source_len, 0)
@@ -222,7 +194,6 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     new_array = codegen.builder.insert_value(new_array, new_data_ptr, 2)
     codegen.builder.branch(clone_merge_bb)
 
-    # Merge: phi node to select result
     codegen.builder.position_at_end(clone_merge_bb)
     result_phi = codegen.builder.phi(array_struct_type, name="cloned_array")
     result_phi.add_incoming(empty_array, empty_clone_bb)
@@ -306,7 +277,6 @@ def emit_value_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) 
                       or codegen.enum_table.by_name.get(value_type.name)
                       or value_type)
 
-    # Foreign ptr: an opaque unmanaged handle, nothing to duplicate.
     if isinstance(value_type, ForeignPtrType):
         return value
 
@@ -457,8 +427,6 @@ def _clone_list_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struc
         b.call(_declare_memcpy(codegen),
                [new_raw, old_i8, bytes_to_copy, ir.Constant(ir.IntType(1), 0)])
 
-        # Deep-clone each live element when the element type owns heap, so the copy owns
-        # independent buffers (a no-op walk for a non-owning element type).
         if field_needs_cleanup(codegen, elem_ty):
             def clone_element(element_ptr: ir.Value, _index: ir.Value) -> None:
                 loaded = codegen.builder.load(element_ptr, name="list_clone_elem")

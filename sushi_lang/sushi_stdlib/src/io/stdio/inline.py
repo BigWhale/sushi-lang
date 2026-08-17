@@ -16,13 +16,11 @@ def _emit_readln(codegen: Any, expr: MethodCall) -> ir.Value:
     i8_ptr = codegen.i8.as_pointer()
     i64 = ir.IntType(64)
 
-    # Allocate lineptr (i8*) and n (i64) for getline
     lineptr_alloca = builder.alloca(i8_ptr, name="lineptr")
     n_alloca = builder.alloca(i64, name="n")
     builder.store(ir.Constant(i8_ptr, None), lineptr_alloca)
     builder.store(ir.Constant(i64, 0), n_alloca)
 
-    # Call getline(&lineptr, &n, stdin) -> ssize_t (i64)
     stdin_ptr = builder.load(codegen.runtime.libc_stdio.stdin_handle)
     bytes_read = builder.call(
         codegen.runtime.libc_stdio.getline,
@@ -30,7 +28,6 @@ def _emit_readln(codegen: Any, expr: MethodCall) -> ir.Value:
         name="bytes_read"
     )
 
-    # Check if getline returned < 0 (EOF or error)
     zero_i64 = ir.Constant(i64, 0)
     is_eof = builder.icmp_signed('<', bytes_read, zero_i64, name="is_eof")
 
@@ -38,7 +35,6 @@ def _emit_readln(codegen: Any, expr: MethodCall) -> ir.Value:
     success_block = builder.append_basic_block(name="readln_success")
     builder.cbranch(is_eof, eof_block, success_block)
 
-    # EOF path: free getline buffer (if any), return empty string
     builder.position_at_end(eof_block)
     eof_lineptr = builder.load(lineptr_alloca, name="eof_lineptr")
     eof_null = ir.Constant(i8_ptr, None)
@@ -66,7 +62,6 @@ def _emit_readln(codegen: Any, expr: MethodCall) -> ir.Value:
     eof_ret_pred = builder.block
     builder.branch(merge_block)
 
-    # Success path: strip trailing \n and \r\n
     builder.position_at_end(success_block)
     lineptr_val = builder.load(lineptr_alloca, name="lineptr")
     len_i32 = builder.trunc(bytes_read, codegen.i32, name="len_i32")
@@ -80,7 +75,6 @@ def _emit_readln(codegen: Any, expr: MethodCall) -> ir.Value:
     to_merge_block = builder.append_basic_block(name="readln_to_merge")
     builder.cbranch(has_chars, check_newline_block, to_merge_block)
 
-    # Check and strip trailing \n
     builder.position_at_end(check_newline_block)
     cur_len = builder.load(final_length, name="cur_len")
     last_idx = builder.sub(cur_len, one_i32, name="last_idx")
@@ -92,7 +86,6 @@ def _emit_readln(codegen: Any, expr: MethodCall) -> ir.Value:
     strip_newline_block = builder.append_basic_block(name="readln_strip_nl")
     builder.cbranch(is_newline, strip_newline_block, to_merge_block)
 
-    # Strip \n, then check for \r
     builder.position_at_end(strip_newline_block)
     null_byte = ir.Constant(codegen.i8, 0)
     builder.store(null_byte, last_ptr)
@@ -119,13 +112,11 @@ def _emit_readln(codegen: Any, expr: MethodCall) -> ir.Value:
     builder.store(len_no_crlf, final_length)
     builder.branch(to_merge_block)
 
-    # Build fat pointer for success path and branch to merge
     builder.position_at_end(to_merge_block)
     final_len_val = builder.load(final_length, name="final_len")
     success_fat = cstr_to_fat_pointer_with_len(builder, lineptr_val, final_len_val, owned=1)
     builder.branch(merge_block)
 
-    # Merge block: phi node to select between EOF and success results
     builder.position_at_end(merge_block)
     i8_ptr_ty = codegen.i8.as_pointer()
     string_struct_ty = ir.LiteralStructType([i8_ptr_ty, codegen.i32, ir.IntType(8)])  # {data, size, owned} (#145)

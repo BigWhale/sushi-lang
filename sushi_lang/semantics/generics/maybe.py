@@ -29,7 +29,6 @@ def validate_maybe_method_with_validator(
     elif call.method == "expect":
         _validate_maybe_expect(call, maybe_type, reporter, validator)
     else:
-        # Unknown method - should not happen if is_builtin_maybe_method was called first
         raise_internal_error("CE0094", method=call.method)
 
 
@@ -56,7 +55,6 @@ def _validate_maybe_realise(
         er.emit(reporter, er.ERR.CE2016, call.loc, method="realise", expected=1, got=len(call.args))
         return
 
-    # Extract T from Maybe<T> via the Some variant's associated type.
     some_variant = maybe_type.get_variant("Some")
     if some_variant is None:
         raise_internal_error("CE0092", enum=maybe_type.name)
@@ -72,7 +70,6 @@ def _validate_maybe_realise(
 
     default_arg = call.args[0]
 
-    # Propagate expected type to DotCall nodes so maybe.realise(Result.Ok(...)) works.
     from sushi_lang.semantics.passes.types.utils import propagate_enum_type_to_dotcall
     propagate_enum_type_to_dotcall(validator, default_arg, t_type)
 
@@ -132,8 +129,6 @@ def ensure_maybe_type_in_table(
 
     existing = enums.get(maybe_enum_name)
     if existing is not None:
-        # Same name, different payload: one of the two was interned unresolved. Fail loudly at the
-        # moment of corruption rather than let it decay into a cache miss.
         if existing.variants and existing.variants != variants:
             raise_internal_error(
                 "CE0126",
@@ -153,8 +148,6 @@ def ensure_maybe_type_in_table(
     enums[maybe_enum_name] = maybe_enum
     enum_table.order.append(maybe_enum_name)
 
-    # Register the auto-derived hash() for the on-demand type (mirrors Pass 1.8), matching
-    # what the Result twin has always done.
     can_hash, _ = can_enum_be_hashed(maybe_enum)
     if can_hash:
         register_enum_hash_method(maybe_enum)

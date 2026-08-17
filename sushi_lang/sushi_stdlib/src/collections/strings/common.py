@@ -21,10 +21,6 @@ import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc, declare_memcpy
 
 
-# ==============================================================================
-# Memory Allocation Helpers
-# ==============================================================================
-
 def allocate_and_copy_bytes(
     builder: ir.IRBuilder,
     malloc: ir.Function,
@@ -34,11 +30,9 @@ def allocate_and_copy_bytes(
     i64: ir.IntType
 ) -> ir.Value:
     """Allocate memory and copy bytes from source."""
-    # Allocate memory
     byte_count_i64 = builder.zext(byte_count, i64, name="byte_count_i64")
     new_data = builder.call(malloc, [byte_count_i64], name="new_data")
 
-    # Copy bytes using llvm.memcpy intrinsic
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [new_data, src_ptr, builder.zext(byte_count, ir.IntType(64)), is_volatile])
 
@@ -57,13 +51,10 @@ def allocate_substring(
     i64: ir.IntType
 ) -> ir.Value:
     """Allocate and return a substring as a fat pointer struct."""
-    # Calculate source pointer
     src_ptr = builder.gep(src_data, [start_offset], name="src_ptr")
 
-    # Allocate and copy
     new_data = allocate_and_copy_bytes(builder, malloc, memcpy, src_ptr, byte_length, i64)
 
-    # Build and return struct (freshly malloc'd substring -> heap-owned)
     return build_string_struct(builder, string_type, new_data, byte_length, owned=1)
 
 

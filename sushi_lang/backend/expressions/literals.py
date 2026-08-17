@@ -68,10 +68,8 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
     """Emit LLVM IR for interpolated string by concatenating string parts and expression values.
     """
     if not expr.parts:
-        # Empty interpolated string - return empty string literal
         return codegen.runtime.strings.emit_string_literal("")
 
-    # Handle single string literal case (no interpolation)
     if len(expr.parts) == 1 and isinstance(expr.parts[0], str):
         return codegen.runtime.strings.emit_string_literal(expr.parts[0])
 
@@ -84,15 +82,11 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
 
     for part in expr.parts:
         if isinstance(part, str):
-            # String literal part - emit as string literal (owned=0, borrow-like: not fresh)
             string_values.append(codegen.runtime.strings.emit_string_literal(part))
             fresh_flags.append(False)
         else:
-            # Expression part - emit expression and convert to string if needed
-            # Use codegen.expressions for recursive call
             expr_value = codegen.expressions.emit_expr(part)
 
-            # Check if the expression is already a string (fat pointer struct)
             if codegen.types.is_string_type(expr_value.type):
                 # A string-typed part is a BORROW when a live owner frees it (`{name}`, a
                 # field read, a container get-out) -- use directly, never free here. A
@@ -111,15 +105,11 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
                     fresh_flags.append(False)
                 string_values.append(expr_value)
             else:
-                # Not a string, need to convert using appropriate to_str implementation
-                # Directly call the conversion functions based on LLVM type
                 llvm_type = expr_value.type
 
                 if isinstance(llvm_type, ir.IntType):
-                    # Integer type - determine signedness and width
                     width = llvm_type.width
                     if width == 1:
-                        # bool (i1)
                         string_values.append(codegen.runtime.formatting.emit_bool_to_string(expr_value))
                         fresh_flags.append(True)
                     elif width in [8, 16, 32, 64]:
@@ -148,14 +138,12 @@ def emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) -
                     else:
                         raise_internal_error("CE0022", type=f"i{width}")
                 elif isinstance(llvm_type, (ir.FloatType, ir.DoubleType)):
-                    # Float type
                     is_double = isinstance(llvm_type, ir.DoubleType)
                     string_values.append(codegen.runtime.formatting.emit_float_to_string(expr_value, is_double=is_double))
                     fresh_flags.append(True)
                 else:
                     raise_internal_error("CE0022", type=str(llvm_type))
 
-    # If we have only one string value, return it directly
     if len(string_values) == 1:
         return string_values[0]
 

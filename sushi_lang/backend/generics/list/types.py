@@ -11,14 +11,11 @@ def extract_element_type(list_type: StructType, codegen: Any) -> Type:
     """Extract T from List<T>."""
     name = list_type.name
 
-    # Expected format: "List<T>"
     if not name.startswith("List<") or not name.endswith(">"):
         raise_internal_error("CE0049", generic="List", name=name)
 
-    # Extract T from "List<T>"
     type_str = name[5:-1].strip()  # Remove "List<" and ">"
 
-    # Parse the type string (might be builtin, struct, enum, or nested generic)
     from sushi_lang.semantics.generics.type_strings import resolve_type_from_string
     return resolve_type_from_string(type_str, codegen)
 
@@ -35,7 +32,6 @@ def get_list_llvm_type(codegen: Any, element_type: Type) -> ir.Type:
 
 def get_list_element_type(codegen: Any, list_type: ir.Type) -> ir.Type:
     """Extract the element type from a List<T> LLVM type."""
-    # data field is at index 2, it's a pointer type
     data_ptr_type = list_type.elements[2]
     return data_ptr_type.pointee
 

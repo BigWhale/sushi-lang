@@ -75,14 +75,11 @@ class LLVMCodegen:
         self.func_table = func_table or FunctionTable()
         self.perk_impl_table = perk_impl_table or PerkImplementationTable()
         self.const_table = const_table or ConstantTable()
-        # FFI: external function table (set by the compiler pipeline). Maps
-        # foreign declarations to declared ir.Functions in declare_user_externs.
         from sushi_lang.semantics.passes.collect import ExternalTable
         self.external_table = ExternalTable()
         self.external_funcs = {}
         self.external_sigs = {}
 
-        # Initialize specialized subsystems following SOLID principles
         self.types = LLVMTypeSystem(struct_table=self.struct_table, enum_table=self.enum_table,
                                     context=self.llvm_context)
         self.utils = LLVMUtils(self)
@@ -95,18 +92,15 @@ class LLVMCodegen:
         self.functions = LLVMFunctionManager(self)
         self.optimizer = LLVMOptimizer(self)
 
-        # Specialized managers for common operations
         self.string_manager = StringConstantManager(self)
         self.stdlib = StdlibLinker(self)
 
-        # Type properties for convenient access
         self.i32 = self.types.i32
         self.i8 = self.types.i8
         self.i1 = self.types.i1
         self.str_ptr = self.types.str_ptr
         self.void = self.types.void
 
-        # Per-function compilation state
         self.builder: Optional[ir.IRBuilder] = None
         self.alloca_builder: Optional[ir.IRBuilder] = None
         self.func: Optional[ir.Function] = None
@@ -119,13 +113,10 @@ class LLVMCodegen:
         # index bounds break/continue RAII cleanup to the loop's own scopes.
         self.loop_stack: list[tuple[ir.Block, ir.Block, int]] = []
 
-        # Function registry for declared functions
         self.funcs: Dict[str, ir.Function] = {}
 
-        # Global constants registry
         self.constants: Dict[str, ir.GlobalVariable] = {}
 
-        # Centralized memory management function declarations
         self._malloc_func: Optional[ir.Function] = None
         self._free_func: Optional[ir.Function] = None
         self._realloc_func: Optional[ir.Function] = None
@@ -148,30 +139,22 @@ class LLVMCodegen:
         # and its new owner frees it instead (#145 / N1).
         self._string_value_temp_stack: List[List[ir.Value]] = []
 
-        # Command line arguments support
         self.main_expects_args: bool = False
 
-        # Library compilation mode (no main() wrapper)
         self.is_library_mode: bool = False
 
-        # Library linker for custom library functions
         self.library_linker: Optional['LibraryResolver'] = None
 
-        # Library registry for pre-parsed library metadata
         self.library_registry: Optional[LibraryRegistry] = None
 
-        # Monomorphized generic extension methods (for codegen)
         self.monomorphized_extensions: list['ExtendDef'] = []
 
         # Library-shipped concrete perk impls (C4a): declared only, never
         # defined - the bodies link in from the library bitcode.
         self.library_perk_impls: list['ExtendWithDef'] = []
 
-        # Variable type tracking (Sushi language types, not LLVM types)
-        # Maps variable name to its Sushi Type for struct member access resolution
         self.variable_types: Dict[str, 'Type'] = {}
 
-        # Track which stdlib units are imported (for conditional code generation)
         self.stdlib_units: set[str] = set()
 
         # Function return type tracking (Sushi language types, not LLVM types)
@@ -179,11 +162,8 @@ class LLVMCodegen:
         # Used for inferring Result<T> types from function call expressions
         self.function_return_types: Dict[str, 'Type'] = {}
 
-        # Current function being compiled (AST node)
-        # Used by ?? operator to get the enclosing function's return type
         self.current_function_ast: Optional['FuncDef'] = None
 
-        # AST constant definitions (for constant evaluation in backend)
         self.ast_constants: Dict[str, ConstDef] = {}
 
         # Recursive-destructor emission state (backend/destructors.py). Declared here
@@ -196,7 +176,6 @@ class LLVMCodegen:
         self._dtor_inprogress: list[str] = []
         self._dtor_funcs: Dict[str, ir.Function] = {}
 
-    # Properties for runtime function access
     @property
     def printf(self) -> ir.Function | None:
         """Access to printf runtime function."""
@@ -233,13 +212,10 @@ class LLVMCodegen:
     def _get_malloc_func(self) -> ir.Function:
         """Get or declare malloc function."""
         if self._malloc_func is None:
-            # Reuse an existing declaration (e.g. a matching FFI extern) to avoid
-            # duplicate-symbol declaration errors.
             existing = self.module.globals.get("malloc")
             if isinstance(existing, ir.Function):
                 self._malloc_func = existing
                 return self._malloc_func
-            # void* malloc(size_t size)
             malloc_type = ir.FunctionType(
                 ir.PointerType(ir.IntType(INT8_BIT_WIDTH)),  # void*
                 [ir.IntType(INT64_BIT_WIDTH)]                # size_t
@@ -259,7 +235,6 @@ class LLVMCodegen:
             if isinstance(existing, ir.Function):
                 self._free_func = existing
                 return self._free_func
-            # void free(void* ptr)
             free_type = ir.FunctionType(
                 ir.VoidType(),                   # void
                 [ir.PointerType(ir.IntType(INT8_BIT_WIDTH))]  # void*
@@ -319,7 +294,6 @@ class LLVMCodegen:
             if isinstance(existing, ir.Function):
                 self._realloc_func = existing
                 return self._realloc_func
-            # void* realloc(void* ptr, size_t size)
             realloc_type = ir.FunctionType(
                 ir.PointerType(ir.IntType(INT8_BIT_WIDTH)),  # void*
                 [ir.PointerType(ir.IntType(INT8_BIT_WIDTH)), ir.IntType(INT64_BIT_WIDTH)]  # void*, size_t
@@ -338,7 +312,6 @@ class LLVMCodegen:
 
     def build_module_multi_unit(self, units: list[Unit]) -> ir.Module:
         """Generate LLVM IR for multiple compilation units and return the module."""
-        # Extract stdlib unit imports from all units for conditional code generation
         for unit in units:
             if unit.ast is not None:
                 self.stdlib.extract_stdlib_units(unit.ast)
@@ -363,19 +336,14 @@ class LLVMCodegen:
         library_registry: Optional[LibraryRegistry] = None,
     ) -> Path:
         """Complete multi-unit compilation pipeline from multiple ASTs to native executable."""
-        # Store command line arguments information
         self.main_expects_args = main_expects_args
 
-        # Store monomorphized extensions for emission
         self.monomorphized_extensions = monomorphized_extensions or []
 
-        # Store library linker for function declarations
         self.library_linker = library_linker
 
-        # Store library registry for pre-parsed metadata
         self.library_registry = library_registry
 
-        # Build high-level IR for all units
         mod_ir: ir.Module = self.build_module_multi_unit(units)
 
         if debug:
@@ -384,10 +352,8 @@ class LLVMCodegen:
             for i, line in enumerate(ir_text.splitlines(), 1):
                 print(f"{i:4} {line}")
 
-        # Convert to binding ModuleRef
         llmod = llvm.parse_assembly(str(mod_ir))
 
-        # Collect all library and stdlib modules to link
         library_paths = set()
         stdlib_units = set()
 
@@ -399,20 +365,16 @@ class LLVMCodegen:
                     elif use_stmt.is_stdlib:
                         stdlib_units.add(use_stmt.path)
 
-        # Use two-phase linking if we have libraries to link
         if library_linker is not None and library_paths:
             from sushi_lang.backend.module_linker import TwoPhaseLinker
 
-            # Get target info for the linker
             target_triple = llmod.triple if hasattr(llmod, 'triple') else ""
             data_layout = llmod.data_layout if hasattr(llmod, 'data_layout') else ""
 
             two_phase = TwoPhaseLinker(target_triple, data_layout)
 
-            # Add main module
             two_phase.add_main_module(llmod, "main")
 
-            # Add library modules
             from sushi_lang.backend.library_format import LibraryFormat
             from sushi_lang.backend.library_errors import LibraryError
             for lib_path in library_paths:
@@ -428,7 +390,6 @@ class LLVMCodegen:
                 except Exception as e:
                     raise LibraryError("CE3507", lib=lib_path, reason=str(e)) from e
 
-            # Add stdlib modules
             for stdlib_path in stdlib_units:
                 bc_paths = self.stdlib._resolve_stdlib_unit(stdlib_path)
                 for bc_path in bc_paths:
@@ -436,32 +397,26 @@ class LLVMCodegen:
                         stdlib_mod = llvm.parse_bitcode(f.read())
                         two_phase.add_stdlib_module(stdlib_mod, stdlib_path)
 
-            # Perform two-phase linking with full symbol deduplication
             llmod = two_phase.link()
 
         else:
-            # No libraries - just link stdlib directly
             for unit in units:
                 if unit.ast is not None:
                     self.stdlib.link_stdlib_modules(llmod, unit.ast)
 
-        # Set up target information
         self.optimizer.ensure_target(llmod)
 
         if verify:
             self.optimizer.verify(llmod, "pre-optimization")
 
-        # Optimize if requested
         if opt != "none":
             self.optimizer.optimize(llmod, opt)
 
         if verify:
             self.optimizer.verify(llmod, "post-optimization")
 
-        # Update self.module with optimized IR (for --emit-ll to work correctly)
         self.module = llvm.parse_assembly(str(llmod))
 
-        # Generate native executable
         out_path = out or Path("a.out")
         return self._link_executable(llmod, out_path, cc, debug, keep_object=keep_object)
 
@@ -475,13 +430,10 @@ class LLVMCodegen:
         exported_private_functions: set[str] = frozenset(),
     ) -> bytes:
         """Compile units to LLVM bitcode without linking to executable."""
-        # Store monomorphized extensions for emission
         self.monomorphized_extensions = monomorphized_extensions or []
 
-        # Mark as library mode to skip main() wrapper
         self.is_library_mode = True
 
-        # Build high-level IR for all units
         mod_ir: ir.Module = self.build_module_multi_unit(units)
 
         # Perk-impl methods may also ship through the manifest (C4a) and be
@@ -508,28 +460,23 @@ class LLVMCodegen:
             for i, line in enumerate(ir_text.splitlines(), 1):
                 print(f"{i:4} {line}")
 
-        # Convert to binding ModuleRef
         llmod = llvm.parse_assembly(str(mod_ir))
 
-        # Link stdlib modules if any units import them
         for unit in units:
             if unit.ast is not None:
                 self.stdlib.link_stdlib_modules(llmod, unit.ast)
 
-        # Set up target information
         self.optimizer.ensure_target(llmod)
 
         if verify:
             self.optimizer.verify(llmod, "pre-optimization")
 
-        # Optimize if requested
         if opt != "none":
             self.optimizer.optimize(llmod, opt)
 
         if verify:
             self.optimizer.verify(llmod, "post-optimization")
 
-        # Update self.module with optimized IR (for --write-ll to work correctly)
         self.module = llvm.parse_assembly(str(llmod))
 
         return llmod.as_bitcode()
@@ -546,40 +493,32 @@ class LLVMCodegen:
         """Emit object file and link to native executable."""
         self.optimizer.ensure_llvm()
 
-        # Get target machine
         if tm is None:
             tm = self.optimizer.ensure_target(llmod)
 
-        # Emit object bytes
         obj_bytes = tm.emit_object(llmod)
 
-        # Write temporary object file
         obj_path = out.with_suffix(".o")
         obj_path.write_bytes(obj_bytes)
 
-        # Link to native executable
         cmd = [cc, str(obj_path)]
         cmd.extend(["-o", str(out)])
 
-        # Add platform-specific linker flags
         from sushi_lang.backend.platform_detect import get_current_platform
         platform = get_current_platform()
         if platform.is_linux:
-            # Link math library on Linux (required for pow, sqrt, etc.)
             cmd.append("-lm")
 
         if debug:
             cmd.insert(1, "-g")
         subprocess.run(cmd, check=True)
 
-        # Clean up object file unless requested to keep it
         if not keep_object:
             obj_path.unlink()
         return out
 
     def build_module_single_unit(self, target_unit: Unit, all_units: list[Unit]) -> ir.Module:
         """Generate LLVM IR for a single compilation unit."""
-        # Create a fresh module for this unit
         saved_module = self.module
         saved_funcs = self.funcs.copy()
         saved_constants = self.constants.copy()
@@ -598,10 +537,8 @@ class LLVMCodegen:
         self._string_temp_stack = []
         self.string_manager = StringConstantManager(self)
 
-        # Rebuild runtime-formatted strings for this fresh module
         self.runtime = LLVMRuntime(self)
 
-        # Extract stdlib unit imports from all units for conditional code generation
         for unit in all_units:
             if unit.ast is not None:
                 self.stdlib.extract_stdlib_units(unit.ast)
@@ -609,14 +546,12 @@ class LLVMCodegen:
         self.runtime.declare_externs()
         self.declare_user_externs()
 
-        # Pass 0: Build AST constant map from ALL units (needed for const evaluation)
         for unit in all_units:
             if unit.ast is None:
                 continue
             for const in unit.ast.constants:
                 self.ast_constants[const.name] = const
 
-        # Emit constants from every unit as full definitions.
         for unit in all_units:
             if unit.ast is None:
                 continue
@@ -644,16 +579,13 @@ class LLVMCodegen:
                     synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
                     self.functions.emit_extension_method_decl(synthetic_ext)
 
-        # Declare monomorphized generic extension methods
         for ext in self.monomorphized_extensions:
             self.functions.emit_extension_method_decl(ext)
 
-        # Declare library function prototypes
         if hasattr(self, 'library_linker') and self.library_linker is not None:
             self._declare_library_functions()
             self._declare_library_perk_impl_methods()
 
-        # Pass 2: Emit bodies ONLY for the target unit
         if target_unit.ast is not None:
             for fn in target_unit.ast.functions:
                 if hasattr(fn, 'type_params') and fn.type_params:
@@ -668,18 +600,13 @@ class LLVMCodegen:
                     synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
                     self.functions.emit_extension_method_def(synthetic_ext)
 
-        # Emit monomorphized generic extension method bodies for all units
-        # (linkage comes from emit_extension_method_def, not linkonce_odr)
         for ext in self.monomorphized_extensions:
             self.functions.emit_extension_method_def(ext)
 
-        # Set linkonce_odr on inline-defined runtime functions to avoid
-        # duplicate symbol errors when linking multiple .o files
         _set_linkonce_odr_on_inline_runtime(self.module)
 
         result_module = self.module
 
-        # Restore the original module state
         self.module = saved_module
         self.funcs = saved_funcs
         self.constants = saved_constants
@@ -699,7 +626,6 @@ class LLVMCodegen:
         mod_ir = self.build_module_single_unit(target_unit, all_units)
         llmod = llvm.parse_assembly(str(mod_ir))
 
-        # Target setup, verify, optimize
         tm = self.optimizer.ensure_target(llmod)
 
         if verify:
@@ -716,7 +642,6 @@ class LLVMCodegen:
     def compile_stdlib_to_object(self, stdlib_unit: str, opt: str = "mem2reg") -> bytes:
         """Compile stdlib bitcode files to a single object file."""
         bc_paths = self.stdlib._resolve_stdlib_unit(stdlib_unit)
-        # Read and link all bitcode files for this stdlib unit
         first = True
         llmod = None
         for bc_path in bc_paths:
@@ -776,81 +701,57 @@ class LLVMCodegen:
 
     def _emit_multi_unit_program(self, units: list[Unit]) -> None:
         """Emit LLVM IR for multiple compilation units."""
-        # Pass 0: Build AST constant map and emit global constants from all units
         for unit in units:
             if unit.ast is None:
                 continue
 
-            # Build AST constant map for constant evaluator
             for const in unit.ast.constants:
                 self.ast_constants[const.name] = const
 
-            # Emit all constants (both public and private)
-            # Each unit needs access to its own constants
             for const in unit.ast.constants:
                 self._emit_global_constant(const)
 
-        # Pass 1: Declare all function prototypes from all units
         for unit in units:
             if unit.ast is None:
                 continue
 
-            # Declare regular functions (both public and private)
             for fn in unit.ast.functions:
-                # Skip generic functions in Phase 1 (not monomorphized yet)
                 if hasattr(fn, 'type_params') and fn.type_params:
                     continue
                 self.functions.emit_func_decl(fn)
 
-            # Declare non-generic extension methods (always global)
-            # Generic extension methods are handled by monomorphization
             for ext in unit.ast.extensions:
                 self.functions.emit_extension_method_decl(ext)
 
-            # Declare perk implementation methods
-            # Perk methods are declared as extension methods
             for perk_impl in unit.ast.perk_impls:
                 for method in perk_impl.methods:
-                    # Create synthetic ExtendDef for declaration
                     synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
                     self.functions.emit_extension_method_decl(synthetic_ext)
 
-        # Declare monomorphized generic extension methods
         for ext in self.monomorphized_extensions:
             self.functions.emit_extension_method_decl(ext)
 
-        # Declare library function prototypes if any libraries are loaded
         if hasattr(self, 'library_linker') and self.library_linker is not None:
             self._declare_library_functions()
             self._declare_library_perk_impl_methods()
 
-        # Pass 2: Emit function bodies from all units
         for unit in units:
             if unit.ast is None:
                 continue
 
-            # Emit regular function bodies
             for fn in unit.ast.functions:
-                # Skip generic functions in Phase 1 (not monomorphized yet)
                 if hasattr(fn, 'type_params') and fn.type_params:
                     continue
                 self.functions.emit_func_def(fn)
 
-            # Emit non-generic extension method bodies
-            # Generic extension methods are handled by monomorphization
             for ext in unit.ast.extensions:
                 self.functions.emit_extension_method_def(ext)
 
-            # Emit perk implementation methods
-            # Perk methods are emitted as extension methods (bare return types)
             for perk_impl in unit.ast.perk_impls:
                 for method in perk_impl.methods:
-                    # Convert perk method to extension-like structure for emission
-                    # Create a synthetic ExtendDef with the perk method
                     synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
                     self.functions.emit_extension_method_def(synthetic_ext)
 
-        # Emit monomorphized generic extension method bodies
         for ext in self.monomorphized_extensions:
             self.functions.emit_extension_method_def(ext)
 
@@ -892,12 +793,10 @@ class LLVMCodegen:
     def _declare_library_functions(self) -> None:
         """Declare library function prototypes for external library functions."""
 
-        # Use library_registry if available (pre-parsed metadata)
         if self.library_registry is not None:
             self._declare_library_functions_from_registry()
             return
 
-        # Fallback to manual parsing from library_linker
         if self.library_linker is None:
             return
 
@@ -975,16 +874,13 @@ class LLVMCodegen:
         """Emit a global constant definition."""
         from sushi_lang.semantics.ast import StringLit
 
-        # Map Sushi type to LLVM type
         if const.ty is None:
             return  # Skip constants with no type (should be caught in semantic analysis)
 
-        # Handle string constants specially - create fat pointer struct {i8*, i32}
         if isinstance(const.value, StringLit):
             string_data = const.value.value.encode('utf-8')
             size = len(string_data)
 
-            # Create global array for string data (without null terminator)
             array_type = ir.ArrayType(self.i8, size)
             data_global = ir.GlobalVariable(self.module, array_type, name=f".str_data.{const.name}")
             data_global.linkage = 'internal'
@@ -992,7 +888,6 @@ class LLVMCodegen:
             data_global.initializer = ir.Constant(array_type, bytearray(string_data))
             data_global.unnamed_addr = True
 
-            # Create GEP constant to get pointer to first element
             zero = ir.Constant(self.i32, 0)
             data_ptr = data_global.gep([zero, zero])
 
@@ -1002,14 +897,12 @@ class LLVMCodegen:
             size_value = ir.Constant(self.i32, size)
             struct_value = ir.Constant.literal_struct([data_ptr, size_value, ir.Constant(self.i8, 0)])
 
-            # Create global variable to hold the fat pointer struct
             struct_global = ir.GlobalVariable(self.module, string_struct_type, name=const.name)
             struct_global.linkage = 'internal'
             struct_global.global_constant = True
             struct_global.initializer = struct_value
             struct_global.unnamed_addr = True
 
-            # Register in constants dict (not string_constants)
             self.constants[const.name] = struct_global
             return
 
@@ -1024,7 +917,6 @@ class LLVMCodegen:
         if const_value is None:
             return  # Skip non-constant expressions
 
-        # Create global constant with appropriate linkage based on visibility
         global_const = ir.GlobalVariable(self.module, llvm_type, name=const.name)
 
         # For single-module compilation (our current approach), all constants use internal linkage
@@ -1038,7 +930,6 @@ class LLVMCodegen:
         global_const.initializer = const_value
         global_const.unnamed_addr = True  # Allow merging identical constants
 
-        # Register the constant for later reference
         self.constants[const.name] = global_const
 
     def _evaluate_constant_expression(self, expr, expected_type=None) -> Optional[ir.Constant]:
@@ -1047,7 +938,6 @@ class LLVMCodegen:
         from sushi_lang.semantics.passes.const_eval import ConstantEvaluator
         from sushi_lang.internals.report import Reporter
 
-        # String constants require special handling - fall back to old behavior
         if isinstance(expr, StringLit):
             return None
 
@@ -1058,16 +948,12 @@ class LLVMCodegen:
         const_value = evaluator.evaluate(expr, expected_type, None)
 
         if const_value is None:
-            # Not a compile-time constant or evaluation failed
             return None
 
-        # Convert to LLVM constant
         llvm_const = const_value.to_llvm_constant(self.types)
         return llvm_const
 
 
-# Known inline-defined runtime functions that appear in every module.
-# These need linkonce_odr linkage for separate compilation.
 _INLINE_RUNTIME_FUNCTIONS = frozenset({
     "llvm_strlen",
     "llvm_strcmp",

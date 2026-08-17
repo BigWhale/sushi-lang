@@ -52,7 +52,6 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -
         for module_path in sorted(todo):
             src_path = resolve_source_stdlib_path(module_path)
             if src_path is None or not src_path.exists():
-                # A bundled module missing is a broken install, not a user error.
                 from sushi_lang.internals import errors as er
                 er.emit(reporter, er.ERR.CE0007, None,
                         detail=f"bundled stdlib module '{module_path}' not found at {src_path}")
@@ -72,7 +71,6 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter) -
 def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
                        args, is_library: bool = False) -> int:
     """Handle multi-file compilation when use statements are present."""
-    # `use <collections/hashmap>` is what makes HashMap<K, V> exist; start clean.
     from sushi_lang.semantics.generics.active_generics import (
         activate_generic_unit,
         reset_active_generics,
@@ -82,12 +80,10 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     main_unit_name = src_path.stem
     unit_manager = UnitManager(root_path=src_path.parent, reporter=reporter)
 
-    # Load main unit
     main_unit = unit_manager.load_unit(main_unit_name, main_ast)
     if main_unit is None:
         return 2
 
-    # Recursively load all dependencies
     loaded_units = {main_unit_name}
     for dep_name in main_unit.dependencies:
         if not load_unit_recursively(unit_manager, dep_name, loaded_units, reporter):
@@ -99,12 +95,9 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
         assert unit_name in unit_manager.units, \
             f"Unit '{unit_name}' was loaded but not found in unit manager"
 
-    # Merge bundled Sushi-source stdlib modules (e.g. <collections/iter>) as units
-    # so their generic combinators are collected + monomorphized whole-program.
     if not _inject_source_stdlib_units(unit_manager, reporter):
         return 2
 
-    # Build global symbol table and check for conflicts
     if not unit_manager.build_global_symbol_table():
         return 2
 
@@ -112,7 +105,6 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     if compilation_order is None:
         return 2
 
-    # Collect stdlib and library imports from all units
     stdlib_units = set()
     library_imports = set()
     for unit in compilation_order:
@@ -124,14 +116,12 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
                 elif use_stmt.is_library:
                     library_imports.add(use_stmt.path)
 
-    # Display compilation units only if there are multiple
     if len(compilation_order) > 1:
         print(f"Found {len(compilation_order)} units:")
         for unit in compilation_order:
             print(f"  - {unit.name} ({len(unit.public_symbols)} public symbols)")
         print()
 
-    # Validate and display stdlib units being linked
     if stdlib_units:
         # Auto-build the current platform's stdlib bitcode if missing or if a
         # generator source changed, so we never link stale/absent .bc.
@@ -159,11 +149,9 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
             print(f"  - {formatted_path}")
         print()
 
-    # Register stdlib functions
     from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
     get_stdlib_registry()
 
-    # Validate and load library imports
     library_linker = None
     if library_imports:
         from sushi_lang.backend.library_errors import LibraryError
@@ -182,14 +170,11 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
                 formatted_path = " / ".join(lib_path.split('/'))
                 print(f"  - {formatted_path}")
             except LibraryError as e:
-                # LibraryError is a SushiError carrying its own code; render it through
-                # the reporter (code + message) instead of a bare stringified print.
                 from sushi_lang.internals import errors as er
                 er.emit_exception(reporter, e)
                 return 2
         print()
 
-    # Run multi-file semantic analysis
     multi_file_analyzer = SemanticAnalyzer(reporter, filename=main_unit_name,
                                            unit_manager=unit_manager,
                                            library_linker=library_linker)
@@ -209,7 +194,6 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     if reporter.has_errors:
         return 2
 
-    # Determine whether to use incremental compilation
     use_incremental = (
         len(compilation_order) > 1
         and not is_library
@@ -217,7 +201,6 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
         and not getattr(args, 'dump_ll', False)
     )
 
-    # Code generation
     if use_incremental:
         return _compile_incremental(
             compilation_order, multi_file_analyzer, src_path, reporter, args,
@@ -242,7 +225,6 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
     cg = LLVMCodegen(struct_table=struct_table, enum_table=enum_table,
                      func_table=func_table, perk_impl_table=perk_impl_table,
                      const_table=const_table)
-    # FFI: provide the external table so foreign functions are declared.
     external_table = getattr(analyzer, 'externals', None)
     if external_table is not None:
         cg.external_table = external_table
@@ -343,7 +325,6 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
 
     monomorphized_extensions = getattr(analyzer, 'monomorphized_extensions', [])
 
-    # Create a single codegen instance for all per-unit compilations
     struct_table = getattr(analyzer, 'structs', None)
     enum_table = getattr(analyzer, 'enums', None)
     func_table = getattr(analyzer, 'funcs', None)
@@ -361,7 +342,6 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
     cg.library_registry = getattr(analyzer, 'library_registry', None)
     cg.library_perk_impls = getattr(analyzer, 'library_perk_impls', [])
 
-    # Compute fingerprints and determine what needs rebuilding
     obj_paths: list[Path] = []
     rebuilt = []
     cached = []
@@ -401,7 +381,6 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
             rebuilt.append(unit.name)
             print(f"  {unit.name:<30s} [rebuilt]")
 
-    # Compile stdlib modules to cached .o files
     for stdlib_unit in sorted(stdlib_units):
         bc_paths = cg.stdlib._resolve_stdlib_unit(stdlib_unit)
         if not bc_paths:
@@ -417,7 +396,6 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
             obj_path = cache.store_stdlib_object(stdlib_unit, obj_bytes, fp)
             obj_paths.append(obj_path)
 
-    # Compile library modules to cached .o files
     if library_linker is not None:
         for lib_path in sorted(library_imports):
             slib_path = library_linker.resolve_library(lib_path)
@@ -432,7 +410,6 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
 
     codegen_time = time.monotonic() - t0
 
-    # Link all .o files together
     t1 = time.monotonic()
     cg.link_object_files(obj_paths, out_path, cc="cc", debug=bool(getattr(args, 'dump_ll', False)))
     link_time = time.monotonic() - t1
