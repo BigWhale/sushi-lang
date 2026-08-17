@@ -1599,132 +1599,107 @@ class BorrowChecker:
         - Multiple peek borrows allowed (read-only)
         - Only one poke borrow at a time (exclusive)
         - Cannot have peek and poke borrows simultaneously
+
+        Both spellings run ONE path. A field borrow is tracked against the BASE variable,
+        because this pass tracks whole variables and not sub-places, so the two differ in
+        exactly one thing: where the name comes from.
+
+        They used to be two arms of ~50 duplicated lines each, and they had already
+        drifted -- the CW2409 nested-poke warning was carried in the variable arm alone.
+        See the CW2409 comment below for the scope that check keeps, which is now a
+        decision rather than an accident.
         """
         is_poke = borrow.mutability == "poke"
 
-        if isinstance(borrow.expr, Name):
-            # Variable borrows
-            var_name = borrow.expr.id
+        # `obj.nested.field` is tracked against `obj`. A base that is no bare name -- a
+        # call result, a literal -- names no storage, so there is nothing to borrow.
+        target = borrow.expr
+        if isinstance(target, MemberAccess):
+            target = self._get_member_access_base(target)
+        if not isinstance(target, Name):
+            self.err.emit(er.ERR.CE2404, borrow.loc,
+                          expr=self._expr_to_string(borrow.expr))
+            return
 
-            # A name this pass cannot find has ALREADY been reported by the scope pass,
-            # which is the pass that owns names: CE1001 if it is declared nowhere, CE2400
-            # if it names something that is not a local (a constant, a function, an enum
-            # type, an FFI namespace). Repeating the question here is what produced two
-            # diagnostics for one token (F15 of old/BORROW.md), and it produced the WRONG one
-            # too, because `borrow_state` cannot tell those two cases apart.
-            if var_name not in self.borrow_state:
-                return
+        # A name this pass cannot find has ALREADY been reported by the scope pass,
+        # which is the pass that owns names: CE1001 if it is declared nowhere, CE2400
+        # if it names something that is not a local (a constant, a function, an enum
+        # type, an FFI namespace). Repeating the question here is what produced two
+        # diagnostics for one token (F15 of old/BORROW.md), and it produced the WRONG one
+        # too, because `borrow_state` cannot tell those two cases apart.
+        name = target.id
+        if name not in self.borrow_state:
+            return
+        state = self.borrow_state[name]
 
-            state = self.borrow_state[var_name]
+        if state.is_moved:
+            self._emit_use_after_move(name, borrow.loc, state)
+            return
 
-            # Check if variable has been moved
-            if state.is_moved:
-                self._emit_use_after_move(var_name, borrow.loc, state)
-                return
-
+        if is_poke:
             # A `poke` of a read-only receiver hands the write to a callee: it UPGRADES a
             # `peek` reference (R1, CE2408), hands out a mutable view of a binding's
             # private copy (#253, CE2414), or of a method receiver's (#326, CE2421). A
-            # `peek` reads the same data either way and stays legal.
-            if is_poke and self._reject_readonly_write(
-                    var_name, borrow.loc, "take a `poke` borrow"):
+            # `peek` reads the same data either way and stays legal. Through a field the
+            # rule is identical: `poke peek_ref.field`, `poke binding.field` and
+            # `poke self.field` all hand a callee a write that cannot reach the value the
+            # user means.
+            if self._reject_readonly_write(name, borrow.loc, "take a `poke` borrow"):
                 return
 
             # A `poke` may mutate or free, so it conflicts with a live `let`-borrow
             # binding exactly as a mutating method does (#242). Reported as CE2412 rather
             # than CE2407, because the user wrote no `peek` and CE2407's text would name
             # a borrow they cannot see.
-            if is_poke:
-                self._check_owner_not_borrowed(var_name, borrow.loc, "take `poke`")
+            self._check_owner_not_borrowed(name, borrow.loc, "take `poke`")
 
-            # Check borrow compatibility based on mode
-            if is_poke:
-                # poke: exclusive borrow - no other borrows allowed
-                if state.poke_borrow_count > 0:
-                    self.err.emit_with(er.ERR.CE2403, borrow.loc, name=var_name) \
-                        .note("first borrowed here", state.first_borrow_span).emit()
-                    return
-                if state.peek_borrow_count > 0:
-                    self.err.emit_with(er.ERR.CE2407, borrow.loc, name=var_name) \
-                        .note("first borrowed here", state.first_borrow_span).emit()
-                    return
-                # Warn when creating poke of a variable that is itself a poke reference
-                # This is a nested mutable borrow - potentially dangerous but allowed
-                if isinstance(state.var_type, ReferenceType) and state.var_type.is_poke():
-                    self.err.emit(er.ERR.CW2409, borrow.loc, name=var_name)
-                state.poke_borrow_count = 1
-                state.first_borrow_span = borrow.loc
-            else:
-                # peek: shared borrow - only check for poke conflict
-                if state.poke_borrow_count > 0:
-                    self.err.emit_with(er.ERR.CE2407, borrow.loc, name=var_name) \
-                        .note("first borrowed here", state.first_borrow_span).emit()
-                    return
-                if state.peek_borrow_count == 0:
-                    state.first_borrow_span = borrow.loc
-                state.peek_borrow_count += 1
-
-            self.active_borrows.add(var_name)
-
-        elif isinstance(borrow.expr, MemberAccess):
-            # Member access borrows
-            base = self._get_member_access_base(borrow.expr)
-
-            if not isinstance(base, Name):
-                expr_str = self._expr_to_string(borrow.expr)
-                self.err.emit(er.ERR.CE2404, borrow.loc, expr=expr_str)
+            # poke: exclusive borrow - no other borrows allowed
+            if state.poke_borrow_count > 0:
+                self._emit_borrow_conflict(er.ERR.CE2403, name, borrow.loc, state)
+                return
+            if state.peek_borrow_count > 0:
+                self._emit_borrow_conflict(er.ERR.CE2407, name, borrow.loc, state)
                 return
 
-            # Check if base variable exists and is not moved. As in the Name arm: an
-            # unknown base was already reported by the scope pass.
-            base_var = base.id
-            if base_var not in self.borrow_state:
-                return
+            # Warn when creating poke of a variable that is itself a poke reference.
+            # This is a nested mutable borrow -- potentially dangerous but allowed.
+            #
+            # DIRECT borrows only (`isinstance(borrow.expr, Name)`), and that is a
+            # DECISION now rather than the drift it was. `poke n` re-borrows the WHOLE
+            # referent, so two exclusive paths reach one place. `poke cfg.port` passes
+            # exclusive access to a strictly SMALLER place -- disjoint-field borrowing,
+            # which is how a helper idiomatically takes one field of a `poke` struct
+            # parameter, and which Rust accepts without a word. Warning there would fire
+            # on correct code and teach the reader to ignore the code.
+            if (isinstance(borrow.expr, Name)
+                    and isinstance(state.var_type, ReferenceType)
+                    and state.var_type.is_poke()):
+                self.err.emit(er.ERR.CW2409, borrow.loc, name=name)
 
-            state = self.borrow_state[base_var]
-            if state.is_moved:
-                self._emit_use_after_move(base_var, borrow.loc, state)
-                return
-
-            # The same rule as the Name arm, through a field: `poke peek_ref.field`,
-            # `poke binding.field` and `poke self.field` all hand a callee a write that
-            # cannot reach the value the user means.
-            if is_poke and self._reject_readonly_write(
-                    base_var, borrow.loc, "take a `poke` borrow"):
-                return
-
-            if is_poke:
-                self._check_owner_not_borrowed(base_var, borrow.loc, "take `poke`")
-
-            # Check borrow compatibility based on mode
-            if is_poke:
-                # poke: exclusive borrow - no other borrows allowed
-                if state.poke_borrow_count > 0:
-                    self.err.emit_with(er.ERR.CE2403, borrow.loc, name=base_var) \
-                        .note("first borrowed here", state.first_borrow_span).emit()
-                    return
-                if state.peek_borrow_count > 0:
-                    self.err.emit_with(er.ERR.CE2407, borrow.loc, name=base_var) \
-                        .note("first borrowed here", state.first_borrow_span).emit()
-                    return
-                state.poke_borrow_count = 1
-                state.first_borrow_span = borrow.loc
-            else:
-                # peek: shared borrow - only check for poke conflict
-                if state.poke_borrow_count > 0:
-                    self.err.emit_with(er.ERR.CE2407, borrow.loc, name=base_var) \
-                        .note("first borrowed here", state.first_borrow_span).emit()
-                    return
-                if state.peek_borrow_count == 0:
-                    state.first_borrow_span = borrow.loc
-                state.peek_borrow_count += 1
-
-            self.active_borrows.add(base_var)
-
+            state.poke_borrow_count = 1
+            state.first_borrow_span = borrow.loc
         else:
-            # Other expressions (function calls, literals, etc.) cannot be borrowed
-            expr_str = self._expr_to_string(borrow.expr)
-            self.err.emit(er.ERR.CE2404, borrow.loc, expr=expr_str)
+            # peek: shared borrow - only check for poke conflict
+            if state.poke_borrow_count > 0:
+                self._emit_borrow_conflict(er.ERR.CE2407, name, borrow.loc, state)
+                return
+            if state.peek_borrow_count == 0:
+                state.first_borrow_span = borrow.loc
+            state.peek_borrow_count += 1
+
+        self.active_borrows.add(name)
+
+    def _emit_borrow_conflict(self, code: ErrorMessage, name: str,
+                              span: Optional[Span], state: BorrowState) -> None:
+        """Report a borrow-exclusivity conflict, naming the borrow already live.
+
+        CE2403 (a second `poke`) and CE2407 (`peek` and `poke` at once) are both
+        relational: the borrow being taken is wrong only BECAUSE another one is still
+        live, so each renders the first borrow's span as its note. Four call sites
+        repeated the same three lines, so one of them could lose the note unnoticed.
+        """
+        self.err.emit_with(code, span, name=name) \
+            .note("first borrowed here", state.first_borrow_span).emit()
 
     def _get_member_access_base(self, expr: MemberAccess) -> Expr:
         """Get the base variable of a member access chain.
@@ -2013,8 +1988,7 @@ class BorrowChecker:
         if self._type_class_of_source(state, state.var_type) is not TypeClass.MOVE:
             return
         if state.poke_borrow_count > 0:
-            self.err.emit_with(er.ERR.CE2407, arg.loc, name=arg.id) \
-                .note("first borrowed here", state.first_borrow_span).emit()
+            self._emit_borrow_conflict(er.ERR.CE2407, arg.id, arg.loc, state)
             return
         if state.peek_borrow_count == 0:
             state.first_borrow_span = arg.loc
