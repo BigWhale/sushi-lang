@@ -25,6 +25,7 @@ _REGISTRY_TYPED_STDLIB_MODULES = ("time", "sys/env", "sys/process", "random", "i
 
 def function_value_type_of(type_validator, name: str) -> Optional[Type]:
     """Build the FunctionType for a bare reference to a plain top-level function."""
+    from sushi_lang.semantics.param_modes import declared_modes
     from sushi_lang.semantics.typesys import FunctionType, UnknownType
     sig = type_validator.func_table.by_name.get(name)
     if sig is None:
@@ -37,11 +38,16 @@ def function_value_type_of(type_validator, name: str) -> Optional[Type]:
         return None
     ok_type = sig.ret_type if sig.ret_type is not None else BuiltinType.BLANK
     err_type = sig.err_type if sig.err_type is not None else UnknownType("StdError")
-    return FunctionType(param_types=param_types, ok_type=ok_type, err_type=err_type)
+    # The declared modes are part of the type, and it stays invariant in them
+    # (docs/design/borrow-model.md S7). Without them a `nom` callee compared equal to a
+    # borrow fn type, so binding one to the other was a double free (#368).
+    return FunctionType(param_types=param_types, ok_type=ok_type, err_type=err_type,
+                        param_modes=declared_modes(sig.params))
 
 
 def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
     """Compute (and, by default, cache on the node) the FunctionType of a lambda literal."""
+    from sushi_lang.semantics.param_modes import declared_modes
     from sushi_lang.semantics.typesys import FunctionType, UnknownType
     if stamp and getattr(lam, "resolved_type", None) is not None:
         return lam.resolved_type
@@ -86,6 +92,7 @@ def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
         ok_type=ok_type,
         err_type=err_type,
         captures=tuple(lam.captures or ()),
+        param_modes=declared_modes(lam.params),
     )
     if stamp:
         lam.resolved_type = ft

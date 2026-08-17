@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Optional, Dict
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.param_modes import declared_modes
 from sushi_lang.semantics.typesys import StructType, EnumType, UnknownType, Type
 from sushi_lang.semantics.ast import Call
 from sushi_lang.semantics.generics.name_mangling import mangle_function_name
@@ -134,7 +135,8 @@ def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected
         return None
     ok_type = func_sig.ret_type
     err_type = func_sig.err_type if func_sig.err_type is not None else UnknownType("StdError")
-    concrete_ft = FunctionType(param_types=param_types, ok_type=ok_type, err_type=err_type)
+    concrete_ft = FunctionType(param_types=param_types, ok_type=ok_type, err_type=err_type,
+                               param_modes=declared_modes(func_sig.params))
     return mangled_name, concrete_ft
 
 

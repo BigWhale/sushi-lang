@@ -1,0 +1,22 @@
+# `nom` inside a fn TYPE reaches the call site (#368).
+#
+# `peek` and `poke` ride on the parameter's own ReferenceType, so a rebuild of the fn type
+# keeps them. `nom` lives in `param_modes`, and `resolve_type_recursively` rebuilt the
+# annotation to resolve `StdError` inside it and dropped that field -- so Pass 3 read a
+# BORROW, and the marker written at both ends became a false CE2427.
+# EXPECT_STDOUT_CONTAINS: owned: Ford Prefect
+# EXPECT_STDOUT_CONTAINS: len: 12
+# EXPECT_NO_LEAKS
+
+use <collections/strings>
+
+fn eat(nom string owned) i32:
+    println("owned: {owned}")
+    return Result.Ok(owned.len() as i32)
+
+fn main() i32:
+    let string base = "Ford"
+    let string s = "{base} Prefect"
+    let fn(nom string) -> i32 g = eat
+    println("len: {g(nom s).realise(-1)}")
+    return Result.Ok(0)

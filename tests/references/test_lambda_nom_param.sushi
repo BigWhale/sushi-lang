@@ -1,0 +1,16 @@
+# A lambda declares `nom` on a parameter, and the mode survives into its fn type (#368).
+#
+# `infer_lambda_type` built the type from the lambda's parameters but never read their
+# modes, so `|nom string x|` produced `fn(string) -> ...` and the call site was told the
+# argument stayed the caller's.
+# EXPECT_STDOUT_CONTAINS: len: 12
+# EXPECT_NO_LEAKS
+
+use <collections/strings>
+
+fn main() i32:
+    let string base = "Ford"
+    let string s = "{base} Prefect"
+    let fn(nom string) -> i32 g = |nom string x| x.len() as i32
+    println("len: {g(nom s).realise(-1)}")
+    return Result.Ok(0)

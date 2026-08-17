@@ -1,0 +1,17 @@
+# The marker is written at both ends of an indirect call too, so a missing `nom` at a
+# `nom` fn type is CE2427 (#368).
+#
+# This program used to COMPILE, because the fn type had lost its mode. The callee owned the
+# string and freed it, the caller was never told and freed it too: exit 133.
+# EXPECT_ERROR_CODE: CE2427
+
+fn eat(nom string owned) i32:
+    println("owned: {owned}")
+    return Result.Ok(1)
+
+fn main() i32:
+    let string base = "Ford"
+    let string s = "{base} Prefect"
+    let fn(nom string) -> i32 g = eat
+    println(g(s).realise(-1))
+    return Result.Ok(0)
