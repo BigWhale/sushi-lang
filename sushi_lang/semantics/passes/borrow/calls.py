@@ -116,13 +116,12 @@ def settle_method_args(checker: 'BorrowChecker', expr) -> None:
 
 def consume_indirect_args(checker: 'BorrowChecker', expr) -> None:
     """An indirect call through a fn-typed field follows the fn type's declared modes."""
-    # Deliberately thinner than `apply_mode`: a fn type carries no parameter names to put
-    # in a CE2427, and an unmarked argument here is not counted as a borrow. Widening it
-    # is a behaviour change, not a cleanup.
+    # `apply_mode`, like every other call shape: a thinner arm here skipped the implicit
+    # borrow of an unmarked argument, so `h.handler(arr, poke arr)` compiled clean and read
+    # the buffer the `poke` had reallocated (#365).
     modes = effective_modes(expr.callee_fn_type.modes, CalleeKind.INDIRECT)
     for i, arg in enumerate(expr.args):
-        if checker.callee_modes.mode_at(modes, i, CalleeKind.INDIRECT).consumes:
-            consume(checker, arg, ConsumingUse.CALL_ARG)
+        apply_mode(checker, expr, arg, i, modes, CalleeKind.INDIRECT)
 
 
 def check_nom_marker(checker: 'BorrowChecker', call, arg: Expr, index: int,

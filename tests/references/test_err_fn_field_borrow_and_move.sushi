@@ -1,0 +1,19 @@
+# CE2401 through a fn-typed struct field: the same missing registration as
+# test_err_fn_field_implicit_borrow_and_poke, seen from the move side (#365).
+#
+# The unmarked argument is the borrow, so a `nom` of the same value in one statement hands
+# the new owner a buffer the borrow still reads.
+# EXPECT_ERROR_CODE: CE2401
+
+struct Holder:
+    fn(string, nom string) -> i32 both
+
+fn view_and_eat(string r, nom string owned) i32:
+    println("ref: {r} owned: {owned}")
+    return Result.Ok(1)
+
+fn main() i32:
+    let string s = "hello-{1}"
+    let Holder h = Holder(view_and_eat)
+    println(h.both(s, nom s).realise(-1))
+    return Result.Ok(0)
