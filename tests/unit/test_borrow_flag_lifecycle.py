@@ -55,7 +55,7 @@ def test_every_flow_fact_field_is_restored():
     import inspect
     import textwrap
 
-    from sushi_lang.semantics.passes.borrow import BorrowChecker
+    from sushi_lang.semantics.passes.borrow import flow
 
     fields = set(FlowFacts.__dataclass_fields__)
 
@@ -66,10 +66,10 @@ def test_every_flow_fact_field_is_restored():
         names |= {node.attr for node in ast.walk(tree) if isinstance(node, ast.Attribute)}
         return names & fields
 
-    snapshot = _mentioned(BorrowChecker._snapshot_flow)
-    restore = _mentioned(BorrowChecker._restore_flow)
-    assert snapshot == fields, f"_snapshot_flow misses {sorted(fields - snapshot)}"
-    assert restore == fields, f"_restore_flow misses {sorted(fields - restore)}"
+    snapshot = _mentioned(flow.snapshot_flow)
+    restore = _mentioned(flow.restore_flow)
+    assert snapshot == fields, f"snapshot_flow misses {sorted(fields - snapshot)}"
+    assert restore == fields, f"restore_flow misses {sorted(fields - restore)}"
 
 
 # REBIND. A rebind re-initializes: every fact about the OLD value is stale.
@@ -90,7 +90,7 @@ _REBIND_CLEARS = [
 def test_rebind_clears(flag, cleared_value):
     """Each flag fell out of step one at a time; each was its own bug."""
     from sushi_lang.internals.report import Span
-    from sushi_lang.semantics.passes.borrow import BorrowChecker
+    from sushi_lang.semantics.passes.borrow.flow import reinitialize
 
     state = BorrowState(name="x")
     setattr(state, flag, {"is_moved": True, "moved_at_span": Span(1, 1, 1, 2),
@@ -98,7 +98,7 @@ def test_rebind_clears(flag, cleared_value):
                           "invalidated_by": ("c", "assign"),
                           "is_borrowed_binding": True, "is_let_borrow": True,
                           "borrows_from": "c"}[flag])
-    BorrowChecker._reinitialize(state)
+    reinitialize(state)
     assert getattr(state, flag) == cleared_value
 
 
@@ -292,23 +292,23 @@ def test_an_invalidation_still_reaches_a_read_after_the_branch(analyze):
 def test_break_does_not_terminate_a_path():
     """`break` leaves the STATEMENT, not the function, and must not drop its facts."""
     from sushi_lang.semantics.ast import Break, Continue
-    from sushi_lang.semantics.passes.borrow import BorrowChecker
+    from sushi_lang.semantics.passes.borrow.flow import terminates
 
-    assert BorrowChecker._terminates(Break(loc=None)) is False
-    assert BorrowChecker._terminates(Continue(loc=None)) is False
+    assert terminates(Break(loc=None)) is False
+    assert terminates(Continue(loc=None)) is False
 
 
 def test_an_if_without_an_else_never_terminates():
     """The fall-through path survives, so the branch cannot terminate every path."""
     from sushi_lang.semantics.ast import Block, If, Return
-    from sushi_lang.semantics.passes.borrow import BorrowChecker
+    from sushi_lang.semantics.passes.borrow.flow import terminates
 
     returning = Block(statements=[Return(value=None, loc=None)], loc=None)
     with_else = If(arms=[(None, returning)], else_block=returning, loc=None)
     without_else = If(arms=[(None, returning)], else_block=None, loc=None)
 
-    assert BorrowChecker._terminates(with_else) is True
-    assert BorrowChecker._terminates(without_else) is False
+    assert terminates(with_else) is True
+    assert terminates(without_else) is False
 
 
 def test_a_conditional_rebind_stays_conservative(analyze):
